@@ -1,0 +1,290 @@
+[
+  {
+    "id": "lic_start_surplus",
+    "name": "Scrap-Yard Ballistics Contract",
+    "description": "A handshake deal with local scavengers. Provides a steady stream of highly questionable, unregistered firearms.",
+    "tier": 1,
+    "baseCost": 0,
+    "reqReputation": 0,
+    "reqFaction": "scavengers",
+    "reqFactionRep": 0
+  },
+  {
+    "id": "lic_start_armor_melee",
+    "name": "Scrap-Yard Armor & Melee",
+    "description": "Access to discarded industrial plating and rusted blunt instruments. Perfect for budget-conscious brawlers.",
+    "tier": 1,
+    "baseCost": 150,
+    "reqReputation": 2,
+    "reqFaction": "scavengers",
+    "reqFactionRep": 2
+  },
+  {
+    "id": "lic_start_rations",
+    "name": "Basic Rations & Water",
+    "description": "Standardized bulk food paste and water filtration. High volume, low margin essentials.",
+    "tier": 1,
+    "baseCost": 100,
+    "reqReputation": 0
+  },
+  {
+    "id": "lic_start_apparel",
+    "name": "Civilian Threads (Lyra Synthetics)",
+    "description": "Mass-market civilian clothing. Zero armor value, but high impulse-buy potential for station locals.",
+    "tier": 1,
+    "baseCost": 250,
+    "reqReputation": 5
+  },
+  {
+    "id": "lic_start_tools",
+    "name": "Salvage & Repair Tools (Nautilus)",
+    "description": "Entry-level industrial tools for tearing ships apart or strapping them back together.",
+    "tier": 1,
+    "baseCost": 350,
+    "reqReputation": 5,
+    "reqFaction": "explorers",
+    "reqFactionRep": 2
+  },
+  {
+    "id": "lic_start_ammo",
+    "name": "Standard Munitions Supplier",
+    "description": "A bulk contract for reliable, standard-caliber kinetic ammunition.",
+    "tier": 1,
+    "baseCost": 200,
+    "reqReputation": 0
+  },
+  {
+    "id": "lic_start_mods",
+    "name": "Scrap-Yard Weapon Mods",
+    "description": "Duct-taped flashlights and welded iron sights. Cheap upgrades for cheap guns.",
+    "tier": 1,
+    "baseCost": 150,
+    "reqReputation": 5,
+    "reqFaction": "scavengers",
+    "reqFactionRep": 5
+  },
+  {
+    "id": "lic_corp_aulin",
+    "name": "Aulin NT Distributorship",
+    "description": "Official vendor license for Aulin's mass-produced, highly reliable kinetic weaponry and fitted attachments.",
+    "tier": 2,
+    "baseCost": 1200,
+    "reqReputation": 15,
+    "reqFaction": "mercenaries",
+    "reqFactionRep": 5
+  },
+  {
+    "id": "lic_corp_omni",
+    "name": "Omni-Corp Security Contract",
+    "description": "Access to standard-issue corporate security gear, including riot-control weapons and basic flak.",
+    "tier": 2,
+    "baseCost": 1500,
+    "reqReputation": 20,
+    "reqFaction": "mercenaries",
+    "reqFactionRep": 10
+  },
+  {
+    "id": "lic_corp_vanguard",
+    "name": "Vanguard Tactical License",
+    "description": "Heavy-duty ballistic repeaters, rotary guns, and aggressive close-quarters weapon attachments.",
+    "tier": 2,
+    "baseCost": 2200,
+    "reqReputation": 25,
+    "reqFaction": "mercenaries",
+    "reqFactionRep": 15
+  },
+  {
+    "id": "lic_corp_stellaris",
+    "name": "Stellaris Civilian Defense",
+    "description": "Sleek, civilian-market energy weapons, thermal batteries, and high-end aesthetic space suits.",
+    "tier": 2,
+    "baseCost": 2500,
+    "reqReputation": 30
+  },
+  {
+    "id": "lic_corp_labor",
+    "name": "Industrial Labor Gear",
+    "description": "A combined contract for Aegis and Arx heavy-duty worker clothes, canvas gloves, and mag-boots.",
+    "tier": 2,
+    "baseCost": 1800,
+    "reqReputation": 15
+  },
+  {
+    "id": "lic_corp_hazard",
+    "name": "Hazard & Medical Supply",
+    "description": "Veles-brand bio-sealed hazard suits, basic Med-Tek trauma kits, and rebreather masks.",
+    "tier": 2,
+    "baseCost": 2800,
+    "reqReputation": 30,
+    "reqFaction": "explorers",
+    "reqFactionRep": 10
+  },
+  {
+    "id": "lic_corp_diagnostics",
+    "name": "Quasar Diagnostics",
+    "description": "High-end electronic diagnostic tools, decrypters, and precision repair equipment.",
+    "tier": 2,
+    "baseCost": 2100,
+    "reqReputation": 25,
+    "reqFaction": "explorers",
+    "reqFactionRep": 15
+  },
+  {
+    "id": "lic_corp_breach",
+    "name": "Breach-Tech Heavy Tools",
+    "description": "Industrial-grade plasma cutters, hydraulic spreaders, and heavy pneumatic rivet guns.",
+    "tier": 2,
+    "baseCost": 2400,
+    "reqReputation": 28,
+    "reqFaction": "scavengers",
+    "reqFactionRep": 15
+  },
+  {
+    "id": "lic_corp_scatter",
+    "name": "Scatter & Breach Munitions",
+    "description": "A specialized contract for shotgun shells, bandoliers, and kinetic breaching slugs.",
+    "tier": 2,
+    "baseCost": 1600,
+    "reqReputation": 20,
+    "reqFaction": "mercenaries",
+    "reqFactionRep": 10
+  },
+  {
+    "id": "lic_pro_kodiak",
+    "name": "Kodiak Arsenal",
+    "description": "Military-spec pulse rifles, plasma shrouds, and massively reinforced heavy armor suits.",
+    "tier": 3,
+    "baseCost": 6500,
+    "reqReputation": 45,
+    "reqFaction": "mercenaries",
+    "reqFactionRep": 25
+  },
+  {
+    "id": "lic_pro_zastava",
+    "name": "Zastava Magnetic Tech",
+    "description": "Devastating magnetic accelerator rifles, gauss spikes, and x-ray sniper optics.",
+    "tier": 3,
+    "baseCost": 7200,
+    "reqReputation": 50,
+    "reqFaction": "mercenaries",
+    "reqFactionRep": 30
+  },
+  {
+    "id": "lic_pro_kessler",
+    "name": "Kessler Expeditionary",
+    "description": "Top-of-the-line planetary exploration suits, deployable bivouacs, and survival geo-locators.",
+    "tier": 3,
+    "baseCost": 5800,
+    "reqReputation": 40,
+    "reqFaction": "explorers",
+    "reqFactionRep": 25
+  },
+  {
+    "id": "lic_pro_aegis_sec",
+    "name": "Aegis Active Security",
+    "description": "Advanced personal defense armor including repulsor vests and energy-shielded combat helmets.",
+    "tier": 3,
+    "baseCost": 6000,
+    "reqReputation": 45,
+    "reqFaction": "mercenaries",
+    "reqFactionRep": 20
+  },
+  {
+    "id": "lic_pro_arx_heavy",
+    "name": "Arx Heavy Armatura",
+    "description": "Unforgiving, steel-plated industrial pressure suits and reinforced greaves.",
+    "tier": 3,
+    "baseCost": 5500,
+    "reqReputation": 40
+  },
+  {
+    "id": "lic_pro_adv_melee",
+    "name": "Advanced Melee Weaponry",
+    "description": "High-tier close combat tools including mono-katanas, plasma-axes, and stun batons.",
+    "tier": 3,
+    "baseCost": 4800,
+    "reqReputation": 35,
+    "reqFaction": "mercenaries",
+    "reqFactionRep": 15
+  },
+  {
+    "id": "lic_pro_high_energy",
+    "name": "High-Energy Munitions",
+    "description": "Wholesale supplier of heavy plasma canisters, tactical coolant rigs, and thermal batteries.",
+    "tier": 3,
+    "baseCost": 5200,
+    "reqReputation": 40,
+    "reqFaction": "mercenaries",
+    "reqFactionRep": 20
+  },
+  {
+    "id": "lic_pro_artillery",
+    "name": "Artillery & Explosives",
+    "description": "Highly regulated access to mortars, unguided RPGs, and heavy counter-weight weapon stocks.",
+    "tier": 3,
+    "baseCost": 8500,
+    "reqReputation": 60,
+    "reqFaction": "mercenaries",
+    "reqFactionRep": 40
+  },
+  {
+    "id": "lic_edge_tessier",
+    "name": "Tessier-Ashpool Verified Vendor",
+    "description": "Exclusive access to ridiculously expensive, cutting-edge smart-flechette weapons and neural-link optics.",
+    "tier": 4,
+    "baseCost": 25000,
+    "reqReputation": 85,
+    "reqFaction": "mercenaries",
+    "reqFactionRep": 60
+  },
+  {
+    "id": "lic_edge_antique",
+    "name": "Antique Collector's Network",
+    "description": "A private network sourcing perfectly preserved Pre-War ballistic weapons and wooden sporting goods.",
+    "tier": 4,
+    "baseCost": 18000,
+    "reqReputation": 75,
+    "reqFaction": "scavengers",
+    "reqFactionRep": 40
+  },
+  {
+    "id": "lic_edge_blackwood",
+    "name": "Blackwood Ordnance",
+    "description": "Military artillery attachments including massive autocannon belts, fluted barrels, and artillery sights.",
+    "tier": 4,
+    "baseCost": 22000,
+    "reqReputation": 80,
+    "reqFaction": "mercenaries",
+    "reqFactionRep": 55
+  },
+  {
+    "id": "lic_edge_exotic",
+    "name": "Exotic Ordinance",
+    "description": "Highly illegal or fiercely regulated weaponry, including singularity launchers and archaic liquid fuel.",
+    "tier": 4,
+    "baseCost": 35000,
+    "reqReputation": 95,
+    "reqFaction": "explorers",
+    "reqFactionRep": 50
+  },
+  {
+    "id": "lic_edge_kinetic",
+    "name": "Kinetic-Tek Smart Systems",
+    "description": "Premium weapon enhancements including biometric grips, speed-loaders, and eye-tracking smart optics.",
+    "tier": 4,
+    "baseCost": 15000,
+    "reqReputation": 70,
+    "reqFaction": "mercenaries",
+    "reqFactionRep": 45
+  },
+  {
+    "id": "lic_edge_unrestricted",
+    "name": "Unrestricted Bio-Medical",
+    "description": "Under-the-counter access to severe trauma solutions like anti-radiation flush and synthetic skin.",
+    "tier": 4,
+    "baseCost": 20000,
+    "reqReputation": 80,
+    "reqFaction": "scavengers",
+    "reqFactionRep": 45
+  }
+]

@@ -1,0 +1,23 @@
+STREAMING_CHUNK:Configuring Node dependencies to be ignored
+
+node_modules/
+
+STREAMING_CHUNK:Configuring Vite/Electron build outputs to be ignored
+
+dist/
+dist-electron/
+release/
+
+STREAMING_CHUNK:Configuring log files to be ignored
+
+logs
+.log
+npm-debug.log
+yarn-debug.log*
+yarn-error.log*
+
+STREAMING_CHUNK:Configuring OS and Editor hidden files to be ignored
+
+.DS_Store
+.vscode/
+.idea/

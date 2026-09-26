@@ -1,0 +1,409 @@
+/* ================================================================= /
+/ SPACE ARMS DEALER SIMULATOR - BASE THEME & DESIGN TOKENS          /
+/ ================================================================= */
+
+:root {
+  /* Color Palette */
+  --color-bg-base: #090d16;
+  --color-panel: #0f172a;
+  --color-border-subtle: #334155;
+  --color-border-active: #38bdf8;
+  --color-accent: #0284c7;
+  --color-text-main: #e2e8f0;
+  --color-text-muted: #94a3b8;
+
+  /* TEXTURED HARDWARE SCANLINES */
+  --scanline-pattern: linear-gradient(
+    rgba(18, 16, 16, 0) 50%,
+    rgba(0, 0, 0, 0.25) 50%
+  );
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  font-family: "Share Tech Mono", monospace;
+  background-color: var(--color-bg-base);
+  color: var(--color-text-main);
+  overflow: hidden;
+}
+
+/* ================================================================= /
+/ CANVAS GRID BACKGROUND PATTERN                                    /
+/ ================================================================= */
+
+.canvas-grid {
+  background-image: radial-gradient(#1e293b 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* ================================================================= /
+/ RETRO WINDOW CONTAINER PRIMITIVES                                 /
+/ ================================================================= */
+
+.retro-window {
+  position: absolute;
+  --bg-color: var(--color-panel);
+  background: var(--scanline-pattern), var(--bg-color);
+  background-size:
+    100% 4px,
+    auto;
+
+  border: 2px solid var(--color-border-subtle);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.8),
+    inset 0 0 15px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  user-select: none;
+}
+
+.retro-window.active {
+  border-color: var(--color-border-active);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.8),
+    0 0 10px rgba(56, 189, 248, 0.2),
+    inset 0 0 15px rgba(0, 0, 0, 0.5);
+  z-index: 101;
+}
+
+.retro-window.hidden {
+  display: none !important;
+}
+
+/* ================================================================= /
+/ WINDOW HEADERS & DRAG HANDLES                                     /
+/ ================================================================= */
+
+.retro-window-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  --bg-color: #1e293b;
+  background: var(--scanline-pattern), var(--bg-color);
+  background-size:
+    100% 4px,
+    auto;
+
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  cursor: grab;
+}
+
+.retro-window-header:active {
+  cursor: grabbing;
+}
+
+.retro-window.active .retro-window-header {
+  --bg-color: #0369a1;
+  border-bottom-color: var(--color-border-active);
+}
+
+.retro-window-title {
+  font-size: 13px;
+  font-weight: bold;
+  color: #f8fafc;
+  letter-spacing: 1px;
+}
+
+.retro-window-close {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.retro-window-close:hover {
+  color: #f8fafc;
+}
+
+.retro-window-body {
+  flex: 1;
+  padding: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ================================================================= /
+/ MODULAR UI COMPONENTS (BUTTONS AND SLOTS)                         /
+/ ================================================================= */
+
+.retro-tab-btn {
+  --bg-color: #1e293b;
+  background: var(--scanline-pattern), var(--bg-color);
+  background-size:
+    100% 4px,
+    auto;
+
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-text-muted);
+  padding: 6px 10px;
+  text-align: left;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.retro-tab-btn:hover {
+  --bg-color: #334155;
+  color: var(--color-text-main);
+}
+
+.retro-tab-btn.active {
+  --bg-color: #0284c7;
+  border-color: var(--color-border-active);
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.retro-slot {
+  --bg-color: #090d16;
+  background: var(--scanline-pattern), var(--bg-color);
+  background-size:
+    100% 4px,
+    auto;
+
+  border: 1px solid var(--color-border-subtle);
+  transition: border-color 0.1s ease;
+}
+
+.retro-slot:hover {
+  border-color: var(--color-border-active);
+  --bg-color: #0f172a;
+}
+
+/* ================================================================= /
+/ ACTION BUTTONS & INTERACTIVITY                                    /
+/ ================================================================= */
+
+.action-btn {
+  --bg-color: #10b981;
+  background: var(--scanline-pattern), var(--bg-color);
+  background-size:
+    100% 4px,
+    auto;
+
+  color: #090d16;
+  font-family: inherit;
+  font-weight: bold;
+  border: 2px solid #047857;
+  padding: 8px 12px;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: all 0.1s ease;
+}
+.action-btn:hover {
+  --bg-color: #34d399;
+}
+.action-btn:active {
+  transform: translateY(2px);
+}
+
+.action-btn.danger {
+  --bg-color: #ef4444;
+  border-color: #b91c1c;
+  color: white;
+}
+.action-btn.danger:hover {
+  --bg-color: #f87171;
+}
+
+.action-btn.warning {
+  --bg-color: #eab308;
+  border-color: #ca8a04;
+  color: #090d16;
+}
+.action-btn.warning:hover {
+  --bg-color: #facc15;
+}
+
+button {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-border-active);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 10px rgba(56, 189, 248, 0.5);
+}
+
+/* ================================================================= /
+/ CUSTOM RETRO SCROLLBAR AESTHETICS                                 /
+/ ================================================================= */
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.8);
+  border-radius: 2px;
+  border: 1px solid var(--color-border-subtle);
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-border-subtle);
+  border-radius: 2px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-active);
+}
+
+/* ================================================================= /
+/ INVENTORY CARD COMPONENT STYLES                                   /
+/ ================================================================= */
+
+.item-card {
+  --bg-color: #090d16;
+  background: var(--scanline-pattern), var(--bg-color);
+  background-size:
+    100% 4px,
+    auto;
+
+  border: 1px solid var(--color-border-subtle);
+  padding: 10px;
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  transition: border-color 0.1s ease;
+}
+.item-card:hover {
+  border-color: var(--color-border-active);
+  --bg-color: #0f172a;
+}
+
+.item-icon {
+  width: 48px;
+  height: 48px;
+  background-color: #1e293b;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 4px;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+.item-details {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 4px;
+}
+
+.tag-badge {
+  --bg-color: #1e293b;
+  background: var(--scanline-pattern), var(--bg-color);
+  background-size:
+    100% 4px,
+    auto;
+
+  color: var(--color-accent);
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 2px;
+  text-transform: uppercase;
+  border: 1px solid #334155;
+}
+
+.item-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 2px;
+}
+.item-card-title {
+  font-weight: bold;
+  font-size: 13px;
+  color: var(--color-text-main);
+}
+.item-card-cost {
+  color: #10b981;
+  font-weight: bold;
+  font-size: 13px;
+}
+.item-card-flavor {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-style: italic;
+  line-height: 1.3;
+}
+.item-card-footer {
+  display: flex;
+  flex-direction: column;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  border-top: 1px dashed var(--color-border-subtle);
+  padding-top: 6px;
+  margin-top: 4px;
+}
+
+/* ================================================================= /
+/ PERSISTENT HEADS UP DISPLAY (HUD)                                 /
+/ ================================================================= */
+
+#persistent-hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 36px;
+
+  --bg-color: var(--color-panel);
+  background: var(--scanline-pattern), var(--bg-color);
+  background-size:
+    100% 4px,
+    auto;
+
+  border-bottom: 2px solid var(--color-border-active);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  box-sizing: border-box;
+  z-index: 500;
+  user-select: none;
+}
+
+.hud-section {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+.hud-stat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.hud-label {
+  color: var(--color-text-main);
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+
+.hud-value {
+  color: #10b981; /* Emerald Green */
+  font-weight: bold;
+  font-size: 16px;
+  text-shadow: 0 0 5px rgba(16, 185, 129, 0.4);
+}
+
+.hud-value.deficit {
+  color: #ef4444; /* Danger Red */
+  text-shadow: 0 0 5px rgba(239, 68, 68, 0.5);
+}
+
+.hud-value.rep {
+  color: #fbbf24; /* Luminous Gold */
+  text-shadow: 0 0 5px rgba(251, 191, 36, 0.5);
+}
