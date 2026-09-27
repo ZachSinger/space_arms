@@ -433,6 +433,107 @@ button {
   text-shadow: 0 0 5px rgba(251, 191, 36, 0.5);
 }
 
-#game-container canvas {
-  display: block;
+#game-container {
+  position: relative;
+}
+
+#ui-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 600;
+  pointer-events: none;
+}
+
+.dialogue-window {
+  left: 50%;
+  bottom: 5%;
+  transform: translateX(-50%);
+  width: min(720px, calc(100% - 40px));
+  min-height: 160px;
+  padding: 18px 22px;
+  pointer-events: auto;
+}
+
+.dialogue-text {
+  height: 5.4em;
+  overflow: hidden;
+  font-size: 16px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.dialogue-continue {
+  align-self: flex-end;
+  color: var(--color-border-active);
+  font-size: 13px;
+  visibility: hidden;
+  animation: dialogue-pulse 0.8s steps(2, end) infinite;
+}
+
+.dialogue-continue.visible {
+  visibility: visible;
+}
+
+@keyframes dialogue-pulse {
+  50% {
+    opacity: 0;
+  }
+}
+
+.settings-window {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(520px, calc(100% - 40px));
+  min-height: 280px;
+  z-index: 700;
+  pointer-events: auto;
+}
+
+.settings-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 24px;
+  padding: 22px;
+}
+
+.settings-title {
+  color: var(--color-text-main);
+  font-size: 24px;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.settings-resolution {
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-base);
+  color: var(--color-text-main);
+  padding: 10px;
+  font: inherit;
+}
+
+.settings-status {
+  color: var(--color-border-active);
+  font-size: 14px;
+}
+
+.settings-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 22px;
+  border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-panel);
 }
