@@ -1,13 +1,39 @@
 export class SettingsPanel {
-  constructor() {
+  static textSizeStorageKey = "space-arms-dealer.text-size";
+
+  static textSizeScales = {
+    default: "1.15",
+    smaller: "0.95",
+    larger: "1.4",
+  };
+
+  constructor({ onOpen, onClose } = {}) {
+    this.onOpen = onOpen;
+    this.onClose = onClose;
     this.element = document.createElement("div");
     this.element.className = "retro-window settings-window hidden";
     this.element.innerHTML = `
-      <div class="settings-content">
+      <div class="settings-content custom-scrollbar">
         <div class="settings-title">SETTINGS</div>
         <label class="settings-field">
           <span>RESOLUTION</span>
           <select class="settings-resolution"></select>
+        </label>
+        <label class="settings-field">
+          <span>DISPLAY MODE</span>
+          <select class="settings-display-mode">
+            <option value="windowed">WINDOWED</option>
+            <option value="borderless">BORDERLESS FULLSCREEN</option>
+            <option value="fullscreen">FULLSCREEN</option>
+          </select>
+        </label>
+        <label class="settings-field">
+          <span>TEXT SIZE</span>
+          <select class="settings-text-size">
+            <option value="default">DEFAULT</option>
+            <option value="smaller">SMALLER</option>
+            <option value="larger">LARGER</option>
+          </select>
         </label>
         <div class="settings-status"></div>
       </div>
@@ -21,7 +47,12 @@ export class SettingsPanel {
     document.getElementById("ui-layer").appendChild(this.element);
 
     this.select = this.element.querySelector(".settings-resolution");
+    this.displayModeSelect = this.element.querySelector(
+      ".settings-display-mode",
+    );
+    this.textSizeSelect = this.element.querySelector(".settings-text-size");
     this.status = this.element.querySelector(".settings-status");
+    SettingsPanel.applyTextSize(SettingsPanel.getSavedTextSize());
 
     this.element
       .querySelector(".settings-cancel")
@@ -36,6 +67,12 @@ export class SettingsPanel {
       .addEventListener("click", () => this.close());
 
     this.select.addEventListener("change", () => this.previewResolution());
+    this.displayModeSelect.addEventListener("change", () =>
+      this.previewDisplayMode(),
+    );
+    this.textSizeSelect.addEventListener("change", () =>
+      this.previewTextSize(),
+    );
   }
 
   async open() {
@@ -43,8 +80,13 @@ export class SettingsPanel {
 
     this.settingsSnapshot = {
       resolution: settings.current,
+      displayMode: settings.displayMode,
+      textSize: SettingsPanel.getSavedTextSize(),
     };
     this.appliedResolution = settings.current;
+    this.appliedDisplayMode = settings.displayMode;
+    this.displayModeSelect.value = settings.displayMode;
+    this.textSizeSelect.value = this.settingsSnapshot.textSize;
 
     this.select.replaceChildren();
 
@@ -65,25 +107,16 @@ export class SettingsPanel {
 
     this.status.textContent = `CURRENT: ${settings.current.width} x ${settings.current.height}`;
     this.element.classList.remove("hidden");
-  }
-
-  async apply() {
-    const [width, height] = this.select.value.split("x").map(Number);
-
-    if (
-      width === this.appliedResolution.width &&
-      height === this.appliedResolution.height
-    ) {
-      return;
-    }
-
-    const applied = await window.desktopApi.setResolution({ width, height });
-    this.appliedResolution = applied;
-    this.status.textContent = `CURRENT: ${applied.width} x ${applied.height}`;
+    this.onOpen?.();
   }
 
   close() {
+    localStorage.setItem(
+      SettingsPanel.textSizeStorageKey,
+      this.textSizeSelect.value,
+    );
     this.element.classList.add("hidden");
+    this.onClose?.();
   }
 
   destroy() {
@@ -91,16 +124,17 @@ export class SettingsPanel {
   }
 
   async cancel() {
-    const { width, height } = this.settingsSnapshot.resolution;
+    const { resolution, displayMode, textSize } = this.settingsSnapshot;
 
-    if (
-      width !== this.appliedResolution.width ||
-      height !== this.appliedResolution.height
-    ) {
-      const restored = await window.desktopApi.setResolution({ width, height });
-      this.appliedResolution = restored;
+    if (displayMode !== this.appliedDisplayMode) {
+      await window.desktopApi.setDisplayMode(displayMode);
     }
 
+    const restored = await window.desktopApi.setResolution(resolution);
+    this.appliedResolution = restored;
+    this.appliedDisplayMode = displayMode;
+    this.textSizeSelect.value = textSize;
+    SettingsPanel.applyTextSize(textSize);
     this.close();
   }
 
@@ -119,13 +153,51 @@ export class SettingsPanel {
     this.status.textContent = `CURRENT: ${applied.width} x ${applied.height}`;
   }
 
+  async previewDisplayMode() {
+    const mode = this.displayModeSelect.value;
+
+    if (mode === this.appliedDisplayMode) {
+      return;
+    }
+
+    const settings = await window.desktopApi.setDisplayMode(mode);
+    this.appliedDisplayMode = settings.displayMode;
+    this.appliedResolution = settings.current;
+    this.status.textContent = `CURRENT: ${this.appliedResolution.width} x ${this.appliedResolution.height}`;
+  }
+
+  previewTextSize() {
+    SettingsPanel.applyTextSize(this.textSizeSelect.value);
+  }
+
   async saveSnapshot() {
     const settings = await window.desktopApi.getDisplaySettings();
 
     this.settingsSnapshot = {
       resolution: settings.current,
+      displayMode: settings.displayMode,
+      textSize: this.textSizeSelect.value,
     };
     this.appliedResolution = settings.current;
+    this.appliedDisplayMode = settings.displayMode;
     this.status.textContent = `CURRENT: ${settings.current.width} x ${settings.current.height}`;
+  }
+
+  static getSavedTextSize() {
+    const textSize = localStorage.getItem(SettingsPanel.textSizeStorageKey);
+    return SettingsPanel.textSizeScales[textSize] ? textSize : "default";
+  }
+
+  static getTextSizeScale(textSize) {
+    return Number(SettingsPanel.textSizeScales[textSize]);
+  }
+
+  static applyTextSize(textSize) {
+    document.documentElement.dataset.textSize = textSize;
+    window.dispatchEvent(
+      new CustomEvent("text-size-changed", {
+        detail: { scale: SettingsPanel.getTextSizeScale(textSize) },
+      }),
+    );
   }
 }

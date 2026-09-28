@@ -21,7 +21,7 @@ Copilot must respect the existing modular architecture:
   - `PlayerState.js`: Single source of truth for runtime mutable player state (Galactic Credits, faction reputation, inventory, unlocked licenses).
   - `UIWindow.js` & `WindowManager.js`: Modular windowing library managing draggable, focusable, and dockable CRT viewports.
   - `*Renderer.js` (`InventoryRenderer.js`, `LicenseRenderer.js`): Pure display controllers. Reads data/state to render contents inside `UIWindow` containers.
-  - `HUDController.js` & `Debugger.js`: Top-level orchestration and runtime diagnostics.
+  - `HUDController.js` &`: Top-level orchestration and runtime diagnostics.
 - `documentation/`: Definitive design specs. Consult these for feature scope:
   - `space_arms_dealer_bible.md`: Core gameplay loops (12/24h shifts, factions, tactile checkout, supplier contracts).
   - `TagTaxonomy.md` & `Items.md`: Tagging rules and weapon attributes.
@@ -46,3 +46,13 @@ Copilot must respect the existing modular architecture:
 4. **Game Design Alignment:**
    - Adhere strictly to the three MVP factions: **Scavengers**, **Mercenaries**, and **Explorers**.
    - Maintain physical inventory constraints (grid dimensions, stack depth, hovercart slots) as specified in `documentation/space_arms_dealer_bible.md`.
+
+## 4. Ask Mode responses
+
+1. Always provide responses that align with the project's architecture, coding standards, and design principles outlined above.
+2. Always be very clear about where to place each piece of code. Precede each code block with the name of the module it should go in.
+3. When suggesting new modules or files, ensure they fit logically within the existing directory structure and naming conventions.
+4. Avoid introducing any global state outside of `PlayerState.js` and `DatabaseManager.js`.
+5. Maintain consistency with the coding style used throughout the project (e.g., ES6 modules, Phaser 3 conventions, and monospace typography for UI text).
+6. When in doubt, refer back to the documentation in the `documentation/` directory for guidance on design decisions and feature scope.
+7. Never put scanlines on top of images or text. If you add scanlines it should always go below them in the rendering order.

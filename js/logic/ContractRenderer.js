@@ -1,5 +1,3 @@
-import { Debugger } from "./Debugger.js";
-
 export class ContractRenderer {
   /**
    * Generates the HTML layout for the Contracts tab inside the Tablet.
@@ -39,9 +37,9 @@ export class ContractRenderer {
         } else if (!isUnlocked) {
           actionButtonHTML = `<button class="retro-tab-btn" disabled style="opacity: 0.5; cursor: not-allowed; width: 100%; text-align: center; color: var(--color-text-muted);">LOCKED</button>`;
         } else if (!canAfford) {
-          actionButtonHTML = `<button class="action-btn danger" disabled style="opacity: 0.7; cursor: not-allowed; width: 100%; font-size: 11px;">INSUFFICIENT FUNDS</button>`;
+          actionButtonHTML = `<button class="action-btn danger" disabled style="opacity: 0.7; cursor: not-allowed; width: 100%; font-size: var(--font-size-11);">INSUFFICIENT FUNDS</button>`;
         } else {
-          actionButtonHTML = `<button class="action-btn" data-license-id="${license.id}" style="width: 100%; font-size: 12px;">SIGN CONTRACT</button>`;
+          actionButtonHTML = `<button class="action-btn" data-license-id="${license.id}" style="width: 100%; font-size: var(--font-size-12);">SIGN CONTRACT</button>`;
         }
 
         const globalRepColor = isGlobalRepMet
@@ -65,10 +63,10 @@ export class ContractRenderer {
                         <div class="item-details">
                             <div class="item-card-header">
                                 <span class="item-card-title">${license.name}</span>
-                                <span class="item-card-cost" style="color: var(--color-text-main); font-size: 11px; padding: 2px 6px; background: rgba(255,255,255,0.1); border-radius: 2px;">Tier ${license.tier}</span>
+                                <span class="item-card-cost" style="color: var(--color-text-main); font-size: var(--font-size-11); padding: 2px 6px; background: rgba(255,255,255,0.1); border-radius: 2px;">Tier ${license.tier}</span>
                             </div>
                             <div class="item-card-flavor">"${license.description}"</div>
-                            <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 6px; border-top: 1px dashed var(--color-border-subtle); padding-top: 6px;">
+                            <div style="display: flex; justify-content: space-between; font-size: var(--font-size-11); margin-top: 6px; border-top: 1px dashed var(--color-border-subtle); padding-top: 6px;">
                                 <span><span style="color: ${globalRepColor};">Req Rep: ${license.reqReputation} Pts</span>${factionHtml}</span>
                                 <span style="color: var(--color-text-main); font-weight: bold;">Cost: ${license.baseCost.toLocaleString()}c</span>
                             </div>

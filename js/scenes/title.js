@@ -22,16 +22,16 @@ export class TitleScene extends Phaser.Scene {
       },
     ];
 
-    this.add
-      .text(width / 2, height / 2 - 150, "SPACE ARMS DEALER", {
+    this.titleText = this.add
+      .text(0, 0, "SPACE ARMS DEALER", {
         fontFamily: "monospace",
         fontSize: "52px",
         color: "#e2e8f0",
       })
       .setOrigin(0.5);
 
-    this.add
-      .text(width / 2, height / 2 - 95, "LICENSED ARMS DISTRIBUTION TERMINAL", {
+    this.subtitleText = this.add
+      .text(0, 0, "LICENSED ARMS DISTRIBUTION TERMINAL", {
         fontFamily: "monospace",
         fontSize: "16px",
         color: "#94a3b8",
@@ -40,7 +40,7 @@ export class TitleScene extends Phaser.Scene {
 
     this.menuItems = this.commands.map((command, index) => {
       const menuItem = this.add
-        .text(width / 2, height / 2 + index * 48, command.label, {
+        .text(0, 0, command.label, {
           fontFamily: "monospace",
           fontSize: "24px",
           color: "#94a3b8",
@@ -55,21 +55,73 @@ export class TitleScene extends Phaser.Scene {
     });
 
     this.statusText = this.add
-      .text(width / 2, height / 2 + 175, "", {
+      .text(0, 0, "", {
         fontFamily: "monospace",
         fontSize: "16px",
         color: "#38bdf8",
       })
       .setOrigin(0.5);
 
+    this.textObjects = [
+      { object: this.titleText, fontSize: 52 },
+      { object: this.subtitleText, fontSize: 16 },
+      ...this.menuItems.map((object) => ({ object, fontSize: 24 })),
+      { object: this.statusText, fontSize: 16 },
+    ];
+    this.applyTextSize(
+      SettingsPanel.getTextSizeScale(SettingsPanel.getSavedTextSize()),
+    );
+    this.handleTextSizeChange = (event) =>
+      this.applyTextSize(event.detail.scale);
+    window.addEventListener("text-size-changed", this.handleTextSizeChange);
+
     this.input.keyboard.on("keydown-UP", () => this.selectCommand(-1));
     this.input.keyboard.on("keydown-DOWN", () => this.selectCommand(1));
     this.input.keyboard.on("keydown-ENTER", () => this.activateCommand());
 
+    this.layout(width, height);
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.updateMenuAppearance();
 
-    this.settingsPanel = new SettingsPanel();
-    this.events.once("shutdown", () => this.settingsPanel.destroy());
+    this.settingsPanel = new SettingsPanel({
+      onOpen: () => this.setMenuActive(false),
+      onClose: () => this.setMenuActive(true),
+    });
+    this.events.once("shutdown", () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
+      window.removeEventListener(
+        "text-size-changed",
+        this.handleTextSizeChange,
+      );
+      this.settingsPanel.destroy();
+    });
+  }
+
+  handleResize(gameSize) {
+    this.layout(gameSize.width, gameSize.height);
+  }
+
+  setMenuActive(isActive) {
+    this.input.enabled = isActive;
+    this.input.keyboard.enabled = isActive;
+
+    if (!isActive) {
+      this.selectedIndex = this.commands.findIndex(
+        (command) => command.label === "SETTINGS",
+      );
+      this.updateMenuAppearance();
+    }
+  }
+
+  layout(width, height) {
+    this.titleText.setPosition(width / 2, height / 2 - 150);
+    this.subtitleText.setPosition(width / 2, height / 2 - 95);
+
+    this.menuItems.forEach((menuItem, index) => {
+      menuItem.setPosition(width / 2, height / 2 + index * 48);
+    });
+
+    this.statusText.setPosition(width / 2, height / 2 + 175);
   }
 
   selectCommand(change) {
@@ -97,6 +149,12 @@ export class TitleScene extends Phaser.Scene {
       );
       menuItem.setColor(isSelected ? "#38bdf8" : "#94a3b8");
     });
+  }
+
+  applyTextSize(scale) {
+    this.textObjects.forEach(({ object, fontSize }) =>
+      object.setFontSize(fontSize * scale),
+    );
   }
 
   showStatus(message) {

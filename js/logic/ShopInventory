@@ -1,0 +1,10 @@
+export class Fixture {
+  constructor(data) {
+    this.id = data.id;
+    this.displayType = data.displayType;
+    this.x = data.x;
+    this.y = data.y;
+    this.gridDimensions = data.gridDimensions;
+    this.slots = data.slots || []; // { itemId, quantity, x, y, isRotated }
+  }
+}

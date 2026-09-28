@@ -3,6 +3,15 @@
 / ================================================================= */
 
 :root {
+  --text-scale: 1.15;
+  --font-size-10: calc(10px * var(--text-scale));
+  --font-size-11: calc(11px * var(--text-scale));
+  --font-size-12: calc(12px * var(--text-scale));
+  --font-size-13: calc(13px * var(--text-scale));
+  --font-size-14: calc(14px * var(--text-scale));
+  --font-size-16: calc(16px * var(--text-scale));
+  --font-size-24: calc(24px * var(--text-scale));
+
   /* Color Palette */
   --color-bg-base: #090d16;
   --color-panel: #0f172a;
@@ -17,6 +26,14 @@
     rgba(18, 16, 16, 0) 50%,
     rgba(0, 0, 0, 0.25) 50%
   );
+}
+
+:root[data-text-size="smaller"] {
+  --text-scale: 0.95;
+}
+
+:root[data-text-size="larger"] {
+  --text-scale: 1.4;
 }
 
 * {
@@ -37,6 +54,7 @@ body,
 body {
   background-color: var(--color-bg-base);
   color: var(--color-text-main);
+  font-size: var(--font-size-16);
   display: flex;
   flex-direction: column;
   min-height: 100vh;
@@ -70,6 +88,7 @@ main {
 
 .retro-window {
   position: absolute;
+  pointer-events: auto;
   --bg-color: var(--color-panel);
   background: var(--scanline-pattern), var(--bg-color);
   background-size:
@@ -129,7 +148,7 @@ main {
 }
 
 .retro-window-title {
-  font-size: 13px;
+  font-size: var(--font-size-13);
   font-weight: bold;
   color: #f8fafc;
   letter-spacing: 1px;
@@ -139,7 +158,7 @@ main {
   background: transparent;
   border: none;
   color: var(--color-text-muted);
-  font-size: 16px;
+  font-size: var(--font-size-16);
   cursor: pointer;
   padding: 0 4px;
   line-height: 1;
@@ -151,6 +170,7 @@ main {
 
 .retro-window-body {
   flex: 1;
+  min-height: 0;
   padding: 10px;
   overflow: hidden;
   display: flex;
@@ -172,7 +192,7 @@ main {
   color: var(--color-text-muted);
   padding: 6px 10px;
   text-align: left;
-  font-size: 11px;
+  font-size: var(--font-size-11);
   font-family: inherit;
   cursor: pointer;
   transition: all 0.1s ease;
@@ -299,7 +319,8 @@ button {
   gap: 12px;
   transition: border-color 0.1s ease;
 }
-.item-card:hover {
+.item-card:hover,
+.item-card.selected {
   border-color: var(--color-border-active);
   --bg-color: #0f172a;
 }
@@ -330,11 +351,13 @@ button {
     auto;
 
   color: var(--color-accent);
-  font-size: 10px;
+  font-size: var(--font-size-10);
   padding: 2px 6px;
   border-radius: 2px;
   text-transform: uppercase;
   border: 1px solid #334155;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .item-card-header {
@@ -345,16 +368,16 @@ button {
 }
 .item-card-title {
   font-weight: bold;
-  font-size: 13px;
+  font-size: var(--font-size-13);
   color: var(--color-text-main);
 }
 .item-card-cost {
   color: #10b981;
   font-weight: bold;
-  font-size: 13px;
+  font-size: var(--font-size-13);
 }
 .item-card-flavor {
-  font-size: 11px;
+  font-size: var(--font-size-11);
   color: var(--color-text-muted);
   font-style: italic;
   line-height: 1.3;
@@ -362,11 +385,40 @@ button {
 .item-card-footer {
   display: flex;
   flex-direction: column;
-  font-size: 11px;
+  font-size: var(--font-size-11);
   color: var(--color-text-muted);
   border-top: 1px dashed var(--color-border-subtle);
   padding-top: 6px;
   margin-top: 4px;
+}
+
+/* ================================================================= /
+/ INVENTORY DATABASE LIST (FIXED COLUMN GRID)                       /
+/ ================================================================= */
+
+.inventory-item-card {
+  display: grid;
+  grid-template-columns: 2fr 0.7fr 3fr 2fr 1.6fr;
+  align-items: start;
+}
+
+.inventory-item-card .item-card-footer {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.item-card-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-content: flex-start;
+}
+
+.item-card-footer-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
 }
 
 /* ================================================================= /
@@ -407,7 +459,7 @@ button {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: var(--font-size-14);
 }
 
 .hud-label {
@@ -419,7 +471,7 @@ button {
 .hud-value {
   color: #10b981; /* Emerald Green */
   font-weight: bold;
-  font-size: 16px;
+  font-size: var(--font-size-16);
   text-shadow: 0 0 5px rgba(16, 185, 129, 0.4);
 }
 
@@ -457,7 +509,7 @@ button {
 .dialogue-text {
   height: 5.4em;
   overflow: hidden;
-  font-size: 16px;
+  font-size: var(--font-size-16);
   line-height: 1.35;
   white-space: pre-wrap;
   overflow-wrap: break-word;
@@ -466,7 +518,7 @@ button {
 .dialogue-continue {
   align-self: flex-end;
   color: var(--color-border-active);
-  font-size: 13px;
+  font-size: var(--font-size-13);
   visibility: hidden;
   animation: dialogue-pulse 0.8s steps(2, end) infinite;
 }
@@ -486,22 +538,25 @@ button {
   top: 50%;
   transform: translate(-50%, -50%);
   width: min(520px, calc(100% - 40px));
-  min-height: 280px;
+  height: min(560px, calc(100vh - 40px));
   z-index: 700;
   pointer-events: auto;
+  overflow: hidden;
 }
 
 .settings-content {
   display: flex;
   flex: 1;
+  min-height: 0;
   flex-direction: column;
   gap: 24px;
   padding: 22px;
+  overflow-y: auto;
 }
 
 .settings-title {
   color: var(--color-text-main);
-  font-size: 24px;
+  font-size: var(--font-size-24);
   font-weight: bold;
   letter-spacing: 1px;
 }
@@ -511,10 +566,12 @@ button {
   flex-direction: column;
   gap: 8px;
   color: var(--color-text-muted);
-  font-size: 14px;
+  font-size: var(--font-size-14);
 }
 
-.settings-resolution {
+.settings-resolution,
+.settings-display-mode,
+.settings-text-size {
   border: 1px solid var(--color-border-subtle);
   background: var(--color-bg-base);
   color: var(--color-text-main);
@@ -524,7 +581,7 @@ button {
 
 .settings-status {
   color: var(--color-border-active);
-  font-size: 14px;
+  font-size: var(--font-size-14);
 }
 
 .settings-actions {

@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, screen } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs/promises";
 
 // ES6 Module fix for __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -33,13 +34,24 @@ function getDisplaySettings(win) {
     )
     .sort((first, second) => first.width - second.width);
 
-  return { current: { width, height }, resolutions };
+  return {
+    current: { width, height },
+    resolutions,
+    displayMode: getDisplayMode(win),
+  };
+}
+
+const displayModes = new WeakMap();
+
+function getDisplayMode(win) {
+  return displayModes.get(win) ?? "windowed";
 }
 
 const createWindow = () => {
   const win = new BrowserWindow({
     width: 1280,
     height: 720,
+    fullscreen: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -47,6 +59,7 @@ const createWindow = () => {
     },
   });
 
+  displayModes.set(win, "fullscreen");
   win.loadURL("http://localhost:5173");
 };
 
@@ -75,6 +88,32 @@ ipcMain.handle("display:set-resolution", (event, resolution) => {
   return { width, height };
 });
 
+ipcMain.handle("display:set-mode", (event, mode) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+
+  if (!["windowed", "borderless", "fullscreen"].includes(mode)) {
+    throw new Error("Unsupported display mode");
+  }
+
+  if (mode === "windowed") {
+    win.setKiosk(false);
+    win.setFullScreen(false);
+  }
+
+  if (mode === "borderless") {
+    win.setFullScreen(false);
+    win.setKiosk(true);
+  }
+
+  if (mode === "fullscreen") {
+    win.setKiosk(false);
+    win.setFullScreen(true);
+  }
+
+  displayModes.set(win, mode);
+  return getDisplaySettings(win);
+});
+
 app.whenReady().then(() => {
   createWindow();
 
@@ -85,4 +124,22 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
+});
+
+const SAVE_FILE_PATH = path.join(app.getPath("userData"), "savegame.json");
+
+ipcMain.handle("save:write", async (event, payload) => {
+  // fixed filename under userData avoids any path-traversal from renderer input
+  await fs.writeFile(SAVE_FILE_PATH, JSON.stringify(payload), "utf-8");
+  return true;
+});
+
+ipcMain.handle("save:read", async () => {
+  try {
+    const raw = await fs.readFile(SAVE_FILE_PATH, "utf-8");
+    return JSON.parse(raw);
+  } catch (err) {
+    if (err.code === "ENOENT") return null; // no save yet
+    throw err;
+  }
 });

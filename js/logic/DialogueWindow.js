@@ -19,6 +19,14 @@ export class DialogueWindow {
     document.getElementById("ui-layer").appendChild(this.element);
 
     this.element.addEventListener("pointerdown", () => this.advance());
+
+    this.handleKeydown = (event) => {
+      if (this.element.classList.contains("hidden")) return;
+      if (event.code !== "Space" && event.code !== "Enter") return;
+      event.preventDefault();
+      this.advance();
+    };
+    window.addEventListener("keydown", this.handleKeydown);
   }
 
   show(message) {
@@ -52,6 +60,7 @@ export class DialogueWindow {
 
   destroy() {
     this.stopTyping();
+    window.removeEventListener("keydown", this.handleKeydown);
     this.element.remove();
   }
 

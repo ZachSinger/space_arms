@@ -12,11 +12,7 @@ export class BootScene extends Phaser.Scene {
     this.load.json("items", "data/Items.json");
     this.load.json("iconset", "data/IconSet.json");
     this.load.json("licenses", "data/Licenses.json");
-    this.load.atlas(
-      "item-icons",
-      "img/IconSet.png",
-      "data/IconSet.json",
-    );
+    this.load.atlas("item-icons", "img/IconSet.png", "data/IconSet.json");
   }
 
   create() {
@@ -26,6 +22,7 @@ export class BootScene extends Phaser.Scene {
 
     database.loadItemsJSON(rawItems);
     database.loadLicensesJSON(rawLicenses);
+
     this.scene.start("scene-title");
   }
 }
