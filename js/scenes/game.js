@@ -239,6 +239,10 @@ export class GameScene extends Phaser.Scene {
     this.player = new Player(this, zonePixelX + zonePixelW * 0.5, zonePixelY + zonePixelH * 0.75);
     this.physics.add.collider(this.player.sprite, this.room.wallGroup);
     this.physics.add.collider(this.player.sprite, this.obstacleGroup);
+    // The register has its own static body (see drawRegister) -- not part of obstacleGroup,
+    // since that's shared with customerGroup's collider and customers need to stand almost
+    // flush against it to queue. The player has no such constraint.
+    this.physics.add.collider(this.player.sprite, this.registerSprite);
     this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
 
     // Loading Pad (bible Step 10): where ordered restock crates physically spawn, to be
@@ -382,20 +386,30 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
-  // The single keydown-E handler for both ends of hauling: picks up the nearest
-  // not-yet-carried crate if the player isn't already holding one, or -- if they are --
-  // delivers it to the shelf when close enough. Deliberately one shared key (rather than
-  // separate pickup/drop keys) since the player is only ever in one of these two states at
-  // a time; which action makes sense is already implied by whether they're carrying
-  // something.
+  // The single keydown-E handler for all player interactions: delivers a carried crate if
+  // holding one, otherwise tries (in order) picking up a nearby crate, then operating the
+  // register -- whichever is actually in range. One shared key rather than separate ones
+  // per action since at most one of these is ever actually reachable at a time in
+  // practice (the crate pickup spot, the shelf, and the register are all far apart).
   handleInteract() {
     if (this.carriedCrate) {
       this.tryDeliverCarriedCrate();
-    } else {
-      this.tryPickUpNearestCrate();
+      return;
     }
+
+    if (this.tryPickUpNearestCrate()) return;
+    if (this.tryOpenRegister()) return;
+
+    this.showFloatingText(
+      this.player.sprite.x,
+      this.player.sprite.y - 40,
+      "Nothing nearby to interact with",
+      "#94a3b8",
+    );
   }
 
+  // Returns true if a crate was actually picked up, so handleInteract can fall through to
+  // trying other interactions (the register) when there's nothing to pick up here.
   tryPickUpNearestCrate() {
     const { x, y } = this.player.sprite;
     let nearest = null;
@@ -409,10 +423,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    if (!nearest) {
-      this.showFloatingText(x, y - 40, "Nothing nearby to pick up", "#94a3b8");
-      return;
-    }
+    if (!nearest) return false;
 
     this.restockCrates = this.restockCrates.filter((crate) => crate !== nearest);
     this.carriedCrate = nearest;
@@ -420,6 +431,16 @@ export class GameScene extends Phaser.Scene {
 
     const item = database.getItem(nearest.itemId);
     this.showFloatingText(x, y - 40, `Picked up ${item.name} x${nearest.quantity}`, "#38bdf8");
+    return true;
+  }
+
+  // Keyboard equivalent of clicking the register sprite -- returns true/false (rather than
+  // just calling openRegisterWindow() directly) so handleInteract knows whether this
+  // actually did anything, for its own fallback "nothing nearby" message.
+  tryOpenRegister() {
+    if (!this.isPlayerNearRegister()) return false;
+    this.openRegisterWindow();
+    return true;
   }
 
   tryDeliverCarriedCrate() {
@@ -498,6 +519,14 @@ export class GameScene extends Phaser.Scene {
       .setDepth(2)
       .setInteractive({ useHandCursor: true });
     sprite.on("pointerdown", () => this.openRegisterWindow());
+
+    // Deliberately NOT added to obstacleGroup (shared with customerGroup's collider) --
+    // customers need to stand almost flush against its front edge to queue (see
+    // registerQueueAnchor), and a body solid to THEM would block that. The player has no
+    // such constraint, so give it its own static body and collide only the player against
+    // it (see the player setup below, where this.registerSprite is now available).
+    this.physics.add.existing(sprite, true);
+    this.registerSprite = sprite;
   }
 
   // Clicking the register re-opens the checkout window if the player closed it (it has no

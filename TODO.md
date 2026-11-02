@@ -35,6 +35,14 @@ notice something that needs doing but isn't being done right now.
       `startCheckout()` now require the player to be standing at `registerQueueAnchor`
       (see `isPlayerNearRegister`), and the window auto-closes the moment they walk away
       (`updateRegisterWindowVisibility()`, checked every frame).
+- [x] ~~Player had no collision with the register (walked straight through it)~~ -- the
+      register now has its own static physics body (`drawRegister`), collided only against
+      the player (not `obstacleGroup`, which is shared with `customerGroup` -- customers
+      still need to stand almost flush against it to queue, which a shared solid body
+      would've blocked).
+- [x] ~~No keyboard way to operate the register~~ -- pressing E now also tries the register
+      (`tryOpenRegister()`) if nothing closer (a crate) is in range, in addition to the
+      existing click-to-open.
 - [x] ~~Game auto-started a shift the instant the scene loaded~~ -- the store now starts
       closed (`ShiftClock.started = false`, HUD shows "CLOSED", pause button disabled) and
       shows a pre-shift "STORE CLOSED / START SHIFT" window (`ShiftSummaryWindow.
