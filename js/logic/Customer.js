@@ -20,7 +20,10 @@ const SEEKING_TIMEOUT_MS = 15000;
 // Display size every customer sprite is forced to, regardless of a given facing's native
 // pixel dimensions (side-profile crops are narrower than front/back ones) -- keeps a
 // character's apparent size consistent as it turns instead of visibly popping/resizing.
-export const SPRITE_DISPLAY_WIDTH = 28;
+// Square, not tall-and-thin: the Seventh Generation art's own crops are themselves roughly
+// square (~515x520px), unlike the old Sixth Generation art this was originally tuned for --
+// forcing the old narrow 28x48 box onto this art stretched every character noticeably.
+export const SPRITE_DISPLAY_WIDTH = 46;
 export const SPRITE_DISPLAY_HEIGHT = 48;
 
 // Walks to a fixture, grabs a small randomized handful of items (snapshotting each item's

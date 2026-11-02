@@ -7,9 +7,10 @@ import { pickPlayerCharacterTextures } from "./CustomerSprites.js";
 // the player doesn't feel sluggish next to the NPCs walking around them.
 const MOVE_SPEED = 160;
 
-// Matches Customer.js's own display size so the player reads as the same "scale of
-// person" as every customer on the floor -- only visually distinct via tint (see below).
-export const PLAYER_DISPLAY_WIDTH = 28;
+// Matches Customer.js's own display size (square, not tall-and-thin -- see that file's
+// comment) so the player reads as the same "scale of person" as every customer on the
+// floor -- only visually distinct via tint (see below).
+export const PLAYER_DISPLAY_WIDTH = 46;
 export const PLAYER_DISPLAY_HEIGHT = 48;
 
 // Temporary: no dedicated player sprite exists yet (see TODO.md), so this reuses one

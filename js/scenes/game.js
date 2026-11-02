@@ -3,7 +3,7 @@ import { ManagerTablet } from "../logic/ManagerTablet.js";
 import { PlayerState } from "../logic/PlayerState.js";
 import { HUDController } from "../logic/HUDController.js";
 import { Fixture } from "../logic/ShopInventory.js";
-import { Customer, SPRITE_DISPLAY_HEIGHT } from "../logic/Customer.js";
+import { Customer, SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT } from "../logic/Customer.js";
 import { Player } from "../logic/Player.js";
 import { CheckoutWindow } from "../logic/CheckoutWindow.js";
 import { TileRoom } from "../logic/TileRoom.js";
@@ -392,7 +392,7 @@ export class GameScene extends Phaser.Scene {
   // pixel (shelfStandPoint), which is what let them jam into each other there too.
   reserveShelfSlot() {
     const inFlight = this.customers.filter((c) => c.state === "SEEK_SHELF").length;
-    const spacing = 36;
+    const spacing = SPRITE_DISPLAY_WIDTH + 8;
     return {
       x: this.shelfStandPoint.x + spreadOffset(inFlight) * spacing,
       y: this.shelfStandPoint.y,
