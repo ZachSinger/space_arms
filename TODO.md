@@ -9,10 +9,13 @@ notice something that needs doing but isn't being done right now.
       for this specific item. Replace with a proper generated icon.
 - [ ] No dedicated player sprite exists yet -- `Player.js` reuses one customer character's
       art (tinted cyan to stand out). Replace with real player-specific art eventually.
-- [ ] At least one extracted customer sprite has a leftover crop/bleed artifact (a thin
-      vertical line baked into the image) -- confirmed in
-      `img/Icons_Extracted/Customers/mercenary_01_right.png`. Not yet audited across all 84
-      customer sprites; worth a spot-check/re-extraction pass.
+- [x] ~~Crop/bleed artifact in `mercenary_01_right.png`~~ -- moot, Sixth Generation customer
+      art was fully replaced by Seventh Generation (see below); the file no longer exists.
+- [x] Customer art upgraded Sixth -> Seventh Generation: 32 characters (128 images) kept
+      from 8 of the 10 new sheets (excluded 2 that were in a different, chunkier pixel-art
+      sub-style). Higher hit rate this time -- all 40 characters reviewed passed the
+      same-character-across-all-4-facings check (vs 21/40 last generation). See
+      `scripts/extract_seventh_gen_sprites.py`.
 
 ## Known Issues
 - Dead-end bug: `this.fixture` (the one demo shelf) is seeded with a fixed 14 total items
