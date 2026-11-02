@@ -40,8 +40,12 @@ export class InventoryRenderer {
       }
 
       // Build the card layout (each field is a fixed grid column)
+      const iconHTML = item.image
+        ? `<img class="item-icon" src="${item.image}" alt="" />`
+        : `<div class="item-icon"></div>`;
       html += `
             <div class="item-card inventory-item-card" data-index="${index}">
+                ${iconHTML}
                 <span class="item-card-title">${item.name}</span>
                 <span class="item-card-cost">${item.baseCost}c</span>
                 <div class="item-card-flavor">"${item.flavor}"</div>

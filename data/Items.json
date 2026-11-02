@@ -1965,7 +1965,8 @@
     "stackSize": 1,
     "baseCost": 130,
     "fits": ["Flak Canisters", "Mortar Shells"],
-    "license": "lic_edge_blackwood"
+    "license": "lic_edge_blackwood",
+    "image": "img/Icons_Extracted/_Bonus_Variety/attachments_stocks/stock-tech-black-blue-orb.png"
   },
   {
     "id": "att_stk_09",

@@ -333,6 +333,7 @@ button {
   border: 1px solid var(--color-border-subtle);
   border-radius: 4px;
   image-rendering: pixelated;
+  object-fit: contain;
   flex-shrink: 0;
   box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
 }
@@ -399,7 +400,7 @@ button {
 
 .inventory-item-card {
   display: grid;
-  grid-template-columns: 2fr 0.7fr 3fr 2fr 1.6fr;
+  grid-template-columns: 56px 2fr 0.7fr 3fr 2fr 1.6fr;
   align-items: start;
 }
 
@@ -438,12 +439,24 @@ button {
   position: absolute;
   width: 150px;
   cursor: pointer;
-  justify-content: space-between;
+  justify-content: flex-start;
   user-select: none;
   transition:
     transform 0.3s ease,
     opacity 0.3s ease,
     border-color 0.1s ease;
+}
+
+.checkout-item-card .item-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.checkout-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .checkout-item-card.scanned {

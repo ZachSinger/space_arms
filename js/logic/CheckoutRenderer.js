@@ -15,10 +15,16 @@ export class CheckoutRenderer {
     const itemsHTML = cart
       .map((entry, index) => {
         const item = databaseManager.getItem(entry.itemId);
+        const iconHTML = item.image
+          ? `<img class="item-icon" src="${item.image}" alt="" />`
+          : `<div class="item-icon"></div>`;
         return `
           <div class="item-card checkout-item-card" data-index="${index}" data-scanned="false">
-            <span class="item-card-title">${item.name}</span>
-            <span class="item-card-cost">${entry.price}c</span>
+            ${iconHTML}
+            <div class="checkout-item-text">
+              <span class="item-card-title">${item.name}</span>
+              <span class="item-card-cost">${entry.price}c</span>
+            </div>
           </div>
         `;
       })
