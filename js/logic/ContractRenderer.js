@@ -1,17 +1,13 @@
 export class ContractRenderer {
   /**
-   * Generates the HTML layout for the Contracts tab inside the Tablet.
+   * Generates the Contracts tab's own content (the tab bar/chrome around it is owned by
+   * whatever window hosts this -- see ManagerTablet.js).
    * @param {Array<SupplierLicense>} licenses - Array of license objects
    * @param {PlayerState} playerState - The central player state instance
    */
   static generateHTML(licenses, playerState) {
     let html = `
-            <div style="display: flex; gap: 4px; margin-bottom: 10px;">
-                <button class="retro-tab-btn" data-tab="shift">Shift</button>
-                <button class="retro-tab-btn" data-tab="inventory">Inventory DB</button>
-                <button class="retro-tab-btn active" data-tab="contracts">Contracts</button>
-            </div>
-            <div class="retro-slot custom-scrollbar" style="padding: 10px; display: flex; flex-direction: column; gap: 8px; flex: 1; overflow-y: auto;">
+            <div class="retro-slot custom-scrollbar" style="padding: 10px; display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto;">
         `;
 
     if (!licenses || licenses.length === 0) {

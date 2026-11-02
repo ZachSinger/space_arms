@@ -18,5 +18,14 @@ notice something that needs doing but isn't being done right now.
 - [ ] More fixtures / Build Mode (Step 22/41)
 - [ ] Procurement: Loading Pad, crate hauling (Step 10, 42, 62)
 - [ ] Factions: Scavengers/Mercenaries/Explorers demand & reputation (Step 24-28, 49, 51)
-- [ ] Manager's Tablet UI tabs beyond Inventory (Step 40)
+- [x] Manager's Tablet UI: unified tabbed window shell built (`js/logic/ManagerTablet.js`),
+      Inventory + Contracts tabs have real content. Remaining tabs (Employee, Supply,
+      Fixtures, Layout, Finances, Handbook) still just show a "COMING SOON" placeholder
+      until each one's own system exists -- see below.
+- [ ] Employee tab: needs the Employee/Hiring system to exist first (Step 13-19 above)
+- [ ] Supply tab: needs the Supplier/Procurement system to exist first (Part 3)
+- [ ] Fixtures tab: needs Build Mode / fixture purchasing to exist first (Step 22/41)
+- [ ] Layout tab: needs a shop-floor layout/move-fixtures tool to exist first (Step 63)
+- [ ] Finances tab: needs the End Day / itemized receipt flow to exist first (Step 43)
+- [ ] Handbook tab: needs actual handbook/reference content written (Step 36)
 - [ ] `npm run build` is not verified to produce a working production build (see AGENTS.md)

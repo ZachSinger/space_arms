@@ -211,6 +211,46 @@ main {
   font-weight: bold;
 }
 
+/* ================================================================= /
+/ MANAGER'S TABLET (UNIFIED TABBED WINDOW)                          /
+/ ================================================================= */
+
+.tablet-tab-bar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.tablet-tab-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tablet-tab-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tablet-tab-panel.hidden {
+  display: none;
+}
+
+.tablet-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-13);
+  letter-spacing: 2px;
+}
+
 .retro-slot {
   --bg-color: #090d16;
   background: var(--scanline-pattern), var(--bg-color);

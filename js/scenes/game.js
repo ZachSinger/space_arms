@@ -1,6 +1,5 @@
 import { WindowManager } from "../logic/WindowManager.js";
-import { UIWindow } from "../logic/UIWindow.js";
-import { InventoryRenderer } from "../logic/InventoryRenderer.js";
+import { ManagerTablet } from "../logic/ManagerTablet.js";
 import { PlayerState } from "../logic/PlayerState.js";
 import { HUDController } from "../logic/HUDController.js";
 import { Fixture } from "../logic/ShopInventory.js";
@@ -71,24 +70,10 @@ export class GameScene extends Phaser.Scene {
     this.creditsAtShiftStart = this.playerState.credits;
     this.reputationAtShiftStart = this.playerState.globalReputation;
 
-    this.inventoryWindow = new UIWindow(
-      {
-        id: "inventory-window",
-        title: "INVENTORY DATABASE",
-        contentHTML: InventoryRenderer.generateHTML(database),
-        width: "40vw",
-        height: "60vh",
-        x: 60,
-        y: 60,
-      },
-      this.windowManager,
-    );
-    this.disableInventoryNavigation = InventoryRenderer.enableListNavigation(
-      this.inventoryWindow.element,
-    );
+    this.managerTablet = new ManagerTablet(this.windowManager, this.playerState);
 
     this.input.keyboard.on("keydown-I", () =>
-      this.inventoryWindow.openWindow(),
+      this.managerTablet.openWindow(),
     );
 
     // --- Shop map: authored tile room (see RoomLayout.js), with the vertical
@@ -243,7 +228,7 @@ export class GameScene extends Phaser.Scene {
     this.spawnCustomer(); // first customer immediately so the loop is visible right away
 
     this.events.once("shutdown", () => {
-      this.disableInventoryNavigation();
+      this.managerTablet.disableInventoryNavigation();
       this.spawnTimer.remove();
     });
   }

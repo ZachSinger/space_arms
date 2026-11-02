@@ -40,9 +40,7 @@ Design is specified in detail in `documentation/` — consult it before inventin
 
 ## Current State Gotchas (read before touching related code)
 
-- `js/logic/PlayerState.js`, `SaveManager.js`, `js/logic/ContractRenderer.js`, and `js/logic/HUDController.js` are **scaffolded but not yet imported/wired into any scene**. Don't assume they're live just because they exist — check `js/scenes/game.js` imports to see what's actually active.
-- `HUDController` references DOM elements (`#hud-credits`, `#hud-rep`) that don't exist yet in `index.html`; it will throw if instantiated as-is.
-- `js/logic/ShopInventory` (the `Fixture` class) is missing its `.js` extension and currently cannot be imported as an ES module. Rename before wiring it up.
+- `SaveManager.js` is **scaffolded but not yet imported/wired into any scene**. Don't assume it's live just because it exists — check `js/scenes/game.js` imports to see what's actually active. (`PlayerState`, `HUDController`, `ShopInventory`'s `Fixture` class, and `ContractRenderer`, previously also listed here, are now wired in and live.)
+- The Manager's Tablet (`js/logic/ManagerTablet.js`) is a single unified tabbed window (bible Step 40) hosting `InventoryRenderer` and `ContractRenderer`'s content as tabs. Most of its other tabs (Employee, Supply, Fixtures, Layout, Finances, Handbook) are still just "COMING SOON" placeholders — see `TODO.md` for what each one is blocked on.
 - `StoreItem` (`js/logic/Items.js`) does not capture the `license` field present on every entry in `data/Items.json` — add it if you're building contract-gated purchasing.
-- Not every item has an `image` field in `data/Items.json` yet (121/245 as of this writing) — it's the item's detail-view art (tooltips/inspect panels), not a shelf icon. Always null-check before using it.
 - `SaveManager` requires subsystems to implement `applySave(data)`; `PlayerState` currently only has `serialize()`/`deserialize()` and is missing `applySave()`.

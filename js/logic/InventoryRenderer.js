@@ -2,15 +2,12 @@
 // FILE: InventoryRenderer.js
 // ==========================================
 export class InventoryRenderer {
+  // Renders just the Inventory tab's own content (the tab bar/chrome around it is owned
+  // by whatever window hosts this -- see ManagerTablet.js).
   static generateHTML(databaseManager) {
     const items = databaseManager.getAllItems();
 
     let html = `
-        <div style="display: flex; gap: 4px; margin-bottom: 10px;">
-            <button class="retro-tab-btn">Shift</button>
-            <button class="retro-tab-btn active">Inventory DB</button>
-            <button class="retro-tab-btn">Finances</button>
-        </div>
         <div class="retro-slot custom-scrollbar inventory-list" style="padding: 10px; display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto;">
     `;
 
@@ -96,8 +93,14 @@ export class InventoryRenderer {
       card.addEventListener("pointerenter", handlePointerEnter),
     );
 
+    // rootElement may be the whole window (hidden when the window itself is closed) or,
+    // when hosted inside the tabbed Manager's Tablet, a specific tab panel that gets its
+    // own "hidden" class toggled independently as the player switches tabs -- check both
+    // so arrow keys don't hijack navigation while a different tab is actually visible.
     const handleKeydown = (event) => {
       if (rootElement.classList.contains("hidden")) return;
+      const panel = list.closest(".tablet-tab-panel");
+      if (panel && panel.classList.contains("hidden")) return;
 
       if (event.code === "ArrowDown") {
         event.preventDefault();
