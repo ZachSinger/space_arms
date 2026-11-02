@@ -85,6 +85,20 @@ notice something that needs doing but isn't being done right now.
       `showFloatingText` itself more legible generally: bigger bold font, and it now holds
       fully visible for a beat before fading, instead of starting to fade immediately on
       spawn.
+- [x] ~~Manual pause (P key / HUD button) only froze the displayed clock -- customers (and
+      the spawn timer) kept moving/spawning~~ -- `GameScene.update()` now skips
+      `player.update()`/`customer.update()` entirely and zeroes velocity while
+      `shiftClock.isPaused && shiftClock.started`, and `spawnTimer.paused` is now
+      continuously synced to the clock's actual running state (manually paused, soft-
+      closed, or the very first shift not yet started) instead of a one-way flag that only
+      ever got set by soft-close.
+- [x] ~~Image-only checkout cards had no card frame at all, just a floating image with a
+      hover glow~~ -- the image-only change (previous round) was only supposed to drop the
+      name/price text and the small separate icon box, not the card's own bordered/
+      background frame (which it lost anyway, since that came from a shared `.item-card`
+      base class the new markup no longer used). Gave `.checkout-item-card` its own
+      border/background directly so each item is still visually "in a card", same as
+      elsewhere in the UI, just without text content.
 
 ## Bigger Features Not Yet Built (from the bible)
 - [x] Player avatar (`js/logic/Player.js`): WASD/arrow movement, collides with walls/

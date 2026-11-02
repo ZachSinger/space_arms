@@ -783,20 +783,37 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(time, delta) {
-    this.player.update();
-    this.customers.forEach((customer) => customer.update(delta));
+    // The Manual Toggle (bible Step 2) is supposed to freeze time "entirely" -- it used to
+    // only stop the clock's own displayed tick, while customers (and the player) kept
+    // right on moving and the spawn timer kept spawning more of them in the background.
+    // Only true once a shift has actually been started, though -- isPaused is also the
+    // (separate) pre-shift "store closed" state, during which free player movement is
+    // intentional/unaffected (there are no customers to freeze yet anyway).
+    const movementFrozen = this.shiftClock.isPaused && this.shiftClock.started;
 
-    if (this.carriedCrate) {
-      this.carriedCrate.followCarrier(this.player.sprite);
+    if (movementFrozen) {
+      // Skipping update() entirely (rather than calling it and then zeroing velocity)
+      // also freezes each customer's own internal state-machine timers, not just their
+      // on-screen movement.
+      this.player.sprite.body.setVelocity(0, 0);
+      this.customers.forEach((customer) => customer.sprite.body.setVelocity(0, 0));
+    } else {
+      this.player.update();
+      this.customers.forEach((customer) => customer.update(delta));
+
+      if (this.carriedCrate) {
+        this.carriedCrate.followCarrier(this.player.sprite);
+      }
     }
 
     this.shiftClock.update(delta);
 
     // Soft Close (bible Step 11): once hour 12 hits, stop admitting new customers, but the
     // shift itself doesn't end until everyone already inside has actually been served.
-    if (this.shiftClock.softClosed && this.spawnTimer.paused === false) {
-      this.spawnTimer.paused = true;
-    }
+    // Also stays paused for as long as the clock itself isn't actually running (manually
+    // paused, or the very first shift not yet started) -- otherwise a paused game could
+    // still be quietly spawning customers nobody can see move.
+    this.spawnTimer.paused = !this.shiftClock.started || this.shiftClock.isPaused || this.shiftClock.softClosed;
 
     if (this.shiftClock.softClosed && this.customers.length === 0 && !this.shiftEnded) {
       this.endShift();

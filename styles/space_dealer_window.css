@@ -476,6 +476,18 @@ button {
 }
 
 .checkout-item-card {
+  /* Still its own small bordered "window" (same scanline/border treatment as .item-card
+     elsewhere), just with no name/price/icon-box content inside it -- the image-only
+     change was about the content, not about losing the card frame entirely. */
+  --bg-color: #090d16;
+  background: var(--scanline-pattern), var(--bg-color);
+  background-size:
+    100% 4px,
+    auto;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 4px;
+  box-sizing: border-box;
+  padding: 6px;
   position: absolute;
   width: 72px;
   height: 72px;
@@ -483,7 +495,13 @@ button {
   user-select: none;
   transition:
     transform 0.3s ease,
-    opacity 0.3s ease;
+    opacity 0.3s ease,
+    border-color 0.1s ease;
+}
+
+.checkout-item-card:hover {
+  border-color: var(--color-border-active);
+  --bg-color: #0f172a;
 }
 
 .checkout-item-image {
@@ -491,14 +509,6 @@ button {
   height: 100%;
   image-rendering: pixelated;
   object-fit: contain;
-  /* A subtle glow instead of a border/background box -- the image itself is the whole
-     card now, nothing framing it, but it still needs *some* hover feedback. */
-  filter: drop-shadow(0 0 0 transparent);
-  transition: filter 0.1s ease;
-}
-
-.checkout-item-card:hover .checkout-item-image {
-  filter: drop-shadow(0 0 6px var(--color-border-active));
 }
 
 .checkout-item-card.scanned {
