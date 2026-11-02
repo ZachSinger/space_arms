@@ -2,6 +2,9 @@ export class PlayerState {
   constructor() {
     this.credits = 1500;
     this.globalReputation = 2;
+    // Customers who never entered the store because it was already at capacity (see
+    // GameScene.MAX_CUSTOMERS_IN_STORE) -- lost sales, not merely delayed ones.
+    this.customersTurnedAway = 0;
 
     // Factions strictly adhere to the MVP Tag Taxonomy. No Military.
     this.factionReputation = {
@@ -65,6 +68,7 @@ export class PlayerState {
       globalReputation: this.globalReputation,
       factionReputation: { ...this.factionReputation },
       activeLicenses: [...this.activeLicenses],
+      customersTurnedAway: this.customersTurnedAway,
     };
   }
 

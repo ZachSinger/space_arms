@@ -22,4 +22,5 @@ const config = {
   scene: [BootScene, TitleScene, GameScene],
 };
 
-new Phaser.Game(config);
+// Exposed for devtools/debugging convenience (e.g. `window.__game.scene.getScene(...)`).
+window.__game = new Phaser.Game(config);

@@ -1,0 +1,674 @@
+[
+  {
+    "key": "awning_shop_left",
+    "path": "img/Icons_Extracted/Tileset/awning_shop_left.png"
+  },
+  {
+    "key": "awning_shop_right",
+    "path": "img/Icons_Extracted/Tileset/awning_shop_right.png"
+  },
+  {
+    "key": "door_blast_keypad_01",
+    "path": "img/Icons_Extracted/Tileset/door_blast_keypad_01.png"
+  },
+  {
+    "key": "door_blast_keypad_02",
+    "path": "img/Icons_Extracted/Tileset/door_blast_keypad_02.png"
+  },
+  {
+    "key": "door_blast_plain_01",
+    "path": "img/Icons_Extracted/Tileset/door_blast_plain_01.png"
+  },
+  {
+    "key": "door_blast_single_small",
+    "path": "img/Icons_Extracted/Tileset/door_blast_single_small.png"
+  },
+  {
+    "key": "door_light_blank_01",
+    "path": "img/Icons_Extracted/Tileset/door_light_blank_01.png"
+  },
+  {
+    "key": "door_light_blank_02",
+    "path": "img/Icons_Extracted/Tileset/door_light_blank_02.png"
+  },
+  {
+    "key": "door_light_blank_03",
+    "path": "img/Icons_Extracted/Tileset/door_light_blank_03.png"
+  },
+  {
+    "key": "door_light_blank_wide",
+    "path": "img/Icons_Extracted/Tileset/door_light_blank_wide.png"
+  },
+  {
+    "key": "bin_trash_01",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/bin_trash_01.png"
+  },
+  {
+    "key": "bin_trash_02",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/bin_trash_02.png"
+  },
+  {
+    "key": "bin_trash_03",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/bin_trash_03.png"
+  },
+  {
+    "key": "bin_trash_04",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/bin_trash_04.png"
+  },
+  {
+    "key": "bin_trash_05",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/bin_trash_05.png"
+  },
+  {
+    "key": "camera_security_01",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/camera_security_01.png"
+  },
+  {
+    "key": "camera_security_02",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/camera_security_02.png"
+  },
+  {
+    "key": "camera_security_03",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/camera_security_03.png"
+  },
+  {
+    "key": "camera_security_04",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/camera_security_04.png"
+  },
+  {
+    "key": "camera_security_05",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/camera_security_05.png"
+  },
+  {
+    "key": "chair_office",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/chair_office.png"
+  },
+  {
+    "key": "crate_closed_01",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/crate_closed_01.png"
+  },
+  {
+    "key": "crate_closed_02",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/crate_closed_02.png"
+  },
+  {
+    "key": "crate_closed_03",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/crate_closed_03.png"
+  },
+  {
+    "key": "crate_closed_04",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/crate_closed_04.png"
+  },
+  {
+    "key": "crate_closed_05",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/crate_closed_05.png"
+  },
+  {
+    "key": "crate_open_01",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/crate_open_01.png"
+  },
+  {
+    "key": "crate_open_02",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/crate_open_02.png"
+  },
+  {
+    "key": "crate_open_03",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/crate_open_03.png"
+  },
+  {
+    "key": "crate_open_04",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/crate_open_04.png"
+  },
+  {
+    "key": "crate_open_05",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/crate_open_05.png"
+  },
+  {
+    "key": "desk_office",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/desk_office.png"
+  },
+  {
+    "key": "light_ceiling_01",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/light_ceiling_01.png"
+  },
+  {
+    "key": "light_ceiling_02",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/light_ceiling_02.png"
+  },
+  {
+    "key": "light_ceiling_03",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/light_ceiling_03.png"
+  },
+  {
+    "key": "light_ceiling_04",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/light_ceiling_04.png"
+  },
+  {
+    "key": "light_ceiling_05",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/light_ceiling_05.png"
+  },
+  {
+    "key": "locker_storage",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/locker_storage.png"
+  },
+  {
+    "key": "mannequin_01",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/mannequin_01.png"
+  },
+  {
+    "key": "mannequin_02",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/mannequin_02.png"
+  },
+  {
+    "key": "mannequin_03",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/mannequin_03.png"
+  },
+  {
+    "key": "mannequin_04",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/mannequin_04.png"
+  },
+  {
+    "key": "mannequin_05",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/mannequin_05.png"
+  },
+  {
+    "key": "monitor_crt_01",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/monitor_crt_01.png"
+  },
+  {
+    "key": "monitor_crt_02",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/monitor_crt_02.png"
+  },
+  {
+    "key": "monitor_crt_03",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/monitor_crt_03.png"
+  },
+  {
+    "key": "monitor_crt_04",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/monitor_crt_04.png"
+  },
+  {
+    "key": "monitor_crt_05",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/monitor_crt_05.png"
+  },
+  {
+    "key": "pipe_corner_01",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/pipe_corner_01.png"
+  },
+  {
+    "key": "pipe_corner_02",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/pipe_corner_02.png"
+  },
+  {
+    "key": "pipe_corner_03",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/pipe_corner_03.png"
+  },
+  {
+    "key": "pipe_corner_04",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/pipe_corner_04.png"
+  },
+  {
+    "key": "pipe_corner_05",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/pipe_corner_05.png"
+  },
+  {
+    "key": "plant_potted_01",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/plant_potted_01.png"
+  },
+  {
+    "key": "plant_potted_02",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/plant_potted_02.png"
+  },
+  {
+    "key": "plant_potted_03",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/plant_potted_03.png"
+  },
+  {
+    "key": "plant_potted_04",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/plant_potted_04.png"
+  },
+  {
+    "key": "plant_potted_05",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/plant_potted_05.png"
+  },
+  {
+    "key": "podium_octagon",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/podium_octagon.png"
+  },
+  {
+    "key": "prop_small_01",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/prop_small_01.png"
+  },
+  {
+    "key": "prop_small_02",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/prop_small_02.png"
+  },
+  {
+    "key": "prop_small_03",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/prop_small_03.png"
+  },
+  {
+    "key": "prop_small_04",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/prop_small_04.png"
+  },
+  {
+    "key": "prop_small_05",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/prop_small_05.png"
+  },
+  {
+    "key": "prop_small_06",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/prop_small_06.png"
+  },
+  {
+    "key": "prop_small_07",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/prop_small_07.png"
+  },
+  {
+    "key": "prop_small_08",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/prop_small_08.png"
+  },
+  {
+    "key": "prop_small_09",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/prop_small_09.png"
+  },
+  {
+    "key": "prop_small_10",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/prop_small_10.png"
+  },
+  {
+    "key": "prop_small_11",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/prop_small_11.png"
+  },
+  {
+    "key": "prop_small_12",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/prop_small_12.png"
+  },
+  {
+    "key": "prop_small_13",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/prop_small_13.png"
+  },
+  {
+    "key": "prop_small_14",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/prop_small_14.png"
+  },
+  {
+    "key": "rail_bench_01",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/rail_bench_01.png"
+  },
+  {
+    "key": "rail_bench_02",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/rail_bench_02.png"
+  },
+  {
+    "key": "rail_bench_03",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/rail_bench_03.png"
+  },
+  {
+    "key": "rail_bench_04",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/rail_bench_04.png"
+  },
+  {
+    "key": "rail_bench_05",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/rail_bench_05.png"
+  },
+  {
+    "key": "register_01",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/register_01.png"
+  },
+  {
+    "key": "register_02",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/register_02.png"
+  },
+  {
+    "key": "register_03",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/register_03.png"
+  },
+  {
+    "key": "register_04",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/register_04.png"
+  },
+  {
+    "key": "register_05",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/register_05.png"
+  },
+  {
+    "key": "server_standee",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/server_standee.png"
+  },
+  {
+    "key": "shelf_frame_01",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_frame_01.png"
+  },
+  {
+    "key": "shelf_frame_02",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_frame_02.png"
+  },
+  {
+    "key": "shelf_frame_03",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_frame_03.png"
+  },
+  {
+    "key": "shelf_frame_04",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_frame_04.png"
+  },
+  {
+    "key": "shelf_frame_05",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_frame_05.png"
+  },
+  {
+    "key": "shelf_universal_01",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_universal_01.png"
+  },
+  {
+    "key": "shelf_universal_02",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_universal_02.png"
+  },
+  {
+    "key": "shelf_universal_03",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_universal_03.png"
+  },
+  {
+    "key": "shelf_universal_04",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_universal_04.png"
+  },
+  {
+    "key": "shelf_universal_05",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_universal_05.png"
+  },
+  {
+    "key": "sign_neon_01",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/sign_neon_01.png"
+  },
+  {
+    "key": "sign_neon_02",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/sign_neon_02.png"
+  },
+  {
+    "key": "sign_neon_03",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/sign_neon_03.png"
+  },
+  {
+    "key": "sign_neon_04",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/sign_neon_04.png"
+  },
+  {
+    "key": "sign_neon_05",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/sign_neon_05.png"
+  },
+  {
+    "key": "sign_warning_01",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/sign_warning_01.png"
+  },
+  {
+    "key": "sign_warning_02",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/sign_warning_02.png"
+  },
+  {
+    "key": "sign_warning_03",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/sign_warning_03.png"
+  },
+  {
+    "key": "sign_warning_04",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/sign_warning_04.png"
+  },
+  {
+    "key": "sign_warning_05",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/sign_warning_05.png"
+  },
+  {
+    "key": "unit_hvac_01",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/unit_hvac_01.png"
+  },
+  {
+    "key": "unit_hvac_02",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/unit_hvac_02.png"
+  },
+  {
+    "key": "vending_machine_01",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/vending_machine_01.png"
+  },
+  {
+    "key": "vending_machine_02",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/vending_machine_02.png"
+  },
+  {
+    "key": "vending_machine_03",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/vending_machine_03.png"
+  },
+  {
+    "key": "vending_machine_04",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/vending_machine_04.png"
+  },
+  {
+    "key": "vending_machine_05",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/vending_machine_05.png"
+  },
+  {
+    "key": "workbench_drawer",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/workbench_drawer.png"
+  },
+  {
+    "key": "workbench_plain",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/workbench_plain.png"
+  },
+  {
+    "key": "workbench_tools",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/workbench_tools.png"
+  },
+  {
+    "key": "floor_concrete_clean_01",
+    "path": "img/Icons_Extracted/Tileset/floor_concrete_clean_01.png"
+  },
+  {
+    "key": "floor_concrete_marked_02",
+    "path": "img/Icons_Extracted/Tileset/floor_concrete_marked_02.png"
+  },
+  {
+    "key": "floor_dark_textured_circuit",
+    "path": "img/Icons_Extracted/Tileset/floor_dark_textured_circuit.png"
+  },
+  {
+    "key": "floor_dark_textured_plain",
+    "path": "img/Icons_Extracted/Tileset/floor_dark_textured_plain.png"
+  },
+  {
+    "key": "floor_dark_textured_seams",
+    "path": "img/Icons_Extracted/Tileset/floor_dark_textured_seams.png"
+  },
+  {
+    "key": "floor_dark_textured_tools",
+    "path": "img/Icons_Extracted/Tileset/floor_dark_textured_tools.png"
+  },
+  {
+    "key": "floor_grate_01",
+    "path": "img/Icons_Extracted/Tileset/floor_grate_01.png"
+  },
+  {
+    "key": "floor_grate_02",
+    "path": "img/Icons_Extracted/Tileset/floor_grate_02.png"
+  },
+  {
+    "key": "floor_grate_03",
+    "path": "img/Icons_Extracted/Tileset/floor_grate_03.png"
+  },
+  {
+    "key": "floor_grate_04",
+    "path": "img/Icons_Extracted/Tileset/floor_grate_04.png"
+  },
+  {
+    "key": "floor_grey_clean_01",
+    "path": "img/Icons_Extracted/Tileset/floor_grey_clean_01.png"
+  },
+  {
+    "key": "floor_grey_grimy_04",
+    "path": "img/Icons_Extracted/Tileset/floor_grey_grimy_04.png"
+  },
+  {
+    "key": "floor_grey_scratched_02",
+    "path": "img/Icons_Extracted/Tileset/floor_grey_scratched_02.png"
+  },
+  {
+    "key": "floor_grey_scuffed_03",
+    "path": "img/Icons_Extracted/Tileset/floor_grey_scuffed_03.png"
+  },
+  {
+    "key": "floor_hazard_right_01",
+    "path": "img/Icons_Extracted/Tileset/floor_hazard_right_01.png"
+  },
+  {
+    "key": "floor_hazard_sides_01",
+    "path": "img/Icons_Extracted/Tileset/floor_hazard_sides_01.png"
+  },
+  {
+    "key": "floor_hazard_top_01",
+    "path": "img/Icons_Extracted/Tileset/floor_hazard_top_01.png"
+  },
+  {
+    "key": "floor_hazard_top_bottom_02",
+    "path": "img/Icons_Extracted/Tileset/floor_hazard_top_bottom_02.png"
+  },
+  {
+    "key": "floor_light_clean_01",
+    "path": "img/Icons_Extracted/Tileset/floor_light_clean_01.png"
+  },
+  {
+    "key": "floor_light_cracked_08",
+    "path": "img/Icons_Extracted/Tileset/floor_light_cracked_08.png"
+  },
+  {
+    "key": "floor_light_grimy_07",
+    "path": "img/Icons_Extracted/Tileset/floor_light_grimy_07.png"
+  },
+  {
+    "key": "floor_light_mint_accent_04",
+    "path": "img/Icons_Extracted/Tileset/floor_light_mint_accent_04.png"
+  },
+  {
+    "key": "floor_light_scratched_03",
+    "path": "img/Icons_Extracted/Tileset/floor_light_scratched_03.png"
+  },
+  {
+    "key": "floor_light_speckled_02",
+    "path": "img/Icons_Extracted/Tileset/floor_light_speckled_02.png"
+  },
+  {
+    "key": "floor_light_stained_06",
+    "path": "img/Icons_Extracted/Tileset/floor_light_stained_06.png"
+  },
+  {
+    "key": "floor_light_teal_glow_05",
+    "path": "img/Icons_Extracted/Tileset/floor_light_teal_glow_05.png"
+  },
+  {
+    "key": "floor_plate_riveted_01",
+    "path": "img/Icons_Extracted/Tileset/floor_plate_riveted_01.png"
+  },
+  {
+    "key": "floor_plate_riveted_02",
+    "path": "img/Icons_Extracted/Tileset/floor_plate_riveted_02.png"
+  },
+  {
+    "key": "floor_ridged_thick_01",
+    "path": "img/Icons_Extracted/Tileset/floor_ridged_thick_01.png"
+  },
+  {
+    "key": "floor_ridged_thick_02",
+    "path": "img/Icons_Extracted/Tileset/floor_ridged_thick_02.png"
+  },
+  {
+    "key": "floor_ridged_thin_brass_01",
+    "path": "img/Icons_Extracted/Tileset/floor_ridged_thin_brass_01.png"
+  },
+  {
+    "key": "floor_ridged_thin_brass_02",
+    "path": "img/Icons_Extracted/Tileset/floor_ridged_thin_brass_02.png"
+  },
+  {
+    "key": "wall_base_arch_01",
+    "path": "img/Icons_Extracted/Tileset/wall_base_arch_01.png"
+  },
+  {
+    "key": "wall_base_arch_02",
+    "path": "img/Icons_Extracted/Tileset/wall_base_arch_02.png"
+  },
+  {
+    "key": "wall_base_plain_01",
+    "path": "img/Icons_Extracted/Tileset/wall_base_plain_01.png"
+  },
+  {
+    "key": "wall_base_plain_02",
+    "path": "img/Icons_Extracted/Tileset/wall_base_plain_02.png"
+  },
+  {
+    "key": "wall_beam_center_01",
+    "path": "img/Icons_Extracted/Tileset/wall_beam_center_01.png"
+  },
+  {
+    "key": "wall_beam_frame_02",
+    "path": "img/Icons_Extracted/Tileset/wall_beam_frame_02.png"
+  },
+  {
+    "key": "wall_brace_x_01",
+    "path": "img/Icons_Extracted/Tileset/wall_brace_x_01.png"
+  },
+  {
+    "key": "wall_brace_x_02",
+    "path": "img/Icons_Extracted/Tileset/wall_brace_x_02.png"
+  },
+  {
+    "key": "wall_dark_riveted_01",
+    "path": "img/Icons_Extracted/Tileset/wall_dark_riveted_01.png"
+  },
+  {
+    "key": "wall_dark_riveted_02",
+    "path": "img/Icons_Extracted/Tileset/wall_dark_riveted_02.png"
+  },
+  {
+    "key": "wall_dark_riveted_seam_03",
+    "path": "img/Icons_Extracted/Tileset/wall_dark_riveted_seam_03.png"
+  },
+  {
+    "key": "wall_dark_riveted_split_04",
+    "path": "img/Icons_Extracted/Tileset/wall_dark_riveted_split_04.png"
+  },
+  {
+    "key": "wall_light_panel_01",
+    "path": "img/Icons_Extracted/Tileset/wall_light_panel_01.png"
+  },
+  {
+    "key": "wall_light_panel_02",
+    "path": "img/Icons_Extracted/Tileset/wall_light_panel_02.png"
+  },
+  {
+    "key": "wall_light_panel_03",
+    "path": "img/Icons_Extracted/Tileset/wall_light_panel_03.png"
+  },
+  {
+    "key": "wall_light_panel_04",
+    "path": "img/Icons_Extracted/Tileset/wall_light_panel_04.png"
+  },
+  {
+    "key": "wall_pipes_junction_right",
+    "path": "img/Icons_Extracted/Tileset/wall_pipes_junction_right.png"
+  },
+  {
+    "key": "wall_pipes_left",
+    "path": "img/Icons_Extracted/Tileset/wall_pipes_left.png"
+  },
+  {
+    "key": "wall_window_star_02",
+    "path": "img/Icons_Extracted/Tileset/wall_window_star_02.png"
+  },
+  {
+    "key": "wall_window_star_narrow",
+    "path": "img/Icons_Extracted/Tileset/wall_window_star_narrow.png"
+  },
+  {
+    "key": "wall_window_star_wide",
+    "path": "img/Icons_Extracted/Tileset/wall_window_star_wide.png"
+  },
+  {
+    "key": "wall_window_star_widest",
+    "path": "img/Icons_Extracted/Tileset/wall_window_star_widest.png"
+  }
+]

@@ -1,0 +1,338 @@
+[
+  {
+    "key": "customer_civilian_01_down",
+    "path": "img/Icons_Extracted/Customers/civilian_01_down.png"
+  },
+  {
+    "key": "customer_civilian_01_left",
+    "path": "img/Icons_Extracted/Customers/civilian_01_left.png"
+  },
+  {
+    "key": "customer_civilian_01_right",
+    "path": "img/Icons_Extracted/Customers/civilian_01_right.png"
+  },
+  {
+    "key": "customer_civilian_01_up",
+    "path": "img/Icons_Extracted/Customers/civilian_01_up.png"
+  },
+  {
+    "key": "customer_civilian_02_down",
+    "path": "img/Icons_Extracted/Customers/civilian_02_down.png"
+  },
+  {
+    "key": "customer_civilian_02_left",
+    "path": "img/Icons_Extracted/Customers/civilian_02_left.png"
+  },
+  {
+    "key": "customer_civilian_02_right",
+    "path": "img/Icons_Extracted/Customers/civilian_02_right.png"
+  },
+  {
+    "key": "customer_civilian_02_up",
+    "path": "img/Icons_Extracted/Customers/civilian_02_up.png"
+  },
+  {
+    "key": "customer_civilian_03_down",
+    "path": "img/Icons_Extracted/Customers/civilian_03_down.png"
+  },
+  {
+    "key": "customer_civilian_03_left",
+    "path": "img/Icons_Extracted/Customers/civilian_03_left.png"
+  },
+  {
+    "key": "customer_civilian_03_right",
+    "path": "img/Icons_Extracted/Customers/civilian_03_right.png"
+  },
+  {
+    "key": "customer_civilian_03_up",
+    "path": "img/Icons_Extracted/Customers/civilian_03_up.png"
+  },
+  {
+    "key": "customer_explorer_01_down",
+    "path": "img/Icons_Extracted/Customers/explorer_01_down.png"
+  },
+  {
+    "key": "customer_explorer_01_left",
+    "path": "img/Icons_Extracted/Customers/explorer_01_left.png"
+  },
+  {
+    "key": "customer_explorer_01_right",
+    "path": "img/Icons_Extracted/Customers/explorer_01_right.png"
+  },
+  {
+    "key": "customer_explorer_01_up",
+    "path": "img/Icons_Extracted/Customers/explorer_01_up.png"
+  },
+  {
+    "key": "customer_explorer_02_down",
+    "path": "img/Icons_Extracted/Customers/explorer_02_down.png"
+  },
+  {
+    "key": "customer_explorer_02_left",
+    "path": "img/Icons_Extracted/Customers/explorer_02_left.png"
+  },
+  {
+    "key": "customer_explorer_02_right",
+    "path": "img/Icons_Extracted/Customers/explorer_02_right.png"
+  },
+  {
+    "key": "customer_explorer_02_up",
+    "path": "img/Icons_Extracted/Customers/explorer_02_up.png"
+  },
+  {
+    "key": "customer_explorer_03_down",
+    "path": "img/Icons_Extracted/Customers/explorer_03_down.png"
+  },
+  {
+    "key": "customer_explorer_03_left",
+    "path": "img/Icons_Extracted/Customers/explorer_03_left.png"
+  },
+  {
+    "key": "customer_explorer_03_right",
+    "path": "img/Icons_Extracted/Customers/explorer_03_right.png"
+  },
+  {
+    "key": "customer_explorer_03_up",
+    "path": "img/Icons_Extracted/Customers/explorer_03_up.png"
+  },
+  {
+    "key": "customer_explorer_04_down",
+    "path": "img/Icons_Extracted/Customers/explorer_04_down.png"
+  },
+  {
+    "key": "customer_explorer_04_left",
+    "path": "img/Icons_Extracted/Customers/explorer_04_left.png"
+  },
+  {
+    "key": "customer_explorer_04_right",
+    "path": "img/Icons_Extracted/Customers/explorer_04_right.png"
+  },
+  {
+    "key": "customer_explorer_04_up",
+    "path": "img/Icons_Extracted/Customers/explorer_04_up.png"
+  },
+  {
+    "key": "customer_explorer_05_down",
+    "path": "img/Icons_Extracted/Customers/explorer_05_down.png"
+  },
+  {
+    "key": "customer_explorer_05_left",
+    "path": "img/Icons_Extracted/Customers/explorer_05_left.png"
+  },
+  {
+    "key": "customer_explorer_05_right",
+    "path": "img/Icons_Extracted/Customers/explorer_05_right.png"
+  },
+  {
+    "key": "customer_explorer_05_up",
+    "path": "img/Icons_Extracted/Customers/explorer_05_up.png"
+  },
+  {
+    "key": "customer_mercenary_01_down",
+    "path": "img/Icons_Extracted/Customers/mercenary_01_down.png"
+  },
+  {
+    "key": "customer_mercenary_01_left",
+    "path": "img/Icons_Extracted/Customers/mercenary_01_left.png"
+  },
+  {
+    "key": "customer_mercenary_01_right",
+    "path": "img/Icons_Extracted/Customers/mercenary_01_right.png"
+  },
+  {
+    "key": "customer_mercenary_01_up",
+    "path": "img/Icons_Extracted/Customers/mercenary_01_up.png"
+  },
+  {
+    "key": "customer_mercenary_02_down",
+    "path": "img/Icons_Extracted/Customers/mercenary_02_down.png"
+  },
+  {
+    "key": "customer_mercenary_02_left",
+    "path": "img/Icons_Extracted/Customers/mercenary_02_left.png"
+  },
+  {
+    "key": "customer_mercenary_02_right",
+    "path": "img/Icons_Extracted/Customers/mercenary_02_right.png"
+  },
+  {
+    "key": "customer_mercenary_02_up",
+    "path": "img/Icons_Extracted/Customers/mercenary_02_up.png"
+  },
+  {
+    "key": "customer_mercenary_03_down",
+    "path": "img/Icons_Extracted/Customers/mercenary_03_down.png"
+  },
+  {
+    "key": "customer_mercenary_03_left",
+    "path": "img/Icons_Extracted/Customers/mercenary_03_left.png"
+  },
+  {
+    "key": "customer_mercenary_03_right",
+    "path": "img/Icons_Extracted/Customers/mercenary_03_right.png"
+  },
+  {
+    "key": "customer_mercenary_03_up",
+    "path": "img/Icons_Extracted/Customers/mercenary_03_up.png"
+  },
+  {
+    "key": "customer_mercenary_04_down",
+    "path": "img/Icons_Extracted/Customers/mercenary_04_down.png"
+  },
+  {
+    "key": "customer_mercenary_04_left",
+    "path": "img/Icons_Extracted/Customers/mercenary_04_left.png"
+  },
+  {
+    "key": "customer_mercenary_04_right",
+    "path": "img/Icons_Extracted/Customers/mercenary_04_right.png"
+  },
+  {
+    "key": "customer_mercenary_04_up",
+    "path": "img/Icons_Extracted/Customers/mercenary_04_up.png"
+  },
+  {
+    "key": "customer_mercenary_05_down",
+    "path": "img/Icons_Extracted/Customers/mercenary_05_down.png"
+  },
+  {
+    "key": "customer_mercenary_05_left",
+    "path": "img/Icons_Extracted/Customers/mercenary_05_left.png"
+  },
+  {
+    "key": "customer_mercenary_05_right",
+    "path": "img/Icons_Extracted/Customers/mercenary_05_right.png"
+  },
+  {
+    "key": "customer_mercenary_05_up",
+    "path": "img/Icons_Extracted/Customers/mercenary_05_up.png"
+  },
+  {
+    "key": "customer_mercenary_06_down",
+    "path": "img/Icons_Extracted/Customers/mercenary_06_down.png"
+  },
+  {
+    "key": "customer_mercenary_06_left",
+    "path": "img/Icons_Extracted/Customers/mercenary_06_left.png"
+  },
+  {
+    "key": "customer_mercenary_06_right",
+    "path": "img/Icons_Extracted/Customers/mercenary_06_right.png"
+  },
+  {
+    "key": "customer_mercenary_06_up",
+    "path": "img/Icons_Extracted/Customers/mercenary_06_up.png"
+  },
+  {
+    "key": "customer_mercenary_07_down",
+    "path": "img/Icons_Extracted/Customers/mercenary_07_down.png"
+  },
+  {
+    "key": "customer_mercenary_07_left",
+    "path": "img/Icons_Extracted/Customers/mercenary_07_left.png"
+  },
+  {
+    "key": "customer_mercenary_07_right",
+    "path": "img/Icons_Extracted/Customers/mercenary_07_right.png"
+  },
+  {
+    "key": "customer_mercenary_07_up",
+    "path": "img/Icons_Extracted/Customers/mercenary_07_up.png"
+  },
+  {
+    "key": "customer_mercenary_08_down",
+    "path": "img/Icons_Extracted/Customers/mercenary_08_down.png"
+  },
+  {
+    "key": "customer_mercenary_08_left",
+    "path": "img/Icons_Extracted/Customers/mercenary_08_left.png"
+  },
+  {
+    "key": "customer_mercenary_08_right",
+    "path": "img/Icons_Extracted/Customers/mercenary_08_right.png"
+  },
+  {
+    "key": "customer_mercenary_08_up",
+    "path": "img/Icons_Extracted/Customers/mercenary_08_up.png"
+  },
+  {
+    "key": "customer_mercenary_09_down",
+    "path": "img/Icons_Extracted/Customers/mercenary_09_down.png"
+  },
+  {
+    "key": "customer_mercenary_09_left",
+    "path": "img/Icons_Extracted/Customers/mercenary_09_left.png"
+  },
+  {
+    "key": "customer_mercenary_09_right",
+    "path": "img/Icons_Extracted/Customers/mercenary_09_right.png"
+  },
+  {
+    "key": "customer_mercenary_09_up",
+    "path": "img/Icons_Extracted/Customers/mercenary_09_up.png"
+  },
+  {
+    "key": "customer_mercenary_10_down",
+    "path": "img/Icons_Extracted/Customers/mercenary_10_down.png"
+  },
+  {
+    "key": "customer_mercenary_10_left",
+    "path": "img/Icons_Extracted/Customers/mercenary_10_left.png"
+  },
+  {
+    "key": "customer_mercenary_10_right",
+    "path": "img/Icons_Extracted/Customers/mercenary_10_right.png"
+  },
+  {
+    "key": "customer_mercenary_10_up",
+    "path": "img/Icons_Extracted/Customers/mercenary_10_up.png"
+  },
+  {
+    "key": "customer_scavenger_01_down",
+    "path": "img/Icons_Extracted/Customers/scavenger_01_down.png"
+  },
+  {
+    "key": "customer_scavenger_01_left",
+    "path": "img/Icons_Extracted/Customers/scavenger_01_left.png"
+  },
+  {
+    "key": "customer_scavenger_01_right",
+    "path": "img/Icons_Extracted/Customers/scavenger_01_right.png"
+  },
+  {
+    "key": "customer_scavenger_01_up",
+    "path": "img/Icons_Extracted/Customers/scavenger_01_up.png"
+  },
+  {
+    "key": "customer_scavenger_02_down",
+    "path": "img/Icons_Extracted/Customers/scavenger_02_down.png"
+  },
+  {
+    "key": "customer_scavenger_02_left",
+    "path": "img/Icons_Extracted/Customers/scavenger_02_left.png"
+  },
+  {
+    "key": "customer_scavenger_02_right",
+    "path": "img/Icons_Extracted/Customers/scavenger_02_right.png"
+  },
+  {
+    "key": "customer_scavenger_02_up",
+    "path": "img/Icons_Extracted/Customers/scavenger_02_up.png"
+  },
+  {
+    "key": "customer_scavenger_03_down",
+    "path": "img/Icons_Extracted/Customers/scavenger_03_down.png"
+  },
+  {
+    "key": "customer_scavenger_03_left",
+    "path": "img/Icons_Extracted/Customers/scavenger_03_left.png"
+  },
+  {
+    "key": "customer_scavenger_03_right",
+    "path": "img/Icons_Extracted/Customers/scavenger_03_right.png"
+  },
+  {
+    "key": "customer_scavenger_03_up",
+    "path": "img/Icons_Extracted/Customers/scavenger_03_up.png"
+  }
+]

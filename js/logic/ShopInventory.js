@@ -13,6 +13,11 @@ export class Fixture {
     return this.slots.find((slot) => slot.quantity > 0) || null;
   }
 
+  // Returns every slot still holding stock (used to pick varied items for a cart).
+  getAvailableSlots() {
+    return this.slots.filter((slot) => slot.quantity > 0);
+  }
+
   // Decrements a slot's quantity by one and returns the itemId taken, or null if the slot is empty.
   takeItem(slot) {
     if (!slot || slot.quantity <= 0) return null;
