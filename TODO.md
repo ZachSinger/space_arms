@@ -59,6 +59,9 @@ notice something that needs doing but isn't being done right now.
         pricing model (bible Step 45/48).
   - [ ] No employee auto-hauling (bible Step 14/15) -- the player has to do every haul by
         hand for now.
+  - [ ] No Hovercart/backpack capacity model at all (bible Step 10/63: "an abstract
+        character/employee inventory size, not a physical moving entity"). Crates currently
+        carry a flat RESTOCK_QUANTITY (5) with no carrying-capacity limit of any kind.
 - [ ] Customer patience bubbles + Go-Backs cart (Step 53/12)
 - [ ] Pre-shift pricing / Start Shift flow (Step 44/52)
 - [ ] Employees: hiring, Work Register / Stock Shelves tasks (Step 13-19)
