@@ -28,9 +28,13 @@ const MAX_CUSTOMERS_IN_STORE = 6;
 export const RESTOCK_QUANTITY = 5;
 export const WHOLESALE_FACTOR = 0.5;
 
-// How close the player has to be standing to actually operate the register -- bigger than
-// Crate's own INTERACT_RANGE since the register prop itself is physically larger (90x75).
-const REGISTER_INTERACT_RANGE = 70;
+// How close the player has to be standing to actually operate the register -- generous on
+// purpose (bigger than Crate's own INTERACT_RANGE, and bigger than the register's own
+// footprint) so "reasonably close" always counts, regardless of the exact angle the
+// player approaches from (early tuning measured from registerQueueAnchor made a
+// straight-on south approach trivially pass, but anything off-angle could easily exceed a
+// tighter radius despite looking right next to it).
+const REGISTER_INTERACT_RANGE = 130;
 const REGISTER_WIDTH = 90;
 const REGISTER_HEIGHT = 75;
 
@@ -222,11 +226,6 @@ export class GameScene extends Phaser.Scene {
     this.exitPoint = { x: this.storeDoor.x, y: this.storeDoor.y };
 
     this.checkoutWindow = new CheckoutWindow(this.windowManager);
-    // Ends the register session (teleports the player back, re-enables input) the moment
-    // the checkout window actually closes (X button or Escape) -- NOT when its content is
-    // just refreshed for the next customer in line, which never actually hides the window
-    // (see startCheckout's onComplete callback).
-    this.checkoutWindow.uiWindow.onClose = () => this.endRegisterSession();
     // Ordered line of customers waiting at the register; index 0 is the one currently
     // being checked out. Re-laid-out (via layoutRegisterLine) any time it changes so
     // customers visibly queue up single-file instead of stacking on the same spot.
@@ -409,10 +408,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   // The single keydown-E handler for all player interactions: delivers a carried crate if
-  // holding one, otherwise tries (in order) picking up a nearby crate, then operating the
-  // register -- whichever is actually in range. One shared key rather than separate ones
-  // per action since at most one of these is ever actually reachable at a time in
-  // practice (the crate pickup spot, the shelf, and the register are all far apart).
+  // holding one, otherwise tries (in order) picking up a nearby crate, exiting the
+  // register if already operating it, or entering it if close enough. One shared key
+  // rather than separate ones per action since at most one of these is ever actually
+  // reachable/relevant at a time in practice.
   handleInteract() {
     if (this.carriedCrate) {
       this.tryDeliverCarriedCrate();
@@ -420,6 +419,13 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.tryPickUpNearestCrate()) return;
+
+    // Toggle: pressing E again while already behind the counter leaves it, rather than
+    // trying (and failing) to re-enter an already-active session.
+    if (this.operatingRegister) {
+      this.endRegisterSession();
+      return;
+    }
     if (this.tryOpenRegister()) return;
 
     this.showFloatingText(
@@ -456,9 +462,11 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
-  // Keyboard equivalent of clicking the register sprite -- returns true/false (rather than
-  // just calling openRegisterWindow() directly) so handleInteract knows whether this
-  // actually did anything, for its own fallback "nothing nearby" message.
+  // Keyboard equivalent of clicking the register sprite -- enters the register (teleports
+  // behind the counter) if close enough, regardless of whether there's actually a
+  // customer to scan right now (see openRegisterWindow's comment). Returns true/false so
+  // handleInteract knows whether this actually did anything, for its own fallback
+  // "nothing nearby" message.
   tryOpenRegister() {
     if (!this.isPlayerNearRegister()) return false;
     this.openRegisterWindow();
@@ -551,24 +559,20 @@ export class GameScene extends Phaser.Scene {
     this.registerSprite = sprite;
   }
 
-  // Clicking the register re-opens the checkout window if the player closed it (it has no
-  // other way to come back otherwise), or just brings it to front if it's already open.
-  // Re-opening always restarts that customer's scan progress from scratch, since nothing
-  // outside the DOM currently tracks which individual items were already scanned. Requires
-  // the player to actually be standing at the register -- now that a real player character
-  // exists, operating it from anywhere on the map doesn't make sense anymore.
+  // Walking up and pressing E / clicking the register always lets the player step behind
+  // the counter (bible-style), regardless of whether there's actually a customer waiting
+  // right now -- only the item-scanning window itself is conditional on there being
+  // something to scan. If a customer does show up later while already standing there (see
+  // handleJoinQueue), the scan window opens automatically. Requires the player to
+  // actually be near the register -- now that a real player character exists, operating
+  // it from anywhere on the map doesn't make sense anymore.
   openRegisterWindow() {
     if (!this.isPlayerNearRegister()) return;
 
-    const isHidden = this.checkoutWindow.uiWindow.element.classList.contains("hidden");
-    if (!isHidden) {
-      this.checkoutWindow.uiWindow.openWindow(); // already open; just focus it
-      return;
-    }
+    this.beginRegisterSession(); // no-ops if already in one
 
     const frontCustomer = this.registerLine[0];
-    if (!frontCustomer) return; // nobody waiting; nothing to reopen
-    this.startCheckout(frontCustomer);
+    if (frontCustomer) this.startCheckout(frontCustomer); // re-renders/refocuses if already open
   }
 
   // Same "front of the counter" approach point customers queue at, not the register
@@ -610,14 +614,19 @@ export class GameScene extends Phaser.Scene {
   }
 
   // Teleports the player back to wherever they were standing right before
-  // beginRegisterSession(), and restores input + collision. Called automatically the
-  // moment the checkout window actually closes (see its onClose wiring above) -- not a
-  // distance/walk-away check anymore, since the player can't walk anywhere while frozen in
-  // place to begin with.
+  // beginRegisterSession(), and restores input + collision. Only ever called when the
+  // player deliberately leaves (pressing E again -- see handleInteract) -- NOT tied to the
+  // checkout window closing, since that now also happens automatically whenever the queue
+  // just runs out (nothing left to scan), which shouldn't eject them from the counter.
   endRegisterSession() {
     if (!this.operatingRegister) return;
 
     this.operatingRegister = false;
+    // Leaving the counter should dismiss any active scan UI too -- can't operate it from
+    // wherever they're about to be teleported back to.
+    if (!this.checkoutWindow.uiWindow.element.classList.contains("hidden")) {
+      this.checkoutWindow.uiWindow.close();
+    }
     this.player.sprite.body.enable = true;
     this.player.inputEnabled = true;
     this.player.teleportTo(
@@ -750,7 +759,13 @@ export class GameScene extends Phaser.Scene {
       this.layoutRegisterLine(); // shuffle everyone else forward one spot
 
       const nextCustomer = this.registerLine[0];
-      if (nextCustomer) this.startCheckout(nextCustomer);
+      if (nextCustomer) {
+        this.startCheckout(nextCustomer);
+      } else {
+        // Nothing left to scan -- hide the window, but stay standing behind the counter
+        // (does NOT call endRegisterSession(); see its own comment for why).
+        this.checkoutWindow.uiWindow.close();
+      }
     });
   }
 

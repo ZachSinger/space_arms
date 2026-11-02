@@ -9,6 +9,8 @@ notice something that needs doing but isn't being done right now.
       for this specific item. Replace with a proper generated icon.
 - [ ] No dedicated player sprite exists yet -- `Player.js` reuses one customer character's
       art (tinted cyan to stand out). Replace with real player-specific art eventually.
+- [x] Checkout scan cards simplified to just the item's own image -- no name/price text,
+      no separate small "icon" box/border (`CheckoutRenderer.js`/`.checkout-item-image`).
 - [x] ~~Crop/bleed artifact in `mercenary_01_right.png`~~ -- moot, Sixth Generation customer
       art was fully replaced by Seventh Generation (see below); the file no longer exists.
 - [x] Customer art upgraded Sixth -> Seventh Generation: 32 characters (128 images) kept
@@ -50,10 +52,21 @@ notice something that needs doing but isn't being done right now.
       `beginRegisterSession()`/`endRegisterSession()` teleport the player behind the
       counter (facing it) and disable their physics body + input entirely for the
       duration -- a disabled body can't collide at all, which is also the answer to "how
-      do we avoid collision problems doing this." Ends and teleports them back to exactly
-      where they were the moment the checkout window actually closes (`UIWindow.onClose`,
-      a new generic hook -- fires on the X button/Escape, NOT on the content just
-      refreshing for the next customer in line).
+      do we avoid collision problems doing this." Pressing E again toggles them back out.
+- [x] ~~Entering the register was too strict/finicky~~ -- `REGISTER_INTERACT_RANGE` bumped
+      70 -> 130; was measured from `registerQueueAnchor`, which only trivially passed for a
+      dead-center approach from directly south, not any other angle.
+- [x] ~~Completing a sale ejected the player from the register (not just on the last
+      customer -- every single one)~~ -- `CheckoutWindow.confirmPayment()` used to
+      unconditionally call `uiWindow.close()` on every successful payment, which (once the
+      register-session teleport existed) ejected the player every time, then
+      re-teleported them back in for the next customer. Now the caller
+      (`GameScene.startCheckout`'s `onComplete`) decides: refresh the window in place for
+      the next customer, or explicitly hide it if none are left -- either way, standing
+      behind the counter is no longer tied to the window being open at all. The player can
+      now enter the register at any time (even with an empty queue) and only sees the
+      item-scanning window once there's actually something to scan (auto-opens the moment
+      a customer joins while already standing there).
 - [x] ~~Game auto-started a shift the instant the scene loaded~~ -- the store now starts
       closed (`ShiftClock.started = false`, HUD shows "CLOSED") and shows a "START SHIFT"
       button directly in the persistent HUD bar (replacing the PAUSE button, which has

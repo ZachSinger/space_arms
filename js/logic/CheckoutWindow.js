@@ -11,8 +11,8 @@ import {
 } from "./Sfx.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
-const CARD_WIDTH = 150;
-const CARD_HEIGHT = 70;
+const CARD_WIDTH = 72;
+const CARD_HEIGHT = 72;
 const MAX_PLACEMENT_ATTEMPTS = 30;
 
 // Matches the window's own "32vw" width so it can be right-aligned at construction time
@@ -241,7 +241,13 @@ export class CheckoutWindow {
     this.confirmPayment = () => {
       if (Number(this.paymentBuffer) === this.total) {
         playSaleComplete();
-        this.uiWindow.close();
+        // Deliberately NOT closing the window here -- the caller (GameScene.startCheckout)
+        // decides what happens next: if there's another customer waiting, it just
+        // refreshes this same window's content for them (openForCustomer() re-renders
+        // regardless of whether the window was ever actually hidden); it only explicitly
+        // closes it if there's truly nothing left to scan. Closing unconditionally here
+        // used to eject the player from the register (see GameScene.endRegisterSession)
+        // after literally every single sale, not just the last one.
         this.onComplete?.();
         return;
       }
