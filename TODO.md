@@ -16,6 +16,13 @@ notice something that needs doing but isn't being done right now.
       sub-style). Higher hit rate this time -- all 40 characters reviewed passed the
       same-character-across-all-4-facings check (vs 21/40 last generation). See
       `scripts/extract_seventh_gen_sprites.py`.
+- [x] Customer roster expanded with Eighth Generation: +32 more characters (128 images)
+      from 8 of the 9 new sheets (excluded 1 in that same chunkier pixel-art sub-style).
+      All 36 characters reviewed passed the facing-consistency check. Added to (not
+      replacing) the existing roster, now 64 characters/256 images total. Heavily
+      explorer-skewed (+22 of the 32) -- purely cosmetic/no gameplay impact, but worth
+      knowing if customer variety ever looks lopsided. See
+      `scripts/extract_eighth_gen_sprites.py`.
 
 ## Known Issues
 - [x] ~~Dead-end bug: `this.fixture` never restocks~~ -- fixed by the Procurement MVP below.
