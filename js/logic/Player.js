@@ -13,6 +13,16 @@ const MOVE_SPEED = 160;
 export const PLAYER_DISPLAY_WIDTH = 46;
 export const PLAYER_DISPLAY_HEIGHT = 48;
 
+// The extracted sprite's own canvas has a lot of transparent padding around the actual
+// character (measured directly from alien_01's PNGs: real visible content is only ~45-55%
+// of the full display width and ~85% of the display height) -- using the full display size
+// for the collision body made it feel like there was a large invisible buffer around the
+// player. These are the desired FINAL on-screen (world-space) body dimensions, trimmed to
+// fit within the narrowest of the 4 facings' real content bounds -- see applyBodySize()
+// for why this can't just be passed straight to body.setSize().
+const BODY_WIDTH = 22;
+const BODY_HEIGHT = 40;
+
 // Temporary: no dedicated player sprite exists yet (see TODO.md), so this reuses one
 // customer character's art (pickPlayerCharacterTextures -- deterministic, not random) and
 // tints it a bright cyan matching the UI's own accent color, so the player is instantly
@@ -38,6 +48,7 @@ export class Player {
       .setTint(PLAYER_TINT)
       .setDepth(9999);
     scene.physics.add.existing(this.sprite);
+    this.applyBodySize();
 
     this.cursors = scene.input.keyboard.createCursorKeys();
     this.wasd = scene.input.keyboard.addKeys({
@@ -46,6 +57,20 @@ export class Player {
       left: "A",
       right: "D",
     });
+  }
+
+  // Body.setSize() takes its width/height in the texture FRAME's own native (pre-scale)
+  // space, not final on-screen pixels -- Phaser then multiplies by the sprite's current
+  // scaleX/scaleY to get the actual collision box. Since every facing's source crop has a
+  // slightly different native width (side-profile crops are narrower than front/back
+  // ones -- same reason SPRITE_DISPLAY_WIDTH/HEIGHT force a fixed display size over them),
+  // setDisplaySize() gives each facing a different scaleX/scaleY too. Dividing the desired
+  // *world-space* BODY_WIDTH/HEIGHT by the current scale cancels that back out, so the
+  // actual on-screen collision box stays a constant 22x40 regardless of which facing's
+  // texture is currently active. Must be re-applied every time the texture changes (see
+  // updateFacing()), not just once at construction.
+  applyBodySize() {
+    this.sprite.body.setSize(BODY_WIDTH / this.sprite.scaleX, BODY_HEIGHT / this.sprite.scaleY);
   }
 
   update() {
@@ -86,5 +111,6 @@ export class Player {
       .setTexture(this.facingTextures[facing])
       .setDisplaySize(PLAYER_DISPLAY_WIDTH, PLAYER_DISPLAY_HEIGHT)
       .setTint(PLAYER_TINT);
+    this.applyBodySize(); // this facing's native frame size differs, so scaleX/Y just changed
   }
 }
