@@ -76,6 +76,15 @@ notice something that needs doing but isn't being done right now.
       floor right next to the backroom doorway. There's now an actual door
       (`TileRoom.openDoorway`, `door_light_blank_wide`) carved into the Sales Floor's south
       exterior wall; customers spawn just inside it and walk back to it to leave.
+- [x] ~~Delivering a carried crate to the shelf was too finicky, and the floating-text
+      feedback explaining why was gone before it could be read~~ -- shelf delivery used to
+      share Crate's own tight 56px pickup radius, measured from one single fixed pixel in
+      front of the shelf (`shelfStandPoint`), so approaching from almost any angle but
+      dead-center silently failed. Gave it its own, more forgiving `SHELF_INTERACT_RANGE`
+      (110px, same reasoning as the register's own range bump). Also made
+      `showFloatingText` itself more legible generally: bigger bold font, and it now holds
+      fully visible for a beat before fading, instead of starting to fade immediately on
+      spawn.
 
 ## Bigger Features Not Yet Built (from the bible)
 - [x] Player avatar (`js/logic/Player.js`): WASD/arrow movement, collides with walls/

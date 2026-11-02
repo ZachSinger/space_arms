@@ -38,6 +38,14 @@ const REGISTER_INTERACT_RANGE = 130;
 const REGISTER_WIDTH = 90;
 const REGISTER_HEIGHT = 75;
 
+// How close the player has to be to shelfStandPoint to deliver a carried crate. Kept
+// separate from Crate's own INTERACT_RANGE (which governs picking a crate up off the
+// Loading Pad, and works fine tight) because shelfStandPoint is one single fixed pixel
+// in front of the shelf -- a tight radius around it meant approaching from almost any
+// angle but dead-center failed silently (same "reasonably close should count" problem
+// the register had; see REGISTER_INTERACT_RANGE above).
+const SHELF_INTERACT_RANGE = 110;
+
 // Returns the set of "gx,gy" grid-cell keys overlapped (even partially) by a world-space
 // rectangle -- used to mark a fixture's full footprint as blocked for pathfinding, since a
 // fixture's pixel position/size isn't guaranteed to land on clean grid-cell boundaries.
@@ -485,7 +493,7 @@ export class GameScene extends Phaser.Scene {
       this.shelfStandPoint.x,
       this.shelfStandPoint.y,
     );
-    if (distance > INTERACT_RANGE) {
+    if (distance > SHELF_INTERACT_RANGE) {
       this.showFloatingText(
         this.player.sprite.x,
         this.player.sprite.y - 40,
@@ -508,25 +516,30 @@ export class GameScene extends Phaser.Scene {
   }
 
   // Brief on-screen confirmation for actions that would otherwise have no visible feedback
-  // at all (picking up/delivering a crate just makes it silently appear/disappear) --
-  // floats upward and fades out over ~1.2s, then cleans itself up.
+  // at all (picking up/delivering a crate just makes it silently appear/disappear). Holds
+  // fully readable for a beat before floating up and fading out, rather than fading
+  // immediately on spawn -- at the old 14px/instant-fade tuning this was gone before you
+  // could even read it (the text itself is right above the player's own head, exactly
+  // where you're least likely to already be looking the instant you press the key).
   showFloatingText(x, y, text, color) {
     const label = this.add
       .text(x, y, text, {
         fontFamily: '"Courier New", monospace',
-        fontSize: "14px",
+        fontSize: "18px",
+        fontStyle: "bold",
         color,
         stroke: "#000000",
-        strokeThickness: 3,
+        strokeThickness: 4,
       })
       .setOrigin(0.5, 1)
       .setDepth(9999);
 
     this.tweens.add({
       targets: label,
-      y: y - 32,
+      y: y - 36,
       alpha: 0,
-      duration: 1200,
+      duration: 900,
+      delay: 900,
       ease: "Cubic.easeOut",
       onComplete: () => label.destroy(),
     });
