@@ -28,6 +28,10 @@ const MAX_CUSTOMERS_IN_STORE = 6;
 export const RESTOCK_QUANTITY = 5;
 export const WHOLESALE_FACTOR = 0.5;
 
+// How close the player has to be standing to actually operate the register -- bigger than
+// Crate's own INTERACT_RANGE since the register prop itself is physically larger (90x75).
+const REGISTER_INTERACT_RANGE = 70;
+
 // Returns the set of "gx,gy" grid-cell keys overlapped (even partially) by a world-space
 // rectangle -- used to mark a fixture's full footprint as blocked for pathfinding, since a
 // fixture's pixel position/size isn't guaranteed to land on clean grid-cell boundaries.
@@ -94,6 +98,17 @@ export class GameScene extends Phaser.Scene {
     const zonePixelY = salesFloor.gridY * TILE_SIZE;
     const zonePixelW = salesFloor.gridW * TILE_SIZE;
     const zonePixelH = salesFloor.gridH * TILE_SIZE;
+
+    // The shop's one real public entrance/exit (a designated door, not an arbitrary strip
+    // of floor) -- carved into the Sales Floor's own south exterior wall, away from both
+    // the shelf and the register so customer foot traffic doesn't cross either. Customers
+    // spawn just inside it and walk back to its exact position to leave (see
+    // customerSpawnBounds/exitPoint below); the player can walk through it too, same as
+    // any other now-walkable cell.
+    const doorGX = salesFloor.gridX + 2;
+    const doorGY = salesFloor.gridY + salesFloor.gridH - 1;
+    this.room.openDoorway(doorGX, doorGY, "door_light_blank_wide");
+    this.storeDoor = { x: this.room.worldX(doorGX), y: this.room.worldY(doorGY) };
 
     this.fixture = new Fixture({
       id: "fixture_demo_01",
@@ -170,19 +185,21 @@ export class GameScene extends Phaser.Scene {
     // overlap each other and jam instead of standing cleanly spaced apart.
     this.registerQueueSpacing = SPRITE_DISPLAY_HEIGHT + 2;
 
+    // Customers appear just inside the store door (not spawned already deep on the floor)
+    // and walk back to that exact door to leave -- a designated entrance/exit (storeDoor),
+    // not an arbitrary strip of floor next to the backroom doorway like before. The small
+    // +/- jitter box (rather than the door's single exact pixel) just keeps a run of
+    // several customers spawning in quick succession from visually stacking on each other.
     this.customerSpawnBounds = {
-      xMin: zonePixelX + TILE_SIZE,
-      xMax: zonePixelX + TILE_SIZE * 1.5,
-      yMin: zonePixelY + TILE_SIZE,
-      yMax: zonePixelY + zonePixelH - TILE_SIZE,
+      xMin: this.storeDoor.x - 24,
+      xMax: this.storeDoor.x + 24,
+      yMin: this.storeDoor.y - TILE_SIZE,
+      yMax: this.storeDoor.y - 8,
     };
-    // Where customers walk back to and vanish once their business here is done. A single
-    // fixed point (rather than "wherever you currently are") now that real pathfinding
-    // exists to route them there regardless of what's in the way.
-    this.exitPoint = {
-      x: this.customerSpawnBounds.xMin,
-      y: (this.customerSpawnBounds.yMin + this.customerSpawnBounds.yMax) / 2,
-    };
+    // Where customers walk back to and vanish once their business here is done -- the
+    // store door's exact position, so they visibly walk out through it rather than to some
+    // unrelated point.
+    this.exitPoint = { x: this.storeDoor.x, y: this.storeDoor.y };
 
     this.checkoutWindow = new CheckoutWindow(this.windowManager);
     // Ordered line of customers waiting at the register; index 0 is the one currently
@@ -255,17 +272,23 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard.on("keydown-P", () => this.shiftClock.togglePause());
 
     this.customers = [];
+    // Starts paused -- the store opens for the day only once the player presses START
+    // SHIFT on the pre-shift window below (or "START NEXT SHIFT" at the end of a
+    // previous one, via startNextShift()), not the instant the scene loads.
     this.spawnTimer = this.time.addEvent({
       delay: CUSTOMER_SPAWN_DELAY_MS,
       loop: true,
+      paused: true,
       callback: () => this.spawnCustomer(),
     });
-    this.spawnCustomer(); // first customer immediately so the loop is visible right away
 
     this.events.once("shutdown", () => {
       this.managerTablet.disableInventoryNavigation();
       this.spawnTimer.remove();
     });
+
+    // The very first thing the player sees: the store hasn't opened for business yet.
+    this.shiftSummaryWindow.showPreShift();
   }
 
   setupCamera() {
@@ -386,11 +409,17 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    if (!nearest) return;
+    if (!nearest) {
+      this.showFloatingText(x, y - 40, "Nothing nearby to pick up", "#94a3b8");
+      return;
+    }
 
     this.restockCrates = this.restockCrates.filter((crate) => crate !== nearest);
     this.carriedCrate = nearest;
     this.carriedCrate.isCarried = true;
+
+    const item = database.getItem(nearest.itemId);
+    this.showFloatingText(x, y - 40, `Picked up ${item.name} x${nearest.quantity}`, "#38bdf8");
   }
 
   tryDeliverCarriedCrate() {
@@ -405,11 +434,51 @@ export class GameScene extends Phaser.Scene {
       this.shelfStandPoint.x,
       this.shelfStandPoint.y,
     );
-    if (distance > INTERACT_RANGE) return;
+    if (distance > INTERACT_RANGE) {
+      this.showFloatingText(
+        this.player.sprite.x,
+        this.player.sprite.y - 40,
+        "Too far from the shelf to deliver",
+        "#94a3b8",
+      );
+      return;
+    }
 
     this.fixture.restock(crate.itemId, crate.quantity);
+    const item = database.getItem(crate.itemId);
+    this.showFloatingText(
+      this.player.sprite.x,
+      this.player.sprite.y - 40,
+      `Restocked ${item.name} +${crate.quantity}`,
+      "#10b981",
+    );
     crate.destroy();
     this.carriedCrate = null;
+  }
+
+  // Brief on-screen confirmation for actions that would otherwise have no visible feedback
+  // at all (picking up/delivering a crate just makes it silently appear/disappear) --
+  // floats upward and fades out over ~1.2s, then cleans itself up.
+  showFloatingText(x, y, text, color) {
+    const label = this.add
+      .text(x, y, text, {
+        fontFamily: '"Courier New", monospace',
+        fontSize: "14px",
+        color,
+        stroke: "#000000",
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(9999);
+
+    this.tweens.add({
+      targets: label,
+      y: y - 32,
+      alpha: 0,
+      duration: 1200,
+      ease: "Cubic.easeOut",
+      onComplete: () => label.destroy(),
+    });
   }
 
   drawFixture(fixture) {
@@ -434,8 +503,12 @@ export class GameScene extends Phaser.Scene {
   // Clicking the register re-opens the checkout window if the player closed it (it has no
   // other way to come back otherwise), or just brings it to front if it's already open.
   // Re-opening always restarts that customer's scan progress from scratch, since nothing
-  // outside the DOM currently tracks which individual items were already scanned.
+  // outside the DOM currently tracks which individual items were already scanned. Requires
+  // the player to actually be standing at the register -- now that a real player character
+  // exists, operating it from anywhere on the map doesn't make sense anymore.
   openRegisterWindow() {
+    if (!this.isPlayerNearRegister()) return;
+
     const isHidden = this.checkoutWindow.uiWindow.element.classList.contains("hidden");
     if (!isHidden) {
       this.checkoutWindow.uiWindow.openWindow(); // already open; just focus it
@@ -445,6 +518,19 @@ export class GameScene extends Phaser.Scene {
     const frontCustomer = this.registerLine[0];
     if (!frontCustomer) return; // nobody waiting; nothing to reopen
     this.startCheckout(frontCustomer);
+  }
+
+  // Same "front of the counter" approach point customers queue at, not the register
+  // sprite's own raw center -- consistent with how the shelf's interact range is measured
+  // (see tryDeliverCarriedCrate).
+  isPlayerNearRegister() {
+    const distance = Phaser.Math.Distance.Between(
+      this.player.sprite.x,
+      this.player.sprite.y,
+      this.registerQueueAnchor.x,
+      this.registerQueueAnchor.y,
+    );
+    return distance <= REGISTER_INTERACT_RANGE;
   }
 
   spawnCustomer() {
@@ -551,7 +637,13 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  // Opens the checkout UI for this customer -- but only if the player is actually standing
+  // at the register (see isPlayerNearRegister). If not, this just quietly does nothing;
+  // the window will open the next time the player walks up and clicks the register (see
+  // openRegisterWindow(), which re-calls this for whoever's at the front of the line).
   startCheckout(customer) {
+    if (!this.isPlayerNearRegister()) return;
+
     this.checkoutWindow.openForCustomer(customer.cart, () => {
       customer.completeSale();
       this.customersServedThisShift += 1;
@@ -563,6 +655,16 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  // Auto-closes the checkout window the moment the player walks away from the register --
+  // operating it requires actually being there, consistently with openRegisterWindow()/
+  // startCheckout() requiring it to open in the first place.
+  updateRegisterWindowVisibility() {
+    const isOpen = !this.checkoutWindow.uiWindow.element.classList.contains("hidden");
+    if (isOpen && !this.isPlayerNearRegister()) {
+      this.checkoutWindow.uiWindow.close();
+    }
+  }
+
   update(time, delta) {
     this.player.update();
     this.customers.forEach((customer) => customer.update(delta));
@@ -570,6 +672,8 @@ export class GameScene extends Phaser.Scene {
     if (this.carriedCrate) {
       this.carriedCrate.followCarrier(this.player.sprite);
     }
+
+    this.updateRegisterWindowVisibility();
 
     this.shiftClock.update(delta);
 

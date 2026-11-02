@@ -60,4 +60,34 @@ export class ShiftSummaryWindow {
 
     this.uiWindow.openWindow();
   }
+
+  // The very first thing the player sees: the store hasn't opened for business at all yet
+  // (bible: "the game should start with the store closed"), not mid-shift-summary with
+  // zeroed-out stats that don't mean anything yet. Reuses the same window/button-wiring as
+  // show() above since both are really the same "the day isn't running, press a button to
+  // begin one" screen -- just with nothing to report yet.
+  showPreShift() {
+    this.uiWindow.element.querySelector(".retro-window-title").textContent = "STORE CLOSED";
+
+    this.bodyElement.innerHTML = `
+      <div class="shift-summary">
+        <div class="shift-summary-row">
+          <span>The store is closed for the day.</span>
+        </div>
+        <button id="shift-summary-start-next" class="shift-summary-button">
+          START SHIFT
+        </button>
+      </div>
+    `;
+
+    this.bodyElement
+      .querySelector("#shift-summary-start-next")
+      .addEventListener("click", () => {
+        this.uiWindow.close();
+        this.uiWindow.element.querySelector(".retro-window-title").textContent = "END OF SHIFT";
+        this.onStartNextShift?.();
+      });
+
+    this.uiWindow.openWindow();
+  }
 }

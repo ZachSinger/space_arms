@@ -21,6 +21,21 @@ notice something that needs doing but isn't being done right now.
 - [x] ~~Dead-end bug: `this.fixture` never restocks~~ -- fixed by the Procurement MVP below.
       The player can now order more stock (Supply tab), haul the resulting crate in from
       the Loading Pad, and deliver it to the shelf, indefinitely.
+- [x] ~~Crate delivery had no feedback~~ -- picking up/delivering a crate (or trying to and
+      failing, e.g. too far from the shelf) now shows a brief floating text confirmation
+      (`GameScene.showFloatingText`), so it's no longer silent/ambiguous whether it worked.
+- [x] ~~Register could be operated from anywhere on the map~~ -- `openRegisterWindow()`/
+      `startCheckout()` now require the player to be standing at `registerQueueAnchor`
+      (see `isPlayerNearRegister`), and the window auto-closes the moment they walk away
+      (`updateRegisterWindowVisibility()`, checked every frame).
+- [x] ~~Game auto-started a shift the instant the scene loaded~~ -- the store now starts
+      closed (`ShiftClock.started = false`, HUD shows "CLOSED", pause button disabled) and
+      shows a pre-shift "STORE CLOSED / START SHIFT" window (`ShiftSummaryWindow.
+      showPreShift()`) before any customers can spawn.
+- [x] ~~No real entrance/exit~~ -- customers used to spawn/despawn in an arbitrary strip of
+      floor right next to the backroom doorway. There's now an actual door
+      (`TileRoom.openDoorway`, `door_light_blank_wide`) carved into the Sales Floor's south
+      exterior wall; customers spawn just inside it and walk back to it to leave.
 
 ## Bigger Features Not Yet Built (from the bible)
 - [x] Player avatar (`js/logic/Player.js`): WASD/arrow movement, collides with walls/

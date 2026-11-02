@@ -98,6 +98,25 @@ export class TileRoom {
     this.wallCells.set(`${gx},${gy}`, { image });
   }
 
+  // Carves a walkable doorway into an existing wall cell: removes its solid wall body and
+  // swaps the visual for a door tile instead. Used for the shop's one real public
+  // entrance/exit (see GameScene.storeDoor) -- customers (and the player) can now actually
+  // walk through that specific cell, since isWalkable() just checks wallCells, and this
+  // removes the cell from it exactly the same way unlockZone()'s wall-teardown does.
+  openDoorway(gx, gy, doorTileKey) {
+    const key = `${gx},${gy}`;
+    const existingWall = this.wallCells.get(key);
+    if (existingWall) {
+      this.wallGroup.remove(existingWall.image, true, true);
+      this.wallCells.delete(key);
+    }
+
+    this.scene.add
+      .image(this.worldX(gx), this.worldY(gy), doorTileKey)
+      .setDisplaySize(TILE_SIZE, TILE_SIZE)
+      .setDepth(1);
+  }
+
   // Opens a locked zone: builds its tiles for the first time, then re-checks
   // every neighboring zone's wall cells and tears down any that no longer
   // need to exist now that this zone actually renders. Returns the new

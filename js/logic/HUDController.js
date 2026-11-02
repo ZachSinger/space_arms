@@ -30,13 +30,15 @@ export class HUDController {
     }
 
     renderShiftClock(clock) {
-        this.shiftTimeEl.innerText = clock.getFormattedTime();
+        this.shiftTimeEl.innerText = clock.started ? clock.getFormattedTime() : 'CLOSED';
         this.shiftTimeEl.classList.toggle('shift-soft-closed', clock.softClosed);
 
         this.pauseBtn.innerText = clock.isPaused ? 'RESUME' : 'PAUSE';
         this.pauseBtn.classList.toggle('active', clock.isPaused);
         // Pausing after doors are already locked for the day doesn't mean anything --
-        // the clock itself has already stopped advancing (see ShiftClock.update).
-        this.pauseBtn.disabled = clock.softClosed;
+        // the clock itself has already stopped advancing (see ShiftClock.update). Same
+        // idea before the very first shift has even been started yet (see
+        // ShiftClock.togglePause's own guard against this).
+        this.pauseBtn.disabled = clock.softClosed || !clock.started;
     }
 }
