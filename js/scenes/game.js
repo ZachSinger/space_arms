@@ -31,6 +31,8 @@ export const WHOLESALE_FACTOR = 0.5;
 // How close the player has to be standing to actually operate the register -- bigger than
 // Crate's own INTERACT_RANGE since the register prop itself is physically larger (90x75).
 const REGISTER_INTERACT_RANGE = 70;
+const REGISTER_WIDTH = 90;
+const REGISTER_HEIGHT = 75;
 
 // Returns the set of "gx,gy" grid-cell keys overlapped (even partially) by a world-space
 // rectangle -- used to mark a fixture's full footprint as blocked for pathfinding, since a
@@ -72,7 +74,7 @@ export class GameScene extends Phaser.Scene {
   create() {
     this.playerState = new PlayerState();
     this.shiftClock = new ShiftClock();
-    this.hud = new HUDController(this.playerState, this.shiftClock);
+    this.hud = new HUDController(this.playerState, this.shiftClock, () => this.startNextShift());
 
     this.windowManager = new WindowManager();
     this.shiftSummaryWindow = new ShiftSummaryWindow(this.windowManager, () =>
@@ -170,6 +172,24 @@ export class GameScene extends Phaser.Scene {
     };
     this.drawRegister(this.registerPoint);
 
+    // Where the player is teleported to while operating the register (bible-style "behind
+    // the counter"), facing south toward it -- there genuinely isn't room to walk there
+    // normally (the register sits close against the north wall, see registerPoint's own
+    // comment), so this is only ever reached via beginRegisterSession()'s teleport, not
+    // WASD. Positioned at the midpoint of whatever sliver of floor exists between the
+    // wall's inner edge and the register's own top edge, so it's centered in that gap
+    // regardless of exactly how tight it is.
+    const wallInnerEdgeY = zonePixelY + TILE_SIZE;
+    const registerTopEdgeY = this.registerPoint.y - REGISTER_HEIGHT / 2;
+    this.behindRegisterPoint = {
+      x: this.registerPoint.x,
+      y: (wallInnerEdgeY + registerTopEdgeY) / 2,
+    };
+    // Whether the player is currently "inside" a register-operating session (teleported
+    // behind the counter, input frozen) -- see beginRegisterSession/endRegisterSession.
+    this.operatingRegister = false;
+    this.playerPositionBeforeRegister = null;
+
     // Customers queue in front of the register counter, not on top of it or beside it --
     // the register sprite is drawn front-facing, so "in front" means below it (south),
     // matching the direction a customer would actually approach and face the counter from.
@@ -202,6 +222,11 @@ export class GameScene extends Phaser.Scene {
     this.exitPoint = { x: this.storeDoor.x, y: this.storeDoor.y };
 
     this.checkoutWindow = new CheckoutWindow(this.windowManager);
+    // Ends the register session (teleports the player back, re-enables input) the moment
+    // the checkout window actually closes (X button or Escape) -- NOT when its content is
+    // just refreshed for the next customer in line, which never actually hides the window
+    // (see startCheckout's onComplete callback).
+    this.checkoutWindow.uiWindow.onClose = () => this.endRegisterSession();
     // Ordered line of customers waiting at the register; index 0 is the one currently
     // being checked out. Re-laid-out (via layoutRegisterLine) any time it changes so
     // customers visibly queue up single-file instead of stacking on the same spot.
@@ -290,9 +315,6 @@ export class GameScene extends Phaser.Scene {
       this.managerTablet.disableInventoryNavigation();
       this.spawnTimer.remove();
     });
-
-    // The very first thing the player sees: the store hasn't opened for business yet.
-    this.shiftSummaryWindow.showPreShift();
   }
 
   setupCamera() {
@@ -515,7 +537,7 @@ export class GameScene extends Phaser.Scene {
   drawRegister(point) {
     const sprite = this.add
       .image(point.x, point.y, "register_01")
-      .setDisplaySize(90, 75)
+      .setDisplaySize(REGISTER_WIDTH, REGISTER_HEIGHT)
       .setDepth(2)
       .setInteractive({ useHandCursor: true });
     sprite.on("pointerdown", () => this.openRegisterWindow());
@@ -551,8 +573,12 @@ export class GameScene extends Phaser.Scene {
 
   // Same "front of the counter" approach point customers queue at, not the register
   // sprite's own raw center -- consistent with how the shelf's interact range is measured
-  // (see tryDeliverCarriedCrate).
+  // (see tryDeliverCarriedCrate). Always true while already mid-session (teleported behind
+  // the counter, see beginRegisterSession) -- their literal distance from
+  // registerQueueAnchor no longer reflects anything meaningful once they're back there.
   isPlayerNearRegister() {
+    if (this.operatingRegister) return true;
+
     const distance = Phaser.Math.Distance.Between(
       this.player.sprite.x,
       this.player.sprite.y,
@@ -560,6 +586,45 @@ export class GameScene extends Phaser.Scene {
       this.registerQueueAnchor.y,
     );
     return distance <= REGISTER_INTERACT_RANGE;
+  }
+
+  // Teleports the player behind the register counter, facing it, and takes over completely
+  // until the session ends (see endRegisterSession). There's no real floor space to stand
+  // there normally -- the sliver of floor between the wall and the register's own top edge
+  // (see behindRegisterPoint's comment) is only ~11px, far less than the player's own 40px
+  // body height, so standing there necessarily overlaps BOTH solids. Input alone being
+  // frozen wouldn't stop Arcade from still trying to separate that overlap every physics
+  // step regardless of velocity -- the body itself has to be disabled too, which also
+  // conveniently answers "how do we avoid unintended collision problems here" for free (a
+  // disabled body does not collide, period). No-ops if already in a session, so callers
+  // can call this unconditionally.
+  beginRegisterSession() {
+    if (this.operatingRegister) return;
+
+    this.operatingRegister = true;
+    this.playerPositionBeforeRegister = { x: this.player.sprite.x, y: this.player.sprite.y };
+    this.player.teleportTo(this.behindRegisterPoint.x, this.behindRegisterPoint.y);
+    this.player.forceFacing("down");
+    this.player.inputEnabled = false;
+    this.player.sprite.body.enable = false;
+  }
+
+  // Teleports the player back to wherever they were standing right before
+  // beginRegisterSession(), and restores input + collision. Called automatically the
+  // moment the checkout window actually closes (see its onClose wiring above) -- not a
+  // distance/walk-away check anymore, since the player can't walk anywhere while frozen in
+  // place to begin with.
+  endRegisterSession() {
+    if (!this.operatingRegister) return;
+
+    this.operatingRegister = false;
+    this.player.sprite.body.enable = true;
+    this.player.inputEnabled = true;
+    this.player.teleportTo(
+      this.playerPositionBeforeRegister.x,
+      this.playerPositionBeforeRegister.y,
+    );
+    this.playerPositionBeforeRegister = null;
   }
 
   spawnCustomer() {
@@ -670,8 +735,13 @@ export class GameScene extends Phaser.Scene {
   // at the register (see isPlayerNearRegister). If not, this just quietly does nothing;
   // the window will open the next time the player walks up and clicks the register (see
   // openRegisterWindow(), which re-calls this for whoever's at the front of the line).
+  // Teleports the player behind the counter the first time this succeeds in a given
+  // session (beginRegisterSession() no-ops if already mid-session), so this fires
+  // regardless of which of the three paths led here (a new customer auto-triggering it,
+  // a manual re-open, or serving the next customer in the onComplete callback below).
   startCheckout(customer) {
     if (!this.isPlayerNearRegister()) return;
+    this.beginRegisterSession();
 
     this.checkoutWindow.openForCustomer(customer.cart, () => {
       customer.completeSale();
@@ -684,16 +754,6 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  // Auto-closes the checkout window the moment the player walks away from the register --
-  // operating it requires actually being there, consistently with openRegisterWindow()/
-  // startCheckout() requiring it to open in the first place.
-  updateRegisterWindowVisibility() {
-    const isOpen = !this.checkoutWindow.uiWindow.element.classList.contains("hidden");
-    if (isOpen && !this.isPlayerNearRegister()) {
-      this.checkoutWindow.uiWindow.close();
-    }
-  }
-
   update(time, delta) {
     this.player.update();
     this.customers.forEach((customer) => customer.update(delta));
@@ -701,8 +761,6 @@ export class GameScene extends Phaser.Scene {
     if (this.carriedCrate) {
       this.carriedCrate.followCarrier(this.player.sprite);
     }
-
-    this.updateRegisterWindowVisibility();
 
     this.shiftClock.update(delta);
 

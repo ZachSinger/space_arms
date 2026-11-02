@@ -57,6 +57,13 @@ export class Player {
       left: "A",
       right: "D",
     });
+
+    // Frozen while "inside" an interaction that takes over player positioning entirely
+    // (currently: operating the register -- see GameScene.beginRegisterSession()). WASD
+    // is ignored and velocity forced to zero while this is false, rather than disabling
+    // the physics body itself, so the body stays fully active for anything else that might
+    // still need it.
+    this.inputEnabled = true;
   }
 
   // Body.setSize() takes its width/height in the texture FRAME's own native (pre-scale)
@@ -74,6 +81,11 @@ export class Player {
   }
 
   update() {
+    if (!this.inputEnabled) {
+      this.sprite.body.setVelocity(0, 0);
+      return;
+    }
+
     const left = this.cursors.left.isDown || this.wasd.left.isDown;
     const right = this.cursors.right.isDown || this.wasd.right.isDown;
     const up = this.cursors.up.isDown || this.wasd.up.isDown;
@@ -104,6 +116,21 @@ export class Player {
     if (vx === 0 && vy === 0) return;
 
     const facing = Math.abs(vx) > Math.abs(vy) ? (vx < 0 ? "left" : "right") : vy < 0 ? "up" : "down";
+    this.forceFacing(facing);
+  }
+
+  // Instantly moves the player (e.g. snapping them behind the register counter, or back
+  // to wherever they were standing before -- see GameScene.beginRegisterSession/
+  // endRegisterSession). Uses the body's own teleport so velocity doesn't carry over and
+  // Arcade doesn't try to interpolate through anything in between.
+  teleportTo(x, y) {
+    this.sprite.body.reset(x, y);
+  }
+
+  // Swaps the facing texture directly -- shared by updateFacing() (derived from movement)
+  // and anything that needs to set it explicitly, like forcing the player to visibly face
+  // the register counter while operating it.
+  forceFacing(facing) {
     if (facing === this.currentFacing) return;
 
     this.currentFacing = facing;

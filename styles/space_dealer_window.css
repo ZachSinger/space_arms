@@ -716,6 +716,31 @@ button {
   cursor: not-allowed;
 }
 
+.hud-start-shift-btn {
+  --bg-color: #10b981;
+  background: var(--scanline-pattern), var(--bg-color);
+  background-size:
+    100% 4px,
+    auto;
+  border: 1px solid #10b981;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: var(--font-size-12);
+  font-weight: bold;
+  letter-spacing: 1px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.hud-start-shift-btn:hover {
+  --bg-color: #0d9668;
+}
+
+.hud-pause-btn.hidden,
+.hud-start-shift-btn.hidden {
+  display: none;
+}
+
 /* ================================================================= /
 / SHIFT SUMMARY WINDOW                                               /
 / ================================================================= */

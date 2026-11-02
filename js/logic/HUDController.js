@@ -1,9 +1,10 @@
 export class HUDController {
-    constructor(playerState, shiftClock) {
+    constructor(playerState, shiftClock, onStartShift) {
         this.creditsEl = document.getElementById('hud-credits');
         this.repEl = document.getElementById('hud-rep');
         this.shiftTimeEl = document.getElementById('hud-shift-time');
         this.pauseBtn = document.getElementById('hud-pause-btn');
+        this.startShiftBtn = document.getElementById('hud-start-shift-btn');
 
         // Subscribe to the brain!
         playerState.subscribe((state) => this.render(state));
@@ -11,6 +12,7 @@ export class HUDController {
         if (shiftClock) {
             shiftClock.subscribe((clock) => this.renderShiftClock(clock));
             this.pauseBtn.addEventListener('click', () => shiftClock.togglePause());
+            this.startShiftBtn.addEventListener('click', () => onStartShift?.());
         }
     }
 
@@ -33,12 +35,16 @@ export class HUDController {
         this.shiftTimeEl.innerText = clock.started ? clock.getFormattedTime() : 'CLOSED';
         this.shiftTimeEl.classList.toggle('shift-soft-closed', clock.softClosed);
 
+        // Before the very first shift starts, show a plain HUD button instead of a
+        // separate popped-up window -- the pause button has nothing to do yet either
+        // (ShiftClock.togglePause() ignores it until started, see its own comment).
+        this.startShiftBtn.classList.toggle('hidden', clock.started);
+        this.pauseBtn.classList.toggle('hidden', !clock.started);
+
         this.pauseBtn.innerText = clock.isPaused ? 'RESUME' : 'PAUSE';
         this.pauseBtn.classList.toggle('active', clock.isPaused);
         // Pausing after doors are already locked for the day doesn't mean anything --
-        // the clock itself has already stopped advancing (see ShiftClock.update). Same
-        // idea before the very first shift has even been started yet (see
-        // ShiftClock.togglePause's own guard against this).
-        this.pauseBtn.disabled = clock.softClosed || !clock.started;
+        // the clock itself has already stopped advancing (see ShiftClock.update).
+        this.pauseBtn.disabled = clock.softClosed;
     }
 }

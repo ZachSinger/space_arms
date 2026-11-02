@@ -33,8 +33,8 @@ notice something that needs doing but isn't being done right now.
       (`GameScene.showFloatingText`), so it's no longer silent/ambiguous whether it worked.
 - [x] ~~Register could be operated from anywhere on the map~~ -- `openRegisterWindow()`/
       `startCheckout()` now require the player to be standing at `registerQueueAnchor`
-      (see `isPlayerNearRegister`), and the window auto-closes the moment they walk away
-      (`updateRegisterWindowVisibility()`, checked every frame).
+      (see `isPlayerNearRegister`). Superseded the original walk-away-based auto-close
+      with a proper session model -- see below.
 - [x] ~~Player had no collision with the register (walked straight through it)~~ -- the
       register now has its own static physics body (`drawRegister`), collided only against
       the player (not `obstacleGroup`, which is shared with `customerGroup` -- customers
@@ -43,10 +43,22 @@ notice something that needs doing but isn't being done right now.
 - [x] ~~No keyboard way to operate the register~~ -- pressing E now also tries the register
       (`tryOpenRegister()`) if nothing closer (a crate) is in range, in addition to the
       existing click-to-open.
+- [x] ~~No room to stand behind the register to operate it~~ -- there genuinely isn't (the
+      register sits close against the north wall; the real floor gap is ~11px, far less
+      than the player's own body height). Instead of moving the register (which would've
+      broken the register-queue's own tuned spacing budget against the south wall),
+      `beginRegisterSession()`/`endRegisterSession()` teleport the player behind the
+      counter (facing it) and disable their physics body + input entirely for the
+      duration -- a disabled body can't collide at all, which is also the answer to "how
+      do we avoid collision problems doing this." Ends and teleports them back to exactly
+      where they were the moment the checkout window actually closes (`UIWindow.onClose`,
+      a new generic hook -- fires on the X button/Escape, NOT on the content just
+      refreshing for the next customer in line).
 - [x] ~~Game auto-started a shift the instant the scene loaded~~ -- the store now starts
-      closed (`ShiftClock.started = false`, HUD shows "CLOSED", pause button disabled) and
-      shows a pre-shift "STORE CLOSED / START SHIFT" window (`ShiftSummaryWindow.
-      showPreShift()`) before any customers can spawn.
+      closed (`ShiftClock.started = false`, HUD shows "CLOSED") and shows a "START SHIFT"
+      button directly in the persistent HUD bar (replacing the PAUSE button, which has
+      nothing to do yet either) rather than a popped-up modal window, before any customers
+      can spawn.
 - [x] ~~No real entrance/exit~~ -- customers used to spawn/despawn in an arbitrary strip of
       floor right next to the backroom doorway. There's now an actual door
       (`TileRoom.openDoorway`, `door_light_blank_wide`) carved into the Sales Floor's south

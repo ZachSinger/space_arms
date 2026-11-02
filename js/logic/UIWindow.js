@@ -4,7 +4,7 @@
 
 export class UIWindow {
   /**
-   * @param {Object} config - { id, title, contentHTML, width, height, x, y, shouldCloseOtherWindows }
+   * @param {Object} config - { id, title, contentHTML, width, height, x, y, shouldCloseOtherWindows, onClose }
    * @param {WindowManager} manager - Reference to the central window manager
    */
   constructor(config, manager) {
@@ -18,6 +18,11 @@ export class UIWindow {
     this.width = config.width || "300px";
     this.height = config.height || "auto";
     this.shouldCloseOtherWindows = config.shouldCloseOtherWindows || false;
+    // Optional hook fired whenever this window actually closes (X button, Escape, or a
+    // direct close() call) -- NOT fired just because its content was refreshed while still
+    // open. Can also be assigned directly after construction (this.onClose = fn) if not
+    // known yet at construction time.
+    this.onClose = config.onClose || null;
 
     this.isOpen = false;
     this.isDragging = false;
@@ -128,5 +133,6 @@ export class UIWindow {
     this.element.classList.remove("active");
     this.isOpen = false;
     this.manager.passFocusToNextHighest();
+    this.onClose?.();
   }
 }
