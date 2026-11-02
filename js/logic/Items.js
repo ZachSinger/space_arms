@@ -13,6 +13,7 @@ export class StoreItem {
     this.ammo = data.ammo || null; // String: What a gun shoots, or what an ammo box contains
     this.count = data.count || null; // Number: How many rounds are in an ammo box
     this.fits = data.fits || []; // Array: What tags/weapons an attachment can snap onto
+    this.image = data.image || null; // String: path (relative to project root) to the item's detail-view art, or null if none exists yet
   }
 
   // Example Helper Method:

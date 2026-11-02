@@ -21,3 +21,8 @@ STREAMING_CHUNK:Configuring OS and Editor hidden files to be ignored
 .DS_Store
 .vscode/
 .idea/
+
+# Generated/extracted art assets (bulk AI-generated sheets + derived crops) -
+# not committed; regenerate locally via scripts/extract_item_icons.py
+img/Uncut_Sheets/
+img/Icons_Extracted/

@@ -7,7 +7,20 @@
   </head>
   <body>
     <div id="game-container">
-      <div id="ui-layer"></div>
+      <div id="ui-layer">
+        <div id="persistent-hud">
+          <div class="hud-section">
+            <div class="hud-stat">
+              <span class="hud-label">CREDITS</span>
+              <span id="hud-credits" class="hud-value">0c</span>
+            </div>
+            <div class="hud-stat">
+              <span class="hud-label">REPUTATION</span>
+              <span id="hud-rep" class="hud-value rep">0</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     <script type="module" src="/js/scenes/main.js"></script>
   </body>
