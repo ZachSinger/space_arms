@@ -4,6 +4,7 @@
 import { UIWindow } from "./UIWindow.js";
 import { InventoryRenderer } from "./InventoryRenderer.js";
 import { ContractRenderer } from "./ContractRenderer.js";
+import { SupplyRenderer } from "./SupplyRenderer.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
 // The bible's full Step 40 tab list (Part 8). Only Inventory and Contracts have a real
@@ -27,8 +28,9 @@ const TAB_DEFS = [
 // (InventoryRenderer, ContractRenderer, ...) -- this class only owns the shared chrome
 // around them.
 export class ManagerTablet {
-  constructor(windowManager, playerState) {
+  constructor(windowManager, playerState, scene) {
     this.playerState = playerState;
+    this.scene = scene; // needed by the Supply tab to read/order fixture stock
 
     const tabBarHTML = TAB_DEFS.map(
       ({ id, label }, index) =>
@@ -71,14 +73,22 @@ export class ManagerTablet {
     this.bodyElement.addEventListener("click", (event) => {
       const signButton = event.target.closest("[data-license-id]");
       if (signButton) this.handleSignContract(signButton.dataset.licenseId);
+
+      const orderButton = event.target.closest("[data-order-item-id]");
+      if (orderButton) this.handleOrderRestock(orderButton.dataset.orderItemId);
     });
 
     // Licenses can flip between locked/unaffordable/available purely because credits or
     // reputation changed elsewhere (a sale completing, reputation gained/lost) -- re-render
     // the Contracts panel on every state change so it never goes stale while the Tablet
     // happens to be open. (Fires once immediately on subscribe -- harmless, just an extra
-    // render of a tiny list before the window is even shown.)
-    this.playerState.subscribe(() => this.refreshContractsPanel());
+    // render of a tiny list before the window is even shown.) The Supply tab's afford-
+    // ability (and its "on shelf" counts, which change on every sale too) needs the exact
+    // same live refresh, for the same reason.
+    this.playerState.subscribe(() => {
+      this.refreshContractsPanel();
+      this.refreshSupplyPanel();
+    });
   }
 
   renderPanelContent(tabId) {
@@ -86,6 +96,7 @@ export class ManagerTablet {
     if (tabId === "contracts") {
       return ContractRenderer.generateHTML(database.getAllLicenses(), this.playerState);
     }
+    if (tabId === "supply") return SupplyRenderer.generateHTML(this.scene);
     return `<div class="tablet-placeholder">COMING SOON</div>`;
   }
 
@@ -103,6 +114,11 @@ export class ManagerTablet {
     if (panel) panel.innerHTML = this.renderPanelContent("contracts");
   }
 
+  refreshSupplyPanel() {
+    const panel = this.bodyElement.querySelector('[data-tab-panel="supply"]');
+    if (panel) panel.innerHTML = this.renderPanelContent("supply");
+  }
+
   handleSignContract(licenseId) {
     const license = database.getLicense(licenseId);
     if (!license) return;
@@ -114,6 +130,15 @@ export class ManagerTablet {
     this.playerState.signLicense(licenseId);
     // Both of the above call notifyListeners(), which triggers refreshContractsPanel()
     // via the subscribe() in the constructor -- no explicit re-render needed here.
+  }
+
+  handleOrderRestock(itemId) {
+    this.scene.orderRestockCrate(itemId);
+    // orderRestockCrate() calls playerState.spendCredits() on success, which triggers
+    // refreshSupplyPanel() via the subscribe() in the constructor -- but only on success;
+    // explicitly refresh too so a no-op (e.g. clicked just as funds became insufficient)
+    // doesn't leave a stale button state.
+    this.refreshSupplyPanel();
   }
 
   openWindow() {

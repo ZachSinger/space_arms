@@ -24,6 +24,23 @@ export const ZONES = [
     wallTile: "wall_dark_riveted_01",
   },
   {
+    id: "loading_pad",
+    name: "Loading Pad",
+    // Sits directly below the Storeroom (same gridX/gridW), connected by an open
+    // walkway north into it -- matches MapExpansionPlan.md's step 2 (an unlocked-by-
+    // default, exterior-coded zone adjacent to the Storeroom for ordered crates to spawn
+    // in, hauled inside from there). Reuses the Storeroom's own industrial tile set
+    // (riveted walls, plain concrete) rather than needing new art -- this doesn't need to
+    // look dramatically different, just read as "the loading dock," not the sales floor.
+    gridX: 0,
+    gridY: 8,
+    gridW: 6,
+    gridH: 4,
+    locked: false,
+    floorTile: "floor_grate_01",
+    wallTile: "wall_dark_riveted_01",
+  },
+  {
     id: "sales_floor",
     name: "Sales Floor",
     gridX: 6,

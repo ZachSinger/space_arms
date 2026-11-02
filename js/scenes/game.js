@@ -5,6 +5,7 @@ import { HUDController } from "../logic/HUDController.js";
 import { Fixture } from "../logic/ShopInventory.js";
 import { Customer, SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT } from "../logic/Customer.js";
 import { Player } from "../logic/Player.js";
+import { Crate, INTERACT_RANGE } from "../logic/Crate.js";
 import { CheckoutWindow } from "../logic/CheckoutWindow.js";
 import { TileRoom } from "../logic/TileRoom.js";
 import { TILE_SIZE, getZone } from "../logic/RoomLayout.js";
@@ -19,6 +20,13 @@ const CUSTOMER_SPAWN_DELAY_MS = 4000;
 // -- a slow/backed-up dealer genuinely loses that sale, same as if the shift had ended
 // before they got to it.
 const MAX_CUSTOMERS_IN_STORE = 6;
+
+// How much stock a single ordered crate contains, and what it costs the player (a fraction
+// of the item's own retail baseCost -- standing in for a real wholesale/supplier pricing
+// model, which doesn't exist yet; see TODO.md). Exported so the Supply tab (ManagerTablet/
+// SupplyRenderer) can display the same price it'll actually be charged.
+export const RESTOCK_QUANTITY = 5;
+export const WHOLESALE_FACTOR = 0.5;
 
 // Returns the set of "gx,gy" grid-cell keys overlapped (even partially) by a world-space
 // rectangle -- used to mark a fixture's full footprint as blocked for pathfinding, since a
@@ -70,12 +78,6 @@ export class GameScene extends Phaser.Scene {
     this.customersServedThisShift = 0;
     this.creditsAtShiftStart = this.playerState.credits;
     this.reputationAtShiftStart = this.playerState.globalReputation;
-
-    this.managerTablet = new ManagerTablet(this.windowManager, this.playerState);
-
-    this.input.keyboard.on("keydown-I", () =>
-      this.managerTablet.openWindow(),
-    );
 
     // --- Shop map: authored tile room (see RoomLayout.js), with the vertical
     // slice's one hand-seeded shelf/customer-loop/register placed inside the
@@ -222,6 +224,28 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.collider(this.player.sprite, this.obstacleGroup);
     this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
 
+    // Loading Pad (bible Step 10): where ordered restock crates physically spawn, to be
+    // hauled in by hand (see orderRestockCrate/handleInteract) rather than appearing
+    // directly on the shelf -- the whole point of a physical crate is that getting it
+    // inside is its own task, not an instant inventory top-up.
+    const loadingPadZone = getZone("loading_pad");
+    this.loadingPadSpawnPoint = {
+      x: loadingPadZone.gridX * TILE_SIZE + (loadingPadZone.gridW * TILE_SIZE) / 2,
+      y: loadingPadZone.gridY * TILE_SIZE + (loadingPadZone.gridH * TILE_SIZE) / 2,
+    };
+    this.restockCrates = []; // crates sitting at the Loading Pad, not yet picked up
+    this.carriedCrate = null; // the one crate the player is currently hauling, if any
+
+    // Single interact key for both ends of hauling a crate: pick one up near the Loading
+    // Pad, then press it again near the shelf to deliver -- see handleInteract().
+    this.input.keyboard.on("keydown-E", () => this.handleInteract());
+
+    // Constructed here (not earlier in create()) because its Supply tab reads this.fixture
+    // immediately on construction (via SupplyRenderer -> getRestockableItems()) -- it has
+    // to already exist.
+    this.managerTablet = new ManagerTablet(this.windowManager, this.playerState, this);
+    this.input.keyboard.on("keydown-I", () => this.managerTablet.openWindow());
+
     // Debug-only: proves the expand-the-store mechanism end-to-end until a
     // real purchase UI exists. Remove once that UI is built.
     this.input.keyboard.on("keydown-U", () => this.debugUnlockExpansion());
@@ -280,6 +304,112 @@ export class GameScene extends Phaser.Scene {
     const bounds = this.room.unlockZone("expansion_a");
     this.cameras.main.setBounds(bounds.x, bounds.y, bounds.width, bounds.height);
     console.log("Unlocked expansion_a; camera bounds now", bounds);
+  }
+
+  // What ordering RESTOCK_QUANTITY more of this item costs -- shared by the Supply tab
+  // (so it can display the real price) and orderRestockCrate (so it charges that same
+  // price). See WHOLESALE_FACTOR's comment for why this isn't the item's full retail cost.
+  restockCost(item) {
+    return Math.round(item.baseCost * WHOLESALE_FACTOR * RESTOCK_QUANTITY);
+  }
+
+  // Everything the Supply tab needs to render: every distinct item this fixture is set up
+  // to sell, its current on-shelf quantity, and what restocking it would cost. Only items
+  // the shelf already stocks can be restocked for now -- introducing a brand new item type
+  // to a fixture is Build Mode/fixture reconfiguration, a separate later feature.
+  getRestockableItems() {
+    const seenItemIds = new Set();
+    const entries = [];
+
+    for (const slot of this.fixture.slots) {
+      if (seenItemIds.has(slot.itemId)) continue;
+      seenItemIds.add(slot.itemId);
+
+      const item = database.getItem(slot.itemId);
+      entries.push({ item, quantity: slot.quantity, cost: this.restockCost(item) });
+    }
+
+    return entries;
+  }
+
+  // Spends credits and spawns a physical crate at the Loading Pad (bible Step 10) -- it
+  // isn't actually restocked until the player hauls it to the shelf, see handleInteract().
+  // Returns false (no-op) if the player can't afford it or this fixture doesn't stock the
+  // requested item at all.
+  orderRestockCrate(itemId) {
+    const item = database.getItem(itemId);
+    if (!item) return false;
+
+    const stocksThisItem = this.fixture.slots.some((slot) => slot.itemId === itemId);
+    if (!stocksThisItem) return false;
+
+    const cost = this.restockCost(item);
+    if (this.playerState.credits < cost) return false;
+
+    this.playerState.spendCredits(cost);
+
+    // Offset each new crate a little further along the pad so repeated orders don't all
+    // stack exactly on top of each other while waiting to be hauled in.
+    const offsetIndex = this.restockCrates.length;
+    const spawnX = this.loadingPadSpawnPoint.x + (offsetIndex % 3) * 48 - 48;
+    const spawnY = this.loadingPadSpawnPoint.y + Math.floor(offsetIndex / 3) * 48;
+
+    const crate = new Crate(this, itemId, RESTOCK_QUANTITY, spawnX, spawnY);
+    this.restockCrates.push(crate);
+    return true;
+  }
+
+  // The single keydown-E handler for both ends of hauling: picks up the nearest
+  // not-yet-carried crate if the player isn't already holding one, or -- if they are --
+  // delivers it to the shelf when close enough. Deliberately one shared key (rather than
+  // separate pickup/drop keys) since the player is only ever in one of these two states at
+  // a time; which action makes sense is already implied by whether they're carrying
+  // something.
+  handleInteract() {
+    if (this.carriedCrate) {
+      this.tryDeliverCarriedCrate();
+    } else {
+      this.tryPickUpNearestCrate();
+    }
+  }
+
+  tryPickUpNearestCrate() {
+    const { x, y } = this.player.sprite;
+    let nearest = null;
+    let nearestDistance = INTERACT_RANGE;
+
+    for (const crate of this.restockCrates) {
+      const distance = crate.distanceTo(x, y);
+      if (distance <= nearestDistance) {
+        nearest = crate;
+        nearestDistance = distance;
+      }
+    }
+
+    if (!nearest) return;
+
+    this.restockCrates = this.restockCrates.filter((crate) => crate !== nearest);
+    this.carriedCrate = nearest;
+    this.carriedCrate.isCarried = true;
+  }
+
+  tryDeliverCarriedCrate() {
+    const crate = this.carriedCrate;
+    // Measured from shelfStandPoint (the same "front of the shelf" approach point
+    // customers use), not the fixture's raw center -- the shelf itself is a solid
+    // obstacle, so the player can never actually stand within INTERACT_RANGE of its
+    // center, only of the clear space in front of it.
+    const distance = Phaser.Math.Distance.Between(
+      this.player.sprite.x,
+      this.player.sprite.y,
+      this.shelfStandPoint.x,
+      this.shelfStandPoint.y,
+    );
+    if (distance > INTERACT_RANGE) return;
+
+    this.fixture.restock(crate.itemId, crate.quantity);
+    crate.destroy();
+    this.carriedCrate = null;
   }
 
   drawFixture(fixture) {
@@ -436,6 +566,10 @@ export class GameScene extends Phaser.Scene {
   update(time, delta) {
     this.player.update();
     this.customers.forEach((customer) => customer.update(delta));
+
+    if (this.carriedCrate) {
+      this.carriedCrate.followCarrier(this.player.sprite);
+    }
 
     this.shiftClock.update(delta);
 
