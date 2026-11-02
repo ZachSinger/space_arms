@@ -30,3 +30,18 @@ export function pickRandomCharacterTextures() {
     right: `customer_${entry.faction}_${entry.num}_right`,
   };
 }
+
+// Deterministic (not random, unlike pickRandomCharacterTextures) so the player's look is
+// stable across every session instead of reshuffling each time the game loads. Temporary:
+// no dedicated player sprite exists yet, so this reuses customer art -- see Player.js,
+// which tints it at render time to stay visually distinct from NPC customers. Tracked in
+// TODO.md for real player-specific art later.
+export function pickPlayerCharacterTextures() {
+  const entry = ROSTER[0];
+  return {
+    down: `customer_${entry.faction}_${entry.num}_down`,
+    up: `customer_${entry.faction}_${entry.num}_up`,
+    left: `customer_${entry.faction}_${entry.num}_left`,
+    right: `customer_${entry.faction}_${entry.num}_right`,
+  };
+}

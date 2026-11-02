@@ -99,7 +99,8 @@ smaller than a normal desktop window)
    Still not modeled: path recomputation if a *new* fixture gets placed while
    a customer is already mid-walk (static obstacles are snapshotted once at
    scene creation), and a real navmesh for non-grid-aligned movement.
-6. **Player avatar + camera follow.** Once a player-controlled character
-   exists, the camera should switch from drag-to-pan to following the avatar
-   (clamped to the same unlocked bounds), per the bible's Step 58 (player
-   avatar always renders at top z-index).
+6. **Player avatar + camera follow -- DONE.** `js/logic/Player.js` + `GameScene` now have a
+   WASD/arrow-controlled player (temporary tinted reuse of customer art, see TODO.md),
+   colliding with walls/fixtures but not customers (bible Step 30/58, highest Z-index via
+   `setDepth(9999)`). The camera now calls `startFollow()` on it instead of the old
+   drag-to-pan placeholder, still clamped to the same unlocked zone bounds.

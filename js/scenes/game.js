@@ -4,6 +4,7 @@ import { PlayerState } from "../logic/PlayerState.js";
 import { HUDController } from "../logic/HUDController.js";
 import { Fixture } from "../logic/ShopInventory.js";
 import { Customer, SPRITE_DISPLAY_HEIGHT } from "../logic/Customer.js";
+import { Player } from "../logic/Player.js";
 import { CheckoutWindow } from "../logic/CheckoutWindow.js";
 import { TileRoom } from "../logic/TileRoom.js";
 import { TILE_SIZE, getZone } from "../logic/RoomLayout.js";
@@ -211,6 +212,16 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.collider(this.customerGroup, this.room.wallGroup);
     this.physics.add.collider(this.customerGroup, this.obstacleGroup);
 
+    // Player avatar (bible Step 30/58): spawned in open floor away from both the shelf
+    // (0.3/0.4) and the register (0.7/0.22) so it doesn't start inside either. Collides
+    // with walls/fixtures like anyone else, but deliberately NOT with customerGroup --
+    // per the bible, the player has no dynamic collision with customers either (everyone
+    // glides through each other, not just customers through customers).
+    this.player = new Player(this, zonePixelX + zonePixelW * 0.5, zonePixelY + zonePixelH * 0.75);
+    this.physics.add.collider(this.player.sprite, this.room.wallGroup);
+    this.physics.add.collider(this.player.sprite, this.obstacleGroup);
+    this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
+
     // Debug-only: proves the expand-the-store mechanism end-to-end until a
     // real purchase UI exists. Remove once that UI is built.
     this.input.keyboard.on("keydown-U", () => this.debugUnlockExpansion());
@@ -236,14 +247,6 @@ export class GameScene extends Phaser.Scene {
   setupCamera() {
     const bounds = this.room.getCameraBounds();
     this.cameras.main.setBounds(bounds.x, bounds.y, bounds.width, bounds.height);
-
-    // No player avatar exists yet, so pointer-drag is the stand-in way to look
-    // around a store bigger than the viewport; setBounds already clamps scroll.
-    this.input.on("pointermove", (pointer) => {
-      if (!pointer.isDown) return;
-      this.cameras.main.scrollX -= (pointer.x - pointer.prevPosition.x) / this.cameras.main.zoom;
-      this.cameras.main.scrollY -= (pointer.y - pointer.prevPosition.y) / this.cameras.main.zoom;
-    });
   }
 
   // Whether a customer could ever stand at this grid cell: must belong to a currently
@@ -431,6 +434,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(time, delta) {
+    this.player.update();
     this.customers.forEach((customer) => customer.update(delta));
 
     this.shiftClock.update(delta);
