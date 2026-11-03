@@ -11,6 +11,7 @@ export class StoreItem {
     this.baseCost = data.baseCost;
 
     // Conditional Properties (Safely default to null/empty if not present)
+    this.license = data.license || null; // String: the Supplier License (Licenses.json) required to order this item
     this.ammo = data.ammo || null; // String: What a gun shoots, or what an ammo box contains
     this.count = data.count || null; // Number: How many rounds are in an ammo box
     this.fits = data.fits || []; // Array: What tags/weapons an attachment can snap onto

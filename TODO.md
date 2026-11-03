@@ -109,6 +109,19 @@ notice something that needs doing but isn't being done right now.
       base class the new markup no longer used). Gave `.checkout-item-card` its own
       border/background directly so each item is still visually "in a card", same as
       elsewhere in the UI, just without text content.
+- [x] ~~Shelf placement item picker showed the whole catalog~~ -- you could pick an item
+      to place on the shelf that you weren't actually carrying. Filtered
+      `FixtureRenderer.itemPickerHTML` to only the player's own hovercart stock.
+- [x] ~~Supply tab only listed items already stocked somewhere, so a fixture that starts
+      completely empty (both now do) had nothing orderable at all, ever~~ -- genuinely
+      broken, not a design choice. `GameScene.getRestockableItems`/`orderRestockCrate` now
+      work off the bible's actual Step 29/48 model instead: the whole catalog, filtered
+      only by whether the player has a signed Supplier License for that item
+      (`playerState.activeLicenses.has(item.license)`) -- affordability is still checked
+      separately per-order, same as before. `StoreItem` (`Items.js`) exposes `license` now
+      (it was in `Items.json` the whole time, just never read). `lic_start_surplus` is
+      free (0c, 0 reputation required) specifically so there's always at least one
+      immediately-signable contract to get the loop started from a brand new game.
 
 ## Bigger Features Not Yet Built (from the bible)
 - [x] Player avatar (`js/logic/Player.js`): WASD/arrow movement, collides with walls/

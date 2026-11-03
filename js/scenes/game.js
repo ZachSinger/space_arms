@@ -508,39 +508,41 @@ export class GameScene extends Phaser.Scene {
     return Math.round(item.baseCost * WHOLESALE_FACTOR * RESTOCK_QUANTITY);
   }
 
-  // Everything the Supply tab needs to render: every distinct item ANY fixture (shelf or
-  // storage) currently has stocked, its total quantity across all of them, and what
-  // restocking it would cost. Only items already in stock somewhere can be restocked for
-  // now -- getting a brand new item type into the game for the first time still has to go
-  // through the demo fixtures' starting stock (see TODO.md); there's no general "introduce
-  // a new item" UI yet since the capacity-pool model doesn't need a pre-assignment step.
+  // Everything the Supply tab needs to render: bible Step 29's "Unified Market" -- every
+  // item in the WHOLE catalog that the player currently has a signed Supplier License
+  // for (bible Step 48: "Customers only expect items from Supplier Contracts you have
+  // actively signed and paid for" -- the same gate applies to the player's own ordering).
+  // Affordability is checked separately, per-order, not here -- an unaffordable item
+  // still shows up (just can't be ordered yet), same as before. Not limited to items
+  // already stocked somewhere; that was a mistake (previous commit) that made ordering
+  // impossible for a fixture that legitimately starts completely empty.
   getRestockableItems() {
     const quantityByItemId = new Map();
-
     for (const { fixture } of this.getFixtureEntries()) {
       for (const entry of fixture.stock) {
         quantityByItemId.set(entry.itemId, (quantityByItemId.get(entry.itemId) || 0) + entry.quantity);
       }
     }
 
-    return [...quantityByItemId.entries()].map(([itemId, quantity]) => {
-      const item = database.getItem(itemId);
-      return { item, quantity, cost: this.restockCost(item) };
-    });
+    return database
+      .getAllItems()
+      .filter((item) => this.playerState.activeLicenses.has(item.license))
+      .map((item) => ({
+        item,
+        quantity: quantityByItemId.get(item.id) || 0,
+        cost: this.restockCost(item),
+      }));
   }
 
   // Spends credits and spawns a physical crate at the Loading Pad (bible Step 10) -- it
   // isn't actually restocked until the player hauls it to a fixture, see handleInteract().
-  // Returns false (no-op) if the player can't afford it or no fixture currently stocks the
-  // requested item at all.
+  // Returns false (no-op) if the player can't afford it or doesn't have a signed license
+  // for this item (bible Step 48) -- NOT gated on whether anything's already stocked
+  // somewhere; that was wrong (see getRestockableItems' own comment).
   orderRestockCrate(itemId) {
     const item = database.getItem(itemId);
     if (!item) return false;
-
-    const stocksThisItem = this.getFixtureEntries().some(({ fixture }) =>
-      fixture.findStockEntry(itemId),
-    );
-    if (!stocksThisItem) return false;
+    if (!this.playerState.activeLicenses.has(item.license)) return false;
 
     const cost = this.restockCost(item);
     if (this.playerState.credits < cost) return false;

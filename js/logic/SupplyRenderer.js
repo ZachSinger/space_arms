@@ -5,9 +5,10 @@ export class SupplyRenderer {
   /**
    * Generates the Supply tab's own content (the tab bar/chrome around it is owned by
    * whatever window hosts this -- see ManagerTablet.js). Lets the player order more stock
-   * for whatever the shop's one fixture already sells; ordering spawns a physical crate at
-   * the Loading Pad that has to be hauled in by hand (see GameScene.handleInteract), not an
-   * instant restock.
+   * for any item they currently have a signed Supplier License for (bible Step 29/48 --
+   * see GameScene.getRestockableItems); ordering spawns a physical crate at the Loading
+   * Pad that has to be hauled in by hand (see GameScene.handleInteract), not an instant
+   * restock.
    * @param {GameScene} scene
    */
   static generateHTML(scene) {
@@ -18,7 +19,7 @@ export class SupplyRenderer {
     `;
 
     if (entries.length === 0) {
-      html += `<div style="color: var(--color-text-muted); text-align: center; padding: 20px;">No fixtures stocking anything yet.</div>`;
+      html += `<div style="color: var(--color-text-muted); text-align: center; padding: 20px;">No Supplier Licenses signed yet -- sign one in the Contracts tab first.</div>`;
     } else {
       entries.forEach(({ item, quantity, cost }) => {
         const canAfford = scene.playerState.credits >= cost;
