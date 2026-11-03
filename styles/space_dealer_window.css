@@ -672,6 +672,33 @@ button {
   padding: 20px;
 }
 
+.fixture-section-divider {
+  margin: 4px 14px 0;
+  padding-top: 10px;
+  border-top: 1px dashed var(--color-border-subtle);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-11);
+  letter-spacing: 1px;
+}
+
+.fixture-stock-row {
+  align-items: center;
+}
+
+.fixture-transfer-btn {
+  flex-shrink: 0;
+  width: 60px;
+  min-width: 60px;
+  padding: 0;
+  font-size: var(--font-size-11);
+  line-height: 1;
+}
+
+.fixture-transfer-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 /* ================================================================= /
 / PERSISTENT HEADS UP DISPLAY (HUD)                                 /
 / ================================================================= */

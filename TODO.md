@@ -134,12 +134,12 @@ notice something that needs doing but isn't being done right now.
         pricing model (bible Step 45/48).
   - [ ] No employee auto-hauling (bible Step 14/15) -- the player has to do every haul by
         hand for now.
-  - [ ] No Hovercart/backpack capacity model at all (bible Step 10/63: "an abstract
-        character/employee inventory size, not a physical moving entity"). Crates currently
-        carry a flat RESTOCK_QUANTITY (5) with no carrying-capacity limit of any kind. This
-        is the clear next step (requested right after Storage Shelving below), since
-        actually meaningful "how much can I haul at once" only matters now that there's
-        somewhere to make deliberate choices about where that haul ends up.
+  - [x] ~~No Hovercart/backpack capacity model at all~~ -- see the new Hovercart entry
+        below. Crates themselves still carry a flat RESTOCK_QUANTITY (5) with no
+        carrying-capacity limit when hauled from the Loading Pad -- the Hovercart only
+        governs transfers between fixtures (shelf <-> storage) via FixtureWindow, not the
+        Loading-Pad-to-fixture crate flow, which is a separate, not-yet-unified path (see
+        below).
 - [x] Storage Shelving + real capacity-pool storage (bible Steps 4/42): the Storeroom is
       now a proper walled-off backroom (a `door_blast_keypad_01` door in its own east
       wall, sealed via the new `TileRoom.addWall`, since two already-unlocked zones never
@@ -153,19 +153,36 @@ notice something that needs doing but isn't being done right now.
       no pre-assignment/configuration step needed (an earlier version of this required
       clicking an empty "block" and assigning it to one specific item first; that was
       confusing in practice -- not what was actually wanted -- and has been replaced
-      entirely by this flat pool model). `FixtureWindow`/`FixtureRenderer` now just show a
+      entirely by this flat pool model). `FixtureWindow`/`FixtureRenderer` show a
       capacity bar + a plain list of whatever's currently stocked (image, quantity, how
       many slots it's using); walk up to either fixture and press E (or click it) to open
-      it, purely as a status display now -- all actual stocking still happens via
-      ordering (Supply tab) + hauling + delivering a crate
-      (`GameScene.tryDeliverCarriedCrate`), which now targets whichever fixture the player
-      is actually standing near and keeps any leftover crate contents if the pool fills up
-      mid-delivery. Known simplifications: there's still no way to introduce a brand new
-      item type via the Supply tab UI itself (ordering only lists items already stocked
-      somewhere -- the demo fixtures' hardcoded starting stock is the only way new item
-      types exist right now); no supplier license/contract gating on what can be stocked
-      (Step 45/48 aside); the sales shelf and Storage Fixture are each still one single
-      hardcoded instance (no Build Mode/purchasing more of either yet, Step 22/41).
+      it. Stock still gets there in the first place via ordering (Supply tab) + hauling +
+      delivering a crate (`GameScene.tryDeliverCarriedCrate`), which targets whichever
+      fixture the player is actually standing near and keeps any leftover crate contents
+      if the pool fills up mid-delivery. Known simplifications: there's still no way to
+      introduce a brand new item type via the Supply tab UI itself (ordering only lists
+      items already stocked somewhere -- the demo fixtures' hardcoded starting stock is
+      the only way new item types exist right now); no supplier license/contract gating
+      on what can be stocked (Step 45/48 aside); the sales shelf and Storage Fixture are
+      each still one single hardcoded instance (no Build Mode/purchasing more of either
+      yet, Step 22/41).
+- [x] Hovercart (bible Step 10/63: "an abstract character/employee inventory size, not a
+      physical moving entity"): extracted the capacity-pool logic shared by every Fixture
+      into a new base class (`InventoryPool.js` -- capacity + stock + add/remove/usedCapacity/
+      etc.), and gave `PlayerState` its own instance (`HOVERCART_CAPACITY` = 10, smaller
+      than either fixture's own capacity since it's one character's personal carry limit,
+      not a whole shelf/locker). `FixtureWindow` now shows the open fixture's stock AND
+      the hovercart's own stock side by side, each row with a TAKE (fixture -> hovercart)
+      or STOCK (hovercart -> fixture) button that moves 1 unit at a time, disabled the
+      instant the receiving side has no room left for that item. This is what actually
+      gives the Storage Fixture a purpose now: haul a crate to Storage (or the shelf,
+      whichever's closer/has room), then separately walk between the two moving units via
+      the hovercart as needed. The HUD gained a live `HOVERCART x/y` readout next to
+      Credits/Reputation. Known simplifications: only the player has a hovercart (no
+      employees yet, Step 14/15); only 1 unit moves per click (no bulk-transfer input);
+      crates from the Loading Pad still deliver straight into a fixture rather than
+      routing through the hovercart first, so the hovercart's actual role is purely
+      post-delivery reorganizing between fixtures for now, not the primary haul-in path.
 - [ ] Customer patience bubbles + Go-Backs cart (Step 53/12)
 - [ ] Pre-shift pricing / Start Shift flow (Step 44/52)
 - [ ] Employees: hiring, Work Register / Stock Shelves tasks (Step 13-19)

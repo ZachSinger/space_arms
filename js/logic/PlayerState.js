@@ -1,3 +1,11 @@
+import { InventoryPool } from "./InventoryPool.js";
+
+// Hovercart capacity (bible: "an abstract character/employee inventory size, not a
+// physical moving entity on the map") -- deliberately smaller than either fixture's own
+// capacity (30/20 -- see game.js), since this represents what one character can
+// personally carry at a time, not a whole shelf or storage locker.
+export const HOVERCART_CAPACITY = 10;
+
 export class PlayerState {
   constructor() {
     this.credits = 1500;
@@ -14,6 +22,12 @@ export class PlayerState {
     };
 
     this.activeLicenses = new Set(); // Stores IDs of signed licenses
+
+    // The player's own carrying capacity -- same InventoryPool model as a physical
+    // Fixture (ShopInventory.js), just not drawn anywhere on the map. Lets stock be
+    // withdrawn from one fixture and deposited into another (see FixtureWindow).
+    this.hovercart = new InventoryPool({ capacity: HOVERCART_CAPACITY, stock: [] });
+
     this.listeners = [];
   }
 
@@ -69,6 +83,10 @@ export class PlayerState {
       factionReputation: { ...this.factionReputation },
       activeLicenses: [...this.activeLicenses],
       customersTurnedAway: this.customersTurnedAway,
+      hovercart: {
+        capacity: this.hovercart.capacity,
+        stock: this.hovercart.stock.map((entry) => ({ ...entry })),
+      },
     };
   }
 
@@ -76,6 +94,10 @@ export class PlayerState {
     const state = new PlayerState();
     Object.assign(state, data, {
       activeLicenses: new Set(data.activeLicenses),
+      hovercart: new InventoryPool({
+        capacity: data.hovercart?.capacity ?? HOVERCART_CAPACITY,
+        stock: data.hovercart?.stock || [],
+      }),
     });
     return state;
   }

@@ -2,6 +2,7 @@ export class HUDController {
     constructor(playerState, shiftClock, onStartShift) {
         this.creditsEl = document.getElementById('hud-credits');
         this.repEl = document.getElementById('hud-rep');
+        this.hovercartEl = document.getElementById('hud-hovercart');
         this.shiftTimeEl = document.getElementById('hud-shift-time');
         this.pauseBtn = document.getElementById('hud-pause-btn');
         this.startShiftBtn = document.getElementById('hud-start-shift-btn');
@@ -29,6 +30,13 @@ export class HUDController {
         
         // Render raw reputation integer
         this.repEl.innerText = state.globalReputation;
+
+        // Hovercart capacity -- same InventoryPool model as a physical fixture, just
+        // always "with" the player (bible: an abstract carrying capacity, not a physical
+        // object). Not driven by its own subscribe() -- transfers call
+        // playerState.notifyListeners() directly (see FixtureWindow.transfer) so this
+        // stays live right alongside credits/reputation.
+        this.hovercartEl.innerText = `${state.hovercart.usedCapacity()}/${state.hovercart.capacity}`;
     }
 
     renderShiftClock(clock) {

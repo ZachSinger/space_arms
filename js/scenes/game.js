@@ -309,7 +309,7 @@ export class GameScene extends Phaser.Scene {
     this.exitPoint = { x: this.storeDoor.x, y: this.storeDoor.y };
 
     this.checkoutWindow = new CheckoutWindow(this.windowManager);
-    this.fixtureWindow = new FixtureWindow(this.windowManager);
+    this.fixtureWindow = new FixtureWindow(this.windowManager, this.playerState);
     // Ordered line of customers waiting at the register; index 0 is the one currently
     // being checked out. Re-laid-out (via layoutRegisterLine) any time it changes so
     // customers visibly queue up single-file instead of stacking on the same spot.
