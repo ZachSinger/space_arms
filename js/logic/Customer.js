@@ -169,6 +169,7 @@ export class Customer {
       return;
     }
 
+    this.playerState.notifyListeners();
     this.reservedTarget = this.onReserveQueueSlot
       ? this.onReserveQueueSlot()
       : this.registerPoint;

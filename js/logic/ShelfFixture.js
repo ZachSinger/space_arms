@@ -80,9 +80,10 @@ export class ShelfFixture {
     return true;
   }
 
-  // Places a brand new, empty (0 stock) instance of itemId at the given anchor cell.
-  // Returns the new placement, or null if it doesn't actually fit there (e.g. the UI and
-  // the model somehow disagreed about what's valid).
+  // Places a new instance of itemId at the given anchor cell, already holding 1 unit (the
+  // caller is responsible for having taken that unit from somewhere, e.g. the hovercart)
+  // -- a placement never exists at 0 stock. Returns the new placement, or null if it
+  // doesn't fit there or can't hold even a single unit.
   placeItem(itemId, gx, gy, rotated = false) {
     const item = database.getItem(itemId);
     if (!item) return null;
@@ -91,18 +92,36 @@ export class ShelfFixture {
     const h = rotated ? item.dimensions.w : item.dimensions.h;
     if (!this.canPlaceAt(gx, gy, w, h)) return null;
 
-    const placement = { itemId, gx, gy, w, h, rotated, quantity: 0 };
+    const placement = { itemId, gx, gy, w, h, rotated, quantity: 1 };
+    if (this.getPlacementCapacity(placement) < 1) return null;
     this.placements.push(placement);
     return placement;
   }
 
-  // Frees up a placement's grid cells entirely. Only allowed while it's already sitting
-  // at zero stock -- removing a placement that's still holding physical units would need
-  // somewhere for those units to go first (the hovercart).
-  removePlacement(placement) {
-    if (placement.quantity > 0) return false;
+  // Lifts an existing placement (with its whole stack) off the grid so its cells are free
+  // while the player picks a new spot for it. It stays out of placements -- so customers
+  // and deliveries can't touch it -- until attachPlacement() puts it back somewhere.
+  detachPlacement(placement) {
     this.placements = this.placements.filter((p) => p !== placement);
+  }
+
+  // Puts a detached placement back at (gx, gy). Returns false (leaving it detached) if it
+  // doesn't fit there.
+  attachPlacement(placement, gx, gy, rotated) {
+    const item = database.getItem(placement.itemId);
+    const w = rotated ? item.dimensions.h : item.dimensions.w;
+    const h = rotated ? item.dimensions.w : item.dimensions.h;
+    if (!this.canPlaceAt(gx, gy, w, h)) return false;
+
+    Object.assign(placement, { gx, gy, w, h, rotated });
+    this.placements.push(placement);
     return true;
+  }
+
+  // A placement that hits 0 stock frees its grid cells immediately -- there's no such
+  // thing as an empty "0/X" placement sitting on the shelf.
+  pruneEmptyPlacements() {
+    this.placements = this.placements.filter((p) => p.quantity > 0);
   }
 
   // --- The rest of this mirrors InventoryPool's own public API exactly (see its own
@@ -119,6 +138,7 @@ export class ShelfFixture {
   takeItem(placement) {
     if (!placement || placement.quantity <= 0) return null;
     placement.quantity -= 1;
+    this.pruneEmptyPlacements();
     return placement.itemId;
   }
 
@@ -168,6 +188,7 @@ export class ShelfFixture {
       placement.quantity -= removed;
       remaining -= removed;
     }
+    this.pruneEmptyPlacements();
     return quantity - remaining;
   }
 

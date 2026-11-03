@@ -4,7 +4,8 @@
 // A physical, hauled unit of ordered stock (bible Step 10: "Ordered stock spawns as
 // physical crates on an outdoor Loading Pad. Crates must be hauled inside via chained
 // anchor pathfinding"). For this first procurement slice, hauling is player-driven (walk
-// up, press E to pick up; walk to the shelf, press E to deliver) rather than full
+// up, press E to pick up; walk to a fixture, press E to deliver; Q to drop on the floor)
+// rather than full
 // automated anchor-chain pathfinding -- see TODO.md for what's still simplified here
 // (no backroom intermediate storage stage, no employee auto-hauling yet).
 const CRATE_DISPLAY_SIZE = 40;

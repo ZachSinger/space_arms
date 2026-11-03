@@ -147,6 +147,14 @@ notice something that needs doing but isn't being done right now.
       only existed for the old all-cells-highlighted approach.
 
 ## Bigger Features Not Yet Built (from the bible)
+- [x] Manager Tablet Inventory now shows only owned items, with Storage and Stock unit
+      counts. Storage includes all lockers, the hovercart, and unemptied crates (on the
+      Loading Pad, carried, or dropped). Stock totals all placements on sales shelves,
+      including stacks temporarily lifted in move mode. Counts refresh on transfers,
+      ordering/delivery, and customers taking shelf stock; zero-total items disappear.
+- [x] Q drops the carried crate at the player's floor position without unpacking it.
+      E can pick it up again wherever it was dropped; E near a fixture still delivers
+      its contents. Partially emptied crates keep their remaining quantity when dropped.
 - [x] Player avatar (`js/logic/Player.js`): WASD/arrow movement, collides with walls/
       fixtures but not customers (bible Step 30/58), camera now follows it instead of the
       old drag-to-pan placeholder. Needed as a prerequisite for the physical procurement

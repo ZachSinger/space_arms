@@ -60,8 +60,9 @@ export class FixtureRenderer {
 
   // Shared by a Storage Fixture's own list and the hovercart's list -- both are flat
   // {itemId, quantity} entries backed by InventoryPool's shared-pool model (unlike a
-  // ShelfFixture's placements, see shelfPlacementRowsHTML). `transferAttr` is which data
-  // attribute the transfer button gets, and `otherPool` is whichever pool the button
+  // ShelfFixture's placements). `transferAttr` is which data attribute the transfer
+  // button gets (null = no button at all, e.g. the shelf's hovercart list, where stocking
+  // is done by clicking grid slots instead), and `otherPool` is whichever pool the button
   // would be moving the unit INTO, so it can disable itself the moment that side has no
   // room left for one more.
   static poolStockRowsHTML(entries, otherPool, databaseManager, transferAttr) {
@@ -80,7 +81,15 @@ export class FixtureRenderer {
     const iconHTML = item.image
       ? `<img class="item-icon" src="${item.image}" alt="" />`
       : `<div class="item-icon"></div>`;
-    const canTransfer = otherPool.getRemainingUnitsFor(item.id) > 0;
+    const canTransfer = transferAttr && otherPool.getRemainingUnitsFor(item.id) > 0;
+    const buttonHTML = transferAttr
+      ? `<button
+          class="action-btn fixture-transfer-btn"
+          ${transferAttr}="${item.id}"
+          ${canTransfer ? "" : "disabled"}
+          title="${canTransfer ? "Move 1 unit" : "No room on the other side"}"
+        >${transferAttr === "data-take-item-id" ? "TAKE" : "STOCK"}</button>`
+      : "";
 
     return `
       <div class="item-card fixture-stock-row">
@@ -92,12 +101,7 @@ export class FixtureRenderer {
           </div>
           <div class="fixture-stock-meta">${metaHTML}</div>
         </div>
-        <button
-          class="action-btn fixture-transfer-btn"
-          ${transferAttr}="${item.id}"
-          ${canTransfer ? "" : "disabled"}
-          title="${canTransfer ? "Move 1 unit" : "No room on the other side"}"
-        >${transferAttr === "data-take-item-id" ? "TAKE" : "STOCK"}</button>
+        ${buttonHTML}
       </div>
     `;
   }
@@ -105,8 +109,8 @@ export class FixtureRenderer {
   // --- Sales Shelf (manual grid placement, see ShelfFixture.js) ---
 
   /**
-   * Renders a sales shelf: either its normal grid view (with a "+ ADD ITEM" button and a
-   * list of its current placements, each with a "take 1 into the hovercart" button), or,
+   * Renders a sales shelf: either its normal grid view (with a "+ ADD ITEM" button; the
+   * placements themselves are moved/taken via mouse clicks on the grid), or,
    * while `pendingPlacement` is set, the same grid with valid placement cells highlighted
    * and a small toolbar (rotate/cancel) instead of the placement list.
    * @param {ShelfFixture} shelfFixture
@@ -119,27 +123,16 @@ export class FixtureRenderer {
       ? this.placementToolbarHTML(pendingPlacement, databaseManager)
       : `<button class="action-btn fixture-add-item-btn" data-add-item>+ ADD ITEM</button>`;
 
-    const placementRows = pendingPlacement
-      ? ""
-      : this.shelfPlacementRowsHTML(shelfFixture, hovercart, databaseManager);
-
     const hovercartRows = this.poolStockRowsHTML(
       hovercart.stock,
       shelfFixture,
       databaseManager,
-      "data-deposit-item-id",
+      null,
     );
 
     return `
       ${topHTML}
       ${this.placementGridHTML(shelfFixture, pendingPlacement, databaseManager)}
-      ${
-        pendingPlacement
-          ? ""
-          : `<div class="retro-slot custom-scrollbar fixture-stock-list" style="padding: 10px; display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow-y: auto;">
-              ${placementRows || `<div class="fixture-empty-hint">Nothing placed on this shelf yet -- click "+ ADD ITEM" to pick a spot for one.</div>`}
-            </div>`
-      }
       ${pendingPlacement ? "" : this.hovercartSectionHTML(hovercart, hovercartRows)}
     `;
   }
@@ -148,7 +141,7 @@ export class FixtureRenderer {
     const item = databaseManager.getItem(pendingPlacement.itemId);
     return `
       <div class="fixture-placement-toolbar">
-        <span class="fixture-placement-label">Placing: ${item.name}${pendingPlacement.rotated ? " (rotated)" : ""}</span>
+        <span class="fixture-placement-label">${pendingPlacement.moving ? "Moving" : "Placing"}: ${item.name}${pendingPlacement.rotated ? " (rotated)" : ""}</span>
         <button class="action-btn" data-rotate-placement>ROTATE</button>
         <button class="action-btn danger" data-cancel-placement>CANCEL</button>
       </div>
@@ -180,7 +173,7 @@ export class FixtureRenderer {
           // other cells it spans are covered by this one div's own grid-column/row span,
           // so nothing separate needs to render there at all.
           if (gx === placement.gx && gy === placement.gy) {
-            cells.push(this.occupiedCellHTML(shelfFixture, placement, databaseManager));
+            cells.push(this.occupiedCellHTML(shelfFixture, placement, databaseManager, pendingPlacement));
           }
           continue;
         }
@@ -200,40 +193,28 @@ export class FixtureRenderer {
     `;
   }
 
-  static occupiedCellHTML(shelfFixture, placement, databaseManager) {
+  // Outside placement mode every placement is interactive: left-click stocks 1 from the
+  // hovercart, drag lifts the whole stack to move it, right-click pulls 1 into the
+  // hovercart (see FixtureWindow).
+  static occupiedCellHTML(shelfFixture, placement, databaseManager, pendingPlacement) {
     const item = databaseManager.getItem(placement.itemId);
     const capacity = shelfFixture.getPlacementCapacity(placement);
     const imageHTML = item.image
       ? `<img class="fixture-cell-image" src="${item.image}" alt="" />`
       : `<div class="fixture-cell-image"></div>`;
     const index = shelfFixture.placements.indexOf(placement);
-    const removableAttr = placement.quantity === 0 ? `data-remove-placement-index="${index}"` : "";
-    const unstockedClass = placement.quantity === 0 ? " fixture-cell-unstocked" : "";
+    const interactiveAttr = pendingPlacement ? "" : `data-placement-index="${index}"`;
+    const interactiveClass = pendingPlacement ? "" : " fixture-cell-interactive";
 
     return `
-      <div class="fixture-cell fixture-cell-occupied${unstockedClass}"
+      <div class="fixture-cell fixture-cell-occupied${interactiveClass}"
         style="grid-column: ${placement.gx + 1} / span ${placement.w}; grid-row: ${placement.gy + 1} / span ${placement.h};"
-        ${removableAttr}
-        title="${item.name}${placement.quantity === 0 ? " (click to remove -- not stocked yet)" : ""}">
+        ${interactiveAttr}
+        title="${item.name}${pendingPlacement ? "" : " (click: stock 1, drag: move stack, right-click: take 1)"}">
         ${imageHTML}
         <span class="fixture-cell-badge">${placement.quantity}/${capacity}</span>
       </div>
     `;
-  }
-
-  // One row per placement still holding stock -- a lighter-weight version of
-  // transferRowHTML with placement-specific meta (position, per-placement capacity)
-  // instead of a shared-pool slot count.
-  static shelfPlacementRowsHTML(shelfFixture, hovercart, databaseManager) {
-    return shelfFixture.placements
-      .filter((p) => p.quantity > 0)
-      .map((p) => {
-        const item = databaseManager.getItem(p.itemId);
-        const capacity = shelfFixture.getPlacementCapacity(p);
-        const metaHTML = `${p.quantity}/${capacity} in this slot${p.rotated ? " (rotated)" : ""}`;
-        return this.transferRowHTML(item, p.quantity, metaHTML, hovercart, "data-take-item-id");
-      })
-      .join("");
   }
 
   // --- Shared: the item picker shown after clicking "+ ADD ITEM" -- only items actually

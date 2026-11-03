@@ -374,12 +374,15 @@ export class GameScene extends Phaser.Scene {
       x: loadingPadZone.gridX * TILE_SIZE + (loadingPadZone.gridW * TILE_SIZE) / 2,
       y: loadingPadZone.gridY * TILE_SIZE + (loadingPadZone.gridH * TILE_SIZE) / 2,
     };
-    this.restockCrates = []; // crates sitting at the Loading Pad, not yet picked up
+    this.restockCrates = []; // uncarried crates, at the Loading Pad or dropped on the floor
     this.carriedCrate = null; // the one crate the player is currently hauling, if any
 
     // Single interact key for both ends of hauling a crate: pick one up near the Loading
     // Pad, then press it again near the shelf to deliver -- see handleInteract().
     this.input.keyboard.on("keydown-E", () => this.handleInteract());
+    this.input.keyboard.on("keydown-Q", (event) => {
+      if (!event.repeat) this.dropCarriedCrate();
+    });
 
     // Constructed here (not earlier in create()) because its Supply tab reads this.fixture
     // immediately on construction (via SupplyRenderer -> getRestockableItems()) -- it has
@@ -522,6 +525,30 @@ export class GameScene extends Phaser.Scene {
     return Math.round(item.baseCost * WHOLESALE_FACTOR * RESTOCK_QUANTITY);
   }
 
+  getInventoryItems() {
+    const totals = new Map();
+    const add = (entry, column) => {
+      if (entry.quantity <= 0) return;
+      if (!totals.has(entry.itemId)) totals.set(entry.itemId, { storage: 0, stock: 0 });
+      totals.get(entry.itemId)[column] += entry.quantity;
+    };
+
+    for (const { fixture } of this.getFixtureEntries()) {
+      const column = fixture instanceof ShelfFixture ? "stock" : "storage";
+      for (const entry of fixture.stock) add(entry, column);
+    }
+    // A lifted shelf stack is still owned and assigned to that shelf until dropped.
+    const moving = this.fixtureWindow.pendingPlacement?.moving;
+    if (moving) add(moving, "stock");
+    for (const entry of this.playerState.hovercart.stock) add(entry, "storage");
+    for (const crate of this.restockCrates) add(crate, "storage");
+    if (this.carriedCrate) add(this.carriedCrate, "storage");
+
+    return database.getAllItems()
+      .filter((item) => totals.has(item.id))
+      .map((item) => ({ item, ...totals.get(item.id) }));
+  }
+
   // Everything the Supply tab needs to render: bible Step 29's "Unified Market" -- every
   // item in the WHOLE catalog that the player currently has a signed Supplier License
   // for (bible Step 48: "Customers only expect items from Supplier Contracts you have
@@ -571,6 +598,7 @@ export class GameScene extends Phaser.Scene {
 
     const crate = new Crate(this, itemId, RESTOCK_QUANTITY, spawnX, spawnY);
     this.restockCrates.push(crate);
+    this.playerState.notifyListeners();
     return true;
   }
 
@@ -659,7 +687,25 @@ export class GameScene extends Phaser.Scene {
     this.carriedCrate.isCarried = true;
 
     const item = database.getItem(nearest.itemId);
-    this.showFloatingText(x, y - 40, `Picked up ${item.name} x${nearest.quantity}`, "#38bdf8");
+    this.showFloatingText(x, y - 40, `Picked up ${item.name} x${nearest.quantity} (Q to drop)`, "#38bdf8");
+    return true;
+  }
+
+  dropCarriedCrate() {
+    const { x, y } = this.player.sprite;
+    const crate = this.carriedCrate;
+    if (!crate) {
+      this.showFloatingText(x, y - 40, "No crate to drop", "#94a3b8");
+      return false;
+    }
+
+    // Use the player's clear floor position, not an offset that could land inside a wall.
+    crate.sprite.setPosition(x, y).setDepth(2);
+    crate.isCarried = false;
+    this.restockCrates.push(crate);
+    this.carriedCrate = null;
+    const item = database.getItem(crate.itemId);
+    this.showFloatingText(x, y - 40, `Dropped ${item.name} x${crate.quantity}`, "#38bdf8");
     return true;
   }
 
@@ -727,6 +773,7 @@ export class GameScene extends Phaser.Scene {
         "#f59e0b",
       );
     }
+    this.playerState.notifyListeners();
   }
 
   // Brief on-screen confirmation for actions that would otherwise have no visible feedback

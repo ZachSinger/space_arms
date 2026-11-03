@@ -6,6 +6,10 @@ import { FixtureRenderer } from "./FixtureRenderer.js";
 import { ShelfFixture } from "./ShelfFixture.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
+// How far the mouse must travel while held on a shelf placement before it counts as a
+// drag (move the stack) rather than a click (stock 1 into it).
+const DRAG_THRESHOLD_PX = 6;
+
 // One shared window reused for whichever fixture the player currently has open (the shelf
 // or a Storage Fixture) -- same idea as there only ever being one CheckoutWindow, just
 // re-targeted/re-titled per open() call rather than one instance per fixture. Renders
@@ -51,8 +55,68 @@ export class FixtureWindow {
     // Delegated (one listener for the whole body, not one per row/cell) since everything
     // gets fully re-rendered after each click -- see render().
     this.bodyElement.addEventListener("click", (event) => this.handleClick(event));
-    this.bodyElement.addEventListener("mousemove", (event) => this.handleGridHover(event));
+    this.bodyElement.addEventListener("contextmenu", (event) => this.handleContextMenu(event));
+    this.bodyElement.addEventListener("mousedown", (event) => this.handleMouseDown(event));
+    this.bodyElement.addEventListener("mousemove", (event) => {
+      if (!this.handleDragMove(event)) this.handleGridHover(event);
+    });
     this.bodyElement.addEventListener("mouseleave", () => this.clearPlacementPreview());
+    // On document so releasing a drag outside the window still ends it cleanly.
+    document.addEventListener("mouseup", (event) => this.handleMouseUp(event));
+    this.dragStart = null;
+    this.isDragging = false;
+    this.suppressClick = false;
+
+    // Closing mid-move must put the lifted stack back where it came from, or it'd vanish.
+    this.uiWindow.onClose = () => this.cancelPendingPlacement();
+  }
+
+  // Abandons whatever placement mode is active. A brand new placement just evaporates
+  // (nothing was taken from the hovercart yet); a moved stack goes back to its origin.
+  cancelPendingPlacement() {
+    const moving = this.pendingPlacement?.moving;
+    if (moving && this.fixture) {
+      const { gx, gy, rotated } = this.pendingPlacement.origin;
+      this.fixture.attachPlacement(moving, gx, gy, rotated);
+    }
+    this.pendingPlacement = null;
+    this.hoveredCell = null;
+    if (moving) this.playerState.notifyListeners();
+  }
+
+  // Right-click a shelf placement: pull 1 unit into the hovercart (the placement clears
+  // itself once its last unit is gone -- see ShelfFixture.pruneEmptyPlacements).
+  handleContextMenu(event) {
+    if (!this.isShelf()) return;
+    const cell = event.target.closest("[data-placement-index]");
+    if (!cell) return;
+    event.preventDefault();
+
+    const placement = this.fixture.placements[Number(cell.dataset.placementIndex)];
+    if (!placement) return;
+
+    const hovercart = this.playerState.hovercart;
+    if (hovercart.getRemainingUnitsFor(placement.itemId) <= 0) {
+      this.showPopupText(event.clientX, event.clientY, "No Space In Hovercart");
+      return;
+    }
+
+    const itemId = this.fixture.takeItem(placement);
+    if (!itemId) return;
+    hovercart.add(itemId, 1);
+
+    this.render();
+    this.playerState.notifyListeners();
+  }
+
+  showPopupText(x, y, text) {
+    const popup = document.createElement("div");
+    popup.className = "fixture-popup-text";
+    popup.textContent = text;
+    popup.style.left = `${x}px`;
+    popup.style.top = `${y}px`;
+    document.body.appendChild(popup);
+    popup.addEventListener("animationend", () => popup.remove());
   }
 
   // Phaser's input manager listens for mousedown at the *window* level, not just on the
@@ -68,11 +132,10 @@ export class FixtureWindow {
   openForFixture(fixture, title) {
     if (this.fixture === fixture && this.uiWindow.isOpen) return;
 
+    this.cancelPendingPlacement(); // restores a mid-move stack to the fixture it came from
     this.fixture = fixture;
     this.titleElement.textContent = title;
     this.pickingItem = false;
-    this.pendingPlacement = null;
-    this.hoveredCell = null;
     this.render();
     this.uiWindow.openWindow();
   }
@@ -153,6 +216,8 @@ export class FixtureWindow {
   }
 
   handleClick(event) {
+    if (this.suppressClick) return;
+
     // --- Shared: fixture <-> hovercart stock transfers ---
     const takeBtn = event.target.closest("[data-take-item-id]");
     if (takeBtn) {
@@ -199,8 +264,7 @@ export class FixtureWindow {
     }
     const cancelBtn = event.target.closest("[data-cancel-placement]");
     if (cancelBtn) {
-      this.pendingPlacement = null;
-      this.hoveredCell = null;
+      this.cancelPendingPlacement();
       this.render();
       return;
     }
@@ -210,24 +274,107 @@ export class FixtureWindow {
     // the cursor at this exact pixel (the preview itself can span several cells).
     const gridCell = event.target.closest("[data-grid-cell]");
     if (gridCell && this.hoveredCell) {
-      const { gx, gy } = this.hoveredCell;
-      const { w, h } = this.getPendingFootprint();
-      if (this.fixture.canPlaceAt(gx, gy, w, h)) {
-        this.fixture.placeItem(this.pendingPlacement.itemId, gx, gy, this.pendingPlacement.rotated);
-        this.pendingPlacement = null;
-        this.hoveredCell = null;
-        this.render();
-      }
+      this.confirmPlacement();
       return;
     }
 
-    // --- Shelf-only: removing an empty (never-stocked) placement ---
-    const removeCell = event.target.closest("[data-remove-placement-index]");
-    if (removeCell) {
-      const placement = this.fixture.placements[Number(removeCell.dataset.removePlacementIndex)];
-      this.fixture.removePlacement(placement);
-      this.render();
+    // --- Shelf-only: left-click a placement to stock 1 unit into it from the hovercart ---
+    const placementCell = event.target.closest("[data-placement-index]");
+    if (placementCell && !this.pendingPlacement) {
+      const placement = this.fixture.placements[Number(placementCell.dataset.placementIndex)];
+      if (placement) this.stockPlacement(placement, event);
     }
+  }
+
+  // Places/drops the pending item at hoveredCell if it fits there. Returns whether it did.
+  confirmPlacement() {
+    if (!this.pendingPlacement || !this.hoveredCell) return false;
+    const { gx, gy } = this.hoveredCell;
+    const { w, h } = this.getPendingFootprint();
+    if (!this.fixture.canPlaceAt(gx, gy, w, h)) return false;
+
+    const { itemId, rotated, moving } = this.pendingPlacement;
+    if (moving) {
+      this.fixture.attachPlacement(moving, gx, gy, rotated);
+    } else if (this.playerState.hovercart.remove(itemId, 1) === 1) {
+      if (!this.fixture.placeItem(itemId, gx, gy, rotated)) {
+        this.playerState.hovercart.add(itemId, 1);
+      }
+      this.playerState.notifyListeners();
+    }
+    this.pendingPlacement = null;
+    this.hoveredCell = null;
+    this.render();
+    if (moving) this.playerState.notifyListeners();
+    return true;
+  }
+
+  stockPlacement(placement, event) {
+    const hovercart = this.playerState.hovercart;
+    if (!hovercart.findStockEntry(placement.itemId)?.quantity) {
+      this.showPopupText(event.clientX, event.clientY, "None In Hovercart");
+      return;
+    }
+    if (placement.quantity >= this.fixture.getPlacementCapacity(placement)) {
+      this.showPopupText(event.clientX, event.clientY, "Slot Full");
+      return;
+    }
+    hovercart.remove(placement.itemId, 1);
+    placement.quantity += 1;
+    this.render();
+    this.playerState.notifyListeners();
+  }
+
+  // --- Shelf-only: click-and-drag a placement to lift its whole stack into move mode.
+  // Releasing over a valid cell drops it there; releasing anywhere else just leaves it in
+  // move mode (ROTATE/CANCEL toolbar, click a cell to drop) like a normal placement. ---
+  handleMouseDown(event) {
+    if (!this.isShelf() || event.button !== 0 || this.pendingPlacement) return;
+    const cell = event.target.closest("[data-placement-index]");
+    if (!cell) return;
+    event.preventDefault(); // stops the browser's own image ghost-drag
+    this.dragStart = { x: event.clientX, y: event.clientY, index: Number(cell.dataset.placementIndex) };
+  }
+
+  handleDragMove(event) {
+    if (!this.dragStart) return false;
+    const dx = event.clientX - this.dragStart.x;
+    const dy = event.clientY - this.dragStart.y;
+    if (dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) return true;
+
+    const placement = this.fixture.placements[this.dragStart.index];
+    this.dragStart = null;
+    if (!placement) return true;
+    this.isDragging = true;
+    this.beginMove(placement);
+    return true;
+  }
+
+  handleMouseUp(event) {
+    this.dragStart = null; // a press with no real movement is just a click (see handleClick)
+    if (!this.isDragging) return;
+    this.isDragging = false;
+
+    // The release also fires a click; it mustn't be read as "stock 1" or "place here".
+    this.suppressClick = true;
+    setTimeout(() => (this.suppressClick = false), 0);
+
+    if (this.bodyElement.contains(event.target) && event.target.closest("[data-grid-cell]")) {
+      this.confirmPlacement();
+    }
+  }
+
+  beginMove(placement) {
+    this.fixture.detachPlacement(placement);
+    this.pendingPlacement = {
+      itemId: placement.itemId,
+      rotated: placement.rotated,
+      moving: placement,
+      origin: { gx: placement.gx, gy: placement.gy, rotated: placement.rotated },
+    };
+    this.hoveredCell = null;
+    this.render();
+    this.playerState.notifyListeners();
   }
 
   // Moves exactly 1 unit of itemId from one capacity pool to another (fixture <-> player's

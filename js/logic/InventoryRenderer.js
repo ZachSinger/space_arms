@@ -4,68 +4,37 @@
 export class InventoryRenderer {
   // Renders just the Inventory tab's own content (the tab bar/chrome around it is owned
   // by whatever window hosts this -- see ManagerTablet.js).
-  static generateHTML(databaseManager) {
-    const items = databaseManager.getAllItems();
-
-    let html = `
-        <div class="retro-slot custom-scrollbar inventory-list" style="padding: 10px; display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto;">
-    `;
-
-    items.forEach((item, index) => {
-      // Map the tags array into HTML pills
-      const tagHTML = item.tags
-        .map((t) => `<span class="tag-badge">${t}</span>`)
-        .join("");
-
-      // Conditionally generate the extra data row ONLY if ammo or count exist
-      let extraDataHTML = "";
-      if (item.ammo || item.count) {
-        const ammoSpan = item.ammo
-          ? `<span>Uses: ${item.ammo}</span>`
-          : `<span></span>`;
-        const countSpan = item.count
-          ? `<span>Qty: ${item.count}</span>`
-          : `<span></span>`;
-
-        // This ensures the optional row stays perfectly formatted and independent
-        extraDataHTML = `
-                <div style="display: flex; justify-content: space-between; margin-top: 4px; color: #eab308;">
-                    ${ammoSpan}
-                    ${countSpan}
-                </div>
-            `;
-      }
-
-      // Build the card layout (each field is a fixed grid column)
+  static generateHTML(entries) {
+    const rows = entries.map(({ item, storage, stock }, index) => {
       const iconHTML = item.image
         ? `<img class="item-icon" src="${item.image}" alt="" />`
         : `<div class="item-icon"></div>`;
-      html += `
-            <div class="item-card inventory-item-card" data-index="${index}">
-                ${iconHTML}
-                <span class="item-card-title">${item.name}</span>
-                <span class="item-card-cost">${item.baseCost}c</span>
-                <div class="item-card-flavor">"${item.flavor}"</div>
-                <div class="item-card-tags">
-                    ${tagHTML}
-                </div>
-                <div class="item-card-footer">
-                    <div class="item-card-footer-row">
-                        <span>Dim: [${item.dimensions.w}x${item.dimensions.h}]</span>
-                        <span>Stack: x${item.stackSize}</span>
-                    </div>
-                    ${extraDataHTML}
-                </div>
-            </div>
-        `;
-    });
+      return `
+        <div class="item-card inventory-item-card" data-index="${index}" data-item-id="${item.id}">
+          ${iconHTML}
+          <span class="item-card-title">${item.name}</span>
+          <span class="inventory-quantity" data-inventory-storage>${storage}</span>
+          <span class="inventory-quantity" data-inventory-stock>${stock}</span>
+        </div>
+      `;
+    }).join("");
 
-    html += `</div>`;
-    return html;
+    return `
+      <div class="fixture-stock-meta">Storage includes lockers, hovercart, and unopened crates. Stock is on sales shelves.</div>
+      <div class="inventory-column-header">
+        <span></span>
+        <span>ITEM</span>
+        <span class="inventory-quantity">STORAGE</span>
+        <span class="inventory-quantity">STOCK</span>
+      </div>
+      <div class="retro-slot custom-scrollbar inventory-list" style="padding: 10px; display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto;">
+        ${rows || `<div class="fixture-empty-hint">No inventory owned yet -- order items from Supply.</div>`}
+      </div>
+    `;
   }
 
   // Wires arrow-key/hover selection with auto-scroll; returns a teardown function.
-  static enableListNavigation(rootElement) {
+  static enableListNavigation(rootElement, selectedItemId = null) {
     const list = rootElement.querySelector(".inventory-list");
     const cards = list ? Array.from(list.querySelectorAll(".item-card")) : [];
 
@@ -112,7 +81,7 @@ export class InventoryRenderer {
     };
 
     window.addEventListener("keydown", handleKeydown);
-    selectCard(0);
+    selectCard(Math.max(0, cards.findIndex((card) => card.dataset.itemId === selectedItemId)));
 
     return () => {
       window.removeEventListener("keydown", handleKeydown);

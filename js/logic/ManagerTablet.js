@@ -84,15 +84,17 @@ export class ManagerTablet {
     // happens to be open. (Fires once immediately on subscribe -- harmless, just an extra
     // render of a tiny list before the window is even shown.) The Supply tab's afford-
     // ability (and its "on shelf" counts, which change on every sale too) needs the exact
-    // same live refresh, for the same reason.
+    // same live refresh, for the same reason. Inventory totals also refresh after stock
+    // transfers, crate ordering/delivery, and customers taking shelf items.
     this.playerState.subscribe(() => {
+      this.refreshInventoryPanel();
       this.refreshContractsPanel();
       this.refreshSupplyPanel();
     });
   }
 
   renderPanelContent(tabId) {
-    if (tabId === "inventory") return InventoryRenderer.generateHTML(database);
+    if (tabId === "inventory") return InventoryRenderer.generateHTML(this.scene.getInventoryItems());
     if (tabId === "contracts") {
       return ContractRenderer.generateHTML(database.getAllLicenses(), this.playerState);
     }
@@ -101,12 +103,27 @@ export class ManagerTablet {
   }
 
   switchTab(tabId) {
+    if (tabId === "inventory") this.refreshInventoryPanel();
     this.bodyElement.querySelectorAll(".tablet-tab-btn").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.tab === tabId);
     });
     this.bodyElement.querySelectorAll(".tablet-tab-panel").forEach((panel) => {
       panel.classList.toggle("hidden", panel.dataset.tabPanel !== tabId);
     });
+  }
+
+  refreshInventoryPanel() {
+    const panel = this.bodyElement.querySelector('[data-tab-panel="inventory"]');
+    if (!panel) return;
+    const selectedItemId = panel.querySelector(".item-card.selected")?.dataset.itemId;
+    const scrollTop = panel.querySelector(".inventory-list").scrollTop;
+    this.disableInventoryNavigation();
+    panel.innerHTML = this.renderPanelContent("inventory");
+    this.disableInventoryNavigation = InventoryRenderer.enableListNavigation(
+      this.uiWindow.element,
+      selectedItemId,
+    );
+    panel.querySelector(".inventory-list").scrollTop = scrollTop;
   }
 
   refreshContractsPanel() {
@@ -142,6 +159,7 @@ export class ManagerTablet {
   }
 
   openWindow() {
+    this.refreshInventoryPanel();
     this.uiWindow.openWindow();
   }
 }
