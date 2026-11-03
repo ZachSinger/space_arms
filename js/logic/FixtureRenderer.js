@@ -238,13 +238,16 @@ export class FixtureRenderer {
       .join("");
   }
 
-  // --- Shared: the full-catalog item picker shown after clicking "+ ADD ITEM" ---
+  // --- Shared: the item picker shown after clicking "+ ADD ITEM" -- only items actually
+  // in the player's hovercart are offered, since those are the only ones there's
+  // anything physical to put on the shelf. (An earlier version of this showed the whole
+  // catalog, which isn't correct -- you can't place an item you aren't carrying.)
+  static itemPickerHTML(databaseManager, hovercart) {
+    const availableEntries = hovercart.stock.filter((entry) => entry.quantity > 0);
 
-  static itemPickerHTML(databaseManager) {
-    const items = databaseManager.getAllItems();
-
-    const rowsHTML = items
-      .map((item) => {
+    const rowsHTML = availableEntries
+      .map((entry) => {
+        const item = databaseManager.getItem(entry.itemId);
         const iconHTML = item.image
           ? `<img class="item-icon" src="${item.image}" alt="" />`
           : `<div class="item-icon"></div>`;
@@ -254,7 +257,7 @@ export class FixtureRenderer {
             <div class="item-details">
               <div class="item-card-header">
                 <span class="item-card-title">${item.name}</span>
-                <span class="item-card-cost">${item.baseCost}c</span>
+                <span class="item-card-cost">x${entry.quantity} in cart</span>
               </div>
               <div class="fixture-stock-meta">Dim: ${item.dimensions.w}x${item.dimensions.h}</div>
             </div>
@@ -263,10 +266,15 @@ export class FixtureRenderer {
       })
       .join("");
 
+    const emptyHTML =
+      availableEntries.length === 0
+        ? `<div class="fixture-empty-hint">Nothing in your hovercart to place -- take something from a fixture first.</div>`
+        : "";
+
     return `
       <button class="action-btn fixture-picker-back" data-picker-back>&lt; BACK</button>
       <div class="retro-slot custom-scrollbar fixture-picker-list" style="padding: 10px; display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0; overflow-y: auto;">
-        ${rowsHTML}
+        ${rowsHTML}${emptyHTML}
       </div>
     `;
   }

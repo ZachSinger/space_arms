@@ -158,7 +158,7 @@ export class FixtureWindow {
   render() {
     if (this.isShelf()) {
       this.bodyElement.innerHTML = this.pickingItem
-        ? FixtureRenderer.itemPickerHTML(database)
+        ? FixtureRenderer.itemPickerHTML(database, this.playerState.hovercart)
         : FixtureRenderer.generateShelfHTML(
             this.fixture,
             this.playerState.hovercart,
