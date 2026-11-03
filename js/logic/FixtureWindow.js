@@ -62,13 +62,19 @@ export class FixtureWindow {
     });
     this.bodyElement.addEventListener("mouseleave", () => this.clearPlacementPreview());
     // On document so releasing a drag outside the window still ends it cleanly.
-    document.addEventListener("mouseup", (event) => this.handleMouseUp(event));
+    this.handleDocumentMouseUp = (event) => this.handleMouseUp(event);
+    document.addEventListener("mouseup", this.handleDocumentMouseUp);
     this.dragStart = null;
     this.isDragging = false;
     this.suppressClick = false;
 
     // Closing mid-move must put the lifted stack back where it came from, or it'd vanish.
     this.uiWindow.onClose = () => this.cancelPendingPlacement();
+  }
+
+  destroy() {
+    this.cancelPendingPlacement();
+    document.removeEventListener("mouseup", this.handleDocumentMouseUp);
   }
 
   // Abandons whatever placement mode is active. A brand new placement just evaporates

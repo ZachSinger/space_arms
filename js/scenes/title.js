@@ -1,5 +1,10 @@
 import Phaser from "phaser";
 import { SettingsPanel } from "../logic/SettingsPanel.js";
+import { UIWindow } from "../logic/UIWindow.js";
+import { WindowManager } from "../logic/WindowManager.js";
+import { SaveManager } from "../../SaveManager.js";
+import { validateShopSave } from "../logic/ShopSave.js";
+import { database } from "./boot.js";
 
 export class TitleScene extends Phaser.Scene {
   constructor() {
@@ -10,11 +15,13 @@ export class TitleScene extends Phaser.Scene {
     const { width, height } = this.scale;
 
     this.selectedIndex = 0;
+    this.loadingSave = false;
+    this.saveManager = new SaveManager();
     this.commands = [
-      { label: "NEW GAME", action: () => this.scene.start("scene-game") },
+      { label: "NEW GAME", action: () => this.confirmNewGame() },
       {
         label: "CONTINUE",
-        action: () => this.showStatus("NO SAVED GAME FOUND"),
+        action: () => this.continueGame(),
       },
       {
         label: "SETTINGS",
@@ -87,6 +94,21 @@ export class TitleScene extends Phaser.Scene {
       onOpen: () => this.setMenuActive(false),
       onClose: () => this.setMenuActive(true),
     });
+    this.windowManager = new WindowManager();
+    this.newGameWindow = new UIWindow({
+      id: "new-game-confirmation", title: "NEW GAME", width: "380px", height: "auto",
+      x: 80, y: 120, onClose: () => this.setMenuActive(true),
+      contentHTML: `
+        <p>Start a new shop? This replaces your existing saved game.</p>
+        <button class="action-btn" data-confirm-new-game>START NEW GAME</button>
+        <button class="action-btn" data-cancel-new-game>CANCEL</button>
+      `,
+    }, this.windowManager);
+    this.newGameWindow.element.querySelector("[data-confirm-new-game]").addEventListener("click", () => {
+      this.newGameWindow.close();
+      this.scene.start("scene-game");
+    });
+    this.newGameWindow.element.querySelector("[data-cancel-new-game]").addEventListener("click", () => this.newGameWindow.close());
     this.events.once("shutdown", () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
       window.removeEventListener(
@@ -94,6 +116,7 @@ export class TitleScene extends Phaser.Scene {
         this.handleTextSizeChange,
       );
       this.settingsPanel.destroy();
+      this.windowManager.destroy();
     });
   }
 
@@ -105,11 +128,33 @@ export class TitleScene extends Phaser.Scene {
     this.input.enabled = isActive;
     this.input.keyboard.enabled = isActive;
 
-    if (!isActive) {
-      this.selectedIndex = this.commands.findIndex(
-        (command) => command.label === "SETTINGS",
-      );
-      this.updateMenuAppearance();
+  }
+
+  confirmNewGame() {
+    if (this.loadingSave) return;
+    this.setMenuActive(false);
+    this.newGameWindow.openWindow();
+  }
+
+  async continueGame() {
+    if (this.loadingSave) return;
+    this.loadingSave = true;
+    this.setMenuActive(false);
+    this.showStatus("LOADING SAVED GAME...");
+    try {
+      const payload = await this.saveManager.read();
+      if (payload === null) {
+        this.showStatus("NO SAVED GAME FOUND");
+        return;
+      }
+      const savedShopData = validateShopSave(payload.data.shop, database);
+      this.scene.start("scene-game", { savedShopData });
+    } catch (error) {
+      console.error("Could not load saved game", error);
+      this.showStatus(`LOAD FAILED: ${error.message}`);
+    } finally {
+      this.loadingSave = false;
+      this.setMenuActive(true);
     }
   }
 

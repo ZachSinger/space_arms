@@ -151,6 +151,14 @@ notice something that needs doing but isn't being done right now.
       only existed for the old all-cells-highlighted approach.
 
 ## Bigger Features Not Yet Built (from the bible)
+- [x] Off-shift rearrangement of the existing shelf, three lockers, and register through
+      Manager Tablet Fixtures/Layout MOVE controls. Grid-snapped previews reject overlaps,
+      blocked access, disconnected floor, doors/loading-area obstruction, and insufficient
+      register queue space. Contents stay attached; right-click/Escape cancels.
+- [x] Off-shift autosaving and title-screen Continue. Saves fixture positions/stock,
+      hovercart, crates, player economy/licenses, prices/market, and unlocked rooms.
+      Electron uses an atomic user-data save file; browser uses localStorage.
+      Continue restores closed-shop preparation; active shifts resume the last checkpoint.
 - [x] Manager Tablet Inventory now shows only owned items, with Storage and Stock unit
       counts. Storage includes all lockers, the hovercart, and unemptied crates (on the
       Loading Pad, carried, or dropped). Stock totals all placements on sales shelves,
@@ -271,15 +279,15 @@ notice something that needs doing but isn't being done right now.
       market" (current avg market price).
 - [ ] Pre-shift Start Shift onboarding flow (Step 44)
 - [ ] Employees: hiring, Work Register / Stock Shelves tasks (Step 13-19)
-- [ ] More fixtures / Build Mode (Step 22/41)
+- [ ] Purchasing additional fixtures (Step 22/41; existing-fixture rearrangement is built)
 - [ ] Factions: Scavengers/Mercenaries/Explorers demand & reputation (Step 24-28, 49, 51)
 - [x] Manager's Tablet UI: unified tabbed window shell built (`js/logic/ManagerTablet.js`),
-      Inventory + Contracts + Supply tabs have real content. Remaining tabs (Employee,
-      Fixtures, Layout, Finances, Handbook) still just show a "COMING SOON" placeholder
+      Inventory + Contracts + Supply + Fixtures + Layout tabs have real content.
+      Remaining tabs (Employee, Finances, Handbook) still show a "COMING SOON" placeholder
       until each one's own system exists -- see below.
 - [ ] Employee tab: needs the Employee/Hiring system to exist first (Step 13-19 above)
-- [ ] Fixtures tab: needs Build Mode / fixture purchasing to exist first (Step 22/41)
-- [ ] Layout tab: needs a shop-floor layout/move-fixtures tool to exist first (Step 63)
+- [x] Fixtures tab: move existing fixtures; purchasing additional fixtures remains future work.
+- [x] Layout tab: safe off-shift fixture placement with autosave status (Step 63)
 - [ ] Finances tab: needs the End Day / itemized receipt flow to exist first (Step 43)
 - [ ] Handbook tab: needs actual handbook/reference content written (Step 36)
 - [ ] `npm run build` is not verified to produce a working production build (see AGENTS.md)

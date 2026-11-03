@@ -43,3 +43,15 @@ test("supply cost uses a hidden per-item rate that stays fixed across days", () 
   market.advanceDay();
   assert.equal(market.getSupplyCost("rifle", 5), 1000 * MIN_SUPPLY_RATIO * 5);
 });
+
+test("restoring a market keeps its day, supplier rates, and subsequent price changes", () => {
+  const original = new Market(items, () => 1);
+  original.advanceDay();
+  const saved = original.serialize();
+  const restored = new Market(items, () => 0);
+  restored.applySave(saved);
+  assert.deepEqual(restored.serialize(), saved);
+  assert.equal(restored.getSupplyCost("rifle", 5), original.getSupplyCost("rifle", 5));
+  restored.advanceDay();
+  assert.equal(restored.getPrice("rifle"), Math.round(saved.prices.rifle * 0.9));
+});

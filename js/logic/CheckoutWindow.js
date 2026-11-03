@@ -56,18 +56,27 @@ export class CheckoutWindow {
 
     // Global mousedown/mouseup so a click-and-drag scan works no matter where the drag
     // starts -- not just when the first mousedown happens to land directly on a card.
-    window.addEventListener("mousedown", () => {
+    this.handleMouseDown = () => {
       this.isScanning = true;
-    });
-    window.addEventListener("mouseup", () => {
+    };
+    this.handleMouseUp = () => {
       this.isScanning = false;
-    });
+    };
+    window.addEventListener("mousedown", this.handleMouseDown);
+    window.addEventListener("mouseup", this.handleMouseUp);
 
     // Lets the player type the payment amount on their physical keyboard instead of only
     // clicking the on-screen numpad. Bound once here (rather than per-customer in
     // bindNumpad) and dispatches to whichever handler is currently assigned, since the
     // window/body element itself is reused across every customer.
-    window.addEventListener("keydown", (event) => this.handleNumpadKeydown(event));
+    this.handleKeyDown = (event) => this.handleNumpadKeydown(event);
+    window.addEventListener("keydown", this.handleKeyDown);
+  }
+
+  destroy() {
+    window.removeEventListener("mousedown", this.handleMouseDown);
+    window.removeEventListener("mouseup", this.handleMouseUp);
+    window.removeEventListener("keydown", this.handleKeyDown);
   }
 
   // Ignores keystrokes unless the checkout window is actually open and the payment panel

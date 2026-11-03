@@ -16,6 +16,24 @@ const DIRECTIONS = [
   [-1, -1],
 ];
 
+export function getReachableGridCells(start, isWalkable, maxCells = 4000) {
+  if (!isWalkable(start.gx, start.gy)) return [];
+  const cells = [start];
+  const visited = new Set([`${start.gx},${start.gy}`]);
+  for (let index = 0; index < cells.length && cells.length < maxCells; index += 1) {
+    const current = cells[index];
+    for (const [dx, dy] of DIRECTIONS.slice(0, 4)) {
+      const gx = current.gx + dx;
+      const gy = current.gy + dy;
+      const key = `${gx},${gy}`;
+      if (visited.has(key) || !isWalkable(gx, gy)) continue;
+      visited.add(key);
+      cells.push({ gx, gy });
+    }
+  }
+  return cells;
+}
+
 // Returns an array of {gx, gy} waypoints from (exclusive of) start to (inclusive of) goal,
 // or null if no path exists. isWalkable(gx, gy) is only ever queried for cells other than
 // the start cell itself (the agent is trusted to already be standing somewhere valid).

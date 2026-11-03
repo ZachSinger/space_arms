@@ -139,6 +139,22 @@ export class Crate {
     this.sprite.body.moves = !paused;
   }
 
+  serialize() {
+    return {
+      itemId: this.itemId,
+      quantity: this.quantity,
+      x: this.sprite.x,
+      y: this.sprite.y,
+      velocityX: this.sprite.body.velocity.x,
+      velocityY: this.sprite.body.velocity.y,
+    };
+  }
+
+  applySave(data) {
+    this.drop(data.x, data.y, data.velocityX / CRATE_THROW_MULTIPLIER,
+      data.velocityY / CRATE_THROW_MULTIPLIER, false);
+  }
+
   // Called every frame while being carried, to keep it visually "attached" to the player --
   // rendered slightly above and at a higher depth so it reads as held up, not standing on
   // the floor next to them.

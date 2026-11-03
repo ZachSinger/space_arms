@@ -80,6 +80,16 @@ function createScene(obstacles = []) {
   return scene;
 }
 
+test("crate saving restores its contents, position, and in-flight velocity", () => {
+  const original = new Crate(createScene(), "item", 5, 100, 100);
+  original.drop(120, 140, 80, -40, false);
+  const saved = original.serialize();
+  const restored = new Crate(createScene(), saved.itemId, saved.quantity, 0, 0);
+  restored.applySave(saved);
+  assert.deepEqual(restored.serialize(), saved);
+  assert.equal(restored.isThrown, true);
+});
+
 test("picking up a stationary crate and dropping it preserves contents", () => {
   const scene = createScene();
   const crate = new Crate(scene, "item", 5, 100, 100);

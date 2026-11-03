@@ -127,11 +127,7 @@ export class Customer {
         this.updateFacing();
         break;
       case "QUEUEING":
-        // Continuously drift toward wherever the scene says this customer's spot in
-        // line currently is (it moves closer to the register as the line shrinks). The
-        // queue lane itself is always a clear, obstacle-free strip, so no pathfinding is
-        // needed here -- only a direct walk.
-        this.driftToward(this.queueTarget || this.registerPoint);
+        this.followPath();
         // Face the register while waiting, rather than whichever way they last happened
         // to be walking -- looks right for a line of people facing the counter.
         this.updateFacing("up");
@@ -204,6 +200,7 @@ export class Customer {
   // the line finishes and everyone shuffles forward).
   setQueueTarget(x, y) {
     this.queueTarget = { x, y };
+    this.setDestination(x, y, () => {});
   }
 
   hitByCrate() {
@@ -272,20 +269,6 @@ export class Customer {
     }
 
     const angle = Phaser.Math.Angle.Between(this.sprite.x, this.sprite.y, targetX, targetY);
-    this.sprite.body.setVelocity(Math.cos(angle) * SPEED, Math.sin(angle) * SPEED);
-  }
-
-  // Like moveToward, but has no one-shot "arrival" callback -- used while queueing, since the
-  // target itself keeps shifting (closer to the register) as the line moves.
-  driftToward(target) {
-    const distance = Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, target.x, target.y);
-
-    if (distance < 4) {
-      this.sprite.body.setVelocity(0, 0);
-      return;
-    }
-
-    const angle = Phaser.Math.Angle.Between(this.sprite.x, this.sprite.y, target.x, target.y);
     this.sprite.body.setVelocity(Math.cos(angle) * SPEED, Math.sin(angle) * SPEED);
   }
 

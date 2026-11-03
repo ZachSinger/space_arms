@@ -20,20 +20,20 @@ export class WindowManager {
 
   bindGlobalEvents() {
     // Global Drag Listeners
-    document.addEventListener("mousemove", (e) => {
+    this.handleMouseMove = (e) => {
       if (this.draggedWindow)
         this.draggedWindow.updateDragPosition(e.clientX, e.clientY);
-    });
+    };
 
-    document.addEventListener("mouseup", () => {
+    this.handleMouseUp = () => {
       if (this.draggedWindow) {
         this.draggedWindow.stopDrag();
         this.draggedWindow = null;
       }
-    });
+    };
 
     // Global Keyboard Accessibility (Escape key)
-    document.addEventListener("keydown", (e) => {
+    this.handleKeyDown = (e) => {
       if (e.key === "Escape") {
         const activeWinEl = document.querySelector(".retro-window.active");
         if (activeWinEl) {
@@ -41,7 +41,21 @@ export class WindowManager {
           if (activeWinObj) activeWinObj.close();
         }
       }
-    });
+    };
+    document.addEventListener("mousemove", this.handleMouseMove);
+    document.addEventListener("mouseup", this.handleMouseUp);
+    document.addEventListener("keydown", this.handleKeyDown);
+  }
+
+  destroy() {
+    document.removeEventListener("mousemove", this.handleMouseMove);
+    document.removeEventListener("mouseup", this.handleMouseUp);
+    document.removeEventListener("keydown", this.handleKeyDown);
+    for (const win of this.windows.values()) {
+      win.close();
+      win.element.remove();
+    }
+    this.windows.clear();
   }
 
   setDraggingWindow(win) {

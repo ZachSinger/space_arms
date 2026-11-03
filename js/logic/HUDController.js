@@ -6,15 +6,25 @@ export class HUDController {
         this.shiftTimeEl = document.getElementById('hud-shift-time');
         this.pauseBtn = document.getElementById('hud-pause-btn');
         this.startShiftBtn = document.getElementById('hud-start-shift-btn');
+        this.rootEl = document.getElementById('persistent-hud');
+        this.rootEl.classList.remove('hidden');
 
         // Subscribe to the brain!
         playerState.subscribe((state) => this.render(state));
 
         if (shiftClock) {
             shiftClock.subscribe((clock) => this.renderShiftClock(clock));
-            this.pauseBtn.addEventListener('click', () => shiftClock.togglePause());
-            this.startShiftBtn.addEventListener('click', () => onStartShift?.());
+            this.handlePause = () => shiftClock.togglePause();
+            this.handleStartShift = () => onStartShift?.();
+            this.pauseBtn.addEventListener('click', this.handlePause);
+            this.startShiftBtn.addEventListener('click', this.handleStartShift);
         }
+    }
+
+    destroy() {
+        this.rootEl.classList.add('hidden');
+        this.pauseBtn.removeEventListener('click', this.handlePause);
+        this.startShiftBtn.removeEventListener('click', this.handleStartShift);
     }
 
     render(state) {

@@ -42,6 +42,8 @@ function getDisplaySettings(win) {
 }
 
 const displayModes = new WeakMap();
+const pendingSaveWrites = new Set();
+let saveQueue = Promise.resolve();
 
 function getDisplayMode(win) {
   return displayModes.get(win) ?? "windowed";
@@ -60,6 +62,14 @@ const createWindow = () => {
   });
 
   displayModes.set(win, "fullscreen");
+  win.on("close", (event) => {
+    if (pendingSaveWrites.size === 0) return;
+    event.preventDefault();
+    win.setEnabled(false);
+    Promise.allSettled([...pendingSaveWrites]).then(() => {
+      if (!win.isDestroyed()) win.destroy();
+    });
+  });
   win.loadURL("http://localhost:5173");
 };
 
@@ -130,8 +140,19 @@ const SAVE_FILE_PATH = path.join(app.getPath("userData"), "savegame.json");
 
 ipcMain.handle("save:write", async (event, payload) => {
   // fixed filename under userData avoids any path-traversal from renderer input
-  await fs.writeFile(SAVE_FILE_PATH, JSON.stringify(payload), "utf-8");
-  return true;
+  const write = saveQueue.then(async () => {
+    const temporaryPath = `${SAVE_FILE_PATH}.tmp`;
+    await fs.writeFile(temporaryPath, JSON.stringify(payload), "utf-8");
+    await fs.rename(temporaryPath, SAVE_FILE_PATH);
+    return true;
+  });
+  saveQueue = write.catch((error) => console.error("Save file write failed", error));
+  pendingSaveWrites.add(write);
+  try {
+    return await write;
+  } finally {
+    pendingSaveWrites.delete(write);
+  }
 });
 
 ipcMain.handle("save:read", async () => {

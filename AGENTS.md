@@ -29,7 +29,7 @@ Design is specified in detail in `documentation/` — consult it before inventin
 - `npm run dev` — Vite dev server (`localhost:5173`); open it directly in a browser for fast iteration without Electron.
 - `npm start` — launches Electron pointed at `localhost:5173`; **requires `npm run dev` already running**.
 - `npm run build` — currently **not verified to produce a working production build**: `data/`, `img/`, and `styles/` are loaded via plain string paths (Phaser loader, CSS), not JS imports, so Vite won't copy them into `dist/` without a `vite.config` fix (e.g. `publicDir` or a copy plugin). Fix this before relying on `build`/packaging.
-- No test suite, linter, or formatter is configured yet.
+- Run regression tests with `node --test tests/*.test.js` (PowerShell: `node --test (Get-ChildItem tests -Filter '*.test.js').FullName`). No linter or formatter is configured.
 
 ## Conventions
 
@@ -40,7 +40,7 @@ Design is specified in detail in `documentation/` — consult it before inventin
 
 ## Current State Gotchas (read before touching related code)
 
-- `SaveManager.js` is **scaffolded but not yet imported/wired into any scene**. Don't assume it's live just because it exists — check `js/scenes/game.js` imports to see what's actually active. (`PlayerState`, `HUDController`, `ShopInventory`'s `Fixture` class, and `ContractRenderer`, previously also listed here, are now wired in and live.)
-- The Manager's Tablet (`js/logic/ManagerTablet.js`) is a single unified tabbed window (bible Step 40) hosting `InventoryRenderer` and `ContractRenderer`'s content as tabs. Most of its other tabs (Employee, Supply, Fixtures, Layout, Finances, Handbook) are still just "COMING SOON" placeholders — see `TODO.md` for what each one is blocked on.
+- `SaveManager.js` is wired into the title/game scenes. Save only off-shift; Continue restores preparation state, not an active shift. `ShopSave.js` validates snapshots; fixture geometry must also pass `FixtureLayout.js` before restoration. Browser and Electron saves are separate.
+- The Manager's Tablet (`js/logic/ManagerTablet.js`) hosts Inventory, Contracts, Supply, Fixtures, and Layout content. Fixtures/Layout rearrange existing fixtures off-shift; buying new fixtures is not implemented. Employee, Finances, and Handbook remain placeholders.
 - `StoreItem` (`js/logic/Items.js`) does not capture the `license` field present on every entry in `data/Items.json` — add it if you're building contract-gated purchasing.
-- `SaveManager` requires subsystems to implement `applySave(data)`; `PlayerState` currently only has `serialize()`/`deserialize()` and is missing `applySave()`.
+- `SaveManager` requires subsystems to implement `serialize()` and `applySave(data)`. Preserve existing listeners when applying restored player state.

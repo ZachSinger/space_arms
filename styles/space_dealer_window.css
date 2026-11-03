@@ -505,6 +505,51 @@ button {
   font-weight: bold;
 }
 
+.layout-fixture-list {
+  padding: 10px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.layout-fixture-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+  cursor: pointer;
+}
+
+.layout-fixture-list.retro-slot:hover {
+  border-color: var(--color-border-subtle);
+  --bg-color: #090d16;
+}
+
+.layout-fixture-row:hover {
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.layout-fixture-row small,
+.layout-save-status {
+  color: var(--color-text-muted);
+}
+
+.layout-fixture-row .action-btn {
+  width: auto;
+  min-width: 70px;
+}
+
+.layout-fixture-row .action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+#fixture-placement-window [data-placement-status] {
+  min-height: 3em;
+  color: var(--color-text-main);
+}
+
 .item-card-tags {
   display: flex;
   gap: 6px;
@@ -1036,6 +1081,7 @@ button {
   --bg-color: #0d9668;
 }
 
+#persistent-hud.hidden,
 .hud-pause-btn.hidden,
 .hud-start-shift-btn.hidden {
   display: none;

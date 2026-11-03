@@ -5,6 +5,8 @@ import { UIWindow } from "./UIWindow.js";
 import { InventoryRenderer } from "./InventoryRenderer.js";
 import { ContractRenderer } from "./ContractRenderer.js";
 import { SupplyRenderer } from "./SupplyRenderer.js";
+import { LayoutRenderer } from "./LayoutRenderer.js";
+import { FixtureHighlight } from "./FixtureHighlight.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
 // The bible's full Step 40 tab list (Part 8). Only Inventory and Contracts have a real
@@ -63,6 +65,8 @@ export class ManagerTablet {
     );
 
     this.bodyElement = this.uiWindow.element.querySelector(".retro-window-body");
+    this.fixtureHighlight = new FixtureHighlight(scene, this.uiWindow);
+    this.uiWindow.onClose = () => this.fixtureHighlight.reset();
     this.disableInventoryNavigation = InventoryRenderer.enableListNavigation(
       this.uiWindow.element,
     );
@@ -80,6 +84,9 @@ export class ManagerTablet {
 
       const orderButton = event.target.closest("[data-order-item-id]");
       if (orderButton) this.handleOrderRestock(orderButton.dataset.orderItemId);
+
+      const moveButton = event.target.closest("[data-move-fixture-id]");
+      if (moveButton) this.scene.fixturePlacement.begin(moveButton.dataset.moveFixtureId);
 
       const priceButton = event.target.closest(PRICE_BUTTON_SELECTOR);
       if (priceButton) {
@@ -135,6 +142,7 @@ export class ManagerTablet {
       this.refreshInventoryPanel();
       this.refreshContractsPanel();
       this.refreshSupplyPanel();
+      this.refreshLayoutPanels();
     });
   }
 
@@ -144,12 +152,15 @@ export class ManagerTablet {
       return ContractRenderer.generateHTML(database.getAllLicenses(), this.playerState);
     }
     if (tabId === "supply") return SupplyRenderer.generateHTML(this.scene);
+    if (tabId === "layout" || tabId === "fixtures") return LayoutRenderer.generateHTML(this.scene);
     return `<div class="tablet-placeholder">COMING SOON</div>`;
   }
 
   switchTab(tabId) {
     if (this.bodyElement.contains(document.activeElement)) document.activeElement.blur();
+    this.fixtureHighlight.reset();
     if (tabId === "inventory") this.refreshInventoryPanel();
+    if (tabId === "layout" || tabId === "fixtures") this.refreshLayoutPanels();
     this.bodyElement.querySelectorAll(".tablet-tab-btn").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.tab === tabId);
     });
@@ -203,6 +214,20 @@ export class ManagerTablet {
     panel.querySelector(".supply-list").scrollTop = scrollTop;
   }
 
+  refreshLayoutPanels() {
+    for (const id of ["layout", "fixtures"]) {
+      const panel = this.bodyElement.querySelector(`[data-tab-panel="${id}"]`);
+      if (panel) panel.innerHTML = this.renderPanelContent(id);
+    }
+    this.updateSaveStatus();
+  }
+
+  updateSaveStatus() {
+    this.bodyElement.querySelectorAll("[data-save-status]").forEach((element) => {
+      element.textContent = this.scene.saveStatus;
+    });
+  }
+
   handlePriceAdjustment(itemId, action) {
     const currentPrice = this.scene.getStorePrice(itemId);
     const marketPrice = this.scene.market.getPrice(itemId);
@@ -240,7 +265,9 @@ export class ManagerTablet {
   }
 
   openWindow() {
+    if (this.scene.startingShift || this.scene.fixturePlacement?.active || this.scene.loadFailed) return;
     this.refreshInventoryPanel();
+    this.refreshLayoutPanels();
     this.uiWindow.openWindow();
   }
 }

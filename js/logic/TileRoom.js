@@ -11,7 +11,7 @@ import { TILE_SIZE, ZONES, zoneAt } from "./RoomLayout.js";
 export class TileRoom {
   constructor(scene) {
     this.scene = scene;
-    this.zones = ZONES; // mutable `locked` flags live directly on these objects
+    this.zones = ZONES.map((zone) => ({ ...zone }));
     this.wallCells = new Map(); // `${gx},${gy}` -> { image }
     this.floorCells = new Map(); // `${gx},${gy}` -> image
     // A static physics group (not loose per-image bodies) so that walls built later by
@@ -41,7 +41,7 @@ export class TileRoom {
   neighborZone(gx, gy, edge) {
     const offsets = { north: [0, -1], south: [0, 1], west: [-1, 0], east: [1, 0] };
     const [dx, dy] = offsets[edge];
-    return zoneAt(gx + dx, gy + dy);
+    return zoneAt(gx + dx, gy + dy, this.zones);
   }
 
   // A perimeter cell needs a wall if any of its outward-facing edges hits the
@@ -61,7 +61,7 @@ export class TileRoom {
   // currently-unlocked zone and isn't one of this room's own wall tiles (fixture obstacles
   // like the shelf are a separate, scene-level concern -- see GameScene.isCellWalkable).
   isWalkable(gx, gy) {
-    const zone = zoneAt(gx, gy);
+    const zone = zoneAt(gx, gy, this.zones);
     if (!zone || zone.locked) return false;
     return !this.wallCells.has(`${gx},${gy}`);
   }
@@ -95,13 +95,15 @@ export class TileRoom {
   // two already-unlocked zones that don't naturally wall off against each other -- e.g.
   // sealing the Storeroom away from the Sales Floor (see GameScene.create()), since
   // needsWallAt() only ever auto-seals a boundary when the neighboring zone is locked.
-  addWall(gx, gy, wallTileKey) {
+  addWall(gx, gy, wallTileKey, permanent = false) {
+    const previous = this.wallCells.get(`${gx},${gy}`);
+    if (previous) this.wallGroup.remove(previous.image, true, true);
     const image = this.scene.add
       .image(this.worldX(gx), this.worldY(gy), wallTileKey)
       .setDisplaySize(TILE_SIZE, TILE_SIZE)
       .setDepth(1);
     this.wallGroup.add(image); // staticGroup.add() creates the static body automatically
-    this.wallCells.set(`${gx},${gy}`, { image });
+    this.wallCells.set(`${gx},${gy}`, { image, permanent });
   }
 
   // Carves a walkable doorway into an existing wall cell: removes its solid wall body and
@@ -136,8 +138,8 @@ export class TileRoom {
 
     for (const [key, entry] of [...this.wallCells.entries()]) {
       const [gx, gy] = key.split(",").map(Number);
-      const cellZone = zoneAt(gx, gy);
-      if (cellZone && !cellZone.locked && !this.needsWallAt(cellZone, gx, gy)) {
+      const cellZone = zoneAt(gx, gy, this.zones);
+      if (!entry.permanent && cellZone && !cellZone.locked && !this.needsWallAt(cellZone, gx, gy)) {
         // remove(child, removeFromScene, destroyChild) -- keeps the group's internal
         // bookkeeping and the actual GameObject/body teardown consistent.
         this.wallGroup.remove(entry.image, true, true);
@@ -158,4 +160,3 @@ export class TileRoom {
     return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
   }
 }
-

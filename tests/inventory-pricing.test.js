@@ -1,17 +1,24 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createServer } from "vite";
 
 let server;
 let ManagerTablet;
+let cacheDirectory;
 const originalDocument = globalThis.document;
 
 before(async () => {
+  cacheDirectory = await mkdtemp(join(tmpdir(), "space-arms-pricing-test-"));
   server = await createServer({
     root: fileURLToPath(new URL("..", import.meta.url)),
     configFile: false,
     logLevel: "silent",
+    cacheDir: cacheDirectory,
+    optimizeDeps: { noDiscovery: true, include: [] },
     server: { middlewareMode: true },
     plugins: [{
       name: "inventory-pricing-test-stubs",
@@ -19,8 +26,12 @@ before(async () => {
       resolveId(source) {
         if (source === "../scenes/boot.js") return "\0inventory-test-database";
         if (source === "./UIWindow.js") return "\0inventory-test-window";
+        if (source === "./FixtureHighlight.js") return "\0inventory-test-highlight";
       },
       load(id) {
+        if (id === "\0inventory-test-highlight") {
+          return "export class FixtureHighlight { reset() {} destroy() {} }";
+        }
         if (id === "\0inventory-test-database") {
           return "export const database = { getAllLicenses: () => [] };";
         }
@@ -38,6 +49,7 @@ after(async () => {
   else globalThis.document = originalDocument;
   delete globalThis.__inventoryTestWindow;
   if (server) await server.close();
+  if (cacheDirectory) await rm(cacheDirectory, { recursive: true, force: true });
 });
 
 function createHarness() {
@@ -124,6 +136,7 @@ function createHarness() {
     if (selector === '[data-tab-panel="inventory"]') return panel;
     return null;
   };
+  body.querySelectorAll = () => [];
   globalThis.__inventoryTestWindow = {
     querySelector(selector) {
       if (selector === ".retro-window-body") return body;
@@ -168,6 +181,8 @@ function createHarness() {
       }));
     },
     getRestockableItems: () => [],
+    canRearrangeFixtures: () => false,
+    getFixtureLayout: () => [],
   };
   const tablet = new ManagerTablet({}, playerState, scene);
   const click = (itemId, action) => {

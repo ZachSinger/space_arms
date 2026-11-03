@@ -77,9 +77,9 @@ export function getTotalGridSize() {
 
 // Finds which zone owns a given grid cell, or null if the cell isn't covered
 // by any authored zone.
-export function zoneAt(gridX, gridY) {
+export function zoneAt(gridX, gridY, zones = ZONES) {
   return (
-    ZONES.find(
+    zones.find(
       (zone) =>
         gridX >= zone.gridX &&
         gridX < zone.gridX + zone.gridW &&

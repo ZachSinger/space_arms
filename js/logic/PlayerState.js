@@ -94,21 +94,30 @@ export class PlayerState {
       customersTurnedAway: this.customersTurnedAway,
       hovercart: {
         capacity: this.hovercart.capacity,
-        stock: this.hovercart.stock.map((entry) => ({ ...entry })),
+        stock: this.hovercart.stock.filter((entry) => entry.quantity > 0).map((entry) => ({ ...entry })),
       },
     };
   }
 
   static deserialize(data) {
     const state = new PlayerState();
-    Object.assign(state, data, {
+    state.applySave(data);
+    return state;
+  }
+
+  applySave(data) {
+    Object.assign(this, {
+      credits: data.credits,
+      globalReputation: data.globalReputation,
+      factionReputation: { ...data.factionReputation },
+      customersTurnedAway: data.customersTurnedAway,
       activeLicenses: new Set(data.activeLicenses),
       storePrices: { ...data.storePrices },
       hovercart: new InventoryPool({
         capacity: data.hovercart?.capacity ?? HOVERCART_CAPACITY,
-        stock: data.hovercart?.stock || [],
+        stock: (data.hovercart?.stock || []).map((entry) => ({ ...entry })),
       }),
     });
-    return state;
+    this.notifyListeners();
   }
 }

@@ -56,4 +56,18 @@ export class Market {
       this.prices.set(itemId, this.nextPrice(this.prices.get(itemId), basePrice));
     }
   }
+
+  serialize() {
+    return {
+      day: this.day,
+      prices: Object.fromEntries(this.prices),
+      supplyRatios: Object.fromEntries(this.supplyRatios),
+    };
+  }
+
+  applySave(data) {
+    this.day = data.day;
+    this.prices = new Map(Object.entries(data.prices));
+    this.supplyRatios = new Map(Object.entries(data.supplyRatios));
+  }
 }
