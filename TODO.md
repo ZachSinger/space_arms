@@ -3,6 +3,16 @@
 Running task list. Consult this before deciding what to work on. Add to it any time we
 notice something that needs doing but isn't being done right now.
 
+## Debug Tools
+- [x] Tile-grid overlay (G key, `GameScene.toggleDebugGrid`): draws a 1px line every
+      TILE_SIZE across the whole authored map (including locked/not-yet-built zones), on
+      top of everything else. Added after discovering the Storage Fixture's lockers (and,
+      slightly, the sales shelf) weren't actually sitting on tile boundaries -- their
+      positions were computed as a fractional percentage of the zone's raw pixel
+      width/height, which only lines up with the grid by coincidence. Use this any time a
+      fixture looks even slightly off to confirm it before chasing the wrong cause -- see
+      `gridAlignedCenter()` in game.js for the correct way to position one instead.
+
 ## Art / Assets
 - [ ] `att_stk_08` (Blackwood Ordnance Counter-Weight Stock) is using a placeholder image
       (`_Bonus_Variety/attachments_stocks/stock-tech-black-blue-orb.png`), not real art made

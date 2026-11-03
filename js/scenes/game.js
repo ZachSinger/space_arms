@@ -9,7 +9,7 @@ import { Crate, INTERACT_RANGE } from "../logic/Crate.js";
 import { CheckoutWindow } from "../logic/CheckoutWindow.js";
 import { FixtureWindow } from "../logic/FixtureWindow.js";
 import { TileRoom } from "../logic/TileRoom.js";
-import { TILE_SIZE, getZone } from "../logic/RoomLayout.js";
+import { TILE_SIZE, getZone, getTotalGridSize } from "../logic/RoomLayout.js";
 import { ShiftClock } from "../logic/ShiftClock.js";
 import { ShiftSummaryWindow } from "../logic/ShiftSummaryWindow.js";
 import { findGridPath } from "../logic/Pathfinder.js";
@@ -63,6 +63,20 @@ function getOccupiedCellKeys(centerX, centerY, width, height) {
     }
   }
   return keys;
+}
+
+// A fixture's pixel center such that its own footprint (widthTiles x heightTiles) lands
+// exactly on tile boundaries, anchored leftOffsetTiles/topOffsetTiles cells in from the
+// zone's own top-left corner. Placing a fixture at some fractional percentage of a zone's
+// raw pixel width/height (the old approach) only lines up with the grid by coincidence for
+// specific fixture-size/zone-size/fraction combinations -- it didn't for either the shelf
+// or the Storage Fixture, which is exactly what the debug grid overlay (toggleDebugGrid)
+// was added to make obvious.
+function gridAlignedCenter(zone, leftOffsetTiles, topOffsetTiles, widthTiles, heightTiles) {
+  return {
+    x: (zone.gridX + leftOffsetTiles + widthTiles / 2) * TILE_SIZE,
+    y: (zone.gridY + topOffsetTiles + heightTiles / 2) * TILE_SIZE,
+  };
 }
 
 // Converts a 0-based "how many others are already here" count into a centered left/right
@@ -145,11 +159,13 @@ export class GameScene extends Phaser.Scene {
       y: this.room.worldY(backroomDoorGY),
     };
 
+    const shelfPosition = gridAlignedCenter(salesFloor, 1, 2, 3, 2);
+
     this.fixture = new Fixture({
       id: "fixture_demo_01",
       displayType: "universal",
-      x: zonePixelX + zonePixelW * 0.3,
-      y: zonePixelY + zonePixelH * 0.4,
+      x: shelfPosition.x,
+      y: shelfPosition.y,
       // 3x2 instead of the original 2x2 -- the 2 new blocks (2,0)/(2,1) start deliberately
       // unassigned, to actually demonstrate player-driven shelf stocking (bible: "determine
       // what can go on the shelf") rather than every slot already being pre-decided before
@@ -176,11 +192,12 @@ export class GameScene extends Phaser.Scene {
     // the exact same slot/capacity logic as the sales shelf (just not customer-facing).
     // Starts completely empty/unassigned; every block has to be set up by the player
     // before anything hauled in from the Loading Pad has anywhere to go.
+    const storagePosition = gridAlignedCenter(storeroom, 1, 1, 3, 2);
     this.storageFixture = new Fixture({
       id: "storage_demo_01",
       displayType: "storage",
-      x: storeroom.gridX * TILE_SIZE + storeroom.gridW * TILE_SIZE * 0.35,
-      y: storeroom.gridY * TILE_SIZE + storeroom.gridH * TILE_SIZE * 0.3,
+      x: storagePosition.x,
+      y: storagePosition.y,
       gridDimensions: { w: 3, h: 2 },
       slots: [
         { itemId: null, quantity: 0, stackDepth: null, x: 0, y: 0 },
@@ -372,6 +389,12 @@ export class GameScene extends Phaser.Scene {
     // real purchase UI exists. Remove once that UI is built.
     this.input.keyboard.on("keydown-U", () => this.debugUnlockExpansion());
 
+    // Debug-only: toggles a tile-grid overlay across the whole map, so misaligned fixtures
+    // (placed at some fractional-of-zone-width pixel position instead of real tile
+    // boundaries) are immediately obvious by eye instead of having to eyeball it against
+    // the floor tiles underneath.
+    this.input.keyboard.on("keydown-G", () => this.toggleDebugGrid());
+
     // The shift clock's "Manual Toggle" (bible Step 2) -- freezes time entirely so the
     // player can think without pressure, without a variable speed control.
     this.input.keyboard.on("keydown-P", () => this.shiftClock.togglePause());
@@ -429,6 +452,32 @@ export class GameScene extends Phaser.Scene {
     const bounds = this.room.unlockZone("expansion_a");
     this.cameras.main.setBounds(bounds.x, bounds.y, bounds.width, bounds.height);
     console.log("Unlocked expansion_a; camera bounds now", bounds);
+  }
+
+  // Debug hook (keydown-G): a tile-grid line overlay across the entire authored map
+  // (every zone, including locked/not-yet-built ones, so it's also useful for lining up
+  // expansion content later), drawn once and just toggled visible/hidden after that. Sits
+  // at depth 9998 -- just under the player's own 9999 (bible Step 30/58) -- so it draws on
+  // top of every floor/wall/fixture/character, making any fixture whose position isn't a
+  // clean multiple of TILE_SIZE immediately obvious instead of having to eyeball it.
+  toggleDebugGrid() {
+    if (!this.debugGridGraphics) {
+      const { gridW, gridH } = getTotalGridSize();
+      const width = gridW * TILE_SIZE;
+      const height = gridH * TILE_SIZE;
+
+      this.debugGridGraphics = this.add.graphics().setDepth(9998);
+      this.debugGridGraphics.lineStyle(1, 0x00ffff, 0.5);
+      for (let gx = 0; gx <= gridW; gx += 1) {
+        this.debugGridGraphics.lineBetween(gx * TILE_SIZE, 0, gx * TILE_SIZE, height);
+      }
+      for (let gy = 0; gy <= gridH; gy += 1) {
+        this.debugGridGraphics.lineBetween(0, gy * TILE_SIZE, width, gy * TILE_SIZE);
+      }
+      this.debugGridGraphics.setVisible(false);
+    }
+
+    this.debugGridGraphics.setVisible(!this.debugGridGraphics.visible);
   }
 
   // Every fixture that can be delivered to / managed in-world, paired with the point the
