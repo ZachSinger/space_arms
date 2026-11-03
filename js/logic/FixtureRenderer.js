@@ -157,16 +157,16 @@ export class FixtureRenderer {
 
   // The item-placement grid itself. Every rendered cell gets an explicit grid-column/
   // grid-row so occupied (multi-cell) placements and single empty cells can coexist
-  // without CSS grid's implicit auto-placement getting involved at all.
+  // without CSS grid's implicit auto-placement getting involved at all. While placing an
+  // item, empty cells are no longer pre-highlighted as one solid block of "every valid
+  // anchor" (confusing -- looked like the item itself was that whole shape, e.g. a 2x1
+  // item showing 6 highlighted cells on a 4x2 grid read as "taking up 1x4" or "2x3"
+  // depending on rotation). Instead each empty cell just gets a hover target
+  // (data-grid-cell); FixtureWindow shows a real preview -- the item's own image, at its
+  // actual w x h footprint -- anchored wherever the cursor currently is, via
+  // showPlacementPreview().
   static placementGridHTML(shelfFixture, pendingPlacement, databaseManager) {
     const { w, h } = shelfFixture.displayGrid;
-    const validCells = pendingPlacement
-      ? new Set(
-          shelfFixture
-            .getValidPlacementCells(pendingPlacement.itemId, pendingPlacement.rotated)
-            .map((c) => `${c.gx},${c.gy}`),
-        )
-      : null;
 
     const cells = [];
     for (let gy = 0; gy < h; gy += 1) {
@@ -185,12 +185,10 @@ export class FixtureRenderer {
           continue;
         }
 
-        const key = `${gx},${gy}`;
-        const isValid = Boolean(validCells?.has(key));
-        const classes = isValid ? "fixture-cell fixture-cell-valid" : "fixture-cell fixture-cell-empty";
+        const hoverAttr = pendingPlacement ? `data-grid-cell="${gx},${gy}"` : "";
         cells.push(`
-          <div class="${classes}" style="grid-column: ${gx + 1} / span 1; grid-row: ${gy + 1} / span 1;"
-            ${isValid ? `data-place-at="${gx},${gy}"` : ""}></div>
+          <div class="fixture-cell fixture-cell-empty" style="grid-column: ${gx + 1} / span 1; grid-row: ${gy + 1} / span 1;"
+            ${hoverAttr}></div>
         `);
       }
     }

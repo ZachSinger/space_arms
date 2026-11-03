@@ -80,25 +80,6 @@ export class ShelfFixture {
     return true;
   }
 
-  // Every top-left anchor position where this item's footprint (given the requested
-  // rotation) would actually fit -- used to highlight valid cells during manual
-  // placement, rather than requiring the player to guess-and-check.
-  getValidPlacementCells(itemId, rotated) {
-    const item = database.getItem(itemId);
-    if (!item) return [];
-
-    const w = rotated ? item.dimensions.h : item.dimensions.w;
-    const h = rotated ? item.dimensions.w : item.dimensions.h;
-    const valid = [];
-
-    for (let gy = 0; gy < this.displayGrid.h; gy += 1) {
-      for (let gx = 0; gx < this.displayGrid.w; gx += 1) {
-        if (this.canPlaceAt(gx, gy, w, h)) valid.push({ gx, gy });
-      }
-    }
-    return valid;
-  }
-
   // Places a brand new, empty (0 stock) instance of itemId at the given anchor cell.
   // Returns the new placement, or null if it doesn't actually fit there (e.g. the UI and
   // the model somehow disagreed about what's valid).

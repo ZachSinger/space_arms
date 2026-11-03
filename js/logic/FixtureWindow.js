@@ -39,10 +39,20 @@ export class FixtureWindow {
     // fixture is opened (see openForFixture) so it never leaks between sessions.
     this.pickingItem = false;
     this.pendingPlacement = null;
+    // The last empty grid cell the cursor was over during placement mode -- used both to
+    // draw the hover preview and, on click, as the actual placement anchor (see
+    // handleGridHover/handleClick). Tracking this ourselves rather than re-deriving it
+    // from the click's own event.target matters because the preview itself can visually
+    // cover several cells at once (a 2-wide item's preview spans 2 cells) -- clicking
+    // anywhere on that preview has to still anchor the placement at its own top-left
+    // cell, not whichever specific sub-cell happened to be directly under the pointer.
+    this.hoveredCell = null;
 
     // Delegated (one listener for the whole body, not one per row/cell) since everything
     // gets fully re-rendered after each click -- see render().
     this.bodyElement.addEventListener("click", (event) => this.handleClick(event));
+    this.bodyElement.addEventListener("mousemove", (event) => this.handleGridHover(event));
+    this.bodyElement.addEventListener("mouseleave", () => this.clearPlacementPreview());
   }
 
   // Phaser's input manager listens for mousedown at the *window* level, not just on the
@@ -62,12 +72,84 @@ export class FixtureWindow {
     this.titleElement.textContent = title;
     this.pickingItem = false;
     this.pendingPlacement = null;
+    this.hoveredCell = null;
     this.render();
     this.uiWindow.openWindow();
   }
 
   isShelf() {
     return this.fixture instanceof ShelfFixture;
+  }
+
+  // The item's actual footprint right now, accounting for the current rotation state --
+  // shared by the hover preview and the click-to-confirm handler so they always agree on
+  // what "fits" means for the exact same pending item.
+  getPendingFootprint() {
+    const item = database.getItem(this.pendingPlacement.itemId);
+    return this.pendingPlacement.rotated
+      ? { w: item.dimensions.h, h: item.dimensions.w }
+      : { w: item.dimensions.w, h: item.dimensions.h };
+  }
+
+  // Updates (creating it the first time) a preview block showing the item's own image at
+  // its real w x h footprint, anchored at (gx, gy) -- green if it would actually fit
+  // there, red if not (still shown, just so hovering an invalid spot gives feedback
+  // instead of silently doing nothing). `pointer-events: none` (see CSS) is what lets
+  // mousemove keep reporting the *underlying* empty cell while the cursor is visually
+  // over this overlay instead of the overlay stealing hover from itself.
+  showPlacementPreview(gx, gy) {
+    const { w, h } = this.getPendingFootprint();
+    const isValid = this.fixture.canPlaceAt(gx, gy, w, h);
+    const item = database.getItem(this.pendingPlacement.itemId);
+
+    const grid = this.bodyElement.querySelector(".fixture-placement-grid");
+    if (!grid) return;
+
+    let preview = grid.querySelector(".fixture-placement-preview");
+    if (!preview) {
+      preview = document.createElement("div");
+      preview.className = "fixture-cell fixture-placement-preview";
+      preview.innerHTML = `<img class="fixture-cell-image" alt="" />`;
+      grid.appendChild(preview);
+    }
+
+    // Clamped only for the visual span -- hovering near an edge with a footprint that
+    // would run off the grid should still show (in red) rather than being clipped into
+    // an implicit (and potentially oddly-sized) extra grid track.
+    const { w: gridW, h: gridH } = this.fixture.displayGrid;
+    const visualW = Math.min(w, gridW - gx);
+    const visualH = Math.min(h, gridH - gy);
+    preview.style.gridColumn = `${gx + 1} / span ${visualW}`;
+    preview.style.gridRow = `${gy + 1} / span ${visualH}`;
+    preview.classList.toggle("fixture-placement-preview-valid", isValid);
+    preview.classList.toggle("fixture-placement-preview-invalid", !isValid);
+
+    const img = preview.querySelector("img");
+    if (item.image) img.src = item.image;
+  }
+
+  clearPlacementPreview() {
+    this.hoveredCell = null;
+    this.bodyElement.querySelector(".fixture-placement-preview")?.remove();
+  }
+
+  // Only relevant while actually choosing where to place something (see
+  // handleClick's data-pick-item-id branch). Re-draws the preview only when the hovered
+  // cell actually changes, not on every pixel of mouse movement within the same cell.
+  handleGridHover(event) {
+    if (!this.isShelf() || !this.pendingPlacement) return;
+
+    const cell = event.target.closest("[data-grid-cell]");
+    if (!cell) {
+      this.clearPlacementPreview();
+      return;
+    }
+
+    const [gx, gy] = cell.dataset.gridCell.split(",").map(Number);
+    if (this.hoveredCell?.gx === gx && this.hoveredCell?.gy === gy) return;
+
+    this.hoveredCell = { gx, gy };
+    this.showPlacementPreview(gx, gy);
   }
 
   handleClick(event) {
@@ -102,6 +184,7 @@ export class FixtureWindow {
     if (pickBtn) {
       this.pickingItem = false;
       this.pendingPlacement = { itemId: pickBtn.dataset.pickItemId, rotated: false };
+      this.hoveredCell = null;
       this.render();
       return;
     }
@@ -110,21 +193,31 @@ export class FixtureWindow {
     const rotateBtn = event.target.closest("[data-rotate-placement]");
     if (rotateBtn) {
       this.pendingPlacement.rotated = !this.pendingPlacement.rotated;
+      this.hoveredCell = null; // the old anchor may no longer fit at all once rotated
       this.render();
       return;
     }
     const cancelBtn = event.target.closest("[data-cancel-placement]");
     if (cancelBtn) {
       this.pendingPlacement = null;
+      this.hoveredCell = null;
       this.render();
       return;
     }
-    const placeCell = event.target.closest("[data-place-at]");
-    if (placeCell) {
-      const [gx, gy] = placeCell.dataset.placeAt.split(",").map(Number);
-      this.fixture.placeItem(this.pendingPlacement.itemId, gx, gy, this.pendingPlacement.rotated);
-      this.pendingPlacement = null;
-      this.render();
+    // Clicking anywhere on an empty cell (including the hover preview sitting on top of
+    // it, thanks to pointer-events: none -- see showPlacementPreview) confirms placement
+    // at whatever cell hover last anchored it to, not necessarily the literal cell under
+    // the cursor at this exact pixel (the preview itself can span several cells).
+    const gridCell = event.target.closest("[data-grid-cell]");
+    if (gridCell && this.hoveredCell) {
+      const { gx, gy } = this.hoveredCell;
+      const { w, h } = this.getPendingFootprint();
+      if (this.fixture.canPlaceAt(gx, gy, w, h)) {
+        this.fixture.placeItem(this.pendingPlacement.itemId, gx, gy, this.pendingPlacement.rotated);
+        this.pendingPlacement = null;
+        this.hoveredCell = null;
+        this.render();
+      }
       return;
     }
 

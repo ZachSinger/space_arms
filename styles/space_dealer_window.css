@@ -755,14 +755,11 @@ button {
   border: 1px dashed var(--color-border-subtle);
 }
 
-.fixture-cell-valid {
-  background: rgba(16, 185, 129, 0.2);
-  border: 1px dashed #10b981;
-  cursor: pointer;
-}
-
-.fixture-cell-valid:hover {
-  background: rgba(16, 185, 129, 0.4);
+/* Only actually clickable while a placement is pending (data-grid-cell is only present
+   on empty cells in that mode -- see FixtureRenderer.placementGridHTML) -- the cursor
+   hint applies generally since CSS has no way to key off a sibling's own JS-side state. */
+.fixture-cell-empty:hover {
+  border-color: var(--color-border-active);
 }
 
 .fixture-cell-occupied {
@@ -802,6 +799,33 @@ button {
   background: rgba(0, 0, 0, 0.7);
   padding: 0 3px;
   border-radius: 2px;
+}
+
+/* The "where will this actually land" preview shown while placing an item (see
+   FixtureWindow.showPlacementPreview) -- the item's own image at its real footprint,
+   anchored under the cursor. pointer-events: none is essential: without it, hovering the
+   preview itself (which can visually cover several grid cells at once) would steal mouse
+   events away from the empty cells underneath, breaking hover tracking the moment the
+   cursor sits over its own overlay. */
+.fixture-placement-preview {
+  pointer-events: none;
+  border-radius: 3px;
+  padding: 4px;
+  box-sizing: border-box;
+}
+
+.fixture-placement-preview-valid {
+  background: rgba(16, 185, 129, 0.25);
+  border: 2px solid #10b981;
+}
+
+.fixture-placement-preview-invalid {
+  background: rgba(239, 68, 68, 0.25);
+  border: 2px solid #ef4444;
+}
+
+.fixture-placement-preview .fixture-cell-image {
+  opacity: 0.85;
 }
 
 /* ================================================================= /

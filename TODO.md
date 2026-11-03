@@ -133,6 +133,18 @@ notice something that needs doing but isn't being done right now.
       `locker_storage.png` texture instead -- looked bad, replaced with real single-door
       art provided afterward.) `FixtureWindow` titles now read "LOCKER 1"/"LOCKER
       2"/"LOCKER 3" so they're distinguishable when opened.
+- [x] ~~Shelf placement UI highlighted every valid anchor cell green at once~~ -- looked
+      like one solid block of taken-up space, not "here's everywhere a 2x1 item COULD go."
+      Confusing in practice -- a 2x1 item on a 4x2 grid highlighting 6 cells read as
+      "this takes up 1x4" (or "2x3" rotated), not its real 2x1 shape. Replaced with a real
+      hover preview instead (`FixtureWindow.showPlacementPreview`): the item's own image,
+      at its actual w x h footprint, anchored wherever the cursor currently is -- green if
+      it fits there, red if not (clamped visually at the grid's edge so an out-of-bounds
+      hover doesn't blow out into an extra implicit CSS grid track). Clicking confirms at
+      the last hovered anchor, not necessarily the literal cell under the cursor (the
+      preview itself can span multiple cells and has `pointer-events: none` so hover still
+      reads the cell underneath it). Removed `ShelfFixture.getValidPlacementCells`, which
+      only existed for the old all-cells-highlighted approach.
 
 ## Bigger Features Not Yet Built (from the bible)
 - [x] Player avatar (`js/logic/Player.js`): WASD/arrow movement, collides with walls/
