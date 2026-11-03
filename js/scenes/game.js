@@ -7,6 +7,7 @@ import { Customer, SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT } from "../logic/
 import { Player } from "../logic/Player.js";
 import { Crate, INTERACT_RANGE } from "../logic/Crate.js";
 import { CheckoutWindow } from "../logic/CheckoutWindow.js";
+import { FixtureWindow } from "../logic/FixtureWindow.js";
 import { TileRoom } from "../logic/TileRoom.js";
 import { TILE_SIZE, getZone } from "../logic/RoomLayout.js";
 import { ShiftClock } from "../logic/ShiftClock.js";
@@ -124,35 +125,90 @@ export class GameScene extends Phaser.Scene {
     this.room.openDoorway(doorGX, doorGY, "door_light_blank_wide");
     this.storeDoor = { x: this.room.worldX(doorGX), y: this.room.worldY(doorGY) };
 
+    // The Storeroom (backroom) and Sales Floor used to share one continuous open gap
+    // across their entire boundary -- TileRoom only auto-walls a zone edge when the
+    // neighboring zone is locked (see TileRoom.needsWallAt), so two unlocked zones sitting
+    // side by side just... don't get a wall between them at all. Seal it properly with a
+    // single keypad-locked employee door instead, same approach as the shop's own public
+    // entrance above. The Storeroom's own connection south to the Loading Pad stays
+    // intentionally open -- that one really is one continuous loading corridor, not two
+    // separate rooms (see loading_pad's own zone comment in RoomLayout.js).
+    const storeroom = getZone("storeroom");
+    const backroomDoorGX = storeroom.gridX + storeroom.gridW - 1;
+    const backroomDoorGY = storeroom.gridY + 3;
+    for (let gy = storeroom.gridY; gy < storeroom.gridY + storeroom.gridH; gy += 1) {
+      this.room.addWall(backroomDoorGX, gy, storeroom.wallTile);
+    }
+    this.room.openDoorway(backroomDoorGX, backroomDoorGY, "door_blast_keypad_01");
+    this.backroomDoor = {
+      x: this.room.worldX(backroomDoorGX),
+      y: this.room.worldY(backroomDoorGY),
+    };
+
     this.fixture = new Fixture({
       id: "fixture_demo_01",
       displayType: "universal",
       x: zonePixelX + zonePixelW * 0.3,
       y: zonePixelY + zonePixelH * 0.4,
-      gridDimensions: { w: 2, h: 2 },
+      // 3x2 instead of the original 2x2 -- the 2 new blocks (2,0)/(2,1) start deliberately
+      // unassigned, to actually demonstrate player-driven shelf stocking (bible: "determine
+      // what can go on the shelf") rather than every slot already being pre-decided before
+      // the player ever touches it.
+      gridDimensions: { w: 3, h: 2 },
       // Several different items (not just one) so a customer's cart can actually contain
-      // a varied, multi-item haul -- see Customer.grabItems().
+      // a varied, multi-item haul -- see Customer.grabItems(). Real capacity now comes
+      // from stackDepth/item.stackSize (see Fixture.getSlotCapacity), not an unlimited
+      // quantity -- each stackDepth below is picked so the item's own stackSize gives some
+      // headroom above its starting quantity (a bare stackDepth 8 would, for the lower-
+      // stackSize items here, actually be LESS capacity than their starting quantity).
       slots: [
-        { itemId: "wpn_rif_01", quantity: 4, x: 0, y: 0 },
-        { itemId: "wpn_rif_02", quantity: 2, x: 1, y: 0 },
-        { itemId: "wpn_rif_03", quantity: 3, x: 0, y: 1 },
-        { itemId: "wpn_pis_01", quantity: 5, x: 1, y: 1 },
+        { itemId: "wpn_rif_01", quantity: 4, stackDepth: 18, x: 0, y: 0 }, // stackSize 3 -> cap 6
+        { itemId: "wpn_rif_02", quantity: 2, stackDepth: 16, x: 1, y: 0 }, // stackSize 4 -> cap 4
+        { itemId: "wpn_rif_03", quantity: 3, stackDepth: 16, x: 0, y: 1 }, // stackSize 4 -> cap 4
+        { itemId: "wpn_pis_01", quantity: 5, stackDepth: 14, x: 1, y: 1 }, // stackSize 2 -> cap 7
+        { itemId: null, quantity: 0, stackDepth: null, x: 2, y: 0 },
+        { itemId: null, quantity: 0, stackDepth: null, x: 2, y: 1 },
       ],
     });
-    this.drawFixture(this.fixture);
+    this.drawFixture(this.fixture, "shelf_universal_01");
 
-    // Mark the shelf's full footprint as blocked for pathfinding (see getOccupiedCellKeys)
-    // -- separate from TileRoom's own wall knowledge, since fixtures are a scene-level
-    // concern, not something the room itself places.
-    const fixtureWidth = this.fixture.gridDimensions.w * TILE_SIZE;
-    const fixtureHeight = this.fixture.gridDimensions.h * TILE_SIZE;
+    // Storage Fixture (bible Step 42: Backroom Storage) -- lives in the Storeroom, shares
+    // the exact same slot/capacity logic as the sales shelf (just not customer-facing).
+    // Starts completely empty/unassigned; every block has to be set up by the player
+    // before anything hauled in from the Loading Pad has anywhere to go.
+    this.storageFixture = new Fixture({
+      id: "storage_demo_01",
+      displayType: "storage",
+      x: storeroom.gridX * TILE_SIZE + storeroom.gridW * TILE_SIZE * 0.35,
+      y: storeroom.gridY * TILE_SIZE + storeroom.gridH * TILE_SIZE * 0.3,
+      gridDimensions: { w: 3, h: 2 },
+      slots: [
+        { itemId: null, quantity: 0, stackDepth: null, x: 0, y: 0 },
+        { itemId: null, quantity: 0, stackDepth: null, x: 1, y: 0 },
+        { itemId: null, quantity: 0, stackDepth: null, x: 2, y: 0 },
+        { itemId: null, quantity: 0, stackDepth: null, x: 0, y: 1 },
+        { itemId: null, quantity: 0, stackDepth: null, x: 1, y: 1 },
+        { itemId: null, quantity: 0, stackDepth: null, x: 2, y: 1 },
+      ],
+    });
+    this.drawFixture(this.storageFixture, "locker_storage");
+
+    // Mark each fixture's full footprint as blocked for pathfinding (see
+    // getOccupiedCellKeys) -- separate from TileRoom's own wall knowledge, since fixtures
+    // are a scene-level concern, not something the room itself places.
     const shelfOccupiedCells = getOccupiedCellKeys(
       this.fixture.x,
       this.fixture.y,
-      fixtureWidth,
-      fixtureHeight,
+      this.fixture.gridDimensions.w * TILE_SIZE,
+      this.fixture.gridDimensions.h * TILE_SIZE,
     );
-    this.blockedCells = new Set(shelfOccupiedCells);
+    const storageOccupiedCells = getOccupiedCellKeys(
+      this.storageFixture.x,
+      this.storageFixture.y,
+      this.storageFixture.gridDimensions.w * TILE_SIZE,
+      this.storageFixture.gridDimensions.h * TILE_SIZE,
+    );
+    this.blockedCells = new Set([...shelfOccupiedCells, ...storageOccupiedCells]);
 
     // Customers shop by walking up to a point just below (in front of) the shelf, not its
     // exact center -- now that the shelf is a solid obstacle, a target inside it would be
@@ -170,6 +226,18 @@ export class GameScene extends Phaser.Scene {
     this.shelfStandPoint = {
       x: this.fixture.x,
       y: clearRowTopY + SPRITE_DISPLAY_HEIGHT / 2 + 8,
+    };
+
+    // Same "stand in the clear row below it" approach as the shelf -- only the player
+    // (not customers) ever needs to reach this one, but it still has to land in a cell the
+    // pathfinder/physics consider walkable.
+    const maxStorageOccupiedRow = Math.max(
+      ...storageOccupiedCells.map((key) => Number(key.split(",")[1])),
+    );
+    const storageClearRowTopY = (maxStorageOccupiedRow + 1) * TILE_SIZE;
+    this.storageStandPoint = {
+      x: this.storageFixture.x,
+      y: storageClearRowTopY + SPRITE_DISPLAY_HEIGHT / 2 + 8,
     };
 
     this.registerPoint = {
@@ -234,6 +302,7 @@ export class GameScene extends Phaser.Scene {
     this.exitPoint = { x: this.storeDoor.x, y: this.storeDoor.y };
 
     this.checkoutWindow = new CheckoutWindow(this.windowManager);
+    this.fixtureWindow = new FixtureWindow(this.windowManager);
     // Ordered line of customers waiting at the register; index 0 is the one currently
     // being checked out. Re-laid-out (via layoutRegisterLine) any time it changes so
     // customers visibly queue up single-file instead of stacking on the same spot.
@@ -362,6 +431,39 @@ export class GameScene extends Phaser.Scene {
     console.log("Unlocked expansion_a; camera bounds now", bounds);
   }
 
+  // Every fixture that can be delivered to / managed in-world, paired with the point the
+  // player has to stand at to reach it (bible: shelves AND Storage Fixtures share the same
+  // slot/inventory logic -- see Fixture.js -- so both are handled identically here).
+  getFixtureEntries() {
+    return [
+      { fixture: this.fixture, standPoint: this.shelfStandPoint },
+      { fixture: this.storageFixture, standPoint: this.storageStandPoint },
+    ];
+  }
+
+  // Whichever fixture the player is currently standing close enough to, or null if
+  // neither is in range -- used by both crate delivery and opening a fixture's block-
+  // management window, so "close enough" means the same thing for both.
+  getNearbyFixture() {
+    let nearest = null;
+    let nearestDistance = SHELF_INTERACT_RANGE;
+
+    for (const entry of this.getFixtureEntries()) {
+      const distance = Phaser.Math.Distance.Between(
+        this.player.sprite.x,
+        this.player.sprite.y,
+        entry.standPoint.x,
+        entry.standPoint.y,
+      );
+      if (distance <= nearestDistance) {
+        nearest = entry.fixture;
+        nearestDistance = distance;
+      }
+    }
+
+    return nearest;
+  }
+
   // What ordering RESTOCK_QUANTITY more of this item costs -- shared by the Supply tab
   // (so it can display the real price) and orderRestockCrate (so it charges that same
   // price). See WHOLESALE_FACTOR's comment for why this isn't the item's full retail cost.
@@ -369,34 +471,38 @@ export class GameScene extends Phaser.Scene {
     return Math.round(item.baseCost * WHOLESALE_FACTOR * RESTOCK_QUANTITY);
   }
 
-  // Everything the Supply tab needs to render: every distinct item this fixture is set up
-  // to sell, its current on-shelf quantity, and what restocking it would cost. Only items
-  // the shelf already stocks can be restocked for now -- introducing a brand new item type
-  // to a fixture is Build Mode/fixture reconfiguration, a separate later feature.
+  // Everything the Supply tab needs to render: every distinct item ANY fixture (shelf or
+  // storage) is currently assigned to sell/hold, its total quantity across all of them,
+  // and what restocking it would cost. Only items a fixture is already assigned to can be
+  // restocked for now -- assigning a brand new item to an empty block is a separate action
+  // (see Fixture.assignItem / FixtureWindow), not something ordering itself does.
   getRestockableItems() {
-    const seenItemIds = new Set();
-    const entries = [];
+    const quantityByItemId = new Map();
 
-    for (const slot of this.fixture.slots) {
-      if (seenItemIds.has(slot.itemId)) continue;
-      seenItemIds.add(slot.itemId);
-
-      const item = database.getItem(slot.itemId);
-      entries.push({ item, quantity: slot.quantity, cost: this.restockCost(item) });
+    for (const { fixture } of this.getFixtureEntries()) {
+      for (const slot of fixture.slots) {
+        if (!slot.itemId) continue;
+        quantityByItemId.set(slot.itemId, (quantityByItemId.get(slot.itemId) || 0) + slot.quantity);
+      }
     }
 
-    return entries;
+    return [...quantityByItemId.entries()].map(([itemId, quantity]) => {
+      const item = database.getItem(itemId);
+      return { item, quantity, cost: this.restockCost(item) };
+    });
   }
 
   // Spends credits and spawns a physical crate at the Loading Pad (bible Step 10) -- it
-  // isn't actually restocked until the player hauls it to the shelf, see handleInteract().
-  // Returns false (no-op) if the player can't afford it or this fixture doesn't stock the
-  // requested item at all.
+  // isn't actually restocked until the player hauls it to a fixture, see handleInteract().
+  // Returns false (no-op) if the player can't afford it or no fixture is currently
+  // assigned to sell/hold the requested item at all.
   orderRestockCrate(itemId) {
     const item = database.getItem(itemId);
     if (!item) return false;
 
-    const stocksThisItem = this.fixture.slots.some((slot) => slot.itemId === itemId);
+    const stocksThisItem = this.getFixtureEntries().some(({ fixture }) =>
+      fixture.slots.some((slot) => slot.itemId === itemId),
+    );
     if (!stocksThisItem) return false;
 
     const cost = this.restockCost(item);
@@ -416,10 +522,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   // The single keydown-E handler for all player interactions: delivers a carried crate if
-  // holding one, otherwise tries (in order) picking up a nearby crate, exiting the
-  // register if already operating it, or entering it if close enough. One shared key
-  // rather than separate ones per action since at most one of these is ever actually
-  // reachable/relevant at a time in practice.
+  // holding one, otherwise tries (in order) picking up a nearby crate, opening a nearby
+  // fixture's block-management window, exiting the register if already operating it, or
+  // entering it if close enough. One shared key rather than separate ones per action since
+  // at most one of these is ever actually reachable/relevant at a time in practice.
   handleInteract() {
     if (this.carriedCrate) {
       this.tryDeliverCarriedCrate();
@@ -427,6 +533,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.tryPickUpNearestCrate()) return;
+    if (this.tryOpenFixtureWindow()) return;
 
     // Toggle: pressing E again while already behind the counter leaves it, rather than
     // trying (and failing) to re-enter an already-active session.
@@ -442,6 +549,29 @@ export class GameScene extends Phaser.Scene {
       "Nothing nearby to interact with",
       "#94a3b8",
     );
+  }
+
+  // Opens whichever fixture (shelf or storage) the player is standing close enough to --
+  // called either with a specific fixture (clicking its sprite directly) or with none (the
+  // E key, which finds whichever one is nearby). Silently no-ops if out of range, same as
+  // the register's own click-to-open (no pathfind-to-anchor yet -- see bible's "Modal
+  // Windows & Anchors" note in the design doc for the eventual intended behavior).
+  tryOpenFixtureWindow(fixture) {
+    const target = fixture || this.getNearbyFixture();
+    if (!target) return false;
+
+    const entry = this.getFixtureEntries().find((candidate) => candidate.fixture === target);
+    const distance = Phaser.Math.Distance.Between(
+      this.player.sprite.x,
+      this.player.sprite.y,
+      entry.standPoint.x,
+      entry.standPoint.y,
+    );
+    if (distance > SHELF_INTERACT_RANGE) return false;
+
+    const title = target === this.fixture ? "SHELF" : "STORAGE";
+    this.fixtureWindow.openForFixture(target, title);
+    return true;
   }
 
   // Returns true if a crate was actually picked up, so handleInteract can fall through to
@@ -483,36 +613,56 @@ export class GameScene extends Phaser.Scene {
 
   tryDeliverCarriedCrate() {
     const crate = this.carriedCrate;
-    // Measured from shelfStandPoint (the same "front of the shelf" approach point
-    // customers use), not the fixture's raw center -- the shelf itself is a solid
-    // obstacle, so the player can never actually stand within INTERACT_RANGE of its
-    // center, only of the clear space in front of it.
-    const distance = Phaser.Math.Distance.Between(
-      this.player.sprite.x,
-      this.player.sprite.y,
-      this.shelfStandPoint.x,
-      this.shelfStandPoint.y,
-    );
-    if (distance > SHELF_INTERACT_RANGE) {
+    const target = this.getNearbyFixture();
+
+    if (!target) {
       this.showFloatingText(
         this.player.sprite.x,
         this.player.sprite.y - 40,
-        "Too far from the shelf to deliver",
+        "Too far from a fixture to deliver",
         "#94a3b8",
       );
       return;
     }
 
-    this.fixture.restock(crate.itemId, crate.quantity);
     const item = database.getItem(crate.itemId);
-    this.showFloatingText(
-      this.player.sprite.x,
-      this.player.sprite.y - 40,
-      `Restocked ${item.name} +${crate.quantity}`,
-      "#10b981",
-    );
-    crate.destroy();
-    this.carriedCrate = null;
+
+    if (target.getOpenSlotsFor(crate.itemId).length === 0) {
+      this.showFloatingText(
+        this.player.sprite.x,
+        this.player.sprite.y - 40,
+        `${item.name} isn't assigned to any block here`,
+        "#94a3b8",
+      );
+      return;
+    }
+
+    const accepted = target.restock(crate.itemId, crate.quantity);
+
+    if (accepted >= crate.quantity) {
+      // Fully emptied -- the "Abstracted Box" approach (bible Step 62): once the last
+      // unit leaves a crate, it instantly despawns rather than sticking around empty.
+      this.showFloatingText(
+        this.player.sprite.x,
+        this.player.sprite.y - 40,
+        `Restocked ${item.name} +${accepted}`,
+        "#10b981",
+      );
+      crate.destroy();
+      this.carriedCrate = null;
+    } else {
+      // Every assigned block for this item is already full -- keep carrying whatever
+      // didn't fit instead of silently discarding it.
+      crate.quantity -= accepted;
+      this.showFloatingText(
+        this.player.sprite.x,
+        this.player.sprite.y - 40,
+        accepted > 0
+          ? `Restocked +${accepted}, ${crate.quantity} left (full)`
+          : `Already full -- still carrying ${crate.quantity}`,
+        "#f59e0b",
+      );
+    }
   }
 
   // Brief on-screen confirmation for actions that would otherwise have no visible feedback
@@ -545,14 +695,16 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  drawFixture(fixture) {
+  drawFixture(fixture, textureKey) {
     const width = fixture.gridDimensions.w * TILE_SIZE;
     const height = fixture.gridDimensions.h * TILE_SIZE;
     const image = this.add
-      .image(fixture.x, fixture.y, "shelf_universal_01")
+      .image(fixture.x, fixture.y, textureKey)
       .setDisplaySize(width, height)
       .setDepth(2);
     this.obstacleGroup.add(image); // solid -- customers walk up to it, not through it
+    image.setInteractive({ useHandCursor: true });
+    image.on("pointerdown", () => this.tryOpenFixtureWindow(fixture));
   }
 
   drawRegister(point) {

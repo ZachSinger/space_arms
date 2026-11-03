@@ -111,12 +111,14 @@ notice something that needs doing but isn't being done right now.
       Loading Pad; press E near it to pick it up, carry it to the shelf, press E again to
       deliver (restocks that item). Deliberately simplified vs. the bible's full vision --
       logged below, not yet built:
-  - [ ] No backroom intermediate storage stage yet -- crates go straight from the Loading
-        Pad to the sales-floor shelf, skipping Storage Fixtures / the Storeroom entirely
-        (bible Step 42). `locker_storage.png`/`shelf_frame_*` art already exists, unused.
-  - [ ] Only the one hardcoded demo fixture can be restocked (ordering an item it doesn't
-        already stock is a no-op) -- there's no way to introduce a new item type or target
-        a different/future fixture yet (needs Build Mode, Step 22/41).
+  - [x] ~~No backroom intermediate storage stage yet -- crates go straight from the Loading
+        Pad to the sales-floor shelf, skipping Storage Fixtures / the Storeroom entirely~~
+        -- see the new Storage Shelving entry below; crates can now be delivered to either
+        fixture depending on which one the player is standing near.
+  - [ ] Only fixtures already assigned to an item can be restocked by ordering -- ordering
+        itself still doesn't let you introduce a brand new item type on the spot (that's
+        what assigning an empty block to a Fixture window now does instead -- see below --
+        but the two are still separate actions, not unified into one flow yet).
   - [ ] Restock pricing is a flat `baseCost * 0.5` wholesale-factor guess
         (`WHOLESALE_FACTOR`/`RESTOCK_QUANTITY` in game.js), not a real Supplier Contract
         pricing model (bible Step 45/48).
@@ -124,7 +126,30 @@ notice something that needs doing but isn't being done right now.
         hand for now.
   - [ ] No Hovercart/backpack capacity model at all (bible Step 10/63: "an abstract
         character/employee inventory size, not a physical moving entity"). Crates currently
-        carry a flat RESTOCK_QUANTITY (5) with no carrying-capacity limit of any kind.
+        carry a flat RESTOCK_QUANTITY (5) with no carrying-capacity limit of any kind. This
+        is the clear next step (requested right after Storage Shelving below), since
+        actually meaningful "how much can I haul at once" only matters now that there's
+        somewhere to make deliberate choices about where that haul ends up.
+- [x] Storage Shelving + real shelf-block capacity (bible Steps 4/5/22/42/63): the
+      Storeroom is now a proper walled-off backroom (a `door_blast_keypad_01` door in its
+      own east wall, sealed via the new `TileRoom.addWall`, since two already-unlocked
+      zones never auto-wall against each other -- see `TileRoom.needsWallAt`) with a
+      `locker_storage` Storage Fixture inside it, completely empty/unassigned to start.
+      `Fixture` (`ShopInventory.js`) now models real per-slot capacity
+      (`stackDepth / item.stackSize`, per the bible's own Step 5 example) instead of
+      unlimited quantity, plus `assignItem`/`unassignItem` so the player actually decides
+      what sells/stores where (an unassigned slot has zero capacity until assigned; an
+      assigned-but-still-empty slot can be undone, a stocked one can't yet -- that needs
+      the hovercart above). New `FixtureWindow`/`FixtureRenderer` show a fixture's blocks
+      as a clickable grid (empty = dashed "+", assigned = item image + "qty/capacity"
+      badge); walk up to either fixture and press E (or click it) to open its window.
+      Crate delivery (`tryDeliverCarriedCrate`) now targets whichever fixture the player
+      is actually standing near and keeps any leftover units in the crate if a block fills
+      up mid-delivery, instead of assuming there's only ever the one sales shelf. Known
+      simplifications: assigning a block doesn't check supplier licenses/contracts yet
+      (any catalog item can go anywhere, bible Step 45/48 aside); the sales shelf and
+      Storage Fixture are each still one single hardcoded instance (no Build Mode/
+      purchasing more of either yet, Step 22/41).
 - [ ] Customer patience bubbles + Go-Backs cart (Step 53/12)
 - [ ] Pre-shift pricing / Start Shift flow (Step 44/52)
 - [ ] Employees: hiring, Work Register / Stock Shelves tasks (Step 13-19)

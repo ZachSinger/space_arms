@@ -83,15 +83,21 @@ export class TileRoom {
         this.floorCells.set(`${gx},${gy}`, image);
 
         if (this.needsWallAt(zone, gx, gy)) {
-          this.placeWall(zone, gx, gy);
+          this.addWall(gx, gy, zone.wallTile);
         }
       }
     }
   }
 
-  placeWall(zone, gx, gy) {
+  // Places a solid wall tile at a specific cell, overwriting whatever floor is already
+  // there. Used both by buildZone() (every perimeter cell a zone needs sealed against the
+  // map edge or a locked neighbor) and, after the fact, by anything that wants to divide
+  // two already-unlocked zones that don't naturally wall off against each other -- e.g.
+  // sealing the Storeroom away from the Sales Floor (see GameScene.create()), since
+  // needsWallAt() only ever auto-seals a boundary when the neighboring zone is locked.
+  addWall(gx, gy, wallTileKey) {
     const image = this.scene.add
-      .image(this.worldX(gx), this.worldY(gy), zone.wallTile)
+      .image(this.worldX(gx), this.worldY(gy), wallTileKey)
       .setDisplaySize(TILE_SIZE, TILE_SIZE)
       .setDepth(1);
     this.wallGroup.add(image); // staticGroup.add() creates the static body automatically

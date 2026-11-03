@@ -36,7 +36,7 @@ export class SupplyRenderer {
             <div class="item-details">
               <div class="item-card-header">
                 <span class="item-card-title">${item.name}</span>
-                <span class="item-card-cost">On shelf: ${quantity}</span>
+                <span class="item-card-cost">In stock: ${quantity}</span>
               </div>
               <div style="margin-top: 8px;">
                 ${actionButtonHTML}
