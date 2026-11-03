@@ -6,6 +6,7 @@ export class StoreItem {
     this.flavor = data.flavor;
     this.tags = data.tags; // e.g., ['Firearm', 'Standard', 'Rifle']
     this.dimensions = data.dimensions; // e.g., { w: 2, h: 1 }
+    this.slots = data.slots; // How many storage/shelf slots one unit of this item takes up (1 = smallest, 5 = largest)
     this.stackSize = data.stackSize;
     this.baseCost = data.baseCost;
 
