@@ -37,6 +37,8 @@ notice something that needs doing but isn't being done right now.
       `scripts/extract_eighth_gen_sprites.py`.
 
 ## Known Issues
+- [x] Supply orders no longer jump the list to the top: refreshing prices, availability,
+      and stock counts preserves the Supply list's scroll position.
 - [x] ~~Dead-end bug: `this.fixture` never restocks~~ -- fixed by the Procurement MVP below.
       The player can now order more stock (Supply tab), haul the resulting crate in from
       the Loading Pad, and deliver it to the shelf, indefinitely.

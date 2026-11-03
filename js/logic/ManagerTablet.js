@@ -133,7 +133,10 @@ export class ManagerTablet {
 
   refreshSupplyPanel() {
     const panel = this.bodyElement.querySelector('[data-tab-panel="supply"]');
-    if (panel) panel.innerHTML = this.renderPanelContent("supply");
+    if (!panel) return;
+    const scrollTop = panel.querySelector(".supply-list").scrollTop;
+    panel.innerHTML = this.renderPanelContent("supply");
+    panel.querySelector(".supply-list").scrollTop = scrollTop;
   }
 
   handleSignContract(licenseId) {

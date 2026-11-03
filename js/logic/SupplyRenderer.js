@@ -15,7 +15,7 @@ export class SupplyRenderer {
     const entries = scene.getRestockableItems();
 
     let html = `
-      <div class="retro-slot custom-scrollbar" style="padding: 10px; display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto;">
+      <div class="retro-slot custom-scrollbar supply-list" style="padding: 10px; display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto;">
     `;
 
     if (entries.length === 0) {
