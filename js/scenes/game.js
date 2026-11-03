@@ -13,6 +13,7 @@ import { TileRoom } from "../logic/TileRoom.js";
 import { TILE_SIZE, getZone, getTotalGridSize } from "../logic/RoomLayout.js";
 import { ShiftClock } from "../logic/ShiftClock.js";
 import { ShiftSummaryWindow } from "../logic/ShiftSummaryWindow.js";
+import { Market } from "../logic/Market.js";
 import { findGridPath } from "../logic/Pathfinder.js";
 import { database } from "./boot.js"; // the exported DatabaseManager singleton
 
@@ -23,12 +24,9 @@ const CUSTOMER_SPAWN_DELAY_MS = 4000;
 // before they got to it.
 const MAX_CUSTOMERS_IN_STORE = 6;
 
-// How much stock a single ordered crate contains, and what it costs the player (a fraction
-// of the item's own retail baseCost -- standing in for a real wholesale/supplier pricing
-// model, which doesn't exist yet; see TODO.md). Exported so the Supply tab (ManagerTablet/
-// SupplyRenderer) can display the same price it'll actually be charged.
+// How much stock a single ordered crate contains. Its cost comes from Market's hidden
+// per-item supplier rate -- standing in for a real supplier pricing model; see TODO.md.
 export const RESTOCK_QUANTITY = 5;
-export const WHOLESALE_FACTOR = 0.5;
 
 // How close the player has to be standing to actually operate the register -- generous on
 // purpose (bigger than Crate's own INTERACT_RANGE, and bigger than the register's own
@@ -101,6 +99,7 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     this.playerState = new PlayerState();
+    this.market = new Market(database.getAllItems());
     this.shiftClock = new ShiftClock();
     this.hud = new HUDController(this.playerState, this.shiftClock, () => this.startNextShift());
 
@@ -540,9 +539,20 @@ export class GameScene extends Phaser.Scene {
 
   // What ordering RESTOCK_QUANTITY more of this item costs -- shared by the Supply tab
   // (so it can display the real price) and orderRestockCrate (so it charges that same
-  // price). See WHOLESALE_FACTOR's comment for why this isn't the item's full retail cost.
+  // price).
   restockCost(item) {
-    return Math.round(item.baseCost * WHOLESALE_FACTOR * RESTOCK_QUANTITY);
+    return this.market.getSupplyCost(item.id, RESTOCK_QUANTITY);
+  }
+
+  getStorePrice(itemId) {
+    return this.playerState.storePrices[itemId] ?? this.market.getPrice(itemId);
+  }
+
+  setStorePrice(itemId, price) {
+    const rounded = Math.round(price);
+    if (!Number.isFinite(rounded) || rounded < 1) return false;
+    this.playerState.setStorePrice(itemId, rounded);
+    return true;
   }
 
   getInventoryItems() {
@@ -566,7 +576,12 @@ export class GameScene extends Phaser.Scene {
 
     return database.getAllItems()
       .filter((item) => totals.has(item.id))
-      .map((item) => ({ item, ...totals.get(item.id) }));
+      .map((item) => ({
+        item,
+        ...totals.get(item.id),
+        marketPrice: this.market.getPrice(item.id),
+        storePrice: this.getStorePrice(item.id),
+      }));
   }
 
   // Everything the Supply tab needs to render: bible Step 29's "Unified Market" -- every
@@ -609,6 +624,10 @@ export class GameScene extends Phaser.Scene {
     if (this.playerState.credits < cost) return false;
 
     this.playerState.spendCredits(cost);
+    // A first-time item starts at today's market price, then stays put until repriced.
+    if (this.playerState.storePrices[itemId] === undefined) {
+      this.playerState.storePrices[itemId] = this.market.getPrice(itemId);
+    }
 
     // Cycle through nine spots within the pad; unbounded rows would spawn later crates
     // inside or beyond its south wall.
@@ -1133,6 +1152,9 @@ export class GameScene extends Phaser.Scene {
   // system doesn't exist yet, so this reports only what the vertical slice really tracks.
   endShift() {
     this.shiftEnded = true;
+    // Bible Step 52: the market only moves at End Day, so repricing is stress-free.
+    this.market.advanceDay();
+    this.playerState.notifyListeners();
     this.shiftSummaryWindow.show({
       creditsEarned: this.playerState.credits - this.creditsAtShiftStart,
       reputationGained: this.playerState.globalReputation - this.reputationAtShiftStart,

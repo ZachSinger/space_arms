@@ -5,7 +5,7 @@ export class InventoryRenderer {
   // Renders just the Inventory tab's own content (the tab bar/chrome around it is owned
   // by whatever window hosts this -- see ManagerTablet.js).
   static generateHTML(entries) {
-    const rows = entries.map(({ item, storage, stock }, index) => {
+    const rows = entries.map(({ item, storage, stock, marketPrice, storePrice }, index) => {
       const iconHTML = item.image
         ? `<img class="item-icon" src="${item.image}" alt="" />`
         : `<div class="item-icon"></div>`;
@@ -15,17 +15,34 @@ export class InventoryRenderer {
           <span class="item-card-title">${item.name}</span>
           <span class="inventory-quantity" data-inventory-storage>${storage}</span>
           <span class="inventory-quantity" data-inventory-stock>${stock}</span>
+          <span class="inventory-quantity" data-inventory-market>${marketPrice}c</span>
+          <div class="inventory-price-controls">
+            <input class="inventory-price-input" type="number" min="1" step="1" value="${storePrice}"
+              data-price-item-id="${item.id}" aria-label="Store price for ${item.name}" />
+            <div class="inventory-price-buttons">
+              <button type="button" data-price-action="decrease" data-price-item-id="${item.id}"
+                aria-label="Decrease price by 10% for ${item.name}, at least 1 credit when possible"
+                title="Decrease by 10% (at least 1c; minimum price 1c)">-10%</button>
+              <button type="button" data-price-action="increase" data-price-item-id="${item.id}"
+                aria-label="Increase price by 10% for ${item.name}, at least 1 credit"
+                title="Increase by 10% (at least 1c)">+10%</button>
+              <button type="button" data-price-action="market" data-price-item-id="${item.id}"
+                aria-label="Set price to market for ${item.name}" title="Set price to current market price">MKT</button>
+            </div>
+          </div>
         </div>
       `;
     }).join("");
 
     return `
-      <div class="fixture-stock-meta">Storage includes lockers, hovercart, and unopened crates. Stock is on sales shelves.</div>
+      <div class="fixture-stock-meta">Storage includes lockers, hovercart, and unopened crates. Stock is on sales shelves. Market is today's galactic average; set your own Price.</div>
       <div class="inventory-column-header">
         <span></span>
         <span>ITEM</span>
         <span class="inventory-quantity">STORAGE</span>
         <span class="inventory-quantity">STOCK</span>
+        <span class="inventory-quantity">MARKET</span>
+        <span class="inventory-quantity">PRICE</span>
       </div>
       <div class="retro-slot custom-scrollbar inventory-list" style="padding: 10px; display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto;">
         ${rows || `<div class="fixture-empty-hint">No inventory owned yet -- order items from Supply.</div>`}
@@ -68,6 +85,7 @@ export class InventoryRenderer {
     // so arrow keys don't hijack navigation while a different tab is actually visible.
     const handleKeydown = (event) => {
       if (rootElement.classList.contains("hidden")) return;
+      if (event.target instanceof HTMLInputElement) return;
       const panel = list.closest(".tablet-tab-panel");
       if (panel && panel.classList.contains("hidden")) return;
 

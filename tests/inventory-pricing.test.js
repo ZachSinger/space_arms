@@ -1,0 +1,255 @@
+import assert from "node:assert/strict";
+import { after, before, test } from "node:test";
+import { fileURLToPath } from "node:url";
+import { createServer } from "vite";
+
+let server;
+let ManagerTablet;
+const originalDocument = globalThis.document;
+
+before(async () => {
+  server = await createServer({
+    root: fileURLToPath(new URL("..", import.meta.url)),
+    configFile: false,
+    logLevel: "silent",
+    server: { middlewareMode: true },
+    plugins: [{
+      name: "inventory-pricing-test-stubs",
+      enforce: "pre",
+      resolveId(source) {
+        if (source === "../scenes/boot.js") return "\0inventory-test-database";
+        if (source === "./UIWindow.js") return "\0inventory-test-window";
+      },
+      load(id) {
+        if (id === "\0inventory-test-database") {
+          return "export const database = { getAllLicenses: () => [] };";
+        }
+        if (id === "\0inventory-test-window") {
+          return "export class UIWindow { constructor() { this.element = globalThis.__inventoryTestWindow; } }";
+        }
+      },
+    }],
+  });
+  ({ ManagerTablet } = await server.ssrLoadModule("/js/logic/ManagerTablet.js"));
+});
+
+after(async () => {
+  if (originalDocument === undefined) delete globalThis.document;
+  else globalThis.document = originalDocument;
+  delete globalThis.__inventoryTestWindow;
+  if (server) await server.close();
+});
+
+function createHarness() {
+  const events = () => ({
+    listeners: new Map(),
+    addEventListener(type, listener) {
+      if (!this.listeners.has(type)) this.listeners.set(type, []);
+      this.listeners.get(type).push(listener);
+    },
+    emit(type, event) {
+      for (const listener of this.listeners.get(type) || []) listener(event);
+    },
+  });
+  const body = events();
+  const tabBar = events();
+  const list = { scrollTop: 37, querySelectorAll: () => [] };
+  const document = { activeElement: null };
+  globalThis.document = document;
+
+  const focus = (next) => {
+    const previous = document.activeElement;
+    if (previous === next) return;
+    if (previous) body.emit("focusout", { target: previous, relatedTarget: next });
+    document.activeElement = next;
+    if (next) body.emit("focusin", { target: next, relatedTarget: previous });
+  };
+  const control = (kind, itemId, action, value) => ({
+    kind,
+    dataset: { priceItemId: itemId, priceAction: action },
+    value,
+    matches(selector) {
+      return selector.split(",").some((part) => {
+        switch (part.trim()) {
+          case "[data-price-item-id]": return true;
+          case "[data-price-action]": return this.kind === "button";
+          case "input[data-price-item-id]": return this.kind === "input";
+          case "button[data-price-action]": return this.kind === "button";
+          default: return false;
+        }
+      });
+    },
+    closest(selector) { return this.matches(selector) ? this : null; },
+    focus() { focus(this); },
+    blur() { if (document.activeElement === this) focus(null); },
+  });
+  const panel = {
+    controls: [],
+    renderCount: 0,
+    contains(element) { return this.controls.includes(element); },
+    querySelector(selector) {
+      if (selector === ".inventory-list") return list;
+      return null;
+    },
+    querySelectorAll() { return this.controls.filter((item) => item.kind === "button"); },
+    set innerHTML(markup) {
+      if (this.contains(document.activeElement)) focus(null);
+      this.renderCount += 1;
+      this.markup = markup;
+      this.controls = [];
+      for (const [, value, itemId] of markup.matchAll(
+        /<input\b[^>]*value="([^"]*)"[^>]*data-price-item-id="([^"]*)"[^>]*>/g,
+      )) {
+        this.controls.push(control("input", itemId, undefined, value));
+      }
+      for (const [, action, itemId] of markup.matchAll(
+        /<button\b[^>]*data-price-action="([^"]*)"[^>]*data-price-item-id="([^"]*)"[^>]*>/g,
+      )) {
+        this.controls.push(control("button", itemId, action));
+      }
+    },
+    input(itemId) {
+      return this.controls.find((item) => item.kind === "input" && item.dataset.priceItemId === itemId);
+    },
+    button(itemId, action) {
+      return this.controls.find((item) =>
+        item.kind === "button" &&
+        item.dataset.priceItemId === itemId &&
+        item.dataset.priceAction === action,
+      );
+    },
+  };
+  body.querySelector = (selector) => {
+    if (selector === ".tablet-tab-bar") return tabBar;
+    if (selector === '[data-tab-panel="inventory"]') return panel;
+    return null;
+  };
+  globalThis.__inventoryTestWindow = {
+    querySelector(selector) {
+      if (selector === ".retro-window-body") return body;
+      if (selector === ".inventory-list") return list;
+      return null;
+    },
+  };
+
+  const prices = new Map([["rifle", 100], ["pistol", 200]]);
+  const marketPrices = new Map([["rifle", 275], ["pistol", 250]]);
+  const playerState = {
+    listeners: [],
+    subscribe(listener) { this.listeners.push(listener); listener(); },
+    notifyListeners() { for (const listener of this.listeners) listener(); },
+  };
+  const keyboard = {
+    enabled: true,
+    disableGlobalCapture() {},
+    enableGlobalCapture() {},
+    resetKeys() {},
+  };
+  const scene = {
+    playerState,
+    input: { keyboard },
+    market: { getPrice: (itemId) => marketPrices.get(itemId) },
+    storage: 1,
+    getStorePrice: (itemId) => prices.get(itemId),
+    setStorePrice(itemId, price) {
+      const rounded = Math.round(price);
+      if (!Number.isFinite(rounded) || rounded < 1) return false;
+      prices.set(itemId, rounded);
+      playerState.notifyListeners();
+      return true;
+    },
+    getInventoryItems() {
+      return ["rifle", "pistol"].map((itemId) => ({
+        item: { id: itemId, name: itemId },
+        storage: this.storage,
+        stock: 0,
+        marketPrice: marketPrices.get(itemId),
+        storePrice: prices.get(itemId),
+      }));
+    },
+    getRestockableItems: () => [],
+  };
+  const tablet = new ManagerTablet({}, playerState, scene);
+  const click = (itemId, action) => {
+    const button = panel.button(itemId, action);
+    focus(button);
+    body.emit("click", { target: button });
+  };
+  return { body, click, document, focus, keyboard, list, marketPrices, panel, scene, tablet };
+}
+
+test("price buttons update the displayed value and retain keyboard focus", () => {
+  const h = createHarness();
+  h.click("rifle", "increase");
+  assert.equal(h.panel.input("rifle").value, "110");
+  assert.equal(h.scene.getStorePrice("rifle"), 110);
+  assert.equal(h.document.activeElement, h.panel.button("rifle", "increase"));
+  assert.equal(h.keyboard.enabled, false);
+
+  const focusedButton = h.document.activeElement;
+  h.body.emit("keydown", { target: focusedButton, key: "Enter" });
+  assert.equal(h.document.activeElement, focusedButton);
+  h.body.emit("click", { target: focusedButton });
+  assert.equal(h.panel.input("rifle").value, "121");
+
+  h.click("rifle", "decrease");
+  assert.equal(h.panel.input("rifle").value, "109");
+  h.marketPrices.set("rifle", 300);
+  h.click("rifle", "market");
+  assert.equal(h.panel.input("rifle").value, "300");
+  assert.equal(h.panel.input("pistol").value, "200");
+  assert.equal(h.list.scrollTop, 37);
+  h.focus(null);
+  assert.equal(h.keyboard.enabled, true);
+});
+
+test("a typed price commits before a subsequent button click", async () => {
+  const h = createHarness();
+  const input = h.panel.input("rifle");
+  h.focus(input);
+  input.value = "200";
+  h.body.emit("change", { target: input });
+  assert.equal(h.tablet.inventoryRefreshPending, true);
+
+  const renders = h.panel.renderCount;
+  const button = h.panel.button("rifle", "increase");
+  h.focus(button);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(h.panel.renderCount, renders);
+  assert.equal(h.panel.contains(button), true);
+
+  h.body.emit("click", { target: button });
+  assert.equal(h.panel.input("rifle").value, "220");
+  assert.equal(h.scene.getStorePrice("rifle"), 220);
+  assert.equal(h.tablet.inventoryRefreshPending, false);
+  h.focus(null);
+});
+
+test("percentage buttons change low prices by at least one credit", () => {
+  const h = createHarness();
+  h.scene.setStorePrice("rifle", 1);
+  h.click("rifle", "increase");
+  assert.equal(h.panel.input("rifle").value, "2");
+  h.click("rifle", "decrease");
+  assert.equal(h.panel.input("rifle").value, "1");
+  h.click("rifle", "decrease");
+  assert.equal(h.panel.input("rifle").value, "1");
+  h.scene.setStorePrice("rifle", 5);
+  h.click("rifle", "decrease");
+  assert.equal(h.panel.input("rifle").value, "4");
+  h.focus(null);
+});
+
+test("pending changes refresh when leaving price controls", async () => {
+  const h = createHarness();
+  h.focus(h.panel.input("rifle"));
+  h.scene.storage = 5;
+  h.scene.playerState.notifyListeners();
+  assert.equal(h.tablet.inventoryRefreshPending, true);
+  h.focus(h.panel.button("rifle", "market"));
+  h.focus(null);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(h.tablet.inventoryRefreshPending, false);
+  assert.match(h.panel.markup, /data-inventory-storage>5<\/span>/);
+  assert.equal(h.keyboard.enabled, true);
+});

@@ -22,6 +22,10 @@ const TAB_DEFS = [
   { id: "handbook", label: "Handbook" },
 ];
 
+const PRICE_INPUT_SELECTOR = "input[data-price-item-id]";
+const PRICE_BUTTON_SELECTOR = "button[data-price-action]";
+const PRICE_CONTROL_SELECTOR = `${PRICE_INPUT_SELECTOR}, ${PRICE_BUTTON_SELECTOR}`;
+
 // The single unified Manager's Tablet window (bible Part 8), replacing the old
 // standalone Inventory-only window. Owns tab-switching and the Contracts tab's
 // buy/sign interaction; each tab's actual content still comes from its own renderer
@@ -76,6 +80,47 @@ export class ManagerTablet {
 
       const orderButton = event.target.closest("[data-order-item-id]");
       if (orderButton) this.handleOrderRestock(orderButton.dataset.orderItemId);
+
+      const priceButton = event.target.closest(PRICE_BUTTON_SELECTOR);
+      if (priceButton) {
+        this.handlePriceAdjustment(
+          priceButton.dataset.priceItemId,
+          priceButton.dataset.priceAction,
+        );
+      }
+    });
+
+    this.bodyElement.addEventListener("change", (event) => {
+      const input = event.target.closest(PRICE_INPUT_SELECTOR);
+      if (!input) return;
+      const itemId = input.dataset.priceItemId;
+      if (!this.scene.setStorePrice(itemId, Number(input.value))) {
+        input.value = this.scene.getStorePrice(itemId);
+      }
+    });
+    this.bodyElement.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && event.target.matches(PRICE_INPUT_SELECTOR)) event.target.blur();
+    });
+    // Price controls must not also drive the player or fire hotkeys (E, Q, I, P...).
+    const keyboard = this.scene.input.keyboard;
+    this.bodyElement.addEventListener("focusin", (event) => {
+      if (!event.target.matches(PRICE_CONTROL_SELECTOR)) return;
+      if (event.target.matches(PRICE_INPUT_SELECTOR)) this.editingPrice = true;
+      keyboard.enabled = false;
+      keyboard.disableGlobalCapture();
+      keyboard.resetKeys();
+    });
+    this.bodyElement.addEventListener("focusout", (event) => {
+      if (!event.target.matches(PRICE_CONTROL_SELECTOR)) return;
+      if (event.target.matches(PRICE_INPUT_SELECTOR)) this.editingPrice = false;
+      if (!event.relatedTarget?.matches?.(PRICE_CONTROL_SELECTOR)) {
+        keyboard.enabled = true;
+        keyboard.enableGlobalCapture();
+      }
+      // Keep the button in place until its click if focus moved there from an edited input.
+      if (this.inventoryRefreshPending && !event.relatedTarget?.matches?.(PRICE_BUTTON_SELECTOR)) {
+        setTimeout(() => this.refreshInventoryPanel());
+      }
     });
 
     // Licenses can flip between locked/unaffordable/available purely because credits or
@@ -103,6 +148,7 @@ export class ManagerTablet {
   }
 
   switchTab(tabId) {
+    if (this.bodyElement.contains(document.activeElement)) document.activeElement.blur();
     if (tabId === "inventory") this.refreshInventoryPanel();
     this.bodyElement.querySelectorAll(".tablet-tab-btn").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.tab === tabId);
@@ -115,6 +161,16 @@ export class ManagerTablet {
   refreshInventoryPanel() {
     const panel = this.bodyElement.querySelector('[data-tab-panel="inventory"]');
     if (!panel) return;
+    // Re-rendering would wipe a price the player is mid-way through typing.
+    if (this.editingPrice) {
+      this.inventoryRefreshPending = true;
+      return;
+    }
+    this.inventoryRefreshPending = false;
+    const activeElement = document.activeElement;
+    const focusedButton = panel.contains(activeElement) && activeElement.matches(PRICE_BUTTON_SELECTOR)
+      ? { itemId: activeElement.dataset.priceItemId, action: activeElement.dataset.priceAction }
+      : null;
     const selectedItemId = panel.querySelector(".item-card.selected")?.dataset.itemId;
     const scrollTop = panel.querySelector(".inventory-list").scrollTop;
     this.disableInventoryNavigation();
@@ -124,6 +180,14 @@ export class ManagerTablet {
       selectedItemId,
     );
     panel.querySelector(".inventory-list").scrollTop = scrollTop;
+    if (focusedButton) {
+      const replacement = Array.from(panel.querySelectorAll(PRICE_BUTTON_SELECTOR)).find(
+        (button) =>
+          button.dataset.priceItemId === focusedButton.itemId &&
+          button.dataset.priceAction === focusedButton.action,
+      );
+      replacement?.focus({ preventScroll: true });
+    }
   }
 
   refreshContractsPanel() {
@@ -137,6 +201,20 @@ export class ManagerTablet {
     const scrollTop = panel.querySelector(".supply-list").scrollTop;
     panel.innerHTML = this.renderPanelContent("supply");
     panel.querySelector(".supply-list").scrollTop = scrollTop;
+  }
+
+  handlePriceAdjustment(itemId, action) {
+    const currentPrice = this.scene.getStorePrice(itemId);
+    const marketPrice = this.scene.market.getPrice(itemId);
+    const nextPrice =
+      action === "decrease"
+        ? Math.max(1, Math.min(currentPrice - 1, Math.round(currentPrice * 0.9)))
+        : action === "increase"
+          ? Math.max(currentPrice + 1, Math.round(currentPrice * 1.1))
+          : action === "market"
+            ? marketPrice
+            : null;
+    if (nextPrice !== null) this.scene.setStorePrice(itemId, nextPrice);
   }
 
   handleSignContract(licenseId) {

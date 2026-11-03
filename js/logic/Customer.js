@@ -1,8 +1,10 @@
-import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 import { pickRandomCustomerCharacter } from "./CustomerSprites.js";
 
 const SPEED = 120; // px/sec
 const CRATE_HIT_REPUTATION_PENALTY = 1;
+// Bible Step 52: each customer accepts up to this random markup over the market price.
+export const MIN_PRICE_TOLERANCE = 1.0;
+export const MAX_PRICE_TOLERANCE = 1.3;
 // Safety net: even with real pathfinding, if a customer somehow still can't reach the exit
 // (e.g. an edge case the pathfinder didn't anticipate), don't let them block the shift from
 // ever ending. They've already been paid/served by this point, so there's no harm in just
@@ -73,6 +75,7 @@ export class Customer {
 
     this.state = "SEEK_SHELF";
     this.cart = []; // [{ itemId, price }]
+    this.priceTolerance = Phaser.Math.FloatBetween(MIN_PRICE_TOLERANCE, MAX_PRICE_TOLERANCE);
     this.queueTarget = null; // set by the scene once this customer has a spot in line
 
     // Path-following state -- see setDestination()/followPath().
@@ -145,27 +148,38 @@ export class Customer {
     }
   }
 
+  acceptsPrice(itemId) {
+    const marketPrice = this.scene.market.getPrice(itemId);
+    return this.scene.getStorePrice(itemId) <= marketPrice * this.priceTolerance;
+  }
+
   // Grabs a small random handful (1-3) of items, picked from whichever slots still have
-  // stock, so a single customer's cart can contain several different items -- this is what
+  // stock at a price this customer accepts, so a single customer's cart can contain
+  // several different items -- this is what
   // actually exercises the checkout UI's scattered multi-card scanning (bible Step 54)
   // instead of every customer carrying exactly one unit of the same item. Full guaranteed
   // Primary/Optional shopping lists (bible Step 12) are a later, more deliberate pass.
   grabItems() {
     const desiredCount = Phaser.Math.Between(1, 3);
+    let rejectedOnPrice = false;
 
     for (let i = 0; i < desiredCount; i += 1) {
-      const candidates = this.fixture.getAvailableSlots();
+      const stocked = this.fixture.getAvailableSlots();
+      const candidates = stocked.filter((slot) => this.acceptsPrice(slot.itemId));
+      if (candidates.length < stocked.length) rejectedOnPrice = true;
       if (candidates.length === 0) break;
 
       const slot = Phaser.Utils.Array.GetRandom(candidates);
       const itemId = this.fixture.takeItem(slot);
       if (!itemId) continue;
 
-      const item = database.getItem(itemId);
-      this.cart.push({ itemId, price: item.baseCost });
+      this.cart.push({ itemId, price: this.scene.getStorePrice(itemId) });
     }
 
     if (this.cart.length === 0) {
+      if (rejectedOnPrice) {
+        this.scene.showFloatingText(this.sprite.x, this.sprite.y - 40, "Too expensive!", "#f59e0b");
+      }
       // Another customer already in transit beat them to the last units; leave empty-handed
       // rather than queueing for a checkout with nothing to sell.
       this.enterLeaving();

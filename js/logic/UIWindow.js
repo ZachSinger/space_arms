@@ -129,6 +129,8 @@ export class UIWindow {
 
   close() {
     if (!this.isOpen) return;
+    // Hiding a focused field doesn't reliably fire blur; force it so edits commit.
+    if (this.element.contains(document.activeElement)) document.activeElement.blur();
     this.element.classList.add("hidden");
     this.element.classList.remove("active");
     this.isOpen = false;

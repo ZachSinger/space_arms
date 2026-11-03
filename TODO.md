@@ -183,8 +183,8 @@ notice something that needs doing but isn't being done right now.
         itself still doesn't let you introduce a brand new item type on the spot (that's
         what assigning an empty block to a Fixture window now does instead -- see below --
         but the two are still separate actions, not unified into one flow yet).
-  - [ ] Restock pricing is a flat `baseCost * 0.5` wholesale-factor guess
-        (`WHOLESALE_FACTOR`/`RESTOCK_QUANTITY` in game.js), not a real Supplier Contract
+  - [ ] Restock pricing is a hidden, fixed per-item 40-60% of base (`Market.getSupplyCost`,
+        `RESTOCK_QUANTITY` in game.js), not a real Supplier Contract
         pricing model (bible Step 45/48).
   - [ ] No employee auto-hauling (bible Step 14/15) -- the player has to do every haul by
         hand for now.
@@ -259,7 +259,17 @@ notice something that needs doing but isn't being done right now.
       (`stock`/`add`/`remove`/`getRemainingUnitsFor`/etc.) so GameScene and FixtureWindow
       can treat both generically, but the internal models remain genuinely different.
 - [ ] Customer patience bubbles + Go-Backs cart (Step 53/12)
-- [ ] Pre-shift pricing / Start Shift flow (Step 44/52)
+- [x] Item pricing (Step 52): `Market.js` keeps each item's hidden base (`baseCost`) and a
+      galactic market price that moves up to ±10% per day at End Day, clamped to 50%-200%
+      of base. Inventory tab shows MARKET and an editable PRICE (defaults to market when
+      first ordered). Customers get a random 1.0-1.3x markup tolerance and skip items
+      priced above it; carts snapshot the store price. Supply cost doesn't follow the
+      market: it's a hidden per-item 40-60% of base, so it can't be divided back into base.
+- [ ] Figure out the benefit of pricing below the average market price (happier
+      customers? more sales?).
+- [x] Price editing buttons: +10% / -10% (at least 1c where possible), and "Set to
+      market" (current avg market price).
+- [ ] Pre-shift Start Shift onboarding flow (Step 44)
 - [ ] Employees: hiring, Work Register / Stock Shelves tasks (Step 13-19)
 - [ ] More fixtures / Build Mode (Step 22/41)
 - [ ] Factions: Scavengers/Mercenaries/Explorers demand & reputation (Step 24-28, 49, 51)

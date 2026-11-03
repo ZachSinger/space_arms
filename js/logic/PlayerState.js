@@ -23,6 +23,9 @@ export class PlayerState {
 
     this.activeLicenses = new Set(); // Stores IDs of signed licenses
 
+    // The player's own retail price per item id (credits per unit).
+    this.storePrices = {};
+
     // The player's own carrying capacity -- same InventoryPool model as a physical
     // StorageFixture (ShopInventory.js), just not drawn anywhere on the map. Lets stock
     // be withdrawn from one fixture and deposited into another (see FixtureWindow).
@@ -62,6 +65,11 @@ export class PlayerState {
     this.notifyListeners();
   }
 
+  setStorePrice(itemId, price) {
+    this.storePrices[itemId] = price;
+    this.notifyListeners();
+  }
+
   signLicense(licenseId) {
     this.activeLicenses.add(licenseId);
     this.notifyListeners();
@@ -82,6 +90,7 @@ export class PlayerState {
       globalReputation: this.globalReputation,
       factionReputation: { ...this.factionReputation },
       activeLicenses: [...this.activeLicenses],
+      storePrices: { ...this.storePrices },
       customersTurnedAway: this.customersTurnedAway,
       hovercart: {
         capacity: this.hovercart.capacity,
@@ -94,6 +103,7 @@ export class PlayerState {
     const state = new PlayerState();
     Object.assign(state, data, {
       activeLicenses: new Set(data.activeLicenses),
+      storePrices: { ...data.storePrices },
       hovercart: new InventoryPool({
         capacity: data.hovercart?.capacity ?? HOVERCART_CAPACITY,
         stock: data.hovercart?.stock || [],
