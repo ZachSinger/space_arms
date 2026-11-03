@@ -14,6 +14,8 @@ notice something that needs doing but isn't being done right now.
       `gridAlignedCenter()` in game.js for the correct way to position one instead.
 
 ## Art / Assets
+- [ ] Sound effects for hitting customers with boxes.
+- [ ] Emoticons for customers.
 - [ ] `att_stk_08` (Blackwood Ordnance Counter-Weight Stock) is using a placeholder image
       (`_Bonus_Variety/attachments_stocks/stock-tech-black-blue-orb.png`), not real art made
       for this specific item. Replace with a proper generated icon.
@@ -32,8 +34,8 @@ notice something that needs doing but isn't being done right now.
       from 8 of the 9 new sheets (excluded 1 in that same chunkier pixel-art sub-style).
       All 36 characters reviewed passed the facing-consistency check. Added to (not
       replacing) the existing roster, now 64 characters/256 images total. Heavily
-      explorer-skewed (+22 of the 32) -- purely cosmetic/no gameplay impact, but worth
-      knowing if customer variety ever looks lopsided. See
+      explorer-skewed (+22 of the 32) -- this also affects visual faction membership for
+      thrown-crate reputation penalties. See
       `scripts/extract_eighth_gen_sprites.py`.
 
 ## Known Issues
@@ -154,9 +156,15 @@ notice something that needs doing but isn't being done right now.
       Loading Pad, carried, or dropped). Stock totals all placements on sales shelves,
       including stacks temporarily lifted in move mode. Counts refresh on transfers,
       ordering/delivery, and customers taking shelf stock; zero-total items disappear.
-- [x] Q drops the carried crate at the player's floor position without unpacking it.
-      E can pick it up again wherever it was dropped; E near a fixture still delivers
-      its contents. Partially emptied crates keep their remaining quantity when dropped.
+- [x] Q drops the carried crate without unpacking it; moving when dropping throws it in
+      the movement direction. Crates slow to a stop and bounce off walls and fixtures
+      (including the register), without blocking players or customers. Their motion pauses
+      with the shift. E can pick them up again once their velocity reaches zero, including
+      partially emptied crates.
+- [x] Thrown crates hitting customers cost 1 store reputation and 1 reputation with the
+      customer's faction, if any. Faction membership currently follows the character's
+      sprite group; other groups are neutral. Each customer can be hit once per throw,
+      including across bounces. Dropped, stopped, carried, and paused crates do no harm.
 - [x] Player avatar (`js/logic/Player.js`): WASD/arrow movement, collides with walls/
       fixtures but not customers (bible Step 30/58), camera now follows it instead of the
       old drag-to-pan placeholder. Needed as a prerequisite for the physical procurement

@@ -1,7 +1,8 @@
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
-import { pickRandomCharacterTextures } from "./CustomerSprites.js";
+import { pickRandomCustomerCharacter } from "./CustomerSprites.js";
 
 const SPEED = 120; // px/sec
+const CRATE_HIT_REPUTATION_PENALTY = 1;
 // Safety net: even with real pathfinding, if a customer somehow still can't reach the exit
 // (e.g. an edge case the pathfinder didn't anticipate), don't let them block the shift from
 // ever ending. They've already been paid/served by this point, so there's no harm in just
@@ -89,7 +90,9 @@ export class Customer {
 
     // A randomly-picked character's 4 facing textures (see CustomerSprites.js), swapped as
     // this customer turns to walk in a different direction -- see updateFacing().
-    this.facingTextures = pickRandomCharacterTextures();
+    const character = pickRandomCustomerCharacter();
+    this.facingTextures = character.facingTextures;
+    this.factionId = character.factionId;
     this.currentFacing = "down";
     this.sprite = scene.add
       .image(spawnX, spawnY, this.facingTextures.down)
@@ -187,6 +190,17 @@ export class Customer {
   // the line finishes and everyone shuffles forward).
   setQueueTarget(x, y) {
     this.queueTarget = { x, y };
+  }
+
+  hitByCrate() {
+    this.playerState.subReputation(CRATE_HIT_REPUTATION_PENALTY, this.factionId);
+    const penalty = CRATE_HIT_REPUTATION_PENALTY;
+    this.scene.showFloatingText(
+      this.sprite.x,
+      this.sprite.y - 40,
+      `Store rep -${penalty}${this.factionId ? ` / Faction rep -${penalty}` : ""}`,
+      "#ef4444",
+    );
   }
 
   // Called by the scene once the player has scanned every item and clicked Complete Sale.

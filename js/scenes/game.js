@@ -374,8 +374,28 @@ export class GameScene extends Phaser.Scene {
       x: loadingPadZone.gridX * TILE_SIZE + (loadingPadZone.gridW * TILE_SIZE) / 2,
       y: loadingPadZone.gridY * TILE_SIZE + (loadingPadZone.gridH * TILE_SIZE) / 2,
     };
+    const { gridW, gridH } = getTotalGridSize();
+    this.crateBounds = new Phaser.Geom.Rectangle(0, 0, gridW * TILE_SIZE, gridH * TILE_SIZE);
+    this.crateGroup = this.physics.add.group();
+    this.physics.add.collider(this.crateGroup, this.room.wallGroup);
+    this.physics.add.collider(this.crateGroup, this.obstacleGroup);
+    this.physics.add.collider(this.crateGroup, this.registerSprite);
+    // Register impacts without introducing dynamic obstacles to customer pathfinding.
+    this.physics.add.overlap(this.crateGroup, this.customerGroup, (crateSprite, customerSprite) => {
+      const crate = this.restockCrates.find((candidate) => candidate.sprite === crateSprite);
+      const customer = this.customers.find((candidate) => candidate.sprite === customerSprite);
+      if (crate && customer) crate.tryHitCustomer(customer);
+    });
     this.restockCrates = []; // uncarried crates, at the Loading Pad or dropped on the floor
     this.carriedCrate = null; // the one crate the player is currently hauling, if any
+
+    this.crateMotionPaused = false;
+    this.shiftClock.subscribe(({ started, isPaused }) => {
+      const paused = started && isPaused;
+      if (paused === this.crateMotionPaused) return;
+      this.crateMotionPaused = paused;
+      for (const crate of this.restockCrates) crate.setPaused(paused);
+    });
 
     // Single interact key for both ends of hauling a crate: pick one up near the Loading
     // Pad, then press it again near the shelf to deliver -- see handleInteract().
@@ -590,13 +610,14 @@ export class GameScene extends Phaser.Scene {
 
     this.playerState.spendCredits(cost);
 
-    // Offset each new crate a little further along the pad so repeated orders don't all
-    // stack exactly on top of each other while waiting to be hauled in.
+    // Cycle through nine spots within the pad; unbounded rows would spawn later crates
+    // inside or beyond its south wall.
     const offsetIndex = this.restockCrates.length;
     const spawnX = this.loadingPadSpawnPoint.x + (offsetIndex % 3) * 48 - 48;
-    const spawnY = this.loadingPadSpawnPoint.y + Math.floor(offsetIndex / 3) * 48;
+    const spawnY = this.loadingPadSpawnPoint.y + [0, -40, 40][Math.floor(offsetIndex / 3) % 3];
 
     const crate = new Crate(this, itemId, RESTOCK_QUANTITY, spawnX, spawnY);
+    crate.setPaused(this.crateMotionPaused);
     this.restockCrates.push(crate);
     this.playerState.notifyListeners();
     return true;
@@ -665,26 +686,35 @@ export class GameScene extends Phaser.Scene {
     return `LOCKER ${lockerIndex + 1}`;
   }
 
-  // Returns true if a crate was actually picked up, so handleInteract can fall through to
-  // trying other interactions (the register) when there's nothing to pick up here.
+  // Handles a pickup or warns about a nearby moving crate. Only falls through to other
+  // interactions when no crate is in range.
   tryPickUpNearestCrate() {
     const { x, y } = this.player.sprite;
     let nearest = null;
     let nearestDistance = INTERACT_RANGE;
+    let movingNearby = false;
 
     for (const crate of this.restockCrates) {
       const distance = crate.distanceTo(x, y);
+      if (distance > INTERACT_RANGE) continue;
+      if (!crate.isStationary()) {
+        movingNearby = true;
+        continue;
+      }
       if (distance <= nearestDistance) {
         nearest = crate;
         nearestDistance = distance;
       }
     }
 
-    if (!nearest) return false;
+    if (!nearest || !nearest.pickUp(this.player.sprite)) {
+      if (!nearest && !movingNearby) return false;
+      this.showFloatingText(x, y - 40, "Wait for crate to stop", "#f59e0b");
+      return true;
+    }
 
     this.restockCrates = this.restockCrates.filter((crate) => crate !== nearest);
     this.carriedCrate = nearest;
-    this.carriedCrate.isCarried = true;
 
     const item = database.getItem(nearest.itemId);
     this.showFloatingText(x, y - 40, `Picked up ${item.name} x${nearest.quantity} (Q to drop)`, "#38bdf8");
@@ -698,10 +728,25 @@ export class GameScene extends Phaser.Scene {
       this.showFloatingText(x, y - 40, "No crate to drop", "#94a3b8");
       return false;
     }
+    if (this.operatingRegister) {
+      this.showFloatingText(x, y - 40, "Leave the register to drop a crate", "#94a3b8");
+      return false;
+    }
 
-    // Use the player's clear floor position, not an offset that could land inside a wall.
-    crate.sprite.setPosition(x, y).setDepth(2);
-    crate.isCarried = false;
+    const position = crate.findDropPosition(x, y);
+    if (!position) {
+      this.showFloatingText(x, y - 40, "No room to drop crate", "#94a3b8");
+      return false;
+    }
+
+    const velocity = this.player.sprite.body.velocity;
+    crate.drop(
+      position.x,
+      position.y,
+      this.crateMotionPaused ? 0 : velocity.x,
+      this.crateMotionPaused ? 0 : velocity.y,
+      this.crateMotionPaused,
+    );
     this.restockCrates.push(crate);
     this.carriedCrate = null;
     const item = database.getItem(crate.itemId);
