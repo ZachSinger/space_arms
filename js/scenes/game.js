@@ -166,32 +166,28 @@ export class GameScene extends Phaser.Scene {
       displayType: "universal",
       x: shelfPosition.x,
       y: shelfPosition.y,
-      // 3x2 instead of the original 2x2 -- the 2 new blocks (2,0)/(2,1) start deliberately
-      // unassigned, to actually demonstrate player-driven shelf stocking (bible: "determine
-      // what can go on the shelf") rather than every slot already being pre-decided before
-      // the player ever touches it.
-      gridDimensions: { w: 3, h: 2 },
+      gridDimensions: { w: 3, h: 2 }, // just the physical footprint on the map
+      // Total storage capacity in abstract "slots" (see each item's own `slots` value in
+      // Items.json -- 1-5 depending on physical size). Not a grid of individually-
+      // assignable blocks; any item can be stocked here as long as there's room in this
+      // one shared pool. 30 comfortably covers the starting stock below (uses 23) with
+      // headroom to restock more before it's actually full.
+      capacity: 30,
       // Several different items (not just one) so a customer's cart can actually contain
-      // a varied, multi-item haul -- see Customer.grabItems(). Real capacity now comes
-      // from stackDepth/item.stackSize (see Fixture.getSlotCapacity), not an unlimited
-      // quantity -- each stackDepth below is picked so the item's own stackSize gives some
-      // headroom above its starting quantity (a bare stackDepth 8 would, for the lower-
-      // stackSize items here, actually be LESS capacity than their starting quantity).
-      slots: [
-        { itemId: "wpn_rif_01", quantity: 4, stackDepth: 18, x: 0, y: 0 }, // stackSize 3 -> cap 6
-        { itemId: "wpn_rif_02", quantity: 2, stackDepth: 16, x: 1, y: 0 }, // stackSize 4 -> cap 4
-        { itemId: "wpn_rif_03", quantity: 3, stackDepth: 16, x: 0, y: 1 }, // stackSize 4 -> cap 4
-        { itemId: "wpn_pis_01", quantity: 5, stackDepth: 14, x: 1, y: 1 }, // stackSize 2 -> cap 7
-        { itemId: null, quantity: 0, stackDepth: null, x: 2, y: 0 },
-        { itemId: null, quantity: 0, stackDepth: null, x: 2, y: 1 },
+      // a varied, multi-item haul -- see Customer.grabItems().
+      stock: [
+        { itemId: "wpn_rif_01", quantity: 4 },
+        { itemId: "wpn_rif_02", quantity: 2 },
+        { itemId: "wpn_rif_03", quantity: 3 },
+        { itemId: "wpn_pis_01", quantity: 5 },
       ],
     });
     this.drawFixture(this.fixture, "shelf_universal_01");
 
     // Storage Fixture (bible Step 42: Backroom Storage) -- lives in the Storeroom, shares
-    // the exact same slot/capacity logic as the sales shelf (just not customer-facing).
-    // Starts completely empty/unassigned; every block has to be set up by the player
-    // before anything hauled in from the Loading Pad has anywhere to go.
+    // the exact same capacity-pool logic as the sales shelf (just not customer-facing).
+    // Starts completely empty; capacity 20 matches the size of pool most things will
+    // actually be tested against.
     const storagePosition = gridAlignedCenter(storeroom, 1, 1, 3, 2);
     this.storageFixture = new Fixture({
       id: "storage_demo_01",
@@ -199,14 +195,8 @@ export class GameScene extends Phaser.Scene {
       x: storagePosition.x,
       y: storagePosition.y,
       gridDimensions: { w: 3, h: 2 },
-      slots: [
-        { itemId: null, quantity: 0, stackDepth: null, x: 0, y: 0 },
-        { itemId: null, quantity: 0, stackDepth: null, x: 1, y: 0 },
-        { itemId: null, quantity: 0, stackDepth: null, x: 2, y: 0 },
-        { itemId: null, quantity: 0, stackDepth: null, x: 0, y: 1 },
-        { itemId: null, quantity: 0, stackDepth: null, x: 1, y: 1 },
-        { itemId: null, quantity: 0, stackDepth: null, x: 2, y: 1 },
-      ],
+      capacity: 20,
+      stock: [],
     });
     this.drawFixture(this.storageFixture, "locker_storage");
 
@@ -491,8 +481,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   // Whichever fixture the player is currently standing close enough to, or null if
-  // neither is in range -- used by both crate delivery and opening a fixture's block-
-  // management window, so "close enough" means the same thing for both.
+  // neither is in range -- used by both crate delivery and opening a fixture's stock/
+  // capacity window, so "close enough" means the same thing for both.
   getNearbyFixture() {
     let nearest = null;
     let nearestDistance = SHELF_INTERACT_RANGE;
@@ -521,17 +511,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   // Everything the Supply tab needs to render: every distinct item ANY fixture (shelf or
-  // storage) is currently assigned to sell/hold, its total quantity across all of them,
-  // and what restocking it would cost. Only items a fixture is already assigned to can be
-  // restocked for now -- assigning a brand new item to an empty block is a separate action
-  // (see Fixture.assignItem / FixtureWindow), not something ordering itself does.
+  // storage) currently has stocked, its total quantity across all of them, and what
+  // restocking it would cost. Only items already in stock somewhere can be restocked for
+  // now -- getting a brand new item type into the game for the first time still has to go
+  // through the demo fixtures' starting stock (see TODO.md); there's no general "introduce
+  // a new item" UI yet since the capacity-pool model doesn't need a pre-assignment step.
   getRestockableItems() {
     const quantityByItemId = new Map();
 
     for (const { fixture } of this.getFixtureEntries()) {
-      for (const slot of fixture.slots) {
-        if (!slot.itemId) continue;
-        quantityByItemId.set(slot.itemId, (quantityByItemId.get(slot.itemId) || 0) + slot.quantity);
+      for (const entry of fixture.stock) {
+        quantityByItemId.set(entry.itemId, (quantityByItemId.get(entry.itemId) || 0) + entry.quantity);
       }
     }
 
@@ -543,14 +533,14 @@ export class GameScene extends Phaser.Scene {
 
   // Spends credits and spawns a physical crate at the Loading Pad (bible Step 10) -- it
   // isn't actually restocked until the player hauls it to a fixture, see handleInteract().
-  // Returns false (no-op) if the player can't afford it or no fixture is currently
-  // assigned to sell/hold the requested item at all.
+  // Returns false (no-op) if the player can't afford it or no fixture currently stocks the
+  // requested item at all.
   orderRestockCrate(itemId) {
     const item = database.getItem(itemId);
     if (!item) return false;
 
     const stocksThisItem = this.getFixtureEntries().some(({ fixture }) =>
-      fixture.slots.some((slot) => slot.itemId === itemId),
+      fixture.findStockEntry(itemId),
     );
     if (!stocksThisItem) return false;
 
@@ -572,7 +562,7 @@ export class GameScene extends Phaser.Scene {
 
   // The single keydown-E handler for all player interactions: delivers a carried crate if
   // holding one, otherwise tries (in order) picking up a nearby crate, opening a nearby
-  // fixture's block-management window, exiting the register if already operating it, or
+  // fixture's stock/capacity window, exiting the register if already operating it, or
   // entering it if close enough. One shared key rather than separate ones per action since
   // at most one of these is ever actually reachable/relevant at a time in practice.
   handleInteract() {
@@ -676,17 +666,18 @@ export class GameScene extends Phaser.Scene {
 
     const item = database.getItem(crate.itemId);
 
-    if (target.getOpenSlotsFor(crate.itemId).length === 0) {
+    if (target.getRemainingUnitsFor(crate.itemId) === 0) {
       this.showFloatingText(
         this.player.sprite.x,
         this.player.sprite.y - 40,
-        `${item.name} isn't assigned to any block here`,
+        `No room left here for ${item.name}`,
         "#94a3b8",
       );
       return;
     }
 
     const accepted = target.restock(crate.itemId, crate.quantity);
+    this.fixtureWindow.refresh(target); // keep its capacity bar/stock list live if open
 
     if (accepted >= crate.quantity) {
       // Fully emptied -- the "Abstracted Box" approach (bible Step 62): once the last
@@ -700,8 +691,8 @@ export class GameScene extends Phaser.Scene {
       crate.destroy();
       this.carriedCrate = null;
     } else {
-      // Every assigned block for this item is already full -- keep carrying whatever
-      // didn't fit instead of silently discarding it.
+      // Fixture's total capacity is already full -- keep carrying whatever didn't fit
+      // instead of silently discarding it.
       crate.quantity -= accepted;
       this.showFloatingText(
         this.player.sprite.x,

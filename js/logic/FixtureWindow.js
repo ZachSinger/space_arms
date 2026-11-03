@@ -30,42 +30,24 @@ export class FixtureWindow {
   openForFixture(fixture, title) {
     this.fixture = fixture;
     this.titleElement.textContent = title;
-    this.renderGrid();
+    this.render();
     this.uiWindow.openWindow();
   }
 
-  renderGrid() {
-    this.bodyElement.innerHTML = FixtureRenderer.generateGridHTML(this.fixture, database);
-
-    this.bodyElement.querySelectorAll("[data-slot-index]").forEach((cell) => {
-      cell.addEventListener("click", () => {
-        const slot = this.fixture.slots[Number(cell.dataset.slotIndex)];
-
-        if (!slot.itemId) {
-          this.renderPicker(slot);
-        } else if (slot.quantity === 0) {
-          // Only an assigned-but-still-empty block can be undone this way -- a block
-          // already holding physical stock needs somewhere for that stock to go first
-          // (bible Step 63: the hovercart), which doesn't exist yet.
-          this.fixture.unassignItem(slot);
-          this.renderGrid();
-        }
-      });
-    });
+  // Pure display -- a capacity bar plus whatever's actually stocked. There's no more
+  // per-block assignment to interact with (see ShopInventory.js); stocking happens
+  // entirely via ordering from the Supply tab and hauling/delivering crates
+  // (GameScene.tryDeliverCarriedCrate), so this window just needs to stay current
+  // whenever it's open. Re-rendered on every open() call above; also exposed as refresh()
+  // so GameScene can update it live while the player is standing there delivering.
+  render() {
+    this.bodyElement.innerHTML = FixtureRenderer.generateHTML(this.fixture, database);
   }
 
-  renderPicker(slot) {
-    this.bodyElement.innerHTML = FixtureRenderer.generatePickerHTML(database);
-
-    this.bodyElement
-      .querySelector("[data-picker-back]")
-      .addEventListener("click", () => this.renderGrid());
-
-    this.bodyElement.querySelectorAll("[data-item-id]").forEach((row) => {
-      row.addEventListener("click", () => {
-        this.fixture.assignItem(slot, row.dataset.itemId);
-        this.renderGrid();
-      });
-    });
+  // Called by GameScene right after a delivery into whichever fixture this window is
+  // currently showing, so the capacity bar/stock list don't go stale while it's open.
+  refresh(fixture) {
+    if (this.fixture !== fixture || !this.uiWindow.isOpen) return;
+    this.render();
   }
 }

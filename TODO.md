@@ -140,26 +140,32 @@ notice something that needs doing but isn't being done right now.
         is the clear next step (requested right after Storage Shelving below), since
         actually meaningful "how much can I haul at once" only matters now that there's
         somewhere to make deliberate choices about where that haul ends up.
-- [x] Storage Shelving + real shelf-block capacity (bible Steps 4/5/22/42/63): the
-      Storeroom is now a proper walled-off backroom (a `door_blast_keypad_01` door in its
-      own east wall, sealed via the new `TileRoom.addWall`, since two already-unlocked
-      zones never auto-wall against each other -- see `TileRoom.needsWallAt`) with a
-      `locker_storage` Storage Fixture inside it, completely empty/unassigned to start.
-      `Fixture` (`ShopInventory.js`) now models real per-slot capacity
-      (`stackDepth / item.stackSize`, per the bible's own Step 5 example) instead of
-      unlimited quantity, plus `assignItem`/`unassignItem` so the player actually decides
-      what sells/stores where (an unassigned slot has zero capacity until assigned; an
-      assigned-but-still-empty slot can be undone, a stocked one can't yet -- that needs
-      the hovercart above). New `FixtureWindow`/`FixtureRenderer` show a fixture's blocks
-      as a clickable grid (empty = dashed "+", assigned = item image + "qty/capacity"
-      badge); walk up to either fixture and press E (or click it) to open its window.
-      Crate delivery (`tryDeliverCarriedCrate`) now targets whichever fixture the player
-      is actually standing near and keeps any leftover units in the crate if a block fills
-      up mid-delivery, instead of assuming there's only ever the one sales shelf. Known
-      simplifications: assigning a block doesn't check supplier licenses/contracts yet
-      (any catalog item can go anywhere, bible Step 45/48 aside); the sales shelf and
-      Storage Fixture are each still one single hardcoded instance (no Build Mode/
-      purchasing more of either yet, Step 22/41).
+- [x] Storage Shelving + real capacity-pool storage (bible Steps 4/42): the Storeroom is
+      now a proper walled-off backroom (a `door_blast_keypad_01` door in its own east
+      wall, sealed via the new `TileRoom.addWall`, since two already-unlocked zones never
+      auto-wall against each other -- see `TileRoom.needsWallAt`) with a `locker_storage`
+      Storage Fixture inside it, completely empty to start. `Fixture` (`ShopInventory.js`)
+      now models one shared total `capacity` number (e.g. 20/30 "slots") instead of
+      unlimited quantity -- every item in `Items.json` has its own `slots` value (1-5,
+      derived from its `dimensions` footprint: small stuff like ammo/attachments/pistols
+      costs 1, bulky armor/heavy weapons costs 4-5), and stocking it eats that many units
+      out of the fixture's shared pool. Any item can be stocked anywhere there's room --
+      no pre-assignment/configuration step needed (an earlier version of this required
+      clicking an empty "block" and assigning it to one specific item first; that was
+      confusing in practice -- not what was actually wanted -- and has been replaced
+      entirely by this flat pool model). `FixtureWindow`/`FixtureRenderer` now just show a
+      capacity bar + a plain list of whatever's currently stocked (image, quantity, how
+      many slots it's using); walk up to either fixture and press E (or click it) to open
+      it, purely as a status display now -- all actual stocking still happens via
+      ordering (Supply tab) + hauling + delivering a crate
+      (`GameScene.tryDeliverCarriedCrate`), which now targets whichever fixture the player
+      is actually standing near and keeps any leftover crate contents if the pool fills up
+      mid-delivery. Known simplifications: there's still no way to introduce a brand new
+      item type via the Supply tab UI itself (ordering only lists items already stocked
+      somewhere -- the demo fixtures' hardcoded starting stock is the only way new item
+      types exist right now); no supplier license/contract gating on what can be stocked
+      (Step 45/48 aside); the sales shelf and Storage Fixture are each still one single
+      hardcoded instance (no Build Mode/purchasing more of either yet, Step 22/41).
 - [ ] Customer patience bubbles + Go-Backs cart (Step 53/12)
 - [ ] Pre-shift pricing / Start Shift flow (Step 44/52)
 - [ ] Employees: hiring, Work Register / Stock Shelves tasks (Step 13-19)

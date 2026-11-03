@@ -625,99 +625,51 @@ button {
 }
 
 /* ================================================================= /
-/ FIXTURE WINDOW (SHELF / STORAGE BLOCK MANAGEMENT)                 /
+/ FIXTURE WINDOW (SHELF / STORAGE CAPACITY POOL)                    /
 / ================================================================= */
 
-.fixture-grid {
-  display: grid;
-  gap: 8px;
-  padding: 14px;
+.fixture-capacity-bar-wrap {
+  padding: 14px 14px 10px;
 }
 
-.fixture-slot {
-  width: 72px;
-  height: 72px;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-}
-
-.fixture-slot-empty {
-  border: 2px dashed var(--color-border-subtle);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: border-color 0.1s ease;
-}
-
-.fixture-slot-empty:hover {
-  border-color: var(--color-border-active);
-}
-
-.fixture-slot-plus {
-  font-size: 28px;
-  color: var(--color-border-subtle);
-}
-
-.fixture-slot-empty:hover .fixture-slot-plus {
-  color: var(--color-border-active);
-}
-
-.fixture-slot-assigned {
-  --bg-color: #090d16;
-  background: var(--scanline-pattern), var(--bg-color);
-  background-size:
-    100% 4px,
-    auto;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 4px;
-  padding: 6px;
-}
-
-.fixture-slot-unstocked {
-  cursor: pointer;
-  opacity: 0.6;
-}
-
-.fixture-slot-unstocked:hover {
-  border-color: var(--color-border-active);
-  opacity: 1;
-}
-
-.fixture-slot-image {
+.fixture-capacity-bar {
   width: 100%;
+  height: 14px;
+  background: #090d16;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.fixture-capacity-bar-fill {
   height: 100%;
+  background: var(--color-accent, #38bdf8);
+  transition: width 0.2s ease;
+}
+
+.fixture-capacity-label {
+  margin-top: 4px;
+  text-align: center;
+  font-size: var(--font-size-11);
+  color: var(--color-text-muted);
+}
+
+.fixture-stock-row .item-icon {
   image-rendering: pixelated;
-  object-fit: contain;
 }
 
-.fixture-slot-badge {
-  position: absolute;
-  right: 3px;
-  bottom: 2px;
+.fixture-stock-meta {
+  margin-top: 4px;
   font-size: var(--font-size-10);
-  font-weight: bold;
-  color: var(--color-text-main);
-  background: rgba(0, 0, 0, 0.7);
-  padding: 0 3px;
-  border-radius: 2px;
+  color: var(--color-text-muted);
 }
 
-.fixture-grid-hint {
-  padding: 0 14px 10px;
+.fixture-empty-hint {
   color: var(--color-text-muted);
   font-size: var(--font-size-11);
   font-style: italic;
-}
-
-.fixture-picker-back {
-  margin: 10px 10px 0;
-  width: calc(100% - 20px);
-}
-
-.fixture-picker-row {
-  cursor: pointer;
+  text-align: center;
+  padding: 20px;
 }
 
 /* ================================================================= /
