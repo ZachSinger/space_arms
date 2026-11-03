@@ -140,49 +140,70 @@ notice something that needs doing but isn't being done right now.
         governs transfers between fixtures (shelf <-> storage) via FixtureWindow, not the
         Loading-Pad-to-fixture crate flow, which is a separate, not-yet-unified path (see
         below).
-- [x] Storage Shelving + real capacity-pool storage (bible Steps 4/42): the Storeroom is
+- [x] Storage Shelving + real capacity-pool storage (bible Step 42): the Storeroom is
       now a proper walled-off backroom (a `door_blast_keypad_01` door in its own east
       wall, sealed via the new `TileRoom.addWall`, since two already-unlocked zones never
       auto-wall against each other -- see `TileRoom.needsWallAt`) with a `locker_storage`
-      Storage Fixture inside it, completely empty to start. `Fixture` (`ShopInventory.js`)
-      now models one shared total `capacity` number (e.g. 20/30 "slots") instead of
-      unlimited quantity -- every item in `Items.json` has its own `slots` value (1-5,
-      derived from its `dimensions` footprint: small stuff like ammo/attachments/pistols
-      costs 1, bulky armor/heavy weapons costs 4-5), and stocking it eats that many units
-      out of the fixture's shared pool. Any item can be stocked anywhere there's room --
-      no pre-assignment/configuration step needed (an earlier version of this required
-      clicking an empty "block" and assigning it to one specific item first; that was
-      confusing in practice -- not what was actually wanted -- and has been replaced
-      entirely by this flat pool model). `FixtureWindow`/`FixtureRenderer` show a
-      capacity bar + a plain list of whatever's currently stocked (image, quantity, how
-      many slots it's using); walk up to either fixture and press E (or click it) to open
-      it. Stock still gets there in the first place via ordering (Supply tab) + hauling +
-      delivering a crate (`GameScene.tryDeliverCarriedCrate`), which targets whichever
-      fixture the player is actually standing near and keeps any leftover crate contents
-      if the pool fills up mid-delivery. Known simplifications: there's still no way to
-      introduce a brand new item type via the Supply tab UI itself (ordering only lists
-      items already stocked somewhere -- the demo fixtures' hardcoded starting stock is
-      the only way new item types exist right now); no supplier license/contract gating
-      on what can be stocked (Step 45/48 aside); the sales shelf and Storage Fixture are
-      each still one single hardcoded instance (no Build Mode/purchasing more of either
-      yet, Step 22/41).
+      Storage Fixture inside it, completely empty to start. `StorageFixture`
+      (`ShopInventory.js`, renamed from the original `Fixture` once the sales shelf got
+      its own completely different model -- see below) models one shared total `capacity`
+      number (e.g. 20 "slots") instead of unlimited quantity -- every item in
+      `Items.json` has its own `slots` value (1-5, derived from its `dimensions`
+      footprint: small stuff like ammo/attachments/pistols costs 1, bulky armor/heavy
+      weapons costs 4-5), and stocking it eats that many units out of the fixture's
+      shared pool. Any item can be stocked anywhere there's room -- no pre-assignment/
+      configuration step needed. This is the correct model for a Storage Fixture
+      specifically (a flexible overflow/staging locker, not a real storefront display) --
+      see the Sales Shelf entry below for why the real sales shelf needed something
+      completely different instead. `FixtureWindow`/`FixtureRenderer` show a capacity bar
+      + a plain list of whatever's currently stocked; walk up and press E (or click it)
+      to open it. Stock gets there via ordering (Supply tab) + hauling + delivering a
+      crate (`GameScene.tryDeliverCarriedCrate`), or via the Hovercart (see below).
 - [x] Hovercart (bible Step 10/63: "an abstract character/employee inventory size, not a
-      physical moving entity"): extracted the capacity-pool logic shared by every Fixture
-      into a new base class (`InventoryPool.js` -- capacity + stock + add/remove/usedCapacity/
-      etc.), and gave `PlayerState` its own instance (`HOVERCART_CAPACITY` = 10, smaller
-      than either fixture's own capacity since it's one character's personal carry limit,
-      not a whole shelf/locker). `FixtureWindow` now shows the open fixture's stock AND
-      the hovercart's own stock side by side, each row with a TAKE (fixture -> hovercart)
-      or STOCK (hovercart -> fixture) button that moves 1 unit at a time, disabled the
-      instant the receiving side has no room left for that item. This is what actually
-      gives the Storage Fixture a purpose now: haul a crate to Storage (or the shelf,
-      whichever's closer/has room), then separately walk between the two moving units via
-      the hovercart as needed. The HUD gained a live `HOVERCART x/y` readout next to
-      Credits/Reputation. Known simplifications: only the player has a hovercart (no
-      employees yet, Step 14/15); only 1 unit moves per click (no bulk-transfer input);
-      crates from the Loading Pad still deliver straight into a fixture rather than
-      routing through the hovercart first, so the hovercart's actual role is purely
-      post-delivery reorganizing between fixtures for now, not the primary haul-in path.
+      physical moving entity"): extracted the capacity-pool logic shared by every
+      StorageFixture into a new base class (`InventoryPool.js` -- capacity + stock +
+      add/remove/usedCapacity/etc.), and gave `PlayerState` its own instance
+      (`HOVERCART_CAPACITY` = 10, smaller than a Storage Fixture's own capacity since it's
+      one character's personal carry limit, not a whole locker). `FixtureWindow` shows the
+      open fixture's stock AND the hovercart's own stock side by side, each row with a
+      TAKE (fixture -> hovercart) or STOCK (hovercart -> fixture) button that moves 1 unit
+      at a time, disabled the instant the receiving side has no room left for that item.
+      This is what actually gives the Storage Fixture a purpose: haul a crate to Storage
+      (or the shelf, whichever's closer/has room), then separately walk between the two
+      moving units via the hovercart as needed. The HUD gained a live `HOVERCART x/y`
+      readout next to Credits/Reputation. Known simplifications: only the player has a
+      hovercart (no employees yet, Step 14/15); only 1 unit moves per click (no bulk-
+      transfer input); crates from the Loading Pad still deliver straight into a fixture
+      rather than routing through the hovercart first.
+- [x] Sales Shelf: manual grid placement (bible Steps 4/5/22) -- NOT the same model as a
+      Storage Fixture above. Originally built as a shared capacity pool (same as Storage),
+      but that's wrong for a real storefront shelf: items need actual physical placement
+      on a grid (Tarkov-style packing using each item's own `dimensions` w/h, optionally
+      rotated 90 degrees), and "depth"/stack capacity is NOT shared across the fixture --
+      each individual placement gets its own capacity, independently, from the fixture's
+      own `stackDepth` divided by that specific item's `stackSize` (two different items
+      placed on the same shelf each get the full stackDepth-derived capacity for their own
+      item, they don't compete for a shared number). New `ShelfFixture.js` models this:
+      `displayGrid` (e.g. 4 columns x 2 rows, separate from `gridDimensions`, which is
+      still just the physical map footprint) + a flat `placements` array
+      (`{itemId, gx, gy, w, h, rotated, quantity}`). `FixtureWindow`/`FixtureRenderer`
+      gained a real placement UI: "+ ADD ITEM" opens the full catalog, picking one enters
+      placement mode (every valid anchor cell for the item's current shape is highlighted
+      green, a toolbar offers ROTATE/CANCEL), clicking a highlighted cell confirms it
+      there. An existing placement still at 0 stock can be clicked away again to free up
+      the space. Below the grid, a flat list of current placements (same TAKE-into-
+      hovercart affordance as Storage) plus the hovercart section. Demo shelf starts
+      completely empty (4x2 grid, stackDepth 12). Found and fixed two real bugs building
+      this: (1) CSS grid rows sized with `1fr` inside an unbounded-height container blew
+      up to a runaway size the instant an item's image rendered -- fixed with fixed-px
+      grid tracks instead; (2) giving `.fixture-cell` an explicit width/height clamped
+      multi-column placements back down to one cell's worth of space despite spanning
+      more grid tracks -- removed the explicit size so grid items stretch to fill their
+      actual spanned area. Known simplification: `StorageFixture`'s `getOpenSlotsFor` and
+      the shelf's `getOpenPlacementsFor` have very similar names/shapes but aren't
+      actually unified into one shared concept -- duck-typed to the same small public API
+      (`stock`/`add`/`remove`/`getRemainingUnitsFor`/etc.) so GameScene and FixtureWindow
+      can treat both generically, but the internal models remain genuinely different.
 - [ ] Customer patience bubbles + Go-Backs cart (Step 53/12)
 - [ ] Pre-shift pricing / Start Shift flow (Step 44/52)
 - [ ] Employees: hiring, Work Register / Stock Shelves tasks (Step 13-19)

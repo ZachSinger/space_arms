@@ -8,7 +8,7 @@ import { database } from "../scenes/boot.js"; // the exported DatabaseManager si
 // list of whatever's currently stocked. Any item can be added as long as there's room;
 // nothing needs to be pre-assigned/configured first.
 //
-// Used by both physical Fixtures (ShopInventory.js, drawn on the map) and the player's
+// Used by both physical StorageFixtures (ShopInventory.js, drawn on the map) and the player's
 // Hovercart (PlayerState.js) -- conceptually the exact same pool, just one is a place on
 // the map and one is "whatever the character is currently carrying" (bible: "an abstract
 // character/employee inventory size, not a physical moving entity").

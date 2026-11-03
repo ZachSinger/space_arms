@@ -24,8 +24,8 @@ export class PlayerState {
     this.activeLicenses = new Set(); // Stores IDs of signed licenses
 
     // The player's own carrying capacity -- same InventoryPool model as a physical
-    // Fixture (ShopInventory.js), just not drawn anywhere on the map. Lets stock be
-    // withdrawn from one fixture and deposited into another (see FixtureWindow).
+    // StorageFixture (ShopInventory.js), just not drawn anywhere on the map. Lets stock
+    // be withdrawn from one fixture and deposited into another (see FixtureWindow).
     this.hovercart = new InventoryPool({ capacity: HOVERCART_CAPACITY, stock: [] });
 
     this.listeners = [];

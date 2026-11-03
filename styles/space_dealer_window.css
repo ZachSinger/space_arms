@@ -699,6 +699,111 @@ button {
   cursor: not-allowed;
 }
 
+.fixture-add-item-btn {
+  margin: 10px 14px 0;
+  width: calc(100% - 28px);
+}
+
+.fixture-picker-back {
+  margin: 10px 10px 0;
+  width: calc(100% - 20px);
+}
+
+.fixture-picker-row {
+  cursor: pointer;
+}
+
+.fixture-placement-toolbar {
+  margin: 10px 14px 0;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #090d16;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 4px;
+}
+
+.fixture-placement-label {
+  flex: 1;
+  font-size: var(--font-size-11);
+  color: var(--color-text-main);
+}
+
+.fixture-placement-toolbar .action-btn {
+  padding: 4px 10px;
+  font-size: var(--font-size-10);
+}
+
+.fixture-placement-grid {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+}
+
+.fixture-cell {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border-radius: 3px;
+}
+
+.fixture-cell-empty {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed var(--color-border-subtle);
+}
+
+.fixture-cell-valid {
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px dashed #10b981;
+  cursor: pointer;
+}
+
+.fixture-cell-valid:hover {
+  background: rgba(16, 185, 129, 0.4);
+}
+
+.fixture-cell-occupied {
+  --bg-color: #090d16;
+  background: var(--scanline-pattern), var(--bg-color);
+  background-size:
+    100% 4px,
+    auto;
+  border: 1px solid var(--color-border-subtle);
+  padding: 4px;
+}
+
+.fixture-cell-unstocked {
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.fixture-cell-unstocked:hover {
+  border-color: var(--color-border-active);
+  opacity: 1;
+}
+
+.fixture-cell-image {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  object-fit: contain;
+}
+
+.fixture-cell-badge {
+  position: absolute;
+  right: 3px;
+  bottom: 2px;
+  font-size: var(--font-size-10);
+  font-weight: bold;
+  color: var(--color-text-main);
+  background: rgba(0, 0, 0, 0.7);
+  padding: 0 3px;
+  border-radius: 2px;
+}
+
 /* ================================================================= /
 / PERSISTENT HEADS UP DISPLAY (HUD)                                 /
 / ================================================================= */

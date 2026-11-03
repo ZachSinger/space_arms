@@ -2,7 +2,8 @@ import { WindowManager } from "../logic/WindowManager.js";
 import { ManagerTablet } from "../logic/ManagerTablet.js";
 import { PlayerState } from "../logic/PlayerState.js";
 import { HUDController } from "../logic/HUDController.js";
-import { Fixture } from "../logic/ShopInventory.js";
+import { StorageFixture } from "../logic/ShopInventory.js";
+import { ShelfFixture } from "../logic/ShelfFixture.js";
 import { Customer, SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT } from "../logic/Customer.js";
 import { Player } from "../logic/Player.js";
 import { Crate, INTERACT_RANGE } from "../logic/Crate.js";
@@ -161,35 +162,32 @@ export class GameScene extends Phaser.Scene {
 
     const shelfPosition = gridAlignedCenter(salesFloor, 1, 2, 3, 2);
 
-    this.fixture = new Fixture({
+    this.fixture = new ShelfFixture({
       id: "fixture_demo_01",
       displayType: "universal",
       x: shelfPosition.x,
       y: shelfPosition.y,
-      gridDimensions: { w: 3, h: 2 }, // just the physical footprint on the map
-      // Total storage capacity in abstract "slots" (see each item's own `slots` value in
-      // Items.json -- 1-5 depending on physical size). Not a grid of individually-
-      // assignable blocks; any item can be stocked here as long as there's room in this
-      // one shared pool. 30 comfortably covers the starting stock below (uses 23) with
-      // headroom to restock more before it's actually full.
-      capacity: 30,
-      // Several different items (not just one) so a customer's cart can actually contain
-      // a varied, multi-item haul -- see Customer.grabItems().
-      stock: [
-        { itemId: "wpn_rif_01", quantity: 4 },
-        { itemId: "wpn_rif_02", quantity: 2 },
-        { itemId: "wpn_rif_03", quantity: 3 },
-        { itemId: "wpn_pis_01", quantity: 5 },
-      ],
+      gridDimensions: { w: 3, h: 2 }, // physical footprint on the map, in tiles
+      // The item-placement grid (bible Steps 4/5/22): 4 columns x 2 rows the player
+      // manually places items into (Tarkov-style packing, using each item's own
+      // dimensions, optionally rotated) -- unrelated to the world-tile footprint above.
+      displayGrid: { w: 4, h: 2 },
+      // Depth/"stack" capacity (bible Step 5): NOT a shared pool -- each individual
+      // placement gets its own capacity, independently, from this stackDepth divided by
+      // that placement's own item's stackSize (see ShelfFixture.getPlacementCapacity).
+      stackDepth: 12,
+      placements: [], // starts completely empty; the player places everything by hand
     });
     this.drawFixture(this.fixture, "shelf_universal_01");
 
-    // Storage Fixture (bible Step 42: Backroom Storage) -- lives in the Storeroom, shares
-    // the exact same capacity-pool logic as the sales shelf (just not customer-facing).
-    // Starts completely empty; capacity 20 matches the size of pool most things will
-    // actually be tested against.
+    // Storage Fixture (bible Step 42: Backroom Storage) -- lives in the Storeroom. Unlike
+    // the sales shelf above, this uses the simple shared-capacity-pool model (any item
+    // fits anywhere there's room -- see InventoryPool.js) rather than manual grid
+    // placement; it's just a flexible overflow/staging area, not a real storefront
+    // display. Starts completely empty; capacity 20 matches the size of pool most things
+    // will actually be tested against.
     const storagePosition = gridAlignedCenter(storeroom, 1, 1, 3, 2);
-    this.storageFixture = new Fixture({
+    this.storageFixture = new StorageFixture({
       id: "storage_demo_01",
       displayType: "storage",
       x: storagePosition.x,
@@ -670,7 +668,7 @@ export class GameScene extends Phaser.Scene {
       this.showFloatingText(
         this.player.sprite.x,
         this.player.sprite.y - 40,
-        `No room left here for ${item.name}`,
+        `${item.name} can't be stocked here`,
         "#94a3b8",
       );
       return;
