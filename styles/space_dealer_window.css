@@ -506,6 +506,7 @@ button {
 }
 
 .layout-fixture-list {
+  flex: 1;
   padding: 10px;
   overflow-y: auto;
   min-height: 0;
@@ -543,6 +544,24 @@ button {
 .layout-fixture-row .action-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.fixture-section-title {
+  margin: 8px 0 2px;
+  color: var(--color-text-main);
+  font-size: var(--font-size-12);
+}
+
+.fixture-purchase-list {
+  padding: 0 10px 8px;
+  max-height: 160px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.layout-fixture-actions {
+  display: flex;
+  gap: 6px;
 }
 
 #fixture-placement-window [data-placement-status] {
@@ -638,6 +657,14 @@ button {
 .checkout-total {
   font-weight: bold;
   color: var(--color-text-main);
+}
+
+.checkout-footer .checkout-go-backs-btn {
+  margin-left: 12px;
+}
+
+.checkout-idle-hint {
+  flex: 1;
 }
 
 .checkout-payment.hidden {
@@ -785,6 +812,10 @@ button {
   align-items: center;
 }
 
+.go-backs-row {
+  cursor: pointer;
+}
+
 .fixture-transfer-btn {
   flex-shrink: 0;
   width: 60px;
@@ -916,6 +947,10 @@ button {
   height: 100%;
   image-rendering: pixelated;
   object-fit: contain;
+}
+
+.fixture-cell-sold-out .fixture-cell-image {
+  opacity: 0.35;
 }
 
 .fixture-cell-badge {

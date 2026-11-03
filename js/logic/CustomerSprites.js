@@ -35,10 +35,23 @@ function characterTextures(entry) {
   };
 }
 
-export function pickRandomCustomerCharacter() {
-  const entry = Phaser.Utils.Array.GetRandom(ROSTER);
+export function pickRandomCustomerCharacter(factionId) {
+  if (factionId !== undefined && factionId !== null &&
+    !Object.values(FACTION_IDS).includes(factionId)) {
+    throw new Error(`Unknown customer faction "${factionId}".`);
+  }
+  const candidates = factionId === undefined || factionId === null
+    ? ROSTER
+    : ROSTER.filter((entry) => FACTION_IDS[entry.faction] === factionId);
+  if (candidates.length === 0) {
+    throw new Error(`No customer sprites are available for faction "${factionId}".`);
+  }
+  const entry = Phaser.Utils.Array.GetRandom(candidates);
+  // Neutral customers reuse the available roster art, but retain a null game faction.
   return {
-    factionId: FACTION_IDS[entry.faction] || null,
+    factionId: factionId === undefined
+      ? FACTION_IDS[entry.faction] || null
+      : factionId,
     facingTextures: characterTextures(entry),
   };
 }

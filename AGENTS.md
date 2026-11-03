@@ -7,6 +7,7 @@ The project owner has severe ADHD and difficulty holding context across long res
 - Keep replies brief. One topic per response — don't combine multiple topics or go on tangents.
 - Avoid long, detail-heavy explanations spanning several subjects at once. If more detail is genuinely needed, offer it rather than dumping it by default.
 - Never answer indirectly or make the owner ask a follow-up just to get a plain yes/no/which-one answer.
+- Unless the user says otherwise, don't end at a dead end: continue unfinished requested work, or briefly suggest one concrete next step. If a decision is needed, ask one focused question instead.
 
 ## Project Overview
 
@@ -41,6 +42,7 @@ Design is specified in detail in `documentation/` — consult it before inventin
 ## Current State Gotchas (read before touching related code)
 
 - `SaveManager.js` is wired into the title/game scenes. Save only off-shift; Continue restores preparation state, not an active shift. `ShopSave.js` validates snapshots; fixture geometry must also pass `FixtureLayout.js` before restoration. Browser and Electron saves are separate.
-- The Manager's Tablet (`js/logic/ManagerTablet.js`) hosts Inventory, Contracts, Supply, Fixtures, and Layout content. Fixtures/Layout rearrange existing fixtures off-shift; buying new fixtures is not implemented. Employee, Finances, and Handbook remain placeholders.
+- Placed fixtures live only in `scene.fixtures` (`js/logic/FixtureRegistry.js`) — look them up there (`get`, `shelves()`, `stockHolders()`, `register()`, `displayName()`); never keep separate references. Types are in `FIXTURE_TYPES` (`FixtureLayout.js`).
+- The Manager's Tablet (`js/logic/ManagerTablet.js`) hosts Inventory, Contracts, Supply, Fixtures, and Layout content. Fixture purchases, licenses, fixture crates, placement, and empty-fixture crating use the fixture catalog and registry; rearrangement and crate-up are only available while closed. Employee, Finances, and Handbook remain placeholders.
 - `StoreItem` (`js/logic/Items.js`) does not capture the `license` field present on every entry in `data/Items.json` — add it if you're building contract-gated purchasing.
 - `SaveManager` requires subsystems to implement `serialize()` and `applySave(data)`. Preserve existing listeners when applying restored player state.

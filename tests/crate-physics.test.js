@@ -90,6 +90,26 @@ test("crate saving restores its contents, position, and in-flight velocity", () 
   assert.equal(restored.isThrown, true);
 });
 
+test("fixture crates preserve their fixture type", () => {
+  const scene = createScene();
+  const crate = new Crate(scene, null, 1, 100, 100, {
+    kind: "fixture",
+    typeId: "shelf_universal",
+  });
+  assert.deepEqual(crate.serializePayload(), {
+    kind: "fixture",
+    typeId: "shelf_universal",
+  });
+  assert.equal(crate.itemId, null);
+  assert.equal(crate.pickUp({ x: 120, y: 120, depth: 1 }), true);
+  crate.drop(120, 140, 80, 0, false);
+  assert.equal(crate.isThrown, true);
+  assert.deepEqual(crate.serializePayload(), {
+    kind: "fixture",
+    typeId: "shelf_universal",
+  });
+});
+
 test("picking up a stationary crate and dropping it preserves contents", () => {
   const scene = createScene();
   const crate = new Crate(scene, "item", 5, 100, 100);

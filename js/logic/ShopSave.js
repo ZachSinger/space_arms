@@ -1,4 +1,4 @@
-import { FIXTURE_SPECS } from "./FixtureLayout.js";
+import { getFixtureType, migrateFixtureEntry } from "./FixtureLayout.js";
 import { TILE_SIZE, ZONES, getTotalGridSize } from "./RoomLayout.js";
 import { MIN_BASE_RATIO, MAX_BASE_RATIO, MIN_SUPPLY_RATIO, MAX_SUPPLY_RATIO } from "./Market.js";
 
@@ -14,8 +14,11 @@ function integer(value, minimum = Number.MIN_SAFE_INTEGER) {
   return Number.isSafeInteger(value) && value >= minimum;
 }
 
+// Validates a shop save and returns it, with pre-fixture-type entries migrated.
 export function validateShopSave(data, database) {
   requireSave(isRecord(data), "missing shop state.");
+  requireSave(Array.isArray(data.fixtures) && data.fixtures.length > 0, "missing fixture layout.");
+  data = { ...data, fixtures: data.fixtures.map(migrateFixtureEntry) };
   const items = database.getAllItems();
   const itemById = new Map(items.map((item) => [item.id, item]));
   const stockCapacity = (stock, capacity) => {
@@ -45,6 +48,8 @@ export function validateShopSave(data, database) {
   ), "invalid store price.");
   requireSave(isRecord(player.hovercart) && player.hovercart.capacity === 10, "invalid hovercart.");
   stockCapacity(player.hovercart.stock, player.hovercart.capacity);
+  // Optional so saves from before the Go-Backs bin existed still load.
+  if (player.goBacks !== undefined) stockCapacity(player.goBacks, Infinity);
 
   const market = data.market;
   requireSave(isRecord(market) && integer(market.day, 1) &&
@@ -62,14 +67,12 @@ export function validateShopSave(data, database) {
       `invalid supplier rate for ${item.id}.`);
   }
 
-  requireSave(Array.isArray(data.fixtures) && data.fixtures.length === FIXTURE_SPECS.length,
-    "missing fixture layout.");
   const fixtureIds = new Set();
   for (const entry of data.fixtures) {
-    const spec = FIXTURE_SPECS.find((candidate) => candidate.id === entry?.id);
-    requireSave(spec && !fixtureIds.has(spec.id) && integer(entry.gx, 0) && integer(entry.gy, 0),
-      "invalid fixture position.");
-    fixtureIds.add(spec.id);
+    const spec = getFixtureType(entry?.type);
+    requireSave(spec && typeof entry.id === "string" && !fixtureIds.has(entry.id) &&
+      integer(entry.gx, 0) && integer(entry.gy, 0), "invalid fixture position.");
+    fixtureIds.add(entry.id);
     if (spec.kind === "storage") stockCapacity(entry.stock, spec.capacity);
     if (spec.kind === "shelf") {
       requireSave(Array.isArray(entry.placements), "missing shelf contents.");
@@ -78,7 +81,7 @@ export function validateShopSave(data, database) {
         const item = itemById.get(placement?.itemId);
         requireSave(item && typeof placement.rotated === "boolean" &&
           integer(placement.gx, 0) && integer(placement.gy, 0) &&
-          integer(placement.quantity, 1), "invalid shelf stack.");
+          integer(placement.quantity, 0), "invalid shelf stack.");
         const w = placement.rotated ? item.dimensions.h : item.dimensions.w;
         const h = placement.rotated ? item.dimensions.w : item.dimensions.h;
         requireSave(placement.w === w && placement.h === h &&
@@ -100,9 +103,16 @@ export function validateShopSave(data, database) {
     data.unlockedZones.every((id) => ZONES.some((zone) => zone.id === id)) &&
     ZONES.filter((zone) => !zone.locked).every((zone) => data.unlockedZones.includes(zone.id)),
   "invalid unlocked rooms.");
-  const validateCrateContents = (crate) => requireSave(
-    isRecord(crate) && itemById.has(crate.itemId) && integer(crate.quantity, 1), "invalid crate contents.",
-  );
+  const validateCrateContents = (crate) => {
+    requireSave(isRecord(crate), "invalid crate contents.");
+    const kind = crate.kind ?? "item";
+    if (kind === "fixture") {
+      requireSave(getFixtureType(crate.typeId), "unknown fixture crate.");
+      return;
+    }
+    requireSave(kind === "item" && itemById.has(crate.itemId) &&
+      integer(crate.quantity, 1), "invalid crate contents.");
+  };
   const { gridW, gridH } = getTotalGridSize();
   requireSave(Array.isArray(data.crates), "missing crates.");
   for (const crate of data.crates) {

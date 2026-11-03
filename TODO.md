@@ -99,13 +99,10 @@ notice something that needs doing but isn't being done right now.
       `showFloatingText` itself more legible generally: bigger bold font, and it now holds
       fully visible for a beat before fading, instead of starting to fade immediately on
       spawn.
-- [x] ~~Manual pause (P key / HUD button) only froze the displayed clock -- customers (and
-      the spawn timer) kept moving/spawning~~ -- `GameScene.update()` now skips
-      `player.update()`/`customer.update()` entirely and zeroes velocity while
-      `shiftClock.isPaused && shiftClock.started`, and `spawnTimer.paused` is now
-      continuously synced to the clock's actual running state (manually paused, soft-
-      closed, or the very first shift not yet started) instead of a one-way flag that only
-      ever got set by soft-close.
+- [x] ~~Manual pause (P key / HUD button) only froze the displayed clock -- customers and
+      arrivals kept moving/spawning~~ -- `GameScene.update()` now skips player/customer
+      updates while a started shift is paused, and scheduled arrivals use the paused shift
+      clock so they stop until the shift resumes.
 - [x] ~~Image-only checkout cards had no card frame at all, just a floating image with a
       hover glow~~ -- the image-only change (previous round) was only supposed to drop the
       name/price text and the small separate icon box, not the card's own bordered/
@@ -164,11 +161,12 @@ notice something that needs doing but isn't being done right now.
       Loading Pad, carried, or dropped). Stock totals all placements on sales shelves,
       including stacks temporarily lifted in move mode. Counts refresh on transfers,
       ordering/delivery, and customers taking shelf stock; zero-total items disappear.
-- [x] Q drops the carried crate without unpacking it; moving when dropping throws it in
-      the movement direction. Crates slow to a stop and bounce off walls and fixtures
+- [x] Space picks up a nearby stopped crate, or drops the carried crate without unpacking
+      it; moving when dropping throws it in the movement direction. Crates slow to a stop
+      and bounce off walls and fixtures
       (including the register), without blocking players or customers. Their motion pauses
-      with the shift. E can pick them up again once their velocity reaches zero, including
-      partially emptied crates.
+      with the shift. Space can pick them up again once their velocity reaches zero,
+      including partially emptied crates.
 - [x] Thrown crates hitting customers cost 1 store reputation and 1 reputation with the
       customer's faction, if any. Faction membership currently follows the character's
       sprite group; other groups are neutral. Each customer can be hit once per throw,
@@ -180,7 +178,7 @@ notice something that needs doing but isn't being done right now.
 - [x] Procurement MVP (Step 10): a `loading_pad` RoomLayout zone, a `Crate` class, and a
       real Supply tab (`SupplyRenderer.js`) that orders more stock for whatever the one
       demo fixture already sells. Ordering spends credits and spawns a crate at the
-      Loading Pad; press E near it to pick it up, carry it to the shelf, press E again to
+      Loading Pad; press Space near it to pick it up, carry it to the shelf, press E to
       deliver (restocks that item). Deliberately simplified vs. the bible's full vision --
       logged below, not yet built:
   - [x] ~~No backroom intermediate storage stage yet -- crates go straight from the Loading
@@ -266,7 +264,20 @@ notice something that needs doing but isn't being done right now.
       actually unified into one shared concept -- duck-typed to the same small public API
       (`stock`/`add`/`remove`/`getRemainingUnitsFor`/etc.) so GameScene and FixtureWindow
       can treat both generically, but the internal models remain genuinely different.
-- [ ] Customer patience bubbles + Go-Backs cart (Step 53/12)
+- [x] Customer patience bubbles + Go-Backs bin (Step 53/12/51): queued customers show a
+      colored bubble (green `...` > yellow `!` > red `!!`) as their 40s real-time patience
+      (`PATIENCE_MS` in Customer.js) drains; it pauses with the game and while the player is
+      ringing that customer up, and each completed sale resets the next in line. At zero they
+      leave angry (-1 store rep, -1 faction rep) and their cart goes to the unlimited
+      `PlayerState.goBacks` bin (saved, counted as owned stock). The bin is its own window,
+      opened from the register UI's GO-BACKS BIN button (the register now shows an idle view
+      when nobody's in line). Clicking a bin item loads 1 into the hovercart -- the only way
+      out of the bin.
+- [ ] Consider a separate Go-Backs minigame: scan go-backs items before they can be loaded
+      into the hovercart.
+- [ ] Inventory gap: items in a customer's cart (taken off the shelf, not yet sold or sent
+      to Go-Backs) aren't counted in Inventory totals anywhere. Decide how to show them
+      (e.g. an "in carts" count).
 - [x] Item pricing (Step 52): `Market.js` keeps each item's hidden base (`baseCost`) and a
       galactic market price that moves up to ±10% per day at End Day, clamped to 50%-200%
       of base. Inventory tab shows MARKET and an editable PRICE (defaults to market when
@@ -279,14 +290,31 @@ notice something that needs doing but isn't being done right now.
       market" (current avg market price).
 - [ ] Pre-shift Start Shift onboarding flow (Step 44)
 - [ ] Employees: hiring, Work Register / Stock Shelves tasks (Step 13-19)
-- [ ] Purchasing additional fixtures (Step 22/41; existing-fixture rearrangement is built)
-- [ ] Factions: Scavengers/Mercenaries/Explorers demand & reputation (Step 24-28, 49, 51)
+- [x] Fixture purchasing, fixture crates, off-shift placement/crating, and fixture licenses
+      (Steps 22/41; fixture catalog in `js/logic/FixtureLayout.js`).
+- [ ] Sell fixtures back for partial credit (after fixture purchasing/crating is built)
+- [x] MVP faction customer buy lists (Steps 12, 25-28): primary items come from assigned
+      shelf slots (including sold-out slots); customers visit multiple shelves, penalize
+      once for missing primary stock, and leave if none of their primary items are in stock.
+      Bonus items are randomized and missing bonus stock is free. Mercenaries seek matching
+      ammo and avoid duplicate weapon types; Explorers pick Primaries from Tools and Survival gear equally;
+      Scavengers get more impulse buys. Current fixed list sizes: neutral 1 Primary/0-2
+      Bonus, Scavengers 1/2-3, Mercenaries 2/0-1, Explorers 1/0-2.
+- [ ] Tune CustomerBuyLists.js reputation thresholds for expanding Primary list sizes after
+      reputation gains/losses have been observed over multiple playtested shifts. Counts are
+      intentionally fixed and small for now.
+- [x] Reputation-driven customer pooling (Steps 24/49): customer counts and faction
+      mix are calculated once at shift start, with licensed factions represented and
+      arrivals scheduled across the shift. Tune traffic/reputation curves after playtesting.
+- [ ] Remaining faction systems: faction-specific currencies (Steps 25-28).
+- [x] Faction sale reputation (Step 51): a completed sale gives +1 store rep and +1 rep
+      with the customer's faction. Rewards and penalties apply independently, when each happens.
 - [x] Manager's Tablet UI: unified tabbed window shell built (`js/logic/ManagerTablet.js`),
       Inventory + Contracts + Supply + Fixtures + Layout tabs have real content.
       Remaining tabs (Employee, Finances, Handbook) still show a "COMING SOON" placeholder
       until each one's own system exists -- see below.
 - [ ] Employee tab: needs the Employee/Hiring system to exist first (Step 13-19 above)
-- [x] Fixtures tab: move existing fixtures; purchasing additional fixtures remains future work.
+- [x] Fixtures tab: purchase licensed fixtures, place/crate fixtures, and move existing fixtures.
 - [x] Layout tab: safe off-shift fixture placement with autosave status (Step 63)
 - [ ] Finances tab: needs the End Day / itemized receipt flow to exist first (Step 43)
 - [ ] Handbook tab: needs actual handbook/reference content written (Step 36)

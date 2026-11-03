@@ -21,13 +21,13 @@ const CHECKOUT_WIDTH_VW = 32;
 const RIGHT_MARGIN_PX = 24;
 
 // Mock of the bible's Step 54/55 checkout flow (card payment only for now; cash/change-owed
-// and the patience/Go-Backs systems are a later pass). Items scatter randomly around the
+// is a later pass). Items scatter randomly around the
 // window; the player scans each one by clicking it, or by holding the mouse button down and
 // dragging the cursor across several cards in a row. Each scan beeps and slides the card into
 // the bag. Once every item is scanned, a numpad appears and the player must type the exact
 // total to complete the sale.
 export class CheckoutWindow {
-  constructor(windowManager) {
+  constructor(windowManager, playerState, onOpenGoBacks) {
     // Pinned to the right edge of the screen (rather than the old fixed x:400, which sat
     // over the middle of the shop floor) so it doesn't cover the customer queue/shelf area
     // -- that's the view that actually needs to stay visible while customers are on screen.
@@ -50,6 +50,12 @@ export class CheckoutWindow {
       ".retro-window-body",
     );
     this.onComplete = null;
+    this.mode = null; // "checkout" while ringing up a cart, "idle" with nobody to serve
+    this.playerState = playerState;
+    this.bodyElement.addEventListener("click", (event) => {
+      if (event.target.closest("[data-open-go-backs]")) onOpenGoBacks?.();
+    });
+    playerState?.subscribe(() => this.updateGoBacksCount());
     this.isScanning = false;
     this.paymentBuffer = "";
     this.total = 0;
@@ -95,7 +101,23 @@ export class CheckoutWindow {
     }
   }
 
+  updateGoBacksCount() {
+    const countElement = this.bodyElement.querySelector("[data-go-backs-count]");
+    if (!countElement || !this.playerState) return;
+    const units = this.playerState.goBacks.stock.reduce((sum, entry) => sum + entry.quantity, 0);
+    countElement.textContent = String(units);
+  }
+
+  openIdle() {
+    this.mode = "idle";
+    this.onComplete = null;
+    this.bodyElement.innerHTML = CheckoutRenderer.generateIdleHTML();
+    this.updateGoBacksCount();
+    this.uiWindow.openWindow();
+  }
+
   openForCustomer(cart, onComplete) {
+    this.mode = "checkout";
     this.onComplete = onComplete;
     this.paymentBuffer = "";
     this.total = cart.reduce((sum, entry) => sum + entry.price, 0);
@@ -104,6 +126,7 @@ export class CheckoutWindow {
       cart,
       database,
     );
+    this.updateGoBacksCount();
     // Open the window before scattering cards: the scatter zone needs real, laid-out
     // dimensions (clientWidth/clientHeight), which read as 0 while the window still has
     // its "hidden" class applied, collapsing every card onto the same (0, 0) spot.

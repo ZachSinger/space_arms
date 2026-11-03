@@ -10,6 +10,17 @@ import { database } from "../scenes/boot.js"; // the exported DatabaseManager si
 // drag (move the stack) rather than a click (stock 1 into it).
 const DRAG_THRESHOLD_PX = 6;
 
+// Short floating message at the cursor (e.g. "No Space In Hovercart").
+export function showPopupText(x, y, text) {
+  const popup = document.createElement("div");
+  popup.className = "fixture-popup-text";
+  popup.textContent = text;
+  popup.style.left = `${x}px`;
+  popup.style.top = `${y}px`;
+  document.body.appendChild(popup);
+  popup.addEventListener("animationend", () => popup.remove());
+}
+
 // One shared window reused for whichever fixture the player currently has open (the shelf
 // or a Storage Fixture) -- same idea as there only ever being one CheckoutWindow, just
 // re-targeted/re-titled per open() call rather than one instance per fixture. Renders
@@ -90,8 +101,8 @@ export class FixtureWindow {
     if (moving) this.playerState.notifyListeners();
   }
 
-  // Right-click a shelf placement: pull 1 unit into the hovercart (the placement clears
-  // itself once its last unit is gone -- see ShelfFixture.pruneEmptyPlacements).
+  // Right-click a shelf placement: pull 1 unit into the hovercart. Right-clicking a slot
+  // that's already empty removes the slot itself (the only way a slot is ever removed).
   handleContextMenu(event) {
     if (!this.isShelf()) return;
     const cell = event.target.closest("[data-placement-index]");
@@ -100,6 +111,14 @@ export class FixtureWindow {
 
     const placement = this.fixture.placements[Number(cell.dataset.placementIndex)];
     if (!placement) return;
+
+    if (placement.quantity <= 0) {
+      if (this.fixture.removeEmptyPlacement(placement)) {
+        this.render();
+        this.playerState.notifyListeners();
+      }
+      return;
+    }
 
     const hovercart = this.playerState.hovercart;
     if (hovercart.getRemainingUnitsFor(placement.itemId) <= 0) {
@@ -116,13 +135,7 @@ export class FixtureWindow {
   }
 
   showPopupText(x, y, text) {
-    const popup = document.createElement("div");
-    popup.className = "fixture-popup-text";
-    popup.textContent = text;
-    popup.style.left = `${x}px`;
-    popup.style.top = `${y}px`;
-    document.body.appendChild(popup);
-    popup.addEventListener("animationend", () => popup.remove());
+    showPopupText(x, y, text);
   }
 
   // Phaser's input manager listens for mousedown at the *window* level, not just on the

@@ -1,9 +1,8 @@
 // ==========================================
 // FILE: Crate.js
 // ==========================================
-// A physical, hauled unit of ordered stock (bible Step 10: "Ordered stock spawns as
-// physical crates on an outdoor Loading Pad. Crates must be hauled inside via chained
-// anchor pathfinding"). For now the player uses E to pick up/deliver and Q to drop.
+// A physical cargo crate for ordered stock or one fixture. Item crates are delivered to
+// stock holders; fixture crates are carried and placed through FixturePlacement.
 const CRATE_DISPLAY_SIZE = 40;
 const CRATE_THROW_MULTIPLIER = 1.5;
 const CRATE_DRAG = 180;
@@ -15,19 +14,25 @@ const DROP_SEARCH_STEP = 8;
 // trigger from across the room.
 export const INTERACT_RANGE = 56;
 const DROP_SEARCH_RADIUS = INTERACT_RANGE - DROP_SEARCH_STEP;
+const FIXTURE_CRATE_DISPLAY_SIZE = 48;
 
 export class Crate {
-  constructor(scene, itemId, quantity, x, y) {
+  constructor(scene, itemId, quantity, x, y, { kind = "item", typeId = null } = {}) {
     this.scene = scene;
-    this.itemId = itemId;
-    this.quantity = quantity;
+    this.kind = kind;
+    this.typeId = kind === "fixture" ? typeId : null;
+    this.itemId = kind === "item" ? itemId : null;
+    this.quantity = kind === "item" ? quantity : 1;
     this.isCarried = false;
     this.isThrown = false;
     this.hitCustomers = new Set();
 
     this.sprite = scene.add
-      .image(x, y, "crate_closed_01")
-      .setDisplaySize(CRATE_DISPLAY_SIZE, CRATE_DISPLAY_SIZE)
+      .image(x, y, kind === "fixture" ? "fixture_crate_01" : "crate_closed_01")
+      .setDisplaySize(
+        kind === "fixture" ? FIXTURE_CRATE_DISPLAY_SIZE : CRATE_DISPLAY_SIZE,
+        kind === "fixture" ? FIXTURE_CRATE_DISPLAY_SIZE : CRATE_DISPLAY_SIZE,
+      )
       .setDepth(2);
 
     scene.crateGroup.add(this.sprite);
@@ -141,13 +146,18 @@ export class Crate {
 
   serialize() {
     return {
-      itemId: this.itemId,
-      quantity: this.quantity,
+      ...this.serializePayload(),
       x: this.sprite.x,
       y: this.sprite.y,
       velocityX: this.sprite.body.velocity.x,
       velocityY: this.sprite.body.velocity.y,
     };
+  }
+
+  serializePayload() {
+    return this.kind === "fixture"
+      ? { kind: "fixture", typeId: this.typeId }
+      : { kind: "item", itemId: this.itemId, quantity: this.quantity };
   }
 
   applySave(data) {

@@ -1,5 +1,14 @@
 [
   {
+    "id": "lic_fixture_basics",
+    "name": "Basic Fixture Supply",
+    "description": "A starter contract for standard shelves, lockers, and checkout registers.",
+    "tier": 1,
+    "baseCost": 0,
+    "reqReputation": 0,
+    "unlocksFixtures": ["shelf_universal", "locker_single", "register_basic"]
+  },
+  {
     "id": "lic_start_surplus",
     "name": "Scrap-Yard Ballistics Contract",
     "description": "A handshake deal with local scavengers. Provides a steady stream of highly questionable, unregistered firearms.",

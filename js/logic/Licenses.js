@@ -8,6 +8,7 @@ export class SupplierLicense {
     this.reqReputation = data.reqReputation;
     this.reqFaction = data.reqFaction || null;
     this.reqFactionRep = data.reqFactionRep || 0;
+    this.unlocksFixtures = data.unlocksFixtures || [];
   }
 
   /**

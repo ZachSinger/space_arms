@@ -3,7 +3,7 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { SaveManager, createSaveStorage, SAVE_STORAGE_KEY } from "../SaveManager.js";
 import { DatabaseManager } from "../js/logic/DatabaseManager.js";
-import { FIXTURE_SPECS } from "../js/logic/FixtureLayout.js";
+import { STARTING_FIXTURES, getFixtureType } from "../js/logic/FixtureLayout.js";
 import { Market } from "../js/logic/Market.js";
 import { validateShopSave } from "../js/logic/ShopSave.js";
 
@@ -18,14 +18,15 @@ function snapshot() {
       factionReputation: { scavengers: 0, mercenaries: -1, explorers: 3 },
       activeLicenses: ["lic_corp_aulin"], storePrices: { wpn_rif_01: 123 },
       hovercart: { capacity: 10, stock: [{ itemId: "amo_01", quantity: 2 }] },
+      goBacks: [{ itemId: "wpn_rif_01", quantity: 40 }],
     },
     market: new Market(database.getAllItems(), () => 0.5).serialize(),
-    fixtures: FIXTURE_SPECS.map(({ id, gx, gy, kind }) => ({
-      id, gx, gy,
-      ...(kind === "shelf" ? { placements: [{
+    fixtures: STARTING_FIXTURES.map(({ id, type, gx, gy }) => ({
+      id, type, gx, gy,
+      ...(getFixtureType(type).kind === "shelf" ? { placements: [{
         itemId: "wpn_rif_01", gx: 0, gy: 0, w: 2, h: 1, rotated: false, quantity: 3,
       }] } : {}),
-      ...(kind === "storage" ? { stock: [{ itemId: "srv_01", quantity: 5 }] } : {}),
+      ...(getFixtureType(type).kind === "storage" ? { stock: [{ itemId: "srv_01", quantity: 5 }] } : {}),
     })),
     unlockedZones: ["storeroom", "sales_floor", "loading_pad"],
     crates: [{ itemId: "wpn_rif_01", quantity: 5, x: 192, y: 640, velocityX: 120, velocityY: 0 }],
@@ -97,13 +98,44 @@ test("invalid saved inventory and economy are rejected before restoration", () =
     (data) => { data.fixtures[0].placements.push({ ...data.fixtures[0].placements[0] }); },
     (data) => { data.fixtures[1].stock[0].itemId = "unknown"; },
     (data) => { data.fixtures[1].gx = 1.5; },
+    (data) => { data.fixtures[1].type = "unknown"; },
+    (data) => { data.fixtures[1].id = data.fixtures[0].id; },
     (data) => { data.unlockedZones = []; },
     (data) => { data.crates[0].quantity = 0; },
     (data) => { data.carriedCrate.itemId = "unknown"; },
+    (data) => { data.playerState.goBacks[0].itemId = "unknown"; },
+    (data) => { data.playerState.goBacks[0].quantity = 0; },
+    (data) => { data.playerState.goBacks = {}; },
   ];
   for (const corrupt of corruptions) {
     const data = snapshot();
     corrupt(data);
     assert.throws(() => validateShopSave(data, database), /Invalid saved game/);
   }
+});
+
+test("saves from before the Go-Backs bin existed still load", () => {
+  const data = snapshot();
+  delete data.playerState.goBacks;
+  assert.doesNotThrow(() => validateShopSave(data, database));
+});
+
+test("saves from before fixture types existed load with types filled in", () => {
+  const legacy = snapshot();
+  for (const entry of legacy.fixtures) delete entry.type;
+  const migrated = validateShopSave(legacy, database);
+  assert.deepEqual(migrated.fixtures, snapshot().fixtures);
+  assert.equal(legacy.fixtures[0].type, undefined);
+});
+
+test("fixture crates can be saved on the floor or carried", () => {
+  const data = snapshot();
+  data.crates.push({
+    kind: "fixture", typeId: "shelf_universal", x: 320, y: 640, velocityX: 0, velocityY: 0,
+  });
+  data.carriedCrate = { kind: "fixture", typeId: "locker_single" };
+  assert.deepEqual(validateShopSave(data, database), data);
+
+  data.carriedCrate.typeId = "unknown";
+  assert.throws(() => validateShopSave(data, database), /unknown fixture crate/);
 });

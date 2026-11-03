@@ -1,23 +1,41 @@
 import { getReachableGridCells } from "./Pathfinder.js";
 import { TILE_SIZE, getTotalGridSize } from "./RoomLayout.js";
 
-export const FIXTURE_SPECS = [
-  { id: "fixture_demo_01", name: "SHELF", kind: "shelf", gx: 7, gy: 2, w: 3, h: 2,
-    texture: "shelf_universal_01", displayGrid: { w: 4, h: 2 }, stackDepth: 12 },
-  ...[1, 2, 3].map((number) => ({
-    id: `storage_demo_0${number}`, name: `LOCKER ${number}`, kind: "storage",
-    gx: number, gy: 1, w: 1, h: 2, texture: "locker_single", capacity: 20,
-  })),
-  { id: "register", name: "REGISTER", kind: "register", gx: 12, gy: 2, w: 2, h: 2,
-    texture: "register_01" },
+// The fixture catalog: what each *type* of fixture is. Placed fixtures are instances
+// ({ id, type, gx, gy }) owned by FixtureRegistry.
+export const FIXTURE_TYPES = {
+  shelf_universal: { id: "shelf_universal", name: "SHELF", kind: "shelf", w: 3, h: 2,
+    texture: "shelf_universal_01", displayGrid: { w: 4, h: 2 }, stackDepth: 12,
+    price: 300, licenseId: "lic_fixture_basics" },
+  locker_single: { id: "locker_single", name: "LOCKER", kind: "storage", w: 1, h: 2,
+    texture: "locker_single", capacity: 20, price: 180, licenseId: "lic_fixture_basics" },
+  register_basic: { id: "register_basic", name: "REGISTER", kind: "register", w: 2, h: 2,
+    texture: "register_01", price: 500, licenseId: "lic_fixture_basics" },
+};
+
+// A new game's layout. These instance ids predate fixture types, so saves made before
+// types existed (entries without a `type`) are migrated through this list.
+export const STARTING_FIXTURES = [
+  { id: "fixture_demo_01", type: "shelf_universal", gx: 7, gy: 2 },
+  { id: "storage_demo_01", type: "locker_single", gx: 1, gy: 1 },
+  { id: "storage_demo_02", type: "locker_single", gx: 2, gy: 1 },
+  { id: "storage_demo_03", type: "locker_single", gx: 3, gy: 1 },
+  { id: "register", type: "register_basic", gx: 12, gy: 2 },
 ];
 
-export function getFixtureSpec(id) {
-  return FIXTURE_SPECS.find((spec) => spec.id === id);
+export function getFixtureType(typeId) {
+  return Object.hasOwn(FIXTURE_TYPES, typeId) ? FIXTURE_TYPES[typeId] : undefined;
+}
+
+// Fills in `type` for entries saved before fixture types existed.
+export function migrateFixtureEntry(entry) {
+  if (!entry || typeof entry !== "object" || entry.type !== undefined) return entry;
+  const legacy = STARTING_FIXTURES.find((fixture) => fixture.id === entry.id);
+  return legacy ? { ...entry, type: legacy.type } : entry;
 }
 
 export function fixtureCells(placement) {
-  const spec = getFixtureSpec(placement.id);
+  const spec = getFixtureType(placement.type);
   const cells = [];
   for (let y = 0; y < spec.h; y += 1) {
     for (let x = 0; x < spec.w; x += 1) {
@@ -28,7 +46,7 @@ export function fixtureCells(placement) {
 }
 
 export function fixtureAccessCells(placement, behind = false) {
-  const spec = getFixtureSpec(placement.id);
+  const spec = getFixtureType(placement.type);
   return Array.from({ length: spec.w }, (_, x) => ({
     gx: placement.gx + x,
     gy: behind ? placement.gy - 1 : placement.gy + spec.h,
@@ -44,17 +62,16 @@ export function validateFixtureLayout(placements, {
   gridSize = getTotalGridSize(), queueSize = 6,
 }) {
   const invalid = (reason) => ({ valid: false, reason });
-  if (!Array.isArray(placements) || placements.length !== FIXTURE_SPECS.length) {
-    return invalid("The layout must contain all existing fixtures.");
-  }
+  if (!Array.isArray(placements)) return invalid("The fixture layout is invalid.");
   const ids = new Set();
   const blockedCells = new Set();
   for (const placement of placements) {
-    const spec = getFixtureSpec(placement?.id);
-    if (!spec || ids.has(spec.id) || !Number.isInteger(placement.gx) || !Number.isInteger(placement.gy)) {
+    const spec = getFixtureType(placement?.type);
+    if (!spec || typeof placement.id !== "string" || ids.has(placement.id) ||
+      !Number.isInteger(placement.gx) || !Number.isInteger(placement.gy)) {
       return invalid("The fixture layout is invalid.");
     }
-    ids.add(spec.id);
+    ids.add(placement.id);
     for (const cell of fixtureCells(placement)) {
       const key = cellKey(cell);
       if (!isWalkable(cell.gx, cell.gy)) return invalid("Place fixtures on unlocked floor, away from walls.");
@@ -71,19 +88,22 @@ export function validateFixtureLayout(placements, {
       return invalid("Move the player or crate out of the way first.");
     }
   }
+  // Customers only support one checkout line for now.
+  const registers = placements.filter((placement) => getFixtureType(placement.type).kind === "register");
+  if (registers.length !== 1) return invalid("The shop needs exactly one register.");
   const canWalk = (gx, gy) => isWalkable(gx, gy) && !blockedCells.has(`${gx},${gy}`);
   const reachable = new Set(getReachableGridCells(entrance, canWalk).map(cellKey));
   const access = new Map();
   const otherAccessCells = new Set();
   for (const placement of placements) {
+    const isRegister = placement === registers[0];
     const front = fixtureAccessCells(placement);
-    const required = placement.id === "register"
-      ? [...front, ...fixtureAccessCells(placement, true)] : front;
+    const required = isRegister ? [...front, ...fixtureAccessCells(placement, true)] : front;
     if (required.some((cell) => !reachable.has(cellKey(cell)))) {
-      return invalid(`Keep the front${placement.id === "register" ? " and back" : ""} of ${getFixtureSpec(placement.id).name} accessible.`);
+      return invalid(`Keep the front${isRegister ? " and back" : ""} of ${getFixtureType(placement.type).name} accessible.`);
     }
     access.set(placement.id, front[Math.floor(front.length / 2)]);
-    if (placement.id !== "register") front.forEach((cell) => otherAccessCells.add(cellKey(cell)));
+    if (!isRegister) front.forEach((cell) => otherAccessCells.add(cellKey(cell)));
   }
   for (let gy = 0; gy < gridSize.gridH; gy += 1) {
     for (let gx = 0; gx < gridSize.gridW; gx += 1) {
@@ -92,7 +112,7 @@ export function validateFixtureLayout(placements, {
       }
     }
   }
-  const queueStart = access.get("register");
+  const queueStart = access.get(registers[0].id);
   const queueCells = getReachableGridCells(queueStart, (gx, gy) =>
     gy >= queueStart.gy && canWalk(gx, gy) &&
     !reservedCells.has(`${gx},${gy}`) && !otherAccessCells.has(`${gx},${gy}`),

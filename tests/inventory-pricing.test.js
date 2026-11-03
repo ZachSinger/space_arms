@@ -182,7 +182,8 @@ function createHarness() {
     },
     getRestockableItems: () => [],
     canRearrangeFixtures: () => false,
-    getFixtureLayout: () => [],
+    getFixturePurchaseOptions: () => [],
+    fixtures: { all: () => [], displayName: () => "" },
   };
   const tablet = new ManagerTablet({}, playerState, scene);
   const click = (itemId, action) => {

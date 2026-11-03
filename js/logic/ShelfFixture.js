@@ -82,7 +82,7 @@ export class ShelfFixture {
 
   // Places a new instance of itemId at the given anchor cell, already holding 1 unit (the
   // caller is responsible for having taken that unit from somewhere, e.g. the hovercart)
-  // -- a placement never exists at 0 stock. Returns the new placement, or null if it
+  // -- a new placement never starts at 0 stock. Returns the new placement, or null if it
   // doesn't fit there or can't hold even a single unit.
   placeItem(itemId, gx, gy, rotated = false) {
     const item = database.getItem(itemId);
@@ -118,10 +118,12 @@ export class ShelfFixture {
     return true;
   }
 
-  // A placement that hits 0 stock frees its grid cells immediately -- there's no such
-  // thing as an empty "0/X" placement sitting on the shelf.
-  pruneEmptyPlacements() {
-    this.placements = this.placements.filter((p) => p.quantity > 0);
+  // A sold-out slot keeps its spot (and its item assignment) until the player deliberately
+  // removes it. Only an empty slot can be removed. Returns whether it was.
+  removeEmptyPlacement(placement) {
+    if (!placement || placement.quantity > 0 || !this.placements.includes(placement)) return false;
+    this.placements = this.placements.filter((p) => p !== placement);
+    return true;
   }
 
   // --- The rest of this mirrors InventoryPool's own public API exactly (see its own
@@ -138,7 +140,6 @@ export class ShelfFixture {
   takeItem(placement) {
     if (!placement || placement.quantity <= 0) return null;
     placement.quantity -= 1;
-    this.pruneEmptyPlacements();
     return placement.itemId;
   }
 
@@ -188,7 +189,6 @@ export class ShelfFixture {
       placement.quantity -= removed;
       remaining -= removed;
     }
-    this.pruneEmptyPlacements();
     return quantity - remaining;
   }
 

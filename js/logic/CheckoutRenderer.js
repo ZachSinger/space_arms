@@ -37,6 +37,7 @@ export class CheckoutRenderer {
       </div>
       <div class="checkout-footer">
         <span class="checkout-total">TOTAL: <span id="checkout-total-value">0c</span></span>
+        ${this.goBacksButtonHTML()}
       </div>
       <div class="checkout-payment hidden" id="checkout-payment">
         <div class="checkout-payment-prompt">ENTER EXACT AMOUNT DUE</div>
@@ -50,5 +51,18 @@ export class CheckoutRenderer {
         <div class="checkout-payment-feedback" id="checkout-payment-feedback"></div>
       </div>
     `;
+  }
+
+  // Shown while the player is behind the counter with nobody to ring up.
+  static generateIdleHTML() {
+    return `
+      <div class="fixture-empty-hint checkout-idle-hint">No customer at the register.</div>
+      <div class="checkout-footer">${this.goBacksButtonHTML()}</div>
+    `;
+  }
+
+  // Count is filled in by CheckoutWindow.updateGoBacksCount().
+  static goBacksButtonHTML() {
+    return `<button class="action-btn checkout-go-backs-btn" data-open-go-backs>GO-BACKS BIN (<span data-go-backs-count>0</span>)</button>`;
   }
 }

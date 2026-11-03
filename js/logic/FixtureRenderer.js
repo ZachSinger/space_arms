@@ -205,12 +205,14 @@ export class FixtureRenderer {
     const index = shelfFixture.placements.indexOf(placement);
     const interactiveAttr = pendingPlacement ? "" : `data-placement-index="${index}"`;
     const interactiveClass = pendingPlacement ? "" : " fixture-cell-interactive";
+    const emptyClass = placement.quantity <= 0 ? " fixture-cell-sold-out" : "";
+    const rightClickHint = placement.quantity <= 0 ? "remove empty slot" : "take 1";
 
     return `
-      <div class="fixture-cell fixture-cell-occupied${interactiveClass}"
+      <div class="fixture-cell fixture-cell-occupied${interactiveClass}${emptyClass}"
         style="grid-column: ${placement.gx + 1} / span ${placement.w}; grid-row: ${placement.gy + 1} / span ${placement.h};"
         ${interactiveAttr}
-        title="${item.name}${pendingPlacement ? "" : " (click: stock 1, drag: move stack, right-click: take 1)"}">
+        title="${item.name}${pendingPlacement ? "" : ` (click: stock 1, drag: move stack, right-click: ${rightClickHint})`}">
         ${imageHTML}
         <span class="fixture-cell-badge">${placement.quantity}/${capacity}</span>
       </div>

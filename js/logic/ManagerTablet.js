@@ -88,6 +88,14 @@ export class ManagerTablet {
       const moveButton = event.target.closest("[data-move-fixture-id]");
       if (moveButton) this.scene.fixturePlacement.begin(moveButton.dataset.moveFixtureId);
 
+      const buyFixtureButton = event.target.closest("[data-buy-fixture-id]");
+      if (buyFixtureButton && !this.scene.buyFixture(buyFixtureButton.dataset.buyFixtureId)) {
+        this.scene.showShopMessage("Fixture purchase is unavailable. Check its license, cost, and requirements.");
+      }
+
+      const crateFixtureButton = event.target.closest("[data-crate-fixture-id]");
+      if (crateFixtureButton) this.scene.crateFixture(crateFixtureButton.dataset.crateFixtureId);
+
       const priceButton = event.target.closest(PRICE_BUTTON_SELECTOR);
       if (priceButton) {
         this.handlePriceAdjustment(
@@ -108,7 +116,7 @@ export class ManagerTablet {
     this.bodyElement.addEventListener("keydown", (event) => {
       if (event.key === "Enter" && event.target.matches(PRICE_INPUT_SELECTOR)) event.target.blur();
     });
-    // Price controls must not also drive the player or fire hotkeys (E, Q, I, P...).
+    // Price controls must not also drive the player or fire hotkeys (E, Space, I, P...).
     const keyboard = this.scene.input.keyboard;
     this.bodyElement.addEventListener("focusin", (event) => {
       if (!event.target.matches(PRICE_CONTROL_SELECTOR)) return;
@@ -152,7 +160,8 @@ export class ManagerTablet {
       return ContractRenderer.generateHTML(database.getAllLicenses(), this.playerState);
     }
     if (tabId === "supply") return SupplyRenderer.generateHTML(this.scene);
-    if (tabId === "layout" || tabId === "fixtures") return LayoutRenderer.generateHTML(this.scene);
+    if (tabId === "fixtures") return LayoutRenderer.generateHTML(this.scene, true);
+    if (tabId === "layout") return LayoutRenderer.generateHTML(this.scene);
     return `<div class="tablet-placeholder">COMING SOON</div>`;
   }
 
@@ -251,12 +260,15 @@ export class ManagerTablet {
 
     this.playerState.spendCredits(license.baseCost);
     this.playerState.signLicense(licenseId);
+    this.scene.recalculateActiveFactions();
     // Both of the above call notifyListeners(), which triggers refreshContractsPanel()
     // via the subscribe() in the constructor -- no explicit re-render needed here.
   }
 
   handleOrderRestock(itemId) {
-    this.scene.orderRestockCrate(itemId);
+    if (!this.scene.orderRestockCrate(itemId)) {
+      this.scene.showShopMessage("Unable to order. Check funds, license, and Loading Pad space.");
+    }
     // orderRestockCrate() calls playerState.spendCredits() on success, which triggers
     // refreshSupplyPanel() via the subscribe() in the constructor -- but only on success;
     // explicitly refresh too so a no-op (e.g. clicked just as funds became insufficient)

@@ -20,8 +20,9 @@ export class PlayerState {
       mercenaries: 0,
       explorers: 0,
     };
+    this.activeFactions = new Set();
 
-    this.activeLicenses = new Set(); // Stores IDs of signed licenses
+    this.activeLicenses = new Set(["lic_fixture_basics"]); // Starting fixtures remain usable and purchasable.
 
     // The player's own retail price per item id (credits per unit).
     this.storePrices = {};
@@ -30,6 +31,10 @@ export class PlayerState {
     // StorageFixture (ShopInventory.js), just not drawn anywhere on the map. Lets stock
     // be withdrawn from one fixture and deposited into another (see FixtureWindow).
     this.hovercart = new InventoryPool({ capacity: HOVERCART_CAPACITY, stock: [] });
+
+    // Bible Step 12: carts abandoned by angry customers land here (unlimited room), and
+    // can only leave by being loaded into the hovercart from the register's bin window.
+    this.goBacks = new InventoryPool({ capacity: Infinity, stock: [] });
 
     this.listeners = [];
   }
@@ -70,9 +75,28 @@ export class PlayerState {
     this.notifyListeners();
   }
 
+  addToGoBacks(cart) {
+    for (const { itemId } of cart) this.goBacks.add(itemId, 1);
+    this.notifyListeners();
+  }
+
+  // Moves 1 unit from the Go-Backs bin into the hovercart; false if there's no room.
+  loadGoBacksItem(itemId) {
+    if (this.hovercart.getRemainingUnitsFor(itemId) <= 0) return false;
+    if (this.goBacks.remove(itemId, 1) !== 1) return false;
+    this.hovercart.add(itemId, 1);
+    this.goBacks.stock = this.goBacks.stock.filter((entry) => entry.quantity > 0);
+    this.notifyListeners();
+    return true;
+  }
+
   signLicense(licenseId) {
     this.activeLicenses.add(licenseId);
     this.notifyListeners();
+  }
+
+  setActiveFactions(factionIds) {
+    this.activeFactions = new Set(factionIds);
   }
 
   subscribe(callback) {
@@ -96,6 +120,7 @@ export class PlayerState {
         capacity: this.hovercart.capacity,
         stock: this.hovercart.stock.filter((entry) => entry.quantity > 0).map((entry) => ({ ...entry })),
       },
+      goBacks: this.goBacks.stock.filter((entry) => entry.quantity > 0).map((entry) => ({ ...entry })),
     };
   }
 
@@ -111,11 +136,16 @@ export class PlayerState {
       globalReputation: data.globalReputation,
       factionReputation: { ...data.factionReputation },
       customersTurnedAway: data.customersTurnedAway,
-      activeLicenses: new Set(data.activeLicenses),
+      activeFactions: new Set(),
+      activeLicenses: new Set([...data.activeLicenses, "lic_fixture_basics"]),
       storePrices: { ...data.storePrices },
       hovercart: new InventoryPool({
         capacity: data.hovercart?.capacity ?? HOVERCART_CAPACITY,
         stock: (data.hovercart?.stock || []).map((entry) => ({ ...entry })),
+      }),
+      goBacks: new InventoryPool({
+        capacity: Infinity,
+        stock: (data.goBacks || []).map((entry) => ({ ...entry })),
       }),
     });
     this.notifyListeners();

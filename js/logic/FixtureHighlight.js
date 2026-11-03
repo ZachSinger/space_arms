@@ -1,5 +1,5 @@
 import { TILE_SIZE } from "./RoomLayout.js";
-import { getFixtureSpec } from "./FixtureLayout.js";
+import { getFixtureType } from "./FixtureLayout.js";
 
 const HIGHLIGHT_COLOR = 0x22c55e;
 const CLEARANCE_PX = 12;
@@ -86,8 +86,8 @@ export class FixtureHighlight {
   }
 
   fixtureWorldRect(fixtureId) {
-    const entry = this.scene.getFixtureLayout().find((fixture) => fixture.id === fixtureId);
-    const spec = entry && getFixtureSpec(fixtureId);
+    const entry = this.scene.fixtures.get(fixtureId);
+    const spec = entry && getFixtureType(entry.type);
     if (!spec) return null;
     return { x: entry.gx * TILE_SIZE, y: entry.gy * TILE_SIZE, width: spec.w * TILE_SIZE, height: spec.h * TILE_SIZE };
   }

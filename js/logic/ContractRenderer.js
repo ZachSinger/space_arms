@@ -1,3 +1,5 @@
+import { getFixtureType } from "./FixtureLayout.js";
+
 export class ContractRenderer {
   /**
    * Generates the Contracts tab's own content (the tab bar/chrome around it is owned by
@@ -27,6 +29,12 @@ export class ContractRenderer {
           playerState.activeLicenses.has(license.id);
 
         let actionButtonHTML = "";
+        const fixtureNames = license.unlocksFixtures
+          .map((typeId) => getFixtureType(typeId)?.name)
+          .filter(Boolean);
+        const fixtureUnlocksHTML = fixtureNames.length
+          ? `<div class="fixture-stock-meta">Unlocks fixtures: ${fixtureNames.join(", ")}</div>`
+          : "";
 
         if (isOwned) {
           actionButtonHTML = `<button class="retro-tab-btn" disabled style="opacity: 0.6; cursor: not-allowed; width: 100%; text-align: center;">[ PURCHASED ]</button>`;
@@ -62,6 +70,7 @@ export class ContractRenderer {
                                 <span class="item-card-cost" style="color: var(--color-text-main); font-size: var(--font-size-11); padding: 2px 6px; background: rgba(255,255,255,0.1); border-radius: 2px;">Tier ${license.tier}</span>
                             </div>
                             <div class="item-card-flavor">"${license.description}"</div>
+                            ${fixtureUnlocksHTML}
                             <div style="display: flex; justify-content: space-between; font-size: var(--font-size-11); margin-top: 6px; border-top: 1px dashed var(--color-border-subtle); padding-top: 6px;">
                                 <span><span style="color: ${globalRepColor};">Req Rep: ${license.reqReputation} Pts</span>${factionHtml}</span>
                                 <span style="color: var(--color-text-main); font-weight: bold;">Cost: ${license.baseCost.toLocaleString()}c</span>

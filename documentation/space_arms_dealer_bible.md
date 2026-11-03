@@ -11,7 +11,7 @@
 
 ## Part 1: Core Architecture & Time
 * **Step 1: Platform & Tech Stack:** PC Desktop (Electron using Vite, vanilla HTML/CSS/JS frontend, and Phaser 3 canvas). The UI and Canvas are strictly decoupled.
-* **Step 2: Time Management:** Real-time simulation using Galactic Time Code (GTC) with a "Manual Toggle". Shifts last 12 GTC hours at a **Static Speed**; time pauses entirely when closed, allowing infinite downtime for management.
+* **Step 2: Time Management:** Real-time simulation using Galactic Time Code (GTC) with a "Manual Toggle". Shifts reach soft close after 12 GTC hours at a **Static Speed**, or 10 minutes of unpaused play; time pauses entirely when closed, allowing infinite downtime for management.
 * **Step 3: The MVP Bridge:** Powered by a Master State (single source of truth) and an Event Bus to handle communication between the "dumb" UI and the Canvas.
 
 ## Part 2: Spatial Organization & Stock
@@ -19,16 +19,17 @@
 * **Step 47: Item Granularity (Tags):** Items use Unique Branded Assets (e.g., "Aulin NT Assault Rifle") categorized by combinative Tags (e.g., `[Weapon]`, `[Surplus]`).
 * **Step 5: Fixture Data Contract:** Shelves feature `gridDimensions`, a `displayType`, and a `stackDepth` capacity (how much accumulative item `stack` a single slot on this fixture holds). For example, if a Rifle has a `stack` of 2, and a shelf slot has a `stackDepth` of 8, that slot can hold 4 of that Rifle. If the Rifle has a `stack` of 3, that same slot can only hold 2. Stacked items show an "xN" badge instead of rendering overlapping sprites.
 * **Step 22: Hybrid Fixtures:** Universal shelves hold anything that fits physically; specialized displays (e.g., weapon racks) restrict items by Tag but offer massive space efficiency.
-* **Step 41: Build Mode:** Off-shift, use MOVE in the Manager Tablet's Fixtures or Layout tab to rearrange the existing shelf, lockers, and register. Click to confirm; right-click or Escape cancels. WASD/arrows pan during placement. Fixtures snap to unlocked floor; placement preserves entrances, the loading area, connected walkways, clear fixture fronts, and register access/queue space. Purchasing additional fixtures remains future work.
+* **Step 41: Build Mode:** While the store is closed, use MOVE in the Manager Tablet's Fixtures or Layout tab to rearrange fixtures, or carry a fixture crate and press E to place it. Left-click confirms; right-click or Escape cancels. WASD/arrows pan during placement. Fixtures snap to unlocked floor; placement preserves entrances, the loading area, connected walkways, clear fixture fronts, and register access/queue space.
+* **Fixture Purchasing & Crating:** The Fixtures tab lists prices and required fixture licenses. Buying delivers a distinct fixture crate to the Loading Pad. Empty fixtures can be crated only while the store is closed; the crate appears where the fixture stood. Fixture crates can be carried, dropped, thrown, saved, and placed, but cannot be stocked in storage. The only register cannot be crated.
 * **Step 63: Reorganizing Loaded Fixtures:** Fixtures move with their entire contents intact, without using hovercart capacity or spawning crates. The original position remains unchanged until a valid placement is confirmed.
 
 ## Part 3: Procurement & Logistics
 * **Step 10: The Loading Pad & Abstracted Inventory:** Ordered stock spawns as physical crates on an outdoor Loading Pad. Crates must be hauled inside via chained anchor pathfinding. 
 * **Hovercart (Backpack) Abstracted Model:** The hovercart is an abstract character/employee inventory size rather than a physical moving entity on the map. 
 * **Step 62: Empty Crates:** Utilizes the "Abstracted Box" approach for the MVP—the moment the last item is removed from a crate into inventory, the empty crate instantly despawns.
-* **Step 42: Backroom Storage:** Crates can be dumped on the floor (clogging pathing) or placed on Storage Fixtures, which share the inventory array logic for easy drag-and-drop management.
+* **Step 42: Backroom Storage:** Item crates can be dumped on the floor (clogging pathing) or placed on Storage Fixtures, which share the inventory array logic for easy drag-and-drop management. Fixture crates cannot be stocked in Storage Fixtures.
 * **Step 29: Unified Market:** All unlocked items populate in a single, unified DOM catalog.
-* **Step 45: Supplier Discovery (MVP):** All potential supplier contracts are fully visible from Day 1 in the Tablet, but remain un-interactable until specific reputation thresholds are met.
+* **Step 45: Supplier Discovery (MVP):** All potential supplier contracts, including fixture licenses, are fully visible from Day 1 in the Tablet, but remain un-interactable until specific reputation thresholds are met. The starting fixture license covers the currently implemented shelf, locker, and register types.
 * **Step 48: Contract-Driven Demand:** Customers only expect (and penalize you for missing) items from Supplier Contracts you have *actively signed and paid for*.
 
 ## Part 4: The Checkout Flow (Updated)
@@ -36,7 +37,7 @@
 * **Step 53: Visualizing Patience:** Customers in line display color-coded emote bubbles that escalate in urgency as their patience drains. Ringing up *any* customer globally resets the patience timer for the next person in line.
 * **Step 54: The Checkout Interface:** Clicking the register opens the DOM UI. Customer items appear as scattered individual windows. The player must click (or drag-hover) over each one to "scan" it, triggering a beep and sliding it into a UI shopping bag.
 * **Step 55: Receiving Payment:** Multiple lore currencies exist (M-Scrips, Vouchers), but all exact change is simplified to standard Galactic Credits. For card payments, the player types the exact total on the numpad. For cash, the UI shows the "Change Owed," which the player types or drags out.
-* **Step 12: The Go-Backs Cart:** If a customer's patience hits zero, they leave angry and abandon their cart. These items teleport to an infinite-capacity UI "Go-Backs" cart to be restocked manually.
+* **Step 12: The Go-Backs Bin:** If a customer's patience hits zero, they leave angry and abandon their cart. These items teleport to an infinite-capacity "Go-Backs" bin, opened as its own window from the register UI. Items leave the bin only by being loaded into the hovercart, then restocked manually.
 
 ## Part 5: Shift Mechanics & Economics
 * **Step 11: The Soft Close:** At hour 12, doors lock to new foot traffic, but the shift doesn't end until the register queue drops to zero.
@@ -56,11 +57,11 @@
 * **Step 24: Accumulative Spawning:** The total daily customer pool scales upward. Global Reputation dictates baseline traffic, while Faction reputations *add* their distinct members to the pool.
 * **Step 49: Foot Traffic:** Baseline traffic acts as a direct multiplier of Global Store Reputation.
 * **Step 51: Reputation Math:** Flat 1-to-1 ratio (+1 for success, -1 for anger/fail). Faction customers apply this dual-tick to both their specific Faction and the Global pool simultaneously.
-* **Step 12: Intent + Impulse:** Customers have guaranteed Primary lists (penalizes rep if out of stock) and randomized Optional lists (no penalty if missing).
+* **Step 12: Intent + Impulse:** Customers build Primary and randomized Optional lists only from item types assigned to shelf slots (including sold-out slots), and visit each relevant shelf. A missing Primary item costs one penalty total: -1 store reputation, plus -1 faction reputation for faction customers. They still buy available Primary items; they leave without buying if none of their Primary items are in stock. Missing Optional items have no penalty. List sizes are currently small and fixed by faction while reputation thresholds await playtesting.
 * **Step 25-28: The Factions:**
-  * *Scavengers:* Buy low-tier/surplus. Huge Optional lists (impulse buyers). Use M-Scrips.
-  * *Mercenaries:* Buy mid/high-tier gear. Huge Primary lists, highly discriminating (high risk/reward). Refuse to buy duplicate weapons.
-  * *Explorers:* Seek Tools and Survival gear. Guaranteed to want at least one Tool. Use Vouchers.
+  * *Scavengers:* Buy low-tier/surplus. Larger Optional lists (impulse buyers). Use M-Scrips.
+  * *Mercenaries:* Buy mid/high-tier Firearms, Ammunition, and Armor. Have a larger Primary list, seek matching ammunition for purchased firearms, and refuse duplicate weapon types.
+  * *Explorers:* Seek Tools and Survival gear (either can fill their Primary list); may also buy Standard Firearms. Use Vouchers.
 
 ## Part 8: The Manager's Tablet & UI
 * **Step 40: Tablet Tabs:** The central DOM UI features tabs for Inventory, Employee, Contract, Supply, Fixtures, Layout, Finances, and the Handbook.

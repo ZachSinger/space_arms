@@ -1,6 +1,6 @@
 import { UIWindow } from "./UIWindow.js";
 import { TILE_SIZE } from "./RoomLayout.js";
-import { getFixtureSpec, fixtureAccessCells } from "./FixtureLayout.js";
+import { getFixtureType, fixtureAccessCells } from "./FixtureLayout.js";
 
 export class FixturePlacement {
   constructor(scene) {
@@ -8,7 +8,7 @@ export class FixturePlacement {
     this.active = false;
     this.uiWindow = new UIWindow({
       id: "fixture-placement-window",
-      title: "MOVE FIXTURE",
+      title: "FIXTURE PLACEMENT",
       width: "350px",
       height: "auto",
       x: 24,
@@ -35,7 +35,10 @@ export class FixturePlacement {
       }
       if (!pointer.leftButtonDown()) return;
       this.updatePreview(pointer);
-      if (scene.moveFixture(this.placement.id, this.placement.gx, this.placement.gy)) {
+      const placed = this.original
+        ? scene.moveFixture(this.placement.id, this.placement.gx, this.placement.gy)
+        : scene.placeFixtureFromCrate(this.fixtureCrate, this.placement.gx, this.placement.gy);
+      if (placed) {
         this.cancel();
       }
     };
@@ -47,21 +50,43 @@ export class FixturePlacement {
       this.scene.showShopMessage("Fixtures can only move while the store is closed.");
       return false;
     }
+    const original = this.scene.fixtures.get(id);
+    if (!original) throw new Error(`Unknown fixture: ${id}`);
+    return this.start(original.type, original, null);
+  }
+
+  beginFromCrate(crate) {
+    if (!this.scene.canRearrangeFixtures()) {
+      this.scene.showShopMessage("Fixtures can only be placed while the store is closed.");
+      return false;
+    }
+    if (crate !== this.scene.carriedCrate || crate?.kind !== "fixture") return false;
+    return this.start(crate.typeId, null, crate);
+  }
+
+  start(typeId, original, fixtureCrate) {
     this.cancel();
     this.scene.endRegisterSession();
     this.scene.windowManager.closeAllExcept(this.uiWindow.id);
-    this.spec = getFixtureSpec(id);
-    if (!this.spec) throw new Error(`Unknown fixture: ${id}`);
-    this.original = this.scene.getFixtureModels().find((fixture) => fixture.id === id);
+    this.original = original;
+    this.fixtureCrate = fixtureCrate;
+    this.spec = getFixtureType(typeId);
     this.active = true;
-    this.original.sprite.setAlpha(0.35);
-    this.nameElement.textContent = `Moving ${this.spec.name} with its contents`;
+    if (this.original) {
+      this.original.sprite.setAlpha(0.35);
+      this.nameElement.textContent = `Moving ${this.scene.fixtures.displayName(this.original)} with its contents`;
+    } else {
+      this.fixtureCrate.sprite.setVisible(false);
+      this.nameElement.textContent = `Placing ${this.spec.name}`;
+    }
     this.scene.player.inputEnabled = false;
     this.scene.player.sprite.body.stop();
     this.scene.cameras.main.stopFollow();
     this.scene.restockCrates.forEach((crate) => crate.setPaused(true));
-    this.ghost = this.scene.add.image(this.original.x, this.original.y, this.spec.texture)
-      .setDisplaySize(this.original.sprite.displayWidth, this.original.sprite.displayHeight)
+    const x = original?.x ?? fixtureCrate.sprite.x;
+    const y = original?.y ?? fixtureCrate.sprite.y;
+    this.ghost = this.scene.add.image(x, y, this.spec.texture)
+      .setDisplaySize(this.spec.w * TILE_SIZE, this.spec.h * TILE_SIZE)
       .setAlpha(0.5).setDepth(9996);
     this.graphics.setVisible(true);
     this.uiWindow.openWindow();
@@ -72,11 +97,14 @@ export class FixturePlacement {
   updatePreview(pointer) {
     const world = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
     this.placement = {
-      id: this.spec.id,
+      id: this.original?.id ?? this.scene.fixtures.nextId(this.spec.id),
+      type: this.spec.id,
       gx: Math.floor(world.x / TILE_SIZE) - Math.floor(this.spec.w / 2),
       gy: Math.floor(world.y / TILE_SIZE) - Math.floor(this.spec.h / 2),
     };
-    const result = this.scene.checkFixtureMove(this.placement.id, this.placement.gx, this.placement.gy);
+    const result = this.original
+      ? this.scene.checkFixtureMove(this.placement.id, this.placement.gx, this.placement.gy)
+      : this.scene.checkFixturePlacement(this.spec.id, this.placement.gx, this.placement.gy);
     this.statusElement.textContent = result.reason;
     const color = result.valid ? 0x10b981 : 0xef4444;
     const x = this.placement.gx * TILE_SIZE;
@@ -104,13 +132,16 @@ export class FixturePlacement {
   finish() {
     if (!this.active) return;
     this.active = false;
-    this.original.sprite.setAlpha(1);
+    if (this.original) this.original.sprite.setAlpha(1);
+    if (this.fixtureCrate?.sprite.active) this.fixtureCrate.sprite.setVisible(true);
     this.ghost.destroy();
     this.graphics.clear().setVisible(false);
     this.scene.player.inputEnabled = true;
     this.scene.input.keyboard.resetKeys();
     this.scene.cameras.main.startFollow(this.scene.player.sprite, true, 0.1, 0.1);
     this.scene.restockCrates.forEach((crate) => crate.setPaused(this.scene.crateMotionPaused));
+    this.original = null;
+    this.fixtureCrate = null;
   }
 
   cancel() {

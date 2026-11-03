@@ -1,4 +1,5 @@
 import { pickRandomCustomerCharacter } from "./CustomerSprites.js";
+import { createCustomerBuyList } from "./CustomerBuyLists.js";
 
 const SPEED = 120; // px/sec
 const CRATE_HIT_REPUTATION_PENALTY = 1;
@@ -20,6 +21,21 @@ const LEAVING_TIMEOUT_MS = 6000;
 // anywhere, abandon the goal rather than trust the destination was valid forever.
 const SEEKING_TIMEOUT_MS = 15000;
 
+// Bible Steps 53/12/51: how long a queued customer waits (real ms, paused with the game)
+// before leaving angry, and what that costs.
+export const PATIENCE_MS = 40000;
+const ANGRY_REPUTATION_PENALTY = 1;
+// Bubble escalation: [minimum remaining fraction, glyph, fill color].
+const PATIENCE_LEVELS = [
+  [0.6, "...", 0x22c55e],
+  [0.3, "!", 0xf59e0b],
+  [0, "!!", 0xef4444],
+];
+
+export function getPatienceLevel(fraction) {
+  return PATIENCE_LEVELS.findIndex(([minimum]) => fraction > minimum || minimum === 0);
+}
+
 // Display size every customer sprite is forced to, regardless of a given facing's native
 // pixel dimensions (side-profile crops are narrower than front/back ones) -- keeps a
 // character's apparent size consistent as it turns instead of visibly popping/resizing.
@@ -29,18 +45,14 @@ const SEEKING_TIMEOUT_MS = 15000;
 export const SPRITE_DISPLAY_WIDTH = 46;
 export const SPRITE_DISPLAY_HEIGHT = 48;
 
-// Walks to a fixture, grabs a small randomized handful of items (snapshotting each item's
-// price per bible Step 6), walks to the register, joins the (visually lined-up) queue, then
-// waits for the scene to resolve a player-driven checkout (Customer owns the sale logic; the
-// scene only owns when/whether the checkout window is currently visible, and where this
-// customer should stand while waiting). Movement between those points uses real grid-based
-// pathfinding (see GameScene.findPath / Pathfinder.js) so customers correctly route around
-// obstacles like the shelf instead of walking straight at a point and getting stuck.
+// Builds a faction-specific Primary/Optional buy list from assigned shelf item types, visits
+// the shelves holding those items, snapshots purchased prices, then queues for player-driven
+// checkout. Movement uses real grid-based pathfinding (GameScene.findPath / Pathfinder.js)
+// so customers correctly route around fixtures instead of walking straight into them.
 export class Customer {
   constructor({
     scene,
-    fixture,
-    shelfStandPoint,
+    getShoppingPlan,
     registerPoint,
     exitPoint,
     onReserveShelfSlot,
@@ -48,15 +60,12 @@ export class Customer {
     onReserveExitSlot,
     playerState,
     spawnBounds,
+    factionId,
     onJoinQueue,
+    onLeaveAngry,
     onComplete,
   }) {
     this.scene = scene;
-    this.fixture = fixture;
-    // Where to walk when heading to the shelf -- a point just in front of it, not its exact
-    // center, since the shelf is a solid obstacle (a target inside it would never actually
-    // be reachable). Falls back to the fixture's own position if not provided.
-    this.shelfStandPoint = shelfStandPoint || { x: fixture.x, y: fixture.y };
     this.registerPoint = registerPoint;
     // A single fixed point to walk back to and vanish at once finished here -- real
     // pathfinding means it doesn't need to depend on this customer's current position.
@@ -71,12 +80,16 @@ export class Customer {
     this.reservedTarget = null;
     this.playerState = playerState;
     this.onJoinQueue = onJoinQueue;
+    this.onLeaveAngry = onLeaveAngry;
     this.onComplete = onComplete;
 
     this.state = "SEEK_SHELF";
     this.cart = []; // [{ itemId, price }]
     this.priceTolerance = Phaser.Math.FloatBetween(MIN_PRICE_TOLERANCE, MAX_PRICE_TOLERANCE);
     this.queueTarget = null; // set by the scene once this customer has a spot in line
+    this.patienceRemainingMs = null; // only ticks once queued -- see joinQueue()
+    this.patienceBubble = null;
+    this.patienceLevel = -1;
 
     // Path-following state -- see setDestination()/followPath().
     this.path = [];
@@ -93,9 +106,20 @@ export class Customer {
 
     // A randomly-picked character's 4 facing textures (see CustomerSprites.js), swapped as
     // this customer turns to walk in a different direction -- see updateFacing().
-    const character = pickRandomCustomerCharacter();
+    const character = pickRandomCustomerCharacter(factionId);
     this.facingTextures = character.facingTextures;
     this.factionId = character.factionId;
+    this.shoppingPlan = getShoppingPlan
+      ? getShoppingPlan(this.factionId)
+      : createCustomerBuyList(this.factionId, [], () => null);
+    this.shelfStops = this.shoppingPlan.shelfStops || [];
+    this.shelfStopIndex = 0;
+    this.phaseItemIds = [];
+    this.primaryBought = new Set();
+    this.primaryMissing = new Set();
+    this.bonusBought = new Set();
+    this.bonusAttempted = new Set();
+    this.purchasedFirearms = new Set();
     this.currentFacing = "down";
     this.sprite = scene.add
       .image(spawnX, spawnY, this.facingTextures.down)
@@ -103,8 +127,7 @@ export class Customer {
       .setDepth(2);
     scene.physics.add.existing(this.sprite);
 
-    const shelfTarget = this.onReserveShelfSlot ? this.onReserveShelfSlot() : this.shelfStandPoint;
-    this.setDestination(shelfTarget.x, shelfTarget.y, () => this.grabItems());
+    this.visitNextShelf("primary");
   }
 
   update(delta = 0) {
@@ -131,6 +154,7 @@ export class Customer {
         // Face the register while waiting, rather than whichever way they last happened
         // to be walking -- looks right for a line of people facing the counter.
         this.updateFacing("up");
+        this.updatePatience(delta);
         break;
       case "LEAVING":
         this.leavingTimer += delta;
@@ -149,39 +173,143 @@ export class Customer {
     return this.scene.getStorePrice(itemId) <= marketPrice * this.priceTolerance;
   }
 
-  // Grabs a small random handful (1-3) of items, picked from whichever slots still have
-  // stock at a price this customer accepts, so a single customer's cart can contain
-  // several different items -- this is what
-  // actually exercises the checkout UI's scattered multi-card scanning (bible Step 54)
-  // instead of every customer carrying exactly one unit of the same item. Full guaranteed
-  // Primary/Optional shopping lists (bible Step 12) are a later, more deliberate pass.
-  grabItems() {
-    const desiredCount = Phaser.Math.Between(1, 3);
-    let rejectedOnPrice = false;
-
-    for (let i = 0; i < desiredCount; i += 1) {
-      const stocked = this.fixture.getAvailableSlots();
-      const candidates = stocked.filter((slot) => this.acceptsPrice(slot.itemId));
-      if (candidates.length < stocked.length) rejectedOnPrice = true;
-      if (candidates.length === 0) break;
-
-      const slot = Phaser.Utils.Array.GetRandom(candidates);
-      const itemId = this.fixture.takeItem(slot);
-      if (!itemId) continue;
-
-      this.cart.push({ itemId, price: this.scene.getStorePrice(itemId) });
+  visitNextShelf(phase) {
+    this.shoppingPhase = phase;
+    const itemIds = phase === "primary"
+      ? this.shoppingPlan.primaryItemIds
+      : this.getBonusItemIds().filter((itemId) => !this.bonusAttempted.has(itemId));
+    if (itemIds.length === 0) {
+      this.finishShoppingPhase();
+      return;
     }
+    this.phaseItemIds = itemIds;
+    this.shelfStops = this.shoppingPlan.shelfStops.filter(({ fixture }) =>
+      fixture.placements.some((placement) => itemIds.includes(placement.itemId)),
+    );
+    this.shelfStopIndex = 0;
+    this.visitNextShelfStop();
+  }
 
-    if (this.cart.length === 0) {
-      if (rejectedOnPrice) {
-        this.scene.showFloatingText(this.sprite.x, this.sprite.y - 40, "Too expensive!", "#f59e0b");
+  visitNextShelfStop() {
+    if (this.shelfStopIndex >= this.shelfStops.length) {
+      this.finishShoppingPhase();
+      return;
+    }
+    const { fixture, standPoint } = this.shelfStops[this.shelfStopIndex];
+    this.fixture = fixture;
+    const target = this.onReserveShelfSlot
+      ? this.onReserveShelfSlot(fixture, this)
+      : standPoint;
+    this.shelfStopIndex += 1;
+    this.setDestination(target.x, target.y, () => this.shopAtCurrentShelf());
+  }
+
+  shopAtCurrentShelf() {
+    for (const itemId of this.phaseItemIds) {
+      if (this.shoppingPhase === "bonus") this.bonusAttempted.add(itemId);
+      const placements = this.fixture.placements.filter((placement) =>
+        placement.itemId === itemId && placement.quantity > 0,
+      );
+      if (placements.length === 0) continue;
+      if (this.cart.some((entry) => entry.itemId === itemId)) continue;
+      if (this.shoppingPhase === "bonus" && this.factionId === "mercenaries" &&
+        this.purchasedFirearms.has(this.scene.getItem(itemId)?.tags.find((tag) =>
+          ["Pistol", "Rifle", "Heavy"].includes(tag),
+        ))) continue;
+
+      const placement = placements.find((candidate) => this.acceptsPrice(itemId));
+      if (!placement) {
+        this.scene.showFloatingText(
+          this.sprite.x,
+          this.sprite.y - 40,
+          "Too expensive!",
+          "#f59e0b",
+        );
+        continue;
       }
-      // Another customer already in transit beat them to the last units; leave empty-handed
-      // rather than queueing for a checkout with nothing to sell.
-      this.enterLeaving();
+
+      const takenItemId = this.fixture.takeItem(placement);
+      if (!takenItemId) continue;
+      this.cart.push({ itemId: takenItemId, price: this.scene.getStorePrice(takenItemId) });
+      if (this.shoppingPhase === "primary") this.primaryBought.add(takenItemId);
+      else this.bonusBought.add(takenItemId);
+
+      const item = this.scene.getItem(takenItemId);
+      if (this.factionId === "mercenaries" && item?.tags.includes("Firearm")) {
+        const weaponType = item.tags.find((tag) => ["Pistol", "Rifle", "Heavy"].includes(tag));
+        if (weaponType) this.purchasedFirearms.add(weaponType);
+      }
+    }
+    this.visitNextShelfStop();
+  }
+
+  getBonusItemIds() {
+    const ids = [...this.shoppingPlan.bonusItemIds];
+    for (const { itemId: firearmId } of this.cart) {
+      if (!this.scene.getItem(firearmId)?.tags.includes("Firearm")) continue;
+      ids.push(...(this.shoppingPlan.matchingAmmoIdsByFirearm?.[firearmId] || []));
+    }
+    return [...new Set(ids)].filter((id) =>
+      !this.cart.some((entry) => entry.itemId === id),
+    );
+  }
+
+  finishShoppingPhase() {
+    if (this.shoppingPhase === "primary") {
+      if (this.shoppingPlan.primaryItemIds.length === 0) {
+        if (this.factionId) {
+          const hints = {
+            scavengers: "Looking for surplus gear!",
+            mercenaries: "Looking for weapons, ammo, or armor!",
+            explorers: "Looking for tools or survival gear!",
+          };
+          this.scene.showFloatingText(
+            this.sprite.x,
+            this.sprite.y - 40,
+            hints[this.factionId],
+            "#38bdf8",
+          );
+        }
+        this.enterLeaving();
+        return;
+      }
+
+      this.primaryMissing = new Set(
+        this.shoppingPlan.primaryItemIds.filter((itemId) =>
+          !this.primaryBought.has(itemId) &&
+          !this.shoppingPlan.shelfStops.some(({ fixture }) =>
+            fixture.placements.some((placement) =>
+              placement.itemId === itemId && placement.quantity > 0,
+            ),
+          ),
+        ),
+      );
+      if (this.primaryMissing.size > 0) this.penalizeMissingPrimary();
+      if (this.primaryBought.size === 0) {
+        this.enterLeaving();
+        return;
+      }
+      this.visitNextShelf("bonus");
       return;
     }
 
+    const additionalBonusIds = this.getBonusItemIds().filter((itemId) =>
+      !this.bonusAttempted.has(itemId),
+    );
+    if (additionalBonusIds.length > 0) {
+      this.phaseItemIds = additionalBonusIds;
+      this.shelfStops = this.shoppingPlan.shelfStops.filter(({ fixture }) =>
+        fixture.placements.some((placement) => additionalBonusIds.includes(placement.itemId)),
+      );
+      this.shelfStopIndex = 0;
+      this.visitNextShelfStop();
+      return;
+    }
+
+    if (this.cart.length === 0) {
+      this.enterLeaving();
+      return;
+    }
     this.playerState.notifyListeners();
     this.reservedTarget = this.onReserveQueueSlot
       ? this.onReserveQueueSlot()
@@ -190,10 +318,89 @@ export class Customer {
     this.state = "SEEK_REGISTER";
   }
 
+  penalizeMissingPrimary() {
+    const penalty = 1;
+    this.playerState.subReputation(penalty, this.factionId);
+    this.scene.showFloatingText(
+      this.sprite.x,
+      this.sprite.y - 40,
+      `Out of stock! Store rep -${penalty}${this.factionId ? ` / Faction rep -${penalty}` : ""}`,
+      "#ef4444",
+    );
+  }
+
   joinQueue() {
     this.state = "QUEUEING";
     this.queueTarget = { x: this.registerPoint.x, y: this.registerPoint.y };
+    this.resetPatience();
     this.onJoinQueue(this);
+  }
+
+  resetPatience() {
+    this.patienceRemainingMs = PATIENCE_MS;
+  }
+
+  // Drains while waiting in line, except while the player is actively ringing them up.
+  updatePatience(delta) {
+    if (this.patienceRemainingMs == null) return;
+    if (!this.scene.isServingCustomer?.(this)) {
+      this.patienceRemainingMs = Math.max(0, this.patienceRemainingMs - delta);
+    }
+    if (this.patienceRemainingMs <= 0) {
+      this.leaveAngry();
+      return;
+    }
+    this.drawPatienceBubble();
+  }
+
+  drawPatienceBubble() {
+    const x = this.sprite.x;
+    const y = this.sprite.y - SPRITE_DISPLAY_HEIGHT / 2 - 14;
+    if (!this.patienceBubble) {
+      const background = this.scene.add.circle(0, 0, 12, 0xffffff).setStrokeStyle(2, 0x000000);
+      const glyph = this.scene.add
+        .text(0, -1, "", {
+          fontFamily: '"Courier New", monospace',
+          fontSize: "14px",
+          fontStyle: "bold",
+          color: "#000000",
+        })
+        .setOrigin(0.5);
+      this.patienceBubble = this.scene.add.container(x, y, [background, glyph]).setDepth(9000);
+    }
+    this.patienceBubble.setPosition(x, y);
+
+    const level = getPatienceLevel(this.patienceRemainingMs / PATIENCE_MS);
+    if (level === this.patienceLevel) return;
+    this.patienceLevel = level;
+    const [, text, color] = PATIENCE_LEVELS[level];
+    const [background, glyph] = this.patienceBubble.list;
+    background.setFillStyle(color);
+    glyph.setText(text);
+  }
+
+  clearPatience() {
+    this.patienceRemainingMs = null;
+    this.patienceLevel = -1;
+    this.patienceBubble?.destroy();
+    this.patienceBubble = null;
+  }
+
+  // Bible Steps 12/51: abandons the cart (sent to the Go-Backs bin) and costs reputation.
+  leaveAngry() {
+    const cart = this.cart;
+    this.cart = [];
+    this.clearPatience();
+    this.playerState.subReputation(ANGRY_REPUTATION_PENALTY, this.factionId);
+    const penalty = ANGRY_REPUTATION_PENALTY;
+    this.scene.showFloatingText(
+      this.sprite.x,
+      this.sprite.y - 40,
+      `Left angry! Store rep -${penalty}${this.factionId ? ` / Faction rep -${penalty}` : ""}`,
+      "#ef4444",
+    );
+    this.onLeaveAngry?.(this, cart);
+    this.enterLeaving();
   }
 
   // Called by the scene whenever the line's layout changes (someone joins, or the front of
@@ -218,7 +425,8 @@ export class Customer {
   completeSale() {
     const total = this.cart.reduce((sum, entry) => sum + entry.price, 0);
     this.playerState.addCredits(total);
-    this.playerState.addReputation(1);
+    this.playerState.addReputation(1, this.factionId);
+    this.clearPatience();
     this.enterLeaving();
   }
 
@@ -297,6 +505,7 @@ export class Customer {
 
   destroy() {
     this.isDestroyed = true;
+    this.clearPatience();
     this.sprite.destroy();
     this.onComplete(this);
   }

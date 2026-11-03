@@ -5,24 +5,31 @@ import { HUDController } from "../logic/HUDController.js";
 import { StorageFixture } from "../logic/ShopInventory.js";
 import { ShelfFixture } from "../logic/ShelfFixture.js";
 import { Customer } from "../logic/Customer.js";
+import { createCustomerBuyList } from "../logic/CustomerBuyLists.js";
+import {
+  createCustomerArrivalSchedule,
+  createCustomerPool,
+  getLicensedFactionIds,
+} from "../logic/CustomerPooling.js";
 import { Player } from "../logic/Player.js";
 import { Crate, INTERACT_RANGE } from "../logic/Crate.js";
 import { CheckoutWindow } from "../logic/CheckoutWindow.js";
 import { FixtureWindow } from "../logic/FixtureWindow.js";
+import { GoBacksWindow } from "../logic/GoBacksWindow.js";
 import { TileRoom } from "../logic/TileRoom.js";
 import { TILE_SIZE, getZone, getTotalGridSize } from "../logic/RoomLayout.js";
-import { ShiftClock } from "../logic/ShiftClock.js";
+import { ShiftClock, SHIFT_DURATION_MS } from "../logic/ShiftClock.js";
 import { ShiftSummaryWindow } from "../logic/ShiftSummaryWindow.js";
 import { Market } from "../logic/Market.js";
 import { findGridPath } from "../logic/Pathfinder.js";
 import { FixturePlacement } from "../logic/FixturePlacement.js";
-import { FIXTURE_SPECS, getFixtureSpec, fixtureAccessCells, validateFixtureLayout } from "../logic/FixtureLayout.js";
+import { STARTING_FIXTURES, FIXTURE_TYPES, getFixtureType, fixtureAccessCells, validateFixtureLayout } from "../logic/FixtureLayout.js";
+import { FixtureRegistry } from "../logic/FixtureRegistry.js";
 import { validateShopSave } from "../logic/ShopSave.js";
 import { UIWindow } from "../logic/UIWindow.js";
 import { SaveManager } from "../../SaveManager.js";
 import { database } from "./boot.js"; // the exported DatabaseManager singleton
 
-const CUSTOMER_SPAWN_DELAY_MS = 4000;
 // Caps how many customers can be physically inside the store at once. A full store means
 // the next potential customer simply doesn't come in at all (not "delayed", gone for good)
 // -- a slow/backed-up dealer genuinely loses that sale, same as if the shift had ended
@@ -43,10 +50,10 @@ const REGISTER_INTERACT_RANGE = 130;
 const REGISTER_WIDTH = 90;
 const REGISTER_HEIGHT = 75;
 
-// How close the player has to be to shelfStandPoint to deliver a carried crate. Kept
-// separate from Crate's own INTERACT_RANGE (which governs picking a crate up off the
-// Loading Pad, and works fine tight) because shelfStandPoint is one single fixed pixel
-// in front of the shelf -- a tight radius around it meant approaching from almost any
+// How close the player has to be to a fixture's standPoint to deliver a carried crate or
+// open it. Kept separate from Crate's own INTERACT_RANGE (which governs picking a crate up
+// off the Loading Pad, and works fine tight) because standPoint is one single fixed pixel
+// in front of the fixture -- a tight radius around it meant approaching from almost any
 // angle but dead-center failed silently (same "reasonably close should count" problem
 // the register had; see REGISTER_INTERACT_RANGE above).
 const SHELF_INTERACT_RANGE = 110;
@@ -90,8 +97,12 @@ export class GameScene extends Phaser.Scene {
     this.lastSavedSnapshot = null;
     this.saveStatus = "Not saved yet";
     this.playerState = new PlayerState();
+    this.recalculateActiveFactions();
     this.market = new Market(database.getAllItems());
     this.shiftClock = new ShiftClock();
+    this.customerArrivalSchedule = [];
+    this.nextScheduledArrival = 0;
+    this.customerPool = null;
     this.hud = new HUDController(this.playerState, this.shiftClock, () => this.startNextShift());
 
     this.windowManager = new WindowManager();
@@ -150,69 +161,16 @@ export class GameScene extends Phaser.Scene {
       y: this.room.worldY(backroomDoorGY),
     };
 
-    const shelfSpec = getFixtureSpec("fixture_demo_01");
-    const shelfPosition = {
-      x: (shelfSpec.gx + shelfSpec.w / 2) * TILE_SIZE,
-      y: (shelfSpec.gy + shelfSpec.h / 2) * TILE_SIZE,
-    };
-
-    this.fixture = new ShelfFixture({
-      id: shelfSpec.id,
-      displayType: "universal",
-      x: shelfPosition.x,
-      y: shelfPosition.y,
-      gridDimensions: { w: shelfSpec.w, h: shelfSpec.h },
-      // The item-placement grid (bible Steps 4/5/22): 4 columns x 2 rows the player
-      // manually places items into (Tarkov-style packing, using each item's own
-      // dimensions, optionally rotated) -- unrelated to the world-tile footprint above.
-      displayGrid: { ...shelfSpec.displayGrid },
-      // Depth/"stack" capacity (bible Step 5): NOT a shared pool -- each individual
-      // placement gets its own capacity, independently, from this stackDepth divided by
-      // that placement's own item's stackSize (see ShelfFixture.getPlacementCapacity).
-      stackDepth: shelfSpec.stackDepth,
-      placements: [], // starts completely empty; the player places everything by hand
-    });
-    this.drawFixture(this.fixture, shelfSpec.texture);
-
-    // Storage Fixture (bible Step 42: Backroom Storage) -- lives in the Storeroom. Unlike
-    // the sales shelf above, this uses the simple shared-capacity-pool model (any item
-    // fits anywhere there's room -- see InventoryPool.js) rather than manual grid
-    // placement; it's just a flexible overflow/staging area, not a real storefront
-    // display. Starts completely empty; capacity 20 matches the size of pool most things
-    // will actually be tested against.
-    // 3 genuinely independent Storage Fixtures (bible Step 42), each its own storage
-    // pool -- NOT one shared capacity split across what only looks like 3 lockers. Each
-    // uses its own single-door locker_single.png, placed directly adjacent to the next,
-    // so the art reads as one bank of lockers while each door is actually its own
-    // Fixture with its own position/capacity/stock.
-    this.storageLockers = [];
-    for (const spec of FIXTURE_SPECS.filter((entry) => entry.kind === "storage")) {
-      const fixture = new StorageFixture({
-        id: spec.id,
-        displayType: "storage",
-        x: (spec.gx + spec.w / 2) * TILE_SIZE,
-        y: (spec.gy + spec.h / 2) * TILE_SIZE,
-        gridDimensions: { w: spec.w, h: spec.h },
-        capacity: spec.capacity,
-        stock: [],
-      });
-      this.drawFixture(fixture, spec.texture);
-      this.storageLockers.push({ fixture });
-    }
-
-    // Mark each fixture's full footprint as blocked for pathfinding (see
-    // getOccupiedCellKeys) -- separate from TileRoom's own wall knowledge, since fixtures
-    // are a scene-level concern, not something the room itself places.
+    // Every placed fixture lives in this one registry -- see FixtureRegistry.js. Shelves use
+    // manual grid placement (bible Steps 4/5/22); lockers are shared-capacity storage pools
+    // (bible Step 42); the register runs checkout.
+    this.fixtures = new FixtureRegistry();
+    // The register's body is solid to the player and crates only: customers queue almost
+    // flush against its front edge, so it can't join obstacleGroup.
+    this.registerGroup = this.physics.add.staticGroup();
+    // Each fixture's footprint, blocked for pathfinding (filled by applyFixtureLayout).
     this.blockedCells = new Set();
-    const registerSpec = getFixtureSpec("register");
-    this.registerFixture = {
-      id: registerSpec.id,
-      x: (registerSpec.gx + registerSpec.w / 2) * TILE_SIZE,
-      y: (registerSpec.gy + registerSpec.h / 2) * TILE_SIZE,
-      gridDimensions: { w: registerSpec.w, h: registerSpec.h },
-    };
-    this.registerPoint = this.registerFixture;
-    this.drawRegister(this.registerFixture);
+    for (const entry of STARTING_FIXTURES) this.spawnFixture(entry);
     this.operatingRegister = false;
     this.playerPositionBeforeRegister = null;
 
@@ -232,7 +190,8 @@ export class GameScene extends Phaser.Scene {
     // unrelated point.
     this.exitPoint = { x: this.storeDoor.x, y: this.storeDoor.y };
 
-    this.checkoutWindow = new CheckoutWindow(this.windowManager);
+    this.checkoutWindow = new CheckoutWindow(this.windowManager, this.playerState, () => this.openGoBacksBin());
+    this.goBacksWindow = new GoBacksWindow(this.windowManager, this.playerState);
     this.fixtureWindow = new FixtureWindow(this.windowManager, this.playerState);
     // Ordered line of customers waiting at the register; index 0 is the one currently
     // being checked out. Re-laid-out (via layoutRegisterLine) any time it changes so
@@ -274,7 +233,7 @@ export class GameScene extends Phaser.Scene {
     // The register has its own static body (see drawRegister) -- not part of obstacleGroup,
     // since that's shared with customerGroup's collider and customers need to stand almost
     // flush against it to queue. The player has no such constraint.
-    this.physics.add.collider(this.player.sprite, this.registerSprite);
+    this.physics.add.collider(this.player.sprite, this.registerGroup);
     this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
 
     // Loading Pad (bible Step 10): where ordered restock crates physically spawn, to be
@@ -291,7 +250,7 @@ export class GameScene extends Phaser.Scene {
     this.crateGroup = this.physics.add.group();
     this.physics.add.collider(this.crateGroup, this.room.wallGroup);
     this.physics.add.collider(this.crateGroup, this.obstacleGroup);
-    this.physics.add.collider(this.crateGroup, this.registerSprite);
+    this.physics.add.collider(this.crateGroup, this.registerGroup);
     // Register impacts without introducing dynamic obstacles to customer pathfinding.
     this.physics.add.overlap(this.crateGroup, this.customerGroup, (crateSprite, customerSprite) => {
       const crate = this.restockCrates.find((candidate) => candidate.sprite === crateSprite);
@@ -309,23 +268,19 @@ export class GameScene extends Phaser.Scene {
       for (const crate of this.restockCrates) crate.setPaused(paused);
     });
     this.customers = [];
-    const initialLayout = this.getFixtureLayout();
+    const initialLayout = this.fixtures.layout();
     const initialAccess = validateFixtureLayout(initialLayout, this.getLayoutOptions());
     if (!initialAccess.valid) throw new Error(initialAccess.reason);
     this.applyFixtureLayout(initialLayout, initialAccess);
     this.fixturePlacement = new FixturePlacement(this);
     this.input.mouse.disableContextMenu();
 
-    // Single interact key for both ends of hauling a crate: pick one up near the Loading
-    // Pad, then press it again near the shelf to deliver -- see handleInteract().
+    // E opens fixtures or delivers/places carried crates; Space handles pickup/drop/throw.
     this.input.keyboard.on("keydown-E", () => this.handleInteract());
-    this.input.keyboard.on("keydown-Q", (event) => {
-      if (!event.repeat) this.dropCarriedCrate();
-    });
+    this.bindCrateKey();
 
-    // Constructed here (not earlier in create()) because its Supply tab reads this.fixture
-    // immediately on construction (via SupplyRenderer -> getRestockableItems()) -- it has
-    // to already exist.
+    // Constructed after the fixtures exist: its Supply tab reads their stock immediately
+    // on construction (via SupplyRenderer -> getRestockableItems()).
     this.managerTablet = new ManagerTablet(this.windowManager, this.playerState, this);
     this.input.keyboard.on("keydown-I", () => this.managerTablet.openWindow());
 
@@ -343,21 +298,10 @@ export class GameScene extends Phaser.Scene {
     // player can think without pressure, without a variable speed control.
     this.input.keyboard.on("keydown-P", () => this.shiftClock.togglePause());
 
-    // Starts paused -- the store opens for the day only once the player presses START
-    // SHIFT on the pre-shift window below (or "START NEXT SHIFT" at the end of a
-    // previous one, via startNextShift()), not the instant the scene loads.
-    this.spawnTimer = this.time.addEvent({
-      delay: CUSTOMER_SPAWN_DELAY_MS,
-      loop: true,
-      paused: true,
-      callback: () => this.spawnCustomer(),
-    });
-
     this.events.once("shutdown", () => {
       this.fixturePlacement.destroy();
       this.managerTablet.disableInventoryNavigation();
       this.managerTablet.fixtureHighlight.destroy();
-      this.spawnTimer.remove();
       this.autosaveTimer.remove();
       this.hud.destroy();
       this.fixtureWindow.destroy();
@@ -388,16 +332,41 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBounds(bounds.x, bounds.y, bounds.width, bounds.height);
   }
 
-  getFixtureModels() {
-    return [this.fixture, ...this.storageLockers.map(({ fixture }) => fixture), this.registerFixture];
+  // Builds a fixture model and its sprite, then registers it. Shelves and lockers start
+  // empty; applySave fills in contents afterward.
+  spawnFixture({ id, type, gx, gy }) {
+    const spec = getFixtureType(type);
+    if (!spec) throw new Error(`Unknown fixture type: ${type}`);
+    const base = {
+      id,
+      x: (gx + spec.w / 2) * TILE_SIZE,
+      y: (gy + spec.h / 2) * TILE_SIZE,
+      gridDimensions: { w: spec.w, h: spec.h },
+    };
+    let fixture;
+    if (spec.kind === "shelf") {
+      fixture = new ShelfFixture({
+        ...base,
+        displayType: "universal",
+        // The item-placement grid the player packs by hand, unrelated to the world footprint.
+        displayGrid: { ...spec.displayGrid },
+        // Per-placement stack depth, not a shared pool -- see ShelfFixture.getPlacementCapacity.
+        stackDepth: spec.stackDepth,
+        placements: [],
+      });
+    } else if (spec.kind === "storage") {
+      fixture = new StorageFixture({ ...base, displayType: "storage", capacity: spec.capacity, stock: [] });
+    } else {
+      fixture = { ...base };
+    }
+    Object.assign(fixture, { type, gx, gy });
+    if (spec.kind === "register") this.drawRegister(fixture);
+    else this.drawFixture(fixture, spec.texture);
+    return this.fixtures.add(fixture);
   }
 
-  getFixtureLayout() {
-    return this.getFixtureModels().map((fixture) => ({
-      id: fixture.id,
-      gx: Math.round(fixture.x / TILE_SIZE - fixture.gridDimensions.w / 2),
-      gy: Math.round(fixture.y / TILE_SIZE - fixture.gridDimensions.h / 2),
-    }));
+  despawnAllFixtures() {
+    for (const fixture of this.fixtures.clear()) fixture.sprite.destroy();
   }
 
   getLayoutOptions(occupiedRectangles = []) {
@@ -420,10 +389,13 @@ export class GameScene extends Phaser.Scene {
     return this.canSaveOffShift() && !this.startingShift;
   }
 
+  layoutWithMove(id, gx, gy) {
+    return this.fixtures.layout().map((entry) => entry.id === id ? { ...entry, gx, gy } : entry);
+  }
+
   checkFixtureMove(id, gx, gy) {
-    const placements = this.getFixtureLayout().map((entry) => entry.id === id ? { id, gx, gy } : entry);
     const bodies = [this.player.sprite.body, ...this.restockCrates.map((crate) => crate.sprite.body)];
-    return validateFixtureLayout(placements, this.getLayoutOptions(
+    return validateFixtureLayout(this.layoutWithMove(id, gx, gy), this.getLayoutOptions(
       bodies.filter((body) => body.enable).map((body) => ({
         left: body.left, right: body.right, top: body.top, bottom: body.bottom,
       })),
@@ -435,51 +407,51 @@ export class GameScene extends Phaser.Scene {
       this.showShopMessage("Fixtures can only move while the store is closed.");
       return false;
     }
-    if (!getFixtureSpec(id)) throw new Error(`Unknown fixture: ${id}`);
+    if (!this.fixtures.get(id)) throw new Error(`Unknown fixture: ${id}`);
     const result = this.checkFixtureMove(id, gx, gy);
     if (!result.valid) {
       this.showShopMessage(result.reason);
       return false;
     }
-    const layout = this.getFixtureLayout().map((entry) => entry.id === id ? { id, gx, gy } : entry);
-    this.applyFixtureLayout(layout, result);
+    this.applyFixtureLayout(this.layoutWithMove(id, gx, gy), result);
     this.playerState.notifyListeners();
     return true;
   }
 
   applyFixtureLayout(layout, result) {
+    const toWorld = (cell) => ({ x: this.room.worldX(cell.gx), y: this.room.worldY(cell.gy) });
     for (const entry of layout) {
-      const fixture = this.getFixtureModels().find((model) => model.id === entry.id);
+      const fixture = this.fixtures.get(entry.id);
+      fixture.gx = entry.gx;
+      fixture.gy = entry.gy;
       fixture.x = (entry.gx + fixture.gridDimensions.w / 2) * TILE_SIZE;
       fixture.y = (entry.gy + fixture.gridDimensions.h / 2) * TILE_SIZE;
       fixture.sprite.setPosition(fixture.x, fixture.y);
       fixture.sprite.body.updateFromGameObject();
+      fixture.standPoint = toWorld(result.access.get(entry.id));
     }
     this.blockedCells = result.blockedCells;
-    const toWorld = (cell) => ({ x: this.room.worldX(cell.gx), y: this.room.worldY(cell.gy) });
-    this.shelfStandPoint = toWorld(result.access.get(this.fixture.id));
-    for (const locker of this.storageLockers) {
-      locker.standPoint = toWorld(result.access.get(locker.fixture.id));
-    }
     this.registerQueuePoints = result.queueCells.map(toWorld);
     this.registerQueueAnchor = this.registerQueuePoints[0];
-    const register = layout.find((entry) => entry.id === "register");
-    const behind = fixtureAccessCells(register, true);
+    const behind = fixtureAccessCells(this.fixtures.register(), true);
     this.behindRegisterPoint = toWorld(behind[Math.floor(behind.length / 2)]);
   }
 
   serialize() {
-    const moving = this.fixtureWindow.pendingPlacement?.moving;
-    const shelfPlacements = this.fixture.placements.map((entry) => ({ ...entry }));
-    if (moving) {
-      shelfPlacements.push({ ...moving, ...this.fixtureWindow.pendingPlacement.origin });
-    }
+    const pending = this.fixtureWindow.pendingPlacement;
     const snapshot = {
       playerState: this.playerState.serialize(),
       market: this.market.serialize(),
-      fixtures: this.getFixtureLayout().map((entry) => {
-        const fixture = this.getFixtureModels().find((model) => model.id === entry.id);
-        if (fixture === this.fixture) return { ...entry, placements: shelfPlacements };
+      fixtures: this.fixtures.all().map((fixture) => {
+        const entry = { id: fixture.id, type: fixture.type, gx: fixture.gx, gy: fixture.gy };
+        if (fixture instanceof ShelfFixture) {
+          const placements = fixture.placements.map((stack) => ({ ...stack }));
+          // A stack lifted mid-move is saved back at its origin.
+          if (pending?.moving && this.fixtureWindow.fixture === fixture) {
+            placements.push({ ...pending.moving, ...pending.origin });
+          }
+          return { ...entry, placements };
+        }
         if (fixture instanceof StorageFixture) {
           return { ...entry, stock: fixture.stock.filter((stack) => stack.quantity > 0).map((stack) => ({ ...stack })) };
         }
@@ -488,39 +460,45 @@ export class GameScene extends Phaser.Scene {
       unlockedZones: this.room.zones.filter((zone) => !zone.locked).map((zone) => zone.id),
       crates: this.restockCrates.map((crate) => crate.serialize()),
       carriedCrate: this.carriedCrate ? {
-        itemId: this.carriedCrate.itemId, quantity: this.carriedCrate.quantity,
+        ...this.carriedCrate.serializePayload(),
       } : null,
     };
     return validateShopSave(snapshot, database);
   }
 
-  applySave(data) {
-    validateShopSave(data, database);
+  applySave(saved) {
+    const data = validateShopSave(saved, database);
     for (const id of data.unlockedZones) this.room.unlockZone(id);
     const result = validateFixtureLayout(data.fixtures, this.getLayoutOptions());
     if (!result.valid) throw new Error(`Invalid saved layout: ${result.reason}`);
-    this.applyFixtureLayout(data.fixtures, result);
+    this.despawnAllFixtures();
     for (const entry of data.fixtures) {
-      const fixture = this.getFixtureModels().find((model) => model.id === entry.id);
-      if (fixture === this.fixture) fixture.placements = entry.placements.map((stack) => ({ ...stack }));
+      const fixture = this.spawnFixture(entry);
+      if (fixture instanceof ShelfFixture) fixture.placements = entry.placements.map((stack) => ({ ...stack }));
       if (fixture instanceof StorageFixture) fixture.stock = entry.stock.map((stack) => ({ ...stack }));
     }
+    this.applyFixtureLayout(data.fixtures, result);
     this.market.applySave(data.market);
     this.player.teleportTo(this.storeDoor.x, this.storeDoor.y - TILE_SIZE);
     for (const crate of this.restockCrates) crate.destroy();
     this.restockCrates = data.crates.map((entry) => {
-      const crate = new Crate(this, entry.itemId, entry.quantity, entry.x, entry.y);
+      const crate = new Crate(this, entry.itemId, entry.quantity, entry.x, entry.y,
+        entry.kind === "fixture" ? { kind: "fixture", typeId: entry.typeId } : undefined);
       crate.applySave(entry);
       return crate;
     });
     if (this.carriedCrate) this.carriedCrate.destroy();
     this.carriedCrate = null;
     if (data.carriedCrate) {
-      const { itemId, quantity } = data.carriedCrate;
-      this.carriedCrate = new Crate(this, itemId, quantity, this.player.sprite.x, this.player.sprite.y);
+      const entry = data.carriedCrate;
+      this.carriedCrate = new Crate(
+        this, entry.itemId, entry.quantity, this.player.sprite.x, this.player.sprite.y,
+        entry.kind === "fixture" ? { kind: "fixture", typeId: entry.typeId } : undefined,
+      );
       this.carriedCrate.pickUp(this.player.sprite);
     }
     this.playerState.applySave(data.playerState);
+    this.recalculateActiveFactions();
     this.creditsAtShiftStart = this.playerState.credits;
     this.reputationAtShiftStart = this.playerState.globalReputation;
     this.setupCamera();
@@ -657,32 +635,22 @@ export class GameScene extends Phaser.Scene {
     this.debugGridGraphics.setVisible(!this.debugGridGraphics.visible);
   }
 
-  // Every fixture that can be delivered to / managed in-world, paired with the point the
-  // player has to stand at to reach it (bible: shelves AND Storage Fixtures share the same
-  // slot/inventory logic -- see Fixture.js -- so both are handled identically here).
-  getFixtureEntries() {
-    return [
-      { fixture: this.fixture, standPoint: this.shelfStandPoint },
-      ...this.storageLockers.map(({ fixture, standPoint }) => ({ fixture, standPoint })),
-    ];
-  }
-
-  // Whichever fixture the player is currently standing close enough to, or null if
-  // neither is in range -- used by both crate delivery and opening a fixture's stock/
-  // capacity window, so "close enough" means the same thing for both.
+  // Whichever stock-holding fixture (shelf or locker) the player is standing close enough
+  // to, or null -- used by both crate delivery and opening a fixture's window, so "close
+  // enough" means the same thing for both.
   getNearbyFixture() {
     let nearest = null;
     let nearestDistance = SHELF_INTERACT_RANGE;
 
-    for (const entry of this.getFixtureEntries()) {
+    for (const fixture of this.fixtures.stockHolders()) {
       const distance = Phaser.Math.Distance.Between(
         this.player.sprite.x,
         this.player.sprite.y,
-        entry.standPoint.x,
-        entry.standPoint.y,
+        fixture.standPoint.x,
+        fixture.standPoint.y,
       );
       if (distance <= nearestDistance) {
-        nearest = entry.fixture;
+        nearest = fixture;
         nearestDistance = distance;
       }
     }
@@ -701,6 +669,24 @@ export class GameScene extends Phaser.Scene {
     return this.playerState.storePrices[itemId] ?? this.market.getPrice(itemId);
   }
 
+  getLoadingPadSpawnPosition() {
+    const offsets = [-64, 0, 64];
+    for (const dy of offsets) {
+      for (const dx of offsets) {
+        const position = {
+          x: this.loadingPadSpawnPoint.x + dx,
+          y: this.loadingPadSpawnPoint.y + dy,
+        };
+        const occupied = this.restockCrates.some((crate) =>
+          Math.abs(crate.sprite.x - position.x) < 52 &&
+          Math.abs(crate.sprite.y - position.y) < 52,
+        );
+        if (!occupied) return position;
+      }
+    }
+    return null;
+  }
+
   setStorePrice(itemId, price) {
     const rounded = Math.round(price);
     if (!Number.isFinite(rounded) || rounded < 1) return false;
@@ -711,12 +697,12 @@ export class GameScene extends Phaser.Scene {
   getInventoryItems() {
     const totals = new Map();
     const add = (entry, column) => {
-      if (entry.quantity <= 0) return;
+      if (!entry.itemId || entry.quantity <= 0) return;
       if (!totals.has(entry.itemId)) totals.set(entry.itemId, { storage: 0, stock: 0 });
       totals.get(entry.itemId)[column] += entry.quantity;
     };
 
-    for (const { fixture } of this.getFixtureEntries()) {
+    for (const fixture of this.fixtures.stockHolders()) {
       const column = fixture instanceof ShelfFixture ? "stock" : "storage";
       for (const entry of fixture.stock) add(entry, column);
     }
@@ -724,8 +710,9 @@ export class GameScene extends Phaser.Scene {
     const moving = this.fixtureWindow.pendingPlacement?.moving;
     if (moving) add(moving, "stock");
     for (const entry of this.playerState.hovercart.stock) add(entry, "storage");
+    for (const entry of this.playerState.goBacks.stock) add(entry, "storage");
     for (const crate of this.restockCrates) add(crate, "storage");
-    if (this.carriedCrate) add(this.carriedCrate, "storage");
+    if (this.carriedCrate?.kind === "item") add(this.carriedCrate, "storage");
 
     return database.getAllItems()
       .filter((item) => totals.has(item.id))
@@ -747,7 +734,7 @@ export class GameScene extends Phaser.Scene {
   // impossible for a fixture that legitimately starts completely empty.
   getRestockableItems() {
     const quantityByItemId = new Map();
-    for (const { fixture } of this.getFixtureEntries()) {
+    for (const fixture of this.fixtures.stockHolders()) {
       for (const entry of fixture.stock) {
         quantityByItemId.set(entry.itemId, (quantityByItemId.get(entry.itemId) || 0) + entry.quantity);
       }
@@ -763,6 +750,14 @@ export class GameScene extends Phaser.Scene {
       }));
   }
 
+  recalculateActiveFactions() {
+    const activeFactions = getLicensedFactionIds(
+      this.playerState.activeLicenses,
+      database.getAllItems(),
+    );
+    this.playerState.setActiveFactions(activeFactions);
+  }
+
   // Spends credits and spawns a physical crate at the Loading Pad (bible Step 10) -- it
   // isn't actually restocked until the player hauls it to a fixture, see handleInteract().
   // Returns false (no-op) if the player can't afford it or doesn't have a signed license
@@ -775,6 +770,8 @@ export class GameScene extends Phaser.Scene {
 
     const cost = this.restockCost(item);
     if (this.playerState.credits < cost) return false;
+    const spawn = this.getLoadingPadSpawnPosition();
+    if (!spawn) return false;
 
     this.playerState.spendCredits(cost);
     // A first-time item starts at today's market price, then stays put until repriced.
@@ -782,32 +779,134 @@ export class GameScene extends Phaser.Scene {
       this.playerState.storePrices[itemId] = this.market.getPrice(itemId);
     }
 
-    // Cycle through nine spots within the pad; unbounded rows would spawn later crates
-    // inside or beyond its south wall.
-    const offsetIndex = this.restockCrates.length;
-    const spawnX = this.loadingPadSpawnPoint.x + (offsetIndex % 3) * 48 - 48;
-    const spawnY = this.loadingPadSpawnPoint.y + [0, -40, 40][Math.floor(offsetIndex / 3) % 3];
-
-    const crate = new Crate(this, itemId, RESTOCK_QUANTITY, spawnX, spawnY);
+    const crate = new Crate(this, itemId, RESTOCK_QUANTITY, spawn.x, spawn.y);
     crate.setPaused(this.crateMotionPaused);
     this.restockCrates.push(crate);
     this.playerState.notifyListeners();
     return true;
   }
 
-  // The single keydown-E handler for all player interactions: delivers a carried crate if
-  // holding one, otherwise tries (in order) picking up a nearby crate, opening a nearby
-  // fixture's stock/capacity window, exiting the register if already operating it, or
-  // entering it if close enough. One shared key rather than separate ones per action since
-  // at most one of these is ever actually reachable/relevant at a time in practice.
+  getFixturePurchaseOptions() {
+    return Object.values(FIXTURE_TYPES).map((spec) => {
+      const license = database.getLicense(spec.licenseId);
+      const licensed = this.playerState.activeLicenses.has(spec.licenseId);
+      const uniqueAlreadyPlaced = spec.kind === "register" &&
+        this.fixtures.ofKind("register").length > 0;
+      const hasDeliverySpace = !!this.getLoadingPadSpawnPosition();
+      return {
+        spec,
+        license,
+        licensed,
+        canAfford: this.playerState.credits >= spec.price,
+        uniqueAlreadyPlaced,
+        hasDeliverySpace,
+      };
+    });
+  }
+
+  buyFixture(typeId) {
+    const spec = getFixtureType(typeId);
+    if (!spec) throw new Error(`Unknown fixture type: ${typeId}`);
+    if (!this.playerState.activeLicenses.has(spec.licenseId)) return false;
+    if (this.fixtures.ofKind("register").length && spec.kind === "register") return false;
+    if (this.playerState.credits < spec.price) return false;
+    const spawn = this.getLoadingPadSpawnPosition();
+    if (!spawn) return false;
+
+    this.playerState.spendCredits(spec.price);
+    const crate = new Crate(this, null, 1, spawn.x, spawn.y, { kind: "fixture", typeId });
+    crate.setPaused(this.crateMotionPaused);
+    this.restockCrates.push(crate);
+    this.playerState.notifyListeners();
+    return true;
+  }
+
+  canCrateFixture(fixture) {
+    return this.getFixtureCrateBlockReason(fixture) === null;
+  }
+
+  getFixtureCrateBlockReason(fixture) {
+    if (!fixture) return "Fixture not found.";
+    if (!this.canRearrangeFixtures()) return "Fixtures can only be crated while the store is closed.";
+    if (getFixtureType(fixture.type).kind === "register" &&
+      this.fixtures.ofKind("register").length <= 1) return "The last register cannot be crated.";
+    if (fixture instanceof ShelfFixture && fixture.placements.some((stack) => stack.quantity > 0)) {
+      return "Only empty fixtures can be crated.";
+    }
+    if (fixture instanceof StorageFixture && fixture.stock.some((stack) => stack.quantity > 0)) {
+      return "Only empty fixtures can be crated.";
+    }
+    return null;
+  }
+
+  crateFixture(id) {
+    const fixture = this.fixtures.get(id);
+    if (!fixture) throw new Error(`Unknown fixture: ${id}`);
+    const reason = this.getFixtureCrateBlockReason(fixture);
+    if (reason) {
+      this.showShopMessage(reason);
+      return false;
+    }
+    if (this.fixtureWindow.fixture === fixture) this.fixtureWindow.uiWindow.close();
+    fixture.sprite.destroy();
+    this.fixtures.remove(id);
+    const crate = new Crate(this, null, 1, fixture.x, fixture.y, {
+      kind: "fixture",
+      typeId: fixture.type,
+    });
+    crate.setPaused(this.crateMotionPaused);
+    this.restockCrates.push(crate);
+    this.playerState.notifyListeners();
+    return true;
+  }
+
+  checkFixturePlacement(typeId, gx, gy) {
+    const id = this.fixtures.nextId(typeId);
+    const layout = [...this.fixtures.layout(), { id, type: typeId, gx, gy }];
+    const bodies = [this.player.sprite.body, ...this.restockCrates.map((crate) => crate.sprite.body)];
+    return validateFixtureLayout(layout, this.getLayoutOptions(
+      bodies.filter((body) => body.enable).map((body) => ({
+        left: body.left, right: body.right, top: body.top, bottom: body.bottom,
+      })),
+    ));
+  }
+
+  placeFixtureFromCrate(crate, gx, gy) {
+    if (!this.canRearrangeFixtures() || this.carriedCrate !== crate || crate.kind !== "fixture") return false;
+    const id = this.fixtures.nextId(crate.typeId);
+    const result = this.checkFixturePlacement(crate.typeId, gx, gy);
+    if (!result.valid) {
+      this.showShopMessage(result.reason);
+      return false;
+    }
+
+    const entry = { id, type: crate.typeId, gx, gy };
+    this.spawnFixture(entry);
+    this.applyFixtureLayout(this.fixtures.layout(), result);
+    crate.destroy();
+    this.carriedCrate = null;
+    this.playerState.notifyListeners();
+    return true;
+  }
+
+  // E delivers/places a carried crate, opens a nearby fixture, or toggles register operation.
   handleInteract() {
     if (this.fixturePlacement.active || this.startingShift || this.loadFailed) return;
     if (this.carriedCrate) {
+      if (this.carriedCrate.kind === "fixture") {
+        const nearby = this.getNearbyFixture();
+        if (nearby && getFixtureType(nearby.type).kind === "storage") {
+          this.showFloatingText(this.player.sprite.x, this.player.sprite.y - 40,
+            "Fixtures can't be stocked here", "#94a3b8");
+          return;
+        }
+        this.fixturePlacement.beginFromCrate(this.carriedCrate);
+        return;
+      }
       this.tryDeliverCarriedCrate();
       return;
     }
 
-    if (this.tryPickUpNearestCrate()) return;
     if (this.tryOpenFixtureWindow()) return;
 
     // Toggle: pressing E again while already behind the counter leaves it, rather than
@@ -836,32 +935,19 @@ export class GameScene extends Phaser.Scene {
     const target = fixture || this.getNearbyFixture();
     if (!target) return false;
 
-    const entry = this.getFixtureEntries().find((candidate) => candidate.fixture === target);
     const distance = Phaser.Math.Distance.Between(
       this.player.sprite.x,
       this.player.sprite.y,
-      entry.standPoint.x,
-      entry.standPoint.y,
+      target.standPoint.x,
+      target.standPoint.y,
     );
     if (distance > SHELF_INTERACT_RANGE) return false;
 
-    const title = this.getFixtureTitle(target);
-    this.fixtureWindow.openForFixture(target, title);
+    this.fixtureWindow.openForFixture(target, this.fixtures.displayName(target));
     return true;
   }
 
-  // "SHELF" for the sales shelf, "LOCKER 1"/"LOCKER 2"/"LOCKER 3" for whichever Storage
-  // Fixture this is -- so the player can actually tell the 3 independent lockers apart
-  // (they're visually one combined locker_storage image, but genuinely separate
-  // fixtures/capacities -- see their construction above).
-  getFixtureTitle(fixture) {
-    if (fixture === this.fixture) return "SHELF";
-    const lockerIndex = this.storageLockers.findIndex((locker) => locker.fixture === fixture);
-    return `LOCKER ${lockerIndex + 1}`;
-  }
-
-  // Handles a pickup or warns about a nearby moving crate. Only falls through to other
-  // interactions when no crate is in range.
+  // Handles a pickup or warns about a nearby moving crate.
   tryPickUpNearestCrate() {
     const { x, y } = this.player.sprite;
     let nearest = null;
@@ -890,10 +976,38 @@ export class GameScene extends Phaser.Scene {
     this.restockCrates = this.restockCrates.filter((crate) => crate !== nearest);
     this.carriedCrate = nearest;
 
-    const item = database.getItem(nearest.itemId);
-    this.showFloatingText(x, y - 40, `Picked up ${item.name} x${nearest.quantity} (Q to drop)`, "#38bdf8");
+    const description = nearest.kind === "fixture"
+      ? `${getFixtureType(nearest.typeId).name} fixture`
+      : `${database.getItem(nearest.itemId).name} x${nearest.quantity}`;
+    this.showFloatingText(x, y - 40, `Picked up ${description} (Space to drop/throw)`, "#38bdf8");
     this.playerState.notifyListeners();
     return true;
+  }
+
+  bindCrateKey() {
+    // Cursor keys capture Space by default, which blocks focused UI controls.
+    this.input.keyboard.removeCapture("SPACE");
+    this.input.keyboard.on("keydown-SPACE", (event) => {
+      if (event.target?.closest?.("#ui-layer")) return;
+      event.preventDefault();
+      if (!event.repeat) this.handleCrateInteract();
+    });
+  }
+
+  handleCrateInteract() {
+    if (this.fixturePlacement.active || this.startingShift || this.loadFailed) return;
+    if (this.carriedCrate) {
+      this.dropCarriedCrate();
+      return;
+    }
+    const { x, y } = this.player.sprite;
+    if (this.operatingRegister) {
+      this.showFloatingText(x, y - 40, "Leave the register to pick up a crate", "#94a3b8");
+      return;
+    }
+    if (!this.tryPickUpNearestCrate()) {
+      this.showFloatingText(x, y - 40, "No crate nearby", "#94a3b8");
+    }
   }
 
   dropCarriedCrate() {
@@ -925,8 +1039,10 @@ export class GameScene extends Phaser.Scene {
     );
     this.restockCrates.push(crate);
     this.carriedCrate = null;
-    const item = database.getItem(crate.itemId);
-    this.showFloatingText(x, y - 40, `Dropped ${item.name} x${crate.quantity}`, "#38bdf8");
+    const description = crate.kind === "fixture"
+      ? `${getFixtureType(crate.typeId).name} fixture`
+      : `${database.getItem(crate.itemId).name} x${crate.quantity}`;
+    this.showFloatingText(x, y - 40, `Dropped ${description}`, "#38bdf8");
     this.playerState.notifyListeners();
     return true;
   }
@@ -944,6 +1060,11 @@ export class GameScene extends Phaser.Scene {
 
   tryDeliverCarriedCrate() {
     const crate = this.carriedCrate;
+    if (crate.kind === "fixture") {
+      this.showFloatingText(this.player.sprite.x, this.player.sprite.y - 40,
+        "Fixtures can't be stocked here", "#94a3b8");
+      return;
+    }
     const target = this.getNearbyFixture();
 
     if (!target) {
@@ -1043,24 +1164,17 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  drawRegister(point) {
+  drawRegister(fixture) {
     const sprite = this.add
-      .image(point.x, point.y, "register_01")
+      .image(fixture.x, fixture.y, getFixtureType(fixture.type).texture)
       .setDisplaySize(REGISTER_WIDTH, REGISTER_HEIGHT)
       .setDepth(2)
       .setInteractive({ useHandCursor: true });
     sprite.on("pointerdown", (pointer) => {
       if (pointer.event?.target === this.game.canvas) this.openRegisterWindow();
     });
-
-    // Deliberately NOT added to obstacleGroup (shared with customerGroup's collider) --
-    // customers need to stand almost flush against its front edge to queue (see
-    // registerQueueAnchor), and a body solid to THEM would block that. The player has no
-    // such constraint, so give it its own static body and collide only the player against
-    // it (see the player setup below, where this.registerSprite is now available).
-    this.physics.add.existing(sprite, true);
-    this.registerSprite = sprite;
-    this.registerFixture.sprite = sprite;
+    this.registerGroup.add(sprite); // see registerGroup in create()
+    fixture.sprite = sprite;
   }
 
   // Walking up and pressing E / clicking the register always lets the player step behind
@@ -1078,6 +1192,30 @@ export class GameScene extends Phaser.Scene {
 
     const frontCustomer = this.registerLine[0];
     if (frontCustomer) this.startCheckout(frontCustomer); // re-renders/refocuses if already open
+    else this.checkoutWindow.openIdle(); // still offers the Go-Backs bin
+  }
+
+  // The bin is part of the register UI, so it's only reachable from behind the counter.
+  openGoBacksBin() {
+    if (!this.operatingRegister) return;
+    this.goBacksWindow.open();
+  }
+
+  // The front customer's patience holds while the player is actually ringing them up.
+  isServingCustomer(customer) {
+    return this.operatingRegister && this.registerLine[0] === customer &&
+      this.checkoutWindow.mode === "checkout" && this.checkoutWindow.uiWindow.isOpen;
+  }
+
+  // Bible Step 12: an angry customer's cart goes to the Go-Backs bin.
+  handleAngryLeave(customer, cart) {
+    this.playerState.addToGoBacks(cart);
+    const wasFront = this.registerLine[0] === customer;
+    this.registerLine = this.registerLine.filter((candidate) => candidate !== customer);
+    this.layoutRegisterLine();
+    if (!wasFront || !this.operatingRegister || !this.checkoutWindow.uiWindow.isOpen) return;
+    if (this.registerLine[0]) this.startCheckout(this.registerLine[0]);
+    else this.checkoutWindow.openIdle();
   }
 
   // Same "front of the counter" approach point customers queue at, not the register
@@ -1123,6 +1261,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.checkoutWindow.uiWindow.element.classList.contains("hidden")) {
       this.checkoutWindow.uiWindow.close();
     }
+    this.goBacksWindow.uiWindow.close();
     this.player.sprite.body.enable = true;
     this.player.inputEnabled = true;
     this.player.teleportTo(
@@ -1132,28 +1271,61 @@ export class GameScene extends Phaser.Scene {
     this.playerPositionBeforeRegister = null;
   }
 
-  spawnCustomer() {
+  prepareCustomerSchedule() {
+    const shelfPlacements = this.fixtures.shelves().flatMap((shelf) =>
+      shelf.placements.map((placement) => ({ ...placement })),
+    );
+    this.customerPool = createCustomerPool({
+      storeReputation: this.playerState.globalReputation,
+      factionReputation: this.playerState.factionReputation,
+      activeFactions: this.playerState.activeFactions,
+      shelfPlacements,
+      getItem: (itemId) => database.getItem(itemId),
+      employeeCount: 0,
+      tieBreakOffset: this.market.day,
+    });
+    this.customerArrivalSchedule = createCustomerArrivalSchedule(
+      this.customerPool.customerFactionIds,
+      SHIFT_DURATION_MS,
+    );
+    this.nextScheduledArrival = 0;
+  }
+
+  spawnScheduledCustomers() {
+    if (!this.shiftClock.started || !this.customerArrivalSchedule) return;
+
+    const elapsedMs = this.shiftClock.getElapsedMs();
+    while (
+      this.nextScheduledArrival < this.customerArrivalSchedule.length &&
+      this.customerArrivalSchedule[this.nextScheduledArrival].atMs <= elapsedMs
+    ) {
+      const { factionId } = this.customerArrivalSchedule[this.nextScheduledArrival];
+      this.nextScheduledArrival += 1;
+      this.spawnCustomer(factionId);
+    }
+  }
+
+  spawnCustomer(factionId = null) {
     if (this.customers.length >= MAX_CUSTOMERS_IN_STORE) {
       // Store's at capacity -- this customer never comes in at all, not merely delayed.
       this.playerState.customersTurnedAway += 1;
       return;
     }
 
-    const slot = this.fixture.findAvailableSlot();
-    if (!slot) return; // out of stock; skip spawn (basic version of bible Step 16)
-
     const customer = new Customer({
       scene: this,
-      fixture: this.fixture,
-      shelfStandPoint: this.shelfStandPoint,
+      factionId,
+      getShoppingPlan: (factionId) => this.createCustomerShoppingPlan(factionId),
       registerPoint: this.registerQueueAnchor,
       exitPoint: this.exitPoint,
-      onReserveShelfSlot: () => this.reserveShelfSlot(),
+      onReserveShelfSlot: (shelf, arrivingCustomer) =>
+        this.reserveShelfSlot(shelf, arrivingCustomer),
       onReserveQueueSlot: () => this.reserveQueueSlot(),
       onReserveExitSlot: () => this.reserveExitSlot(),
       playerState: this.playerState,
       spawnBounds: this.customerSpawnBounds,
       onJoinQueue: (arrivingCustomer) => this.handleJoinQueue(arrivingCustomer),
+      onLeaveAngry: (angryCustomer, cart) => this.handleAngryLeave(angryCustomer, cart),
       onComplete: (completedCustomer) => {
         this.customers = this.customers.filter(
           (candidate) => candidate !== completedCustomer,
@@ -1164,9 +1336,34 @@ export class GameScene extends Phaser.Scene {
     this.customers.push(customer);
   }
 
+  createCustomerShoppingPlan(factionId) {
+    const shelves = this.fixtures.shelves();
+    const shelfItemIds = shelves.flatMap((shelf) =>
+      shelf.placements.map((placement) => placement.itemId),
+    );
+    const buyList = createCustomerBuyList(
+      factionId,
+      shelfItemIds,
+      (itemId) => database.getItem(itemId),
+    );
+    const targetIds = new Set([
+      ...buyList.primaryItemIds,
+      ...buyList.bonusItemIds,
+      ...Object.values(buyList.matchingAmmoIdsByFirearm).flat(),
+    ]);
+    const shelfStops = shelves
+      .filter((shelf) => shelf.placements.some((placement) => targetIds.has(placement.itemId)))
+      .map((fixture) => ({ fixture, standPoint: fixture.standPoint }));
+    return { ...buyList, shelfStops };
+  }
+
+  getItem(itemId) {
+    return database.getItem(itemId);
+  }
+
   // Only the customer at the front of the line (index 0) has their cart shown in the
-  // checkout window; everyone else waits in a visible single-file line behind them (a
-  // basic version of bible Step 53 -- patience/emote bubbles are still a later pass).
+  // checkout window; everyone else waits in a visible single-file line behind them, with
+  // patience bubbles overhead (bible Step 53, see Customer.updatePatience).
   handleJoinQueue(customer) {
     this.registerLine.push(customer);
     this.layoutRegisterLine();
@@ -1199,11 +1396,12 @@ export class GameScene extends Phaser.Scene {
     return this.registerQueuePoints[Math.min(index, this.registerQueuePoints.length - 1)];
   }
 
-  // Distribute approaching shoppers across the fixture's clear front edge.
-  reserveShelfSlot() {
-    const inFlight = this.customers.filter((c) => c.state === "SEEK_SHELF").length;
-    const placement = this.getFixtureLayout().find((entry) => entry.id === this.fixture.id);
-    const cells = fixtureAccessCells(placement);
+  // Distribute shoppers approaching the same shelf across its clear front edge.
+  reserveShelfSlot(shelf, arrivingCustomer = null) {
+    const inFlight = this.customers.filter((c) =>
+      c !== arrivingCustomer && c.state === "SEEK_SHELF" && c.fixture === shelf,
+    ).length;
+    const cells = fixtureAccessCells(shelf);
     const cell = cells[inFlight % cells.length];
     return { x: this.room.worldX(cell.gx), y: this.room.worldY(cell.gy) };
   }
@@ -1239,12 +1437,13 @@ export class GameScene extends Phaser.Scene {
       this.layoutRegisterLine(); // shuffle everyone else forward one spot
 
       const nextCustomer = this.registerLine[0];
+      nextCustomer?.resetPatience(); // bible Step 53: any sale resets the next in line
       if (nextCustomer) {
         this.startCheckout(nextCustomer);
       } else {
-        // Nothing left to scan -- hide the window, but stay standing behind the counter
-        // (does NOT call endRegisterSession(); see its own comment for why).
-        this.checkoutWindow.uiWindow.close();
+        // Nothing left to scan -- stay behind the counter (does NOT call
+        // endRegisterSession(); see its own comment) with the idle register view.
+        this.checkoutWindow.openIdle();
       }
     });
   }
@@ -1252,8 +1451,8 @@ export class GameScene extends Phaser.Scene {
   update(time, delta) {
     this.fixturePlacement.update(delta);
     // The Manual Toggle (bible Step 2) is supposed to freeze time "entirely" -- it used to
-    // only stop the clock's own displayed tick, while customers (and the player) kept
-    // right on moving and the spawn timer kept spawning more of them in the background.
+    // only stop the clock's own displayed tick, while customers kept moving and arrivals
+    // continued to enter in the background.
     // Only true once a shift has actually been started, though -- isPaused is also the
     // (separate) pre-shift "store closed" state, during which free player movement is
     // intentional/unaffected (there are no customers to freeze yet anyway).
@@ -1276,13 +1475,10 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.shiftClock.update(delta);
+    this.spawnScheduledCustomers();
 
     // Soft Close (bible Step 11): once hour 12 hits, stop admitting new customers, but the
     // shift itself doesn't end until everyone already inside has actually been served.
-    // Also stays paused for as long as the clock itself isn't actually running (manually
-    // paused, or the very first shift not yet started) -- otherwise a paused game could
-    // still be quietly spawning customers nobody can see move.
-    this.spawnTimer.paused = !this.shiftClock.started || this.shiftClock.isPaused || this.shiftClock.softClosed;
 
     if (this.shiftClock.softClosed && this.customers.length === 0 && !this.shiftEnded) {
       this.endShift();
@@ -1325,6 +1521,7 @@ export class GameScene extends Phaser.Scene {
       this.handlePersistenceError(error);
       return;
     }
+    this.prepareCustomerSchedule();
     this.shiftClock.startNewShift();
     this.shiftEnded = false;
     this.startingShift = false;
@@ -1334,7 +1531,6 @@ export class GameScene extends Phaser.Scene {
     this.playerState.customersTurnedAway = 0;
     this.creditsAtShiftStart = this.playerState.credits;
     this.reputationAtShiftStart = this.playerState.globalReputation;
-    this.spawnTimer.paused = false;
     this.managerTablet.refreshLayoutPanels();
   }
 }

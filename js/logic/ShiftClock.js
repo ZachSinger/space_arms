@@ -7,8 +7,8 @@
 // the scene is responsible for actually ending the shift once everyone already inside has
 // been served (the clock itself only tracks time + the soft-close flag).
 const SHIFT_LENGTH_HOURS = 12;
-const REAL_SECONDS_PER_GTC_HOUR = 12; // "Static Speed" -- a full 12-hour shift is 144
-// real seconds (2m24s), fast enough to actually playtest a full shift end-to-end.
+const REAL_SECONDS_PER_GTC_HOUR = 50; // A 12-hour shift takes 10 minutes of unpaused play.
+export const SHIFT_DURATION_MS = SHIFT_LENGTH_HOURS * REAL_SECONDS_PER_GTC_HOUR * 1000;
 const SHIFT_START_HOUR = 8; // purely cosmetic -- the displayed clock starts at 08:00
 
 export class ShiftClock {
@@ -35,11 +35,15 @@ export class ShiftClock {
     this.notifyListeners();
   }
 
+  getElapsedMs() {
+    return this.elapsedHours * REAL_SECONDS_PER_GTC_HOUR * 1000;
+  }
+
   // The "Manual Toggle" from the bible -- lets the player freeze time entirely (e.g. to
   // think without pressure) without needing a variable speed control. Ignored before the
   // very first shift has actually been started -- otherwise the HUD's pause/resume button
   // could be used to sneak the clock running while the store is still supposed to be
-  // closed (spawnTimer et al. would stay paused regardless, since that's gated separately
+  // closed (customer arrivals would stay paused regardless, since that's gated separately
   // in GameScene, but the displayed clock ticking would be visibly wrong).
   togglePause() {
     if (!this.started) return;
