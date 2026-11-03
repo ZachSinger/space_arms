@@ -122,6 +122,17 @@ notice something that needs doing but isn't being done right now.
       (it was in `Items.json` the whole time, just never read). `lic_start_surplus` is
       free (0c, 0 reputation required) specifically so there's always at least one
       immediately-signable contract to get the loop started from a brand new game.
+- [x] ~~Storage lockers (3 doors, one `locker_storage` image) were actually one single
+      Fixture sharing one combined capacity pool~~ -- visually they're 3 separate lockers,
+      and they're supposed to actually be 3 separate storage spaces, not one pool that
+      just happens to render with 3 doors. Split into `this.storageLockers` -- 3
+      genuinely independent `StorageFixture` instances (each its own 1x2 world footprint,
+      capacity 20, no shared state at all), each drawn with its own dedicated
+      `locker_single.png` placed directly adjacent to the next, so the art still reads as
+      one bank of lockers. (First attempt cropped 3 fixtures to thirds of the same combined
+      `locker_storage.png` texture instead -- looked bad, replaced with real single-door
+      art provided afterward.) `FixtureWindow` titles now read "LOCKER 1"/"LOCKER
+      2"/"LOCKER 3" so they're distinguishable when opened.
 
 ## Bigger Features Not Yet Built (from the bible)
 - [x] Player avatar (`js/logic/Player.js`): WASD/arrow movement, collides with walls/

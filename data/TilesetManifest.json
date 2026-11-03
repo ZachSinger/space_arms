@@ -148,6 +148,10 @@
     "path": "img/Icons_Extracted/Tileset/Fixtures/light_ceiling_05.png"
   },
   {
+    "key": "locker_single",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/locker_single.png"
+  },
+  {
     "key": "locker_storage",
     "path": "img/Icons_Extracted/Tileset/Fixtures/locker_storage.png"
   },

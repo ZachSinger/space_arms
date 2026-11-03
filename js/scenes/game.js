@@ -186,17 +186,27 @@ export class GameScene extends Phaser.Scene {
     // placement; it's just a flexible overflow/staging area, not a real storefront
     // display. Starts completely empty; capacity 20 matches the size of pool most things
     // will actually be tested against.
-    const storagePosition = gridAlignedCenter(storeroom, 1, 1, 3, 2);
-    this.storageFixture = new StorageFixture({
-      id: "storage_demo_01",
-      displayType: "storage",
-      x: storagePosition.x,
-      y: storagePosition.y,
-      gridDimensions: { w: 3, h: 2 },
-      capacity: 20,
-      stock: [],
-    });
-    this.drawFixture(this.storageFixture, "locker_storage");
+    // 3 genuinely independent Storage Fixtures (bible Step 42), each its own storage
+    // pool -- NOT one shared capacity split across what only looks like 3 lockers. Each
+    // uses its own single-door locker_single.png, placed directly adjacent to the next,
+    // so the art reads as one bank of lockers while each door is actually its own
+    // Fixture with its own position/capacity/stock.
+    const LOCKER_COUNT = 3;
+    this.storageLockers = [];
+    for (let i = 0; i < LOCKER_COUNT; i += 1) {
+      const position = gridAlignedCenter(storeroom, 1 + i, 1, 1, 2);
+      const fixture = new StorageFixture({
+        id: `storage_demo_0${i + 1}`,
+        displayType: "storage",
+        x: position.x,
+        y: position.y,
+        gridDimensions: { w: 1, h: 2 },
+        capacity: 20,
+        stock: [],
+      });
+      this.drawFixture(fixture, "locker_single");
+      this.storageLockers.push({ fixture });
+    }
 
     // Mark each fixture's full footprint as blocked for pathfinding (see
     // getOccupiedCellKeys) -- separate from TileRoom's own wall knowledge, since fixtures
@@ -207,11 +217,13 @@ export class GameScene extends Phaser.Scene {
       this.fixture.gridDimensions.w * TILE_SIZE,
       this.fixture.gridDimensions.h * TILE_SIZE,
     );
-    const storageOccupiedCells = getOccupiedCellKeys(
-      this.storageFixture.x,
-      this.storageFixture.y,
-      this.storageFixture.gridDimensions.w * TILE_SIZE,
-      this.storageFixture.gridDimensions.h * TILE_SIZE,
+    const storageOccupiedCells = this.storageLockers.flatMap(({ fixture }) =>
+      getOccupiedCellKeys(
+        fixture.x,
+        fixture.y,
+        fixture.gridDimensions.w * TILE_SIZE,
+        fixture.gridDimensions.h * TILE_SIZE,
+      ),
     );
     this.blockedCells = new Set([...shelfOccupiedCells, ...storageOccupiedCells]);
 
@@ -233,17 +245,19 @@ export class GameScene extends Phaser.Scene {
       y: clearRowTopY + SPRITE_DISPLAY_HEIGHT / 2 + 8,
     };
 
-    // Same "stand in the clear row below it" approach as the shelf -- only the player
-    // (not customers) ever needs to reach this one, but it still has to land in a cell the
-    // pathfinder/physics consider walkable.
+    // Same "stand in the clear row below it" approach as the shelf -- all 3 lockers sit
+    // in the same two rows, so they share the same clear row below; only their own x
+    // (each locker's own column) differs.
     const maxStorageOccupiedRow = Math.max(
       ...storageOccupiedCells.map((key) => Number(key.split(",")[1])),
     );
     const storageClearRowTopY = (maxStorageOccupiedRow + 1) * TILE_SIZE;
-    this.storageStandPoint = {
-      x: this.storageFixture.x,
-      y: storageClearRowTopY + SPRITE_DISPLAY_HEIGHT / 2 + 8,
-    };
+    this.storageLockers.forEach((locker) => {
+      locker.standPoint = {
+        x: locker.fixture.x,
+        y: storageClearRowTopY + SPRITE_DISPLAY_HEIGHT / 2 + 8,
+      };
+    });
 
     this.registerPoint = {
       x: zonePixelX + zonePixelW * 0.7,
@@ -474,7 +488,7 @@ export class GameScene extends Phaser.Scene {
   getFixtureEntries() {
     return [
       { fixture: this.fixture, standPoint: this.shelfStandPoint },
-      { fixture: this.storageFixture, standPoint: this.storageStandPoint },
+      ...this.storageLockers.map(({ fixture, standPoint }) => ({ fixture, standPoint })),
     ];
   }
 
@@ -608,9 +622,19 @@ export class GameScene extends Phaser.Scene {
     );
     if (distance > SHELF_INTERACT_RANGE) return false;
 
-    const title = target === this.fixture ? "SHELF" : "STORAGE";
+    const title = this.getFixtureTitle(target);
     this.fixtureWindow.openForFixture(target, title);
     return true;
+  }
+
+  // "SHELF" for the sales shelf, "LOCKER 1"/"LOCKER 2"/"LOCKER 3" for whichever Storage
+  // Fixture this is -- so the player can actually tell the 3 independent lockers apart
+  // (they're visually one combined locker_storage image, but genuinely separate
+  // fixtures/capacities -- see their construction above).
+  getFixtureTitle(fixture) {
+    if (fixture === this.fixture) return "SHELF";
+    const lockerIndex = this.storageLockers.findIndex((locker) => locker.fixture === fixture);
+    return `LOCKER ${lockerIndex + 1}`;
   }
 
   // Returns true if a crate was actually picked up, so handleInteract can fall through to
