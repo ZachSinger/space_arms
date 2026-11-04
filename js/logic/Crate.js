@@ -25,6 +25,8 @@ export class Crate {
     this.quantity = kind === "item" ? quantity : 1;
     this.isCarried = false;
     this.isThrown = false;
+    this.isPushed = false;
+    this.lockedToPad = false;
     this.hitCustomers = new Set();
 
     this.sprite = scene.add
@@ -54,7 +56,10 @@ export class Crate {
 
     this.isCarried = true;
     this.isThrown = false;
+    this.isPushed = false;
+    this.lockedToPad = false;
     this.hitCustomers.clear();
+    this.sprite.body.setImmovable(false);
     this.sprite.body.stop();
     this.sprite.body.enable = false;
     this.followCarrier(carrierSprite);
@@ -77,6 +82,7 @@ export class Crate {
 
     const { width, height } = this.sprite.body;
     const bounds = this.scene.crateBounds;
+    const pad = this.scene.loadingPadRect;
     for (const { dx, dy } of offsets) {
       const dropX = x + dx;
       const dropY = y + dy;
@@ -87,8 +93,18 @@ export class Crate {
       if (left < bounds.left || right > bounds.right || top < bounds.top || bottom > bounds.bottom) {
         continue;
       }
+      // Only deliveries land on the loading pad; a picked-up crate can't go back.
+      if (pad && left < pad.right && right > pad.left && top < pad.bottom && bottom > pad.top) {
+        continue;
+      }
 
-      const bodies = this.scene.physics.overlapRect(left, top, width, height, false, true);
+      const crateBodies = (this.scene.restockCrates ?? [])
+        .filter((crate) => crate !== this)
+        .map((crate) => crate.sprite.body);
+      const bodies = [
+        ...this.scene.physics.overlapRect(left, top, width, height, false, true),
+        ...crateBodies,
+      ];
       const blocked = bodies.some(
         (body) =>
           body.enable &&
@@ -109,16 +125,26 @@ export class Crate {
     body.reset(x, y);
     body.moves = !paused;
     body.enable = true;
+    body.setImmovable(false);
+    this.lockedToPad = false;
 
-    // Scale drag by direction so diagonal throws travel as far as straight throws.
-    const speed = Math.hypot(velocityX, velocityY);
-    this.isThrown = speed > 0;
+    this.isThrown = Math.hypot(velocityX, velocityY) > 0;
     this.hitCustomers.clear();
-    body.setDrag(
-      speed ? (CRATE_DRAG * Math.abs(velocityX)) / speed : 0,
-      speed ? (CRATE_DRAG * Math.abs(velocityY)) / speed : 0,
-    );
     body.setVelocity(velocityX * CRATE_THROW_MULTIPLIER, velocityY * CRATE_THROW_MULTIPLIER);
+    this.refreshDrag();
+  }
+
+  // Scale drag by direction so diagonal motion travels as far as straight motion. Must be
+  // re-run whenever a crate-vs-crate bump changes its direction (or starts a resting crate
+  // moving), or it would slow along the wrong axis -- or never stop at all.
+  refreshDrag() {
+    const body = this.sprite.body;
+    const { x, y } = body.velocity;
+    const speed = Math.hypot(x, y);
+    body.setDrag(
+      speed ? (CRATE_DRAG * Math.abs(x)) / speed : 0,
+      speed ? (CRATE_DRAG * Math.abs(y)) / speed : 0,
+    );
   }
 
   tryHitCustomer(customer) {
@@ -140,17 +166,43 @@ export class Crate {
     return true;
   }
 
+  // A delivered crate stays fixed on its loading pad spot until the player picks it up:
+  // it can't be pushed or knocked around, and other crates bounce off it.
+  lockToPad() {
+    this.lockedToPad = true;
+    this.isThrown = false;
+    const body = this.sprite.body;
+    body.stop();
+    body.setImmovable(true);
+    body.moves = false;
+  }
+
+  // Moved by the player walking into it (see CratePushing.js). Unlike a throw, a pushed
+  // crate stops the moment the push stops.
+  push(velocity) {
+    this.isPushed = true;
+    this.isThrown = false;
+    this.sprite.body.setDrag(0, 0);
+    this.sprite.body.setVelocity(velocity.x, velocity.y);
+  }
+
+  stopPush() {
+    this.isPushed = false;
+    this.sprite.body.stop();
+  }
+
   setPaused(paused) {
-    this.sprite.body.moves = !paused;
+    this.sprite.body.moves = !paused && !this.lockedToPad;
   }
 
   serialize() {
     return {
       ...this.serializePayload(),
+      onPad: this.lockedToPad,
       x: this.sprite.x,
       y: this.sprite.y,
-      velocityX: this.sprite.body.velocity.x,
-      velocityY: this.sprite.body.velocity.y,
+      velocityX: this.isPushed ? 0 : this.sprite.body.velocity.x,
+      velocityY: this.isPushed ? 0 : this.sprite.body.velocity.y,
     };
   }
 

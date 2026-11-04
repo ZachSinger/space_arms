@@ -38,7 +38,7 @@ export class WindowManager {
         const activeWinEl = document.querySelector(".retro-window.active");
         if (activeWinEl) {
           const activeWinObj = this.getWindow(activeWinEl.id);
-          if (activeWinObj) activeWinObj.close();
+          if (activeWinObj?.closable) activeWinObj.close();
         }
       }
     };

@@ -181,6 +181,8 @@ function createHarness() {
       }));
     },
     getRestockableItems: () => [],
+    getSupplyOrderSummary: () => ({ crates: 0, maxCrates: 9, stockCost: 0, deliveryFee: 0, total: 0, problem: null, canPlace: false }),
+    getLoadingPadSpawnPositions: () => [],
     canRearrangeFixtures: () => false,
     getFixturePurchaseOptions: () => [],
     fixtures: { all: () => [], displayName: () => "" },

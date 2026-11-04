@@ -2,15 +2,15 @@
 // FILE: ShelfFixture.js
 // ==========================================
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
+import { getShelfSlotCapacity } from "./FixtureLayout.js";
 
-// The sales shelf's real model (bible Steps 4/5/22): a physical grid (gridDimensions,
-// e.g. 4 columns x 2 rows), where the player manually picks exactly which cells each item
-// occupies (Tarkov-style packing, using the item's own `dimensions` w/h, optionally
-// rotated 90 degrees). Depth/"stack" capacity is NOT a shared pool like a Storage Fixture
-// (see InventoryPool.js) -- each individual placement gets its own capacity, independently,
-// from this fixture's own `stackDepth` divided by that specific item's `stackSize`. Two
-// placements of different items sitting on the very same shelf each get the full
-// stackDepth-derived capacity for their own item; they don't share or compete for it.
+// The sales shelf's stock grid is two visual cells per floor tile in each direction.
+// The player manually picks which cells each item occupies (Tarkov-style packing, using
+// the item's own `dimensions` w/h, optionally rotated 90 degrees). Depth/"stack" capacity
+// is NOT a shared pool like a Storage Fixture
+// (see InventoryPool.js) -- each individual placement gets its own capacity, independently:
+// the item's own `stackSize` (units per slot), capped by this fixture's `stackDepth`.
+// Placements of different items on the same shelf don't share or compete for it.
 export class ShelfFixture {
   constructor(data) {
     this.id = data.id;
@@ -18,7 +18,7 @@ export class ShelfFixture {
     this.x = data.x;
     this.y = data.y;
     this.gridDimensions = data.gridDimensions; // physical footprint on the map (tiles) -- unrelated to the item grid below
-    this.displayGrid = data.displayGrid; // the item-placement grid, e.g. { w: 4, h: 2 } -- 4 columns x 2 rows
+    this.displayGrid = data.displayGrid; // two item-placement cells per floor tile
     this.stackDepth = data.stackDepth; // uniform depth capacity, applied independently per placement
     // [{ itemId, gx, gy, w, h, rotated, quantity }] -- gx/gy is the top-left anchor cell;
     // w/h is the item's own dimensions (swapped if rotated), not the fixture's grid size.
@@ -37,13 +37,10 @@ export class ShelfFixture {
     return this.placements.find((p) => p.itemId === itemId) || null;
   }
 
-  // How many units ONE specific placement can hold -- this fixture's own stackDepth
-  // divided by that placement's item's own stackSize, independent of every other
-  // placement on the same fixture (bible Step 5's own worked example).
+  // How many units ONE specific placement can hold, independent of every other
+  // placement on the same fixture.
   getPlacementCapacity(placement) {
-    const item = database.getItem(placement.itemId);
-    if (!item || !item.stackSize) return 0;
-    return Math.floor(this.stackDepth / item.stackSize);
+    return getShelfSlotCapacity(this.stackDepth, database.getItem(placement.itemId));
   }
 
   occupiedCellsFor(placement) {

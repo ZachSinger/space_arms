@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { STARTING_FIXTURES, fixtureCells, cellKey, migrateFixtureEntry, validateFixtureLayout } from "../js/logic/FixtureLayout.js";
+import { STARTING_FIXTURES, fixtureCells, cellKey, getFixtureType, migrateFixtureEntry, validateFixtureLayout } from "../js/logic/FixtureLayout.js";
 import { TileRoom } from "../js/logic/TileRoom.js";
 import { getZone } from "../js/logic/RoomLayout.js";
 
@@ -54,7 +54,7 @@ test("fixtures can move without mutating the old layout", () => {
   const original = initialLayout();
   const result = validateFixtureLayout(moved("fixture_demo_01", 8, 1), createRoom());
   assert.equal(result.valid, true, result.reason);
-  assert.deepEqual(original[0], { id: "fixture_demo_01", type: "shelf_universal", gx: 7, gy: 2 });
+  assert.deepEqual(original[0], { id: "fixture_demo_01", type: "shelf_starter_2x1", gx: 7, gy: 2 });
   assert.equal(validateFixtureLayout(moved("register", 12, 3), createRoom()).valid, true);
   assert.equal(validateFixtureLayout(moved("storage_demo_01", 6, 4), createRoom()).valid, true);
 });
@@ -66,7 +66,7 @@ test("placement rejects walls, locked rooms, overlaps, blocked fronts, and obstr
     ["fixture_demo_01", 1, 1],
     ["storage_demo_03", 1, 3],
     ["register", 12, 1],
-    ["fixture_demo_01", 7, 5],
+    ["fixture_demo_01", 7, 7],
   ]) {
     assert.equal(validateFixtureLayout(moved(id, gx, gy), createRoom()).valid, false, `${id} at ${gx},${gy}`);
   }
@@ -106,16 +106,19 @@ test("malformed layouts cannot bypass placement validation", () => {
   const duplicate = initialLayout();
   duplicate[1] = { ...duplicate[0] };
   assert.equal(validateFixtureLayout(duplicate, createRoom()).valid, false);
-  assert.equal(fixtureCells(initialLayout()[0]).length, 6);
+  assert.equal(fixtureCells(initialLayout()[0]).length, 2);
 });
 
 test("layouts can hold any number of fixtures, but exactly one register", () => {
-  const withExtraShelf = [...initialLayout(), { id: "shelf_universal_2", type: "shelf_universal", gx: 1, gy: 5 }];
+  const withExtraShelf = [
+    ...moved("fixture_demo_01", 6, 1),
+    { id: "shelf_universal_2", type: "shelf_universal", gx: 9, gy: 1 },
+  ];
   const result = validateFixtureLayout(withExtraShelf, createRoom());
   assert.equal(result.valid, true, result.reason);
   assert.equal(result.access.has("shelf_universal_2"), true);
 
-  const withoutShelf = initialLayout().filter((entry) => entry.type !== "shelf_universal");
+  const withoutShelf = initialLayout().filter((entry) => getFixtureType(entry.type).kind !== "shelf");
   assert.equal(validateFixtureLayout(withoutShelf, createRoom()).valid, true);
 
   const noRegister = initialLayout().filter((entry) => entry.type !== "register_basic");
@@ -126,7 +129,28 @@ test("layouts can hold any number of fixtures, but exactly one register", () => 
 });
 
 test("entries saved before fixture types existed are migrated by id", () => {
+  assert.deepEqual(migrateFixtureEntry({ id: "fixture_demo_01", gx: 7, gy: 2 }),
+    { id: "fixture_demo_01", gx: 7, gy: 2, type: "shelf_universal" });
   assert.deepEqual(migrateFixtureEntry({ id: "storage_demo_02", gx: 4, gy: 1 }),
     { id: "storage_demo_02", gx: 4, gy: 1, type: "locker_single" });
   assert.deepEqual(migrateFixtureEntry({ id: "mystery", gx: 0, gy: 0 }), { id: "mystery", gx: 0, gy: 0 });
+});
+
+test("the starting shelf occupies two floor tiles", () => {
+  const starter = getFixtureType(STARTING_FIXTURES[0].type);
+  assert.deepEqual({ w: starter.w, h: starter.h }, { w: 2, h: 1 });
+});
+
+test("registers and shelves stay on the sales floor; storage can go anywhere", () => {
+  for (const [id, gx, gy] of [["register", 1, 4], ["fixture_demo_01", 1, 4]]) {
+    const result = validateFixtureLayout(moved(id, gx, gy), createRoom());
+    assert.equal(result.valid, false, `${id} at ${gx},${gy}`);
+    assert.match(result.reason, /sales floor/);
+  }
+  assert.equal(validateFixtureLayout(moved("storage_demo_01", 1, 4), createRoom()).valid, true);
+  assert.equal(validateFixtureLayout(moved("storage_demo_01", 6, 4), createRoom()).valid, true);
+
+  // Older saves with a register in the back still load so it can be moved out.
+  const legacy = validateFixtureLayout(moved("register", 1, 4), { ...createRoom(), requireSalesFloor: false });
+  assert.equal(legacy.valid, true, legacy.reason);
 });

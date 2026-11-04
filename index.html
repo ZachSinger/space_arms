@@ -10,6 +10,8 @@
       <div id="ui-layer">
         <div id="persistent-hud" class="hidden">
           <div class="hud-section">
+            <button id="hud-debug-info-btn" class="hud-pause-btn" type="button"
+              title="Save a screenshot and state report to a local debug session">Debug Info</button>
             <div class="hud-stat">
               <span class="hud-label">CREDITS</span>
               <span id="hud-credits" class="hud-value">0c</span>
@@ -24,6 +26,8 @@
             </div>
           </div>
           <div class="hud-section">
+            <button id="hud-save-btn" class="hud-pause-btn" type="button" disabled
+              title="Save while the store is closed">SAVE</button>
             <div class="hud-stat">
               <span class="hud-label">SHIFT</span>
               <span id="hud-shift-time" class="hud-value time">08:00</span>
@@ -34,6 +38,10 @@
             <button id="hud-start-shift-btn" class="hud-start-shift-btn hidden" aria-label="Start shift">
               START SHIFT
             </button>
+          </div>
+          <div id="debug-feedback" class="hud-debug-feedback hidden">
+            <span id="debug-status" role="status" aria-live="polite"></span>
+            <button id="debug-folder-btn" class="hud-pause-btn hidden" type="button">OPEN FOLDER</button>
           </div>
         </div>
       </div>

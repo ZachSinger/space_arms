@@ -3,11 +3,9 @@
 // ==========================================
 export class CheckoutRenderer {
   /**
-   * Generates the HTML layout for the register's checkout window: a scatter
-   * zone of unpositioned item cards (CheckoutWindow places them randomly
-   * after insertion, once real container dimensions are known), a bag/total
-   * readout, and a numpad payment section that stays hidden until every item
-   * is scanned.
+   * Register scan window: a conveyor belt carrying the cart toward a red scanner bar,
+   * a running total, and a numpad that stays hidden until every item is scanned.
+   * CheckoutWindow positions and animates the cards after insertion.
    * @param {Array<{itemId: string, price: number}>} cart - Snapshot of items the customer grabbed
    * @param {DatabaseManager} databaseManager
    */
@@ -31,13 +29,12 @@ export class CheckoutRenderer {
       .join("");
 
     return `
-      <div class="checkout-scatter-zone" id="checkout-scatter-zone">
+      <div class="checkout-belt" id="checkout-belt">
         ${itemsHTML}
-        <div class="checkout-bag" id="checkout-bag"></div>
+        <div class="checkout-scanner" id="checkout-scanner"></div>
       </div>
       <div class="checkout-footer">
         <span class="checkout-total">TOTAL: <span id="checkout-total-value">0c</span></span>
-        ${this.goBacksButtonHTML()}
       </div>
       <div class="checkout-payment hidden" id="checkout-payment">
         <div class="checkout-payment-prompt">ENTER EXACT AMOUNT DUE</div>
@@ -51,18 +48,5 @@ export class CheckoutRenderer {
         <div class="checkout-payment-feedback" id="checkout-payment-feedback"></div>
       </div>
     `;
-  }
-
-  // Shown while the player is behind the counter with nobody to ring up.
-  static generateIdleHTML() {
-    return `
-      <div class="fixture-empty-hint checkout-idle-hint">No customer at the register.</div>
-      <div class="checkout-footer">${this.goBacksButtonHTML()}</div>
-    `;
-  }
-
-  // Count is filled in by CheckoutWindow.updateGoBacksCount().
-  static goBacksButtonHTML() {
-    return `<button class="action-btn checkout-go-backs-btn" data-open-go-backs>GO-BACKS BIN (<span data-go-backs-count>0</span>)</button>`;
   }
 }

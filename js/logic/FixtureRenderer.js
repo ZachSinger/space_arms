@@ -2,6 +2,8 @@
 // FILE: FixtureRenderer.js
 // ==========================================
 export class FixtureRenderer {
+  static SHELF_GRID_CELL_PX = 48;
+
   // --- Storage Fixture (shared capacity pool, see InventoryPool.js) ---
 
   /**
@@ -187,7 +189,7 @@ export class FixtureRenderer {
     }
 
     return `
-      <div class="fixture-placement-grid" style="grid-template-columns: repeat(${w}, 68px); grid-template-rows: repeat(${h}, 68px);">
+      <div class="fixture-placement-grid" style="grid-template-columns: repeat(${w}, ${this.SHELF_GRID_CELL_PX}px); grid-template-rows: repeat(${h}, ${this.SHELF_GRID_CELL_PX}px);">
         ${cells.join("")}
       </div>
     `;
@@ -206,13 +208,11 @@ export class FixtureRenderer {
     const interactiveAttr = pendingPlacement ? "" : `data-placement-index="${index}"`;
     const interactiveClass = pendingPlacement ? "" : " fixture-cell-interactive";
     const emptyClass = placement.quantity <= 0 ? " fixture-cell-sold-out" : "";
-    const rightClickHint = placement.quantity <= 0 ? "remove empty slot" : "take 1";
 
     return `
       <div class="fixture-cell fixture-cell-occupied${interactiveClass}${emptyClass}"
         style="grid-column: ${placement.gx + 1} / span ${placement.w}; grid-row: ${placement.gy + 1} / span ${placement.h};"
-        ${interactiveAttr}
-        title="${item.name}${pendingPlacement ? "" : ` (click: stock 1, drag: move stack, right-click: ${rightClickHint})`}">
+        ${interactiveAttr}>
         ${imageHTML}
         <span class="fixture-cell-badge">${placement.quantity}/${capacity}</span>
       </div>
@@ -223,12 +223,16 @@ export class FixtureRenderer {
   // in the player's hovercart are offered, since those are the only ones there's
   // anything physical to put on the shelf. (An earlier version of this showed the whole
   // catalog, which isn't correct -- you can't place an item you aren't carrying.)
-  static itemPickerHTML(databaseManager, hovercart) {
+  static itemPickerHTML(databaseManager, hovercart, shelfFixture) {
     const availableEntries = hovercart.stock.filter((entry) => entry.quantity > 0);
 
     const rowsHTML = availableEntries
       .map((entry) => {
         const item = databaseManager.getItem(entry.itemId);
+        const perSlot = shelfFixture.getPlacementCapacity({ itemId: item.id });
+        const fitHTML = perSlot > 0
+          ? `Fits ${perSlot} per slot`
+          : `<span class="fixture-too-bulky">Too bulky for this shelf</span>`;
         const iconHTML = item.image
           ? `<img class="item-icon" src="${item.image}" alt="" />`
           : `<div class="item-icon"></div>`;
@@ -240,7 +244,7 @@ export class FixtureRenderer {
                 <span class="item-card-title">${item.name}</span>
                 <span class="item-card-cost">x${entry.quantity} in cart</span>
               </div>
-              <div class="fixture-stock-meta">Dim: ${item.dimensions.w}x${item.dimensions.h}</div>
+              <div class="fixture-stock-meta">Dim: ${item.dimensions.w}x${item.dimensions.h} | ${fitHTML}</div>
             </div>
           </div>
         `;

@@ -2,15 +2,15 @@ import { CUSTOMER_FACTION_IDS, factionMatches } from "./CustomerBuyLists.js";
 
 export const CUSTOMER_POOL_TUNING = Object.freeze({
   storeRepCurve: [
-    { reputation: 0, customers: 8 },
-    { reputation: 10, customers: 10 },
-    { reputation: 25, customers: 13 },
-    { reputation: 50, customers: 16 },
-    { reputation: 100, customers: 20 },
+    { reputation: 0, customers: 20 },
+    { reputation: 10, customers: 25 },
+    { reputation: 25, customers: 32 },
+    { reputation: 50, customers: 40 },
+    { reputation: 100, customers: 50 },
   ],
-  storeRepTailGrowth: 4,
+  storeRepTailGrowth: 10,
   storeRepTailSoftness: 100,
-  stockScalerMinimum: 0.5,
+  stockScalerMinimum: 1,
   stockScalerMaximum: 1.25,
   unitsPerCustomer: {
     neutral: 2,
@@ -129,7 +129,9 @@ export function createCustomerPool({
   tieBreakOffset = 0,
 }) {
   const factions = CUSTOMER_FACTION_IDS.filter((id) => activeFactions.has(id));
-  const preStockPool = getStoreRepPool(storeReputation) * getEmployeeScaler(employeeCount);
+  const baseCustomers = getStoreRepPool(storeReputation);
+  const employeeScaler = getEmployeeScaler(employeeCount);
+  const preStockPool = baseCustomers * employeeScaler;
   const groups = [{
     factionId: null,
     weight: 1,
@@ -141,6 +143,9 @@ export function createCustomerPool({
     const repMultiplier = getFactionRepMultiplier(factionReputation[factionId] ?? 0);
     groups.push({
       factionId,
+      reputation: factionReputation[factionId] ?? 0,
+      assortmentScore,
+      repMultiplier,
       weight: assortmentScore * repMultiplier,
       unitsPerCustomer: CUSTOMER_POOL_TUNING.unitsPerCustomer[factionId],
     });
@@ -189,6 +194,60 @@ export function createCustomerPool({
     neutralCount,
     preStockPool,
     stockScaler,
+    calculation: {
+      storeReputation,
+      employeeCount,
+      baseCustomers,
+      employeeScaler,
+      averageUnitsPerCustomer,
+      expectedDemand,
+      shelfStockUnits,
+      coverage,
+      calculatedPool,
+      tieBreakOffset,
+      groups,
+    },
+  };
+}
+
+// Mid-shift restocking can only grow the pool. Only the not-yet-elapsed share of the
+// increase is added, spread over the rest of the shift, so stocking late adds fewer.
+export function growCustomerArrivalSchedule({
+  schedule,
+  currentPool,
+  nextPool,
+  elapsedMs,
+  shiftDurationMs,
+  random = Math.random,
+}) {
+  const remainingMs = shiftDurationMs - elapsedMs;
+  if (remainingMs <= 0 || nextPool.totalCustomers <= currentPool.totalCustomers) {
+    return { schedule, pool: currentPool, addedFactionIds: [] };
+  }
+
+  const countIds = (ids) => ids.reduce((counts, id) => {
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+    return counts;
+  }, new Map());
+  const currentCounts = countIds(currentPool.customerFactionIds);
+  const growthIds = [];
+  for (const [factionId, count] of countIds(nextPool.customerFactionIds)) {
+    for (let index = currentCounts.get(factionId) ?? 0; index < count; index += 1) {
+      growthIds.push(factionId);
+    }
+  }
+
+  const addCount = Math.round(growthIds.length * remainingMs / shiftDurationMs);
+  if (addCount === 0) return { schedule, pool: currentPool, addedFactionIds: [] };
+  const addedFactionIds = shuffle(growthIds, random).slice(0, addCount);
+  const added = createCustomerArrivalSchedule(addedFactionIds, remainingMs, random)
+    .map((arrival) => ({ ...arrival, atMs: arrival.atMs + elapsedMs }));
+  const elapsed = schedule.filter((arrival) => arrival.atMs <= elapsedMs);
+  const upcoming = schedule.filter((arrival) => arrival.atMs > elapsedMs);
+  return {
+    schedule: [...elapsed, ...[...upcoming, ...added].sort((a, b) => a.atMs - b.atMs)],
+    pool: nextPool,
+    addedFactionIds,
   };
 }
 

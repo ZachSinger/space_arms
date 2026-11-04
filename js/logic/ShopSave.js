@@ -1,6 +1,10 @@
-import { getFixtureType, migrateFixtureEntry } from "./FixtureLayout.js";
+import { getFixtureType, getShelfDisplayGrid, getShelfSlotCapacity, migrateFixtureEntry } from "./FixtureLayout.js";
 import { TILE_SIZE, ZONES, getTotalGridSize } from "./RoomLayout.js";
 import { MIN_BASE_RATIO, MAX_BASE_RATIO, MIN_SUPPLY_RATIO, MAX_SUPPLY_RATIO } from "./Market.js";
+
+// Older saves used "slot depth 12 ÷ stackSize". Stacks valid under that rule still load;
+// trimShelfOverflow() then moves anything over the current cap to the Go-Backs bin.
+const LEGACY_SHELF_STACK_DEPTH = 12;
 
 function requireSave(condition, message) {
   if (!condition) throw new Error(`Invalid saved game: ${message}`);
@@ -75,6 +79,7 @@ export function validateShopSave(data, database) {
     fixtureIds.add(entry.id);
     if (spec.kind === "storage") stockCapacity(entry.stock, spec.capacity);
     if (spec.kind === "shelf") {
+      const displayGrid = getShelfDisplayGrid(spec);
       requireSave(Array.isArray(entry.placements), "missing shelf contents.");
       const occupied = new Set();
       for (const placement of entry.placements) {
@@ -85,8 +90,11 @@ export function validateShopSave(data, database) {
         const w = placement.rotated ? item.dimensions.h : item.dimensions.w;
         const h = placement.rotated ? item.dimensions.w : item.dimensions.h;
         requireSave(placement.w === w && placement.h === h &&
-          placement.gx + w <= spec.displayGrid.w && placement.gy + h <= spec.displayGrid.h &&
-          placement.quantity <= Math.floor(spec.stackDepth / item.stackSize),
+          placement.gx + w <= displayGrid.w && placement.gy + h <= displayGrid.h &&
+          placement.quantity <= Math.max(
+            getShelfSlotCapacity(spec.stackDepth, item),
+            Math.floor(LEGACY_SHELF_STACK_DEPTH / item.stackSize),
+          ),
         "shelf stack does not fit.");
         for (let dy = 0; dy < h; dy += 1) {
           for (let dx = 0; dx < w; dx += 1) {

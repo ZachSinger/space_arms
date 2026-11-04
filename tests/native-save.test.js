@@ -45,7 +45,7 @@ test("native saves replace atomically, serialize writes, recover from errors, an
         enforce: "pre",
         resolveId: (source) => source === "electron" ? "\0native-test-electron" : null,
         load: (id) => id === "\0native-test-electron"
-          ? "export const { app, BrowserWindow, ipcMain, screen } = globalThis.__nativeSaveTest;" : null,
+          ? "export const { app, BrowserWindow, ipcMain, screen, shell } = globalThis.__nativeSaveTest;" : null,
       }],
     });
     await server.ssrLoadModule("/main.js");

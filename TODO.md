@@ -3,7 +3,65 @@
 Running task list. Consult this before deciding what to work on. Add to it any time we
 notice something that needs doing but isn't being done right now.
 
+## Playtest follow-ups
+- [x] Give fixture movement/placement priority over UI windows: while moving a fixture,
+      hovering a window should make it nearly transparent and allow placement through
+      it. Restore the window when the pointer leaves it or the fixture is placed.
+- [x] Fix Derringer stack size (now 3, matching the other small pistols).
+- [x] Balance early license prices against their catalogs: rations 25c, mods 75c,
+      apparel/ammo 100c, armor/melee 200c, and tools 250c.
+- [x] Rethink register UI:
+  - [x] Fix reopening after closing the register window; currently requires leaving the
+        register and entering it again.
+  - [x] Only open the scan window when there are actually items to scan.
+  - [x] Make the scan window rectangular, with items riding a belt left to right into a
+        red scanner bar. Go-Backs moved to Q at the register.
+- [x] Make crates collide with one another.
+- [x] Loading pad crates stay locked on their spots until picked up. Once picked up, a
+      crate can't be dropped or thrown back onto the pad (it bounces off the edge).
+- [x] Walking into a resting crate pushes it (`CratePushing.js`). Dead center pushes it
+      straight ahead; the further off to one side it is, the more it's pushed sideways, and
+      one that only clips your path is pushed only sideways, out of the way. Each crate in the row
+      slows you more (60%, 40%, 25% speed); 4 in a row can't be pushed. A crate that hits
+      a wall stops you too. Loading pad crates block you like walls.
+- [x] Improve first-shift pacing: shortened shifts from ten to five minutes,
+      keeping the same customer pool and doubling arrival frequency.
+- [x] Start with a much smaller shelf: a two-tile 2x1 starter shelf.
+- [ ] Redo game messages (e.g. "Unable to order", "No room to drop crate"). They are
+      too small, appear somewhere unexpected, and vanish too fast to read, so the player
+      never notices them. They need to be large, readable, shown where the player is
+      looking, and stay up long enough to read.
+- [x] Turn stock ordering into a real order instead of one crate per click
+      (`SupplyOrder.js`, Supply tab):
+  - Add crates to an order with - / +, then place the whole order at once.
+  - Up to 9 crates per order (one full loading pad), and never more than the free spots
+    on the loading pad.
+    Both limits are always shown in the order summary, and + stops at the limit.
+  - Each order costs a flat 25 credit delivery fee on top of the stock.
+  - If an order can't be placed, the reason is written in the summary (pad full, not
+    enough credits) instead of a popup message.
+
+## Saving
+- [x] HUD SAVE button: manually save while the store is closed, with explicit success
+      confirmation and the existing save-error/retry window on failure. Disabled during
+      a shift or while a save is in progress; closed-store autosaves remain enabled.
+
+## Fixture zones
+- [x] Registers and shelves can only be placed on sales-floor zones (`salesFloor: true` in
+      `RoomLayout.js`); storage fixtures can go anywhere. Older saves with a register or
+      shelf in the back still load, so the fixture can be moved out.
+
+## Shelf stacking
+- [x] `stackSize` now means how many units fit in one shelf slot (max 10), capped by the
+      shelf's `stackDepth` (10). The old "12 ÷ stackSize" rule left small items like
+      Nutri-Synth paste (15) fitting 0 per slot, so they silently couldn't be shelved.
+      The item picker shows "Fits N per slot" / "Too bulky for this shelf", and old saves
+      move any stack over the new cap into the Go-Backs bin on load.
+
 ## Debug Tools
+- [x] Desktop HUD "Debug Info": numbered full-window PNG screenshots and readable
+      live-state reports in local playtest sessions, with recent events/errors and
+      customer-pool calculations. See `documentation/DebugPlaytesting.md`.
 - [x] Tile-grid overlay (G key, `GameScene.toggleDebugGrid`): draws a 1px line every
       TILE_SIZE across the whole authored map (including locked/not-yet-built zones), on
       top of everything else. Added after discovering the Storage Fixture's lockers (and,
@@ -240,20 +298,24 @@ notice something that needs doing but isn't being done right now.
       but that's wrong for a real storefront shelf: items need actual physical placement
       on a grid (Tarkov-style packing using each item's own `dimensions` w/h, optionally
       rotated 90 degrees), and "depth"/stack capacity is NOT shared across the fixture --
-      each individual placement gets its own capacity, independently, from the fixture's
-      own `stackDepth` divided by that specific item's `stackSize` (two different items
-      placed on the same shelf each get the full stackDepth-derived capacity for their own
-      item, they don't compete for a shared number). New `ShelfFixture.js` models this:
-      `displayGrid` (e.g. 4 columns x 2 rows, separate from `gridDimensions`, which is
-      still just the physical map footprint) + a flat `placements` array
+      each individual placement gets its own capacity, independently (originally the
+      fixture's `stackDepth` divided by the item's `stackSize`; now the item's
+      `stackSize` = units per slot, capped by `stackDepth` 10 -- see "Shelf stacking";
+      each placement is capped independently, with no shared stock pool). New
+      `ShelfFixture.js` models this:
+      `displayGrid` (two visual slots per floor tile, derived from `gridDimensions`) + a
+      flat `placements` array
       (`{itemId, gx, gy, w, h, rotated, quantity}`). `FixtureWindow`/`FixtureRenderer`
       gained a real placement UI: "+ ADD ITEM" opens the full catalog, picking one enters
       placement mode (every valid anchor cell for the item's current shape is highlighted
       green, a toolbar offers ROTATE/CANCEL), clicking a highlighted cell confirms it
-      there. An existing placement still at 0 stock can be clicked away again to free up
+      there. In-world stock is shown as one dark block with a category-colored outline per stocked placement,
+      sized to the item's existing dimensions, with an `xN` label. A single graphics layer
+      batches blocks per shelf; labels are per placement, never per unit. An existing
+      placement still at 0 stock can be clicked away again to free up
       the space. Below the grid, a flat list of current placements (same TAKE-into-
       hovercart affordance as Storage) plus the hovercart section. Demo shelf starts
-      completely empty (4x2 grid, stackDepth 12). Found and fixed two real bugs building
+      completely empty (tile-derived grid, stackDepth 10). Found and fixed two real bugs building
       this: (1) CSS grid rows sized with `1fr` inside an unbounded-height container blew
       up to a runaway size the instant an item's image rendered -- fixed with fixed-px
       grid tracks instead; (2) giving `.fixture-cell` an explicit width/height clamped

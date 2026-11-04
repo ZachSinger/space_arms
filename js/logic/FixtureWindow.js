@@ -70,8 +70,16 @@ export class FixtureWindow {
     this.bodyElement.addEventListener("mousedown", (event) => this.handleMouseDown(event));
     this.bodyElement.addEventListener("mousemove", (event) => {
       if (!this.handleDragMove(event)) this.handleGridHover(event);
+      this.updateItemTooltip(event);
     });
-    this.bodyElement.addEventListener("mouseleave", () => this.clearPlacementPreview());
+    this.bodyElement.addEventListener("mouseleave", () => {
+      this.clearPlacementPreview();
+      this.hideItemTooltip();
+    });
+    this.tooltip = document.createElement("div");
+    this.tooltip.className = "fixture-item-tooltip";
+    this.tooltip.hidden = true;
+    document.body.appendChild(this.tooltip);
     // On document so releasing a drag outside the window still ends it cleanly.
     this.handleDocumentMouseUp = (event) => this.handleMouseUp(event);
     document.addEventListener("mouseup", this.handleDocumentMouseUp);
@@ -80,12 +88,54 @@ export class FixtureWindow {
     this.suppressClick = false;
 
     // Closing mid-move must put the lifted stack back where it came from, or it'd vanish.
-    this.uiWindow.onClose = () => this.cancelPendingPlacement();
+    this.uiWindow.onClose = () => {
+      this.cancelPendingPlacement();
+      this.hideItemTooltip();
+    };
   }
 
   destroy() {
     this.cancelPendingPlacement();
     document.removeEventListener("mouseup", this.handleDocumentMouseUp);
+    this.tooltip.remove();
+  }
+
+  // Floating name card for whichever shelf placement is under the cursor. Lives on
+  // document.body because the window body is re-rendered on every click.
+  updateItemTooltip(event) {
+    const cell = this.isShelf() && !this.pendingPlacement && !this.isDragging
+      ? event.target.closest("[data-placement-index]")
+      : null;
+    const placement = cell && this.fixture.placements[Number(cell.dataset.placementIndex)];
+    const item = placement && database.getItem(placement.itemId);
+    if (!item) {
+      this.hideItemTooltip();
+      return;
+    }
+
+    const capacity = this.fixture.getPlacementCapacity(placement);
+    const rightClick = placement.quantity <= 0 ? "remove empty slot" : "take 1";
+    this.tooltip.replaceChildren(
+      Object.assign(document.createElement("div"), { className: "fixture-item-tooltip-name", textContent: item.name }),
+      Object.assign(document.createElement("div"), { textContent: `On shelf: ${placement.quantity} / ${capacity}` }),
+      Object.assign(document.createElement("div"), {
+        className: "fixture-item-tooltip-hint",
+        textContent: `Click: stock 1 · Drag: move · Right-click: ${rightClick}`,
+      }),
+    );
+    this.tooltip.hidden = false;
+    const margin = 16;
+    const { offsetWidth: width, offsetHeight: height } = this.tooltip;
+    const left = Math.min(event.clientX + margin, window.innerWidth - width - 4);
+    const top = event.clientY + margin + height > window.innerHeight
+      ? event.clientY - margin - height
+      : event.clientY + margin;
+    this.tooltip.style.left = `${Math.max(4, left)}px`;
+    this.tooltip.style.top = `${Math.max(4, top)}px`;
+  }
+
+  hideItemTooltip() {
+    this.tooltip.hidden = true;
   }
 
   // Abandons whatever placement mode is active. A brand new placement just evaporates
@@ -266,6 +316,10 @@ export class FixtureWindow {
     }
     const pickBtn = event.target.closest("[data-pick-item-id]");
     if (pickBtn) {
+      if (this.fixture.getPlacementCapacity({ itemId: pickBtn.dataset.pickItemId }) < 1) {
+        this.showPopupText(event.clientX, event.clientY, "Too Bulky For This Shelf");
+        return;
+      }
       this.pickingItem = false;
       this.pendingPlacement = { itemId: pickBtn.dataset.pickItemId, rotated: false };
       this.hoveredCell = null;
@@ -417,7 +471,7 @@ export class FixtureWindow {
   render() {
     if (this.isShelf()) {
       this.bodyElement.innerHTML = this.pickingItem
-        ? FixtureRenderer.itemPickerHTML(database, this.playerState.hovercart)
+        ? FixtureRenderer.itemPickerHTML(database, this.playerState.hovercart, this.fixture)
         : FixtureRenderer.generateShelfHTML(
             this.fixture,
             this.playerState.hovercart,

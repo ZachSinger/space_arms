@@ -11,26 +11,24 @@ import {
 } from "./Sfx.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
-const CARD_WIDTH = 72;
-const CARD_HEIGHT = 72;
-const MAX_PLACEMENT_ATTEMPTS = 30;
+const CARD_SIZE = 72;
+const CARD_GAP = 8;
+const SCANNER_GAP = 12;
+const BELT_SPEED_PX_PER_S = 260;
+const SCAN_SLIDE_MS = 220;
 
-// Matches the window's own "32vw" width so it can be right-aligned at construction time
+// Matches the window's own width so it can be right-aligned at construction time
 // (UIWindow's x/y are plain pixel offsets, not vw-aware, so this has to be computed here).
-const CHECKOUT_WIDTH_VW = 32;
+const CHECKOUT_WIDTH_VW = 44;
 const RIGHT_MARGIN_PX = 24;
 
-// Mock of the bible's Step 54/55 checkout flow (card payment only for now; cash/change-owed
-// is a later pass). Items scatter randomly around the
-// window; the player scans each one by clicking it, or by holding the mouse button down and
-// dragging the cursor across several cards in a row. Each scan beeps and slides the card into
-// the bag. Once every item is scanned, a numpad appears and the player must type the exact
-// total to complete the sale.
+// Bible Step 54/55 checkout (card payment only for now). The cart rides a conveyor belt
+// toward a red scanner bar on the right and queues up against it. Clicking an item, or
+// dragging across several, slides it over the scanner with a beep. Once every item is
+// scanned, a numpad appears and the player must type the exact total to complete the sale.
+// The window only exists while there's something to scan, so it has no close button.
 export class CheckoutWindow {
-  constructor(windowManager, playerState, onOpenGoBacks) {
-    // Pinned to the right edge of the screen (rather than the old fixed x:400, which sat
-    // over the middle of the shop floor) so it doesn't cover the customer queue/shelf area
-    // -- that's the view that actually needs to stay visible while customers are on screen.
+  constructor(windowManager) {
     const rightAlignedX =
       window.innerWidth - (window.innerWidth * CHECKOUT_WIDTH_VW) / 100 - RIGHT_MARGIN_PX;
 
@@ -40,9 +38,10 @@ export class CheckoutWindow {
         title: "REGISTER",
         contentHTML: "",
         width: `${CHECKOUT_WIDTH_VW}vw`,
-        height: "44vh",
+        height: "auto",
         x: Math.round(rightAlignedX),
         y: 160,
+        closable: false,
       },
       windowManager,
     );
@@ -50,12 +49,7 @@ export class CheckoutWindow {
       ".retro-window-body",
     );
     this.onComplete = null;
-    this.mode = null; // "checkout" while ringing up a cart, "idle" with nobody to serve
-    this.playerState = playerState;
-    this.bodyElement.addEventListener("click", (event) => {
-      if (event.target.closest("[data-open-go-backs]")) onOpenGoBacks?.();
-    });
-    playerState?.subscribe(() => this.updateGoBacksCount());
+    this.mode = null; // "checkout" while ringing up a cart
     this.isScanning = false;
     this.paymentBuffer = "";
     this.total = 0;
@@ -80,6 +74,7 @@ export class CheckoutWindow {
   }
 
   destroy() {
+    clearTimeout(this.beltStopTimer);
     window.removeEventListener("mousedown", this.handleMouseDown);
     window.removeEventListener("mouseup", this.handleMouseUp);
     window.removeEventListener("keydown", this.handleKeyDown);
@@ -101,19 +96,10 @@ export class CheckoutWindow {
     }
   }
 
-  updateGoBacksCount() {
-    const countElement = this.bodyElement.querySelector("[data-go-backs-count]");
-    if (!countElement || !this.playerState) return;
-    const units = this.playerState.goBacks.stock.reduce((sum, entry) => sum + entry.quantity, 0);
-    countElement.textContent = String(units);
-  }
-
-  openIdle() {
-    this.mode = "idle";
+  close() {
+    this.mode = null;
     this.onComplete = null;
-    this.bodyElement.innerHTML = CheckoutRenderer.generateIdleHTML();
-    this.updateGoBacksCount();
-    this.uiWindow.openWindow();
+    this.uiWindow.close();
   }
 
   openForCustomer(cart, onComplete) {
@@ -126,50 +112,62 @@ export class CheckoutWindow {
       cart,
       database,
     );
-    this.updateGoBacksCount();
-    // Open the window before scattering cards: the scatter zone needs real, laid-out
-    // dimensions (clientWidth/clientHeight), which read as 0 while the window still has
-    // its "hidden" class applied, collapsing every card onto the same (0, 0) spot.
+    // Open first: the belt needs real laid-out dimensions to place the cards.
     this.uiWindow.openWindow();
-    this.scatterCards();
+    this.loadBelt();
     this.bindEvents(cart);
   }
 
-  // Randomly (and non-overlapping, best-effort) positions every unscanned card
-  // within the scatter zone, now that it has real rendered dimensions.
-  scatterCards() {
-    const zone = this.bodyElement.querySelector("#checkout-scatter-zone");
-    const cards = [...zone.querySelectorAll(".checkout-item-card")];
-    const zoneWidth = zone.clientWidth;
-    const zoneHeight = zone.clientHeight;
-    const placed = [];
-
-    cards.forEach((card) => {
-      let x;
-      let y;
-      let attempts = 0;
-
-      do {
-        x = Math.random() * Math.max(zoneWidth - CARD_WIDTH, 0);
-        y = Math.random() * Math.max(zoneHeight - CARD_HEIGHT, 0);
-        attempts += 1;
-      } while (
-        attempts < MAX_PLACEMENT_ATTEMPTS &&
-        placed.some(
-          (p) => Math.abs(p.x - x) < CARD_WIDTH && Math.abs(p.y - y) < CARD_HEIGHT,
-        )
-      );
-
-      placed.push({ x, y });
-      card.style.left = `${x}px`;
-      card.style.top = `${y}px`;
+  // Cards start off the left edge in cart order and ride in as one train.
+  loadBelt() {
+    const cards = [...this.bodyElement.querySelectorAll(".checkout-item-card")];
+    cards.forEach((card, index) => {
+      card.style.transition = "none";
+      card.style.left = `${-(index + 1) * (CARD_SIZE + CARD_GAP)}px`;
     });
+    // eslint-disable-next-line no-unused-expressions
+    this.bodyElement.offsetWidth; // commit the start positions before animating
+    this.advanceBelt();
+  }
+
+  // Moves every unscanned card to its queue spot behind the scanner at belt speed.
+  advanceBelt() {
+    const belt = this.bodyElement.querySelector("#checkout-belt");
+    const scanner = this.bodyElement.querySelector("#checkout-scanner");
+    if (!belt || !scanner) return;
+    const frontX = scanner.offsetLeft - SCANNER_GAP - CARD_SIZE;
+    const waiting = [...belt.querySelectorAll('.checkout-item-card[data-scanned="false"]')];
+    let longestSeconds = 0;
+    waiting.forEach((card, queueIndex) => {
+      const currentX = card.offsetLeft;
+      const targetX = frontX - queueIndex * (CARD_SIZE + CARD_GAP);
+      const seconds = Math.abs(targetX - currentX) / BELT_SPEED_PX_PER_S;
+      longestSeconds = Math.max(longestSeconds, seconds);
+      card.style.transition = `left ${seconds}s linear, border-color 0.1s ease`;
+      card.style.left = `${targetX}px`;
+    });
+    clearTimeout(this.beltStopTimer);
+    belt.classList.toggle("rolling", longestSeconds > 0);
+    this.beltStopTimer = setTimeout(() => belt.classList.remove("rolling"), longestSeconds * 1000);
+  }
+
+  // Lifts the card over the red bar, then lets it drop out of view past the scanner.
+  slideOverScanner(card) {
+    const scanner = this.bodyElement.querySelector("#checkout-scanner");
+    const currentX = card.offsetLeft;
+    card.style.transition = "none";
+    card.style.left = `${currentX}px`;
+    card.classList.add("scanning");
+    // eslint-disable-next-line no-unused-expressions
+    card.offsetWidth;
+    card.style.transition = `left ${SCAN_SLIDE_MS}ms ease-in, transform 0.15s ease`;
+    card.style.left = `${scanner.offsetLeft + scanner.offsetWidth / 2 - CARD_SIZE / 2}px`;
+    setTimeout(() => card.classList.add("scanned"), SCAN_SLIDE_MS);
   }
 
   bindEvents(cart) {
-    const zone = this.bodyElement.querySelector("#checkout-scatter-zone");
-    const cards = [...zone.querySelectorAll(".checkout-item-card")];
-    const bagElement = this.bodyElement.querySelector("#checkout-bag");
+    const belt = this.bodyElement.querySelector("#checkout-belt");
+    const cards = [...belt.querySelectorAll(".checkout-item-card")];
     const totalValueElement = this.bodyElement.querySelector(
       "#checkout-total-value",
     );
@@ -192,7 +190,8 @@ export class CheckoutWindow {
       totalValueElement.textContent = `${runningTotal.toLocaleString()}c`;
 
       playScanBeep();
-      this.slideToBag(card, bagElement);
+      this.slideOverScanner(card);
+      this.advanceBelt();
 
       if (scannedCount === cart.length) {
         paymentSection.classList.remove("hidden");
@@ -200,40 +199,16 @@ export class CheckoutWindow {
     };
 
     cards.forEach((card) => {
-      // The global window "mousedown" listener (constructor) already sets isScanning;
-      // this just scans the specific card the press landed on directly.
+      // The global mousedown listener (constructor) sets isScanning for click-and-drag.
       card.addEventListener("mousedown", () => {
         scan(card);
       });
-      // Supports "click and hold, drag cursor across cards" -- works regardless of
-      // whether the drag started on a card or empty space, since isScanning is now
-      // tracked globally for the whole window rather than per-card.
       card.addEventListener("mouseenter", () => {
         if (this.isScanning) scan(card);
       });
     });
 
     this.bindNumpad(cart);
-  }
-
-  // Animates a scanned card sliding toward the bag indicator, then removes it.
-  slideToBag(card, bagElement) {
-    const cardRect = card.getBoundingClientRect();
-    const bagRect = bagElement.getBoundingClientRect();
-    const dx = bagRect.left + bagRect.width / 2 - (cardRect.left + cardRect.width / 2);
-    const dy = bagRect.top + bagRect.height / 2 - (cardRect.top + cardRect.height / 2);
-
-    card.classList.add("scanned");
-    card.style.setProperty("--slide-x", `${dx}px`);
-    card.style.setProperty("--slide-y", `${dy}px`);
-
-    card.addEventListener(
-      "transitionend",
-      () => {
-        card.style.visibility = "hidden";
-      },
-      { once: true },
-    );
   }
 
   bindNumpad(cart) {

@@ -43,6 +43,25 @@ export class FixturePlacement {
       }
     };
     scene.input.on("pointerdown", this.handlePointerDown);
+    this.handleDocumentMouseMove = (event) => {
+      if (!this.active) return;
+      this.mouseClient = { x: event.clientX, y: event.clientY };
+      this.updateWindowTransparency();
+    };
+    document.addEventListener("mousemove", this.handleDocumentMouseMove, true);
+  }
+
+  // Faded windows ignore the pointer, so hover is tested against their bounds instead.
+  updateWindowTransparency() {
+    const point = this.active ? this.mouseClient : null;
+    for (const win of this.scene.windowManager.windows.values()) {
+      let over = false;
+      if (point && win.isOpen) {
+        const rect = win.element.getBoundingClientRect();
+        over = point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom;
+      }
+      win.element.classList.toggle("placement-see-through", over);
+    }
   }
 
   begin(id) {
@@ -67,7 +86,6 @@ export class FixturePlacement {
   start(typeId, original, fixtureCrate) {
     this.cancel();
     this.scene.endRegisterSession();
-    this.scene.windowManager.closeAllExcept(this.uiWindow.id);
     this.original = original;
     this.fixtureCrate = fixtureCrate;
     this.spec = getFixtureType(typeId);
@@ -90,6 +108,7 @@ export class FixturePlacement {
       .setAlpha(0.5).setDepth(9996);
     this.graphics.setVisible(true);
     this.uiWindow.openWindow();
+    this.mouseClient = null;
     this.updatePreview(this.scene.input.activePointer);
     return true;
   }
@@ -113,7 +132,11 @@ export class FixturePlacement {
       .fillRect(x, y, this.spec.w * TILE_SIZE, this.spec.h * TILE_SIZE)
       .strokeRect(x, y, this.spec.w * TILE_SIZE, this.spec.h * TILE_SIZE);
     this.graphics.lineStyle(2, 0x38bdf8, 1);
-    for (const cell of fixtureAccessCells(this.placement)) {
+    // Registers also need the row behind them clear -- that's where the player stands.
+    const accessCells = this.spec.kind === "register"
+      ? [...fixtureAccessCells(this.placement), ...fixtureAccessCells(this.placement, true)]
+      : fixtureAccessCells(this.placement);
+    for (const cell of accessCells) {
       this.graphics.strokeRect(cell.gx * TILE_SIZE + 3, cell.gy * TILE_SIZE + 3, TILE_SIZE - 6, TILE_SIZE - 6);
     }
     this.ghost.setPosition(x + this.spec.w * TILE_SIZE / 2, y + this.spec.h * TILE_SIZE / 2);
@@ -132,6 +155,8 @@ export class FixturePlacement {
   finish() {
     if (!this.active) return;
     this.active = false;
+    this.mouseClient = null;
+    this.updateWindowTransparency();
     if (this.original) this.original.sprite.setAlpha(1);
     if (this.fixtureCrate?.sprite.active) this.fixtureCrate.sprite.setVisible(true);
     this.ghost.destroy();
@@ -152,6 +177,7 @@ export class FixturePlacement {
   destroy() {
     this.finish();
     this.scene.input.off("pointerdown", this.handlePointerDown);
+    document.removeEventListener("mousemove", this.handleDocumentMouseMove, true);
     this.graphics.destroy();
   }
 }

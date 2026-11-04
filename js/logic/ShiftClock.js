@@ -7,7 +7,7 @@
 // the scene is responsible for actually ending the shift once everyone already inside has
 // been served (the clock itself only tracks time + the soft-close flag).
 const SHIFT_LENGTH_HOURS = 12;
-const REAL_SECONDS_PER_GTC_HOUR = 50; // A 12-hour shift takes 10 minutes of unpaused play.
+const REAL_SECONDS_PER_GTC_HOUR = 25; // A 12-hour shift takes 5 minutes of unpaused play.
 export const SHIFT_DURATION_MS = SHIFT_LENGTH_HOURS * REAL_SECONDS_PER_GTC_HOUR * 1000;
 const SHIFT_START_HOUR = 8; // purely cosmetic -- the displayed clock starts at 08:00
 

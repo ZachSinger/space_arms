@@ -48,6 +48,7 @@ export const ZONES = [
     gridW: 10,
     gridH: 8,
     locked: false,
+    salesFloor: true, // customer-facing: registers and shelves may only go in these zones
     floorTile: "floor_light_clean_01",
     wallTile: "wall_light_panel_01",
   },
@@ -59,6 +60,7 @@ export const ZONES = [
     gridW: 6,
     gridH: 8,
     locked: true,
+    salesFloor: true,
     floorTile: "floor_light_clean_01",
     wallTile: "wall_light_panel_01",
     cost: 5000,

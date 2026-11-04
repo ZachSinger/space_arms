@@ -14,3 +14,18 @@ test("each fixture type is unlocked by its configured license", () => {
     assert.ok(licenseById.get(spec.licenseId)?.unlocksFixtures.includes(spec.id));
   }
 });
+
+test("early supplier license prices reflect the value of their item catalogs", () => {
+  const expectedPrices = {
+    lic_start_rations: 25,
+    lic_start_mods: 75,
+    lic_start_apparel: 100,
+    lic_start_ammo: 100,
+    lic_start_armor_melee: 200,
+    lic_start_tools: 250,
+  };
+
+  for (const [licenseId, price] of Object.entries(expectedPrices)) {
+    assert.equal(licenseById.get(licenseId)?.baseCost, price, licenseId);
+  }
+});

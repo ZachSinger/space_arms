@@ -138,6 +138,7 @@ export class Customer {
       case "SEEK_REGISTER":
         this.seekingTimer += delta;
         if (this.seekingTimer > SEEKING_TIMEOUT_MS) {
+          this.scene.debugInfo?.recordCustomer("customer-seeking-timeout", this);
           // See SEEKING_TIMEOUT_MS -- this destination turned out to be unreachable
           // (shouldn't normally happen, but don't let it block the shift forever).
           console.warn(
@@ -159,6 +160,7 @@ export class Customer {
       case "LEAVING":
         this.leavingTimer += delta;
         if (this.leavingTimer > LEAVING_TIMEOUT_MS) {
+          this.scene.debugInfo?.recordCustomer("customer-exit-timeout", this);
           this.destroy(); // safety net -- see LEAVING_TIMEOUT_MS
           break;
         }
@@ -230,6 +232,7 @@ export class Customer {
 
       const takenItemId = this.fixture.takeItem(placement);
       if (!takenItemId) continue;
+      this.scene.refreshShelfStockDisplay?.(this.fixture);
       this.cart.push({ itemId: takenItemId, price: this.scene.getStorePrice(takenItemId) });
       if (this.shoppingPhase === "primary") this.primaryBought.add(takenItemId);
       else this.bonusBought.add(takenItemId);

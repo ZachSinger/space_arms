@@ -27,7 +27,7 @@ before(async () => {
       },
       load(id) {
         if (id === "\0shelf-slots-test-database") {
-          return `export const database = { getItem: (id) => ({ id, dimensions: { w: 1, h: 1 }, stackSize: 1 }) };`;
+          return `export const database = { getItem: (id) => ({ id, dimensions: { w: 1, h: 1 }, stackSize: id === "paste" ? 15 : 4 }) };`;
         }
       },
     }],
@@ -57,4 +57,15 @@ test("sold-out shelf slots keep their spot until deliberately removed while empt
   shelf.remove("amo_01", 2);
   assert.equal(shelf.removeEmptyPlacement(slot), true);
   assert.deepEqual(shelf.placements, []);
+});
+
+test("stackSize is units per slot, capped by the shelf's depth, so small items always fit", () => {
+  const shelf = new ShelfFixture({ displayGrid: { w: 2, h: 1 }, stackDepth: 10 });
+  assert.equal(shelf.getPlacementCapacity({ itemId: "amo_01" }), 4);
+  assert.equal(shelf.getPlacementCapacity({ itemId: "paste" }), 10);
+
+  const slot = shelf.placeItem("paste", 0, 0);
+  assert.ok(slot);
+  assert.equal(slot.quantity, 1);
+  assert.equal(shelf.add("paste", 20), 9);
 });

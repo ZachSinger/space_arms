@@ -360,6 +360,10 @@
     "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_frame_05.png"
   },
   {
+    "key": "shelf_starter_2x1",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_starter_2x1.png"
+  },
+  {
     "key": "shelf_universal_01",
     "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_universal_01.png"
   },

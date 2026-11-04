@@ -2,11 +2,11 @@
   {
     "id": "lic_fixture_basics",
     "name": "Basic Fixture Supply",
-    "description": "A starter contract for standard shelves, lockers, and checkout registers.",
+    "description": "A starter contract for compact and standard shelves, lockers, and checkout registers.",
     "tier": 1,
     "baseCost": 0,
     "reqReputation": 0,
-    "unlocksFixtures": ["shelf_universal", "locker_single", "register_basic"]
+    "unlocksFixtures": ["shelf_starter_2x1", "shelf_universal", "locker_single", "register_basic"]
   },
   {
     "id": "lic_start_surplus",
@@ -23,7 +23,7 @@
     "name": "Scrap-Yard Armor & Melee",
     "description": "Access to discarded industrial plating and rusted blunt instruments. Perfect for budget-conscious brawlers.",
     "tier": 1,
-    "baseCost": 150,
+    "baseCost": 200,
     "reqReputation": 2,
     "reqFaction": "scavengers",
     "reqFactionRep": 2
@@ -33,7 +33,7 @@
     "name": "Basic Rations & Water",
     "description": "Standardized bulk food paste and water filtration. High volume, low margin essentials.",
     "tier": 1,
-    "baseCost": 100,
+    "baseCost": 25,
     "reqReputation": 0
   },
   {
@@ -41,7 +41,7 @@
     "name": "Civilian Threads (Lyra Synthetics)",
     "description": "Mass-market civilian clothing. Zero armor value, but high impulse-buy potential for station locals.",
     "tier": 1,
-    "baseCost": 250,
+    "baseCost": 100,
     "reqReputation": 5
   },
   {
@@ -49,7 +49,7 @@
     "name": "Salvage & Repair Tools (Nautilus)",
     "description": "Entry-level industrial tools for tearing ships apart or strapping them back together.",
     "tier": 1,
-    "baseCost": 350,
+    "baseCost": 250,
     "reqReputation": 5,
     "reqFaction": "explorers",
     "reqFactionRep": 2
@@ -59,7 +59,7 @@
     "name": "Standard Munitions Supplier",
     "description": "A bulk contract for reliable, standard-caliber kinetic ammunition.",
     "tier": 1,
-    "baseCost": 200,
+    "baseCost": 100,
     "reqReputation": 0
   },
   {
@@ -67,7 +67,7 @@
     "name": "Scrap-Yard Weapon Mods",
     "description": "Duct-taped flashlights and welded iron sights. Cheap upgrades for cheap guns.",
     "tier": 1,
-    "baseCost": 150,
+    "baseCost": 75,
     "reqReputation": 5,
     "reqFaction": "scavengers",
     "reqFactionRep": 5

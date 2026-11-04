@@ -1,9 +1,9 @@
 # Customer Pooling
 
 The customer pool is the set of customers scheduled to arrive during one shift.
-It is determined once, when the shift starts, then shuffled into an arrival
-order. Arrivals are spread mostly evenly across the shift with some random
-variation.
+It is determined when the shift starts, then shuffled into an arrival
+order. Stocking shelves during the shift can grow it (see Arrivals). Arrivals
+are spread mostly evenly across the shift with some random variation.
 
 ## 1. Determine the total pool
 
@@ -91,8 +91,9 @@ All numerical values below are initial tuning values, not final balance.
 
 ### Store Rep Curve
 
-- First-pass baseline: 8 customers at store rep 0 or lower, 10 at 10 rep,
-  13 at 25, 16 at 50, and 20 at 100. Interpolate between these points.
+- Baseline: 20 customers at store rep 0 or lower, 25 at 10 rep,
+  32 at 25, 40 at 50, and 50 at 100. Interpolate between these points.
+  (The first pass of 8–20 left a new store nearly empty in playtesting.)
 - Beyond the final table range, let traffic continue to grow at a diminishing
   rate:
 
@@ -112,12 +113,14 @@ All numerical values below are initial tuning values, not final balance.
 - Average units per customer is a weighted average of the customer groups'
   expected shopping-list sizes, using their current attraction weights.
 - `Coverage = Shelf Stock Units / Expected Demand`
-- `Overall Stock Scaler = clamp(Coverage, 0.5, 1.25)`
+- `Overall Stock Scaler = clamp(Coverage, 1.0, 1.25)`
 - Starting average units per customer: neutral 2, Scavengers 3.5,
   Mercenaries 3, Explorers 2. Derive and tune these from
   `CustomerBuyLists.js`.
-- The 0.5 floor preserves some traffic at low stock; the 1.25 ceiling lets
-  well-stocked shelves help without replacing reputation as the main driver.
+- The 1.0 floor means low stock never thins traffic (a small starter shelf
+  made shifts boring); under-stocked shelves instead cost sales when
+  customers find nothing. The 1.25 ceiling lets well-stocked shelves help
+  without replacing reputation as the main driver.
 - Faction-specific shelf assortment also influences the *allocation* weights,
   not this total-pool calculation. Do not multiply the total by faction stock
   a second time.
@@ -139,10 +142,25 @@ Apply the same employee scaler once to the total pool:
 
 ## Arrivals
 
-- Calculate the pool once at shift start; changes in reputation, stock, or
-  staffing during the shift affect the next shift's pool.
+- A shift lasts five minutes of unpaused real time (12 GTC hours). The same
+  per-shift pool is spread over this duration; shortening a shift increases
+  arrival frequency without increasing per-shift customer demand.
+- Calculate the pool at shift start. Reputation and staffing changes during the
+  shift affect the next shift's pool.
+- Shelf stock is re-checked about once a second during the shift (until soft
+  close). If the recalculated pool is larger, the extra customers are added,
+  scaled by how much of the shift is left, and spread over the remaining time.
+  Stocking early helps more than stocking late. The pool never shrinks
+  mid-shift (customers buying stock does not remove scheduled arrivals).
 - Create the day's non-faction and faction customers from the allocated counts,
   then shuffle them together into one arrival order.
 - Schedule arrivals at mostly even intervals over the shift with random
   variation (up to 35% of the interval), rather than a fixed repeating interval.
 - The store's existing in-store capacity may turn away arrivals when it is full.
+
+## Playtest captures
+
+The desktop HUD's **Debug Info** button exports the shift-start pool, intermediate
+calculations, arrival schedule, current customers, and recent outcomes alongside
+a full-window screenshot. See [Debug playtesting](DebugPlaytesting.md) for the
+capture workflow and the first faction/traffic test.

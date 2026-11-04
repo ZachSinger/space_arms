@@ -37,6 +37,7 @@ export class ManagerTablet {
   constructor(windowManager, playerState, scene) {
     this.playerState = playerState;
     this.scene = scene; // needed by the Supply tab to read/order fixture stock
+    this.supplyOrder = new Map(); // item id -> crates in the order being built
 
     const tabBarHTML = TAB_DEFS.map(
       ({ id, label }, index) =>
@@ -82,8 +83,15 @@ export class ManagerTablet {
       const signButton = event.target.closest("[data-license-id]");
       if (signButton) this.handleSignContract(signButton.dataset.licenseId);
 
-      const orderButton = event.target.closest("[data-order-item-id]");
-      if (orderButton) this.handleOrderRestock(orderButton.dataset.orderItemId);
+      const addCrateButton = event.target.closest("[data-supply-add]");
+      if (addCrateButton) this.changeSupplyOrder(addCrateButton.dataset.supplyAdd, 1);
+      const removeCrateButton = event.target.closest("[data-supply-remove]");
+      if (removeCrateButton) this.changeSupplyOrder(removeCrateButton.dataset.supplyRemove, -1);
+      if (event.target.closest("[data-supply-clear]")) {
+        this.supplyOrder.clear();
+        this.refreshSupplyPanel();
+      }
+      if (event.target.closest("[data-supply-place]")) this.handlePlaceSupplyOrder();
 
       const moveButton = event.target.closest("[data-move-fixture-id]");
       if (moveButton) this.scene.fixturePlacement.begin(moveButton.dataset.moveFixtureId);
@@ -159,7 +167,7 @@ export class ManagerTablet {
     if (tabId === "contracts") {
       return ContractRenderer.generateHTML(database.getAllLicenses(), this.playerState);
     }
-    if (tabId === "supply") return SupplyRenderer.generateHTML(this.scene);
+    if (tabId === "supply") return SupplyRenderer.generateHTML(this.scene, this.supplyOrder);
     if (tabId === "fixtures") return LayoutRenderer.generateHTML(this.scene, true);
     if (tabId === "layout") return LayoutRenderer.generateHTML(this.scene);
     return `<div class="tablet-placeholder">COMING SOON</div>`;
@@ -169,6 +177,7 @@ export class ManagerTablet {
     if (this.bodyElement.contains(document.activeElement)) document.activeElement.blur();
     this.fixtureHighlight.reset();
     if (tabId === "inventory") this.refreshInventoryPanel();
+    if (tabId === "supply") this.refreshSupplyPanel();
     if (tabId === "layout" || tabId === "fixtures") this.refreshLayoutPanels();
     this.bodyElement.querySelectorAll(".tablet-tab-btn").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.tab === tabId);
@@ -265,20 +274,25 @@ export class ManagerTablet {
     // via the subscribe() in the constructor -- no explicit re-render needed here.
   }
 
-  handleOrderRestock(itemId) {
-    if (!this.scene.orderRestockCrate(itemId)) {
-      this.scene.showShopMessage("Unable to order. Check funds, license, and Loading Pad space.");
-    }
-    // orderRestockCrate() calls playerState.spendCredits() on success, which triggers
-    // refreshSupplyPanel() via the subscribe() in the constructor -- but only on success;
-    // explicitly refresh too so a no-op (e.g. clicked just as funds became insufficient)
-    // doesn't leave a stale button state.
+  changeSupplyOrder(itemId, delta) {
+    const count = (this.supplyOrder.get(itemId) || 0) + delta;
+    const summary = this.scene.getSupplyOrderSummary(this.supplyOrder);
+    if (delta > 0 && summary.crates >= summary.maxCrates) return;
+    if (count > 0) this.supplyOrder.set(itemId, count);
+    else this.supplyOrder.delete(itemId);
+    this.refreshSupplyPanel();
+  }
+
+  handlePlaceSupplyOrder() {
+    // Why an order can't be placed is already shown in the summary, so no popup here.
+    if (this.scene.placeSupplyOrder(this.supplyOrder)) this.supplyOrder.clear();
     this.refreshSupplyPanel();
   }
 
   openWindow() {
     if (this.scene.startingShift || this.scene.fixturePlacement?.active || this.scene.loadFailed) return;
     this.refreshInventoryPanel();
+    this.refreshSupplyPanel(); // loading pad spots free up without any playerState change
     this.refreshLayoutPanels();
     this.uiWindow.openWindow();
   }

@@ -55,7 +55,7 @@ export class TitleScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true });
 
-      menuItem.on("pointerover", () => this.selectCommand(index));
+      menuItem.on("pointerover", () => this.setSelectedCommand(index));
       menuItem.on("pointerdown", () => this.activateCommand());
 
       return menuItem;
@@ -170,14 +170,13 @@ export class TitleScene extends Phaser.Scene {
   }
 
   selectCommand(change) {
-    if (typeof change === "number" && Math.abs(change) === 1) {
-      this.selectedIndex =
-        (this.selectedIndex + change + this.commands.length) %
-        this.commands.length;
-    } else {
-      this.selectedIndex = change;
-    }
+    this.setSelectedCommand(
+      (this.selectedIndex + change + this.commands.length) % this.commands.length,
+    );
+  }
 
+  setSelectedCommand(index) {
+    this.selectedIndex = index;
     this.updateMenuAppearance();
   }
 

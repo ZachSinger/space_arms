@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, screen } from "electron";
+import { app, BrowserWindow, ipcMain, screen, shell } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs/promises";
@@ -42,8 +42,10 @@ function getDisplaySettings(win) {
 }
 
 const displayModes = new WeakMap();
-const pendingSaveWrites = new Set();
+const pendingFileWrites = new Set();
 let saveQueue = Promise.resolve();
+let debugQueue = Promise.resolve();
+let debugSession = null;
 
 function getDisplayMode(win) {
   return displayModes.get(win) ?? "windowed";
@@ -63,10 +65,10 @@ const createWindow = () => {
 
   displayModes.set(win, "fullscreen");
   win.on("close", (event) => {
-    if (pendingSaveWrites.size === 0) return;
+    if (pendingFileWrites.size === 0) return;
     event.preventDefault();
     win.setEnabled(false);
-    Promise.allSettled([...pendingSaveWrites]).then(() => {
+    Promise.allSettled([...pendingFileWrites]).then(() => {
       if (!win.isDestroyed()) win.destroy();
     });
   });
@@ -147,11 +149,11 @@ ipcMain.handle("save:write", async (event, payload) => {
     return true;
   });
   saveQueue = write.catch((error) => console.error("Save file write failed", error));
-  pendingSaveWrites.add(write);
+  pendingFileWrites.add(write);
   try {
     return await write;
   } finally {
-    pendingSaveWrites.delete(write);
+    pendingFileWrites.delete(write);
   }
 });
 
@@ -163,4 +165,63 @@ ipcMain.handle("save:read", async () => {
     if (err.code === "ENOENT") return null; // no save yet
     throw err;
   }
+});
+
+ipcMain.handle("debug:capture", async (event, snapshot) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win || win.isDestroyed()) throw new Error("The game window is unavailable.");
+  if (!snapshot || snapshot.formatVersion !== 1 || typeof snapshot.requestedAt !== "string") {
+    throw new Error("Invalid debug snapshot.");
+  }
+  const snapshotJSON = JSON.stringify(snapshot, null, 2);
+  const write = debugQueue.then(async () => {
+    const image = await event.sender.capturePage();
+    if (image.isEmpty()) throw new Error("The game window screenshot was empty.");
+    const screenshotAt = new Date().toISOString();
+    if (!debugSession) {
+      const root = path.join(app.getPath("userData"), "debug-sessions");
+      await fs.mkdir(root, { recursive: true });
+      const stamp = screenshotAt.replace(/[:.]/g, "-");
+      debugSession = {
+        directory: await fs.mkdtemp(path.join(root, `session-${stamp}-`)),
+        nextCapture: 1,
+      };
+    }
+    const captureNumber = debugSession.nextCapture++;
+    const prefix = String(captureNumber).padStart(4, "0");
+    const screenshotPath = path.join(debugSession.directory, `${prefix}-screen.png`);
+    const reportPath = path.join(debugSession.directory, `${prefix}-info.txt`);
+    const report = [
+      "SPACE ARMS DEALER - DEBUG INFO",
+      `Session: ${path.basename(debugSession.directory)}`,
+      `Capture: ${captureNumber}`,
+      `Game version: ${app.getVersion()}`,
+      `Runtime: Electron ${process.versions.electron}; ${process.platform} ${process.arch}`,
+      `Snapshot requested: ${snapshot.requestedAt}`,
+      `Screenshot captured: ${screenshotAt}`,
+      `Screenshot: ${path.basename(screenshotPath)}`,
+      "Local diagnostic capture only. This is NOT a loadable saved game.",
+      "Gameplay continues during capture; the screenshot can be a few frames later than the state.",
+      "",
+      snapshotJSON,
+      "",
+    ].join("\n");
+    await fs.writeFile(screenshotPath, image.toPNG(), { flag: "wx" });
+    await fs.writeFile(reportPath, report, { encoding: "utf8", flag: "wx" });
+    return { captureNumber, directory: debugSession.directory, reportPath, screenshotPath };
+  });
+  debugQueue = write.catch((error) => console.error("Debug capture failed", error));
+  pendingFileWrites.add(write);
+  try {
+    return await write;
+  } finally {
+    pendingFileWrites.delete(write);
+  }
+});
+
+ipcMain.handle("debug:open-folder", async () => {
+  if (!debugSession) throw new Error("Capture debug info before opening its folder.");
+  const error = await shell.openPath(debugSession.directory);
+  if (error) throw new Error(`Could not open the debug folder: ${error}`);
+  return true;
 });

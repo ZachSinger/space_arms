@@ -122,9 +122,11 @@ test("saves from before the Go-Backs bin existed still load", () => {
 
 test("saves from before fixture types existed load with types filled in", () => {
   const legacy = snapshot();
+  legacy.fixtures[0].type = "shelf_universal";
   for (const entry of legacy.fixtures) delete entry.type;
   const migrated = validateShopSave(legacy, database);
-  assert.deepEqual(migrated.fixtures, snapshot().fixtures);
+  assert.deepEqual(migrated.fixtures, snapshot().fixtures.map((fixture, index) =>
+    index === 0 ? { ...fixture, type: "shelf_universal" } : fixture));
   assert.equal(legacy.fixtures[0].type, undefined);
 });
 
@@ -138,4 +140,33 @@ test("fixture crates can be saved on the floor or carried", () => {
 
   data.carriedCrate.typeId = "unknown";
   assert.throws(() => validateShopSave(data, database), /unknown fixture crate/);
+});
+
+test("older saves with shelf stacks over the new per-slot cap still load", () => {
+  const data = snapshot();
+  data.fixtures[0].placements[0].quantity = 4; // rifle: legacy 12 / 3 = 4, current cap 3
+  assert.doesNotThrow(() => validateShopSave(data, database));
+  data.fixtures[0].placements[0].quantity = 5;
+  assert.throws(() => validateShopSave(data, database), /shelf stack does not fit/);
+});
+
+test("shelf saves validate against the tile-derived visual grid", () => {
+  const data = snapshot();
+  data.fixtures[0].type = "shelf_universal";
+  data.fixtures[0].placements[0].gx = 4;
+  data.fixtures[0].placements[0].gy = 3;
+  assert.doesNotThrow(() => validateShopSave(data, database));
+
+  data.fixtures[0].placements[0].gx = 5;
+  assert.throws(() => validateShopSave(data, database), /shelf stack does not fit/);
+});
+
+test("compact starter shelf saves validate against its smaller visual grid", () => {
+  const data = snapshot();
+  data.fixtures[0].placements[0].gx = 2;
+  data.fixtures[0].placements[0].gy = 1;
+  assert.doesNotThrow(() => validateShopSave(data, database));
+
+  data.fixtures[0].placements[0].gx = 4;
+  assert.throws(() => validateShopSave(data, database), /shelf stack does not fit/);
 });

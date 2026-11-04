@@ -43,6 +43,10 @@ function createScene(obstacles = []) {
             this.drag = { x, y };
             return this;
           },
+          setImmovable(value) {
+            this.immovable = value;
+            return this;
+          },
           stop() {
             this.setVelocity(0, 0);
             return this;
@@ -248,4 +252,55 @@ test("drop position avoids corners and world bounds, or reports no room", () => 
   const enclosed = { enable: true, left: 0, right: 500, top: 0, bottom: 500 };
   const blockedCrate = new Crate(createScene([enclosed]), "item", 1, 200, 200);
   assert.equal(blockedCrate.findDropPosition(200, 200), null);
+});
+
+test("drop position never lands on another crate", () => {
+  const scene = createScene();
+  const resting = new Crate(scene, "item", 1, 200, 200);
+  Object.assign(resting.sprite.body, { left: 180, right: 220, top: 180, bottom: 220 });
+  scene.restockCrates = [resting];
+  const carried = new Crate(scene, "item", 1, 0, 0);
+  const position = carried.findDropPosition(200, 200);
+  assert.ok(position);
+  const half = carried.sprite.body.width / 2;
+  const clear = position.x - half >= 220 || position.x + half <= 180 ||
+    position.y - half >= 220 || position.y + half <= 180;
+  assert.ok(clear, JSON.stringify(position));
+});
+
+test("a bumped crate gets drag along its new direction so it always stops", () => {
+  const crate = new Crate(createScene(), "item", 1, 100, 100);
+  crate.drop(100, 100, 0, 0, false);
+  assert.deepEqual(crate.sprite.body.drag, { x: 0, y: 0 });
+  crate.sprite.body.setVelocity(0, -90);
+  crate.refreshDrag();
+  assert.deepEqual(crate.sprite.body.drag, { x: 0, y: 180 });
+});
+
+test("a delivered crate stays locked on the loading pad until picked up", () => {
+  const crate = new Crate(createScene(), "item", 5, 100, 100);
+  const body = crate.sprite.body;
+  crate.lockToPad();
+  assert.equal(body.immovable, true);
+  assert.equal(body.moves, false);
+  crate.setPaused(false);
+  assert.equal(body.moves, false);
+  assert.equal(crate.serialize().onPad, true);
+
+  assert.equal(crate.pickUp({ x: 100, y: 100, depth: 1 }), true);
+  assert.equal(crate.lockedToPad, false);
+  assert.equal(body.immovable, false);
+  crate.drop(300, 300, 0, 0, false);
+  assert.equal(body.moves, true);
+  assert.equal(crate.serialize().onPad, false);
+});
+
+test("a carried crate can't be dropped onto the loading pad", () => {
+  const scene = createScene();
+  scene.loadingPadRect = { left: 200, top: 200, right: 336, bottom: 328 };
+  const crate = new Crate(scene, "item", 5, 0, 0);
+  const position = crate.findDropPosition(268, 264);
+  assert.equal(position, null);
+  const nearEdge = crate.findDropPosition(268, 175);
+  assert.ok(nearEdge.y + 20 <= 200);
 });

@@ -18,6 +18,8 @@ export class UIWindow {
     this.width = config.width || "300px";
     this.height = config.height || "auto";
     this.shouldCloseOtherWindows = config.shouldCloseOtherWindows || false;
+    // false hides the X and ignores Escape; code can still call close().
+    this.closable = config.closable !== false;
     // Optional hook fired whenever this window actually closes (X button, Escape, or a
     // direct close() call) -- NOT fired just because its content was refreshed while still
     // open. Can also be assigned directly after construction (this.onClose = fn) if not
@@ -48,7 +50,7 @@ export class UIWindow {
     win.innerHTML = `
             <div class="retro-window-header" tabindex="0" aria-label="Drag ${this.title}">
                 <span class="retro-window-title">${this.title}</span>
-                <button class="retro-window-close" aria-label="Close">X</button>
+                ${this.closable ? '<button class="retro-window-close" aria-label="Close">X</button>' : ""}
             </div>
             <div class="retro-window-body">
                 ${contentHTML}
@@ -62,7 +64,7 @@ export class UIWindow {
     const closeBtn = this.element.querySelector(".retro-window-close");
 
     // Internal Close Button
-    closeBtn.addEventListener("click", () => this.close());
+    closeBtn?.addEventListener("click", () => this.close());
 
     // Focus on click anywhere inside
     this.element.addEventListener("mousedown", () =>
