@@ -16,7 +16,7 @@ This is a critique, not a to-do list. The fixes and their priority are in
 
 | # | Problem | Severity |
 |---|---|---|
-| 1 | The game can't be packaged for release | 🔴 |
+| 1 | ~~The game can't be packaged for release~~ (addressed; Steam steps remain) | ✅ |
 | 2 | `GameScene` is a god object | 🔴 |
 | 3 | Customer logic can't be reused for employees | 🔴 |
 | 4 | Modules reach directly into the scene | 🟠 |
@@ -37,7 +37,14 @@ This is a critique, not a to-do list. The fixes and their priority are in
 
 ---
 
-## 🔴 1. The game can't be packaged for release
+## ✅ 1. The game can't be packaged for release (addressed)
+
+> **Status:** addressed. `vite.config.js` copies `data/` and referenced images into `dist/`,
+> `main.js` loads `dist/` through the `app://game/` protocol when packaged, and
+> `npm run package` builds a stand-alone exe with electron-builder. Steamworks integration
+> and the Steam store steps are still to do.
+
+Original finding:
 
 - `main.js:90` always loads `http://localhost:5173`. A packaged build would open a blank
   window unless a Vite dev server happened to be running.
@@ -235,7 +242,7 @@ At least 10 logic modules take `scene` and use its internals:
   - It calls the file `GameScene.js`.
   - It says `Fixture` in `ShopInventory.js` supports "one hand-seeded demo shelf."
   - All of those are obsolete.
-- **`AGENTS.md`** says `StoreItem` doesn't capture `license`. It does (`Items.js:17`).
+- ~~**`AGENTS.md`** says `StoreItem` doesn't capture `license`.~~ Fixed.
 - **The bible's anchor-click movement** ("character pathfinding triggers UI upon
   arrival") describes a control scheme the game no longer uses (WASD).
 - **Why it matters:** agents and contributors treat these docs as the source of truth,

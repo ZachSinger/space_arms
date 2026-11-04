@@ -37,9 +37,11 @@ test("native debug captures keep numbered screenshot/report pairs and wait for w
   const errors = context.mock.method(console, "error", () => {});
   globalThis.__nativeDebugTest = {
     app: {
-      getPath: () => directory, getVersion: () => "1.0.0",
+      getPath: () => directory, setPath() {}, getVersion: () => "1.0.0",
       whenReady: () => Promise.resolve(), on() {},
     },
+    protocol: { registerSchemesAsPrivileged() {}, handle() {} },
+    net: {},
     ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
     screen: {},
     shell: { openPath: async (value) => { openedPath = value; return openError; } },
@@ -68,7 +70,7 @@ test("native debug captures keep numbered screenshot/report pairs and wait for w
         name: "debug-electron-stub", enforce: "pre",
         resolveId: (source) => source === "electron" ? "\0debug-test-electron" : null,
         load: (id) => id === "\0debug-test-electron"
-          ? "export const { app, BrowserWindow, ipcMain, screen, shell } = globalThis.__nativeDebugTest;" : null,
+          ? "export const { app, BrowserWindow, ipcMain, net, protocol, screen, shell } = globalThis.__nativeDebugTest;" : null,
       }],
     });
     await server.ssrLoadModule("/main.js");

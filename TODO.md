@@ -390,4 +390,4 @@ notice something that needs doing but isn't being done right now.
 - [x] Layout tab: safe off-shift fixture placement with autosave status (Step 63)
 - [ ] Finances tab: needs the End Day / itemized receipt flow to exist first (Step 43)
 - [ ] Handbook tab: needs actual handbook/reference content written (Step 36)
-- [ ] `npm run build` is not verified to produce a working production build (see AGENTS.md)
+- [x] `npm run package` builds a stand-alone Windows exe (`release\win-unpacked`); verified title, Continue into the shop, and all item images load without the dev server

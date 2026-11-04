@@ -4,14 +4,40 @@
 // Electron main process: creates the game window, and serves the renderer's IPC calls for
 // display settings, the save file, and debug captures.
 // See also: preload.cjs (the renderer-side API for these channels).
-import { app, BrowserWindow, ipcMain, screen, shell } from "electron";
+import { app, BrowserWindow, ipcMain, net, protocol, screen, shell } from "electron";
 import path from "path";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 import fs from "fs/promises";
 
 // ES modules have no __dirname.
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Packaged builds load the game from dist/ through app://game/; development uses Vite.
+const DEV_SERVER_URL = "http://localhost:5173";
+const GAME_URL = "app://game/index.html";
+const DIST_DIRECTORY = path.join(__dirname, "dist");
+
+// Pin the save folder so it doesn't move with the packaged app's display name.
+app.setPath("userData", path.join(app.getPath("appData"), "space-arms-dealer"));
+
+// A standard, secure scheme behaves like a website for relative paths, fetch, and storage.
+protocol.registerSchemesAsPrivileged([
+  { scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true } },
+]);
+
+/**
+ * Serve a file from dist/, refusing any path that escapes it.
+ * @param {Request} request
+ */
+function serveGameFile(request) {
+  const { pathname } = new URL(request.url);
+  const filePath = path.join(DIST_DIRECTORY, decodeURIComponent(pathname));
+  if (!filePath.startsWith(DIST_DIRECTORY + path.sep)) {
+    return new Response("Not found", { status: 404 });
+  }
+  return net.fetch(pathToFileURL(filePath).toString());
+}
 
 // Resolutions offered in settings, filtered to what fits the current display (px).
 const COMMON_RESOLUTIONS = [
@@ -87,7 +113,7 @@ const createWindow = () => {
       if (!win.isDestroyed()) win.destroy();
     });
   });
-  win.loadURL("http://localhost:5173"); // Vite dev server
+  win.loadURL(app.isPackaged ? GAME_URL : DEV_SERVER_URL);
 };
 
 ipcMain.handle("display:get-settings", (event) => {
@@ -143,6 +169,7 @@ ipcMain.handle("display:set-mode", (event, mode) => {
 });
 
 app.whenReady().then(() => {
+  protocol.handle("app", serveGameFile);
   createWindow();
 
   app.on("activate", () => {

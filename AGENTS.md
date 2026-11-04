@@ -20,7 +20,7 @@ Design is specified in detail in `documentation/` — consult it before inventin
 ## Architecture
 
 - **Electron shell** (`main.js`, `preload.cjs`): native window/display-mode control and save-file I/O via `contextBridge`. `contextIsolation: true`, `nodeIntegration: false` — keep it that way.
-- **Frontend** (served by Vite in dev, loaded via `http://localhost:5173` by Electron): Phaser 3 scenes (`js/scenes/`) own the canvas "world" simulation (shelves, customers, pathfinding). DOM windows (`js/logic/UIWindow.js`, `WindowManager.js`) own all heavy interactive UI (inventory, dialogue, settings, contracts). **These two layers are strictly decoupled** — don't render game-logic UI inside the Phaser canvas.
+- **Frontend** (served by Vite at `http://localhost:5173` in dev; the packaged app loads the built `dist/` through the `app://game/` protocol in `main.js`): Phaser 3 scenes (`js/scenes/`) own the canvas "world" simulation (shelves, customers, pathfinding). DOM windows (`js/logic/UIWindow.js`, `WindowManager.js`) own all heavy interactive UI (inventory, dialogue, settings, contracts). **These two layers are strictly decoupled** — don't render game-logic UI inside the Phaser canvas.
 - **Data layer** (`data/*.json` + `js/logic/DatabaseManager.js`): static item/license/icon definitions. Never hardcode item prices, dimensions, or license tiers in JS — query them through `DatabaseManager`.
 - **State** (`js/logic/PlayerState.js`): single source of truth for mutable runtime state (credits, reputation, licenses). All mutations go through its methods (`addCredits`, `addReputation`, etc.) — renderers must never mutate state directly.
 
@@ -29,7 +29,8 @@ Design is specified in detail in `documentation/` — consult it before inventin
 - `npm install` — install deps.
 - `npm run dev` — Vite dev server (`localhost:5173`); open it directly in a browser for fast iteration without Electron.
 - `npm start` — launches Electron pointed at `localhost:5173`; **requires `npm run dev` already running**.
-- `npm run build` — currently **not verified to produce a working production build**: `data/`, `img/`, and `styles/` are loaded via plain string paths (Phaser loader, CSS), not JS imports, so Vite won't copy them into `dist/` without a `vite.config` fix (e.g. `publicDir` or a copy plugin). Fix this before relying on `build`/packaging.
+- `npm run build` — Vite build into `dist/`; the `copy-runtime-assets` plugin in `vite.config.js` copies `data/` and only the `img/` files referenced by data JSON or bundled JS (fails if one is missing).
+- `npm run package` — build plus electron-builder; produces `release\win-unpacked\Space Arms Dealer.exe`, which runs without the dev server. Needs the gitignored `img/Icons_Extracted/` art present locally. Saves stay in `%APPDATA%\space-arms-dealer` for both dev and packaged builds.
 - Run regression tests with `node --test tests/*.test.js` (PowerShell: `node --test (Get-ChildItem tests -Filter '*.test.js').FullName`). No linter or formatter is configured.
 
 ## Conventions
@@ -45,5 +46,5 @@ Design is specified in detail in `documentation/` — consult it before inventin
 - `SaveManager.js` is wired into the title/game scenes. Save only off-shift; Continue restores preparation state, not an active shift. `ShopSave.js` validates snapshots; fixture geometry must also pass `FixtureLayout.js` before restoration. Browser and Electron saves are separate.
 - Placed fixtures live only in `scene.fixtures` (`js/logic/FixtureRegistry.js`) — look them up there (`get`, `shelves()`, `stockHolders()`, `register()`, `displayName()`); never keep separate references. Types are in `FIXTURE_TYPES` (`FixtureLayout.js`).
 - The Manager's Tablet (`js/logic/ManagerTablet.js`) hosts Inventory, Contracts, Supply, Fixtures, and Layout content. Fixture purchases, licenses, fixture crates, placement, and empty-fixture crating use the fixture catalog and registry; rearrangement and crate-up are only available while closed. Employee, Finances, and Handbook remain placeholders.
-- `StoreItem` (`js/logic/Items.js`) does not capture the `license` field present on every entry in `data/Items.json` — add it if you're building contract-gated purchasing.
+- `StoreItem` (`js/logic/Items.js`) exposes the item's required Supplier License id as `license` (or `null`).
 - `SaveManager` requires subsystems to implement `serialize()` and `applySave(data)`. Preserve existing listeners when applying restored player state.

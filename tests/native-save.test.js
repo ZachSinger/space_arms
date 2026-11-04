@@ -14,7 +14,9 @@ test("native saves replace atomically, serialize writes, recover from errors, an
   let server;
   const errorLog = context.mock.method(console, "error", () => {});
   globalThis.__nativeSaveTest = {
-    app: { getPath: () => directory, whenReady: () => Promise.resolve(), on() {} },
+    app: { getPath: () => directory, setPath() {}, whenReady: () => Promise.resolve(), on() {} },
+    protocol: { registerSchemesAsPrivileged() {}, handle() {} },
+    net: {},
     ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
     screen: {},
     BrowserWindow: class {
@@ -45,7 +47,7 @@ test("native saves replace atomically, serialize writes, recover from errors, an
         enforce: "pre",
         resolveId: (source) => source === "electron" ? "\0native-test-electron" : null,
         load: (id) => id === "\0native-test-electron"
-          ? "export const { app, BrowserWindow, ipcMain, screen, shell } = globalThis.__nativeSaveTest;" : null,
+          ? "export const { app, BrowserWindow, ipcMain, net, protocol, screen, shell } = globalThis.__nativeSaveTest;" : null,
       }],
     });
     await server.ssrLoadModule("/main.js");
