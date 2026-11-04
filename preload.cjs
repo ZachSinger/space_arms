@@ -1,3 +1,8 @@
+// ==========================================
+// FILE: preload.cjs
+// ==========================================
+// Electron preload: exposes `window.desktopApi`, the renderer's only bridge to the main
+// process (display settings, save files, debug capture), via IPC.
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("desktopApi", {

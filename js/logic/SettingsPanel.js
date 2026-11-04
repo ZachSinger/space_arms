@@ -1,6 +1,13 @@
+// ==========================================
+// FILE: SettingsPanel.js
+// ==========================================
+// DOM settings window for resolution, display mode, and text size. Changes preview
+// immediately; APPLY keeps them as the new cancel point, CANCEL reverts to the last one.
+// Text size persists in localStorage; display settings live in the Electron window.
 export class SettingsPanel {
   static textSizeStorageKey = "space-arms-dealer.text-size";
 
+  // Text size option -> font scale multiplier.
   static textSizeScales = {
     default: "1.15",
     smaller: "0.95",
@@ -75,6 +82,7 @@ export class SettingsPanel {
     );
   }
 
+  // Show the panel, refreshing options and recording the current settings to revert to.
   async open() {
     const settings = await window.desktopApi.getDisplaySettings();
 
@@ -110,6 +118,7 @@ export class SettingsPanel {
     this.onOpen?.();
   }
 
+  // ACCEPT: keep whatever is previewed and persist the text size.
   close() {
     localStorage.setItem(
       SettingsPanel.textSizeStorageKey,
@@ -126,6 +135,7 @@ export class SettingsPanel {
   async cancel() {
     const { resolution, displayMode, textSize } = this.settingsSnapshot;
 
+    // Restore the mode first; switching modes can resize the window.
     if (displayMode !== this.appliedDisplayMode) {
       await window.desktopApi.setDisplayMode(displayMode);
     }
@@ -170,6 +180,7 @@ export class SettingsPanel {
     SettingsPanel.applyTextSize(this.textSizeSelect.value);
   }
 
+  // APPLY: make the current settings the new point CANCEL reverts to.
   async saveSnapshot() {
     const settings = await window.desktopApi.getDisplaySettings();
 
@@ -192,6 +203,10 @@ export class SettingsPanel {
     return Number(SettingsPanel.textSizeScales[textSize]);
   }
 
+  /**
+   * Apply a text size to the DOM (via CSS data attribute) and notify Phaser scenes.
+   * @param {string} textSize - key of textSizeScales
+   */
   static applyTextSize(textSize) {
     document.documentElement.dataset.textSize = textSize;
     window.dispatchEvent(

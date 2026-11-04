@@ -1,16 +1,25 @@
 // ==========================================
 // FILE: FixtureWindow.js
 // ==========================================
+// The DOM window for whichever fixture the player has open: a Storage Fixture's capacity
+// bar + stock list, or a sales shelf's manual item-placement grid (click, drag, rotate).
+// See also: FixtureRenderer.js (the HTML), ShelfFixture.js (the grid rules).
+
 import { UIWindow } from "./UIWindow.js";
 import { FixtureRenderer } from "./FixtureRenderer.js";
 import { ShelfFixture } from "./ShelfFixture.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
-// How far the mouse must travel while held on a shelf placement before it counts as a
-// drag (move the stack) rather than a click (stock 1 into it).
+// Mouse travel (px) while held on a shelf placement before it's a drag (move the stack)
+// rather than a click (stock 1 into it).
 const DRAG_THRESHOLD_PX = 6;
 
-// Short floating message at the cursor (e.g. "No Space In Hovercart").
+/**
+ * Short floating message at the cursor (e.g. "No Space In Hovercart").
+ * @param {number} x - client px
+ * @param {number} y - client px
+ * @param {string} text
+ */
 export function showPopupText(x, y, text) {
   const popup = document.createElement("div");
   popup.className = "fixture-popup-text";
@@ -21,13 +30,10 @@ export function showPopupText(x, y, text) {
   popup.addEventListener("animationend", () => popup.remove());
 }
 
-// One shared window reused for whichever fixture the player currently has open (the shelf
-// or a Storage Fixture) -- same idea as there only ever being one CheckoutWindow, just
-// re-targeted/re-titled per open() call rather than one instance per fixture. Renders
-// completely differently depending on which kind of fixture it's showing: a Storage
-// Fixture is a flat capacity-pool bar + stock list (see ShopInventory.js); a sales shelf
-// is a manual item-placement grid (see ShelfFixture.js) -- "fixture" here just means
-// "whichever one the player is currently looking at."
+/**
+ * One shared window, re-targeted and re-titled for each fixture opened.
+ * Owns the shelf placement UI state (picker, pending placement, drag).
+ */
 export class FixtureWindow {
   constructor(windowManager, playerState) {
     this.playerState = playerState;
@@ -48,23 +54,14 @@ export class FixtureWindow {
     this.titleElement = this.uiWindow.element.querySelector(".retro-window-title");
     this.fixture = null;
 
-    // Shelf-only UI state -- which item (if any) the player is currently in the middle of
-    // placing on the grid, and whether it's rotated. null means "not currently placing
-    // anything" (the normal grid + placement-list view). Reset every time a different
-    // fixture is opened (see openForFixture) so it never leaks between sessions.
+    // Shelf-only: the item being placed and its rotation; null when not placing.
     this.pickingItem = false;
     this.pendingPlacement = null;
-    // The last empty grid cell the cursor was over during placement mode -- used both to
-    // draw the hover preview and, on click, as the actual placement anchor (see
-    // handleGridHover/handleClick). Tracking this ourselves rather than re-deriving it
-    // from the click's own event.target matters because the preview itself can visually
-    // cover several cells at once (a 2-wide item's preview spans 2 cells) -- clicking
-    // anywhere on that preview has to still anchor the placement at its own top-left
-    // cell, not whichever specific sub-cell happened to be directly under the pointer.
+    // Placement anchor, tracked from hover rather than the click target because the
+    // preview can span several cells and must still anchor at its top-left one.
     this.hoveredCell = null;
 
-    // Delegated (one listener for the whole body, not one per row/cell) since everything
-    // gets fully re-rendered after each click -- see render().
+    // Delegated, since the body is fully re-rendered after each click.
     this.bodyElement.addEventListener("click", (event) => this.handleClick(event));
     this.bodyElement.addEventListener("contextmenu", (event) => this.handleContextMenu(event));
     this.bodyElement.addEventListener("mousedown", (event) => this.handleMouseDown(event));
@@ -100,8 +97,13 @@ export class FixtureWindow {
     this.tooltip.remove();
   }
 
-  // Floating name card for whichever shelf placement is under the cursor. Lives on
-  // document.body because the window body is re-rendered on every click.
+  // --- Item tooltip ---
+
+  /**
+   * Floating name card for whichever shelf placement is under the cursor. Lives on
+   * document.body because the window body is re-rendered on every click.
+   * @param {MouseEvent} event
+   */
   updateItemTooltip(event) {
     const cell = this.isShelf() && !this.pendingPlacement && !this.isDragging
       ? event.target.closest("[data-placement-index]")
@@ -138,6 +140,8 @@ export class FixtureWindow {
     this.tooltip.hidden = true;
   }
 
+  // --- Opening and placement mode ---
+
   // Abandons whatever placement mode is active. A brand new placement just evaporates
   // (nothing was taken from the hovercart yet); a moved stack goes back to its origin.
   cancelPendingPlacement() {
@@ -151,8 +155,11 @@ export class FixtureWindow {
     if (moving) this.playerState.notifyListeners();
   }
 
-  // Right-click a shelf placement: pull 1 unit into the hovercart. Right-clicking a slot
-  // that's already empty removes the slot itself (the only way a slot is ever removed).
+  /**
+   * Right-click a shelf placement: pull 1 unit into the hovercart. Right-clicking a slot
+   * that's already empty removes the slot itself (the only way a slot is ever removed).
+   * @param {MouseEvent} event
+   */
   handleContextMenu(event) {
     if (!this.isShelf()) return;
     const cell = event.target.closest("[data-placement-index]");
@@ -188,16 +195,13 @@ export class FixtureWindow {
     showPopupText(x, y, text);
   }
 
-  // Phaser's input manager listens for mousedown at the *window* level, not just on the
-  // canvas -- so clicking a DOM button inside this very window (while standing near the
-  // fixture it represents) also reaches the fixture sprite's own pointerdown handler and
-  // calls this again, mid-click, for the fixture that's already open. A genuine no-op in
-  // that case is essential, not just "reset less" -- re-rendering at all (even with
-  // identical, preserved state) replaces the DOM node the real click was actually aimed
-  // at mid-event, and the browser silently drops the "click" event entirely rather than
-  // retargeting it, so the player's own click (e.g. ROTATE) would never even reach
-  // handleClick(). Only actually do anything here when genuinely switching to a
-  // different fixture, or opening fresh.
+  /**
+   * Phaser listens for mousedown at the window level, so clicking a button in this window
+   * re-calls this for the already-open fixture. That must be a true no-op: re-rendering
+   * mid-click replaces the clicked node and the browser drops the click (e.g. ROTATE).
+   * @param {object} fixture - a ShelfFixture or Storage Fixture
+   * @param {string} title
+   */
   openForFixture(fixture, title) {
     if (this.fixture === fixture && this.uiWindow.isOpen) return;
 
@@ -213,9 +217,7 @@ export class FixtureWindow {
     return this.fixture instanceof ShelfFixture;
   }
 
-  // The item's actual footprint right now, accounting for the current rotation state --
-  // shared by the hover preview and the click-to-confirm handler so they always agree on
-  // what "fits" means for the exact same pending item.
+  // The pending item's rotated footprint; shared by preview and confirm so they agree on fit.
   getPendingFootprint() {
     const item = database.getItem(this.pendingPlacement.itemId);
     return this.pendingPlacement.rotated
@@ -223,12 +225,12 @@ export class FixtureWindow {
       : { w: item.dimensions.w, h: item.dimensions.h };
   }
 
-  // Updates (creating it the first time) a preview block showing the item's own image at
-  // its real w x h footprint, anchored at (gx, gy) -- green if it would actually fit
-  // there, red if not (still shown, just so hovering an invalid spot gives feedback
-  // instead of silently doing nothing). `pointer-events: none` (see CSS) is what lets
-  // mousemove keep reporting the *underlying* empty cell while the cursor is visually
-  // over this overlay instead of the overlay stealing hover from itself.
+  /**
+   * Draw the pending item at its real footprint: green if it fits, red if not. The CSS
+   * `pointer-events: none` keeps hover reporting the empty cell underneath.
+   * @param {number} gx - grid column
+   * @param {number} gy - grid row
+   */
   showPlacementPreview(gx, gy) {
     const { w, h } = this.getPendingFootprint();
     const isValid = this.fixture.canPlaceAt(gx, gy, w, h);
@@ -245,9 +247,8 @@ export class FixtureWindow {
       grid.appendChild(preview);
     }
 
-    // Clamped only for the visual span -- hovering near an edge with a footprint that
-    // would run off the grid should still show (in red) rather than being clipped into
-    // an implicit (and potentially oddly-sized) extra grid track.
+    // Clamp only the visual span so an off-grid footprint shows in red instead of
+    // creating implicit extra grid tracks.
     const { w: gridW, h: gridH } = this.fixture.displayGrid;
     const visualW = Math.min(w, gridW - gx);
     const visualH = Math.min(h, gridH - gy);
@@ -265,9 +266,10 @@ export class FixtureWindow {
     this.bodyElement.querySelector(".fixture-placement-preview")?.remove();
   }
 
-  // Only relevant while actually choosing where to place something (see
-  // handleClick's data-pick-item-id branch). Re-draws the preview only when the hovered
-  // cell actually changes, not on every pixel of mouse movement within the same cell.
+  /**
+   * During placement mode, redraw the preview only when the hovered cell changes.
+   * @param {MouseEvent} event
+   */
   handleGridHover(event) {
     if (!this.isShelf() || !this.pendingPlacement) return;
 
@@ -283,6 +285,8 @@ export class FixtureWindow {
     this.hoveredCell = { gx, gy };
     this.showPlacementPreview(gx, gy);
   }
+
+  // --- Clicks ---
 
   handleClick(event) {
     if (this.suppressClick) return;
@@ -341,10 +345,8 @@ export class FixtureWindow {
       this.render();
       return;
     }
-    // Clicking anywhere on an empty cell (including the hover preview sitting on top of
-    // it, thanks to pointer-events: none -- see showPlacementPreview) confirms placement
-    // at whatever cell hover last anchored it to, not necessarily the literal cell under
-    // the cursor at this exact pixel (the preview itself can span several cells).
+    // Confirms at the hover anchor, not the literal cell under the cursor (the preview
+    // can span several cells).
     const gridCell = event.target.closest("[data-grid-cell]");
     if (gridCell && this.hoveredCell) {
       this.confirmPlacement();
@@ -382,6 +384,11 @@ export class FixtureWindow {
     return true;
   }
 
+  /**
+   * Move 1 unit from the hovercart into this placement, if there's stock and room.
+   * @param {object} placement
+   * @param {MouseEvent} event - for popup position
+   */
   stockPlacement(placement, event) {
     const hovercart = this.playerState.hovercart;
     if (!hovercart.findStockEntry(placement.itemId)?.quantity) {
@@ -398,9 +405,13 @@ export class FixtureWindow {
     this.playerState.notifyListeners();
   }
 
-  // --- Shelf-only: click-and-drag a placement to lift its whole stack into move mode.
-  // Releasing over a valid cell drops it there; releasing anywhere else just leaves it in
-  // move mode (ROTATE/CANCEL toolbar, click a cell to drop) like a normal placement. ---
+  // --- Dragging placements ---
+
+  /**
+   * Shelf-only: start a possible drag that lifts a placement's whole stack into move mode.
+   * Releasing over a valid cell drops it; elsewhere it stays in move mode.
+   * @param {MouseEvent} event
+   */
   handleMouseDown(event) {
     if (!this.isShelf() || event.button !== 0 || this.pendingPlacement) return;
     const cell = event.target.closest("[data-placement-index]");
@@ -409,6 +420,10 @@ export class FixtureWindow {
     this.dragStart = { x: event.clientX, y: event.clientY, index: Number(cell.dataset.placementIndex) };
   }
 
+  /**
+   * @param {MouseEvent} event
+   * @returns {boolean} true if a press is in progress, so hover handling should be skipped
+   */
   handleDragMove(event) {
     if (!this.dragStart) return false;
     const dx = event.clientX - this.dragStart.x;
@@ -437,6 +452,10 @@ export class FixtureWindow {
     }
   }
 
+  /**
+   * Detach a placement from the grid into move mode, remembering where to restore it.
+   * @param {object} placement
+   */
   beginMove(placement) {
     this.fixture.detachPlacement(placement);
     this.pendingPlacement = {
@@ -450,10 +469,15 @@ export class FixtureWindow {
     this.playerState.notifyListeners();
   }
 
-  // Moves exactly 1 unit of itemId from one capacity pool to another (fixture <-> player's
-  // hovercart) -- always safe to call: remove() can't take more than `from` actually has,
-  // and add() can't accept more than `to` actually has room for, so this never creates or
-  // destroys units even if the buttons somehow get out of sync with capacity.
+  // --- Transfers and rendering ---
+
+  /**
+   * Move 1 unit between capacity pools (fixture <-> hovercart). Never creates or destroys
+   * units, even if the buttons get out of sync with capacity.
+   * @param {object} from
+   * @param {object} to
+   * @param {string} itemId
+   */
   transfer(from, to, itemId) {
     const removed = from.remove(itemId, 1);
     if (removed === 0) return;
@@ -465,9 +489,7 @@ export class FixtureWindow {
     this.playerState.notifyListeners(); // keeps the HUD's hovercart readout live
   }
 
-  // Dispatches to the right renderer for whatever's currently open -- a Storage
-  // Fixture's flat capacity bar/list, or a sales shelf's grid (either its normal view, or
-  // mid-placement with the item picker/toolbar, depending on this window's own UI state).
+  // Storage bar/list, shelf item picker, or shelf grid, depending on fixture and UI state.
   render() {
     if (this.isShelf()) {
       this.bodyElement.innerHTML = this.pickingItem
@@ -487,8 +509,10 @@ export class FixtureWindow {
     }
   }
 
-  // Called by GameScene right after a delivery into whichever fixture this window is
-  // currently showing, so the capacity bar/stock list don't go stale while it's open.
+  /**
+   * Re-render if this fixture is the one open, e.g. after a delivery into it.
+   * @param {object} fixture
+   */
   refresh(fixture) {
     if (this.fixture !== fixture || !this.uiWindow.isOpen) return;
     this.render();

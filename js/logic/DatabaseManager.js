@@ -1,9 +1,11 @@
-import { StoreItem } from "./Items.js";
-import { SupplierLicense } from "./Licenses.js";
-
 // ==========================================
 // FILE: DatabaseManager.js
 // ==========================================
+// In-memory lookup of static game data (items and supplier licenses) loaded from JSON at boot.
+// The shared instance is exported from scenes/boot.js as `database`.
+import { StoreItem } from "./Items.js";
+import { SupplierLicense } from "./Licenses.js";
+
 export class DatabaseManager {
   constructor() {
     this.items = new Map();
@@ -12,7 +14,9 @@ export class DatabaseManager {
     this.licenseList = [];
   }
 
-  // Pass the parsed JSON array directly into here
+  /**
+   * @param {object[]} jsonArray - parsed Items.json
+   */
   loadItemsJSON(jsonArray) {
     let loadedCount = 0;
     jsonArray.forEach((data) => {
@@ -23,6 +27,9 @@ export class DatabaseManager {
     });
   }
 
+  /**
+   * @param {object[]} jsonArray - parsed Licenses.json
+   */
   loadLicensesJSON(jsonArray) {
     let loadedCount = 0;
     jsonArray.forEach((data) => {

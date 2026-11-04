@@ -1,6 +1,14 @@
+// ==========================================
+// FILE: CustomerPooling.js
+// ==========================================
+// Pure math for a shift's customer pool: how many customers come, how they split between
+// neutral and faction groups, and when each one arrives.
+// See also: documentation/CustomerPooling.md (design and formulas).
 import { CUSTOMER_FACTION_IDS, factionMatches } from "./CustomerBuyLists.js";
 
+// First-pass tuning values; see CustomerPooling.md before changing them.
 export const CUSTOMER_POOL_TUNING = Object.freeze({
+  // Store reputation -> base customers per shift, linearly interpolated between points.
   storeRepCurve: [
     { reputation: 0, customers: 20 },
     { reputation: 10, customers: 25 },
@@ -8,10 +16,13 @@ export const CUSTOMER_POOL_TUNING = Object.freeze({
     { reputation: 50, customers: 40 },
     { reputation: 100, customers: 50 },
   ],
+  // Past the last curve point, growth slows logarithmically.
   storeRepTailGrowth: 10,
   storeRepTailSoftness: 100,
+  // Shelf stock vs. expected demand can raise the pool by up to 25%, never lower it.
   stockScalerMinimum: 1,
   stockScalerMaximum: 1.25,
+  // Expected units bought per customer, used to estimate demand.
   unitsPerCustomer: {
     neutral: 2,
     scavengers: 3.5,
@@ -19,16 +30,28 @@ export const CUSTOMER_POOL_TUNING = Object.freeze({
     explorers: 2,
   },
   shelfTypesForMaximumAttraction: 3,
+  // Faction rep at which a faction's attraction weight doubles (halves at the negative).
   factionRepForDoubleTrafficWeight: 250,
+  // Employees add up to +100% traffic, each one adding less than the last.
   maximumEmployeeBonus: 1,
   employeeFalloff: 0.8,
+  // Random arrival offset as a fraction of the even spacing between customers.
   arrivalJitterFraction: 0.35,
 });
 
+/**
+ * Clamp an RNG result into [0, 1) so index math can never land past the end.
+ * @param {() => number} random
+ */
 function randomUnit(random) {
   return Math.max(0, Math.min(1 - Number.EPSILON, random()));
 }
 
+/**
+ * Factions with at least one licensed item they want; only these send customers.
+ * @param {Set<string> | string[]} activeLicenses
+ * @param {object[]} items - item catalog
+ */
 export function getLicensedFactionIds(activeLicenses, items) {
   const licenses = activeLicenses instanceof Set
     ? activeLicenses
@@ -40,6 +63,10 @@ export function getLicensedFactionIds(activeLicenses, items) {
   );
 }
 
+/**
+ * Base customers per shift for a store reputation (unrounded).
+ * @param {number} reputation
+ */
 export function getStoreRepPool(reputation) {
   const curve = CUSTOMER_POOL_TUNING.storeRepCurve;
   if (reputation <= curve[0].reputation) return curve[0].customers;
@@ -59,18 +86,33 @@ export function getStoreRepPool(reputation) {
     Math.log1p((reputation - last.reputation) / CUSTOMER_POOL_TUNING.storeRepTailSoftness);
 }
 
+/**
+ * Pool multiplier from staff, from 1 (none) approaching 2.
+ * @param {number} employeeCount
+ */
 export function getEmployeeScaler(employeeCount = 0) {
   const count = Math.max(0, employeeCount);
   return 1 + CUSTOMER_POOL_TUNING.maximumEmployeeBonus *
     (1 - CUSTOMER_POOL_TUNING.employeeFalloff ** count);
 }
 
+/**
+ * Faction attraction multiplier: 1 at zero rep, bounded to 0.5–2.
+ * @param {number} reputation
+ */
 export function getFactionRepMultiplier(reputation) {
   const maxRep = CUSTOMER_POOL_TUNING.factionRepForDoubleTrafficWeight;
   const boundedRep = Math.max(-maxRep, Math.min(maxRep, reputation));
   return 2 ** (boundedRep / maxRep);
 }
 
+/**
+ * 0–1 score for how many distinct item types on shelves this faction wants. Assigned
+ * slots count even when sold out.
+ * @param {string} factionId
+ * @param {object[]} shelfPlacements
+ * @param {(itemId: string) => object | undefined} getItem
+ */
 function getShelfAssortmentScore(factionId, shelfPlacements, getItem) {
   const eligibleItemIds = new Set(
     shelfPlacements
@@ -86,6 +128,14 @@ function getShelfAssortmentScore(factionId, shelfPlacements, getItem) {
   );
 }
 
+/**
+ * Split a whole number of customers across weighted groups (largest-remainder method).
+ * @param {number} total
+ * @param {{ factionId: string | null, weight: number }[]} groups
+ * @param {number} tieBreakOffset - rotates tie priority so small pools don't always
+ *   favor the same group
+ * @returns {{ factionId: string | null, count: number, remainder: number, index: number }[]}
+ */
 function apportionRemainder(total, groups, tieBreakOffset) {
   const totalWeight = groups.reduce((sum, group) => sum + group.weight, 0);
   const allocations = groups.map((group, index) => {
@@ -119,6 +169,12 @@ function shuffle(items, random) {
   return items;
 }
 
+/**
+ * Build the shift's customer pool: total count plus one faction id (or null for neutral)
+ * per customer. Every active faction is guaranteed one customer.
+ * @param {object} options - reputations, active factions, shelf placements, item lookup
+ * @returns {object} pool with `customerFactionIds` and a `calculation` breakdown for debug
+ */
 export function createCustomerPool({
   storeReputation,
   factionReputation,
@@ -210,8 +266,12 @@ export function createCustomerPool({
   };
 }
 
-// Mid-shift restocking can only grow the pool. Only the not-yet-elapsed share of the
-// increase is added, spread over the rest of the shift, so stocking late adds fewer.
+/**
+ * Mid-shift restocking can only grow the pool. Only the not-yet-elapsed share of the
+ * increase is added, spread over the rest of the shift, so stocking late adds fewer.
+ * @param {object} options - schedule, current/next pool, elapsedMs, shiftDurationMs, random
+ * @returns {{ schedule: object[], pool: object, addedFactionIds: (string | null)[] }}
+ */
 export function growCustomerArrivalSchedule({
   schedule,
   currentPool,
@@ -251,6 +311,13 @@ export function growCustomerArrivalSchedule({
   };
 }
 
+/**
+ * Shuffle customers and space them evenly over the shift with random jitter.
+ * @param {(string | null)[]} customerFactionIds
+ * @param {number} shiftDurationMs
+ * @param {() => number} random
+ * @returns {{ factionId: string | null, atMs: number }[]} sorted by arrival time
+ */
 export function createCustomerArrivalSchedule(
   customerFactionIds,
   shiftDurationMs,

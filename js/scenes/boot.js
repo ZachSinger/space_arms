@@ -1,8 +1,14 @@
+// ==========================================
+// FILE: boot.js
+// ==========================================
+// First scene: loads static data and every image asset, fills the shared item/license
+// database, then hands off to the title scene.
 import Phaser from "phaser";
 import { DatabaseManager } from "../logic/DatabaseManager.js";
 import tilesetManifest from "../../data/TilesetManifest.json";
 import customerSpriteManifest from "../../data/CustomerSpriteManifest.json";
 
+// The game-wide static data lookup, imported by logic modules as `database`.
 export const database = new DatabaseManager();
 
 export class BootScene extends Phaser.Scene {
@@ -16,13 +22,11 @@ export class BootScene extends Phaser.Scene {
     this.load.json("licenses", "data/Licenses.json");
     this.load.atlas("item-icons", "img/IconSet.png", "data/IconSet.json");
 
-    // Bulk-load every extracted floor/wall/fixture tile; see RoomLayout.js /
-    // TileRoom.js for how these keys get used to build the shop map.
+    // Every floor/wall/fixture tile; RoomLayout.js and TileRoom.js build the map from these keys.
     tilesetManifest.forEach(({ key, path }) => this.load.image(key, path));
     this.load.image("fixture_crate_01", "img/Generated/fixture_crate_01.png");
 
-    // Bulk-load every extracted customer sprite (4 facings x however many characters
-    // passed review); see Customer.js for how these keys get picked/swapped per customer.
+    // Every customer sprite (4 facings per character); see CustomerSprites.js.
     customerSpriteManifest.forEach(({ key, path }) => this.load.image(key, path));
   }
 

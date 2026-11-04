@@ -1,7 +1,13 @@
+// ==========================================
+// FILE: FixtureHighlight.js
+// ==========================================
+// Outlines a fixture on the shop floor when its Manager Tablet row is hovered, or pinned by
+// left-click, and slides the Tablet aside when it would cover that fixture.
 import { TILE_SIZE } from "./RoomLayout.js";
 import { getFixtureType } from "./FixtureLayout.js";
 
 const HIGHLIGHT_COLOR = 0x22c55e;
+// Gap kept between the slid window and the fixture, px.
 const CLEARANCE_PX = 12;
 const SLIDE_MS = 180;
 const HUD_HEIGHT_PX = 36;
@@ -9,8 +15,34 @@ const HUD_HEIGHT_PX = 36;
 const overlaps = (a, b) =>
   a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 
-// Smallest horizontal and/or vertical shift that moves `windowRect` clear of `targetRect`,
-// preferring shifts that keep the window inside `viewport`. Rects are {left, top, right, bottom}.
+/**
+ * Convert a world-space rect to browser client coordinates.
+ * @param {Phaser.Scene} scene
+ * @param {number} x
+ * @param {number} y
+ * @param {number} width
+ * @param {number} height
+ * @returns {{ left: number, top: number, right: number, bottom: number }}
+ */
+export function worldToClientRect(scene, x, y, width, height) {
+  const camera = scene.cameras.main;
+  const canvas = scene.game.canvas.getBoundingClientRect();
+  const scaleX = canvas.width / scene.scale.width;
+  const scaleY = canvas.height / scene.scale.height;
+  const toClientX = (worldX) => canvas.left + (camera.x + (worldX - camera.worldView.x) * camera.zoom) * scaleX;
+  const toClientY = (worldY) => canvas.top + (camera.y + (worldY - camera.worldView.y) * camera.zoom) * scaleY;
+  return { left: toClientX(x), top: toClientY(y), right: toClientX(x + width), bottom: toClientY(y + height) };
+}
+
+/**
+ * Smallest horizontal and/or vertical shift that moves the window clear of the target,
+ * preferring shifts that keep it inside the viewport. Rects are {left, top, right, bottom}.
+ * @param {object} windowRect
+ * @param {object} targetRect
+ * @param {object} viewport
+ * @param {number} [clearance] - px
+ * @returns {{ x: number, y: number }}
+ */
 export function computeSlideOffset(windowRect, targetRect, viewport, clearance = CLEARANCE_PX) {
   const target = {
     left: targetRect.left - clearance,
@@ -45,9 +77,6 @@ export function computeSlideOffset(windowRect, targetRect, viewport, clearance =
   return { x: candidates[0].x, y: candidates[0].y };
 }
 
-// Hovering a fixture row in the Manager Tablet outlines that fixture in green on the shop
-// floor. Left-clicking the row pins the highlight and slides the Tablet aside if it covers
-// the fixture.
 export class FixtureHighlight {
   constructor(scene, uiWindow) {
     this.scene = scene;
@@ -80,6 +109,7 @@ export class FixtureHighlight {
       this.element.style.top = `${rect.top}px`;
       this.uiWindow.screenX = rect.left;
       this.uiWindow.screenY = rect.top;
+      // Force a reflow so the transition change applies only after the jump.
       void this.element.offsetWidth;
       this.element.style.transition = `transform ${SLIDE_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`;
     });
@@ -92,6 +122,10 @@ export class FixtureHighlight {
     return { x: entry.gx * TILE_SIZE, y: entry.gy * TILE_SIZE, width: spec.w * TILE_SIZE, height: spec.h * TILE_SIZE };
   }
 
+  /**
+   * Draw the outline for a fixture, or hide it when fixtureId is null/unknown.
+   * @param {string | null} fixtureId
+   */
   draw(fixtureId) {
     const rect = fixtureId && this.fixtureWorldRect(fixtureId);
     this.fixtureId = rect ? fixtureId : null;
@@ -105,6 +139,10 @@ export class FixtureHighlight {
       .lineStyle(3, HIGHLIGHT_COLOR, 1).strokeRect(x, y, width, height);
   }
 
+  /**
+   * Keep the highlight on this fixture and slide the window off it if needed.
+   * @param {string} fixtureId
+   */
   pin(fixtureId) {
     const rect = this.fixtureWorldRect(fixtureId);
     if (!rect) return;
@@ -129,13 +167,7 @@ export class FixtureHighlight {
   }
 
   worldToClientRect(x, y, width, height) {
-    const camera = this.scene.cameras.main;
-    const canvas = this.scene.game.canvas.getBoundingClientRect();
-    const scaleX = canvas.width / this.scene.scale.width;
-    const scaleY = canvas.height / this.scene.scale.height;
-    const toClientX = (worldX) => canvas.left + (camera.x + (worldX - camera.worldView.x) * camera.zoom) * scaleX;
-    const toClientY = (worldY) => canvas.top + (camera.y + (worldY - camera.worldView.y) * camera.zoom) * scaleY;
-    return { left: toClientX(x), top: toClientY(y), right: toClientX(x + width), bottom: toClientY(y + height) };
+    return worldToClientRect(this.scene, x, y, width, height);
   }
 
   setOffset(offset) {

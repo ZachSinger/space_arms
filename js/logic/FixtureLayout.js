@@ -1,10 +1,17 @@
+// ==========================================
+// FILE: FixtureLayout.js
+// ==========================================
+// The fixture type catalog, the starting layout, and layout rules: fixture footprints,
+// access cells, and validation that a proposed layout keeps the shop walkable.
+// See also: FixtureRegistry.js (placed fixture instances).
 import { getReachableGridCells } from "./Pathfinder.js";
 import { TILE_SIZE, getTotalGridSize, zoneAt } from "./RoomLayout.js";
 
+// Shelf display slots per tile along each axis.
 export const SHELF_VISUAL_SLOTS_PER_TILE = 2;
 
 // The fixture catalog: what each *type* of fixture is. Placed fixtures are instances
-// ({ id, type, gx, gy }) owned by FixtureRegistry.
+// ({ id, type, gx, gy }) owned by FixtureRegistry. Prices are in credits.
 export const FIXTURE_TYPES = {
   shelf_starter_2x1: { id: "shelf_starter_2x1", name: "COMPACT SHELF", kind: "shelf", w: 2, h: 1,
     texture: "shelf_starter_2x1", stackDepth: 10,
@@ -28,7 +35,11 @@ export const STARTING_FIXTURES = [
   { id: "register", type: "register_basic", gx: 12, gy: 2 },
 ];
 
-// An item's stackSize is how many units fit in one shelf slot; the shelf's stackDepth caps it.
+/**
+ * Units of an item that fit in one shelf slot: its stackSize, capped by the shelf's stackDepth.
+ * @param {number} stackDepth
+ * @param {object} item
+ */
 export function getShelfSlotCapacity(stackDepth, item) {
   if (!item?.stackSize) return 0;
   return Math.min(item.stackSize, stackDepth);
@@ -45,7 +56,10 @@ export function getFixtureType(typeId) {
   return Object.hasOwn(FIXTURE_TYPES, typeId) ? FIXTURE_TYPES[typeId] : undefined;
 }
 
-// Fills in `type` for entries saved before fixture types existed.
+/**
+ * Fill in `type` for entries saved before fixture types existed.
+ * @param {object} entry
+ */
 export function migrateFixtureEntry(entry) {
   if (!entry || typeof entry !== "object" || entry.type !== undefined) return entry;
   const legacy = STARTING_FIXTURES.find((fixture) => fixture.id === entry.id);
@@ -66,6 +80,12 @@ export function fixtureCells(placement) {
   return cells;
 }
 
+/**
+ * The row of cells a customer or the player stands on to use the fixture.
+ * @param {object} placement
+ * @param {boolean} [behind] - the row behind instead (the register needs both)
+ * @returns {{ gx: number, gy: number }[]}
+ */
 export function fixtureAccessCells(placement, behind = false) {
   const spec = getFixtureType(placement.type);
   return Array.from({ length: spec.w }, (_, x) => ({
@@ -78,6 +98,13 @@ export function cellKey({ gx, gy }) {
   return `${gx},${gy}`;
 }
 
+/**
+ * Check a whole fixture layout: no overlaps, legal zones, every fixture reachable from the
+ * entrance, no cut-off floor, and room for the register queue.
+ * @param {object[]} placements
+ * @param {object} options
+ * @returns {{ valid: boolean, reason: string, blockedCells?: Set<string>, access?: Map, queueCells?: object[] }}
+ */
 export function validateFixtureLayout(placements, {
   isWalkable, entrance, reservedCells = new Set(), occupiedRectangles = [],
   gridSize = getTotalGridSize(), queueSize = 6, requireSalesFloor = true,

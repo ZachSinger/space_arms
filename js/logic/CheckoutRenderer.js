@@ -1,12 +1,13 @@
 // ==========================================
 // FILE: CheckoutRenderer.js
 // ==========================================
+// HTML for the register checkout window.
 export class CheckoutRenderer {
   /**
    * Register scan window: a conveyor belt carrying the cart toward a red scanner bar,
    * a running total, and a numpad that stays hidden until every item is scanned.
    * CheckoutWindow positions and animates the cards after insertion.
-   * @param {Array<{itemId: string, price: number}>} cart - Snapshot of items the customer grabbed
+   * @param {Array<{itemId: string, price: number}>} cart - snapshot of items the customer grabbed
    * @param {DatabaseManager} databaseManager
    */
   static generateHTML(cart, databaseManager) {
@@ -34,7 +35,7 @@ export class CheckoutRenderer {
         <div class="checkout-scanner" id="checkout-scanner"></div>
       </div>
       <div class="checkout-footer">
-        <span class="checkout-total">TOTAL: <span id="checkout-total-value">0c</span></span>
+        <span class="checkout-total">TOTAL: <span id="checkout-total-value">0 credits</span></span>
       </div>
       <div class="checkout-payment hidden" id="checkout-payment">
         <div class="checkout-payment-prompt">ENTER EXACT AMOUNT DUE</div>

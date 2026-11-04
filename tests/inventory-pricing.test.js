@@ -5,6 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "vite";
+import { summarizeSupplyOrder, DELIVERY_FEE } from "../js/logic/SupplyOrder.js";
 
 let server;
 let ManagerTablet;
@@ -27,8 +28,12 @@ before(async () => {
         if (source === "../scenes/boot.js") return "\0inventory-test-database";
         if (source === "./UIWindow.js") return "\0inventory-test-window";
         if (source === "./FixtureHighlight.js") return "\0inventory-test-highlight";
+        if (source === "./Sfx.js") return "\0inventory-test-sfx";
       },
       load(id) {
+        if (id === "\0inventory-test-sfx") {
+          return "export function playErrorBuzz() { globalThis.__supplyErrorBuzzes += 1; }";
+        }
         if (id === "\0inventory-test-highlight") {
           return "export class FixtureHighlight { reset() {} destroy() {} }";
         }
@@ -48,6 +53,7 @@ after(async () => {
   if (originalDocument === undefined) delete globalThis.document;
   else globalThis.document = originalDocument;
   delete globalThis.__inventoryTestWindow;
+  delete globalThis.__supplyErrorBuzzes;
   if (server) await server.close();
   if (cacheDirectory) await rm(cacheDirectory, { recursive: true, force: true });
 });
@@ -270,4 +276,67 @@ test("pending changes refresh when leaving price controls", async () => {
   assert.equal(h.tablet.inventoryRefreshPending, false);
   assert.match(h.panel.markup, /data-inventory-storage>5<\/span>/);
   assert.equal(h.keyboard.enabled, true);
+});
+
+function createSupplyHarness(credits) {
+  const tablet = Object.create(ManagerTablet.prototype);
+  const warnings = [];
+  let refreshes = 0;
+  globalThis.__supplyErrorBuzzes = 0;
+  tablet.playerState = { credits };
+  tablet.supplyOrder = new Map();
+  tablet.scene = {
+    getSupplyOrderSummary: (order) => summarizeSupplyOrder(order, {
+      getCrateCost: (id) => ({ ammo: 40, rations: 10 })[id],
+      credits: tablet.playerState.credits,
+      freePadSpots: 9,
+    }),
+    showShopMessage: (message) => warnings.push(message),
+  };
+  tablet.refreshSupplyPanel = () => { refreshes += 1; };
+  return { tablet, warnings, refreshes: () => refreshes, buzzes: () => globalThis.__supplyErrorBuzzes };
+}
+
+test("an unaffordable first crate is rejected with a warning and sound, including the delivery fee", () => {
+  const h = createSupplyHarness(40 + DELIVERY_FEE - 1);
+  h.tablet.changeSupplyOrder("ammo", 1);
+  assert.deepEqual([...h.tablet.supplyOrder], []);
+  assert.match(h.warnings[0], /Not enough credits/);
+  assert.match(h.warnings[0], /65 credits/);
+  assert.equal(h.buzzes(), 1);
+  assert.equal(h.refreshes(), 0);
+});
+
+test("cart additions consider every crate already selected and allow the exact available budget", () => {
+  const h = createSupplyHarness(40 + 10 + DELIVERY_FEE);
+  h.tablet.changeSupplyOrder("ammo", 1);
+  h.tablet.changeSupplyOrder("rations", 1);
+  assert.deepEqual([...h.tablet.supplyOrder], [["ammo", 1], ["rations", 1]]);
+  assert.equal(h.warnings.length, 0);
+  assert.equal(h.buzzes(), 0);
+  assert.equal(h.refreshes(), 2);
+  h.tablet.changeSupplyOrder("rations", 1);
+  assert.deepEqual([...h.tablet.supplyOrder], [["ammo", 1], ["rations", 1]]);
+  assert.match(h.warnings[0], /85 credits/);
+  assert.equal(h.buzzes(), 1);
+});
+
+test("adding another crate of the same item cannot exceed the budget", () => {
+  const h = createSupplyHarness(40 + DELIVERY_FEE);
+  h.tablet.changeSupplyOrder("ammo", 1);
+  h.tablet.changeSupplyOrder("ammo", 1);
+  assert.equal(h.tablet.supplyOrder.get("ammo"), 1);
+  assert.equal(h.buzzes(), 1);
+});
+
+test("lower funds reject additions but never prevent removing crates from the order", () => {
+  const h = createSupplyHarness(1000);
+  h.tablet.changeSupplyOrder("ammo", 1);
+  h.tablet.playerState.credits = 0;
+  h.tablet.changeSupplyOrder("rations", 1);
+  assert.deepEqual([...h.tablet.supplyOrder], [["ammo", 1]]);
+  assert.equal(h.buzzes(), 1);
+  h.tablet.changeSupplyOrder("ammo", -1);
+  assert.equal(h.tablet.supplyOrder.size, 0);
+  assert.equal(h.buzzes(), 1);
 });

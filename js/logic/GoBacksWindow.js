@@ -1,13 +1,13 @@
 // ==========================================
 // FILE: GoBacksWindow.js
 // ==========================================
+// Window for the register's Go-Backs bin, where abandoned carts pile up. The only way out
+// is clicking an item to load 1 unit into the hovercart, then stocking it elsewhere.
 import { UIWindow } from "./UIWindow.js";
 import { FixtureRenderer } from "./FixtureRenderer.js";
 import { showPopupText } from "./FixtureWindow.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
-// Bible Step 12: the register's Go-Backs bin. Abandoned carts pile up here; the only way
-// out is clicking an item to load 1 unit into the hovercart, then stocking it elsewhere.
 export class GoBacksWindow {
   constructor(windowManager, playerState) {
     this.playerState = playerState;
@@ -36,6 +36,10 @@ export class GoBacksWindow {
     this.uiWindow.openWindow();
   }
 
+  /**
+   * Load 1 unit of the clicked bin row into the hovercart (left or right click).
+   * @param {MouseEvent} event
+   */
   handleLoad(event) {
     const row = event.target.closest("[data-go-backs-item-id]");
     if (!row) return;

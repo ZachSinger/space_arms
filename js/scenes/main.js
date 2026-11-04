@@ -1,3 +1,7 @@
+// ==========================================
+// FILE: main.js
+// ==========================================
+// Renderer entry point: global styles plus the Phaser game config and scene list.
 import "../../styles/space_dealer_window.css";
 import Phaser from "phaser";
 import { TitleScene } from "./title.js";
@@ -16,7 +20,7 @@ const config = {
     default: "arcade",
     arcade: {
       gravity: { x: 0, y: 0 },
-      debug: false, // Toggle to true only when tuning counter or wall hitboxes
+      debug: false, // true only when tuning counter or wall hitboxes
     },
   },
   scene: [BootScene, TitleScene, GameScene],

@@ -1,18 +1,20 @@
 // ==========================================
 // FILE: ManagerTablet.js
 // ==========================================
+// The Manager's Tablet window (bible Part 8): tab chrome plus the Contracts, Supply,
+// Fixtures/Layout, and price-editing interactions. Each tab's HTML comes from its renderer.
+
 import { UIWindow } from "./UIWindow.js";
 import { InventoryRenderer } from "./InventoryRenderer.js";
 import { ContractRenderer } from "./ContractRenderer.js";
 import { SupplyRenderer } from "./SupplyRenderer.js";
 import { LayoutRenderer } from "./LayoutRenderer.js";
 import { FixtureHighlight } from "./FixtureHighlight.js";
+import { playErrorBuzz } from "./Sfx.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
-// The bible's full Step 40 tab list (Part 8). Only Inventory and Contracts have a real
-// system behind them so far -- the rest render a "COMING SOON" placeholder instead of
-// being omitted entirely, so the Tablet's shape already matches the eventual design. See
-// TODO.md for what's still unbuilt behind each placeholder.
+// The bible's full Step 40 tab list (Part 8). Tabs with no system yet render a
+// "COMING SOON" placeholder so the Tablet already has its final shape.
 const TAB_DEFS = [
   { id: "inventory", label: "Inventory" },
   { id: "employee", label: "Employee" },
@@ -28,11 +30,10 @@ const PRICE_INPUT_SELECTOR = "input[data-price-item-id]";
 const PRICE_BUTTON_SELECTOR = "button[data-price-action]";
 const PRICE_CONTROL_SELECTOR = `${PRICE_INPUT_SELECTOR}, ${PRICE_BUTTON_SELECTOR}`;
 
-// The single unified Manager's Tablet window (bible Part 8), replacing the old
-// standalone Inventory-only window. Owns tab-switching and the Contracts tab's
-// buy/sign interaction; each tab's actual content still comes from its own renderer
-// (InventoryRenderer, ContractRenderer, ...) -- this class only owns the shared chrome
-// around them.
+/**
+ * The single Tablet window; owns tab switching, the supply order being built, and
+ * live re-rendering of panels whenever playerState changes.
+ */
 export class ManagerTablet {
   constructor(windowManager, playerState, scene) {
     this.playerState = playerState;
@@ -77,8 +78,7 @@ export class ManagerTablet {
       if (button) this.switchTab(button.dataset.tab);
     });
 
-    // Delegated (rather than bound per-card) since the Contracts panel's innerHTML gets
-    // fully replaced every time playerState changes -- see refreshContractsPanel().
+    // Delegated, since panel innerHTML is fully replaced on every playerState change.
     this.bodyElement.addEventListener("click", (event) => {
       const signButton = event.target.closest("[data-license-id]");
       if (signButton) this.handleSignContract(signButton.dataset.licenseId);
@@ -146,14 +146,8 @@ export class ManagerTablet {
       }
     });
 
-    // Licenses can flip between locked/unaffordable/available purely because credits or
-    // reputation changed elsewhere (a sale completing, reputation gained/lost) -- re-render
-    // the Contracts panel on every state change so it never goes stale while the Tablet
-    // happens to be open. (Fires once immediately on subscribe -- harmless, just an extra
-    // render of a tiny list before the window is even shown.) The Supply tab's afford-
-    // ability (and its "on shelf" counts, which change on every sale too) needs the exact
-    // same live refresh, for the same reason. Inventory totals also refresh after stock
-    // transfers, crate ordering/delivery, and customers taking shelf items.
+    // License availability, supply affordability, shelf counts, and inventory totals all
+    // change elsewhere (sales, deliveries, reputation), so re-render on every state change.
     this.playerState.subscribe(() => {
       this.refreshInventoryPanel();
       this.refreshContractsPanel();
@@ -162,6 +156,12 @@ export class ManagerTablet {
     });
   }
 
+  // --- Tabs and panel rendering ---
+
+  /**
+   * @param {string} tabId - a TAB_DEFS id
+   * @returns {string} panel HTML, or a placeholder for unbuilt tabs
+   */
   renderPanelContent(tabId) {
     if (tabId === "inventory") return InventoryRenderer.generateHTML(this.scene.getInventoryItems());
     if (tabId === "contracts") {
@@ -187,6 +187,7 @@ export class ManagerTablet {
     });
   }
 
+  // Re-renders while preserving selection, scroll, and focus on a price button.
   refreshInventoryPanel() {
     const panel = this.bodyElement.querySelector('[data-tab-panel="inventory"]');
     if (!panel) return;
@@ -246,6 +247,13 @@ export class ManagerTablet {
     });
   }
 
+  // --- Prices, contracts, and supply orders ---
+
+  /**
+   * Step a store price: roughly ±10% (at least 1 credit), or reset to market.
+   * @param {string} itemId
+   * @param {"decrease" | "increase" | "market"} action
+   */
   handlePriceAdjustment(itemId, action) {
     const currentPrice = this.scene.getStorePrice(itemId);
     const marketPrice = this.scene.market.getPrice(itemId);
@@ -270,14 +278,28 @@ export class ManagerTablet {
     this.playerState.spendCredits(license.baseCost);
     this.playerState.signLicense(licenseId);
     this.scene.recalculateActiveFactions();
-    // Both of the above call notifyListeners(), which triggers refreshContractsPanel()
-    // via the subscribe() in the constructor -- no explicit re-render needed here.
+    // The panel re-renders via the constructor's playerState subscription.
   }
 
+  /**
+   * Add or remove crates of an item, rejecting additions the order can't hold.
+   * @param {string} itemId
+   * @param {number} delta - crates
+   */
   changeSupplyOrder(itemId, delta) {
     const count = (this.supplyOrder.get(itemId) || 0) + delta;
     const summary = this.scene.getSupplyOrderSummary(this.supplyOrder);
     if (delta > 0 && summary.crates >= summary.maxCrates) return;
+    if (delta > 0) {
+      const candidate = new Map(this.supplyOrder);
+      candidate.set(itemId, count);
+      const nextSummary = this.scene.getSupplyOrderSummary(candidate);
+      if (!nextSummary.canPlace) {
+        this.scene.showShopMessage(nextSummary.problem);
+        playErrorBuzz();
+        return;
+      }
+    }
     if (count > 0) this.supplyOrder.set(itemId, count);
     else this.supplyOrder.delete(itemId);
     this.refreshSupplyPanel();
@@ -288,6 +310,8 @@ export class ManagerTablet {
     if (this.scene.placeSupplyOrder(this.supplyOrder)) this.supplyOrder.clear();
     this.refreshSupplyPanel();
   }
+
+  // --- Window ---
 
   openWindow() {
     if (this.scene.startingShift || this.scene.fixturePlacement?.active || this.scene.loadFailed) return;

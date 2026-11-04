@@ -8,8 +8,8 @@ notice something that needs doing but isn't being done right now.
       hovering a window should make it nearly transparent and allow placement through
       it. Restore the window when the pointer leaves it or the fixture is placed.
 - [x] Fix Derringer stack size (now 3, matching the other small pistols).
-- [x] Balance early license prices against their catalogs: rations 25c, mods 75c,
-      apparel/ammo 100c, armor/melee 200c, and tools 250c.
+- [x] Balance early license prices against their catalogs: rations 25 credits, mods 75
+      credits, apparel/ammo 100 credits, armor/melee 200 credits, and tools 250 credits.
 - [x] Rethink register UI:
   - [x] Fix reopening after closing the register window; currently requires leaving the
         register and entering it again.
@@ -17,6 +17,11 @@ notice something that needs doing but isn't being done right now.
   - [x] Make the scan window rectangular, with items riding a belt left to right into a
         red scanner bar. Go-Backs moved to Q at the register.
 - [x] Make crates collide with one another.
+- [x] Moving throws start at the held position at the player's speed, accelerate briefly
+      to pull away, then slow down quickly (about 210 pixels total travel, stopping in
+      about one second at walking speed). Keep the departing crate drawn
+      above the player until clear. Stationary drops land beside the player; blocked
+      releases stay carried. Launches pause correctly and survive save/load.
 - [x] Loading pad crates stay locked on their spots until picked up. Once picked up, a
       crate can't be dropped or thrown back onto the pad (it bounces off the edge).
 - [x] Walking into a resting crate pushes it (`CratePushing.js`). Dead center pushes it
@@ -27,10 +32,13 @@ notice something that needs doing but isn't being done right now.
 - [x] Improve first-shift pacing: shortened shifts from ten to five minutes,
       keeping the same customer pool and doubling arrival frequency.
 - [x] Start with a much smaller shelf: a two-tile 2x1 starter shelf.
-- [ ] Redo game messages (e.g. "Unable to order", "No room to drop crate"). They are
-      too small, appear somewhere unexpected, and vanish too fast to read, so the player
-      never notices them. They need to be large, readable, shown where the player is
-      looking, and stay up long enough to read.
+- [x] Redo player-facing game messages: show a large, readable banner below the HUD for
+      2.5 seconds instead of tiny text above the player. Keep customer reactions anchored
+      to the customer.
+- [x] Remove routine crate pickup/drop confirmations. Show the eligible nearby crate's
+      contents and a Space pickup hint in the message area below the HUD, not over the
+      player. Warnings take priority, then the current hint returns.
+- [x] Spell out "credits" in all money labels and tooltips; do not abbreviate it as "c".
 - [x] Turn stock ordering into a real order instead of one crate per click
       (`SupplyOrder.js`, Supply tab):
   - Add crates to an order with - / +, then place the whole order at once.
@@ -38,6 +46,8 @@ notice something that needs doing but isn't being done right now.
     on the loading pad.
     Both limits are always shown in the order summary, and + stops at the limit.
   - Each order costs a flat 25 credit delivery fee on top of the stock.
+  - Reject additions the player cannot afford, including the existing order and delivery
+    fee, with a warning banner and error buzz. Leave the order unchanged.
   - If an order can't be placed, the reason is written in the summary (pad full, not
     enough credits) instead of a popup message.
 
@@ -179,7 +189,7 @@ notice something that needs doing but isn't being done right now.
       (`playerState.activeLicenses.has(item.license)`) -- affordability is still checked
       separately per-order, same as before. `StoreItem` (`Items.js`) exposes `license` now
       (it was in `Items.json` the whole time, just never read). `lic_start_surplus` is
-      free (0c, 0 reputation required) specifically so there's always at least one
+      free (0 credits, 0 reputation required) specifically so there's always at least one
       immediately-signable contract to get the loop started from a brand new game.
 - [x] ~~Storage lockers (3 doors, one `locker_storage` image) were actually one single
       Fixture sharing one combined capacity pool~~ -- visually they're 3 separate lockers,
@@ -348,7 +358,7 @@ notice something that needs doing but isn't being done right now.
       market: it's a hidden per-item 40-60% of base, so it can't be divided back into base.
 - [ ] Figure out the benefit of pricing below the average market price (happier
       customers? more sales?).
-- [x] Price editing buttons: +10% / -10% (at least 1c where possible), and "Set to
+- [x] Price editing buttons: +10% / -10% (at least 1 credit where possible), and "Set to
       market" (current avg market price).
 - [ ] Pre-shift Start Shift onboarding flow (Step 44)
 - [ ] Employees: hiring, Work Register / Stock Shelves tasks (Step 13-19)

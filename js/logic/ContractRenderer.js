@@ -1,11 +1,16 @@
+// ==========================================
+// FILE: ContractRenderer.js
+// ==========================================
+// HTML for the Contracts tab: one card per supplier license with its requirements, cost,
+// fixture unlocks, and a buy button reflecting locked/affordable/owned state.
 import { getFixtureType } from "./FixtureLayout.js";
 
 export class ContractRenderer {
   /**
-   * Generates the Contracts tab's own content (the tab bar/chrome around it is owned by
-   * whatever window hosts this -- see ManagerTablet.js).
-   * @param {Array<SupplierLicense>} licenses - Array of license objects
-   * @param {PlayerState} playerState - The central player state instance
+   * Build the tab's content only; the hosting window (ManagerTablet.js) owns the tab chrome.
+   * @param {Array<SupplierLicense>} licenses
+   * @param {PlayerState} playerState
+   * @returns {string} HTML
    */
   static generateHTML(licenses, playerState) {
     let html = `
@@ -61,7 +66,6 @@ export class ContractRenderer {
           factionHtml = ` | <span style="color: ${factionRepColor};">Req ${factionName}: ${license.reqFactionRep}</span>`;
         }
 
-        // --- CARD HTML GENERATION ---
         html += `
                     <div class="item-card">
                         <div class="item-details">
@@ -73,7 +77,7 @@ export class ContractRenderer {
                             ${fixtureUnlocksHTML}
                             <div style="display: flex; justify-content: space-between; font-size: var(--font-size-11); margin-top: 6px; border-top: 1px dashed var(--color-border-subtle); padding-top: 6px;">
                                 <span><span style="color: ${globalRepColor};">Req Rep: ${license.reqReputation} Pts</span>${factionHtml}</span>
-                                <span style="color: var(--color-text-main); font-weight: bold;">Cost: ${license.baseCost.toLocaleString()}c</span>
+                                <span style="color: var(--color-text-main); font-weight: bold;">Cost: ${license.baseCost.toLocaleString()} credits</span>
                             </div>
                             <div style="margin-top: 8px;">
                                 ${actionButtonHTML}

@@ -1,6 +1,13 @@
+// ==========================================
+// FILE: DebugInfo.js
+// ==========================================
+// The HUD "Debug Info" button: keeps a ring buffer of recent game events and errors, and
+// captures a JSON snapshot of the live scene to disk through the desktop app.
+// See also: main.js (writes captures to the debug folder).
 import { CUSTOMER_POOL_TUNING } from "./CustomerPooling.js";
 import { SHIFT_DURATION_MS } from "./ShiftClock.js";
 
+// Oldest events are dropped past this count.
 const MAX_RECENT_EVENTS = 200;
 
 function point(value) {
@@ -18,6 +25,11 @@ function spriteState(sprite) {
   };
 }
 
+/**
+ * Deep copy that survives JSON: Sets/Maps become arrays/objects, and NaN/Infinity become
+ * strings instead of silently turning into null.
+ * @param {any} value
+ */
 function diagnosticCopy(value) {
   return JSON.parse(JSON.stringify(value, (key, entry) => {
     if (entry instanceof Set) return [...entry];
@@ -27,6 +39,11 @@ function diagnosticCopy(value) {
   }));
 }
 
+/**
+ * Plain-object view of a customer's AI and shopping state.
+ * @param {object} customer
+ * @param {number} id - stable debug id from DebugInfo.identifyCustomer
+ */
 export function snapshotCustomer(customer, id) {
   const plan = customer.shoppingPlan;
   return {
@@ -62,7 +79,13 @@ export function snapshotCustomer(customer, id) {
   };
 }
 
-// Read raw runtime state rather than the save validator: invalid state is evidence, too.
+/**
+ * Read raw runtime state rather than the save validator: invalid state is evidence, too.
+ * @param {Phaser.Scene} scene
+ * @param {(customer: object) => number} identifyCustomer
+ * @param {object[]} recentEvents
+ * @param {Window} environment
+ */
 export function createDebugSnapshot(scene, identifyCustomer, recentEvents, environment = window) {
   const clock = scene.shiftClock;
   const camera = scene.cameras.main;
@@ -160,6 +183,9 @@ export function createDebugSnapshot(scene, identifyCustomer, recentEvents, envir
   });
 }
 
+/**
+ * Owned by the game scene for one session; call destroy() when the scene shuts down.
+ */
 export class DebugInfo {
   constructor(scene, environment = window) {
     this.scene = scene;
@@ -192,11 +218,20 @@ export class DebugInfo {
     environment.addEventListener("unhandledrejection", this.handleRejection);
   }
 
+  /**
+   * Stable small id per customer so events and snapshots can be cross-referenced.
+   * @param {object} customer
+   */
   identifyCustomer(customer) {
     if (!this.customerIds.has(customer)) this.customerIds.set(customer, this.nextCustomerId++);
     return this.customerIds.get(customer);
   }
 
+  /**
+   * Add an event to the recent-events buffer included in captures.
+   * @param {string} type
+   * @param {object} details
+   */
   record(type, details) {
     this.recentEvents.push(diagnosticCopy({
       at: new Date().toISOString(),
@@ -219,6 +254,7 @@ export class DebugInfo {
     this.status.textContent = message;
   }
 
+  // Snapshot the scene and ask the desktop app to save it; reports the result in the HUD.
   async capture() {
     if (this.busy || this.destroyed) return;
     this.busy = true;

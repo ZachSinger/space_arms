@@ -1,16 +1,13 @@
 // ==========================================
 // FILE: RoomLayout.js
 // ==========================================
-// Authored shop footprint, in grid tiles. This defines the *maximum* possible
-// expanded store up front: every zone's tiles exist in the data from the start,
-// but "locked" zones are walled off and excluded from the camera's scrollable
-// bounds until unlocked (see TileRoom.unlockZone). This avoids ever needing to
-// grow the tilemap at runtime -- expanding the store just means revealing and
-// opening up a zone that was already there.
-export const TILE_SIZE = 64;
+// Authored shop footprint, in grid tiles, at its maximum expanded size. Locked zones exist
+// in the data from the start but are walled off and outside camera bounds until unlocked,
+// so the tilemap never has to grow at runtime.
+// See also: TileRoom.js (unlockZone).
+export const TILE_SIZE = 64; // px
 
-// cost is a placeholder for a future "buy expansion" UI; no economy/purchase
-// flow exists yet, so unlocking currently has no real cost check attached.
+// cost (credits) is a placeholder: no purchase flow checks it yet.
 export const ZONES = [
   {
     id: "storeroom",
@@ -26,12 +23,7 @@ export const ZONES = [
   {
     id: "loading_pad",
     name: "Loading Pad",
-    // Sits directly below the Storeroom (same gridX/gridW), connected by an open
-    // walkway north into it -- matches MapExpansionPlan.md's step 2 (an unlocked-by-
-    // default, exterior-coded zone adjacent to the Storeroom for ordered crates to spawn
-    // in, hauled inside from there). Reuses the Storeroom's own industrial tile set
-    // (riveted walls, plain concrete) rather than needing new art -- this doesn't need to
-    // look dramatically different, just read as "the loading dock," not the sales floor.
+    // Directly below the Storeroom, open to it on the north. Ordered crates spawn here.
     gridX: 0,
     gridY: 8,
     gridW: 6,
@@ -77,8 +69,13 @@ export function getTotalGridSize() {
   return { gridW: maxX, gridH: maxY };
 }
 
-// Finds which zone owns a given grid cell, or null if the cell isn't covered
-// by any authored zone.
+/**
+ * Find which zone owns a grid cell.
+ * @param {number} gridX
+ * @param {number} gridY
+ * @param {object[]} zones
+ * @returns {object | null} null if no authored zone covers the cell
+ */
 export function zoneAt(gridX, gridY, zones = ZONES) {
   return (
     zones.find(

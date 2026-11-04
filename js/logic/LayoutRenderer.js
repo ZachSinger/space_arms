@@ -1,4 +1,14 @@
+// ==========================================
+// FILE: LayoutRenderer.js
+// ==========================================
+// HTML for the fixture layout panel: placed fixtures with MOVE / CRATE UP buttons, plus
+// (optionally) the fixture purchase list.
 export class LayoutRenderer {
+  /**
+   * @param {GameScene} scene
+   * @param {boolean} includePurchases - also show buying and crating (the full Layout tab)
+   * @returns {string} HTML
+   */
   static generateHTML(scene, includePurchases = false) {
     const enabled = scene.canRearrangeFixtures();
     const { fixtures } = scene;
@@ -18,7 +28,7 @@ export class LayoutRenderer {
                 : "BUY";
           return `
             <div class="layout-fixture-row">
-              <span>${spec.name} <small>PRICE ${spec.price}c | ${licensed ? "LICENSED" : `LICENSE: ${license.name}`}</small></span>
+              <span>${spec.name} <small>PRICE ${spec.price} credits | ${licensed ? "LICENSED" : `LICENSE: ${license.name}`}</small></span>
               <button type="button" class="action-btn" data-buy-fixture-id="${spec.id}"
                 ${disabled ? "disabled" : ""}>${label}</button>
             </div>

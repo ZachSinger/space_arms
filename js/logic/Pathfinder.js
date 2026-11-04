@@ -1,10 +1,11 @@
 // ==========================================
 // FILE: Pathfinder.js
 // ==========================================
-// Simple grid-based BFS pathfinder (8-directional, with corner-cutting prevented) over an
-// arbitrary walkability predicate. Operates purely on abstract integer grid cells ({gx, gy});
-// callers own converting to/from world pixel coordinates. All moves cost the same, so BFS
-// (not weighted A*) is enough to guarantee a shortest path.
+// Grid BFS pathfinder (8-directional, no corner-cutting) over a walkability predicate.
+// Works purely on integer grid cells ({gx, gy}); callers convert to/from world pixels.
+// All moves cost the same, so BFS (not weighted A*) already yields a shortest path.
+
+// Orthogonal moves first, so slice(0, 4) gives 4-directional flood fill.
 const DIRECTIONS = [
   [1, 0],
   [-1, 0],
@@ -16,6 +17,12 @@ const DIRECTIONS = [
   [-1, -1],
 ];
 
+/**
+ * Flood-fill (4-directional) every walkable cell connected to start.
+ * @param {{gx: number, gy: number}} start
+ * @param {(gx: number, gy: number) => boolean} isWalkable
+ * @param {number} maxCells
+ */
 export function getReachableGridCells(start, isWalkable, maxCells = 4000) {
   if (!isWalkable(start.gx, start.gy)) return [];
   const cells = [start];
@@ -34,9 +41,16 @@ export function getReachableGridCells(start, isWalkable, maxCells = 4000) {
   return cells;
 }
 
-// Returns an array of {gx, gy} waypoints from (exclusive of) start to (inclusive of) goal,
-// or null if no path exists. isWalkable(gx, gy) is only ever queried for cells other than
-// the start cell itself (the agent is trusted to already be standing somewhere valid).
+/**
+ * Shortest path between grid cells. The start cell is never checked for walkability:
+ * the agent is trusted to already be standing somewhere valid.
+ * @param {{gx: number, gy: number}} start
+ * @param {{gx: number, gy: number}} goal
+ * @param {(gx: number, gy: number) => boolean} isWalkable
+ * @param {number} maxSteps - safety cap on BFS iterations
+ * @returns {{gx: number, gy: number}[] | null} waypoints excluding start, including goal;
+ *   null if unreachable
+ */
 export function findGridPath(start, goal, isWalkable, maxSteps = 4000) {
   const goalKey = `${goal.gx},${goal.gy}`;
   if (!isWalkable(goal.gx, goal.gy)) return null;
@@ -63,8 +77,7 @@ export function findGridPath(start, goal, isWalkable, maxSteps = 4000) {
       const key = `${nx},${ny}`;
       if (visited.has(key) || !isWalkable(nx, ny)) continue;
 
-      // Prevent cutting across a diagonal when both orthogonal neighbors are blocked --
-      // otherwise a path could appear to clip through a solid corner (e.g. the shelf's).
+      // Diagonals need both orthogonal neighbors clear, or paths clip through solid corners.
       if (dx !== 0 && dy !== 0) {
         const orthogonalsClear =
           isWalkable(current.gx + dx, current.gy) && isWalkable(current.gx, current.gy + dy);

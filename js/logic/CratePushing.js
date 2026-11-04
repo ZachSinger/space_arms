@@ -1,22 +1,18 @@
 // ==========================================
 // FILE: CratePushing.js
 // ==========================================
-// Walking into a crate pushes it. A crate hit dead-on moves straight ahead; the further off
-// to one side it is, the more it moves sideways, and one that only clips the edge of the
-// player's path moves only sideways. Walking sideways into a crate pushes it sideways. A pushed crate pushes whatever crate it runs into, and
-// every crate being pushed slows the player down. If a crate can't move (wall, fixture,
-// loading pad crate, or too many crates in a row), whoever is pushing it can't move into it.
+// Walking into a crate pushes it: dead-on moves it straight, off-center turns it sideways.
+// Pushed crates push others and each slows the player; a crate that can't move blocks.
 
-// Player speed multiplier by number of crates being pushed at once. Pushing more than
-// MAX_PUSHED_CRATES at once isn't possible.
+// Player speed multiplier by number of crates being pushed at once (index = count).
 export const PUSH_SPEED_BY_CRATE_COUNT = [1, 0.6, 0.4, 0.25];
 export const MAX_PUSHED_CRATES = PUSH_SPEED_BY_CRATE_COUNT.length - 1;
+// px; reach() extends motion by this so touching counts as contact.
 const CONTACT_SKIN = 2;
 const EPSILON = 0.001;
-// A crate knocked sideways out of the path moves at most this many times the mover's speed.
+// A crate knocked sideways moves at most this many times the mover's speed.
 const MAX_SIDEWAYS_PUSH_SPEED = 2;
-// How far off-center (0 = dead center, 1 = barely touching) a crate can be and still be
-// pushed straight ahead.
+// How far off-center (0 = dead center, 1 = barely touching) a crate is still pushed straight.
 const STRAIGHT_PUSH_ZONE = 0.4;
 
 const overlaps = (a, b) =>
@@ -27,8 +23,6 @@ const overlaps = (a, b) =>
 
 const dot = (a, b) => a.x * b.x + a.y * b.y;
 
-// Where a rectangle will be after moving at velocity for dt, plus a small margin so
-// touching counts as contact.
 function reach(rect, velocity, dt) {
   return {
     ...rect,
@@ -40,9 +34,12 @@ function reach(rect, velocity, dt) {
 const scale = (v, s) => ({ x: v.x * s, y: v.y * s });
 const add = (a, b) => ({ x: a.x + b.x, y: a.y + b.y });
 
-// Which way a crate in the mover's path gets pushed. Dead center: straight ahead. The
-// further off to one side it sits, the more the push turns toward that side, until a crate
-// only clipping the edge of the path is pushed purely sideways, out of the way.
+/**
+ * Unit push direction for a crate in the mover's path; turns sideways as it sits off-center.
+ * @param {object} from - mover rect
+ * @param {object} to - crate rect
+ * @param {{x: number, y: number}} direction - mover's unit heading
+ */
 function pushDirection(from, to, direction) {
   const offset = {
     x: to.left + to.width / 2 - (from.left + from.width / 2),
@@ -51,7 +48,6 @@ function pushDirection(from, to, direction) {
   if (dot(offset, direction) <= EPSILON) return null; // not in front of the mover
   const side = { x: -direction.y, y: direction.x };
   const halfSpan = (Math.abs(side.x) * (from.width + to.width) + Math.abs(side.y) * (from.height + to.height)) / 2;
-  // Within the center zone the crate goes straight ahead; past it, the push turns sideways.
   const offCenter = Math.max(-1, Math.min(1, dot(offset, side) / halfSpan));
   const sideways = Math.sign(offCenter) *
     Math.max(0, (Math.abs(offCenter) - STRAIGHT_PUSH_ZONE) / (1 - STRAIGHT_PUSH_ZONE));
@@ -61,12 +57,13 @@ function pushDirection(from, to, direction) {
 }
 
 /**
+ * Resolve one frame of the player walking into crates.
  * @param {object} options
  * @param {{left:number, top:number, width:number, height:number}} options.player
- * @param {{x:number, y:number}} options.velocity the player's intended velocity
- * @param {number} options.dt seconds
+ * @param {{x:number, y:number}} options.velocity - the player's intended velocity, px/s
+ * @param {number} options.dt - seconds
  * @param {{key:any, rect:object, locked:boolean}[]} options.crates
- * @param {(rect:object) => boolean} options.isBlocked true if a crate can't occupy rect
+ * @param {(rect:object) => boolean} options.isBlocked - true if a crate can't occupy rect
  * @returns {{playerVelocity:{x:number,y:number}, crateVelocities: Map<any,{x:number,y:number}>}}
  */
 export function solveCratePush({ player, velocity, dt, crates, isBlocked }) {
@@ -95,10 +92,7 @@ export function solveCratePush({ player, velocity, dt, crates, isBlocked }) {
         const direction = pushDirection(rect, crate.rect, heading);
         if (!direction) continue;
 
-        // How much of the requested push the crate actually managed (1 = all of it).
-        // The crate must keep pace with the mover going forward or the mover would walk into
-        // it, so the push is sped up to match, capped for crates that only clip the edge
-        // (those get flicked sideways out of the path instead, and the mover waits a moment).
+        // Speed the push up to keep pace forward; edge-clipped crates are capped and flicked aside.
         const forwardShare = dot(direction, heading);
         const pushSpeed = Math.min(speed / Math.max(forwardShare, EPSILON), speed * MAX_SIDEWAYS_PUSH_SPEED);
         let achieved = 0;
@@ -111,8 +105,7 @@ export function solveCratePush({ player, velocity, dt, crates, isBlocked }) {
           achieved = Math.max(0, Math.min(1, dot(pushed, heading) / speed));
         }
         if (achieved < 1 - EPSILON) {
-          // The mover only advances as far as the crate gave way, but can still slide
-          // along the crate on the axis that doesn't run into it.
+          // The mover advances only as far as the crate gave way, but may slide along it.
           const blocked = scale(heading, speed * (1 - achieved));
           out = scale(heading, speed * achieved);
           for (const axis of [{ x: blocked.x, y: 0 }, { x: 0, y: blocked.y }]) {

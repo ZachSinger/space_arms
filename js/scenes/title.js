@@ -1,3 +1,8 @@
+// ==========================================
+// FILE: title.js
+// ==========================================
+// Title screen scene: New Game / Continue / Settings menu, driven by mouse or arrow keys.
+// Continue loads and validates the saved shop before starting the game scene.
 import Phaser from "phaser";
 import { SettingsPanel } from "../logic/SettingsPanel.js";
 import { UIWindow } from "../logic/UIWindow.js";
@@ -69,6 +74,7 @@ export class TitleScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    // Base font sizes (px), scaled by the player's text size setting.
     this.textObjects = [
       { object: this.titleText, fontSize: 52 },
       { object: this.subtitleText, fontSize: 16 },
@@ -124,10 +130,13 @@ export class TitleScene extends Phaser.Scene {
     this.layout(gameSize.width, gameSize.height);
   }
 
+  /**
+   * Block menu input while a DOM window (settings, confirmation) is open on top.
+   * @param {boolean} isActive
+   */
   setMenuActive(isActive) {
     this.input.enabled = isActive;
     this.input.keyboard.enabled = isActive;
-
   }
 
   confirmNewGame() {
@@ -136,6 +145,7 @@ export class TitleScene extends Phaser.Scene {
     this.newGameWindow.openWindow();
   }
 
+  // Load the save and start the game with it; any failure stays on the title with a message.
   async continueGame() {
     if (this.loadingSave) return;
     this.loadingSave = true;
@@ -169,6 +179,10 @@ export class TitleScene extends Phaser.Scene {
     this.statusText.setPosition(width / 2, height / 2 + 175);
   }
 
+  /**
+   * Move the menu selection, wrapping at both ends.
+   * @param {number} change - +1 down, -1 up
+   */
   selectCommand(change) {
     this.setSelectedCommand(
       (this.selectedIndex + change + this.commands.length) % this.commands.length,

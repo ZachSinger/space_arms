@@ -1,10 +1,11 @@
 // ==========================================
 // FILE: Market.js
 // ==========================================
-// Galactic average market price per item (bible Step 52). Each item's Items.json baseCost
-// is its hidden base price -- never shown directly. The market price random-walks once per
-// day (relative to the previous day's price), clamped to a band around that hidden base so
-// it can't drift off forever.
+// Galactic average market price per item. Each item's Items.json baseCost is a hidden base
+// price, never shown. The market price random-walks once per day from the previous day's
+// price, clamped to a band around the hidden base so it can't drift off forever.
+
+// Daily random-walk swing (fraction of price) and the clamp band (multiples of base).
 export const DAILY_SWING = 0.1;
 export const MIN_BASE_RATIO = 0.5;
 export const MAX_BASE_RATIO = 2;
@@ -44,6 +45,11 @@ export class Market {
     return this.prices.get(itemId) ?? 0;
   }
 
+  /**
+   * @param {string} itemId
+   * @param {number} quantity
+   * @returns {number} credits (at least 1), from the hidden base and per-item supply ratio
+   */
   getSupplyCost(itemId, quantity) {
     const basePrice = this.basePrices.get(itemId) ?? 0;
     const ratio = this.supplyRatios.get(itemId) ?? 0;

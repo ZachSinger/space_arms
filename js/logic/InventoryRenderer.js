@@ -1,9 +1,15 @@
 // ==========================================
 // FILE: InventoryRenderer.js
 // ==========================================
+// HTML for the Manager Tablet's Inventory tab (per-item storage, stock, market price, and
+// store price controls) plus its keyboard/hover list navigation.
+// See also: ManagerTablet.js (hosts the tab).
 export class InventoryRenderer {
-  // Renders just the Inventory tab's own content (the tab bar/chrome around it is owned
-  // by whatever window hosts this -- see ManagerTablet.js).
+  /**
+   * Render just the Inventory tab's content; the hosting window owns the tab chrome.
+   * @param {{ item: object, storage: number, stock: number, marketPrice: number, storePrice: number }[]} entries - prices in credits
+   * @returns {string}
+   */
   static generateHTML(entries) {
     const rows = entries.map(({ item, storage, stock, marketPrice, storePrice }, index) => {
       const iconHTML = item.image
@@ -15,17 +21,17 @@ export class InventoryRenderer {
           <span class="item-card-title">${item.name}</span>
           <span class="inventory-quantity" data-inventory-storage>${storage}</span>
           <span class="inventory-quantity" data-inventory-stock>${stock}</span>
-          <span class="inventory-quantity" data-inventory-market>${marketPrice}c</span>
+          <span class="inventory-quantity" data-inventory-market>${marketPrice} credits</span>
           <div class="inventory-price-controls">
             <input class="inventory-price-input" type="number" min="1" step="1" value="${storePrice}"
               data-price-item-id="${item.id}" aria-label="Store price for ${item.name}" />
             <div class="inventory-price-buttons">
               <button type="button" data-price-action="decrease" data-price-item-id="${item.id}"
                 aria-label="Decrease price by 10% for ${item.name}, at least 1 credit when possible"
-                title="Decrease by 10% (at least 1c; minimum price 1c)">-10%</button>
+                title="Decrease by 10% (at least 1 credit; minimum price 1 credit)">-10%</button>
               <button type="button" data-price-action="increase" data-price-item-id="${item.id}"
                 aria-label="Increase price by 10% for ${item.name}, at least 1 credit"
-                title="Increase by 10% (at least 1c)">+10%</button>
+                title="Increase by 10% (at least 1 credit)">+10%</button>
               <button type="button" data-price-action="market" data-price-item-id="${item.id}"
                 aria-label="Set price to market for ${item.name}" title="Set price to current market price">MKT</button>
             </div>
@@ -50,7 +56,12 @@ export class InventoryRenderer {
     `;
   }
 
-  // Wires arrow-key/hover selection with auto-scroll; returns a teardown function.
+  /**
+   * Wire arrow-key/hover selection with auto-scroll.
+   * @param {HTMLElement} rootElement
+   * @param {string | null} [selectedItemId] - card to select initially
+   * @returns {() => void} teardown
+   */
   static enableListNavigation(rootElement, selectedItemId = null) {
     const list = rootElement.querySelector(".inventory-list");
     const cards = list ? Array.from(list.querySelectorAll(".item-card")) : [];
@@ -79,10 +90,8 @@ export class InventoryRenderer {
       card.addEventListener("pointerenter", handlePointerEnter),
     );
 
-    // rootElement may be the whole window (hidden when the window itself is closed) or,
-    // when hosted inside the tabbed Manager's Tablet, a specific tab panel that gets its
-    // own "hidden" class toggled independently as the player switches tabs -- check both
-    // so arrow keys don't hijack navigation while a different tab is actually visible.
+    // Ignore keys while the window or this tab panel is hidden, so arrows don't hijack
+    // another tab.
     const handleKeydown = (event) => {
       if (rootElement.classList.contains("hidden")) return;
       if (event.target instanceof HTMLInputElement) return;

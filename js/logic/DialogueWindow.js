@@ -1,4 +1,15 @@
+// ==========================================
+// FILE: DialogueWindow.js
+// ==========================================
+// A typewriter-style dialogue box. Splits a message into pages that fit the box; click,
+// Space, or Enter finishes the current page or advances to the next.
+
 export class DialogueWindow {
+  /**
+   * @param {object} [options]
+   * @param {number} [options.charactersPerSecond]
+   * @param {(() => void) | null} [options.onComplete] - called after the last page is dismissed
+   */
   constructor({ charactersPerSecond = 45, onComplete = null } = {}) {
     this.charactersPerSecond = charactersPerSecond;
     this.onComplete = onComplete;
@@ -37,6 +48,7 @@ export class DialogueWindow {
     this.showPage();
   }
 
+  // Finish typing the current page, else go to the next page, else close.
   advance() {
     if (this.isTyping) {
       this.finishPage();
@@ -95,6 +107,12 @@ export class DialogueWindow {
     this.isTyping = false;
   }
 
+  /**
+   * Break a message into pages at word boundaries, measuring each by filling the live text
+   * element until it overflows.
+   * @param {string} message
+   * @returns {string[]}
+   */
   splitIntoPages(message) {
     const words = message.trim().split(/\s+/);
     const pages = [];

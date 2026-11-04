@@ -1,17 +1,18 @@
+// ==========================================
+// FILE: PlayerState.js
+// ==========================================
+// The player's persistent economy: credits, reputation, licenses, store prices, the
+// hovercart, and the Go-Backs bin. Notifies subscribers on every change.
 import { InventoryPool } from "./InventoryPool.js";
 
-// Hovercart capacity (bible: "an abstract character/employee inventory size, not a
-// physical moving entity on the map") -- deliberately smaller than either fixture's own
-// capacity (30/20 -- see game.js), since this represents what one character can
-// personally carry at a time, not a whole shelf or storage locker.
+// What one character can personally carry, in units; smaller than any fixture.
 export const HOVERCART_CAPACITY = 10;
 
 export class PlayerState {
   constructor() {
     this.credits = 1500;
     this.globalReputation = 2;
-    // Customers who never entered the store because it was already at capacity (see
-    // GameScene.MAX_CUSTOMERS_IN_STORE) -- lost sales, not merely delayed ones.
+    // Customers lost because the store was at capacity: lost sales, not delayed ones.
     this.customersTurnedAway = 0;
 
     // Factions strictly adhere to the MVP Tag Taxonomy. No Military.
@@ -22,18 +23,16 @@ export class PlayerState {
     };
     this.activeFactions = new Set();
 
-    this.activeLicenses = new Set(["lic_fixture_basics"]); // Starting fixtures remain usable and purchasable.
+    // Starting license keeps the basic fixtures usable and purchasable.
+    this.activeLicenses = new Set(["lic_fixture_basics"]);
 
     // The player's own retail price per item id (credits per unit).
     this.storePrices = {};
 
-    // The player's own carrying capacity -- same InventoryPool model as a physical
-    // StorageFixture (ShopInventory.js), just not drawn anywhere on the map. Lets stock
-    // be withdrawn from one fixture and deposited into another (see FixtureWindow).
+    // Same model as a StorageFixture, just not on the map; moves stock between fixtures.
     this.hovercart = new InventoryPool({ capacity: HOVERCART_CAPACITY, stock: [] });
 
-    // Bible Step 12: carts abandoned by angry customers land here (unlimited room), and
-    // can only leave by being loaded into the hovercart from the register's bin window.
+    // Carts abandoned by angry customers (unlimited room); emptied only into the hovercart.
     this.goBacks = new InventoryPool({ capacity: Infinity, stock: [] });
 
     this.listeners = [];
@@ -50,6 +49,11 @@ export class PlayerState {
     return true;
   }
 
+  /**
+   * Change global reputation, and the faction's too when one is given.
+   * @param {number} amount
+   * @param {string | null} [factionId]
+   */
   addReputation(amount, factionId = null) {
     this.globalReputation += amount;
 
@@ -80,7 +84,11 @@ export class PlayerState {
     this.notifyListeners();
   }
 
-  // Moves 1 unit from the Go-Backs bin into the hovercart; false if there's no room.
+  /**
+   * Move 1 unit from the Go-Backs bin into the hovercart.
+   * @param {string} itemId
+   * @returns {boolean} false if the hovercart has no room or the bin has none
+   */
   loadGoBacksItem(itemId) {
     if (this.hovercart.getRemainingUnitsFor(itemId) <= 0) return false;
     if (this.goBacks.remove(itemId, 1) !== 1) return false;
@@ -99,6 +107,10 @@ export class PlayerState {
     this.activeFactions = new Set(factionIds);
   }
 
+  /**
+   * Register a listener; it is called immediately and on every change.
+   * @param {(state: PlayerState) => void} callback
+   */
   subscribe(callback) {
     this.listeners.push(callback);
     callback(this);
@@ -130,6 +142,10 @@ export class PlayerState {
     return state;
   }
 
+  /**
+   * Overwrite this state from save data in place, keeping existing subscribers.
+   * @param {object} data - output of serialize()
+   */
   applySave(data) {
     Object.assign(this, {
       credits: data.credits,

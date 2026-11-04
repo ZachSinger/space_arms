@@ -1,3 +1,9 @@
+// ==========================================
+// FILE: FixturePlacement.js
+// ==========================================
+// Placement mode for moving an existing fixture or unpacking a fixture crate: a ghost
+// follows the cursor with valid/invalid and access-cell highlights, the camera pans with
+// WASD/arrows, and left-click commits. Only allowed while the store is closed.
 import { UIWindow } from "./UIWindow.js";
 import { TILE_SIZE } from "./RoomLayout.js";
 import { getFixtureType, fixtureAccessCells } from "./FixtureLayout.js";
@@ -28,6 +34,7 @@ export class FixturePlacement {
     this.uiWindow.onClose = () => this.finish();
     this.graphics = scene.add.graphics().setDepth(9997).setVisible(false);
     this.handlePointerDown = (pointer) => {
+      // Ignore clicks that land on DOM windows over the canvas.
       if (!this.active || pointer.event?.target !== scene.game.canvas) return;
       if (pointer.rightButtonDown()) {
         this.cancel();
@@ -64,6 +71,11 @@ export class FixturePlacement {
     }
   }
 
+  /**
+   * Start moving a placed fixture, contents included.
+   * @param {string} id - fixture id
+   * @returns {boolean} false if the store is open
+   */
   begin(id) {
     if (!this.scene.canRearrangeFixtures()) {
       this.scene.showShopMessage("Fixtures can only move while the store is closed.");
@@ -74,6 +86,11 @@ export class FixturePlacement {
     return this.start(original.type, original, null);
   }
 
+  /**
+   * Start placing the fixture packed in the crate the player is carrying.
+   * @param {Crate} crate
+   * @returns {boolean} false if the store is open or the crate isn't a carried fixture crate
+   */
   beginFromCrate(crate) {
     if (!this.scene.canRearrangeFixtures()) {
       this.scene.showShopMessage("Fixtures can only be placed while the store is closed.");
@@ -83,6 +100,12 @@ export class FixturePlacement {
     return this.start(crate.typeId, null, crate);
   }
 
+  /**
+   * Enter placement mode: freeze the player and crates, unfollow the camera, show the ghost.
+   * @param {string} typeId
+   * @param {object|null} original - fixture being moved, or null when placing from a crate
+   * @param {Crate|null} fixtureCrate
+   */
   start(typeId, original, fixtureCrate) {
     this.cancel();
     this.scene.endRegisterSession();
@@ -113,6 +136,11 @@ export class FixturePlacement {
     return true;
   }
 
+  /**
+   * Center the candidate footprint on the pointer and redraw validity (green/red) and the
+   * access cells that must stay clear (blue).
+   * @param {Phaser.Input.Pointer} pointer
+   */
   updatePreview(pointer) {
     const world = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
     this.placement = {
@@ -142,16 +170,22 @@ export class FixturePlacement {
     this.ghost.setPosition(x + this.spec.w * TILE_SIZE / 2, y + this.spec.h * TILE_SIZE / 2);
   }
 
+  /**
+   * Pan the camera with movement keys while placing.
+   * @param {number} delta - ms since last frame
+   */
   update(delta) {
     if (!this.active) return;
     const camera = this.scene.cameras.main;
     const { cursors, wasd } = this.scene.player;
-    const amount = 400 * delta / 1000;
+    const amount = 400 * delta / 1000; // 400 px/s pan speed
     camera.scrollX += amount * (Number(cursors.right.isDown || wasd.right.isDown) - Number(cursors.left.isDown || wasd.left.isDown));
     camera.scrollY += amount * (Number(cursors.down.isDown || wasd.down.isDown) - Number(cursors.up.isDown || wasd.up.isDown));
     this.updatePreview(this.scene.input.activePointer);
   }
 
+  // Leave placement mode and restore the player, camera, and crates. Doesn't close the
+  // window (it calls this from onClose); use cancel() for that.
   finish() {
     if (!this.active) return;
     this.active = false;
@@ -162,6 +196,7 @@ export class FixturePlacement {
     this.ghost.destroy();
     this.graphics.clear().setVisible(false);
     this.scene.player.inputEnabled = true;
+    // Keys held while placing would otherwise keep the player walking.
     this.scene.input.keyboard.resetKeys();
     this.scene.cameras.main.startFollow(this.scene.player.sprite, true, 0.1, 0.1);
     this.scene.restockCrates.forEach((crate) => crate.setPaused(this.scene.crateMotionPaused));

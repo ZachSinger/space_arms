@@ -1282,6 +1282,42 @@ button {
   border-color: #ef4444;
 }
 
+.game-message {
+  position: absolute;
+  top: 54px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(760px, calc(100vw - 32px));
+  padding: 12px 20px;
+  background: rgba(9, 13, 22, 0.96);
+  border: 2px solid var(--game-message-color, #f59e0b);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.8);
+  color: var(--color-text-main);
+  font-size: clamp(18px, 2vw, 24px);
+  font-weight: bold;
+  line-height: 1.3;
+  text-align: center;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  z-index: 1000;
+  opacity: 1;
+  transition: opacity 250ms ease;
+}
+
+.game-message.hidden {
+  display: none;
+}
+
+.game-message.fading {
+  opacity: 0;
+}
+
+.game-message.context-message {
+  padding: 8px 14px;
+  font-size: var(--font-size-16);
+}
+
 /* ================================================================= /
 / SHIFT SUMMARY WINDOW                                               /
 / ================================================================= */

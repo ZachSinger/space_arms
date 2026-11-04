@@ -5,6 +5,7 @@
 // (like the register scan beep) doesn't need a shipped audio asset.
 let sharedContext = null;
 
+// Lazily create one AudioContext shared by every effect.
 function getContext() {
   if (!sharedContext) {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;

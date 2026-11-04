@@ -1,15 +1,18 @@
 // ==========================================
 // FILE: FixtureRenderer.js
 // ==========================================
+// Builds the HTML for the fixture window: storage fixture stock lists, sales shelf
+// placement grids, the hovercart section, and the shelf item picker.
+// See also: FixtureWindow.js (owns the window and handles clicks on this markup).
 export class FixtureRenderer {
+  // Size of one shelf grid cell, px.
   static SHELF_GRID_CELL_PX = 48;
 
   // --- Storage Fixture (shared capacity pool, see InventoryPool.js) ---
 
   /**
-   * Renders a Storage Fixture's own stock (capacity bar + stock list, each row with a
-   * "take 1 into the hovercart" button) plus the player's hovercart (its own capacity bar
-   * + stock list, each row with a "deposit 1 back into this fixture" button).
+   * Storage fixture stock (each row can TAKE 1 into the hovercart) above the hovercart
+   * (each row can STOCK 1 back into the fixture).
    * @param {StorageFixture} storageFixture
    * @param {InventoryPool} hovercart
    * @param {DatabaseManager} databaseManager
@@ -60,13 +63,13 @@ export class FixtureRenderer {
     `;
   }
 
-  // Shared by a Storage Fixture's own list and the hovercart's list -- both are flat
-  // {itemId, quantity} entries backed by InventoryPool's shared-pool model (unlike a
-  // ShelfFixture's placements). `transferAttr` is which data attribute the transfer
-  // button gets (null = no button at all, e.g. the shelf's hovercart list, where stocking
-  // is done by clicking grid slots instead), and `otherPool` is whichever pool the button
-  // would be moving the unit INTO, so it can disable itself the moment that side has no
-  // room left for one more.
+  /**
+   * Rows for a flat {itemId, quantity} pool list (storage fixture or hovercart).
+   * @param {{itemId: string, quantity: number}[]} entries
+   * @param {InventoryPool} otherPool - pool the transfer button moves INTO (disables when full)
+   * @param {DatabaseManager} databaseManager
+   * @param {string | null} transferAttr - transfer button's data attribute; null for none
+   */
   static poolStockRowsHTML(entries, otherPool, databaseManager, transferAttr) {
     return entries
       .filter((entry) => entry.quantity > 0)
@@ -111,10 +114,8 @@ export class FixtureRenderer {
   // --- Sales Shelf (manual grid placement, see ShelfFixture.js) ---
 
   /**
-   * Renders a sales shelf: either its normal grid view (with a "+ ADD ITEM" button; the
-   * placements themselves are moved/taken via mouse clicks on the grid), or,
-   * while `pendingPlacement` is set, the same grid with valid placement cells highlighted
-   * and a small toolbar (rotate/cancel) instead of the placement list.
+   * Sales shelf grid with a "+ ADD ITEM" button, or, while placing an item, the grid
+   * with a rotate/cancel toolbar instead.
    * @param {ShelfFixture} shelfFixture
    * @param {InventoryPool} hovercart
    * @param {DatabaseManager} databaseManager
@@ -150,16 +151,14 @@ export class FixtureRenderer {
     `;
   }
 
-  // The item-placement grid itself. Every rendered cell gets an explicit grid-column/
-  // grid-row so occupied (multi-cell) placements and single empty cells can coexist
-  // without CSS grid's implicit auto-placement getting involved at all. While placing an
-  // item, empty cells are no longer pre-highlighted as one solid block of "every valid
-  // anchor" (confusing -- looked like the item itself was that whole shape, e.g. a 2x1
-  // item showing 6 highlighted cells on a 4x2 grid read as "taking up 1x4" or "2x3"
-  // depending on rotation). Instead each empty cell just gets a hover target
-  // (data-grid-cell); FixtureWindow shows a real preview -- the item's own image, at its
-  // actual w x h footprint -- anchored wherever the cursor currently is, via
-  // showPlacementPreview().
+  /**
+   * Every cell gets an explicit grid-column/grid-row so multi-cell placements and single
+   * empty cells never rely on CSS auto-placement. While placing, empty cells are only
+   * hover targets; FixtureWindow draws the real item-footprint preview at the cursor.
+   * @param {ShelfFixture} shelfFixture
+   * @param {{itemId: string, rotated: boolean}|null} pendingPlacement
+   * @param {DatabaseManager} databaseManager
+   */
   static placementGridHTML(shelfFixture, pendingPlacement, databaseManager) {
     const { w, h } = shelfFixture.displayGrid;
 
@@ -171,9 +170,7 @@ export class FixtureRenderer {
         );
 
         if (placement) {
-          // Only render content on the placement's own anchor (top-left) cell -- the
-          // other cells it spans are covered by this one div's own grid-column/row span,
-          // so nothing separate needs to render there at all.
+          // Render only on the anchor (top-left) cell; its span covers the rest.
           if (gx === placement.gx && gy === placement.gy) {
             cells.push(this.occupiedCellHTML(shelfFixture, placement, databaseManager, pendingPlacement));
           }
@@ -195,9 +192,14 @@ export class FixtureRenderer {
     `;
   }
 
-  // Outside placement mode every placement is interactive: left-click stocks 1 from the
-  // hovercart, drag lifts the whole stack to move it, right-click pulls 1 into the
-  // hovercart (see FixtureWindow).
+  /**
+   * Outside placement mode every placement is interactive: left-click stocks 1 from the
+   * hovercart, drag moves the stack, right-click pulls 1 into the hovercart (FixtureWindow).
+   * @param {ShelfFixture} shelfFixture
+   * @param {object} placement
+   * @param {DatabaseManager} databaseManager
+   * @param {object|null} pendingPlacement
+   */
   static occupiedCellHTML(shelfFixture, placement, databaseManager, pendingPlacement) {
     const item = databaseManager.getItem(placement.itemId);
     const capacity = shelfFixture.getPlacementCapacity(placement);
@@ -219,10 +221,13 @@ export class FixtureRenderer {
     `;
   }
 
-  // --- Shared: the item picker shown after clicking "+ ADD ITEM" -- only items actually
-  // in the player's hovercart are offered, since those are the only ones there's
-  // anything physical to put on the shelf. (An earlier version of this showed the whole
-  // catalog, which isn't correct -- you can't place an item you aren't carrying.)
+  /**
+   * Item picker shown after "+ ADD ITEM". Offers only items in the hovercart: you can't
+   * place stock you aren't carrying.
+   * @param {DatabaseManager} databaseManager
+   * @param {InventoryPool} hovercart
+   * @param {ShelfFixture} shelfFixture
+   */
   static itemPickerHTML(databaseManager, hovercart, shelfFixture) {
     const availableEntries = hovercart.stock.filter((entry) => entry.quantity > 0);
 

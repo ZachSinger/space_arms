@@ -1,17 +1,17 @@
 // ==========================================
 // FILE: SupplyRenderer.js
 // ==========================================
+// HTML for the Supply tab: the player builds one order of crates for licensed items, then
+// places it, spawning physical crates on the Loading Pad to haul in by hand.
+// See also: SupplyOrder.js (order rules), GameScene.handleInteract (crate hauling).
 import { MAX_CRATES_PER_ORDER, LOADING_PAD_SPOTS, DELIVERY_FEE } from "./SupplyOrder.js";
 
 export class SupplyRenderer {
   /**
-   * Generates the Supply tab's own content (the tab bar/chrome around it is owned by
-   * whatever window hosts this -- see ManagerTablet.js). The player builds one order out
-   * of crates for any item they hold a signed Supplier License for (bible Step 29/48 --
-   * see GameScene.getRestockableItems), then places it. Placing it spawns physical crates
-   * at the Loading Pad that have to be hauled in by hand (see GameScene.handleInteract).
+   * Build the tab's content only; the hosting window (ManagerTablet.js) owns the tab chrome.
    * @param {GameScene} scene
-   * @param {Map<string, number>} order item id -> crates in the order being built
+   * @param {Map<string, number>} order - item id -> crates in the order being built
+   * @returns {string} HTML
    */
   static generateHTML(scene, order = new Map()) {
     const entries = scene.getRestockableItems();

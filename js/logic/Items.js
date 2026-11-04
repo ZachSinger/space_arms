@@ -1,24 +1,26 @@
+// ==========================================
+// FILE: Items.js
+// ==========================================
+// A sellable item definition from Items.json.
 export class StoreItem {
   constructor(data) {
-    // Core Properties (Shared by 100% of items)
     this.id = data.id;
     this.name = data.name;
     this.flavor = data.flavor;
-    this.tags = data.tags; // e.g., ['Firearm', 'Standard', 'Rifle']
-    this.dimensions = data.dimensions; // e.g., { w: 2, h: 1 }
-    this.slots = data.slots; // How many storage/shelf slots one unit of this item takes up (1 = smallest, 5 = largest)
+    this.tags = data.tags; // e.g. ['Firearm', 'Standard', 'Rifle']
+    this.dimensions = data.dimensions; // e.g. { w: 2, h: 1 }
+    this.slots = data.slots; // storage/shelf slots per unit (1 = smallest, 5 = largest)
     this.stackSize = data.stackSize;
-    this.baseCost = data.baseCost;
+    this.baseCost = data.baseCost; // credits; hidden base for Market prices
 
-    // Conditional Properties (Safely default to null/empty if not present)
-    this.license = data.license || null; // String: the Supplier License (Licenses.json) required to order this item
-    this.ammo = data.ammo || null; // String: What a gun shoots, or what an ammo box contains
-    this.count = data.count || null; // Number: How many rounds are in an ammo box
-    this.fits = data.fits || []; // Array: What tags/weapons an attachment can snap onto
-    this.image = data.image || null; // String: path (relative to project root) to the item's detail-view art, or null if none exists yet
+    // Optional fields, absent on most items.
+    this.license = data.license || null; // Supplier License id required to order this item
+    this.ammo = data.ammo || null; // what a gun shoots, or what an ammo box contains
+    this.count = data.count || null; // rounds in an ammo box
+    this.fits = data.fits || []; // tags/weapons an attachment can snap onto
+    this.image = data.image || null; // detail-view art path (relative to project root)
   }
 
-  // Example Helper Method:
   hasTag(tagString) {
     return this.tags.includes(tagString);
   }

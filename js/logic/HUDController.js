@@ -1,4 +1,15 @@
+// ==========================================
+// FILE: HUDController.js
+// ==========================================
+// The persistent DOM HUD: credits, reputation, hovercart capacity, shift clock, and the
+// pause / start-shift / save buttons. Re-renders from PlayerState and ShiftClock updates.
 export class HUDController {
+    /**
+     * @param {PlayerState} playerState
+     * @param {ShiftClock | null} shiftClock - omit to skip the clock and shift buttons
+     * @param {() => void} onStartShift
+     * @param {() => void} onSave
+     */
     constructor(playerState, shiftClock, onStartShift, onSave) {
         this.creditsEl = document.getElementById('hud-credits');
         this.repEl = document.getElementById('hud-rep');
@@ -14,7 +25,6 @@ export class HUDController {
         this.handleSave = () => onSave?.();
         this.saveBtn.addEventListener('click', this.handleSave);
 
-        // Subscribe to the brain!
         playerState.subscribe((state) => this.render(state));
 
         if (shiftClock) {
@@ -33,6 +43,9 @@ export class HUDController {
         this.saveBtn.removeEventListener('click', this.handleSave);
     }
 
+    /**
+     * @param {{canSave: boolean, saving: boolean, status: string, unavailableReason: string}} saveState
+     */
     renderSaveState({ canSave, saving, status, unavailableReason }) {
         this.saveBtn.disabled = !canSave || saving;
         this.saveBtn.textContent = saving ? 'SAVING...' : 'SAVE';
@@ -40,24 +53,18 @@ export class HUDController {
     }
 
     render(state) {
-        // Render credits with commas
-        this.creditsEl.innerText = `${state.credits.toLocaleString()}c`;
+        this.creditsEl.innerText = `${state.credits.toLocaleString()} credits`;
         
-        // Toggle red color if in debt
         if (state.credits < 0) {
             this.creditsEl.classList.add('deficit');
         } else {
             this.creditsEl.classList.remove('deficit');
         }
         
-        // Render raw reputation integer
         this.repEl.innerText = state.globalReputation;
 
-        // Hovercart capacity -- same InventoryPool model as a physical fixture, just
-        // always "with" the player (bible: an abstract carrying capacity, not a physical
-        // object). Not driven by its own subscribe() -- transfers call
-        // playerState.notifyListeners() directly (see FixtureWindow.transfer) so this
-        // stays live right alongside credits/reputation.
+        // The hovercart has no subscribe() of its own; transfers call
+        // playerState.notifyListeners() (see FixtureWindow.transfer) to keep this live.
         this.hovercartEl.innerText = `${state.hovercart.usedCapacity()}/${state.hovercart.capacity}`;
     }
 
@@ -65,16 +72,13 @@ export class HUDController {
         this.shiftTimeEl.innerText = clock.started ? clock.getFormattedTime() : 'CLOSED';
         this.shiftTimeEl.classList.toggle('shift-soft-closed', clock.softClosed);
 
-        // Before the very first shift starts, show a plain HUD button instead of a
-        // separate popped-up window -- the pause button has nothing to do yet either
-        // (ShiftClock.togglePause() ignores it until started, see its own comment).
+        // Before the first shift, show START SHIFT in place of PAUSE (which does nothing yet).
         this.startShiftBtn.classList.toggle('hidden', clock.started);
         this.pauseBtn.classList.toggle('hidden', !clock.started);
 
         this.pauseBtn.innerText = clock.isPaused ? 'RESUME' : 'PAUSE';
         this.pauseBtn.classList.toggle('active', clock.isPaused);
-        // Pausing after doors are already locked for the day doesn't mean anything --
-        // the clock itself has already stopped advancing (see ShiftClock.update).
+        // After soft close the clock has already stopped, so pausing means nothing.
         this.pauseBtn.disabled = clock.softClosed;
     }
 }

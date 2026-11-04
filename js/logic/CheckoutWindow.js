@@ -1,6 +1,10 @@
 // ==========================================
 // FILE: CheckoutWindow.js
 // ==========================================
+// Bible Step 54/55 checkout (card payment only for now). The cart rides a conveyor belt
+// to a scanner; clicking or dragging across items scans them. Once all are scanned, the
+// player types the exact total on a numpad to complete the sale.
+
 import { UIWindow } from "./UIWindow.js";
 import { CheckoutRenderer } from "./CheckoutRenderer.js";
 import {
@@ -11,22 +15,21 @@ import {
 } from "./Sfx.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
+// Belt layout (px) and animation speeds.
 const CARD_SIZE = 72;
 const CARD_GAP = 8;
 const SCANNER_GAP = 12;
 const BELT_SPEED_PX_PER_S = 260;
 const SCAN_SLIDE_MS = 220;
 
-// Matches the window's own width so it can be right-aligned at construction time
-// (UIWindow's x/y are plain pixel offsets, not vw-aware, so this has to be computed here).
+// UIWindow's x is plain px, so right-aligning a vw-wide window is computed here.
 const CHECKOUT_WIDTH_VW = 44;
 const RIGHT_MARGIN_PX = 24;
 
-// Bible Step 54/55 checkout (card payment only for now). The cart rides a conveyor belt
-// toward a red scanner bar on the right and queues up against it. Clicking an item, or
-// dragging across several, slides it over the scanner with a beep. Once every item is
-// scanned, a numpad appears and the player must type the exact total to complete the sale.
-// The window only exists while there's something to scan, so it has no close button.
+/**
+ * The single register window, re-rendered for each customer at checkout.
+ * Only shown while there's something to scan, so it has no close button.
+ */
 export class CheckoutWindow {
   constructor(windowManager) {
     const rightAlignedX =
@@ -54,8 +57,7 @@ export class CheckoutWindow {
     this.paymentBuffer = "";
     this.total = 0;
 
-    // Global mousedown/mouseup so a click-and-drag scan works no matter where the drag
-    // starts -- not just when the first mousedown happens to land directly on a card.
+    // Global, so a drag-scan works even if it doesn't start on a card.
     this.handleMouseDown = () => {
       this.isScanning = true;
     };
@@ -65,10 +67,7 @@ export class CheckoutWindow {
     window.addEventListener("mousedown", this.handleMouseDown);
     window.addEventListener("mouseup", this.handleMouseUp);
 
-    // Lets the player type the payment amount on their physical keyboard instead of only
-    // clicking the on-screen numpad. Bound once here (rather than per-customer in
-    // bindNumpad) and dispatches to whichever handler is currently assigned, since the
-    // window/body element itself is reused across every customer.
+    // Physical-keyboard payment entry. Bound once, since the window is reused per customer.
     this.handleKeyDown = (event) => this.handleNumpadKeydown(event);
     window.addEventListener("keydown", this.handleKeyDown);
   }
@@ -80,8 +79,10 @@ export class CheckoutWindow {
     window.removeEventListener("keydown", this.handleKeyDown);
   }
 
-  // Ignores keystrokes unless the checkout window is actually open and the payment panel
-  // (which only appears once every item is scanned) is visible.
+  /**
+   * Ignored unless the window is open and the payment panel (shown after scanning) is visible.
+   * @param {KeyboardEvent} event
+   */
   handleNumpadKeydown(event) {
     if (this.uiWindow.element.classList.contains("hidden")) return;
     const panel = this.bodyElement.querySelector("#checkout-payment");
@@ -102,6 +103,11 @@ export class CheckoutWindow {
     this.uiWindow.close();
   }
 
+  /**
+   * Render and open the register for one customer's cart (also used to switch customers).
+   * @param {{ itemId: string, price: number }[]} cart - prices in credits
+   * @param {() => void} onComplete - fired when the exact total is entered
+   */
   openForCustomer(cart, onComplete) {
     this.mode = "checkout";
     this.onComplete = onComplete;
@@ -151,7 +157,10 @@ export class CheckoutWindow {
     this.beltStopTimer = setTimeout(() => belt.classList.remove("rolling"), longestSeconds * 1000);
   }
 
-  // Lifts the card over the red bar, then lets it drop out of view past the scanner.
+  /**
+   * Lifts the card over the red bar, then lets it drop out of view past the scanner.
+   * @param {HTMLElement} card
+   */
   slideOverScanner(card) {
     const scanner = this.bodyElement.querySelector("#checkout-scanner");
     const currentX = card.offsetLeft;
@@ -165,6 +174,10 @@ export class CheckoutWindow {
     setTimeout(() => card.classList.add("scanned"), SCAN_SLIDE_MS);
   }
 
+  /**
+   * Wire click/drag scanning; reveals the payment panel once every item is scanned.
+   * @param {{ itemId: string, price: number }[]} cart
+   */
   bindEvents(cart) {
     const belt = this.bodyElement.querySelector("#checkout-belt");
     const cards = [...belt.querySelectorAll(".checkout-item-card")];
@@ -187,7 +200,7 @@ export class CheckoutWindow {
 
       const index = Number(card.dataset.index);
       runningTotal += cart[index].price;
-      totalValueElement.textContent = `${runningTotal.toLocaleString()}c`;
+      totalValueElement.textContent = `${runningTotal.toLocaleString()} credits`;
 
       playScanBeep();
       this.slideOverScanner(card);
@@ -211,6 +224,9 @@ export class CheckoutWindow {
     this.bindNumpad(cart);
   }
 
+  /**
+   * @param {{ itemId: string, price: number }[]} cart
+   */
   bindNumpad(cart) {
     const displayElement = this.bodyElement.querySelector(
       "#checkout-payment-display",
@@ -228,11 +244,10 @@ export class CheckoutWindow {
       displayElement.textContent = this.paymentBuffer || "0";
     };
 
-    // Shared handlers so both clicking the on-screen numpad and typing on the physical
-    // keyboard (see handleNumpadKeydown) drive the exact same logic.
+    // Shared by the on-screen numpad and the physical keyboard (handleNumpadKeydown).
     this.appendDigit = (digit) => {
       playKeypadClick();
-      // A sensible cap: never type more digits than the total itself has.
+      // Never more digits than the total itself has.
       if (this.paymentBuffer.length >= String(this.total).length) return;
       this.paymentBuffer += digit;
       refreshDisplay();
@@ -248,13 +263,8 @@ export class CheckoutWindow {
     this.confirmPayment = () => {
       if (Number(this.paymentBuffer) === this.total) {
         playSaleComplete();
-        // Deliberately NOT closing the window here -- the caller (GameScene.startCheckout)
-        // decides what happens next: if there's another customer waiting, it just
-        // refreshes this same window's content for them (openForCustomer() re-renders
-        // regardless of whether the window was ever actually hidden); it only explicitly
-        // closes it if there's truly nothing left to scan. Closing unconditionally here
-        // used to eject the player from the register (see GameScene.endRegisterSession)
-        // after literally every single sale, not just the last one.
+        // Don't close here: the caller either re-renders for the next queued customer or
+        // closes when no one is left, so the player isn't ejected after every sale.
         this.onComplete?.();
         return;
       }

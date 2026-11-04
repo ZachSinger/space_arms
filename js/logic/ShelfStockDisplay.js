@@ -1,6 +1,12 @@
+// ==========================================
+// FILE: ShelfStockDisplay.js
+// ==========================================
+// Draws a shelf's stock stacks on the shop floor as category-colored boxes with quantity
+// labels, redrawing only when the shelf's placements change.
 import { TILE_SIZE } from "./RoomLayout.js";
 import { SHELF_VISUAL_SLOTS_PER_TILE } from "./FixtureLayout.js";
 
+// Keyed by an item's first tag.
 const CATEGORY_COLORS = Object.freeze({
   Ammunition: 0xd99b38,
   Apparel: 0x4c8ecb,
@@ -16,6 +22,11 @@ export function getShelfCategoryColor(item) {
   return CATEGORY_COLORS[item?.tags?.[0]] ?? 0x8090a0;
 }
 
+/**
+ * A stack's rect in px, relative to the shelf's center.
+ * @param {{ w: number, h: number }} gridDimensions - shelf size in tiles
+ * @param {{ gx: number, gy: number, w: number, h: number }} placement - in display slots
+ */
 export function getShelfStackBounds(gridDimensions, placement) {
   const cellSize = TILE_SIZE / SHELF_VISUAL_SLOTS_PER_TILE;
   return {
@@ -42,6 +53,7 @@ export class ShelfStockDisplay {
     this.container.setPosition(x, y);
   }
 
+  // Redraw if the placements changed since the last call; reuse labels per placement.
   sync() {
     const { placements } = this.fixture;
     const signature = placements.map((placement) =>
@@ -56,7 +68,7 @@ export class ShelfStockDisplay {
       const item = this.getItem(placement.itemId);
       if (!item) continue;
       const bounds = getShelfStackBounds(this.fixture.gridDimensions, placement);
-      const inset = 2;
+      const inset = 2; // px gap between neighboring stacks
       const x = bounds.x + inset;
       const y = bounds.y + inset;
       const width = Math.max(1, bounds.width - inset * 2);

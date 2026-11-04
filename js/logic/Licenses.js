@@ -1,3 +1,7 @@
+// ==========================================
+// FILE: Licenses.js
+// ==========================================
+// A Supplier License from Licenses.json: reputation requirements, cost, and fixture unlocks.
 export class SupplierLicense {
   constructor(data) {
     this.id = data.id;
@@ -12,7 +16,7 @@ export class SupplierLicense {
   }
 
   /**
-   * Check if the player meets all reputation requirements to buy this license.
+   * Whether the player meets the global and faction reputation requirements.
    * @param {PlayerState} playerState
    */
   isUnlocked(playerState) {
@@ -24,10 +28,6 @@ export class SupplierLicense {
     return globalMet && factionMet;
   }
 
-  /**
-   * Check if the player has enough credits to buy this license.
-   * @param {PlayerState} playerState
-   */
   canAfford(playerState) {
     return playerState.credits >= this.baseCost;
   }

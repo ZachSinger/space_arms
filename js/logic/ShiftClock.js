@@ -1,23 +1,20 @@
 // ==========================================
 // FILE: ShiftClock.js
 // ==========================================
-// Real-time-driven in-game clock for a single shift (bible Step 2: Galactic Time Code,
-// "Static Speed", with a Manual Toggle to pause). A shift is a fixed 12 GTC hours; once
-// elapsed, the store "soft closes" (bible Step 11): doors lock to new foot traffic, but
-// the scene is responsible for actually ending the shift once everyone already inside has
-// been served (the clock itself only tracks time + the soft-close flag).
+// Real-time in-game clock for one shift (Galactic Time Code at a fixed speed, with a manual
+// pause). At hour 12 the store soft-closes to new foot traffic; the scene ends the shift
+// once everyone inside has been served. The clock only tracks time and the soft-close flag.
 const SHIFT_LENGTH_HOURS = 12;
-const REAL_SECONDS_PER_GTC_HOUR = 25; // A 12-hour shift takes 5 minutes of unpaused play.
+const REAL_SECONDS_PER_GTC_HOUR = 25; // a 12-hour shift is 5 minutes of unpaused play
 export const SHIFT_DURATION_MS = SHIFT_LENGTH_HOURS * REAL_SECONDS_PER_GTC_HOUR * 1000;
-const SHIFT_START_HOUR = 8; // purely cosmetic -- the displayed clock starts at 08:00
+const SHIFT_START_HOUR = 8; // cosmetic: the displayed clock starts at 08:00
 
 export class ShiftClock {
   constructor() {
     this.elapsedHours = 0;
-    // The store starts closed -- the very first shift has to be explicitly started (see
-    // GameScene's pre-shift window), not just begin ticking the instant the scene loads.
+    // The first shift must be explicitly started from GameScene's pre-shift window.
     this.isPaused = true;
-    this.started = false; // flips true once a shift has actually been started at least once
+    this.started = false;
     this.softClosed = false; // true once hour 12 is reached
     this.listeners = [];
   }
@@ -39,21 +36,16 @@ export class ShiftClock {
     return this.elapsedHours * REAL_SECONDS_PER_GTC_HOUR * 1000;
   }
 
-  // The "Manual Toggle" from the bible -- lets the player freeze time entirely (e.g. to
-  // think without pressure) without needing a variable speed control. Ignored before the
-  // very first shift has actually been started -- otherwise the HUD's pause/resume button
-  // could be used to sneak the clock running while the store is still supposed to be
-  // closed (customer arrivals would stay paused regardless, since that's gated separately
-  // in GameScene, but the displayed clock ticking would be visibly wrong).
+  // Freeze or resume time. Ignored until the first shift starts, so the HUD button
+  // can't tick the clock while the store is still closed.
   togglePause() {
     if (!this.started) return;
     this.isPaused = !this.isPaused;
     this.notifyListeners();
   }
 
-  // Called once the scene confirms the shift has actually ended (soft-closed AND every
-  // customer already inside has been served) and the player starts the next one -- or, the
-  // very first time, when the player dismisses the initial "store closed" pre-shift window.
+  // Called when the player starts the next shift (or dismisses the first pre-shift window),
+  // after the scene confirms the previous one has fully ended.
   startNewShift() {
     this.elapsedHours = 0;
     this.isPaused = false;
@@ -70,6 +62,10 @@ export class ShiftClock {
     return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
   }
 
+  /**
+   * Register a listener; it's called immediately with the current state.
+   * @param {(clock: ShiftClock) => void} callback
+   */
   subscribe(callback) {
     this.listeners.push(callback);
     callback(this);

@@ -1,12 +1,19 @@
+// ==========================================
+// FILE: main.js
+// ==========================================
+// Electron main process: creates the game window, and serves the renderer's IPC calls for
+// display settings, the save file, and debug captures.
+// See also: preload.cjs (the renderer-side API for these channels).
 import { app, BrowserWindow, ipcMain, screen, shell } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs/promises";
 
-// ES6 Module fix for __dirname
+// ES modules have no __dirname.
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Resolutions offered in settings, filtered to what fits the current display (px).
 const COMMON_RESOLUTIONS = [
   { width: 1280, height: 720 },
   { width: 1600, height: 900 },
@@ -15,6 +22,11 @@ const COMMON_RESOLUTIONS = [
   { width: 3840, height: 2160 },
 ];
 
+/**
+ * Current size, the resolutions that fit this window's display (plus the current size),
+ * and the display mode.
+ * @param {BrowserWindow} win
+ */
 function getDisplaySettings(win) {
   const display = screen.getDisplayMatching(win.getBounds());
   const [width, height] = win.getContentSize();
@@ -42,9 +54,12 @@ function getDisplaySettings(win) {
 }
 
 const displayModes = new WeakMap();
+// Writes in flight; closing the window waits for these so a save is never cut off.
 const pendingFileWrites = new Set();
+// Serialize writes so two saves (or two captures) never interleave.
 let saveQueue = Promise.resolve();
 let debugQueue = Promise.resolve();
+// One debug folder per app run, created on the first capture.
 let debugSession = null;
 
 function getDisplayMode(win) {
@@ -72,7 +87,7 @@ const createWindow = () => {
       if (!win.isDestroyed()) win.destroy();
     });
   });
-  win.loadURL("http://localhost:5173");
+  win.loadURL("http://localhost:5173"); // Vite dev server
 };
 
 ipcMain.handle("display:get-settings", (event) => {
@@ -100,6 +115,7 @@ ipcMain.handle("display:set-resolution", (event, resolution) => {
   return { width, height };
 });
 
+// Borderless uses kiosk mode: screen-sized without exclusive fullscreen.
 ipcMain.handle("display:set-mode", (event, mode) => {
   const win = BrowserWindow.fromWebContents(event.sender);
 
@@ -141,7 +157,8 @@ app.on("window-all-closed", () => {
 const SAVE_FILE_PATH = path.join(app.getPath("userData"), "savegame.json");
 
 ipcMain.handle("save:write", async (event, payload) => {
-  // fixed filename under userData avoids any path-traversal from renderer input
+  // Fixed filename under userData avoids any path traversal from renderer input. Write to
+  // a temp file and rename so a crash mid-write can't corrupt the existing save.
   const write = saveQueue.then(async () => {
     const temporaryPath = `${SAVE_FILE_PATH}.tmp`;
     await fs.writeFile(temporaryPath, JSON.stringify(payload), "utf-8");
@@ -167,6 +184,7 @@ ipcMain.handle("save:read", async () => {
   }
 });
 
+// Writes a numbered screenshot + text report pair into this run's debug session folder.
 ipcMain.handle("debug:capture", async (event, snapshot) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (!win || win.isDestroyed()) throw new Error("The game window is unavailable.");
@@ -206,6 +224,7 @@ ipcMain.handle("debug:capture", async (event, snapshot) => {
       snapshotJSON,
       "",
     ].join("\n");
+    // "wx" refuses to overwrite an existing capture.
     await fs.writeFile(screenshotPath, image.toPNG(), { flag: "wx" });
     await fs.writeFile(reportPath, report, { encoding: "utf8", flag: "wx" });
     return { captureNumber, directory: debugSession.directory, reportPath, screenshotPath };

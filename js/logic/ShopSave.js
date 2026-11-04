@@ -1,6 +1,12 @@
+// ==========================================
+// FILE: ShopSave.js
+// ==========================================
+// Validates a loaded shop save against the item database and layout rules, throwing a
+// readable error on anything malformed and migrating older fixture entries.
 import { getFixtureType, getShelfDisplayGrid, getShelfSlotCapacity, migrateFixtureEntry } from "./FixtureLayout.js";
 import { TILE_SIZE, ZONES, getTotalGridSize } from "./RoomLayout.js";
 import { MIN_BASE_RATIO, MAX_BASE_RATIO, MIN_SUPPLY_RATIO, MAX_SUPPLY_RATIO } from "./Market.js";
+import { THROW_ACCELERATION_MS } from "./Crate.js";
 
 // Older saves used "slot depth 12 ÷ stackSize". Stacks valid under that rule still load;
 // trimShelfOverflow() then moves anything over the current cap to the Go-Backs bin.
@@ -18,7 +24,13 @@ function integer(value, minimum = Number.MIN_SAFE_INTEGER) {
   return Number.isSafeInteger(value) && value >= minimum;
 }
 
-// Validates a shop save and returns it, with pre-fixture-type entries migrated.
+/**
+ * Validate a shop save and return it, with pre-fixture-type entries migrated.
+ * Throws on the first invalid field.
+ * @param {object} data
+ * @param {object} database - item and license lookup
+ * @returns {object}
+ */
 export function validateShopSave(data, database) {
   requireSave(isRecord(data), "missing shop state.");
   requireSave(Array.isArray(data.fixtures) && data.fixtures.length > 0, "missing fixture layout.");
@@ -125,10 +137,20 @@ export function validateShopSave(data, database) {
   requireSave(Array.isArray(data.crates), "missing crates.");
   for (const crate of data.crates) {
     validateCrateContents(crate);
+    // Crates must sit at least 20 px inside the map edge.
     requireSave(Number.isFinite(crate.x) && Number.isFinite(crate.y) &&
       crate.x >= 20 && crate.x <= gridW * TILE_SIZE - 20 &&
       crate.y >= 20 && crate.y <= gridH * TILE_SIZE - 20 &&
       Number.isFinite(crate.velocityX) && Number.isFinite(crate.velocityY), "invalid crate position or motion.");
+    // Saves can capture a crate mid-throw; its remaining launch must still be plausible.
+    if (crate.launch !== undefined) {
+      const launch = crate.launch;
+      requireSave(isRecord(launch) && Number.isFinite(launch.remainingMs) &&
+        launch.remainingMs > 0 && launch.remainingMs <= THROW_ACCELERATION_MS &&
+        Number.isFinite(launch.accelerationX) && Number.isFinite(launch.accelerationY) &&
+        Number.isFinite(launch.maxSpeed) && launch.maxSpeed > 0 &&
+        crate.onPad !== true, "invalid crate launch.");
+    }
   }
   requireSave(data.carriedCrate === null || isRecord(data.carriedCrate), "invalid carried crate.");
   if (data.carriedCrate) validateCrateContents(data.carriedCrate);

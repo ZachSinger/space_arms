@@ -1,3 +1,9 @@
+// ==========================================
+// FILE: game.js
+// ==========================================
+// The main shop scene: builds the room, fixtures, player, and Loading Pad, then runs the
+// shift loop (customers, checkout, crates) and off-shift saving.
+// See also: TileRoom.js (map), FixtureRegistry.js (fixtures), Customer.js (shopper AI).
 import { WindowManager } from "../logic/WindowManager.js";
 import { ManagerTablet } from "../logic/ManagerTablet.js";
 import { PlayerState } from "../logic/PlayerState.js";
@@ -35,40 +41,40 @@ import { UIWindow } from "../logic/UIWindow.js";
 import { SaveManager } from "../../SaveManager.js";
 import { database } from "./boot.js"; // the exported DatabaseManager singleton
 
-// Caps how many customers can be physically inside the store at once. A full store means
-// the next potential customer simply doesn't come in at all (not "delayed", gone for good)
-// -- a slow/backed-up dealer genuinely loses that sale, same as if the shift had ended
-// before they got to it.
+// Most customers inside the store at once. When full, the next arrival is lost for good,
+// so a backed-up dealer really does lose that sale.
 const MAX_CUSTOMERS_IN_STORE = 6;
 
-// How much stock a single ordered crate contains. Its cost comes from Market's hidden
-// per-item supplier rate -- standing in for a real supplier pricing model; see TODO.md.
+// Units of stock in one ordered crate. Its cost comes from Market's per-item supplier rate.
 export const RESTOCK_QUANTITY = 5;
 
-// Loading Pad: a 3x3 grid of crate spots, just big enough for a 40px crate per spot.
+// Loading Pad: a 3x3 grid of crate spots, each fitting one 40px crate (all px).
 const LOADING_PAD_SPOT_SIZE = 40;
 const LOADING_PAD_SPOT_SPACING = 42;
 const LOADING_PAD_WIDTH = 136;
 const LOADING_PAD_HEIGHT = 128;
 
-// How far from the edge of the register graphic the player can stand and still operate it.
+// Register size and reach (px). Reach is measured from the edge of the register graphic.
 const REGISTER_INTERACT_RANGE = 64;
 const REGISTER_WIDTH = 90;
 const REGISTER_HEIGHT = 75;
-// How far the operating player's feet sit past the register graphic's top edge.
+// How far the operating player's feet sit past the register graphic's top edge (px).
 const REGISTER_BEHIND_OVERLAP = 10;
 
-// How close the player has to be to a fixture's standPoint to deliver a carried crate or
-// open it. Kept separate from Crate's own INTERACT_RANGE (which governs picking a crate up
-// off the Loading Pad, and works fine tight) because standPoint is one single fixed pixel
-// in front of the fixture -- a tight radius around it meant approaching from almost any
-// angle but dead-center failed silently (same "reasonably close should count" problem
-// the register had; see REGISTER_INTERACT_RANGE above).
+// How close (px) the player must be to a fixture's standPoint to open it or deliver a crate.
+// Looser than Crate's INTERACT_RANGE because standPoint is a single pixel, so a tight radius
+// failed from almost any angle but dead-center.
 const SHELF_INTERACT_RANGE = 110;
 
-// Returns the set of "gx,gy" grid-cell keys overlapped (even partially) by a world-space
-// rectangle -- used to mark a fixture's full footprint as blocked for pathfinding, since a
-// fixture's pixel position/size isn't guaranteed to land on clean grid-cell boundaries.
+/**
+ * Grid-cell keys ("gx,gy") overlapped, even partially, by a world-space rectangle. Fixture
+ * pixel bounds don't always land on cell boundaries.
+ * @param {number} centerX - px
+ * @param {number} centerY - px
+ * @param {number} width - px
+ * @param {number} height - px
+ * @returns {string[]}
+ */
 function getOccupiedCellKeys(centerX, centerY, width, height) {
   const gxMin = Math.floor((centerX - width / 2) / TILE_SIZE);
   const gxMax = Math.floor((centerX + width / 2 - 0.01) / TILE_SIZE);
@@ -84,13 +90,22 @@ function getOccupiedCellKeys(centerX, centerY, width, height) {
   return keys;
 }
 
+/**
+ * The playable shop scene ("scene-game"), started from the title scene.
+ * Owns every fixture, crate, and customer; all are torn down on scene shutdown.
+ */
 export class GameScene extends Phaser.Scene {
+  // --- Scene setup ---
+
   constructor() {
     super("scene-game");
   }
 
   preload() {}
 
+  /**
+   * @param {{ savedShopData?: object }} data - save to load, or none for a new shop
+   */
   init(data = {}) {
     this.savedShopData = data.savedShopData ?? null;
   }
@@ -105,6 +120,16 @@ export class GameScene extends Phaser.Scene {
     this.autosaveQueued = false;
     this.lastSavedSnapshot = null;
     this.saveStatus = "Not saved yet";
+    this.gameMessageElement = document.getElementById("game-message");
+    if (!this.gameMessageElement) throw new Error("Missing game message element");
+    this.gameMessageTimeout = null;
+    this.gameMessageActive = false;
+    this.crateHint = "";
+    this.events.once("shutdown", () => {
+      clearTimeout(this.gameMessageTimeout);
+      this.gameMessageTimeout = null;
+      this.gameMessageElement.classList.add("hidden");
+    });
     this.playerState = new PlayerState();
     this.recalculateActiveFactions();
     this.market = new Market(database.getAllItems());
@@ -130,14 +155,11 @@ export class GameScene extends Phaser.Scene {
     this.creditsAtShiftStart = this.playerState.credits;
     this.reputationAtShiftStart = this.playerState.globalReputation;
 
-    // --- Shop map: authored tile room (see RoomLayout.js), with the vertical
-    // slice's one hand-seeded shelf/customer-loop/register placed inside the
-    // Sales Floor zone.
+    // Shop map: the authored tile room (see RoomLayout.js).
     this.room = new TileRoom(this);
     this.setupCamera();
 
-    // Static obstacles that aren't part of the room's own walls (shelves, eventually other
-    // placed fixtures) -- kept as its own group since TileRoom only owns the map/walls.
+    // Static obstacles besides the room's own walls (shelves and other fixtures).
     this.obstacleGroup = this.physics.add.staticGroup();
 
     const salesFloor = getZone("sales_floor");
@@ -146,25 +168,17 @@ export class GameScene extends Phaser.Scene {
     const zonePixelW = salesFloor.gridW * TILE_SIZE;
     const zonePixelH = salesFloor.gridH * TILE_SIZE;
 
-    // The shop's one real public entrance/exit (a designated door, not an arbitrary strip
-    // of floor) -- carved into the Sales Floor's own south exterior wall, away from both
-    // the shelf and the register so customer foot traffic doesn't cross either. Customers
-    // spawn just inside it and walk back to its exact position to leave (see
-    // customerSpawnBounds/exitPoint below); the player can walk through it too, same as
-    // any other now-walkable cell.
+    // The shop's one public entrance/exit, in the Sales Floor's south wall away from the
+    // shelf and register so foot traffic crosses neither. Customers spawn just inside it
+    // and walk back to it to leave.
     const doorGX = salesFloor.gridX + 2;
     const doorGY = salesFloor.gridY + salesFloor.gridH - 1;
     this.room.openDoorway(doorGX, doorGY, "door_light_blank_wide");
     this.storeDoor = { x: this.room.worldX(doorGX), y: this.room.worldY(doorGY) };
 
-    // The Storeroom (backroom) and Sales Floor used to share one continuous open gap
-    // across their entire boundary -- TileRoom only auto-walls a zone edge when the
-    // neighboring zone is locked (see TileRoom.needsWallAt), so two unlocked zones sitting
-    // side by side just... don't get a wall between them at all. Seal it properly with a
-    // single keypad-locked employee door instead, same approach as the shop's own public
-    // entrance above. The Storeroom's own connection south to the Loading Pad stays
-    // intentionally open -- that one really is one continuous loading corridor, not two
-    // separate rooms (see loading_pad's own zone comment in RoomLayout.js).
+    // TileRoom only walls a zone edge next to a locked zone, so the unlocked Storeroom and
+    // Sales Floor need an explicit wall with one keypad door. The Storeroom's south side
+    // stays open: it and the Loading Pad form one loading corridor.
     const storeroom = getZone("storeroom");
     const backroomDoorGX = storeroom.gridX + storeroom.gridW - 1;
     const backroomDoorGY = storeroom.gridY + 3;
@@ -177,9 +191,8 @@ export class GameScene extends Phaser.Scene {
       y: this.room.worldY(backroomDoorGY),
     };
 
-    // Every placed fixture lives in this one registry -- see FixtureRegistry.js. Shelves use
-    // manual grid placement (bible Steps 4/5/22); lockers are shared-capacity storage pools
-    // (bible Step 42); the register runs checkout.
+    // Every placed fixture lives in this registry: shelves, shared-capacity lockers, and
+    // the register.
     this.fixtures = new FixtureRegistry();
     // The register's body is solid to the player and crates only: customers queue almost
     // flush against its front edge, so it can't join obstacleGroup.
@@ -190,74 +203,45 @@ export class GameScene extends Phaser.Scene {
     this.operatingRegister = false;
     this.playerPositionBeforeRegister = null;
 
-    // Customers appear just inside the store door (not spawned already deep on the floor)
-    // and walk back to that exact door to leave -- a designated entrance/exit (storeDoor),
-    // not an arbitrary strip of floor next to the backroom doorway like before. The small
-    // +/- jitter box (rather than the door's single exact pixel) just keeps a run of
-    // several customers spawning in quick succession from visually stacking on each other.
+    // Customers spawn just inside the store door. The small jitter box keeps several quick
+    // arrivals from stacking on one pixel.
     this.customerSpawnBounds = {
       xMin: this.storeDoor.x - 24,
       xMax: this.storeDoor.x + 24,
       yMin: this.storeDoor.y - TILE_SIZE,
       yMax: this.storeDoor.y - 8,
     };
-    // Where customers walk back to and vanish once their business here is done -- the
-    // store door's exact position, so they visibly walk out through it rather than to some
-    // unrelated point.
+    // Customers leave by walking out through the store door.
     this.exitPoint = { x: this.storeDoor.x, y: this.storeDoor.y };
 
     this.checkoutWindow = new CheckoutWindow(this.windowManager);
     this.goBacksWindow = new GoBacksWindow(this.windowManager, this.playerState);
     this.fixtureWindow = new FixtureWindow(this.windowManager, this.playerState);
-    // Ordered line of customers waiting at the register; index 0 is the one currently
-    // being checked out. Re-laid-out (via layoutRegisterLine) any time it changes so
-    // customers visibly queue up single-file instead of stacking on the same spot.
+    // Customers waiting at the register; index 0 is being checked out. Re-laid-out by
+    // layoutRegisterLine whenever it changes so they queue single-file.
     this.registerLine = [];
 
-    // Collision: customers can't walk through walls (TileRoom's static wall group) or
-    // through the shelf/other fixtures (obstacleGroup). The register intentionally has no
-    // collision body -- customers need to stand almost flush against its front edge to
-    // queue, and a solid body there would just block them from ever reaching that spot.
-    //
-    // Deliberately NOT colliding customers against each other (no self-group collider).
-    // findPath/Pathfinder.js only knows about these *static* obstacles -- it has no concept
-    // of other moving customers at all, so it will happily route (or, for a short final
-    // approach, fall straight back to a direct line) right past/through wherever another
-    // customer currently happens to be standing. With a self-collider enabled, that
-    // produces exactly the bug reported: two customers converging near the same area (the
-    // shelf, the register queue, the exit) would physically block each other -- one shoved
-    // against the other with velocity still aimed at its own distinct, legitimately-reachable
-    // target, but making zero actual progress, forever (until SEEKING_TIMEOUT_MS gave up on
-    // it). Since every convergence point already hands out a unique per-customer waypoint
-    // (reserveShelfSlot/reserveQueueSlot/reserveExitSlot below), customers no longer need to
-    // physically shove each other aside to find room -- so this collider was pure downside:
-    // no avoidance benefit (the pathfinder can't use it to route around anyone), only
-    // deadlock risk. Brief visual overlap while two customers cross paths is a minor,
-    // acceptable tradeoff for them reliably actually arriving.
+    // Customers collide with walls and fixtures but not the register (they queue flush
+    // against it) and not each other. The pathfinder can't route around moving customers,
+    // so a self-collider only caused deadlocks; unique waypoints from the reserve*Slot
+    // methods keep them apart instead, at the cost of brief visual overlap.
     this.customerGroup = this.physics.add.group();
     this.physics.add.collider(this.customerGroup, this.room.wallGroup);
     this.physics.add.collider(this.customerGroup, this.obstacleGroup);
 
-    // Player avatar (bible Step 30/58): spawned in open floor away from both the shelf
-    // (0.3/0.4) and the register (0.7/0.22) so it doesn't start inside either. Collides
-    // with walls/fixtures like anyone else, but deliberately NOT with customerGroup --
-    // per the bible, the player has no dynamic collision with customers either (everyone
-    // glides through each other, not just customers through customers).
+    // The player spawns in open floor clear of the shelf and register. Like customers,
+    // the player passes through customers.
     this.player = new Player(this, zonePixelX + zonePixelW * 0.5, zonePixelY + zonePixelH * 0.75);
     this.physics.add.collider(this.player.sprite, this.room.wallGroup);
     this.physics.add.collider(this.player.sprite, this.obstacleGroup);
-    // The register has its own static body (see drawRegister) -- not part of obstacleGroup,
-    // since that's shared with customerGroup's collider and customers need to stand almost
-    // flush against it to queue. The player has no such constraint.
+    // The register is its own group so customers (who share obstacleGroup) can queue
+    // flush against it; the player still collides with it.
     this.physics.add.collider(this.player.sprite, this.registerGroup);
     this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
 
-    // Loading Pad (bible Step 10): where ordered restock crates physically spawn, to be
-    // hauled in by hand (see orderRestockCrate/handleInteract) rather than appearing
-    // directly on the shelf -- the whole point of a physical crate is that getting it
-    // inside is its own task, not an instant inventory top-up.
-    // The pad sits in the zone's two rows above its south wall; the top row stays open as
-    // the walkway into the Storeroom.
+    // Loading Pad: ordered crates spawn here and must be hauled in by hand. It fills the
+    // zone's two rows above its south wall; the top row stays open as the walkway into
+    // the Storeroom.
     const loadingPadZone = getZone("loading_pad");
     this.loadingPadSpawnPoint = {
       x: loadingPadZone.gridX * TILE_SIZE + (loadingPadZone.gridW * TILE_SIZE) / 2,
@@ -292,7 +276,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.existing(padBarrier, true);
     this.physics.add.collider(this.crateGroup, padBarrier, null, (crateSprite) =>
       !this.restockCrates.find((crate) => crate.sprite === crateSprite)?.lockedToPad);
-    // Register impacts without introducing dynamic obstacles to customer pathfinding.
+    // Overlap rather than collide, so thrown crates hit customers without blocking their paths.
     this.physics.add.overlap(this.crateGroup, this.customerGroup, (crateSprite, customerSprite) => {
       const crate = this.restockCrates.find((candidate) => candidate.sprite === crateSprite);
       const customer = this.customers.find((candidate) => candidate.sprite === customerSprite);
@@ -335,18 +319,13 @@ export class GameScene extends Phaser.Scene {
     this.debugInfo = new DebugInfo(this);
     this.input.keyboard.on("keydown-I", () => this.managerTablet.openWindow());
 
-    // Debug-only: proves the expand-the-store mechanism end-to-end until a
-    // real purchase UI exists. Remove once that UI is built.
+    // Debug-only: unlocks the store expansion until a real purchase UI exists.
     this.input.keyboard.on("keydown-U", () => this.debugUnlockExpansion());
 
-    // Debug-only: toggles a tile-grid overlay across the whole map, so misaligned fixtures
-    // (placed at some fractional-of-zone-width pixel position instead of real tile
-    // boundaries) are immediately obvious by eye instead of having to eyeball it against
-    // the floor tiles underneath.
+    // Debug-only: tile-grid overlay that makes off-grid fixtures obvious.
     this.input.keyboard.on("keydown-G", () => this.toggleDebugGrid());
 
-    // The shift clock's "Manual Toggle" (bible Step 2) -- freezes time entirely so the
-    // player can think without pressure, without a variable speed control.
+    // The shift clock's manual pause: freezes time entirely so the player can think.
     this.input.keyboard.on("keydown-P", () => this.shiftClock.togglePause());
 
     this.events.once("shutdown", () => {
@@ -371,6 +350,7 @@ export class GameScene extends Phaser.Scene {
         this.handlePersistenceError(error);
       }
     }
+    // Autosave check runs every 1000 ms; it only saves while the store is closed.
     this.autosaveTimer = this.time.addEvent({
       delay: 1000,
       loop: true,
@@ -389,8 +369,14 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBounds(bounds.x, bounds.y, bounds.width, bounds.height);
   }
 
-  // Builds a fixture model and its sprite, then registers it. Shelves and lockers start
-  // empty; applySave fills in contents afterward.
+  // --- Fixture layout ---
+
+  /**
+   * Builds a fixture model and its sprite, then registers it. Shelves and lockers start
+   * empty; applySave fills in contents afterward.
+   * @param {{ id: string, type: string, gx: number, gy: number }} entry - gx/gy is the top-left cell
+   * @returns {object} the registered fixture
+   */
   spawnFixture({ id, type, gx, gy }) {
     const spec = getFixtureType(type);
     if (!spec) throw new Error(`Unknown fixture type: ${type}`);
@@ -436,6 +422,11 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Options for validateFixtureLayout: walkability, the entrance, and cells no fixture may
+   * cover (doorways and the Loading Pad).
+   * @param {Array<{ left: number, right: number, top: number, bottom: number }>} occupiedRectangles - bodies a fixture must not land on (px)
+   */
   getLayoutOptions(occupiedRectangles = []) {
     const cellAt = (point) => ({ gx: Math.floor(point.x / TILE_SIZE), gy: Math.floor(point.y / TILE_SIZE) });
     const entrance = cellAt(this.storeDoor);
@@ -453,6 +444,7 @@ export class GameScene extends Phaser.Scene {
     return { isWalkable: (gx, gy) => this.room.isWalkable(gx, gy), entrance, reservedCells, occupiedRectangles };
   }
 
+  // Saving needs a quiet store: no shift running and nobody inside.
   canSaveOffShift() {
     return !this.loadFailed && (!this.shiftClock.started || this.shiftEnded) && this.customers.length === 0;
   }
@@ -461,10 +453,23 @@ export class GameScene extends Phaser.Scene {
     return this.canSaveOffShift() && !this.startingShift;
   }
 
+  /**
+   * The current layout with one fixture moved; nothing is applied.
+   * @param {string} id
+   * @param {number} gx
+   * @param {number} gy
+   */
   layoutWithMove(id, gx, gy) {
     return this.fixtures.layout().map((entry) => entry.id === id ? { ...entry, gx, gy } : entry);
   }
 
+  /**
+   * Validates a move without applying it. The player and loose crates count as obstacles.
+   * @param {string} id
+   * @param {number} gx
+   * @param {number} gy
+   * @returns {{ valid: boolean, reason?: string }} validateFixtureLayout's result
+   */
   checkFixtureMove(id, gx, gy) {
     const bodies = [this.player.sprite.body, ...this.restockCrates.map((crate) => crate.sprite.body)];
     return validateFixtureLayout(this.layoutWithMove(id, gx, gy), this.getLayoutOptions(
@@ -474,6 +479,13 @@ export class GameScene extends Phaser.Scene {
     ));
   }
 
+  /**
+   * Moves a fixture if the store is closed and the new spot is valid; otherwise shows why not.
+   * @param {string} id
+   * @param {number} gx
+   * @param {number} gy
+   * @returns {boolean} whether it moved
+   */
   moveFixture(id, gx, gy) {
     if (!this.canRearrangeFixtures()) {
       this.showShopMessage("Fixtures can only move while the store is closed.");
@@ -490,6 +502,12 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
+  /**
+   * Moves every fixture sprite to its layout cell and adopts the validated access points,
+   * pathfinding blocks, and register queue cells.
+   * @param {Array<{ id: string, gx: number, gy: number }>} layout
+   * @param {object} result - a valid result from validateFixtureLayout for this layout
+   */
   applyFixtureLayout(layout, result) {
     const toWorld = (cell) => ({ x: this.room.worldX(cell.gx), y: this.room.worldY(cell.gy) });
     for (const entry of layout) {
@@ -520,6 +538,8 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
+  // --- Saving and loading ---
+
   serialize() {
     const pending = this.fixtureWindow.pendingPlacement;
     const snapshot = {
@@ -549,6 +569,10 @@ export class GameScene extends Phaser.Scene {
     return validateShopSave(snapshot, database);
   }
 
+  /**
+   * Replaces the whole shop with a saved one. Throws if the save is invalid.
+   * @param {object} saved - raw save data; validated by validateShopSave
+   */
   applySave(saved) {
     const data = validateShopSave(saved, database);
     for (const id of data.unlockedZones) this.room.unlockZone(id);
@@ -595,7 +619,7 @@ export class GameScene extends Phaser.Scene {
     this.setSaveStatus("Saved. Autosaves while the store is closed.");
   }
 
-  // Saves from before the per-slot cap changed can hold more than a slot now allows.
+  // Older saves can hold more in a shelf slot than its cap allows; the excess goes to Go-Backs.
   moveShelfOverflowToGoBacks() {
     let moved = 0;
     for (const shelf of this.fixtures.shelves()) {
@@ -618,6 +642,7 @@ export class GameScene extends Phaser.Scene {
     for (const shelf of this.fixtures.shelves()) this.refreshShelfStockDisplay(shelf);
   }
 
+  // Coalesces any number of requests in one tick into a single save attempt.
   requestAutosave() {
     if (!this.canSaveOffShift() || this.autosaveBlocked || this.autosaveQueued) return;
     this.autosaveQueued = true;
@@ -646,6 +671,8 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  // Waits out any save already running, then skips writing if nothing changed since the
+  // last successful save.
   async saveOffShift() {
     if (!this.canSaveOffShift()) return;
     if (this.saveInProgress) {
@@ -686,10 +713,52 @@ export class GameScene extends Phaser.Scene {
     this.updateSaveControls();
   }
 
+  // --- On-screen messages and save errors ---
+
   showShopMessage(message) {
-    this.showFloatingText(this.player.sprite.x, this.player.sprite.y - 40, message, "#f59e0b");
+    this.showGameMessage(message, "#f59e0b");
   }
 
+  /**
+   * Shows a temporary message (2250 ms, then a 250 ms fade), after which the current
+   * context hint returns.
+   * @param {string} message
+   * @param {string} color - CSS color
+   */
+  showGameMessage(message, color = "#f59e0b") {
+    const element = this.gameMessageElement;
+    if (!element) throw new Error("Game message element is not initialized");
+    clearTimeout(this.gameMessageTimeout);
+    this.gameMessageActive = true;
+    element.textContent = message;
+    element.style.setProperty("--game-message-color", color);
+    element.classList.remove("hidden", "fading", "context-message");
+    this.gameMessageTimeout = setTimeout(() => {
+      element.classList.add("fading");
+      this.gameMessageTimeout = setTimeout(() => {
+        this.gameMessageTimeout = null;
+        this.gameMessageActive = false;
+        this.renderContextMessage();
+      }, 250);
+    }, 2250);
+  }
+
+  renderContextMessage() {
+    // Temporary warnings take priority; restore the current hint when they expire.
+    if (this.gameMessageActive) return;
+    const element = this.gameMessageElement;
+    if (element.textContent !== this.crateHint) element.textContent = this.crateHint;
+    element.style.setProperty("--game-message-color", "#38bdf8");
+    element.classList.remove("fading");
+    element.classList.add("context-message");
+    element.classList.toggle("hidden", !this.crateHint);
+  }
+
+  /**
+   * Blocks autosave and shows the save/load error window. After a failed load the only way
+   * out is back to the title, so the existing save is never overwritten.
+   * @param {Error} error
+   */
   handlePersistenceError(error) {
     console.error(this.loadFailed ? "Could not load game" : "Could not save game", error);
     this.autosaveBlocked = true;
@@ -715,18 +784,28 @@ export class GameScene extends Phaser.Scene {
     this.saveErrorWindow.openWindow();
   }
 
-  // Whether a customer could ever stand at this grid cell: must belong to a currently
-  // unlocked zone, not be one of the room's own wall tiles, and not overlap a placed
-  // fixture's footprint (the shelf, currently).
+  // --- Pathfinding ---
+
+  /**
+   * Whether a customer could stand at this cell: in an unlocked zone, not a wall, and not
+   * under a fixture.
+   * @param {number} gx
+   * @param {number} gy
+   */
   isCellWalkable(gx, gy) {
     if (!this.room.isWalkable(gx, gy)) return false;
     return !this.blockedCells.has(`${gx},${gy}`);
   }
 
-  // Computes a real path (array of {x, y} world-space waypoints) from one world point to
-  // another, routing around walls and fixtures via Pathfinder's grid-based BFS. Returns
-  // null if no path exists; callers should fall back to a direct walk in that case (see
-  // Customer.followPath) rather than refusing to move at all.
+  /**
+   * A grid path between two world points, routed around walls and fixtures. On null,
+   * callers should walk directly instead (see Customer.followPath).
+   * @param {number} fromX - px
+   * @param {number} fromY - px
+   * @param {number} toX - px
+   * @param {number} toY - px
+   * @returns {Array<{ x: number, y: number }> | null} world-space waypoints
+   */
   findPath(fromX, fromY, toX, toY) {
     const start = { gx: Math.floor(fromX / TILE_SIZE), gy: Math.floor(fromY / TILE_SIZE) };
     const goal = { gx: Math.floor(toX / TILE_SIZE), gy: Math.floor(toY / TILE_SIZE) };
@@ -740,8 +819,9 @@ export class GameScene extends Phaser.Scene {
     }));
   }
 
-  // Temporary debug hook (keydown-U) for the "expand the store" flow -- swap for a
-  // real purchase UI once the economy/contracts system exists.
+  // --- Debug hooks ---
+
+  // U key: unlocks the store expansion until a real purchase UI exists.
   debugUnlockExpansion() {
     if (!this.canRearrangeFixtures()) {
       this.showShopMessage("Expand the shop while the store is closed.");
@@ -753,12 +833,8 @@ export class GameScene extends Phaser.Scene {
     console.log("Unlocked expansion_a; camera bounds now", bounds);
   }
 
-  // Debug hook (keydown-G): a tile-grid line overlay across the entire authored map
-  // (every zone, including locked/not-yet-built ones, so it's also useful for lining up
-  // expansion content later), drawn once and just toggled visible/hidden after that. Sits
-  // at depth 9998 -- just under the player's own 9999 (bible Step 30/58) -- so it draws on
-  // top of every floor/wall/fixture/character, making any fixture whose position isn't a
-  // clean multiple of TILE_SIZE immediately obvious instead of having to eyeball it.
+  // G key: tile-grid overlay over the whole map, locked zones included. Depth 9998 sits
+  // just under the player (9999) so it draws over every fixture, making off-grid ones obvious.
   toggleDebugGrid() {
     if (!this.debugGridGraphics) {
       const { gridW, gridH } = getTotalGridSize();
@@ -779,9 +855,10 @@ export class GameScene extends Phaser.Scene {
     this.debugGridGraphics.setVisible(!this.debugGridGraphics.visible);
   }
 
-  // Whichever stock-holding fixture (shelf or locker) the player is standing close enough
-  // to, or null -- used by both crate delivery and opening a fixture's window, so "close
-  // enough" means the same thing for both.
+  // --- Supply, pricing, and the Loading Pad ---
+
+  // The nearest shelf or locker within SHELF_INTERACT_RANGE, or null. Shared by crate
+  // delivery and opening fixtures so "close enough" means the same for both.
   getNearbyFixture() {
     let nearest = null;
     let nearestDistance = SHELF_INTERACT_RANGE;
@@ -802,13 +879,21 @@ export class GameScene extends Phaser.Scene {
     return nearest;
   }
 
-  // What ordering RESTOCK_QUANTITY more of this item costs -- shared by the Supply tab
-  // (so it can display the real price) and orderRestockCrate (so it charges that same
-  // price).
+  /**
+   * Credits for one crate of this item. Shared by the Supply tab's price display and
+   * ordering, so both always agree.
+   * @param {object} item - catalog item
+   * @returns {number} credits
+   */
   restockCost(item) {
     return this.market.getSupplyCost(item.id, RESTOCK_QUANTITY);
   }
 
+  /**
+   * The player's own price, falling back to today's market price if never set.
+   * @param {string} itemId
+   * @returns {number} credits
+   */
   getStorePrice(itemId) {
     return this.playerState.storePrices[itemId] ?? this.market.getPrice(itemId);
   }
@@ -862,6 +947,10 @@ export class GameScene extends Phaser.Scene {
     return this.getLoadingPadSpawnPositions()[0] ?? null;
   }
 
+  /**
+   * Prices and checks a supply order against the player's credits and free pad spots.
+   * @param {Map<string, number>} order - item id -> number of crates
+   */
   getSupplyOrderSummary(order) {
     return summarizeSupplyOrder(order, {
       getCrateCost: (itemId) => this.restockCost(database.getItem(itemId)),
@@ -870,6 +959,12 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Rounds to whole credits and rejects anything below 1.
+   * @param {string} itemId
+   * @param {number} price - credits
+   * @returns {boolean} whether the price was accepted
+   */
   setStorePrice(itemId, price) {
     const rounded = Math.round(price);
     if (!Number.isFinite(rounded) || rounded < 1) return false;
@@ -877,6 +972,8 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
+  // Inventory tab rows: every owned item, split into shelf "stock" and everything else
+  // ("storage": lockers, hovercart, Go-Backs, and crates).
   getInventoryItems() {
     const totals = new Map();
     const add = (entry, column) => {
@@ -907,14 +1004,9 @@ export class GameScene extends Phaser.Scene {
       }));
   }
 
-  // Everything the Supply tab needs to render: bible Step 29's "Unified Market" -- every
-  // item in the WHOLE catalog that the player currently has a signed Supplier License
-  // for (bible Step 48: "Customers only expect items from Supplier Contracts you have
-  // actively signed and paid for" -- the same gate applies to the player's own ordering).
-  // Affordability is checked separately, per-order, not here -- an unaffordable item
-  // still shows up (just can't be ordered yet), same as before. Not limited to items
-  // already stocked somewhere; that was a mistake (previous commit) that made ordering
-  // impossible for a fixture that legitimately starts completely empty.
+  // Supply tab rows: every catalog item the player holds a Supplier License for, whether or
+  // not it's stocked anywhere yet (a new fixture starts empty). Affordability is checked
+  // per order, so unaffordable items still appear.
   getRestockableItems() {
     const quantityByItemId = new Map();
     for (const fixture of this.fixtures.stockHolders()) {
@@ -933,6 +1025,7 @@ export class GameScene extends Phaser.Scene {
       }));
   }
 
+  // Customer factions follow the player's licenses.
   recalculateActiveFactions() {
     const activeFactions = getLicensedFactionIds(
       this.playerState.activeLicenses,
@@ -941,9 +1034,12 @@ export class GameScene extends Phaser.Scene {
     this.playerState.setActiveFactions(activeFactions);
   }
 
-  // Places one whole supply order (item id -> crate count): charges the stock plus one flat
-  // delivery fee, then drops every crate onto the Loading Pad at once (bible Step 10). Each
-  // crate still has to be hauled to a fixture by hand, see handleInteract().
+  /**
+   * Places a whole supply order: charges the stock plus one flat delivery fee, then drops
+   * every crate onto the Loading Pad at once. Each crate is hauled to a fixture by hand.
+   * @param {Map<string, number>} order - item id -> number of crates
+   * @returns {boolean} false if unlicensed, unaffordable, or the pad lacks room
+   */
   placeSupplyOrder(order) {
     for (const [itemId, count] of order) {
       const item = database.getItem(itemId);
@@ -971,6 +1067,9 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
+  // --- Buying, crating, and placing fixtures ---
+
+  // Fixture shop rows, with every reason a purchase might be blocked.
   getFixturePurchaseOptions() {
     return Object.values(FIXTURE_TYPES).map((spec) => {
       const license = database.getLicense(spec.licenseId);
@@ -989,6 +1088,11 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Buys a fixture, delivered as a crate on the Loading Pad. Only one register is allowed.
+   * @param {string} typeId
+   * @returns {boolean} whether the purchase went through
+   */
   buyFixture(typeId) {
     const spec = getFixtureType(typeId);
     if (!spec) throw new Error(`Unknown fixture type: ${typeId}`);
@@ -1011,6 +1115,10 @@ export class GameScene extends Phaser.Scene {
     return this.getFixtureCrateBlockReason(fixture) === null;
   }
 
+  /**
+   * @param {object} fixture
+   * @returns {string | null} why it can't be packed into a crate, or null if it can
+   */
   getFixtureCrateBlockReason(fixture) {
     if (!fixture) return "Fixture not found.";
     if (!this.canRearrangeFixtures()) return "Fixtures can only be crated while the store is closed.";
@@ -1025,6 +1133,11 @@ export class GameScene extends Phaser.Scene {
     return null;
   }
 
+  /**
+   * Packs an empty fixture into a crate where it stood, so it can be carried and re-placed.
+   * @param {string} id
+   * @returns {boolean} whether it was crated
+   */
   crateFixture(id) {
     const fixture = this.fixtures.get(id);
     if (!fixture) throw new Error(`Unknown fixture: ${id}`);
@@ -1047,6 +1160,13 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
+  /**
+   * Validates adding a new fixture of this type without placing it. The player and loose
+   * crates count as obstacles.
+   * @param {string} typeId
+   * @param {number} gx
+   * @param {number} gy
+   */
   checkFixturePlacement(typeId, gx, gy) {
     const id = this.fixtures.nextId(typeId);
     const layout = [...this.fixtures.layout(), { id, type: typeId, gx, gy }];
@@ -1058,6 +1178,13 @@ export class GameScene extends Phaser.Scene {
     ));
   }
 
+  /**
+   * Unpacks the carried fixture crate into a real fixture at this cell.
+   * @param {Crate} crate - must be the carried fixture crate
+   * @param {number} gx
+   * @param {number} gy
+   * @returns {boolean} whether it was placed
+   */
   placeFixtureFromCrate(crate, gx, gy) {
     if (!this.canRearrangeFixtures() || this.carriedCrate !== crate || crate.kind !== "fixture") return false;
     const id = this.fixtures.nextId(crate.typeId);
@@ -1076,6 +1203,8 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
+  // --- Player interaction and crates ---
+
   // E delivers/places a carried crate, opens a nearby fixture, or toggles register operation.
   handleInteract() {
     if (this.fixturePlacement.active || this.startingShift || this.loadFailed) return;
@@ -1083,8 +1212,7 @@ export class GameScene extends Phaser.Scene {
       if (this.carriedCrate.kind === "fixture") {
         const nearby = this.getNearbyFixture();
         if (nearby && getFixtureType(nearby.type).kind === "storage") {
-          this.showFloatingText(this.player.sprite.x, this.player.sprite.y - 40,
-            "Fixtures can't be stocked here", "#94a3b8");
+          this.showGameMessage("Fixtures can't be stocked here", "#94a3b8");
           return;
         }
         this.fixturePlacement.beginFromCrate(this.carriedCrate);
@@ -1096,27 +1224,21 @@ export class GameScene extends Phaser.Scene {
 
     if (this.tryOpenFixtureWindow()) return;
 
-    // Toggle: pressing E again while already behind the counter leaves it, rather than
-    // trying (and failing) to re-enter an already-active session.
+    // Pressing E again behind the counter leaves it.
     if (this.operatingRegister) {
       this.endRegisterSession();
       return;
     }
     if (this.tryOpenRegister()) return;
 
-    this.showFloatingText(
-      this.player.sprite.x,
-      this.player.sprite.y - 40,
-      "Nothing nearby to interact with",
-      "#94a3b8",
-    );
+    this.showGameMessage("Nothing nearby to interact with", "#94a3b8");
   }
 
-  // Opens whichever fixture (shelf or storage) the player is standing close enough to --
-  // called either with a specific fixture (clicking its sprite directly) or with none (the
-  // E key, which finds whichever one is nearby). Silently no-ops if out of range, same as
-  // the register's own click-to-open (no pathfind-to-anchor yet -- see bible's "Modal
-  // Windows & Anchors" note in the design doc for the eventual intended behavior).
+  /**
+   * Opens a shelf or locker window if the player is in range; silently does nothing if not.
+   * @param {object} [fixture] - the clicked fixture; the E key passes none and uses the nearest
+   * @returns {boolean} whether a window opened
+   */
   tryOpenFixtureWindow(fixture) {
     if (this.fixturePlacement.active || this.startingShift || this.loadFailed) return false;
     const target = fixture || this.getNearbyFixture();
@@ -1134,8 +1256,9 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
-  // Handles a pickup or warns about a nearby moving crate.
-  tryPickUpNearestCrate() {
+  // The nearest resting crate in reach, plus whether a still-moving crate is also in reach
+  // (so pickup can say "wait" instead of "nothing here").
+  getCratePickupTarget() {
     const { x, y } = this.player.sprite;
     let nearest = null;
     let nearestDistance = INTERACT_RANGE;
@@ -1154,25 +1277,46 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    return { crate: nearest, movingNearby };
+  }
+
+  // Keeps the "Space: Pick up" hint pointed at the nearest crate the player could grab.
+  updateCrateHint() {
+    this.crateHint = "";
+    if (!this.carriedCrate && !this.operatingRegister && !this.fixturePlacement.active &&
+      !this.startingShift && !this.loadFailed) {
+      const { crate } = this.getCratePickupTarget();
+      if (crate) {
+        const description = crate.kind === "fixture"
+          ? `${getFixtureType(crate.typeId).name} fixture`
+          : `${database.getItem(crate.itemId).name} x${crate.quantity}`;
+        this.crateHint = `${description} | Space: Pick up`;
+      }
+    }
+    this.renderContextMessage();
+  }
+
+  // Handles a pickup or warns about a nearby moving crate.
+  tryPickUpNearestCrate() {
+    const { crate: nearest, movingNearby } = this.getCratePickupTarget();
     if (!nearest || !nearest.pickUp(this.player.sprite)) {
       if (!nearest && !movingNearby) return false;
-      this.showFloatingText(x, y - 40, "Wait for crate to stop", "#f59e0b");
+      this.showGameMessage("Wait for crate to stop", "#f59e0b");
       return true;
     }
 
     this.restockCrates = this.restockCrates.filter((crate) => crate !== nearest);
     this.carriedCrate = nearest;
 
-    const description = nearest.kind === "fixture"
-      ? `${getFixtureType(nearest.typeId).name} fixture`
-      : `${database.getItem(nearest.itemId).name} x${nearest.quantity}`;
-    this.showFloatingText(x, y - 40, `Picked up ${description} (Space to drop/throw)`, "#38bdf8");
     this.playerState.notifyListeners();
     return true;
   }
 
-  // The player bumps into crates: loose resting crates get pushed (slowing the player),
-  // loading pad crates act like walls. Thrown crates still in flight are ignored.
+  /**
+   * The player bumps into crates: loose resting crates get pushed (slowing the player),
+   * loading pad crates act like walls. Thrown crates still in flight are ignored.
+   * @param {number} delta - ms since last frame
+   */
   updateCratePushing(delta) {
     const body = this.player.sprite.body;
     const rectOf = (b) => ({ left: b.x, top: b.y, width: b.width, height: b.height });
@@ -1194,6 +1338,10 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Whether a pushed crate would leave the map or overlap a static body.
+   * @param {{ left: number, top: number, width: number, height: number }} rect - px
+   */
   isCrateSpaceBlocked({ left, top, width, height }) {
     const bounds = this.crateBounds;
     if (left < bounds.left || top < bounds.top || left + width > bounds.right || top + height > bounds.bottom) {
@@ -1213,98 +1361,83 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  // Space key: drop or throw the carried crate, or pick up the nearest one.
   handleCrateInteract() {
     if (this.fixturePlacement.active || this.startingShift || this.loadFailed) return;
     if (this.carriedCrate) {
       this.dropCarriedCrate();
       return;
     }
-    const { x, y } = this.player.sprite;
     if (this.operatingRegister) {
-      this.showFloatingText(x, y - 40, "Leave the register to pick up a crate", "#94a3b8");
+      this.showGameMessage("Leave the register to pick up a crate", "#94a3b8");
       return;
     }
     if (!this.tryPickUpNearestCrate()) {
-      this.showFloatingText(x, y - 40, "No crate nearby", "#94a3b8");
+      this.showGameMessage("No crate nearby", "#94a3b8");
     }
   }
 
+  // Standing still drops the crate at the player's feet; walking throws it. While the clock
+  // is paused it always drops.
   dropCarriedCrate() {
     if (this.fixturePlacement.active || this.startingShift || this.loadFailed) return false;
     const { x, y } = this.player.sprite;
     const crate = this.carriedCrate;
     if (!crate) {
-      this.showFloatingText(x, y - 40, "No crate to drop", "#94a3b8");
+      this.showGameMessage("No crate to drop", "#94a3b8");
       return false;
     }
     if (this.operatingRegister) {
-      this.showFloatingText(x, y - 40, "Leave the register to drop a crate", "#94a3b8");
+      this.showGameMessage("Leave the register to drop a crate", "#94a3b8");
       return false;
     }
 
-    const position = crate.findDropPosition(x, y);
+    const bodyVelocity = this.player.sprite.body.velocity;
+    const velocity = this.crateMotionPaused ? { x: 0, y: 0 } : { x: bodyVelocity.x, y: bodyVelocity.y };
+    const throwing = velocity.x !== 0 || velocity.y !== 0;
+    const position = throwing
+      ? crate.findThrowPosition(this.player.sprite, velocity.x, velocity.y)
+      : crate.findDropPosition(x, y, this.player.sprite);
     if (!position) {
-      this.showFloatingText(x, y - 40, "No room to drop crate", "#94a3b8");
+      this.showGameMessage(throwing ? "No room to throw crate" : "No room to drop crate", "#94a3b8");
       return false;
     }
 
-    const velocity = this.player.sprite.body.velocity;
-    crate.drop(
-      position.x,
-      position.y,
-      this.crateMotionPaused ? 0 : velocity.x,
-      this.crateMotionPaused ? 0 : velocity.y,
-      this.crateMotionPaused,
-    );
+    if (throwing) crate.startThrow(this.player.sprite, velocity.x, velocity.y);
+    else crate.drop(position.x, position.y, 0, 0, this.crateMotionPaused);
     this.restockCrates.push(crate);
     this.carriedCrate = null;
-    const description = crate.kind === "fixture"
-      ? `${getFixtureType(crate.typeId).name} fixture`
-      : `${database.getItem(crate.itemId).name} x${crate.quantity}`;
-    this.showFloatingText(x, y - 40, `Dropped ${description}`, "#38bdf8");
     this.playerState.notifyListeners();
     return true;
   }
 
-  // Keyboard equivalent of clicking the register sprite -- enters the register (teleports
-  // behind the counter) if close enough, regardless of whether there's actually a
-  // customer to scan right now (see openRegisterWindow's comment). Returns true/false so
-  // handleInteract knows whether this actually did anything, for its own fallback
-  // "nothing nearby" message.
+  // Keyboard equivalent of clicking the register: steps behind the counter if close enough,
+  // even with no customer waiting. Returns false so handleInteract can show its fallback.
   tryOpenRegister() {
     if (!this.isPlayerNearRegister()) return false;
     this.openRegisterWindow();
     return true;
   }
 
+  // Unloads the carried item crate into the nearest shelf or locker; whatever doesn't fit
+  // stays in the crate.
   tryDeliverCarriedCrate() {
     const crate = this.carriedCrate;
     if (crate.kind === "fixture") {
-      this.showFloatingText(this.player.sprite.x, this.player.sprite.y - 40,
-        "Fixtures can't be stocked here", "#94a3b8");
+      this.showGameMessage("Fixtures can't be stocked here", "#94a3b8");
       return;
     }
     const target = this.getNearbyFixture();
 
     if (!target) {
-      this.showFloatingText(
-        this.player.sprite.x,
-        this.player.sprite.y - 40,
-        "Too far from a fixture to deliver",
-        "#94a3b8",
-      );
+      this.showGameMessage("Too far from a fixture to deliver", "#94a3b8");
       return;
     }
 
     const item = database.getItem(crate.itemId);
 
     if (target.getRemainingUnitsFor(crate.itemId) === 0) {
-      this.showFloatingText(
-        this.player.sprite.x,
-        this.player.sprite.y - 40,
-        `${item.name} can't be stocked here`,
-        "#94a3b8",
-      );
+      this.showGameMessage(`${item.name} can't be stocked here`, "#94a3b8");
       return;
     }
 
@@ -1312,23 +1445,14 @@ export class GameScene extends Phaser.Scene {
     this.fixtureWindow.refresh(target); // keep its capacity bar/stock list live if open
 
     if (accepted >= crate.quantity) {
-      // Fully emptied -- the "Abstracted Box" approach (bible Step 62): once the last
-      // unit leaves a crate, it instantly despawns rather than sticking around empty.
-      this.showFloatingText(
-        this.player.sprite.x,
-        this.player.sprite.y - 40,
-        `Restocked ${item.name} +${accepted}`,
-        "#10b981",
-      );
+      // Empty crates despawn immediately rather than lying around.
+      this.showGameMessage(`Restocked ${item.name} +${accepted}`, "#10b981");
       crate.destroy();
       this.carriedCrate = null;
     } else {
-      // Fixture's total capacity is already full -- keep carrying whatever didn't fit
-      // instead of silently discarding it.
+      // The fixture is full: keep carrying what didn't fit instead of discarding it.
       crate.quantity -= accepted;
-      this.showFloatingText(
-        this.player.sprite.x,
-        this.player.sprite.y - 40,
+      this.showGameMessage(
         accepted > 0
           ? `Restocked +${accepted}, ${crate.quantity} left (full)`
           : `Already full -- still carrying ${crate.quantity}`,
@@ -1338,12 +1462,14 @@ export class GameScene extends Phaser.Scene {
     this.playerState.notifyListeners();
   }
 
-  // Brief on-screen confirmation for actions that would otherwise have no visible feedback
-  // at all (picking up/delivering a crate just makes it silently appear/disappear). Holds
-  // fully readable for a beat before floating up and fading out, rather than fading
-  // immediately on spawn -- at the old 14px/instant-fade tuning this was gone before you
-  // could even read it (the text itself is right above the player's own head, exactly
-  // where you're least likely to already be looking the instant you press the key).
+  /**
+   * Brief world-space confirmation text. It holds still for 900 ms before floating up and
+   * fading over 900 ms, since it spawns where the player is least likely to be looking.
+   * @param {number} x - px
+   * @param {number} y - px
+   * @param {string} text
+   * @param {string} color - CSS color
+   */
   showFloatingText(x, y, text, color) {
     this.debugInfo?.record("game-message", { x, y, text, color });
     const label = this.add
@@ -1369,6 +1495,13 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  // --- Fixture sprites ---
+
+  /**
+   * Creates a solid, clickable sprite sized to the fixture's footprint.
+   * @param {object} fixture
+   * @param {string} textureKey
+   */
   drawFixture(fixture, textureKey) {
     const width = fixture.gridDimensions.w * TILE_SIZE;
     const height = fixture.gridDimensions.h * TILE_SIZE;
@@ -1384,6 +1517,10 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * The register is drawn smaller than its footprint and solid only to the player and crates.
+   * @param {object} fixture
+   */
   drawRegister(fixture) {
     const sprite = this.add
       .image(fixture.x, fixture.y, getFixtureType(fixture.type).texture)
@@ -1397,13 +1534,11 @@ export class GameScene extends Phaser.Scene {
     fixture.sprite = sprite;
   }
 
-  // Walking up and pressing E / clicking the register always lets the player step behind
-  // the counter (bible-style), regardless of whether there's actually a customer waiting
-  // right now -- only the item-scanning window itself is conditional on there being
-  // something to scan. If a customer does show up later while already standing there (see
-  // handleJoinQueue), the scan window opens automatically. Requires the player to
-  // actually be near the register -- now that a real player character exists, operating
-  // it from anywhere on the map doesn't make sense anymore.
+  // --- Register ---
+
+  // Clicking the register or pressing E nearby always puts the player behind the counter,
+  // customer or not; only the scan window needs someone at the front of the line. A
+  // customer who arrives later opens it automatically (see handleJoinQueue).
   openRegisterWindow() {
     if (this.fixturePlacement.active || this.startingShift || this.loadFailed) return;
     if (!this.isPlayerNearRegister()) return;
@@ -1434,13 +1569,20 @@ export class GameScene extends Phaser.Scene {
     this.registerPrompt.setPosition(bounds.centerX, bounds.top - 6);
   }
 
-  // The front customer's patience holds while the player is actually ringing them up.
+  /**
+   * The front customer's patience holds while the player is actually ringing them up.
+   * @param {Customer} customer
+   */
   isServingCustomer(customer) {
     return this.operatingRegister && this.registerLine[0] === customer &&
       this.checkoutWindow.mode === "checkout" && this.checkoutWindow.uiWindow.isOpen;
   }
 
-  // Bible Step 12: an angry customer's cart goes to the Go-Backs bin.
+  /**
+   * An angry customer's cart goes to the Go-Backs bin, and the line moves up.
+   * @param {Customer} customer
+   * @param {Array<object>} cart
+   */
   handleAngryLeave(customer, cart) {
     this.debugInfo?.record("customer-left-angry", {
       customerId: this.debugInfo.identifyCustomer(customer), cart,
@@ -1479,17 +1621,14 @@ export class GameScene extends Phaser.Scene {
     this.player.sprite.body.enable = false;
   }
 
-  // Teleports the player back to wherever they were standing right before
-  // beginRegisterSession(), and restores input + collision. Only ever called when the
-  // player deliberately leaves (pressing E again -- see handleInteract) -- NOT tied to the
-  // checkout window closing, since that now also happens automatically whenever the queue
-  // just runs out (nothing left to scan), which shouldn't eject them from the counter.
+  // Returns the player to where they stood before beginRegisterSession(). Only called when
+  // the player leaves on purpose (E again), not when the checkout window closes because
+  // the line ran out.
   endRegisterSession() {
     if (!this.operatingRegister) return;
 
     this.operatingRegister = false;
-    // Leaving the counter should dismiss any active scan UI too -- can't operate it from
-    // wherever they're about to be teleported back to.
+    // The scan UI can't be operated from wherever the player is teleported back to.
     if (this.checkoutWindow.uiWindow.isOpen) this.checkoutWindow.close();
     this.goBacksWindow.uiWindow.close();
     this.player.sprite.body.enable = true;
@@ -1501,6 +1640,9 @@ export class GameScene extends Phaser.Scene {
     this.playerPositionBeforeRegister = null;
   }
 
+  // --- Customer arrivals ---
+
+  // Fixes the shift's customer pool and arrival times from the store as it stands now.
   prepareCustomerSchedule() {
     this.customerPool = this.calculateCustomerPool();
     this.customerPoolAtShiftStart = this.customerPool;
@@ -1527,6 +1669,11 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Once per 1000 ms of play, adds late arrivals if restocking mid-shift grew the pool.
+   * The pool never shrinks mid-shift.
+   * @param {number} delta - ms since last frame
+   */
   refreshCustomerPool(delta) {
     if (!this.shiftClock.started || this.shiftClock.softClosed || !this.customerPool) return;
     this.poolRefreshCooldownMs -= delta;
@@ -1564,9 +1711,12 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Lets one customer in, or turns them away for good if the store is full.
+   * @param {string | null} factionId
+   */
   spawnCustomer(factionId = null) {
     if (this.customers.length >= MAX_CUSTOMERS_IN_STORE) {
-      // Store's at capacity -- this customer never comes in at all, not merely delayed.
       this.playerState.customersTurnedAway += 1;
       this.debugInfo?.record("customer-turned-away", { factionId, reason: "store-at-capacity" });
       return;
@@ -1598,6 +1748,10 @@ export class GameScene extends Phaser.Scene {
     this.debugInfo?.recordCustomer("customer-entered", customer);
   }
 
+  /**
+   * A buy list from what's on the shelves, plus the shelves worth visiting for it.
+   * @param {string | null} factionId
+   */
   createCustomerShoppingPlan(factionId) {
     const shelves = this.fixtures.shelves();
     const shelfItemIds = shelves.flatMap((shelf) =>
@@ -1623,9 +1777,13 @@ export class GameScene extends Phaser.Scene {
     return database.getItem(itemId);
   }
 
-  // Only the customer at the front of the line (index 0) has their cart shown in the
-  // checkout window; everyone else waits in a visible single-file line behind them, with
-  // patience bubbles overhead (bible Step 53, see Customer.updatePatience).
+  // --- Register queue and checkout ---
+
+  /**
+   * Only the front customer's cart shows in the checkout window; the rest wait single-file
+   * with patience bubbles (see Customer.updatePatience).
+   * @param {Customer} customer
+   */
   handleJoinQueue(customer) {
     this.debugInfo?.recordCustomer("customer-joined-queue", customer);
     this.registerLine.push(customer);
@@ -1636,30 +1794,22 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // Claims a unique, never-reused waypoint for a customer who's just leaving the shelf
-  // and heading to the register, so two customers walking there at the same time never
-  // aim at the identical pixel -- which would otherwise jam them into each other via the
-  // collider and block both of them from ever actually arriving. Once a customer really
-  // arrives, layoutRegisterLine() repositions them to their true index anyway, so this
-  // reservation only has to be unique, not a perfect final-position guess.
-  //
-  // Deliberately NOT manual increment/decrement bookkeeping (an earlier version tried
-  // that with a counter that was supposed to be released once a customer joined the queue,
-  // but any path that skips joining -- e.g. the SEEKING_TIMEOUT_MS give-up case -- leaked
-  // a phantom reservation that was never released, permanently inflating the count and
-  // eventually producing a destination past the room's own wall again). Instead, this is
-  // derived FRESH every call directly from live customer state: count how many OTHER
-  // customers are already in SEEK_REGISTER (the caller is still SEEK_SHELF at this exact
-  // point, so it's automatically excluded), plus how many are already actually queued.
-  // Nothing to leak -- a customer that gives up is simply no longer SEEK_REGISTER, so it
-  // stops counting on its own, by construction.
+  // A distinct queue waypoint for a customer heading to the register, so two walkers never
+  // aim at the same pixel; layoutRegisterLine fixes final spots on arrival. Derived fresh
+  // from live customer states rather than a counter, so a customer who gives up can't
+  // leak a reservation. The caller is still SEEK_SHELF, so it isn't counted.
   reserveQueueSlot() {
     const inFlight = this.customers.filter((c) => c.state === "SEEK_REGISTER").length;
     const index = this.registerLine.length + inFlight;
     return this.registerQueuePoints[Math.min(index, this.registerQueuePoints.length - 1)];
   }
 
-  // Distribute shoppers approaching the same shelf across its clear front edge.
+  /**
+   * Spreads shoppers heading to the same shelf across its clear front cells.
+   * @param {ShelfFixture} shelf
+   * @param {Customer | null} arrivingCustomer - excluded from the count
+   * @returns {{ x: number, y: number }} world-space waypoint
+   */
   reserveShelfSlot(shelf, arrivingCustomer = null) {
     const inFlight = this.customers.filter((c) =>
       c !== arrivingCustomer && c.state === "SEEK_SHELF" && c.fixture === shelf,
@@ -1681,14 +1831,12 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  // Opens the checkout UI for this customer -- but only if the player is actually standing
-  // at the register (see isPlayerNearRegister). If not, this just quietly does nothing;
-  // the window will open the next time the player walks up and clicks the register (see
-  // openRegisterWindow(), which re-calls this for whoever's at the front of the line).
-  // Teleports the player behind the counter the first time this succeeds in a given
-  // session (beginRegisterSession() no-ops if already mid-session), so this fires
-  // regardless of which of the three paths led here (a new customer auto-triggering it,
-  // a manual re-open, or serving the next customer in the onComplete callback below).
+  /**
+   * Opens checkout for this customer if the player is at the register, stepping them
+   * behind the counter if needed; otherwise does nothing until openRegisterWindow retries.
+   * Each finished sale moves the line up and serves the next customer.
+   * @param {Customer} customer
+   */
   startCheckout(customer) {
     if (!this.isPlayerNearRegister()) return;
     this.beginRegisterSession();
@@ -1701,7 +1849,7 @@ export class GameScene extends Phaser.Scene {
       this.layoutRegisterLine(); // shuffle everyone else forward one spot
 
       const nextCustomer = this.registerLine[0];
-      nextCustomer?.resetPatience(); // bible Step 53: any sale resets the next in line
+      nextCustomer?.resetPatience(); // any sale resets the next in line's patience
       if (nextCustomer) {
         this.startCheckout(nextCustomer);
       } else {
@@ -1711,21 +1859,18 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  // --- Frame update and shift flow ---
+
   update(time, delta) {
     this.fixturePlacement.update(delta);
-    // The Manual Toggle (bible Step 2) is supposed to freeze time "entirely" -- it used to
-    // only stop the clock's own displayed tick, while customers kept moving and arrivals
-    // continued to enter in the background.
-    // Only true once a shift has actually been started, though -- isPaused is also the
-    // (separate) pre-shift "store closed" state, during which free player movement is
-    // intentional/unaffected (there are no customers to freeze yet anyway).
+    for (const crate of this.restockCrates) crate.updateThrow(delta);
+    // Pausing a started shift freezes time entirely: customers and arrivals included.
+    // Before the shift starts the clock also reads as paused, but the player moves freely.
     const movementFrozen = (this.shiftClock.isPaused && this.shiftClock.started) ||
       this.fixturePlacement.active || this.startingShift || this.loadFailed;
 
     if (movementFrozen) {
-      // Skipping update() entirely (rather than calling it and then zeroing velocity)
-      // also freezes each customer's own internal state-machine timers, not just their
-      // on-screen movement.
+      // Skipping customer update() also freezes their state-machine timers, not just movement.
       this.player.sprite.body.setVelocity(0, 0);
       this.customers.forEach((customer) => customer.sprite.body.setVelocity(0, 0));
       for (const crate of this.restockCrates) if (crate.isPushed) crate.stopPush();
@@ -1741,20 +1886,19 @@ export class GameScene extends Phaser.Scene {
 
     this.shiftClock.update(delta);
     this.updateRegisterPrompt();
+    this.updateCrateHint();
     this.refreshCustomerPool(delta);
     this.spawnScheduledCustomers();
 
-    // Soft Close (bible Step 11): once hour 12 hits, stop admitting new customers, but the
-    // shift itself doesn't end until everyone already inside has actually been served.
-
+    // Soft close: once the store stops admitting customers, the shift ends only after
+    // everyone already inside has left.
     if (this.shiftClock.softClosed && this.customers.length === 0 && !this.shiftEnded) {
       this.endShift();
     }
   }
 
-  // The shift ends silently (bible Step 43) -- no event, just the fact that doors are
-  // locked and the last customer has been served. The actual "Finances Tab"/wages/calendar
-  // system doesn't exist yet, so this reports only what the vertical slice really tracks.
+  // The shift ends quietly once the doors are locked and the last customer is gone, then
+  // shows the shift summary.
   endShift() {
     this.debugInfo?.record("shift-ended", {
       served: this.customersServedThisShift,
@@ -1766,7 +1910,7 @@ export class GameScene extends Phaser.Scene {
     this.shiftClock.started = false;
     this.shiftClock.isPaused = true;
     this.shiftClock.notifyListeners();
-    // Bible Step 52: the market only moves at End Day, so repricing is stress-free.
+    // Prices only move at end of day, so repricing during a shift is stress-free.
     this.market.advanceDay();
     this.playerState.notifyListeners();
     this.shiftSummaryWindow.show({
@@ -1777,6 +1921,7 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  // Saves a checkpoint first; if that save fails, the shift doesn't start.
   async startNextShift() {
     if (this.startingShift || this.loadFailed || !this.canSaveOffShift()) return;
     if (this.fixturePlacement.active) {

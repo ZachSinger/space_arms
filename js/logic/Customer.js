@@ -1,27 +1,24 @@
+// ==========================================
+// FILE: Customer.js
+// ==========================================
+// One shopper: picks a faction buy list, walks to the shelves holding those items, buys at
+// acceptable prices, then queues for player-driven checkout (or leaves angry).
+// See also: CustomerBuyLists.js (what they want), Pathfinder.js (how they route).
+
 import { pickRandomCustomerCharacter } from "./CustomerSprites.js";
 import { createCustomerBuyList } from "./CustomerBuyLists.js";
 
-const SPEED = 120; // px/sec
+const SPEED = 120; // px/s
 const CRATE_HIT_REPUTATION_PENALTY = 1;
 // Bible Step 52: each customer accepts up to this random markup over the market price.
 export const MIN_PRICE_TOLERANCE = 1.0;
 export const MAX_PRICE_TOLERANCE = 1.3;
-// Safety net: even with real pathfinding, if a customer somehow still can't reach the exit
-// (e.g. an edge case the pathfinder didn't anticipate), don't let them block the shift from
-// ever ending. They've already been paid/served by this point, so there's no harm in just
-// letting them vanish instead of leaving them stuck in place indefinitely.
+// Safety nets (ms) so an unreachable destination can never block the shift from ending.
+// Seeking is deliberately far longer than any legitimate walk across the map.
 const LEAVING_TIMEOUT_MS = 6000;
-// Same idea, applied to the shelf/register approach legs too: this is deliberately generous
-// (far longer than any legitimate walk across this small map) so it only ever fires for a
-// genuinely bad/unreachable destination, not just a slow pathfind. A real example this
-// caught: a bug in how register queue slots were numbered could compute a destination point
-// beyond the room's own wall, permanently wedging a customer there and blocking the shift
-// from ever ending (since the store never drops to 0 customers). This is the standard
-// "stuck/deadlock detection via lack of progress" pattern -- if an agent isn't getting
-// anywhere, abandon the goal rather than trust the destination was valid forever.
 const SEEKING_TIMEOUT_MS = 15000;
 
-// Bible Steps 53/12/51: how long a queued customer waits (real ms, paused with the game)
+// Bible Steps 53/12/51: how long a queued customer waits (ms, paused with the game)
 // before leaving angry, and what that costs.
 export const PATIENCE_MS = 40000;
 const ANGRY_REPUTATION_PENALTY = 1;
@@ -32,23 +29,23 @@ const PATIENCE_LEVELS = [
   [0, "!!", 0xef4444],
 ];
 
+/**
+ * @param {number} fraction - remaining patience, 0..1
+ * @returns {number} index into PATIENCE_LEVELS
+ */
 export function getPatienceLevel(fraction) {
   return PATIENCE_LEVELS.findIndex(([minimum]) => fraction > minimum || minimum === 0);
 }
 
-// Display size every customer sprite is forced to, regardless of a given facing's native
-// pixel dimensions (side-profile crops are narrower than front/back ones) -- keeps a
-// character's apparent size consistent as it turns instead of visibly popping/resizing.
-// Square, not tall-and-thin: the Seventh Generation art's own crops are themselves roughly
-// square (~515x520px), unlike the old Sixth Generation art this was originally tuned for --
-// forcing the old narrow 28x48 box onto this art stretched every character noticeably.
+// Fixed display size (px) for every facing, since each facing's source crop differs in size;
+// keeps a character from visibly resizing as it turns.
 export const SPRITE_DISPLAY_WIDTH = 46;
 export const SPRITE_DISPLAY_HEIGHT = 48;
 
-// Builds a faction-specific Primary/Optional buy list from assigned shelf item types, visits
-// the shelves holding those items, snapshots purchased prices, then queues for player-driven
-// checkout. Movement uses real grid-based pathfinding (GameScene.findPath / Pathfinder.js)
-// so customers correctly route around fixtures instead of walking straight into them.
+/**
+ * One customer's sprite, shopping state machine, and patience bubble.
+ * Created by the scene's spawner; destroys itself on reaching the exit.
+ */
 export class Customer {
   constructor({
     scene,
@@ -67,13 +64,9 @@ export class Customer {
   }) {
     this.scene = scene;
     this.registerPoint = registerPoint;
-    // A single fixed point to walk back to and vanish at once finished here -- real
-    // pathfinding means it doesn't need to depend on this customer's current position.
     this.exitPoint = exitPoint || { x: registerPoint.x, y: registerPoint.y };
-    // Each of these claims a distinct waypoint near a shared destination (the shelf, the
-    // register queue, the exit) so multiple customers converging on the same place around
-    // the same time each walk toward their own spot instead of all aiming at the identical
-    // pixel and jamming into each other before any of them can actually arrive.
+    // Each claims a distinct waypoint near a shared destination so converging customers
+    // don't all aim at the same pixel and jam into each other.
     this.onReserveShelfSlot = onReserveShelfSlot;
     this.onReserveQueueSlot = onReserveQueueSlot;
     this.onReserveExitSlot = onReserveExitSlot;
@@ -87,25 +80,20 @@ export class Customer {
     this.cart = []; // [{ itemId, price }]
     this.priceTolerance = Phaser.Math.FloatBetween(MIN_PRICE_TOLERANCE, MAX_PRICE_TOLERANCE);
     this.queueTarget = null; // set by the scene once this customer has a spot in line
-    this.patienceRemainingMs = null; // only ticks once queued -- see joinQueue()
+    this.patienceRemainingMs = null; // only ticks once queued
     this.patienceBubble = null;
     this.patienceLevel = -1;
 
-    // Path-following state -- see setDestination()/followPath().
     this.path = [];
     this.destination = null;
     this.onArriveAtDestination = null;
     this.isDestroyed = false;
 
-    // spawnBounds is in world (not viewport) pixels -- callers should pass
-    // coordinates from within the current unlocked map, since the camera may
-    // now show only part of a larger authored room (see RoomLayout.js).
+    // World (not viewport) px: the camera may show only part of a larger room (RoomLayout.js).
     const bounds = spawnBounds || { xMin: 40, xMax: 120, yMin: 80, yMax: scene.scale.height - 80 };
     const spawnX = Phaser.Math.Between(bounds.xMin, bounds.xMax);
     const spawnY = Phaser.Math.Between(bounds.yMin, bounds.yMax);
 
-    // A randomly-picked character's 4 facing textures (see CustomerSprites.js), swapped as
-    // this customer turns to walk in a different direction -- see updateFacing().
     const character = pickRandomCustomerCharacter(factionId);
     this.facingTextures = character.facingTextures;
     this.factionId = character.factionId;
@@ -130,6 +118,11 @@ export class Customer {
     this.visitNextShelf("primary");
   }
 
+  // --- Frame update ---
+
+  /**
+   * @param {number} [delta] - ms since last frame
+   */
   update(delta = 0) {
     if (this.isDestroyed) return; // guards against being updated the same frame it self-destructed
 
@@ -139,8 +132,6 @@ export class Customer {
         this.seekingTimer += delta;
         if (this.seekingTimer > SEEKING_TIMEOUT_MS) {
           this.scene.debugInfo?.recordCustomer("customer-seeking-timeout", this);
-          // See SEEKING_TIMEOUT_MS -- this destination turned out to be unreachable
-          // (shouldn't normally happen, but don't let it block the shift forever).
           console.warn(
             `Customer gave up seeking a destination (state=${this.state}); abandoning and leaving.`,
           );
@@ -152,8 +143,7 @@ export class Customer {
         break;
       case "QUEUEING":
         this.followPath();
-        // Face the register while waiting, rather than whichever way they last happened
-        // to be walking -- looks right for a line of people facing the counter.
+        // A line of people should face the counter, not their last walking direction.
         this.updateFacing("up");
         this.updatePatience(delta);
         break;
@@ -165,16 +155,26 @@ export class Customer {
           break;
         }
         this.followPath();
-        if (!this.isDestroyed) this.updateFacing(); // followPath's arrival may have just destroyed this
+        if (!this.isDestroyed) this.updateFacing(); // arrival may have just destroyed this
         break;
     }
   }
 
+  // --- Shopping ---
+
+  /**
+   * True if the store price is within this customer's tolerance over the market price.
+   * @param {string} itemId
+   */
   acceptsPrice(itemId) {
     const marketPrice = this.scene.market.getPrice(itemId);
     return this.scene.getStorePrice(itemId) <= marketPrice * this.priceTolerance;
   }
 
+  /**
+   * Start a shopping pass over every shelf holding this phase's wanted items.
+   * @param {"primary" | "bonus"} phase
+   */
   visitNextShelf(phase) {
     this.shoppingPhase = phase;
     const itemIds = phase === "primary"
@@ -206,6 +206,7 @@ export class Customer {
     this.setDestination(target.x, target.y, () => this.shopAtCurrentShelf());
   }
 
+  // Buys one of each wanted item stocked here at an acceptable price, then moves on.
   shopAtCurrentShelf() {
     for (const itemId of this.phaseItemIds) {
       if (this.shoppingPhase === "bonus") this.bonusAttempted.add(itemId);
@@ -214,6 +215,7 @@ export class Customer {
       );
       if (placements.length === 0) continue;
       if (this.cart.some((entry) => entry.itemId === itemId)) continue;
+      // Mercenaries won't buy a second firearm of a type they already picked up.
       if (this.shoppingPhase === "bonus" && this.factionId === "mercenaries" &&
         this.purchasedFirearms.has(this.scene.getItem(itemId)?.tags.find((tag) =>
           ["Pistol", "Rifle", "Heavy"].includes(tag),
@@ -246,6 +248,7 @@ export class Customer {
     this.visitNextShelfStop();
   }
 
+  // Optional items plus ammo matching any firearm already in the cart, minus what's bought.
   getBonusItemIds() {
     const ids = [...this.shoppingPlan.bonusItemIds];
     for (const { itemId: firearmId } of this.cart) {
@@ -257,6 +260,7 @@ export class Customer {
     );
   }
 
+  // Advances primary -> bonus -> queue, or leaves if there's nothing worth buying.
   finishShoppingPhase() {
     if (this.shoppingPhase === "primary") {
       if (this.shoppingPlan.primaryItemIds.length === 0) {
@@ -277,6 +281,7 @@ export class Customer {
         return;
       }
 
+      // Only penalize wanted items that are out of stock store-wide, not merely overpriced.
       this.primaryMissing = new Set(
         this.shoppingPlan.primaryItemIds.filter((itemId) =>
           !this.primaryBought.has(itemId) &&
@@ -299,6 +304,7 @@ export class Customer {
     const additionalBonusIds = this.getBonusItemIds().filter((itemId) =>
       !this.bonusAttempted.has(itemId),
     );
+    // Firearms bought this pass can unlock matching ammo; take one more pass for it.
     if (additionalBonusIds.length > 0) {
       this.phaseItemIds = additionalBonusIds;
       this.shelfStops = this.shoppingPlan.shelfStops.filter(({ fixture }) =>
@@ -332,6 +338,8 @@ export class Customer {
     );
   }
 
+  // --- Queue and patience ---
+
   joinQueue() {
     this.state = "QUEUEING";
     this.queueTarget = { x: this.registerPoint.x, y: this.registerPoint.y };
@@ -343,7 +351,10 @@ export class Customer {
     this.patienceRemainingMs = PATIENCE_MS;
   }
 
-  // Drains while waiting in line, except while the player is actively ringing them up.
+  /**
+   * Drains while waiting in line, except while the player is actively ringing them up.
+   * @param {number} delta - ms
+   */
   updatePatience(delta) {
     if (this.patienceRemainingMs == null) return;
     if (!this.scene.isServingCustomer?.(this)) {
@@ -373,6 +384,7 @@ export class Customer {
     }
     this.patienceBubble.setPosition(x, y);
 
+    // Only restyle when the level changes.
     const level = getPatienceLevel(this.patienceRemainingMs / PATIENCE_MS);
     if (level === this.patienceLevel) return;
     this.patienceLevel = level;
@@ -406,8 +418,11 @@ export class Customer {
     this.enterLeaving();
   }
 
-  // Called by the scene whenever the line's layout changes (someone joins, or the front of
-  // the line finishes and everyone shuffles forward).
+  /**
+   * Called by the scene whenever the line shifts (someone joins, or everyone shuffles forward).
+   * @param {number} x
+   * @param {number} y
+   */
   setQueueTarget(x, y) {
     this.queueTarget = { x, y };
     this.setDestination(x, y, () => {});
@@ -434,32 +449,32 @@ export class Customer {
   }
 
   enterLeaving() {
-    // Reserve before flipping our own state, so this customer doesn't count itself as
-    // one of the "others already leaving" (consistent with how reserveShelfSlot/
-    // reserveQueueSlot exclude the caller too).
+    // Reserve before flipping state so this customer doesn't count itself among those leaving.
     const exitTarget = this.onReserveExitSlot ? this.onReserveExitSlot() : this.exitPoint;
     this.state = "LEAVING";
     this.leavingTimer = 0;
     this.setDestination(exitTarget.x, exitTarget.y, () => this.destroy());
   }
 
-  // Called once whenever this customer decides on a new place to walk to. Computes a real
-  // path via the scene's pathfinder (GameScene.findPath) so movement correctly routes
-  // around obstacles. If no path is found (shouldn't normally happen for these fixed,
-  // known-reachable points, but degrade gracefully rather than refuse to move at all), falls
-  // back to a direct walk -- see followPath().
+  // --- Movement ---
+
+  /**
+   * Path to a new target via the scene's pathfinder; with no path found, walks straight there.
+   * @param {number} targetX
+   * @param {number} targetY
+   * @param {() => void} onArrive
+   */
   setDestination(targetX, targetY, onArrive) {
     this.destination = { x: targetX, y: targetY };
     this.onArriveAtDestination = onArrive;
-    this.seekingTimer = 0; // fresh attempt -- see SEEKING_TIMEOUT_MS
+    this.seekingTimer = 0;
 
     const path = this.scene.findPath?.(this.sprite.x, this.sprite.y, targetX, targetY);
     this.path = path || [];
   }
 
-  // Walks the precomputed path one waypoint at a time. Once every intermediate waypoint has
-  // been consumed, finishes with one direct approach to the exact destination point (which
-  // may not land precisely on a grid-cell center) before firing the real arrival callback.
+  // Walks the path waypoint by waypoint, then directly to the exact destination (which may
+  // not sit on a grid-cell center) before firing the arrival callback.
   followPath() {
     if (this.path.length > 0) {
       const waypoint = this.path[0];
@@ -470,6 +485,11 @@ export class Customer {
     this.moveToward(this.destination.x, this.destination.y, () => this.onArriveAtDestination());
   }
 
+  /**
+   * @param {number} targetX
+   * @param {number} targetY
+   * @param {() => void} onArrive - fired once within 6 px
+   */
   moveToward(targetX, targetY, onArrive) {
     const distance = Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, targetX, targetY);
 
@@ -483,12 +503,11 @@ export class Customer {
     this.sprite.body.setVelocity(Math.cos(angle) * SPEED, Math.sin(angle) * SPEED);
   }
 
-  // Swaps the sprite's texture to match either a forced facing (e.g. "up" while queueing,
-  // so everyone faces the register) or whichever direction best matches current velocity.
-  // No-ops if there's no meaningful movement and no forced facing, so an arrived/idle
-  // customer keeps whatever direction they were last actually facing instead of flickering
-  // back to a default. Re-applies the fixed display size every time since each facing's
-  // source crop has a slightly different native size (see SPRITE_DISPLAY_WIDTH/HEIGHT).
+  /**
+   * Swap texture to the forced facing, or the one matching current velocity. An idle
+   * customer keeps its last facing instead of flickering back to a default.
+   * @param {"up" | "down" | "left" | "right"} [forcedFacing]
+   */
   updateFacing(forcedFacing) {
     let facing = forcedFacing;
 
@@ -501,6 +520,7 @@ export class Customer {
 
     if (facing === this.currentFacing) return;
     this.currentFacing = facing;
+    // Each facing's crop has a different native size; re-force the display size.
     this.sprite
       .setTexture(this.facingTextures[facing])
       .setDisplaySize(SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT);

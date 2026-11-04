@@ -1,18 +1,19 @@
 // ==========================================
 // FILE: UIWindow.js
 // ==========================================
+// A draggable retro DOM window in the #ui-layer. Open/close/focus order is coordinated by
+// WindowManager, which also forwards drag mouse events.
 
 export class UIWindow {
   /**
-   * @param {Object} config - { id, title, contentHTML, width, height, x, y, shouldCloseOtherWindows, onClose }
-   * @param {WindowManager} manager - Reference to the central window manager
+   * @param {Object} config - { id, title, contentHTML, width, height, x, y, closable, shouldCloseOtherWindows, onClose }
+   * @param {WindowManager} manager
    */
   constructor(config, manager) {
     this.id = config.id;
     this.title = config.title;
     this.manager = manager;
 
-    // --- Core State Properties ---
     this.screenX = config.x || 50;
     this.screenY = config.y || 50;
     this.width = config.width || "300px";
@@ -20,10 +21,8 @@ export class UIWindow {
     this.shouldCloseOtherWindows = config.shouldCloseOtherWindows || false;
     // false hides the X and ignores Escape; code can still call close().
     this.closable = config.closable !== false;
-    // Optional hook fired whenever this window actually closes (X button, Escape, or a
-    // direct close() call) -- NOT fired just because its content was refreshed while still
-    // open. Can also be assigned directly after construction (this.onClose = fn) if not
-    // known yet at construction time.
+    // Fired only on an actual close (X, Escape, or close()), not on content refresh.
+    // May be assigned after construction.
     this.onClose = config.onClose || null;
 
     this.isOpen = false;
@@ -31,12 +30,10 @@ export class UIWindow {
     this.dragOffsetX = 0;
     this.dragOffsetY = 0;
 
-    // Build DOM and inject
     this.element = this.buildHTML(config.contentHTML);
     this.bindInternalEvents();
     document.getElementById("ui-layer").appendChild(this.element);
 
-    // Register self with the manager
     this.manager.registerWindow(this);
   }
 
@@ -63,15 +60,12 @@ export class UIWindow {
     const header = this.element.querySelector(".retro-window-header");
     const closeBtn = this.element.querySelector(".retro-window-close");
 
-    // Internal Close Button
     closeBtn?.addEventListener("click", () => this.close());
 
-    // Focus on click anywhere inside
     this.element.addEventListener("mousedown", () =>
       this.manager.focusWindow(this),
     );
 
-    // Dragging Initialization
     header.addEventListener("mousedown", (e) => {
       if (e.target.closest(".retro-window-close")) return;
       this.isDragging = true;
@@ -82,7 +76,12 @@ export class UIWindow {
     });
   }
 
-  // Called by WindowManager during mousemove
+  /**
+   * Follow the mouse while dragging, keeping part of the window on screen. Called by
+   * WindowManager on mousemove.
+   * @param {number} clientX
+   * @param {number} clientY
+   */
   updateDragPosition(clientX, clientY) {
     if (!this.isDragging) return;
     let newX = Math.max(
@@ -97,30 +96,27 @@ export class UIWindow {
     this.element.style.top = `${newY}px`;
   }
 
-  // Called by WindowManager during mouseup
+  // Called by WindowManager on mouseup; remembers where the window was dropped.
   stopDrag() {
     if (this.isDragging) {
       this.isDragging = false;
-      // Update state to remember new location
       const rect = this.element.getBoundingClientRect();
       this.screenX = rect.left;
       this.screenY = rect.top;
     }
   }
 
-  // --- The Primary API Methods ---
+  // Show at the remembered position, or just focus if already open.
   openWindow() {
     if (this.isOpen) {
       this.manager.focusWindow(this);
       return;
     }
 
-    // The Gatekeeper Check
     if (this.shouldCloseOtherWindows) {
       this.manager.closeAllExcept(this.id);
     }
 
-    // Apply saved coordinates
     this.element.style.left = `${this.screenX}px`;
     this.element.style.top = `${this.screenY}px`;
 

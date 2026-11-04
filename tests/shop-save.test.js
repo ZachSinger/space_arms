@@ -53,6 +53,19 @@ test("shop saves preserve layout, all inventory locations, prices, factions, and
   assert.deepEqual(applied, data);
 });
 
+test("saved launch acceleration is preserved, and malformed launch states are rejected", () => {
+  const data = snapshot();
+  data.crates[0].launch = { remainingMs: 80, accelerationX: 1500, accelerationY: 0, maxSpeed: 400 };
+  assert.deepEqual(validateShopSave(data, database).crates[0].launch, data.crates[0].launch);
+  for (const launch of [null, {}, { ...data.crates[0].launch, remainingMs: -1 },
+    { ...data.crates[0].launch, remainingMs: 161 },
+    { ...data.crates[0].launch, accelerationX: NaN }, { ...data.crates[0].launch, maxSpeed: 0 }]) {
+    const invalid = structuredClone(data);
+    invalid.crates[0].launch = launch;
+    assert.throws(() => validateShopSave(invalid, database), /invalid crate launch/);
+  }
+});
+
 test("desktop saving uses IPC, and failures never silently fall back to browser storage", async () => {
   let stored = null;
   const storage = createSaveStorage({

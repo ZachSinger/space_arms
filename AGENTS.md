@@ -38,6 +38,7 @@ Design is specified in detail in `documentation/` — consult it before inventin
 - New UI surfaces must subclass/instantiate `UIWindow` and register with `WindowManager`; use existing CSS classes/variables in `space_dealer_window.css` (CRT scanlines, retro-window borders) rather than new styling patterns.
 - Scanlines must always render **below** text/images in z-order, never on top.
 - Body font is monospace (`"Courier New", monospace`) to match the CRT terminal look — don't remove/override this globally.
+- Code comments follow `documentation/CodeDocumentation.md` (module/class/function blocks, inline rules, ≤ 20% comment budget).
 
 ## Current State Gotchas (read before touching related code)
 

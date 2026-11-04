@@ -56,8 +56,21 @@ function createHarness({ carrying = false } = {}) {
   scene.playerState = { notifyListeners() {} };
   scene.restockCrates = [];
   scene.carriedCrate = carrying ? {} : null;
+  const classes = new Set(["hidden"]);
+  scene.gameMessageElement = {
+    textContent: "",
+    style: { setProperty(name, value) { this[name] = value; } },
+    classList: {
+      add(...names) { names.forEach((name) => classes.add(name)); },
+      remove(...names) { names.forEach((name) => classes.delete(name)); },
+      toggle(name, force) { if (force) classes.add(name); else classes.delete(name); },
+      contains(name) { return classes.has(name); },
+    },
+  };
+  scene.gameMessageActive = false;
+  scene.crateHint = "";
   const messages = [];
-  scene.showFloatingText = (x, y, text) => messages.push(text);
+  scene.showGameMessage = (text) => messages.push(text);
   scene.input = { keyboard: {
     removeCapture(key) { removedCaptures.push(key); },
     on(name, handler) { handlers.set(name, handler); },
@@ -76,6 +89,11 @@ function crate({ kind = "item", distance = 20, stationary = true } = {}) {
     distanceTo: () => distance,
     isStationary: () => stationary,
     pickUp: () => stationary,
+    findDropPosition: () => ({ x: 100, y: 100 }),
+    findThrowPosition: () => ({ x: 150, y: 100 }),
+    startThrow() {},
+    drop() {},
+    sprite: { getBounds: () => ({ x: 80, y: 80, width: 40, height: 40 }) },
   };
 }
 
@@ -115,6 +133,150 @@ for (const carrying of [false, true]) {
     assert.equal(h.scene.carriedCrate, carried);
     assert.equal(h.scene.restockCrates.length, 1);
     assert.equal(h.drops(), 0);
+    assert.deepEqual(h.messages, []);
+  });
+}
+
+test("dropping a crate does not display a confirmation banner", () => {
+  const h = createHarness();
+  const carried = crate();
+  h.scene.carriedCrate = carried;
+  assert.equal(GameScene.prototype.dropCarriedCrate.call(h.scene), true);
+  assert.equal(h.scene.carriedCrate, null);
+  assert.deepEqual(h.scene.restockCrates, [carried]);
+  assert.deepEqual(h.messages, []);
+});
+
+test("throwing starts a smooth launch using the current movement without stopping or resetting the player", () => {
+  const h = createHarness();
+  const carried = crate();
+  const velocity = { x: 160 / Math.sqrt(2), y: -160 / Math.sqrt(2) };
+  h.scene.player.sprite.body.velocity = velocity;
+  h.scene.carriedCrate = carried;
+  carried.findDropPosition = () => { throw new Error("A throw must not drop at the player's feet"); };
+  carried.findThrowPosition = (carrier, x, y) => {
+    assert.equal(carrier, h.scene.player.sprite);
+    assert.deepEqual({ x, y }, velocity);
+    return { x: 150, y: 50 };
+  };
+  let release;
+  carried.drop = () => { throw new Error("Throws must not teleport to the clearance position"); };
+  carried.startThrow = (...args) => { release = args; };
+  assert.equal(GameScene.prototype.dropCarriedCrate.call(h.scene), true);
+  assert.deepEqual(release, [h.scene.player.sprite, velocity.x, velocity.y]);
+  assert.equal(h.scene.player.sprite.body.velocity, velocity);
+  assert.equal(h.scene.carriedCrate, null);
+});
+
+for (const paused of [false, true]) {
+  test(`stationary drops use a clear position beside the player when paused=${paused}`, () => {
+    const h = createHarness();
+    const carried = crate();
+    h.scene.carriedCrate = carried;
+    h.scene.crateMotionPaused = paused;
+    if (!paused) h.scene.player.sprite.body.velocity = { x: 0, y: 0 };
+    carried.findThrowPosition = () => { throw new Error("A stationary drop must not throw"); };
+    carried.findDropPosition = (x, y, carrier) => {
+      assert.equal(carrier, h.scene.player.sprite);
+      assert.deepEqual({ x, y }, { x: 100, y: 100 });
+      return { x: 52, y: 100 };
+    };
+    let release;
+    carried.drop = (...args) => { release = args; };
+    assert.equal(GameScene.prototype.dropCarriedCrate.call(h.scene), true);
+    assert.deepEqual(release, [52, 100, 0, 0, paused]);
+  });
+}
+
+test("a blocked forward release keeps the crate carried rather than dropping it under the player", () => {
+  const h = createHarness();
+  const carried = crate();
+  h.scene.carriedCrate = carried;
+  carried.findThrowPosition = () => null;
+  carried.drop = () => { throw new Error("Blocked crate must stay carried"); };
+  assert.equal(GameScene.prototype.dropCarriedCrate.call(h.scene), false);
+  assert.equal(h.scene.carriedCrate, carried);
+  assert.equal(h.scene.restockCrates.length, 0);
+  assert.deepEqual(h.scene.player.sprite.body.velocity, { x: 160, y: 0 });
+  assert.deepEqual(h.messages, ["No room to throw crate"]);
+});
+
+for (const kind of ["item", "fixture"]) {
+  test(`nearby ${kind} crate hint describes exactly the crate Space will pick up in the shared message area`, () => {
+    const h = createHarness();
+    const target = crate({ kind, distance: 56 });
+    h.scene.restockCrates = [target, crate({ distance: 57 }), crate({ distance: 1, stationary: false })];
+    h.scene.updateCrateHint();
+    assert.equal(h.scene.gameMessageElement.classList.contains("hidden"), false);
+    assert.equal(h.scene.gameMessageElement.textContent,
+      `${kind === "item" ? "Test item x5" : "SHELF fixture"} | Space: Pick up`);
+    assert.equal(h.scene.gameMessageElement.classList.contains("context-message"), true);
+    h.scene.tryPickUpNearestCrate();
+    assert.equal(h.scene.carriedCrate, target);
+    assert.deepEqual(h.messages, []);
+    h.scene.updateCrateHint();
+    assert.equal(h.scene.gameMessageElement.classList.contains("hidden"), true);
+  });
+}
+
+test("the nearest stationary crate is both the hint and pickup target, including ties", () => {
+  const h = createHarness();
+  const target = { ...crate({ distance: 10 }), quantity: 3 };
+  h.scene.restockCrates = [crate({ distance: 20 }), crate({ distance: 10 }), target];
+  h.scene.updateCrateHint();
+  assert.equal(h.scene.gameMessageElement.textContent, "Test item x3 | Space: Pick up");
+  h.scene.tryPickUpNearestCrate();
+  assert.equal(h.scene.carriedCrate, target);
+});
+
+test("warnings take priority over crate hints and restore the current hint after expiring", (t) => {
+  const timers = [];
+  t.mock.method(globalThis, "setTimeout", (callback, delay) => {
+    timers.push({ callback, delay });
+    return timers.length;
+  });
+  t.mock.method(globalThis, "clearTimeout", () => {});
+  const h = createHarness();
+  const target = crate();
+  h.scene.restockCrates = [target];
+  h.scene.updateCrateHint();
+  const element = h.scene.gameMessageElement;
+  GameScene.prototype.showGameMessage.call(h.scene, "Not enough credits.");
+  assert.equal(element.classList.contains("context-message"), false);
+  target.quantity = 3;
+  h.scene.updateCrateHint();
+  assert.equal(element.textContent, "Not enough credits.");
+  assert.equal(timers[0].delay, 2250);
+  timers[0].callback();
+  assert.equal(element.classList.contains("fading"), true);
+  assert.equal(timers[1].delay, 250);
+  timers[1].callback();
+  assert.equal(element.textContent, "Test item x3 | Space: Pick up");
+  assert.equal(element.classList.contains("context-message"), true);
+  assert.equal(element.classList.contains("fading"), false);
+  assert.equal(element.classList.contains("hidden"), false);
+
+  GameScene.prototype.showGameMessage.call(h.scene, "Another warning");
+  h.scene.restockCrates = [];
+  h.scene.updateCrateHint();
+  assert.equal(element.textContent, "Another warning");
+  timers[2].callback();
+  timers[3].callback();
+  assert.equal(element.classList.contains("hidden"), true);
+});
+
+for (const state of ["outOfRange", "moving", "carrying", "operatingRegister", "placement", "startingShift", "loadFailed"]) {
+  test(`crate hint is hidden during ${state}`, () => {
+    const h = createHarness();
+    h.scene.restockCrates = [crate()];
+    h.scene.gameMessageElement.classList.remove("hidden");
+    if (state === "outOfRange") h.scene.restockCrates = [crate({ distance: 57 })];
+    else if (state === "moving") h.scene.restockCrates = [crate({ stationary: false })];
+    else if (state === "carrying") h.scene.carriedCrate = crate();
+    else if (state === "placement") h.scene.fixturePlacement.active = true;
+    else h.scene[state] = true;
+    h.scene.updateCrateHint();
+    assert.equal(h.scene.gameMessageElement.classList.contains("hidden"), true);
   });
 }
 

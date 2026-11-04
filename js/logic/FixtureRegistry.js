@@ -1,9 +1,11 @@
+// ==========================================
+// FILE: FixtureRegistry.js
+// ==========================================
+// Single source of truth for every fixture placed in the shop. Anything needing "the
+// shelves", "the register", or "fixture X" asks here instead of keeping its own reference.
+// Fixture models carry `id`, `type`, `gx`/`gy`, and, once the layout is applied, `standPoint`.
 import { getFixtureType } from "./FixtureLayout.js";
 
-// The single source of truth for every fixture placed in the shop. Anything that needs
-// "the shelves", "the register", or "fixture X" asks this registry instead of keeping
-// its own reference. Each fixture model carries `id`, `type`, `gx`/`gy`, and, once the
-// layout is applied, its `standPoint`.
 export class FixtureRegistry {
   constructor() {
     this.fixtures = [];
@@ -33,6 +35,7 @@ export class FixtureRegistry {
     });
   }
 
+  // The first (and normally only) register.
   register() {
     return this.ofKind("register")[0];
   }
@@ -56,18 +59,26 @@ export class FixtureRegistry {
     return removed;
   }
 
-  // A fresh instance id for a newly bought or unpacked fixture.
+  /**
+   * A fresh instance id for a newly bought or unpacked fixture.
+   * @param {string} typeId
+   * @returns {string} e.g. "shelf_2"
+   */
   nextId(typeId) {
     let number = 1;
     while (this.get(`${typeId}_${number}`)) number += 1;
     return `${typeId}_${number}`;
   }
 
+  // Serializable placement data only ({ id, type, gx, gy } per fixture).
   layout() {
     return this.fixtures.map(({ id, type, gx, gy }) => ({ id, type, gx, gy }));
   }
 
-  // "SHELF", or "LOCKER 2" when several fixtures share a type.
+  /**
+   * "SHELF", or "LOCKER 2" when several fixtures share a type.
+   * @param {object} fixture
+   */
   displayName(fixture) {
     const sameType = this.fixtures.filter((candidate) => candidate.type === fixture.type);
     const name = getFixtureType(fixture.type).name;

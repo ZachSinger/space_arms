@@ -1,9 +1,12 @@
 // ==========================================
 // FILE: WindowManager.js
 // ==========================================
+// Registry for the DOM UI windows: tracks focus/z-order, drives window dragging, and
+// closes the active window on Escape.
+// See also: UIWindow.js (individual windows register themselves here).
 export class WindowManager {
   constructor() {
-    this.windows = new Map(); // Store UIWindow class instances
+    this.windows = new Map(); // id -> UIWindow
     this.draggedWindow = null;
     this.currentMaxZ = 100;
 
@@ -18,8 +21,8 @@ export class WindowManager {
     return this.windows.get(id);
   }
 
+  // Document-level listeners so drags keep tracking when the cursor leaves the title bar.
   bindGlobalEvents() {
-    // Global Drag Listeners
     this.handleMouseMove = (e) => {
       if (this.draggedWindow)
         this.draggedWindow.updateDragPosition(e.clientX, e.clientY);
@@ -32,7 +35,7 @@ export class WindowManager {
       }
     };
 
-    // Global Keyboard Accessibility (Escape key)
+    // Escape closes the focused window, if it allows closing.
     this.handleKeyDown = (e) => {
       if (e.key === "Escape") {
         const activeWinEl = document.querySelector(".retro-window.active");
@@ -70,6 +73,7 @@ export class WindowManager {
     win.element.style.zIndex = this.currentMaxZ;
   }
 
+  // Focus the open window with the highest z-index (e.g. after the focused one closes).
   passFocusToNextHighest() {
     let highest = null;
     let maxZ = 0;

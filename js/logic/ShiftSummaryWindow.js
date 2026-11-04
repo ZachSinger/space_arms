@@ -1,12 +1,15 @@
 // ==========================================
 // FILE: ShiftSummaryWindow.js
 // ==========================================
+// End-of-shift receipt: credits, reputation, and customers served / turned away, with a
+// button to start the next shift. A stand-in until a real finances tab exists.
 import { UIWindow } from "./UIWindow.js";
 
-// Stand-in for the bible's Step 43 Finances Tab / "End Day" receipt -- there's no real
-// finances system (wages, calendar, market fluctuation) yet, so this just reports what the
-// vertical slice actually tracks and lets the player start the next shift.
 export class ShiftSummaryWindow {
+  /**
+   * @param {WindowManager} windowManager
+   * @param {() => void} onStartNextShift
+   */
   constructor(windowManager, onStartNextShift) {
     this.onStartNextShift = onStartNextShift;
 
@@ -26,12 +29,16 @@ export class ShiftSummaryWindow {
     this.bodyElement = this.uiWindow.element.querySelector(".retro-window-body");
   }
 
+  /**
+   * @param {{creditsEarned: number, reputationGained: number, customersServed: number,
+   *   customersTurnedAway: number}} stats
+   */
   show(stats) {
     this.bodyElement.innerHTML = `
       <div class="shift-summary">
         <div class="shift-summary-row">
           <span>Credits earned</span>
-          <span class="shift-summary-value">${stats.creditsEarned.toLocaleString()}c</span>
+          <span class="shift-summary-value">${stats.creditsEarned.toLocaleString()} credits</span>
         </div>
         <div class="shift-summary-row">
           <span>Reputation gained</span>

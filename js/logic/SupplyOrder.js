@@ -5,15 +5,17 @@
 // places it. Each delivery pays one flat fee, so batching crates into one order is cheaper
 // than ordering a single crate every time something runs low.
 
-export const DELIVERY_FEE = 25;
+export const DELIVERY_FEE = 25; // credits
 // The Loading Pad has a 3x3 grid of crate spots (see GameScene.getLoadingPadSpawnPositions).
 export const LOADING_PAD_SPOTS = 9;
 // One order can always fill an empty loading pad.
 export const MAX_CRATES_PER_ORDER = LOADING_PAD_SPOTS;
 
 /**
- * @param {Map<string, number>} order item id -> number of crates
+ * Price an order and find the first problem blocking it.
+ * @param {Map<string, number>} order - item id -> number of crates
  * @param {{ getCrateCost: (itemId: string) => number, credits: number, freePadSpots: number }} context
+ * @returns {{ total: number, problem: string | null, canPlace: boolean }} plus crate and cost breakdown
  */
 export function summarizeSupplyOrder(order, { getCrateCost, credits, freePadSpots }) {
   let crates = 0;

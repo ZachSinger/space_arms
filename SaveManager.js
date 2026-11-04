@@ -1,6 +1,16 @@
+// ==========================================
+// FILE: SaveManager.js
+// ==========================================
+// Versioned save/load across game subsystems. Writes through the Electron desktop API when
+// present, otherwise browser localStorage.
+// See also: preload.cjs (desktopApi.saveGame / loadGame).
 export const SAVE_VERSION = 1;
 export const SAVE_STORAGE_KEY = "space-arms-save-v1";
 
+/**
+ * @param {Window} environment - injectable for tests
+ * @returns {{ read: () => any, write: (payload: object) => boolean | Promise<boolean> }}
+ */
 export function createSaveStorage(environment = window) {
   if (environment.desktopApi) {
     return {
@@ -20,7 +30,10 @@ export function createSaveStorage(environment = window) {
   };
 }
 
-// Each subsystem must implement serialize() -> plain object, and applySave(data) to mutate itself in place.
+/**
+ * Saves and restores a set of named subsystems. Each must implement serialize() -> plain
+ * object and applySave(data), which mutates itself in place.
+ */
 export class SaveManager {
   constructor(subsystems = {}, storage = createSaveStorage()) {
     this.subsystems = subsystems;
@@ -39,6 +52,8 @@ export class SaveManager {
     return true;
   }
 
+  // Read and validate the stored save without applying it; null if none exists.
+  // Throws on a malformed, wrong-version, or incomplete save.
   async read() {
     const payload = await this.storage.read();
     if (payload === null) return null;
@@ -54,6 +69,7 @@ export class SaveManager {
     return payload;
   }
 
+  // Apply the stored save to every subsystem. False if there is no save.
   async load() {
     const payload = await this.read();
     if (payload === null) return false;

@@ -1,11 +1,11 @@
 // ==========================================
 // FILE: CustomerSprites.js
 // ==========================================
+// Customer character art: the roster of distinct sprite characters (faction + number) and
+// their four facing textures, derived from CustomerSpriteManifest.json.
 import customerSpriteManifest from "../../data/CustomerSpriteManifest.json";
 
-// Derives the roster of distinct characters (faction + number) from the manifest itself,
-// so this stays correct automatically if sprites are added/removed/regenerated later --
-// the roster itself has no hardcoded character count.
+// Built from the manifest so adding or removing sprites needs no hardcoded count.
 const ROSTER = (() => {
   const seen = new Map(); // "faction_num" -> { faction, num }
   const pattern = /^customer_([a-z]+)_(\d+)_(down|up|left|right)$/;
@@ -20,6 +20,7 @@ const ROSTER = (() => {
   return [...seen.values()];
 })();
 
+// Sprite-name faction -> game faction id.
 const FACTION_IDS = {
   mercenary: "mercenaries",
   explorer: "explorers",
@@ -35,6 +36,11 @@ function characterTextures(entry) {
   };
 }
 
+/**
+ * @param {string | null} [factionId] - game faction id; null picks any art but keeps a null
+ *   faction (neutral customer), undefined picks any art and reports its faction
+ * @returns {{factionId: string | null, facingTextures: object}}
+ */
 export function pickRandomCustomerCharacter(factionId) {
   if (factionId !== undefined && factionId !== null &&
     !Object.values(FACTION_IDS).includes(factionId)) {
@@ -47,7 +53,6 @@ export function pickRandomCustomerCharacter(factionId) {
     throw new Error(`No customer sprites are available for faction "${factionId}".`);
   }
   const entry = Phaser.Utils.Array.GetRandom(candidates);
-  // Neutral customers reuse the available roster art, but retain a null game faction.
   return {
     factionId: factionId === undefined
       ? FACTION_IDS[entry.faction] || null
@@ -56,11 +61,8 @@ export function pickRandomCustomerCharacter(factionId) {
   };
 }
 
-// Deterministic (not random, unlike pickRandomCustomerCharacter) so the player's look is
-// stable across every session instead of reshuffling each time the game loads. Temporary:
-// no dedicated player sprite exists yet, so this reuses customer art -- see Player.js,
-// which tints it at render time to stay visually distinct from NPC customers. Tracked in
-// TODO.md for real player-specific art later.
+// Deterministic so the player's look stays stable across sessions. No player sprite exists
+// yet, so this reuses customer art; Player.js tints it to stand apart from NPCs.
 export function pickPlayerCharacterTextures() {
   return characterTextures(ROSTER[0]);
 }
