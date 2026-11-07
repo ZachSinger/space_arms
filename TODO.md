@@ -263,8 +263,9 @@ notice something that needs doing but isn't being done right now.
   - [ ] Restock pricing is a hidden, fixed per-item 40-60% of base (`Market.getSupplyCost`,
         `RESTOCK_QUANTITY` in game.js), not a real Supplier Contract
         pricing model (bible Step 45/48).
-  - [ ] No employee auto-hauling (bible Step 14/15) -- the player has to do every haul by
-        hand for now.
+  - [x] ~~No employee auto-hauling (bible Step 14/15)~~ -- hired employees with the
+        "Load storage" job now carry delivered crates from the Loading Pad into lockers
+        on their own (`Employee.js`, `EmployeeJobs.js`).
   - [x] ~~No Hovercart/backpack capacity model at all~~ -- see the new Hovercart entry
         below. Crates themselves still carry a flat RESTOCK_QUANTITY (5) with no
         carrying-capacity limit when hauled from the Loading Pad -- the Hovercart only
@@ -364,7 +365,14 @@ notice something that needs doing but isn't being done right now.
       market" (current avg market price).
 - [ ] Pre-shift Start Shift onboarding flow (Step 44). **Deferred until the map and core
       loop are close to final**; a tutorial built on the placeholder map would need redoing.
-- [ ] Employees: hiring, Work Register / Stock Shelves tasks (Step 13-19)
+- [x] Employees: hiring, Work Register / Stock Shelves tasks (Step 13-19). Tavi the
+      Stock Clerk can be hired from the Employee tab (250 credits, 50 credits in wages
+      paid automatically at each shift start). Each employee has a reorderable job
+      priority list: run register, stock shelves, load storage. Employees walk the shop,
+      serve the register line, refill assigned shelf slots from lockers via a backpack,
+      haul delivered crates into lockers, and return unplaced stock to lockers when
+      clocking out. Hired staff and job priorities save and load (`Employee.js`,
+      `EmployeeJobs.js`, `EmployeeRenderer.js`, `data/Employees.json`).
 - [x] Fixture purchasing, fixture crates, off-shift placement/crating, and fixture licenses
       (Steps 22/41; fixture catalog in `js/logic/FixtureLayout.js`).
 - [ ] Sell fixtures back for partial credit (after fixture purchasing/crating is built)
@@ -388,7 +396,8 @@ notice something that needs doing but isn't being done right now.
       Inventory + Contracts + Supply + Fixtures + Layout tabs have real content.
       Remaining tabs (Employee, Finances, Handbook) still show a "COMING SOON" placeholder
       until each one's own system exists -- see below.
-- [ ] Employee tab: needs the Employee/Hiring system to exist first (Step 13-19 above)
+- [x] Employee tab: hiring, wages, and per-employee job priority ordering (see the
+      Employees entry above).
 - [x] Fixtures tab: purchase licensed fixtures, place/crate fixtures, and move existing fixtures.
 - [x] Layout tab: safe off-shift fixture placement with autosave status (Step 63)
 - [ ] Finances tab: needs the End Day / itemized receipt flow to exist first (Step 43)
