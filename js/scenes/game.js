@@ -1286,6 +1286,16 @@ export class GameScene extends Phaser.Scene {
         quantityByItemId.set(entry.itemId, (quantityByItemId.get(entry.itemId) || 0) + entry.quantity);
       }
     }
+    // Items with a shelf spot (even a sold-out one): how many are out and how many fit.
+    const shelfByItemId = new Map();
+    for (const shelf of this.fixtures.shelves()) {
+      for (const placement of shelf.placements) {
+        const totals = shelfByItemId.get(placement.itemId) || { quantity: 0, capacity: 0 };
+        totals.quantity += placement.quantity;
+        totals.capacity += shelf.getPlacementCapacity(placement);
+        shelfByItemId.set(placement.itemId, totals);
+      }
+    }
 
     return database
       .getAllItems()
@@ -1293,6 +1303,7 @@ export class GameScene extends Phaser.Scene {
       .map((item) => ({
         item,
         quantity: quantityByItemId.get(item.id) || 0,
+        shelf: shelfByItemId.get(item.id) || null,
         cost: this.restockCost(item),
       }));
   }

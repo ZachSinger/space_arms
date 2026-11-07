@@ -476,6 +476,20 @@ button {
 .supply-card-ordered {
   border-color: var(--color-border-active);
 }
+.supply-card-shelf-ok { border-left: 4px solid #22c55e; }
+.supply-card-shelf-low { border-left: 4px solid #f59e0b; }
+.supply-card-shelf-out { border-left: 4px solid #ef4444; }
+.supply-shelf-badge {
+  align-self: flex-start;
+  margin-bottom: 4px;
+  padding: 1px 6px;
+  font-size: var(--font-size-12);
+  font-weight: bold;
+  color: #000;
+}
+.supply-shelf-ok { background: #22c55e; }
+.supply-shelf-low { background: #f59e0b; }
+.supply-shelf-out { background: #ef4444; }
 .supply-card-row {
   margin-top: 8px;
   display: flex;
