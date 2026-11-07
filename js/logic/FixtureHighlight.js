@@ -102,6 +102,7 @@ export class FixtureHighlight {
 
     // Bake any slide into the real position before a header drag, so the drag doesn't jump.
     this.element.querySelector(".retro-window-header").addEventListener("mousedown", () => {
+      if (!this.uiWindow.draggable) return;
       const rect = this.element.getBoundingClientRect();
       this.element.style.transition = "none";
       this.setOffset({ x: 0, y: 0 });

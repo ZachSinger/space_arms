@@ -34,20 +34,21 @@ function createRoom() {
     room.addWall(door.gx, gy, "wall", true);
   }
   room.openDoorway(door.gx, door.gy, "door");
-  const reservedCells = new Set([
+  const doorwayCells = new Set([
     cellKey(entrance),
     `${entrance.gx},${entrance.gy + 1}`,
     `${door.gx - 1},${door.gy}`,
     cellKey(door),
     `${door.gx + 1},${door.gy}`,
   ]);
+  const reservedCells = new Set(doorwayCells);
   const pad = getZone("loading_pad");
   for (let gy = pad.gridY + 1; gy < pad.gridY + pad.gridH - 1; gy += 1) {
     for (let gx = pad.gridX + 1; gx < pad.gridX + pad.gridW - 1; gx += 1) {
       reservedCells.add(`${gx},${gy}`);
     }
   }
-  return { room, entrance, reservedCells, isWalkable: (gx, gy) => room.isWalkable(gx, gy) };
+  return { room, entrance, reservedCells, doorwayCells, isWalkable: (gx, gy) => room.isWalkable(gx, gy) };
 }
 
 // New games start with no shelves, so most layout tests add one clear of the front door.
@@ -111,6 +112,29 @@ test("placement preserves doors, both sides of the backroom entrance, the loadin
   const result = validateFixtureLayout(moved("fixture_demo_01", 11, 5), options);
   assert.equal(result.valid, false);
   assert.match(result.reason, /player or crate/);
+});
+
+test("a fixture's front squares can never sit in a doorway", () => {
+  const options = createRoom();
+  let checked = 0;
+  for (const doorway of options.doorwayCells) {
+    const [doorGX, doorGY] = doorway.split(",").map(Number);
+    for (let rotation = 0; rotation < 4; rotation += 1) {
+      for (let gy = doorGY - 3; gy <= doorGY + 3; gy += 1) {
+        for (let gx = doorGX - 3; gx <= doorGX + 3; gx += 1) {
+          const placement = { ...TEST_SHELF, gx, gy, rotation };
+          if (!fixtureAccessCells(placement).some((cell) => cellKey(cell) === doorway)) continue;
+          if (fixtureCells(placement).some((cell) => options.reservedCells.has(cellKey(cell)) ||
+            !options.isWalkable(cell.gx, cell.gy))) continue;
+          const layout = initialLayout().map((entry) => entry.id === TEST_SHELF.id ? placement : entry);
+          const result = validateFixtureLayout(layout, options);
+          assert.equal(result.valid, false, `front in doorway ${doorway} from ${gx},${gy} turned ${rotation}`);
+          checked += 1;
+        }
+      }
+    }
+  }
+  assert.ok(checked > 0, "no placement faced into a doorway");
 });
 
 test("shelves can be placed near the front door if they preserve the route to the register", () => {

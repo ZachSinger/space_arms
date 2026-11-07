@@ -32,6 +32,7 @@ const RIGHT_MARGIN_PX = 24;
  */
 export class CheckoutWindow {
   constructor(windowManager) {
+    this.windowManager = windowManager;
     const rightAlignedX =
       window.innerWidth - (window.innerWidth * CHECKOUT_WIDTH_VW) / 100 - RIGHT_MARGIN_PX;
 
@@ -84,6 +85,7 @@ export class CheckoutWindow {
    * @param {KeyboardEvent} event
    */
   handleNumpadKeydown(event) {
+    if (this.windowManager?.isConsumed(event)) return;
     if (this.uiWindow.element.classList.contains("hidden")) return;
     const panel = this.bodyElement.querySelector("#checkout-payment");
     if (!panel || panel.classList.contains("hidden")) return;
@@ -101,6 +103,15 @@ export class CheckoutWindow {
     this.mode = null;
     this.onComplete = null;
     this.uiWindow.close();
+  }
+
+  suspend() {
+    this.isScanning = false;
+    this.uiWindow.close();
+  }
+
+  resume() {
+    if (this.mode === "checkout") this.uiWindow.openWindow();
   }
 
   /**

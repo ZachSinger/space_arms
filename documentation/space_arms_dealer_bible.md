@@ -62,9 +62,14 @@
   * *Scavengers:* Buy low-tier/surplus. Larger Optional lists (impulse buyers). Use M-Scrips.
   * *Mercenaries:* Buy mid/high-tier Firearms, Ammunition, and Armor. Have a larger Primary list, seek matching ammunition for purchased firearms, and refuse duplicate weapon types.
   * *Explorers:* Seek Tools and Survival gear (either can fill their Primary list); may also buy Standard Firearms. Use Vouchers.
+* **Customer Traits:** A customer's personality is built from traits (`js/logic/CustomerTraits.js`). Every customer has their group as a trait (Scavenger, Mercenary, or Explorer) and may also get personality traits:
+  * *Wanderer (30% chance):* Besides the shelves holding what they want, also browses about half of the store's other shelves, walking them in a random order. More shelves means more wandering.
+  * *Impatient (25% chance):* Waits in line 40% less time before leaving angry. The patience bubble scales to their shorter fuse.
+  * Traits aren't shown to the player yet.
 
 ## Part 8: The Manager's Tablet & UI
 * **Step 40: Tablet Tabs:** The central DOM UI features tabs for Inventory, Employee, Contract, Supply, Fixtures, Layout, Finances, and the Handbook.
+* **Tablet at the Register:** Opening the Manager's Tablet hides the checkout window without losing scanned items or payment progress. Arriving customers cannot open checkout over the Tablet. The shop keeps running and waiting customers still lose patience. Closing the Tablet restores checkout for the front customer if the player is still operating the register; if that customer left, checkout starts for the next customer instead.
 * **Step 36 & 46: Feedback & Manuals:** Contextual "God Windows" teach mechanics once. On-canvas feedback uses clean Emote Bubbles. The Employee Manual/Handbook acts as a permanent reference guide.
 * **Step 44: MVP Onboarding:** Minimalist pre-shift tutorial via God Windows teaching the procurement-to-shelf loop (buy rifles, grab from pad, inventory, stock, set price, start shift).
 * **Step 35: Screen Real Estate:** Absolute-positioned HTML windows float over a 100% full-screen canvas viewport.

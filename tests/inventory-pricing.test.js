@@ -256,6 +256,18 @@ test("price buttons update the displayed value and retain keyboard focus", () =>
   assert.equal(h.keyboard.enabled, true);
 });
 
+test("opening the tablet hides checkout and closing it resumes register work", () => {
+  const { scene, tablet } = createHarness();
+  const calls = [];
+  scene.checkoutWindow = { suspend: () => calls.push("suspend") };
+  scene.resumeRegisterCheckout = () => calls.push("resume");
+  tablet.uiWindow.openWindow = () => calls.push("tablet-open");
+  tablet.openWindow();
+  assert.deepEqual(calls, ["tablet-open", "suspend"]);
+  tablet.uiWindow.onClose();
+  assert.deepEqual(calls, ["tablet-open", "suspend", "resume"]);
+});
+
 test("inventory refreshes when customers shop and finish checkout", () => {
   const h = createHarness();
   h.scene.customerCartCount = 2;

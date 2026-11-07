@@ -9,8 +9,17 @@ export class WindowManager {
     this.windows = new Map(); // id -> UIWindow
     this.draggedWindow = null;
     this.currentMaxZ = 100;
+    this.consumedEvents = new WeakSet(); // key events already used to close a window
 
     this.bindGlobalEvents();
+  }
+
+  /**
+   * @param {Event} event
+   * @returns {boolean} true if this event already closed a window
+   */
+  isConsumed(event) {
+    return this.consumedEvents.has(event);
   }
 
   registerWindow(uiWindowInstance) {
@@ -41,7 +50,11 @@ export class WindowManager {
         const activeWinEl = document.querySelector(".retro-window.active");
         if (activeWinEl) {
           const activeWinObj = this.getWindow(activeWinEl.id);
-          if (activeWinObj?.closable) activeWinObj.close();
+          if (activeWinObj?.closable) {
+            // Consumed, so a window revealed by this close doesn't also react to it.
+            this.consumedEvents.add(e);
+            activeWinObj.close();
+          }
         }
       }
     };

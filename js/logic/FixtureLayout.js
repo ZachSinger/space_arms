@@ -171,7 +171,7 @@ export function cellKey({ gx, gy }) {
  * @returns {{ valid: boolean, reason: string, blockedCells?: Set<string>, access?: Map, queueCells?: object[] }}
  */
 export function validateFixtureLayout(placements, {
-  isWalkable, entrance, reservedCells = new Set(), occupiedRectangles = [],
+  isWalkable, entrance, reservedCells = new Set(), doorwayCells = new Set(), occupiedRectangles = [],
   gridSize = getTotalGridSize(), queueSize = 6, requireSalesFloor = true,
 }) {
   const invalid = (reason) => ({ valid: false, reason });
@@ -217,6 +217,9 @@ export function validateFixtureLayout(placements, {
     const isRegister = placement === registers[0];
     const front = fixtureAccessCells(placement);
     const required = isRegister ? [...front, ...fixtureAccessCells(placement, true)] : front;
+    if (required.some((cell) => doorwayCells.has(cellKey(cell)))) {
+      return invalid(`The ${isRegister ? "front and back" : "front"} of ${getFixtureType(placement.type).name} can't face into a doorway.`);
+    }
     if (required.some((cell) => !reachable.has(cellKey(cell)))) {
       return invalid(`Keep the front${isRegister ? " and back" : ""} of ${getFixtureType(placement.type).name} accessible.`);
     }

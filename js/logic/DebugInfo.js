@@ -49,6 +49,7 @@ export function snapshotCustomer(customer, id) {
   return {
     id,
     factionId: customer.factionId,
+    traits: customer.traits,
     state: customer.state,
     sprite: spriteState(customer.sprite),
     destroyed: customer.isDestroyed,

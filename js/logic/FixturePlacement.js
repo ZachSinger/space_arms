@@ -48,7 +48,10 @@ export class FixturePlacement {
         ? scene.moveFixture(id, gx, gy, rotation)
         : scene.placeFixtureFromCrate(this.fixtureCrate, gx, gy, rotation);
       if (placed) {
+        const movedFromLayoutMenu = Boolean(this.original);
         this.cancel();
+        // Back to the shop floor, not the Layout tab the move started from.
+        if (movedFromLayoutMenu) scene.managerTablet.uiWindow.close();
       }
     };
     scene.input.on("pointerdown", this.handlePointerDown);

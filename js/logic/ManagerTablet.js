@@ -71,7 +71,10 @@ export class ManagerTablet {
 
     this.bodyElement = this.uiWindow.element.querySelector(".retro-window-body");
     this.fixtureHighlight = new FixtureHighlight(scene, this.uiWindow);
-    this.uiWindow.onClose = () => this.fixtureHighlight.reset();
+    this.uiWindow.onClose = () => {
+      this.fixtureHighlight.reset();
+      this.scene.resumeRegisterCheckout();
+    };
     this.disableInventoryNavigation = InventoryRenderer.enableListNavigation(
       this.uiWindow.element,
     );
@@ -370,5 +373,6 @@ export class ManagerTablet {
     this.refreshLayoutPanels();
     this.refreshFinancesPanel();
     this.uiWindow.openWindow();
+    this.scene.checkoutWindow.suspend();
   }
 }

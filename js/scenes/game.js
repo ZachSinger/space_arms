@@ -437,6 +437,7 @@ export class GameScene extends Phaser.Scene {
       this.eventBus.clear();
       this.debugInfo.destroy();
       this.fixturePlacement.destroy();
+      this.managerTablet.uiWindow.onClose = null;
       this.managerTablet.disableInventoryNavigation();
       this.managerTablet.fixtureHighlight.destroy();
       this.autosaveTimer.remove();
@@ -622,12 +623,15 @@ export class GameScene extends Phaser.Scene {
     const cellAt = (point) => ({ gx: Math.floor(point.x / TILE_SIZE), gy: Math.floor(point.y / TILE_SIZE) });
     const entrance = cellAt(this.storeDoor);
     const backroomDoor = cellAt(this.backroomDoor);
-    const reservedCells = new Set([
+    const doorwayCells = new Set([
       `${entrance.gx},${entrance.gy}`,
       `${entrance.gx},${entrance.gy + 1}`,
       `${backroomDoor.gx - 1},${backroomDoor.gy}`,
       `${backroomDoor.gx},${backroomDoor.gy}`,
       `${backroomDoor.gx + 1},${backroomDoor.gy}`,
+    ]);
+    const reservedCells = new Set([
+      ...doorwayCells,
       ...getOccupiedCellKeys(
         this.loadingPadSpawnPoint.x,
         this.loadingPadSpawnPoint.y,
@@ -635,7 +639,7 @@ export class GameScene extends Phaser.Scene {
         LOADING_PAD_HEIGHT,
       ),
     ]);
-    return { isWalkable: (gx, gy) => this.room.isWalkable(gx, gy), entrance, reservedCells, occupiedRectangles };
+    return { isWalkable: (gx, gy) => this.room.isWalkable(gx, gy), entrance, reservedCells, doorwayCells, occupiedRectangles };
   }
 
   // Saving needs a quiet store: no shift running and nobody inside.
@@ -1887,6 +1891,14 @@ export class GameScene extends Phaser.Scene {
     if (frontCustomer) this.startCheckout(frontCustomer); // re-renders/refocuses if already open
   }
 
+  resumeRegisterCheckout() {
+    if (!this.operatingRegister || !this.controlMode.allows("interact")) return;
+    const customer = this.registerLine[0];
+    if (!customer) return;
+    if (this.checkoutWindow.mode === "checkout") this.checkoutWindow.resume();
+    else this.startCheckout(customer);
+  }
+
   // Q at the register. The bin belongs to the register, so you have to be standing there.
   openGoBacksBin() {
     if (!this.controlMode.allows("goBacks")) return;
@@ -1933,9 +1945,9 @@ export class GameScene extends Phaser.Scene {
     const wasFront = this.registerLine[0] === customer;
     this.registerLine = this.registerLine.filter((candidate) => candidate !== customer);
     this.layoutRegisterLine();
-    if (!wasFront || !this.operatingRegister || !this.checkoutWindow.uiWindow.isOpen) return;
+    if (!wasFront || !this.operatingRegister) return;
+    this.checkoutWindow.close();
     if (this.registerLine[0]) this.startCheckout(this.registerLine[0]);
-    else this.checkoutWindow.close();
   }
 
   // Measured to the nearest edge of the register graphic, so it works from any side and
@@ -2119,10 +2131,11 @@ export class GameScene extends Phaser.Scene {
       ...buyList.bonusItemIds,
       ...Object.values(buyList.matchingAmmoIdsByFirearm).flat(),
     ]);
-    const shelfStops = shelves
-      .filter((shelf) => shelf.placements.some((placement) => targetIds.has(placement.itemId)))
-      .map((fixture) => ({ fixture, standPoint: fixture.standPoint }));
-    return { ...buyList, shelfStops };
+    const allShelfStops = shelves.map((fixture) => ({ fixture, standPoint: fixture.standPoint }));
+    const shelfStops = allShelfStops.filter(({ fixture }) =>
+      fixture.placements.some((placement) => targetIds.has(placement.itemId)),
+    );
+    return { ...buyList, shelfStops, allShelfStops };
   }
 
   getItem(itemId) {
@@ -2190,6 +2203,7 @@ export class GameScene extends Phaser.Scene {
    * @param {Customer} customer
    */
   startCheckout(customer) {
+    if (!this.controlMode.allows("interact")) return;
     if (!this.isPlayerNearRegister()) return;
     this.beginRegisterSession();
 

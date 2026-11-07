@@ -8,6 +8,7 @@
 import { pickRandomCustomerCharacter } from "./CustomerSprites.js";
 import { createCustomerBuyList } from "./CustomerBuyLists.js";
 import { transferItems } from "./InventoryTransfer.js";
+import { BASE_PATIENCE_MS, getPatienceMs, planShelfRoute, rollCustomerTraits } from "./CustomerTraits.js";
 
 const SPEED = 120; // px/s
 // Bible Step 52: each customer accepts up to this random markup over the market price.
@@ -18,8 +19,9 @@ export const MAX_PRICE_TOLERANCE = 1.3;
 const LEAVING_TIMEOUT_MS = 6000;
 const SEEKING_TIMEOUT_MS = 15000;
 
-// Bible Steps 53/12/51: how long a queued customer waits (ms, paused with the game).
-export const PATIENCE_MS = 40000;
+// Bible Steps 53/12/51: how long a typical queued customer waits (ms, paused with the game).
+// Traits such as Impatient change it per customer (CustomerTraits.js).
+export const PATIENCE_MS = BASE_PATIENCE_MS;
 // Bubble escalation: [minimum remaining fraction, glyph, fill color].
 const PATIENCE_LEVELS = [
   [0.6, "...", 0x22c55e],
@@ -97,6 +99,8 @@ export class Customer {
     const character = pickRandomCustomerCharacter(factionId);
     this.facingTextures = character.facingTextures;
     this.factionId = character.factionId;
+    this.traits = rollCustomerTraits(this.factionId);
+    this.maxPatienceMs = getPatienceMs(this.traits);
     this.shoppingPlan = getShoppingPlan
       ? getShoppingPlan(this.factionId)
       : createCustomerBuyList(this.factionId, [], () => null);
@@ -200,6 +204,13 @@ export class Customer {
     this.shelfStops = this.shoppingPlan.shelfStops.filter(({ fixture }) =>
       fixture.placements.some((placement) => itemIds.includes(placement.itemId)),
     );
+    if (phase === "primary") {
+      this.shelfStops = planShelfRoute(
+        this.shelfStops,
+        this.shoppingPlan.allShelfStops || this.shelfStops,
+        this.traits || [],
+      );
+    }
     this.shelfStopIndex = 0;
     this.visitNextShelfStop();
   }
@@ -358,7 +369,7 @@ export class Customer {
   }
 
   resetPatience() {
-    this.patienceRemainingMs = PATIENCE_MS;
+    this.patienceRemainingMs = this.maxPatienceMs ?? PATIENCE_MS;
   }
 
   /**
@@ -395,7 +406,7 @@ export class Customer {
     this.patienceBubble.setPosition(x, y);
 
     // Only restyle when the level changes.
-    const level = getPatienceLevel(this.patienceRemainingMs / PATIENCE_MS);
+    const level = getPatienceLevel(this.patienceRemainingMs / (this.maxPatienceMs ?? PATIENCE_MS));
     if (level === this.patienceLevel) return;
     this.patienceLevel = level;
     const [, text, color] = PATIENCE_LEVELS[level];

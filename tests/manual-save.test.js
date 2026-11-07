@@ -7,10 +7,12 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { HUDController } from "../js/logic/HUDController.js";
 import { SaveManager } from "../SaveManager.js";
+import { ControlMode } from "../js/logic/ControlMode.js";
 
 let server;
 let cacheDirectory;
 let GameScene;
+let CheckoutWindow;
 const originalPhaser = globalThis.Phaser;
 
 before(async () => {
@@ -37,6 +39,7 @@ before(async () => {
     }],
   });
   ({ GameScene } = await server.ssrLoadModule("/js/scenes/game.js"));
+  ({ CheckoutWindow } = await server.ssrLoadModule("/js/logic/CheckoutWindow.js"));
 });
 
 after(async () => {
@@ -80,6 +83,129 @@ function createHarness(write = async () => true) {
   });
   return { scene, messages, errors, writes, controls };
 }
+
+function createRegisterHarness() {
+  const scene = Object.create(GameScene.prototype);
+  const checkout = Object.create(CheckoutWindow.prototype);
+  const tablet = { id: "manager-tablet", isOpen: false };
+  checkout.uiWindow = {
+    id: "checkout-window",
+    isOpen: false,
+    openWindow() { this.isOpen = true; },
+    close() { this.isOpen = false; },
+  };
+  checkout.mode = null;
+  checkout.openedCarts = [];
+  checkout.openForCustomer = (cart, onComplete) => {
+    checkout.mode = "checkout";
+    checkout.onComplete = onComplete;
+    checkout.openedCarts.push(cart);
+    checkout.uiWindow.openWindow();
+  };
+  Object.assign(scene, {
+    operatingRegister: true,
+    registerLine: [],
+    checkoutWindow: checkout,
+    windowManager: { windows: new Map([
+      [tablet.id, tablet], [checkout.uiWindow.id, checkout.uiWindow],
+    ]) },
+    layoutRegisterLine() {},
+    beginRegisterSession() { this.operatingRegister = true; },
+    playerState: { addToGoBacks() {} },
+    employees: [],
+  });
+  scene.controlMode = new ControlMode(scene);
+  return { scene, checkout, tablet };
+}
+
+test("customers queue without opening the register or freezing patience while the tablet is open", () => {
+  const { scene, checkout, tablet } = createRegisterHarness();
+  tablet.isOpen = true;
+  const first = { cart: [{ itemId: "rifle", price: 100 }] };
+  const second = { cart: [{ itemId: "pistol", price: 50 }] };
+  scene.handleJoinQueue(first);
+  scene.handleJoinQueue(second);
+  assert.deepEqual(scene.registerLine, [first, second]);
+  assert.equal(checkout.uiWindow.isOpen, false);
+  assert.deepEqual(checkout.openedCarts, []);
+  assert.equal(scene.isServingCustomer(first), false);
+
+  tablet.isOpen = false;
+  scene.resumeRegisterCheckout();
+  assert.equal(checkout.uiWindow.isOpen, true);
+  assert.deepEqual(checkout.openedCarts, [first.cart]);
+  assert.equal(scene.isServingCustomer(first), true);
+});
+
+test("hiding checkout for the tablet preserves scanned items and payment progress on return", () => {
+  const { scene, checkout, tablet } = createRegisterHarness();
+  const customer = { cart: [{ itemId: "rifle", price: 100 }] };
+  scene.handleJoinQueue(customer);
+  const onComplete = checkout.onComplete;
+  checkout.paymentBuffer = "10";
+  checkout.isScanning = true;
+  tablet.isOpen = true;
+  checkout.suspend();
+  assert.equal(checkout.uiWindow.isOpen, false);
+  assert.equal(checkout.isScanning, false);
+  assert.equal(scene.isServingCustomer(customer), false);
+  scene.resumeRegisterCheckout();
+  assert.equal(checkout.uiWindow.isOpen, false);
+
+  tablet.isOpen = false;
+  scene.resumeRegisterCheckout();
+  assert.equal(checkout.uiWindow.isOpen, true);
+  assert.equal(checkout.onComplete, onComplete);
+  assert.equal(checkout.paymentBuffer, "10");
+  assert.equal(checkout.openedCarts.length, 1);
+});
+
+test("a customer leaving while the tablet is open cannot leave a stale checkout to resume", () => {
+  const { scene, checkout, tablet } = createRegisterHarness();
+  const first = { cart: [{ itemId: "rifle", price: 100 }] };
+  const second = { cart: [{ itemId: "pistol", price: 50 }] };
+  scene.handleJoinQueue(first);
+  tablet.isOpen = true;
+  checkout.suspend();
+  scene.handleJoinQueue(second);
+  scene.handleAngryLeave(first, first.cart);
+  assert.equal(checkout.mode, null);
+  assert.equal(checkout.onComplete, null);
+  assert.equal(checkout.uiWindow.isOpen, false);
+  assert.deepEqual(scene.registerLine, [second]);
+
+  tablet.isOpen = false;
+  scene.resumeRegisterCheckout();
+  assert.deepEqual(checkout.openedCarts, [first.cart, second.cart]);
+  assert.equal(checkout.uiWindow.isOpen, true);
+});
+
+test("the Escape that closes the tablet does not also clear the amount typed at the register", () => {
+  const checkout = Object.create(CheckoutWindow.prototype);
+  const consumed = { key: "Escape" };
+  const visible = { classList: { contains: () => false } };
+  let cleared = 0;
+  Object.assign(checkout, {
+    windowManager: { isConsumed: (event) => event === consumed },
+    uiWindow: { element: visible },
+    bodyElement: { querySelector: () => visible },
+    clearBuffer: () => { cleared += 1; },
+  });
+  checkout.handleNumpadKeydown(consumed);
+  assert.equal(cleared, 0);
+  checkout.handleNumpadKeydown({ key: "Escape" });
+  assert.equal(cleared, 1);
+});
+
+test("closing the tablet does not start checkout with no customers or after leaving the register", () => {
+  const { scene, checkout } = createRegisterHarness();
+  scene.resumeRegisterCheckout();
+  assert.equal(checkout.uiWindow.isOpen, false);
+  scene.operatingRegister = false;
+  scene.registerLine.push({ cart: [] });
+  scene.resumeRegisterCheckout();
+  assert.equal(checkout.uiWindow.isOpen, false);
+});
 
 test("manual save persists the current shop and confirms unchanged saves without another write", async () => {
   const { scene, writes, messages, controls } = createHarness();

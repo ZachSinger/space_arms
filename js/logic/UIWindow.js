@@ -1,12 +1,12 @@
 // ==========================================
 // FILE: UIWindow.js
 // ==========================================
-// A draggable retro DOM window in the #ui-layer. Open/close/focus order is coordinated by
-// WindowManager, which also forwards drag mouse events.
+// A retro DOM window in the #ui-layer. Open/close/focus order is coordinated by
+// WindowManager, which also forwards drag mouse events for windows created draggable.
 
 export class UIWindow {
   /**
-   * @param {Object} config - { id, title, contentHTML, width, height, x, y, closable, shouldCloseOtherWindows, onClose }
+   * @param {Object} config - { id, title, contentHTML, width, height, x, y, closable, draggable, shouldCloseOtherWindows, onClose }
    * @param {WindowManager} manager
    */
   constructor(config, manager) {
@@ -21,6 +21,8 @@ export class UIWindow {
     this.shouldCloseOtherWindows = config.shouldCloseOtherWindows || false;
     // false hides the X and ignores Escape; code can still call close().
     this.closable = config.closable !== false;
+    // Windows stay where they open unless created with draggable: true.
+    this.draggable = config.draggable === true;
     // Fired only on an actual close (X, Escape, or close()), not on content refresh.
     // May be assigned after construction.
     this.onClose = config.onClose || null;
@@ -40,12 +42,12 @@ export class UIWindow {
   buildHTML(contentHTML) {
     const win = document.createElement("div");
     win.id = this.id;
-    win.className = "retro-window hidden";
+    win.className = `retro-window hidden${this.draggable ? " draggable" : ""}`;
     win.style.width = this.width;
     win.style.height = this.height;
 
     win.innerHTML = `
-            <div class="retro-window-header" tabindex="0" aria-label="Drag ${this.title}">
+            <div class="retro-window-header"${this.draggable ? ` tabindex="0" aria-label="Drag ${this.title}"` : ""}>
                 <span class="retro-window-title">${this.title}</span>
                 ${this.closable ? '<button class="retro-window-close" aria-label="Close">X</button>' : ""}
             </div>
@@ -67,7 +69,7 @@ export class UIWindow {
     );
 
     header.addEventListener("mousedown", (e) => {
-      if (e.target.closest(".retro-window-close")) return;
+      if (!this.draggable || e.target.closest(".retro-window-close")) return;
       this.isDragging = true;
       const rect = this.element.getBoundingClientRect();
       this.dragOffsetX = e.clientX - rect.left;
