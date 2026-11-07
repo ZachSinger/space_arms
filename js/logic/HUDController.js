@@ -2,21 +2,23 @@
 // FILE: HUDController.js
 // ==========================================
 // The persistent DOM HUD: credits, reputation, hovercart capacity, shift clock, and the
-// pause / start-shift / save buttons. Re-renders from PlayerState and ShiftClock updates.
+// pause / start-shift / end-day / save buttons. Re-renders from PlayerState and ShiftClock.
 export class HUDController {
     /**
      * @param {PlayerState} playerState
      * @param {ShiftClock | null} shiftClock - omit to skip the clock and shift buttons
      * @param {() => void} onStartShift
      * @param {() => void} onSave
+     * @param {() => void} onEndDay - opens the Finances tab once a shift is over
      */
-    constructor(playerState, shiftClock, onStartShift, onSave) {
+    constructor(playerState, shiftClock, onStartShift, onSave, onEndDay) {
         this.creditsEl = document.getElementById('hud-credits');
         this.repEl = document.getElementById('hud-rep');
         this.hovercartEl = document.getElementById('hud-hovercart');
         this.shiftTimeEl = document.getElementById('hud-shift-time');
         this.pauseBtn = document.getElementById('hud-pause-btn');
         this.startShiftBtn = document.getElementById('hud-start-shift-btn');
+        this.endDayBtn = document.getElementById('hud-end-day-btn');
         this.saveBtn = document.getElementById('hud-save-btn');
         this.rootEl = document.getElementById('persistent-hud');
         this.rootEl.classList.remove('hidden');
@@ -24,6 +26,8 @@ export class HUDController {
         this.saveBtn.textContent = 'SAVE';
         this.handleSave = () => onSave?.();
         this.saveBtn.addEventListener('click', this.handleSave);
+        this.clock = null;
+        this.awaitingEndDay = false;
 
         playerState.subscribe((state) => this.render(state));
 
@@ -31,8 +35,10 @@ export class HUDController {
             shiftClock.subscribe((clock) => this.renderShiftClock(clock));
             this.handlePause = () => shiftClock.togglePause();
             this.handleStartShift = () => onStartShift?.();
+            this.handleEndDay = () => onEndDay?.();
             this.pauseBtn.addEventListener('click', this.handlePause);
             this.startShiftBtn.addEventListener('click', this.handleStartShift);
+            this.endDayBtn.addEventListener('click', this.handleEndDay);
         }
     }
 
@@ -40,6 +46,7 @@ export class HUDController {
         this.rootEl.classList.add('hidden');
         this.pauseBtn.removeEventListener('click', this.handlePause);
         this.startShiftBtn.removeEventListener('click', this.handleStartShift);
+        this.endDayBtn.removeEventListener('click', this.handleEndDay);
         this.saveBtn.removeEventListener('click', this.handleSave);
     }
 
@@ -66,19 +73,29 @@ export class HUDController {
         // The hovercart has no subscribe() of its own; transfers call
         // playerState.notifyListeners() (see FixtureWindow.transfer) to keep this live.
         this.hovercartEl.innerText = `${state.hovercart.usedCapacity()}/${state.hovercart.capacity}`;
+
+        this.awaitingEndDay = Boolean(state.awaitingEndDay);
+        this.renderShiftButtons();
     }
 
     renderShiftClock(clock) {
+        this.clock = clock;
         this.shiftTimeEl.innerText = clock.started ? clock.getFormattedTime() : 'CLOSED';
         this.shiftTimeEl.classList.toggle('shift-soft-closed', clock.softClosed);
-
-        // Before the first shift, show START SHIFT in place of PAUSE (which does nothing yet).
-        this.startShiftBtn.classList.toggle('hidden', clock.started);
-        this.pauseBtn.classList.toggle('hidden', !clock.started);
 
         this.pauseBtn.innerText = clock.isPaused ? 'RESUME' : 'PAUSE';
         this.pauseBtn.classList.toggle('active', clock.isPaused);
         // After soft close the clock has already stopped, so pausing means nothing.
         this.pauseBtn.disabled = clock.softClosed;
+        this.renderShiftButtons();
+    }
+
+    // One shift button at a time: PAUSE during a shift, END DAY after it, START SHIFT before.
+    renderShiftButtons() {
+        if (!this.clock) return;
+        const started = this.clock.started;
+        this.pauseBtn.classList.toggle('hidden', !started);
+        this.endDayBtn.classList.toggle('hidden', started || !this.awaitingEndDay);
+        this.startShiftBtn.classList.toggle('hidden', started || this.awaitingEndDay);
     }
 }

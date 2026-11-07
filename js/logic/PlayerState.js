@@ -5,6 +5,7 @@
 // hovercart, and the Go-Backs bin. Notifies subscribers on every change.
 import { InventoryPool } from "./InventoryPool.js";
 import { transferItems } from "./InventoryTransfer.js";
+import { DayLedger } from "./DayLedger.js";
 import employeeRoster from "../../data/Employees.json" with { type: "json" };
 
 // What one character can personally carry, in units; smaller than any fixture.
@@ -46,18 +47,72 @@ export class PlayerState {
     this.hiredEmployees = [];
     this.employeeJobPriorities = {};
 
+    // Every credit earned or spent today is itemized here for the End Day receipt.
+    this.dayLedger = new DayLedger({
+      day: 1,
+      openingCredits: this.credits,
+      openingReputation: this.globalReputation,
+    });
+    this.lastDayReceipt = null;
+    // True from the end of a shift until the player clicks End Day.
+    this.awaitingEndDay = false;
+
     this.listeners = [];
   }
 
-  addCredits(amount) {
+  /**
+   * @param {number} amount - whole credits, at least 0
+   * @param {{ category: string, label: string, quantity?: number }} entry - receipt line
+   */
+  addCredits(amount, entry) {
+    if (!Number.isSafeInteger(amount) || amount < 0) {
+      throw new TypeError(`Credits earned must be a whole number, got ${amount}.`);
+    }
+    this.dayLedger.record({ ...entry, amount });
     this.credits += amount;
     this.notifyListeners();
   }
 
-  spendCredits(amount) {
+  /**
+   * @param {number} amount - whole credits, at least 0
+   * @param {{ category: string, label: string, quantity?: number }} entry - receipt line
+   */
+  spendCredits(amount, entry) {
+    if (!Number.isSafeInteger(amount) || amount < 0) {
+      throw new TypeError(`Credits spent must be a whole number, got ${amount}.`);
+    }
+    this.dayLedger.record({ ...entry, amount: -amount });
     this.credits -= amount;
     this.notifyListeners();
     return true;
+  }
+
+  /**
+   * Records how the shift went and waits for the player to end the day.
+   * @param {{ customersServed: number, customersTurnedAway: number }} results
+   */
+  finishShift(results) {
+    this.dayLedger.recordShift(results);
+    this.awaitingEndDay = true;
+    this.notifyListeners();
+  }
+
+  /**
+   * Closes today's receipt and opens a fresh one for the next day.
+   * @param {number} nextDay
+   * @returns {object} the finished day's receipt
+   */
+  endDay(nextDay) {
+    const receipt = this.dayLedger.close(this.credits, this.globalReputation);
+    this.lastDayReceipt = receipt;
+    this.dayLedger = new DayLedger({
+      day: nextDay,
+      openingCredits: this.credits,
+      openingReputation: this.globalReputation,
+    });
+    this.awaitingEndDay = false;
+    this.notifyListeners();
+    return receipt;
   }
 
   /**
@@ -97,6 +152,12 @@ export class PlayerState {
     }
     const jobPriorities = defaultEmployeeJobPriorities(employeeId);
     if (this.hiredEmployees.includes(employeeId) || this.credits < hireCost) return false;
+    const employee = employeeRoster.find((candidate) => candidate.id === employeeId);
+    this.dayLedger.record({
+      category: "hiring",
+      label: `${employee.name} (${employee.role})`,
+      amount: -hireCost,
+    });
     this.credits -= hireCost;
     this.hiredEmployees.push(employeeId);
     this.employeeJobPriorities[employeeId] = jobPriorities;
@@ -200,6 +261,11 @@ export class PlayerState {
         stock: this.hovercart.stock.filter((entry) => entry.quantity > 0).map((entry) => ({ ...entry })),
       },
       goBacks: this.goBacks.stock.filter((entry) => entry.quantity > 0).map((entry) => ({ ...entry })),
+      dayLedger: this.dayLedger.serialize(),
+      lastDayReceipt: this.lastDayReceipt
+        ? { ...this.lastDayReceipt, lines: this.lastDayReceipt.lines.map((line) => ({ ...line })) }
+        : null,
+      awaitingEndDay: this.awaitingEndDay,
     };
   }
 
@@ -212,8 +278,9 @@ export class PlayerState {
   /**
    * Overwrite this state from save data in place, keeping existing subscribers.
    * @param {object} data - output of serialize()
+   * @param {{ day?: number }} [options] - the current day, for saves from before receipts
    */
-  applySave(data) {
+  applySave(data, { day = 1 } = {}) {
     Object.assign(this, {
       credits: data.credits,
       globalReputation: data.globalReputation,
@@ -238,6 +305,18 @@ export class PlayerState {
         capacity: Infinity,
         stock: (data.goBacks || []).map((entry) => ({ ...entry })),
       }),
+      // Saves from before receipts start today's receipt from the loaded balance.
+      dayLedger: data.dayLedger
+        ? DayLedger.fromSave(data.dayLedger)
+        : new DayLedger({
+          day,
+          openingCredits: data.credits,
+          openingReputation: data.globalReputation,
+        }),
+      lastDayReceipt: data.lastDayReceipt
+        ? { ...data.lastDayReceipt, lines: data.lastDayReceipt.lines.map((line) => ({ ...line })) }
+        : null,
+      awaitingEndDay: data.awaitingEndDay ?? false,
     });
     this.notifyListeners();
   }

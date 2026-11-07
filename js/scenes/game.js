@@ -34,7 +34,7 @@ import { GoBacksWindow } from "../logic/GoBacksWindow.js";
 import { TileRoom } from "../logic/TileRoom.js";
 import { TILE_SIZE, getZone, getTotalGridSize, getStoreDoorCell } from "../logic/RoomLayout.js";
 import { ShiftClock, SHIFT_DURATION_MS } from "../logic/ShiftClock.js";
-import { ShiftSummaryWindow } from "../logic/ShiftSummaryWindow.js";
+import { summarizeReceipt } from "../logic/DayLedger.js";
 import { Market } from "../logic/Market.js";
 import { findGridPath } from "../logic/Pathfinder.js";
 import { FixturePlacement } from "../logic/FixturePlacement.js";
@@ -159,15 +159,12 @@ export class GameScene extends Phaser.Scene {
       this.shiftClock,
       () => this.startNextShift(),
       () => this.saveManually(),
+      () => this.openFinances(),
     );
 
     this.windowManager = new WindowManager();
-    this.shiftSummaryWindow = new ShiftSummaryWindow(this.windowManager, () =>
-      this.startNextShift(),
-    );
     this.shiftEnded = false; // guards endShift() from firing more than once per shift
     this.customersServedThisShift = 0;
-    this.employeeWagesPaidThisShift = 0;
     this.creditsAtShiftStart = this.playerState.credits;
     this.reputationAtShiftStart = this.playerState.globalReputation;
 
@@ -389,8 +386,8 @@ export class GameScene extends Phaser.Scene {
         itemIds,
       });
     });
-    this.eventBus.on(GAME_EVENTS.CUSTOMER_SALE_COMPLETED, ({ customer, total }) => {
-      this.playerState.addCredits(total);
+    this.eventBus.on(GAME_EVENTS.CUSTOMER_SALE_COMPLETED, ({ customer }) => {
+      this.recordSale(customer.cart);
       this.playerState.addReputation(1, customer.factionId);
       this.customersServedThisShift += 1;
       this.debugInfo?.recordCustomer("customer-sale-completed", customer);
@@ -680,12 +677,20 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
-  getEmployeeWages() {
-    return this.playerState.hiredEmployees.reduce((total, employeeId) => {
+  // Wages are paid up front, even into the red (bible Step 32), one receipt line each.
+  payEmployeeWages() {
+    let total = 0;
+    for (const employeeId of this.playerState.hiredEmployees) {
       const employee = employeeRoster.find((candidate) => candidate.id === employeeId);
       if (!employee) throw new Error(`Unknown hired employee: ${employeeId}`);
-      return total + employee.wagePerShift;
-    }, 0);
+      if (employee.wagePerShift <= 0) continue;
+      this.playerState.spendCredits(employee.wagePerShift, {
+        category: "wages",
+        label: `${employee.name} (${employee.role})`,
+      });
+      total += employee.wagePerShift;
+    }
+    return total;
   }
 
   spawnHiredEmployees() {
@@ -870,7 +875,7 @@ export class GameScene extends Phaser.Scene {
       );
       this.carriedCrate.pickUp(this.player.sprite);
     }
-    this.playerState.applySave(data.playerState);
+    this.playerState.applySave(data.playerState, { day: this.market.day });
     this.moveShelfOverflowToGoBacks();
     this.refreshShelfStockDisplays();
     this.recalculateActiveFactions();
@@ -1312,7 +1317,19 @@ export class GameScene extends Phaser.Scene {
     if (!summary.canPlace) return false;
 
     const spots = this.getLoadingPadSpawnPositions();
-    this.playerState.spendCredits(summary.total);
+    for (const [itemId, count] of order) {
+      if (count <= 0) continue;
+      const item = database.getItem(itemId);
+      this.playerState.spendCredits(this.restockCost(item) * count, {
+        category: "stock_orders",
+        label: item.name,
+        quantity: count,
+      });
+    }
+    this.playerState.spendCredits(summary.deliveryFee, {
+      category: "delivery_fees",
+      label: "Delivery fee",
+    });
     for (const [itemId, count] of order) {
       // A first-time item starts at today's market price, then stays put until repriced.
       if (count > 0 && this.playerState.storePrices[itemId] === undefined) {
@@ -1365,7 +1382,7 @@ export class GameScene extends Phaser.Scene {
     const spawn = this.getLoadingPadSpawnPosition();
     if (!spawn) return false;
 
-    this.playerState.spendCredits(spec.price);
+    this.playerState.spendCredits(spec.price, { category: "fixtures", label: spec.name });
     const crate = new Crate(this, null, 1, spawn.x, spawn.y, { kind: "fixture", typeId });
     crate.setPaused(this.crateMotionPaused);
     crate.lockToPad();
@@ -2259,8 +2276,8 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // The shift ends quietly once the doors are locked and the last customer is gone, then
-  // shows the shift summary.
+  // The shift ends quietly once the doors are locked and the last customer is gone. The
+  // day stays open (prices, calendar) until the player clicks End Day in Finances.
   endShift() {
     this.eventBus.emit(GAME_EVENTS.SHIFT_ENDED, {
       served: this.customersServedThisShift,
@@ -2273,21 +2290,75 @@ export class GameScene extends Phaser.Scene {
     this.shiftClock.started = false;
     this.shiftClock.isPaused = true;
     this.shiftClock.notifyListeners();
-    // Prices only move at end of day, so repricing during a shift is stress-free.
-    this.market.advanceDay();
-    this.playerState.notifyListeners();
-    this.shiftSummaryWindow.show({
-      creditsEarned: this.playerState.credits - this.creditsAtShiftStart,
-      reputationGained: this.playerState.globalReputation - this.reputationAtShiftStart,
+    this.playerState.finishShift({
       customersServed: this.customersServedThisShift,
       customersTurnedAway: this.playerState.customersTurnedAway,
-      employeeWagesPaid: this.employeeWagesPaidThisShift,
     });
+    this.showGameMessage("Shift over. Click END DAY at the top to see today's receipt.", "#10b981");
+  }
+
+  /**
+   * Adds a sold cart to today's receipt, one line per item.
+   * @param {{ itemId: string, price: number }[]} cart
+   */
+  recordSale(cart) {
+    const sold = new Map();
+    for (const { itemId, price } of cart) {
+      const line = sold.get(itemId) ?? { amount: 0, quantity: 0 };
+      line.amount += price;
+      line.quantity += 1;
+      sold.set(itemId, line);
+    }
+    for (const [itemId, { amount, quantity }] of sold) {
+      this.playerState.addCredits(amount, {
+        category: "sales",
+        label: database.getItem(itemId).name,
+        quantity,
+      });
+    }
+  }
+
+  openFinances() {
+    this.managerTablet.openWindow();
+    if (this.managerTablet.uiWindow.isOpen) this.managerTablet.switchTab("finances");
+  }
+
+  canEndDay() {
+    return this.playerState.awaitingEndDay && !this.startingShift &&
+      !this.fixturePlacement.active && this.canSaveOffShift();
+  }
+
+  // Closes today's receipt, moves the calendar on, and changes market prices (bible Steps 43
+  // and 52). Prices only move here, so repricing between shifts is stress-free.
+  endDay() {
+    if (!this.canEndDay()) return false;
+    this.market.advanceDay();
+    this.playerState.endDay(this.market.day);
+    this.showGameMessage(`Day ${this.market.day} begins. Market prices have changed.`, "#10b981");
+    return true;
+  }
+
+  // Today's running receipt and the last finished one, for the Finances tab.
+  getFinancesView() {
+    const state = this.playerState;
+    const last = state.lastDayReceipt;
+    return {
+      day: this.market.day,
+      shiftRunning: this.shiftClock.started && !this.shiftEnded,
+      awaitingEndDay: state.awaitingEndDay,
+      canEndDay: this.canEndDay(),
+      today: summarizeReceipt(state.dayLedger.serialize(), state.credits, state.globalReputation),
+      lastDay: last ? summarizeReceipt(last, last.closingCredits, last.closingReputation) : null,
+    };
   }
 
   // Saves a checkpoint first; if that save fails, the shift doesn't start.
   async startNextShift() {
     if (this.startingShift || this.loadFailed || !this.canSaveOffShift()) return;
+    if (this.playerState.awaitingEndDay) {
+      this.showShopMessage("End the day first: click END DAY at the top.");
+      return;
+    }
     if (this.fixturePlacement.active) {
       this.showShopMessage("Finish or cancel fixture placement before starting the shift.");
       return;
@@ -2304,13 +2375,9 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.prepareCustomerSchedule();
-    this.employeeWagesPaidThisShift = this.getEmployeeWages();
-    if (this.employeeWagesPaidThisShift > 0) {
-      this.playerState.spendCredits(this.employeeWagesPaidThisShift);
-      this.showGameMessage(
-        `Employee wages paid: ${this.employeeWagesPaidThisShift} credits.`,
-        "#f59e0b",
-      );
+    const wages = this.payEmployeeWages();
+    if (wages > 0) {
+      this.showGameMessage(`Employee wages paid: ${wages} credits.`, "#f59e0b");
     }
     this.creditsAtShiftStart = this.playerState.credits;
     this.reputationAtShiftStart = this.playerState.globalReputation;
@@ -2318,7 +2385,6 @@ export class GameScene extends Phaser.Scene {
     this.shiftEnded = false;
     this.startingShift = false;
     this.spawnHiredEmployees();
-    this.shiftSummaryWindow.uiWindow.close();
     this.setSaveStatus("Checkpoint saved. Autosaving resumes after this shift.");
     this.customersServedThisShift = 0;
     this.playerState.customersTurnedAway = 0;

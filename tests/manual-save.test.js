@@ -147,7 +147,7 @@ test("HUD Save button is wired, reflects availability, and removes its handler o
   const elements = new Map();
   for (const id of [
     "hud-credits", "hud-rep", "hud-hovercart", "hud-shift-time", "hud-pause-btn",
-    "hud-start-shift-btn", "hud-save-btn", "persistent-hud",
+    "hud-start-shift-btn", "hud-end-day-btn", "hud-save-btn", "persistent-hud",
   ]) {
     elements.set(id, {
       listeners: new Map(),

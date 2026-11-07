@@ -209,6 +209,17 @@ function createHarness() {
     getLoadingPadSpawnPositions: () => [],
     canRearrangeFixtures: () => false,
     getFixturePurchaseOptions: () => [],
+    getFinancesView: () => ({
+      day: 1,
+      shiftRunning: false,
+      awaitingEndDay: false,
+      canEndDay: false,
+      today: {
+        day: 1, openingCredits: 1500, closingCredits: 1500, reputationChange: 0,
+        earned: [], spent: [], totalEarned: 0, totalSpent: 0, shift: null,
+      },
+      lastDay: null,
+    }),
     fixtures: { all: () => [], displayName: () => "" },
   };
   const tablet = new ManagerTablet({}, playerState, scene);

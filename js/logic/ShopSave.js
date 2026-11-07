@@ -9,6 +9,7 @@ import { EMPLOYEE_JOB_IDS } from "./EmployeeJobs.js";
 import { TILE_SIZE, ZONES, getTotalGridSize } from "./RoomLayout.js";
 import { MIN_BASE_RATIO, MAX_BASE_RATIO, MIN_SUPPLY_RATIO, MAX_SUPPLY_RATIO } from "./Market.js";
 import { THROW_ACCELERATION_MS } from "./Crate.js";
+import { isValidLedgerData } from "./DayLedger.js";
 
 // Older saves used "slot depth 12 ÷ stackSize". Stacks valid under that rule still load;
 // trimShelfOverflow() then moves anything over the current cap to the Go-Backs bin.
@@ -100,6 +101,18 @@ export function validateShopSave(data, database) {
     `invalid market price for ${item.id}.`);
     requireSave(Number.isFinite(ratio) && ratio >= MIN_SUPPLY_RATIO && ratio <= MAX_SUPPLY_RATIO,
       `invalid supplier rate for ${item.id}.`);
+  }
+  // Receipts are optional so saves from before End Day existed still load.
+  if (player.dayLedger !== undefined) {
+    requireSave(isValidLedgerData(player.dayLedger) && player.dayLedger.day === market.day,
+      "invalid daily receipt.");
+  }
+  if (player.lastDayReceipt !== undefined && player.lastDayReceipt !== null) {
+    requireSave(isValidLedgerData(player.lastDayReceipt, { closed: true }) &&
+      player.lastDayReceipt.day < market.day, "invalid previous day's receipt.");
+  }
+  if (player.awaitingEndDay !== undefined) {
+    requireSave(typeof player.awaitingEndDay === "boolean", "invalid end-of-day state.");
   }
 
   const fixtureIds = new Set();

@@ -10,6 +10,7 @@ import { ContractRenderer } from "./ContractRenderer.js";
 import { SupplyRenderer } from "./SupplyRenderer.js";
 import { LayoutRenderer } from "./LayoutRenderer.js";
 import { EmployeeRenderer } from "./EmployeeRenderer.js";
+import { FinancesRenderer } from "./FinancesRenderer.js";
 import { FixtureHighlight } from "./FixtureHighlight.js";
 import { playErrorBuzz } from "./Sfx.js";
 import { GAME_EVENTS } from "./EventBus.js";
@@ -89,6 +90,9 @@ export class ManagerTablet {
       if (hireEmployeeButton) {
         this.scene.hireEmployee(hireEmployeeButton.dataset.hireEmployeeId);
       }
+
+      if (event.target.closest("[data-end-day]")) this.scene.endDay();
+      if (event.target.closest("[data-finances-start-shift]")) this.scene.startNextShift();
 
       const priorityButton = event.target.closest("[data-employee-priority-id]");
       if (priorityButton) {
@@ -170,6 +174,7 @@ export class ManagerTablet {
       this.refreshContractsPanel();
       this.refreshSupplyPanel();
       this.refreshLayoutPanels();
+      this.refreshFinancesPanel();
     });
     this.scene.eventBus.on(GAME_EVENTS.INVENTORY_TRANSFERRED, ({ destination }) => {
       if (destination === "customer-cart") this.refreshInventoryPanel();
@@ -202,6 +207,7 @@ export class ManagerTablet {
     if (tabId === "supply") return SupplyRenderer.generateHTML(this.scene, this.supplyOrder);
     if (tabId === "fixtures") return LayoutRenderer.generateHTML(this.scene, true);
     if (tabId === "layout") return LayoutRenderer.generateHTML(this.scene);
+    if (tabId === "finances") return FinancesRenderer.generateHTML(this.scene.getFinancesView());
     return `<div class="tablet-placeholder">COMING SOON</div>`;
   }
 
@@ -212,6 +218,7 @@ export class ManagerTablet {
     if (tabId === "employee") this.refreshEmployeePanel();
     if (tabId === "supply") this.refreshSupplyPanel();
     if (tabId === "layout" || tabId === "fixtures") this.refreshLayoutPanels();
+    if (tabId === "finances") this.refreshFinancesPanel();
     this.bodyElement.querySelectorAll(".tablet-tab-btn").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.tab === tabId);
     });
@@ -261,6 +268,11 @@ export class ManagerTablet {
   refreshEmployeePanel() {
     const panel = this.bodyElement.querySelector('[data-tab-panel="employee"]');
     if (panel) panel.innerHTML = this.renderPanelContent("employee");
+  }
+
+  refreshFinancesPanel() {
+    const panel = this.bodyElement.querySelector('[data-tab-panel="finances"]');
+    if (panel) panel.innerHTML = this.renderPanelContent("finances");
   }
 
   refreshSupplyPanel() {
@@ -313,7 +325,7 @@ export class ManagerTablet {
     if (!license.isUnlocked(this.playerState)) return; // reputation requirement not met
     if (!license.canAfford(this.playerState)) return; // can't afford it
 
-    this.playerState.spendCredits(license.baseCost);
+    this.playerState.spendCredits(license.baseCost, { category: "licenses", label: license.name });
     this.playerState.signLicense(licenseId);
     this.scene.recalculateActiveFactions();
     // The panel re-renders via the constructor's playerState subscription.
@@ -356,6 +368,7 @@ export class ManagerTablet {
     this.refreshInventoryPanel();
     this.refreshSupplyPanel(); // loading pad spots free up without any playerState change
     this.refreshLayoutPanels();
+    this.refreshFinancesPanel();
     this.uiWindow.openWindow();
   }
 }

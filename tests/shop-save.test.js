@@ -57,6 +57,27 @@ test("shop saves preserve layout, all inventory locations, prices, factions, and
   assert.deepEqual(applied, data);
 });
 
+test("saved receipts must belong to the saved day", () => {
+  const data = snapshot();
+  const day = data.market.day;
+  const ledger = (overrides) => ({ day, openingCredits: 1500, openingReputation: 2, lines: [], shift: null,
+    closingCredits: null, closingReputation: null, ...overrides });
+  data.playerState.dayLedger = ledger();
+  data.playerState.lastDayReceipt = null;
+  data.playerState.awaitingEndDay = true;
+  assert.deepEqual(validateShopSave(structuredClone(data), database).playerState.dayLedger, ledger());
+  for (const [field, value, message] of [
+    ["dayLedger", ledger({ day: day + 1 }), /invalid daily receipt/],
+    ["dayLedger", ledger({ lines: [{ category: "bribes", label: "x", amount: 1, quantity: 1 }] }), /invalid daily receipt/],
+    ["lastDayReceipt", ledger({ closingCredits: 10, closingReputation: 0 }), /previous day's receipt/],
+    ["awaitingEndDay", "yes", /end-of-day state/],
+  ]) {
+    const invalid = structuredClone(data);
+    invalid.playerState[field] = value;
+    assert.throws(() => validateShopSave(invalid, database), message);
+  }
+});
+
 test("saved launch acceleration is preserved, and malformed launch states are rejected", () => {
   const data = snapshot();
   data.crates[0].launch = { remainingMs: 80, accelerationX: 1500, accelerationY: 0, maxSpeed: 400 };

@@ -394,12 +394,18 @@ notice something that needs doing but isn't being done right now.
       with the customer's faction. Rewards and penalties apply independently, when each happens.
 - [x] Manager's Tablet UI: unified tabbed window shell built (`js/logic/ManagerTablet.js`),
       Inventory + Contracts + Supply + Fixtures + Layout tabs have real content.
-      Remaining tabs (Employee, Finances, Handbook) still show a "COMING SOON" placeholder
+      Remaining tab (Handbook) still shows a "COMING SOON" placeholder
       until each one's own system exists -- see below.
 - [x] Employee tab: hiring, wages, and per-employee job priority ordering (see the
       Employees entry above).
 - [x] Fixtures tab: purchase licensed fixtures, place/crate fixtures, and move existing fixtures.
 - [x] Layout tab: safe off-shift fixture placement with autosave status (Step 63)
-- [ ] Finances tab: needs the End Day / itemized receipt flow to exist first (Step 43)
+- [x] Finances tab + End Day (Step 43): when a shift ends, a blinking END DAY button replaces
+      START SHIFT in the top bar and opens the Finances tab. The tab shows today's itemized
+      receipt (every sale, stock order, delivery fee, fixture, license, hire, and wage) and
+      the previous day's final receipt. END DAY moves to the next day and changes market prices;
+      the next shift can't start until the day is ended. Wages are still paid at shift start
+      (Step 32), not at End Day. Money changes must go through `PlayerState.addCredits` /
+      `spendCredits` with a receipt entry (`js/logic/DayLedger.js`).
 - [ ] Handbook tab: needs actual handbook/reference content written (Step 36)
 - [x] `npm run package` builds a stand-alone Windows exe (`release\win-unpacked`); verified title, Continue into the shop, and all item images load without the dev server
