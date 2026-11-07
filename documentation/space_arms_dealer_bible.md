@@ -65,8 +65,9 @@
 * **Customer Traits:** A customer's personality is built from traits (`js/logic/CustomerTraits.js`). Every customer has their group as a trait (Scavenger, Mercenary, or Explorer) and may also get personality traits:
   * *Wanderer (30% chance):* Besides the shelves holding what they want, also browses about half of the store's other shelves, walking them in a random order. More shelves means more wandering.
   * *Impatient (25% chance):* Waits in line 40% less time before leaving angry. The patience bubble scales to their shorter fuse.
+  * *Browser (30% chance, only in a well-stocked store):* Can only appear once the store has at least 4 shelves or at least 8 different items on its shelves. Adds 2 extra items to their might-also-buy list, picked from anything on the shelves, even outside their group's usual taste. They still won't pay above their price limit.
   * Traits aren't shown to the player. They exist to mix up encounters; new traits get added to the pool as we think of them.
-  * Some traits may have appearance conditions, e.g. a future *Browser* trait that only shows up once the store has enough shelves (or enough variety) and buys extra items.
+  * Traits can have appearance conditions (like Browser's) so they only join the pool once the store meets them.
 
 ## Part 8: The Manager's Tablet & UI
 * **Step 40: Tablet Tabs:** The central DOM UI features tabs for Inventory, Employee, Contract, Supply, Fixtures, Layout, Finances, and the Handbook.

@@ -50,6 +50,7 @@ export class Customer {
   constructor({
     scene,
     getShoppingPlan,
+    getStoreConditions,
     registerPoint,
     exitPoint,
     onReserveShelfSlot,
@@ -99,10 +100,10 @@ export class Customer {
     const character = pickRandomCustomerCharacter(factionId);
     this.facingTextures = character.facingTextures;
     this.factionId = character.factionId;
-    this.traits = rollCustomerTraits(this.factionId);
+    this.traits = rollCustomerTraits(this.factionId, Math.random, getStoreConditions?.());
     this.maxPatienceMs = getPatienceMs(this.traits);
     this.shoppingPlan = getShoppingPlan
-      ? getShoppingPlan(this.factionId)
+      ? getShoppingPlan(this.factionId, this.traits)
       : createCustomerBuyList(this.factionId, [], () => null);
     this.shelfStops = this.shoppingPlan.shelfStops || [];
     this.shelfStopIndex = 0;

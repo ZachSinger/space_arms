@@ -18,6 +18,7 @@ import { ShelfFixture } from "../logic/ShelfFixture.js";
 import { Customer } from "../logic/Customer.js";
 import { Employee } from "../logic/Employee.js";
 import { createCustomerBuyList } from "../logic/CustomerBuyLists.js";
+import { addTraitBonusItems } from "../logic/CustomerTraits.js";
 import {
   createCustomerArrivalSchedule,
   growCustomerArrivalSchedule,
@@ -2092,7 +2093,8 @@ export class GameScene extends Phaser.Scene {
     const customer = new Customer({
       scene: this,
       factionId,
-      getShoppingPlan: (factionId) => this.createCustomerShoppingPlan(factionId),
+      getShoppingPlan: (factionId, traits) => this.createCustomerShoppingPlan(factionId, traits),
+      getStoreConditions: () => this.getCustomerTraitConditions(),
       registerPoint: this.registerQueueAnchor,
       exitPoint: this.exitPoint,
       onReserveShelfSlot: (shelf, arrivingCustomer) =>
@@ -2123,11 +2125,21 @@ export class GameScene extends Phaser.Scene {
     this.debugInfo?.recordCustomer("customer-entered", customer);
   }
 
+  // What trait appearance conditions (CustomerTraits.js) can check about the store.
+  getCustomerTraitConditions() {
+    const shelves = this.fixtures.shelves();
+    const itemIds = new Set(shelves.flatMap((shelf) =>
+      shelf.placements.map((placement) => placement.itemId),
+    ));
+    return { shelfCount: shelves.length, itemVariety: itemIds.size };
+  }
+
   /**
    * A buy list from what's on the shelves, plus the shelves worth visiting for it.
    * @param {string | null} factionId
+   * @param {string[]} [traits]
    */
-  createCustomerShoppingPlan(factionId) {
+  createCustomerShoppingPlan(factionId, traits = []) {
     const shelves = this.fixtures.shelves();
     const shelfItemIds = shelves.flatMap((shelf) =>
       shelf.placements.map((placement) => placement.itemId),
@@ -2137,6 +2149,7 @@ export class GameScene extends Phaser.Scene {
       shelfItemIds,
       (itemId) => database.getItem(itemId),
     );
+    buyList.bonusItemIds = addTraitBonusItems(buyList, shelfItemIds, traits);
     const targetIds = new Set([
       ...buyList.primaryItemIds,
       ...buyList.bonusItemIds,
