@@ -29,7 +29,7 @@
 * **Step 62: Empty Crates:** Utilizes the "Abstracted Box" approach for the MVP—the moment the last item is removed from a crate into inventory, the empty crate instantly despawns.
 * **Step 42: Backroom Storage:** Item crates can be dumped on the floor (clogging pathing) or placed on Storage Fixtures, which share the inventory array logic for easy drag-and-drop management. Fixture crates cannot be stocked in Storage Fixtures.
 * **Step 29: Unified Market:** All unlocked items populate in a single, unified DOM catalog.
-* **Step 45: Supplier Discovery (MVP):** All potential supplier contracts, including fixture licenses, are fully visible from Day 1 in the Tablet, but remain un-interactable until specific reputation thresholds are met. The starting fixture license covers the compact starter shelf, universal shelf, locker, and register types.
+* **Step 45: Supplier Discovery (MVP):** All potential supplier contracts, including fixture licenses, are fully visible from Day 1 in the Tablet, but remain un-interactable until specific reputation thresholds are met. The starting fixture license covers the compact shelf, locker, and register types; the large universal shelf needs the Expanded Fixture Supply contract. A new game starts with lockers and a register but no shelves, so the first shelf is bought from the Fixtures tab.
 * **Step 48: Contract-Driven Demand:** Customers only expect (and penalize you for missing) items from Supplier Contracts you have *actively signed and paid for*.
 
 ## Part 4: The Checkout Flow (Updated)
@@ -48,8 +48,8 @@
 ## Part 6: Employees & Automation
 * **Step 19: The Hiring Pool:** Static roster of hand-crafted aliens with fixed S-F stat grades (Stock Speed, Checkout Speed, Attitude). Training costs exponentially more per rank and renders the employee unavailable for one full shift.
 * **Step 17 & 18: Scheduling & Clocking Out:** Employees are budgeted for 3 to 12-hour shifts. When their hours end, they politely finish their immediate micro-interaction before pathing off the canvas.
-* **Step 13 & 50: Task Priorities (MVP):** Employees evaluate a top-to-bottom customizable task list. For the MVP, this is strictly limited to two roles: *Work Register* and *Stock Shelves*.
-* **Step 14 & 15: Employee Logistics:** Hired staff utilize their own independent inventory capacity ("backpack"). They automatically cross-reference empty shelf slots with backroom stock and haul crates on the canvas.
+* **Step 13 & 50: Task Priorities (MVP):** Employees evaluate a top-to-bottom customizable task list: *Work Register*, *Stock Shelves*, and *Load Storage*. Every employee can do all three jobs; their saved priority order decides which available job they take first.
+* **Step 14 & 15: Employee Logistics:** Hired staff utilize their own independent inventory capacity ("backpack") to move locker stock to shelf slots. For *Load Storage*, they move delivered item crates from the Loading Pad into lockers.
 * **Step 16: Empty Stock Alerts:** If backroom stock is missing, the AI skips the shelf and pings the UI with an "Out of Stock" notification. They do not auto-purchase goods.
 * **Step 65, 66 & 67: Break Room & Behavior:** Employees walk in like customers at shift start. When all tasks are fulfilled, they vanish into a blind "break room" door on the wall. The moment a qualifying task opens, they react immediately, stepping out to resume work.
 

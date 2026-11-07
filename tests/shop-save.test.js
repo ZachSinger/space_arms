@@ -16,12 +16,16 @@ function snapshot() {
     playerState: {
       credits: 1500, globalReputation: 2, customersTurnedAway: 0,
       factionReputation: { scavengers: 0, mercenaries: -1, explorers: 3 },
+      hiredEmployees: [],
       activeLicenses: ["lic_corp_aulin"], storePrices: { wpn_rif_01: 123 },
       hovercart: { capacity: 10, stock: [{ itemId: "amo_01", quantity: 2 }] },
       goBacks: [{ itemId: "wpn_rif_01", quantity: 40 }],
     },
     market: new Market(database.getAllItems(), () => 0.5).serialize(),
-    fixtures: STARTING_FIXTURES.map(({ id, type, gx, gy }) => ({
+    fixtures: [
+      { id: "fixture_demo_01", type: "shelf_starter_2x1", gx: 11, gy: 5 },
+      ...STARTING_FIXTURES,
+    ].map(({ id, type, gx, gy }) => ({
       id, type, gx, gy,
       ...(getFixtureType(type).kind === "shelf" ? { placements: [{
         itemId: "wpn_rif_01", gx: 0, gy: 0, w: 2, h: 1, rotated: false, quantity: 3,
@@ -119,6 +123,12 @@ test("invalid saved inventory and economy are rejected before restoration", () =
     (data) => { data.playerState.goBacks[0].itemId = "unknown"; },
     (data) => { data.playerState.goBacks[0].quantity = 0; },
     (data) => { data.playerState.goBacks = {}; },
+    (data) => { data.playerState.hiredEmployees = ["unknown_employee"]; },
+    (data) => { data.playerState.hiredEmployees = ["tavi_stock_clerk", "tavi_stock_clerk"]; },
+    (data) => {
+      data.playerState.hiredEmployees = ["tavi_stock_clerk"];
+      data.playerState.employeeJobPriorities = { tavi_stock_clerk: ["register", "register", "load_storage"] };
+    },
   ];
   for (const corrupt of corruptions) {
     const data = snapshot();
@@ -133,6 +143,13 @@ test("saves from before the Go-Backs bin existed still load", () => {
   assert.doesNotThrow(() => validateShopSave(data, database));
 });
 
+test("saves from before employees existed still load", () => {
+  const data = snapshot();
+  delete data.playerState.hiredEmployees;
+  delete data.playerState.employeeJobPriorities;
+  assert.doesNotThrow(() => validateShopSave(data, database));
+});
+
 test("saves from before fixture types existed load with types filled in", () => {
   const legacy = snapshot();
   legacy.fixtures[0].type = "shelf_universal";
@@ -141,6 +158,18 @@ test("saves from before fixture types existed load with types filled in", () => 
   assert.deepEqual(migrated.fixtures, snapshot().fixtures.map((fixture, index) =>
     index === 0 ? { ...fixture, type: "shelf_universal" } : fixture));
   assert.equal(legacy.fixtures[0].type, undefined);
+});
+
+test("fixture rotation is saved, and older saves without it still load", () => {
+  const data = snapshot();
+  data.fixtures[0].rotation = 2;
+  data.fixtures.at(-1).rotation = 1;
+  assert.deepEqual(validateShopSave(data, database), data);
+
+  for (const rotation of [4, -1, 1.5, "1"]) {
+    data.fixtures[0].rotation = rotation;
+    assert.throws(() => validateShopSave(data, database), /invalid fixture position/);
+  }
 });
 
 test("fixture crates can be saved on the floor or carried", () => {

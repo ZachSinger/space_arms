@@ -20,7 +20,7 @@ This is a critique, not a to-do list. The fixes and their priority are in
 | 2 | `GameScene` is a god object | 🔴 |
 | 3 | Customer logic can't be reused for employees | 🔴 |
 | 4 | Modules reach directly into the scene | 🟠 |
-| 5 | No event system; side effects are wired inline | 🟠 |
+| 5 | Event bus is only wired for a few events | 🟠 |
 | 6 | Input modes are scattered boolean flags | 🟠 |
 | 7 | Inventory locations don't share one model | 🟠 |
 | 8 | Fixture behaviour uses type checks spread across files | 🟠 |
@@ -107,11 +107,12 @@ At least 10 logic modules take `scene` and use its internals:
   decoupling in spirit, even though it holds technically (the UI never draws on the
   canvas).
 
-## 🟠 5. No event system; side effects are wired inline
+## 🟠 5. Event bus is only wired for a few events
 
-- The bible (Step 3) specifies an Event Bus. None exists. There are no
-  application-level `.emit()` calls. Communication is all direct calls, constructor
-  callbacks, and `PlayerState.subscribe`.
+- The bible (Step 3) specifies an Event Bus. `EventBus.js` now publishes sales, crate hits,
+  angry exits, missing primary stock, crate delivery results, shift start/end, player crate
+  actions, fixture opening, register entry/exit, and inventory transfers. Major consequences are handled by
+  listeners, while other communication still uses direct calls and subscriptions.
 - **Consequence:** a single game moment (a sale, an angry customer, a crate hitting
   someone) calls audio, text feedback, reputation, debug logging, and stats directly in
   sequence.
@@ -119,28 +120,25 @@ At least 10 logic modules take `scene` and use its internals:
   crossfades, finances, achievements, employee reactions. Each would mean editing the
   core logic again.
 
-## 🟠 6. Input modes are scattered boolean flags
+## 🟠 6. Input modes are partly centralized
 
-- **What can I do right now?** is answered by re-checking `carriedCrate`,
-  `fixturePlacement.active`, `operatingRegister`, `startingShift`, `loadFailed`, the
-  paused clock, window state, and `player.inputEnabled`.
-- **The same gate conditions are copied across interaction methods.**
-- **Several recent bugs fit this pattern:** an action allowed or blocked in the wrong
-  mode, or a hint showing when it shouldn't.
-- **Keybinds are split** between `GameScene`, `Player`, `FixturePlacement`, and `title.js`,
-  with no single action map. Rebinding keys isn't possible.
+- `ControlMode` now resolves loading, placement, modal, register, carrying, and walking
+  profiles, and gates scene hotkeys and player movement.
+- **Remaining:** some non-input systems still inspect the underlying flags directly, and
+  keybinds remain split between `GameScene`, `Player`, `FixturePlacement`, and `title.js`.
+- Rebinding keys still isn't possible.
 
-## 🟠 7. Inventory locations don't share one model
+## 🟠 7. Inventory movement is partly standardized
 
 - `InventoryPool` is shared by the hovercart, Go-Backs, and lockers. That part is good.
-- `ShelfFixture` copies the pool's API by hand (with a `stock` alias) instead of
-  implementing a shared interface.
-- Crates hold their payload as plain fields.
+- `InventoryTransfer` now handles player moves among pools, shelf slots, and item crates.
+- Shelves and crates expose the methods the shared transfer needs, but remain different
+  models because shelf slots have grid positions and crates have physical behavior.
 - The supply draft is a bare `Map`.
-- Customer carts are separate again.
-- **The movement rules** (capacity, stack limits, "No Space In Hovercart") live in each
-  caller instead of in one `transfer` function. Employees moving stock would need a
-  third copy of those rules.
+- Customer shopping decisions remain separate, but shelf pickups and returning abandoned
+  customer carts to Go-Backs now use `InventoryTransfer`. Employees don't use shared
+  transfers yet.
+- User-facing messages are still chosen by each UI caller.
 
 ## 🟠 8. Fixture behaviour uses type checks spread across files
 

@@ -8,6 +8,7 @@
 import { UIWindow } from "./UIWindow.js";
 import { FixtureRenderer } from "./FixtureRenderer.js";
 import { ShelfFixture } from "./ShelfFixture.js";
+import { transferItems } from "./InventoryTransfer.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
 // Mouse travel (px) while held on a shelf placement before it's a drag (move the stack)
@@ -35,8 +36,9 @@ export function showPopupText(x, y, text) {
  * Owns the shelf placement UI state (picker, pending placement, drag).
  */
 export class FixtureWindow {
-  constructor(windowManager, playerState) {
+  constructor(windowManager, playerState, eventBus = null) {
     this.playerState = playerState;
+    this.eventBus = eventBus;
 
     this.uiWindow = new UIWindow(
       {
@@ -178,14 +180,17 @@ export class FixtureWindow {
     }
 
     const hovercart = this.playerState.hovercart;
-    if (hovercart.getRemainingUnitsFor(placement.itemId) <= 0) {
+    const result = transferItems(this.fixture, hovercart, placement.itemId, 1, {
+      sourceEntry: placement,
+      eventBus: this.eventBus,
+      sourceName: "shelf",
+      destinationName: "hovercart",
+    });
+    if (result.moved === 0 && result.reason === "destination-full") {
       this.showPopupText(event.clientX, event.clientY, "No Space In Hovercart");
       return;
     }
-
-    const itemId = this.fixture.takeItem(placement);
-    if (!itemId) return;
-    hovercart.add(itemId, 1);
+    if (result.moved === 0) return;
 
     this.render();
     this.playerState.notifyListeners();
@@ -371,11 +376,18 @@ export class FixtureWindow {
     const { itemId, rotated, moving } = this.pendingPlacement;
     if (moving) {
       this.fixture.attachPlacement(moving, gx, gy, rotated);
-    } else if (this.playerState.hovercart.remove(itemId, 1) === 1) {
-      if (!this.fixture.placeItem(itemId, gx, gy, rotated)) {
-        this.playerState.hovercart.add(itemId, 1);
+    } else {
+      const placement = this.fixture.placeItem(itemId, gx, gy, rotated, 0);
+      if (placement) {
+        const result = transferItems(this.playerState.hovercart, this.fixture, itemId, 1, {
+          destinationEntry: placement,
+          eventBus: this.eventBus,
+          sourceName: "hovercart",
+          destinationName: "shelf",
+        });
+        if (result.moved === 0) this.fixture.removeEmptyPlacement(placement);
+        else this.playerState.notifyListeners();
       }
-      this.playerState.notifyListeners();
     }
     this.pendingPlacement = null;
     this.hoveredCell = null;
@@ -390,17 +402,27 @@ export class FixtureWindow {
    * @param {MouseEvent} event - for popup position
    */
   stockPlacement(placement, event) {
-    const hovercart = this.playerState.hovercart;
-    if (!hovercart.findStockEntry(placement.itemId)?.quantity) {
+    const result = transferItems(
+      this.playerState.hovercart,
+      this.fixture,
+      placement.itemId,
+      1,
+      {
+        destinationEntry: placement,
+        eventBus: this.eventBus,
+        sourceName: "hovercart",
+        destinationName: "shelf",
+      },
+    );
+    if (result.moved === 0 && result.reason === "source-empty") {
       this.showPopupText(event.clientX, event.clientY, "None In Hovercart");
       return;
     }
-    if (placement.quantity >= this.fixture.getPlacementCapacity(placement)) {
+    if (result.moved === 0 && result.reason === "destination-full") {
       this.showPopupText(event.clientX, event.clientY, "Slot Full");
       return;
     }
-    hovercart.remove(placement.itemId, 1);
-    placement.quantity += 1;
+    if (result.moved === 0) return;
     this.render();
     this.playerState.notifyListeners();
   }
@@ -479,11 +501,17 @@ export class FixtureWindow {
    * @param {string} itemId
    */
   transfer(from, to, itemId) {
-    const removed = from.remove(itemId, 1);
-    if (removed === 0) return;
-
-    const accepted = to.add(itemId, removed);
-    if (accepted < removed) from.add(itemId, removed - accepted); // put back what didn't fit
+    const containerName = (container) => {
+      if (container === this.playerState.hovercart) return "hovercart";
+      if (container === this.fixture) return this.isShelf() ? "shelf" : "locker";
+      return "fixture";
+    };
+    const result = transferItems(from, to, itemId, 1, {
+      eventBus: this.eventBus,
+      sourceName: containerName(from),
+      destinationName: containerName(to),
+    });
+    if (result.moved === 0) return;
 
     this.render();
     this.playerState.notifyListeners(); // keeps the HUD's hovercart readout live

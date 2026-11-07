@@ -63,6 +63,17 @@ export function getZone(id) {
   return ZONES.find((zone) => zone.id === id);
 }
 
+/**
+ * The shop's public door: in the Sales Floor's north wall, near the left, so the south
+ * and east sides stay free for expansion and foot traffic avoids the register line.
+ * Customers spawn on the cell just inside (one row south) and leave through it.
+ * @returns {{ gx: number, gy: number }}
+ */
+export function getStoreDoorCell() {
+  const salesFloor = getZone("sales_floor");
+  return { gx: salesFloor.gridX + 1, gy: salesFloor.gridY };
+}
+
 export function getTotalGridSize() {
   const maxX = Math.max(...ZONES.map((zone) => zone.gridX + zone.gridW));
   const maxY = Math.max(...ZONES.map((zone) => zone.gridY + zone.gridH));

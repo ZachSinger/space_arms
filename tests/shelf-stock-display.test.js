@@ -43,9 +43,11 @@ test("shelf display batches blocks and reuses one quantity label per placement, 
     strokeRect() { return this; },
   };
   const container = {
+    angle: 0,
     add() {},
     setDepth() { return this; },
     setPosition() { return this; },
+    setAngle(angle) { this.angle = angle; return this; },
     destroy() {},
   };
   const scene = {
@@ -58,6 +60,7 @@ test("shelf display batches blocks and reuses one quantity label per placement, 
           style,
           visible: true,
           setOrigin() { return this; },
+          setAngle(angle) { this.angle = angle; return this; },
           setText(value) { this.text = value; return this; },
           setColor(value) { this.color = value; return this; },
           setPosition() { return this; },
@@ -111,5 +114,10 @@ test("shelf display batches blocks and reuses one quantity label per placement, 
   assert.equal(texts[0].visible, true);
   assert.equal(texts[0].text, "x0");
   assert.equal(texts[0].color, "#ffffff");
+
+  // A turned shelf turns its stock boxes but keeps the quantity labels upright.
+  display.setAngle(90);
+  assert.equal(container.angle, 90);
+  assert.equal(texts[0].angle, -90);
   display.destroy();
 });

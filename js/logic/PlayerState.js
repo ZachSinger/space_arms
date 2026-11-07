@@ -4,12 +4,21 @@
 // The player's persistent economy: credits, reputation, licenses, store prices, the
 // hovercart, and the Go-Backs bin. Notifies subscribers on every change.
 import { InventoryPool } from "./InventoryPool.js";
+import { transferItems } from "./InventoryTransfer.js";
+import employeeRoster from "../../data/Employees.json" with { type: "json" };
 
 // What one character can personally carry, in units; smaller than any fixture.
 export const HOVERCART_CAPACITY = 10;
 
+function defaultEmployeeJobPriorities(employeeId) {
+  const employee = employeeRoster.find((candidate) => candidate.id === employeeId);
+  if (!employee) throw new Error(`Unknown employee: ${employeeId}`);
+  return [...employee.jobPriorities];
+}
+
 export class PlayerState {
-  constructor() {
+  constructor(eventBus = null) {
+    this.eventBus = eventBus;
     this.credits = 1500;
     this.globalReputation = 2;
     // Customers lost because the store was at capacity: lost sales, not delayed ones.
@@ -34,6 +43,8 @@ export class PlayerState {
 
     // Carts abandoned by angry customers (unlimited room); emptied only into the hovercart.
     this.goBacks = new InventoryPool({ capacity: Infinity, stock: [] });
+    this.hiredEmployees = [];
+    this.employeeJobPriorities = {};
 
     this.listeners = [];
   }
@@ -79,8 +90,54 @@ export class PlayerState {
     this.notifyListeners();
   }
 
+  hireEmployee(employeeId, hireCost) {
+    if (typeof employeeId !== "string" || !employeeId ||
+      !Number.isSafeInteger(hireCost) || hireCost < 0) {
+      throw new TypeError("Hiring requires an employee id and a non-negative whole-credit cost.");
+    }
+    const jobPriorities = defaultEmployeeJobPriorities(employeeId);
+    if (this.hiredEmployees.includes(employeeId) || this.credits < hireCost) return false;
+    this.credits -= hireCost;
+    this.hiredEmployees.push(employeeId);
+    this.employeeJobPriorities[employeeId] = jobPriorities;
+    this.notifyListeners();
+    return true;
+  }
+
+  moveEmployeeJobPriority(employeeId, jobId, direction) {
+    if (!this.hiredEmployees.includes(employeeId) ||
+      !Number.isInteger(direction) || Math.abs(direction) !== 1) return false;
+    const priorities = this.employeeJobPriorities[employeeId];
+    if (!Array.isArray(priorities)) {
+      throw new Error(`Employee ${employeeId} has no saved job priorities.`);
+    }
+    const index = priorities.indexOf(jobId);
+    const targetIndex = index + direction;
+    if (index < 0 || targetIndex < 0 || targetIndex >= priorities.length) return false;
+    [priorities[index], priorities[targetIndex]] = [priorities[targetIndex], priorities[index]];
+    this.notifyListeners();
+    return true;
+  }
+
   addToGoBacks(cart) {
-    for (const { itemId } of cart) this.goBacks.add(itemId, 1);
+    const stock = [];
+    for (const { itemId } of cart) {
+      const entry = stock.find((candidate) => candidate.itemId === itemId);
+      if (entry) entry.quantity += 1;
+      else stock.push({ itemId, quantity: 1 });
+    }
+
+    const customerCart = new InventoryPool({ capacity: Infinity, stock });
+    for (const { itemId, quantity } of stock) {
+      const result = transferItems(customerCart, this.goBacks, itemId, quantity, {
+        eventBus: this.eventBus,
+        sourceName: "customer-cart",
+        destinationName: "go-backs",
+      });
+      if (result.moved !== quantity) {
+        throw new Error(`Could not return ${itemId} to Go-Backs: ${result.reason}.`);
+      }
+    }
     this.notifyListeners();
   }
 
@@ -90,9 +147,12 @@ export class PlayerState {
    * @returns {boolean} false if the hovercart has no room or the bin has none
    */
   loadGoBacksItem(itemId) {
-    if (this.hovercart.getRemainingUnitsFor(itemId) <= 0) return false;
-    if (this.goBacks.remove(itemId, 1) !== 1) return false;
-    this.hovercart.add(itemId, 1);
+    const result = transferItems(this.goBacks, this.hovercart, itemId, 1, {
+      eventBus: this.eventBus,
+      sourceName: "go-backs",
+      destinationName: "hovercart",
+    });
+    if (result.moved !== 1) return false;
     this.goBacks.stock = this.goBacks.stock.filter((entry) => entry.quantity > 0);
     this.notifyListeners();
     return true;
@@ -125,6 +185,13 @@ export class PlayerState {
       credits: this.credits,
       globalReputation: this.globalReputation,
       factionReputation: { ...this.factionReputation },
+      hiredEmployees: [...this.hiredEmployees],
+      employeeJobPriorities: Object.fromEntries(
+        this.hiredEmployees.map((employeeId) => [
+          employeeId,
+          [...this.employeeJobPriorities[employeeId]],
+        ]),
+      ),
       activeLicenses: [...this.activeLicenses],
       storePrices: { ...this.storePrices },
       customersTurnedAway: this.customersTurnedAway,
@@ -151,6 +218,14 @@ export class PlayerState {
       credits: data.credits,
       globalReputation: data.globalReputation,
       factionReputation: { ...data.factionReputation },
+      hiredEmployees: [...(data.hiredEmployees || [])],
+      employeeJobPriorities: Object.fromEntries(
+        (data.hiredEmployees || []).map((employeeId) => [
+          employeeId,
+          [...(data.employeeJobPriorities?.[employeeId] ??
+            defaultEmployeeJobPriorities(employeeId))],
+        ]),
+      ),
       customersTurnedAway: data.customersTurnedAway,
       activeFactions: new Set(),
       activeLicenses: new Set([...data.activeLicenses, "lic_fixture_basics"]),

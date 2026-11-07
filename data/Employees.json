@@ -1,0 +1,11 @@
+[
+  {
+    "id": "tavi_stock_clerk",
+    "name": "Tavi",
+    "role": "Stock Clerk",
+    "hireCost": 250,
+    "wagePerShift": 50,
+    "backpackCapacity": 10,
+    "jobPriorities": ["register", "stock_shelves", "load_storage"]
+  }
+]

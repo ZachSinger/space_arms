@@ -9,8 +9,10 @@ import { InventoryRenderer } from "./InventoryRenderer.js";
 import { ContractRenderer } from "./ContractRenderer.js";
 import { SupplyRenderer } from "./SupplyRenderer.js";
 import { LayoutRenderer } from "./LayoutRenderer.js";
+import { EmployeeRenderer } from "./EmployeeRenderer.js";
 import { FixtureHighlight } from "./FixtureHighlight.js";
 import { playErrorBuzz } from "./Sfx.js";
+import { GAME_EVENTS } from "./EventBus.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
 // The bible's full Step 40 tab list (Part 8). Tabs with no system yet render a
@@ -83,6 +85,20 @@ export class ManagerTablet {
       const signButton = event.target.closest("[data-license-id]");
       if (signButton) this.handleSignContract(signButton.dataset.licenseId);
 
+      const hireEmployeeButton = event.target.closest("[data-hire-employee-id]");
+      if (hireEmployeeButton) {
+        this.scene.hireEmployee(hireEmployeeButton.dataset.hireEmployeeId);
+      }
+
+      const priorityButton = event.target.closest("[data-employee-priority-id]");
+      if (priorityButton) {
+        this.scene.moveEmployeeJobPriority(
+          priorityButton.dataset.employeePriorityId,
+          priorityButton.dataset.employeePriorityJob,
+          Number(priorityButton.dataset.employeePriorityDirection),
+        );
+      }
+
       const addCrateButton = event.target.closest("[data-supply-add]");
       if (addCrateButton) this.changeSupplyOrder(addCrateButton.dataset.supplyAdd, 1);
       const removeCrateButton = event.target.closest("[data-supply-remove]");
@@ -150,9 +166,16 @@ export class ManagerTablet {
     // change elsewhere (sales, deliveries, reputation), so re-render on every state change.
     this.playerState.subscribe(() => {
       this.refreshInventoryPanel();
+      this.refreshEmployeePanel();
       this.refreshContractsPanel();
       this.refreshSupplyPanel();
       this.refreshLayoutPanels();
+    });
+    this.scene.eventBus.on(GAME_EVENTS.INVENTORY_TRANSFERRED, ({ destination }) => {
+      if (destination === "customer-cart") this.refreshInventoryPanel();
+    });
+    this.scene.eventBus.on(GAME_EVENTS.CUSTOMER_SALE_COMPLETED, () => {
+      this.refreshInventoryPanel();
     });
   }
 
@@ -164,6 +187,15 @@ export class ManagerTablet {
    */
   renderPanelContent(tabId) {
     if (tabId === "inventory") return InventoryRenderer.generateHTML(this.scene.getInventoryItems());
+    if (tabId === "employee") {
+      return EmployeeRenderer.generateHTML({
+        hiredEmployeeIds: this.playerState.hiredEmployees,
+        activeEmployeeIds: this.scene.employees.map((employee) => employee.data.id),
+        employeeJobPriorities: this.playerState.employeeJobPriorities,
+        credits: this.playerState.credits,
+        canHire: this.scene.canHireEmployees(),
+      });
+    }
     if (tabId === "contracts") {
       return ContractRenderer.generateHTML(database.getAllLicenses(), this.playerState);
     }
@@ -177,6 +209,7 @@ export class ManagerTablet {
     if (this.bodyElement.contains(document.activeElement)) document.activeElement.blur();
     this.fixtureHighlight.reset();
     if (tabId === "inventory") this.refreshInventoryPanel();
+    if (tabId === "employee") this.refreshEmployeePanel();
     if (tabId === "supply") this.refreshSupplyPanel();
     if (tabId === "layout" || tabId === "fixtures") this.refreshLayoutPanels();
     this.bodyElement.querySelectorAll(".tablet-tab-btn").forEach((btn) => {
@@ -223,6 +256,11 @@ export class ManagerTablet {
   refreshContractsPanel() {
     const panel = this.bodyElement.querySelector('[data-tab-panel="contracts"]');
     if (panel) panel.innerHTML = this.renderPanelContent("contracts");
+  }
+
+  refreshEmployeePanel() {
+    const panel = this.bodyElement.querySelector('[data-tab-panel="employee"]');
+    if (panel) panel.innerHTML = this.renderPanelContent("employee");
   }
 
   refreshSupplyPanel() {

@@ -7,9 +7,9 @@
 
 import { pickRandomCustomerCharacter } from "./CustomerSprites.js";
 import { createCustomerBuyList } from "./CustomerBuyLists.js";
+import { transferItems } from "./InventoryTransfer.js";
 
 const SPEED = 120; // px/s
-const CRATE_HIT_REPUTATION_PENALTY = 1;
 // Bible Step 52: each customer accepts up to this random markup over the market price.
 export const MIN_PRICE_TOLERANCE = 1.0;
 export const MAX_PRICE_TOLERANCE = 1.3;
@@ -18,10 +18,8 @@ export const MAX_PRICE_TOLERANCE = 1.3;
 const LEAVING_TIMEOUT_MS = 6000;
 const SEEKING_TIMEOUT_MS = 15000;
 
-// Bible Steps 53/12/51: how long a queued customer waits (ms, paused with the game)
-// before leaving angry, and what that costs.
+// Bible Steps 53/12/51: how long a queued customer waits (ms, paused with the game).
 export const PATIENCE_MS = 40000;
-const ANGRY_REPUTATION_PENALTY = 1;
 // Bubble escalation: [minimum remaining fraction, glyph, fill color].
 const PATIENCE_LEVELS = [
   [0.6, "...", 0x22c55e],
@@ -60,6 +58,7 @@ export class Customer {
     factionId,
     onJoinQueue,
     onLeaveAngry,
+    onMissingPrimary,
     onComplete,
   }) {
     this.scene = scene;
@@ -74,6 +73,7 @@ export class Customer {
     this.playerState = playerState;
     this.onJoinQueue = onJoinQueue;
     this.onLeaveAngry = onLeaveAngry;
+    this.onMissingPrimary = onMissingPrimary;
     this.onComplete = onComplete;
 
     this.state = "SEEK_SHELF";
@@ -171,6 +171,18 @@ export class Customer {
     return this.scene.getStorePrice(itemId) <= marketPrice * this.priceTolerance;
   }
 
+  getRemainingUnitsFor(itemId) {
+    return this.cart.some((entry) => entry.itemId === itemId) ? 0 : 1;
+  }
+
+  add(itemId, quantity) {
+    const accepted = Math.min(quantity, this.getRemainingUnitsFor(itemId));
+    if (accepted > 0) {
+      this.cart.push({ itemId, price: this.scene.getStorePrice(itemId) });
+    }
+    return accepted;
+  }
+
   /**
    * Start a shopping pass over every shelf holding this phase's wanted items.
    * @param {"primary" | "bonus"} phase
@@ -232,14 +244,18 @@ export class Customer {
         continue;
       }
 
-      const takenItemId = this.fixture.takeItem(placement);
-      if (!takenItemId) continue;
+      const transfer = transferItems(this.fixture, this, itemId, 1, {
+        sourceEntry: placement,
+        eventBus: this.scene.eventBus,
+        sourceName: "shelf",
+        destinationName: "customer-cart",
+      });
+      if (transfer.moved === 0) continue;
       this.scene.refreshShelfStockDisplay?.(this.fixture);
-      this.cart.push({ itemId: takenItemId, price: this.scene.getStorePrice(takenItemId) });
-      if (this.shoppingPhase === "primary") this.primaryBought.add(takenItemId);
-      else this.bonusBought.add(takenItemId);
+      if (this.shoppingPhase === "primary") this.primaryBought.add(itemId);
+      else this.bonusBought.add(itemId);
 
-      const item = this.scene.getItem(takenItemId);
+      const item = this.scene.getItem(itemId);
       if (this.factionId === "mercenaries" && item?.tags.includes("Firearm")) {
         const weaponType = item.tags.find((tag) => ["Pistol", "Rifle", "Heavy"].includes(tag));
         if (weaponType) this.purchasedFirearms.add(weaponType);
@@ -292,7 +308,7 @@ export class Customer {
           ),
         ),
       );
-      if (this.primaryMissing.size > 0) this.penalizeMissingPrimary();
+      if (this.primaryMissing.size > 0) this.reportMissingPrimary();
       if (this.primaryBought.size === 0) {
         this.enterLeaving();
         return;
@@ -327,15 +343,9 @@ export class Customer {
     this.state = "SEEK_REGISTER";
   }
 
-  penalizeMissingPrimary() {
-    const penalty = 1;
-    this.playerState.subReputation(penalty, this.factionId);
-    this.scene.showFloatingText(
-      this.sprite.x,
-      this.sprite.y - 40,
-      `Out of stock! Store rep -${penalty}${this.factionId ? ` / Faction rep -${penalty}` : ""}`,
-      "#ef4444",
-    );
+  // The scene applies reputation and feedback when this customer misses primary stock.
+  reportMissingPrimary() {
+    this.onMissingPrimary?.(this, [...this.primaryMissing]);
   }
 
   // --- Queue and patience ---
@@ -401,19 +411,11 @@ export class Customer {
     this.patienceBubble = null;
   }
 
-  // Bible Steps 12/51: abandons the cart (sent to the Go-Backs bin) and costs reputation.
+  // Bible Steps 12/51: abandons the cart for the scene to process, then leaves.
   leaveAngry() {
     const cart = this.cart;
     this.cart = [];
     this.clearPatience();
-    this.playerState.subReputation(ANGRY_REPUTATION_PENALTY, this.factionId);
-    const penalty = ANGRY_REPUTATION_PENALTY;
-    this.scene.showFloatingText(
-      this.sprite.x,
-      this.sprite.y - 40,
-      `Left angry! Store rep -${penalty}${this.factionId ? ` / Faction rep -${penalty}` : ""}`,
-      "#ef4444",
-    );
     this.onLeaveAngry?.(this, cart);
     this.enterLeaving();
   }
@@ -428,24 +430,12 @@ export class Customer {
     this.setDestination(x, y, () => {});
   }
 
-  hitByCrate() {
-    this.playerState.subReputation(CRATE_HIT_REPUTATION_PENALTY, this.factionId);
-    const penalty = CRATE_HIT_REPUTATION_PENALTY;
-    this.scene.showFloatingText(
-      this.sprite.x,
-      this.sprite.y - 40,
-      `Store rep -${penalty}${this.factionId ? ` / Faction rep -${penalty}` : ""}`,
-      "#ef4444",
-    );
-  }
-
-  // Called by the scene once the player has scanned every item and clicked Complete Sale.
+  // Finish the customer's sale state and return proceeds for the scene's sale event.
   completeSale() {
     const total = this.cart.reduce((sum, entry) => sum + entry.price, 0);
-    this.playerState.addCredits(total);
-    this.playerState.addReputation(1, this.factionId);
     this.clearPatience();
     this.enterLeaving();
+    return total;
   }
 
   enterLeaving() {

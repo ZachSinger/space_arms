@@ -4,7 +4,7 @@
 // Outlines a fixture on the shop floor when its Manager Tablet row is hovered, or pinned by
 // left-click, and slides the Tablet aside when it would cover that fixture.
 import { TILE_SIZE } from "./RoomLayout.js";
-import { getFixtureType } from "./FixtureLayout.js";
+import { getFixtureType, fixtureFootprint } from "./FixtureLayout.js";
 
 const HIGHLIGHT_COLOR = 0x22c55e;
 // Gap kept between the slid window and the fixture, px.
@@ -117,9 +117,9 @@ export class FixtureHighlight {
 
   fixtureWorldRect(fixtureId) {
     const entry = this.scene.fixtures.get(fixtureId);
-    const spec = entry && getFixtureType(entry.type);
-    if (!spec) return null;
-    return { x: entry.gx * TILE_SIZE, y: entry.gy * TILE_SIZE, width: spec.w * TILE_SIZE, height: spec.h * TILE_SIZE };
+    if (!entry || !getFixtureType(entry.type)) return null;
+    const { w, h } = fixtureFootprint(entry);
+    return { x: entry.gx * TILE_SIZE, y: entry.gy * TILE_SIZE, width: w * TILE_SIZE, height: h * TILE_SIZE };
   }
 
   /**

@@ -6,7 +6,8 @@
 // WASD/arrows, and left-click commits. Only allowed while the store is closed.
 import { UIWindow } from "./UIWindow.js";
 import { TILE_SIZE } from "./RoomLayout.js";
-import { getFixtureType, fixtureAccessCells } from "./FixtureLayout.js";
+import { getFixtureType, fixtureAccessCells, fixtureFootprint } from "./FixtureLayout.js";
+import { getFixtureTexture } from "./FixtureTexture.js";
 
 export class FixturePlacement {
   constructor(scene) {
@@ -21,8 +22,8 @@ export class FixturePlacement {
       y: 80,
       contentHTML: `
         <p data-placement-name></p>
-        <p class="fixture-stock-meta">Left-click to place. Right-click or Esc to cancel.
-          WASD / arrow keys pan the camera. The front must remain accessible.</p>
+        <p class="fixture-stock-meta">Left-click to place. R to turn it. Right-click or Esc to cancel.
+          WASD / arrow keys pan the camera. The blue squares in front must stay clear.</p>
         <p data-placement-status role="status"></p>
         <button type="button" class="action-btn" data-cancel-fixture-move>CANCEL</button>
       `,
@@ -42,14 +43,21 @@ export class FixturePlacement {
       }
       if (!pointer.leftButtonDown()) return;
       this.updatePreview(pointer);
+      const { id, gx, gy, rotation } = this.placement;
       const placed = this.original
-        ? scene.moveFixture(this.placement.id, this.placement.gx, this.placement.gy)
-        : scene.placeFixtureFromCrate(this.fixtureCrate, this.placement.gx, this.placement.gy);
+        ? scene.moveFixture(id, gx, gy, rotation)
+        : scene.placeFixtureFromCrate(this.fixtureCrate, gx, gy, rotation);
       if (placed) {
         this.cancel();
       }
     };
     scene.input.on("pointerdown", this.handlePointerDown);
+    this.handleRotateKey = () => {
+      if (!this.active || !scene.controlMode.allows("rotateFixture")) return;
+      this.rotation = (this.rotation + 1) % 4;
+      this.updatePreview(scene.input.activePointer);
+    };
+    scene.input.keyboard.on("keydown-R", this.handleRotateKey);
     this.handleDocumentMouseMove = (event) => {
       if (!this.active) return;
       this.mouseClient = { x: event.clientX, y: event.clientY };
@@ -112,6 +120,7 @@ export class FixturePlacement {
     this.original = original;
     this.fixtureCrate = fixtureCrate;
     this.spec = getFixtureType(typeId);
+    this.rotation = original?.rotation ?? 0;
     this.active = true;
     if (this.original) {
       this.original.sprite.setAlpha(0.35);
@@ -126,7 +135,7 @@ export class FixturePlacement {
     this.scene.restockCrates.forEach((crate) => crate.setPaused(true));
     const x = original?.x ?? fixtureCrate.sprite.x;
     const y = original?.y ?? fixtureCrate.sprite.y;
-    this.ghost = this.scene.add.image(x, y, this.spec.texture)
+    this.ghost = this.scene.add.image(x, y, getFixtureTexture(this.scene, this.spec))
       .setDisplaySize(this.spec.w * TILE_SIZE, this.spec.h * TILE_SIZE)
       .setAlpha(0.5).setDepth(9996);
     this.graphics.setVisible(true);
@@ -143,31 +152,34 @@ export class FixturePlacement {
    */
   updatePreview(pointer) {
     const world = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const { w, h } = fixtureFootprint({ type: this.spec.id, rotation: this.rotation });
     this.placement = {
       id: this.original?.id ?? this.scene.fixtures.nextId(this.spec.id),
       type: this.spec.id,
-      gx: Math.floor(world.x / TILE_SIZE) - Math.floor(this.spec.w / 2),
-      gy: Math.floor(world.y / TILE_SIZE) - Math.floor(this.spec.h / 2),
+      gx: Math.floor(world.x / TILE_SIZE) - Math.floor(w / 2),
+      gy: Math.floor(world.y / TILE_SIZE) - Math.floor(h / 2),
+      rotation: this.rotation,
     };
+    const { id, gx, gy, rotation } = this.placement;
     const result = this.original
-      ? this.scene.checkFixtureMove(this.placement.id, this.placement.gx, this.placement.gy)
-      : this.scene.checkFixturePlacement(this.spec.id, this.placement.gx, this.placement.gy);
+      ? this.scene.checkFixtureMove(id, gx, gy, rotation)
+      : this.scene.checkFixturePlacement(this.spec.id, gx, gy, rotation);
     this.statusElement.textContent = result.reason;
     const color = result.valid ? 0x10b981 : 0xef4444;
-    const x = this.placement.gx * TILE_SIZE;
-    const y = this.placement.gy * TILE_SIZE;
+    const x = gx * TILE_SIZE;
+    const y = gy * TILE_SIZE;
     this.graphics.clear().fillStyle(color, 0.22).lineStyle(2, color, 1)
-      .fillRect(x, y, this.spec.w * TILE_SIZE, this.spec.h * TILE_SIZE)
-      .strokeRect(x, y, this.spec.w * TILE_SIZE, this.spec.h * TILE_SIZE);
+      .fillRect(x, y, w * TILE_SIZE, h * TILE_SIZE)
+      .strokeRect(x, y, w * TILE_SIZE, h * TILE_SIZE);
     this.graphics.lineStyle(2, 0x38bdf8, 1);
-    // Registers also need the row behind them clear -- that's where the player stands.
+    // Registers also need the side behind them clear -- that's where the player stands.
     const accessCells = this.spec.kind === "register"
       ? [...fixtureAccessCells(this.placement), ...fixtureAccessCells(this.placement, true)]
       : fixtureAccessCells(this.placement);
     for (const cell of accessCells) {
       this.graphics.strokeRect(cell.gx * TILE_SIZE + 3, cell.gy * TILE_SIZE + 3, TILE_SIZE - 6, TILE_SIZE - 6);
     }
-    this.ghost.setPosition(x + this.spec.w * TILE_SIZE / 2, y + this.spec.h * TILE_SIZE / 2);
+    this.ghost.setPosition(x + w * TILE_SIZE / 2, y + h * TILE_SIZE / 2).setAngle(rotation * 90);
   }
 
   /**
@@ -175,7 +187,7 @@ export class FixturePlacement {
    * @param {number} delta - ms since last frame
    */
   update(delta) {
-    if (!this.active) return;
+    if (!this.active || !this.scene.controlMode.allows("cameraPan")) return;
     const camera = this.scene.cameras.main;
     const { cursors, wasd } = this.scene.player;
     const amount = 400 * delta / 1000; // 400 px/s pan speed
@@ -212,6 +224,7 @@ export class FixturePlacement {
   destroy() {
     this.finish();
     this.scene.input.off("pointerdown", this.handlePointerDown);
+    this.scene.input.keyboard.off("keydown-R", this.handleRotateKey);
     document.removeEventListener("mousemove", this.handleDocumentMouseMove, true);
     this.graphics.destroy();
   }

@@ -146,10 +146,12 @@ export class TileRoom {
   }
 
   // Pixel bounding box across every currently-unlocked zone, for camera.setBounds().
+  // Includes one empty tile row above the map so the top wall isn't flush with the screen
+  // edge. No zone exists there, so it can never be built on or expanded into.
   getCameraBounds() {
     const unlocked = this.zones.filter((zone) => !zone.locked);
     const minX = Math.min(...unlocked.map((z) => z.gridX)) * TILE_SIZE;
-    const minY = Math.min(...unlocked.map((z) => z.gridY)) * TILE_SIZE;
+    const minY = Math.min(...unlocked.map((z) => z.gridY)) * TILE_SIZE - TILE_SIZE;
     const maxX = Math.max(...unlocked.map((z) => z.gridX + z.gridW)) * TILE_SIZE;
     const maxY = Math.max(...unlocked.map((z) => z.gridY + z.gridH)) * TILE_SIZE;
     return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };

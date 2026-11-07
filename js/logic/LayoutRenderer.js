@@ -3,6 +3,14 @@
 // ==========================================
 // HTML for the fixture layout panel: placed fixtures with MOVE / CRATE UP buttons, plus
 // (optionally) the fixture purchase list.
+import { getFixtureType } from "./FixtureLayout.js";
+
+const FIXTURE_PURPOSES = {
+  shelf: "SHELVING - displays items for customers",
+  storage: "STORAGE - holds stock for restocking",
+  register: "CHECKOUT - serves customers",
+};
+
 export class LayoutRenderer {
   /**
    * @param {GameScene} scene
@@ -28,7 +36,10 @@ export class LayoutRenderer {
                 : "BUY";
           return `
             <div class="layout-fixture-row">
-              <span>${spec.name} <small>PRICE ${spec.price} credits | ${licensed ? "LICENSED" : `LICENSE: ${license.name}`}</small></span>
+              <span>${spec.name}
+                <small>${FIXTURE_PURPOSES[spec.kind]} | ${spec.w} x ${spec.h} floor tiles</small>
+                <small>PRICE ${spec.price} credits | ${licensed ? "LICENSED" : `NEEDS CONTRACT: ${license.name} (Contracts tab)`}</small>
+              </span>
               <button type="button" class="action-btn" data-buy-fixture-id="${spec.id}"
                 ${disabled ? "disabled" : ""}>${label}</button>
             </div>
@@ -47,7 +58,10 @@ export class LayoutRenderer {
       <div class="retro-slot custom-scrollbar layout-fixture-list">
         ${fixtures.all().map((fixture) => `
           <div class="layout-fixture-row" data-fixture-row-id="${fixture.id}">
-            <span>${fixtures.displayName(fixture)} <small>(${fixture.gx}, ${fixture.gy})</small></span>
+            <span>${fixtures.displayName(fixture)}
+              <small>${FIXTURE_PURPOSES[getFixtureType(fixture.type).kind]}</small>
+              <small>(${fixture.gx}, ${fixture.gy})</small>
+            </span>
             ${includePurchases ? `
               <span class="layout-fixture-actions">
                 <button type="button" class="action-btn" data-move-fixture-id="${fixture.id}"

@@ -163,29 +163,91 @@ test("picking up a stationary crate and dropping it preserves contents", () => {
   assert.equal(body.moves, true);
 });
 
-test("moving crates cannot be picked up until both velocity components reach zero", () => {
+function thrower(x = 100, y = 100) {
+  return {
+    x, y, depth: 8,
+    getBounds: () => ({ left: x - 16, right: x + 16, top: y - 16, bottom: y + 16 }),
+  };
+}
+
+test("a crate still being launched by a throw cannot be picked up, even when paused", () => {
   const crate = new Crate(createScene(), "item", 5, 100, 100);
   const body = crate.sprite.body;
-  const carrier = { x: 200, y: 160, depth: 8 };
-
-  for (const [x, y] of [[50, 0], [0, -20], [3, 4], [0.0001, 0]]) {
-    body.setVelocity(x, y);
-    assert.equal(crate.isStationary(), false);
-    assert.equal(crate.pickUp(carrier), false);
-    assert.equal(crate.isCarried, false);
-    assert.equal(body.enable, true);
-    assert.deepEqual(body.velocity, { x, y });
-    assert.deepEqual([crate.sprite.x, crate.sprite.y, crate.quantity], [100, 100, 5]);
-  }
-
+  const carrier = thrower();
+  assert.equal(crate.pickUp(carrier), true);
+  crate.startThrow(carrier, 160, 0);
+  assert.equal(crate.isSliding(), false);
+  assert.equal(crate.canPickUp(), false);
+  assert.equal(crate.pickUp(carrier), false);
   crate.setPaused(true);
   assert.equal(crate.pickUp(carrier), false);
-  body.setVelocity(0, 0);
-  assert.equal(crate.isStationary(), true);
+  assert.equal(crate.isCarried, false);
+  assert.equal(body.enable, true);
+  assert.deepEqual(body.velocity, { x: 160, y: 0 });
+});
+
+test("a thrown crate starts sliding once its launch ends and it clears the thrower", () => {
+  const crate = new Crate(createScene(), "item", 5, 100, 100);
+  const carrier = thrower();
+  crate.pickUp(carrier);
+  crate.startThrow(carrier, 160, 0);
+
+  crate.sprite.setPosition(200, 100); // clear of the thrower, but the boost is still running
+  crate.updateThrow(1);
+  assert.equal(crate.isSliding(), false);
+
+  crate.updateThrow(10_000); // boost over
+  assert.equal(crate.isSliding(), true);
+  assert.equal(crate.isThrown, true); // can still hit customers while sliding
+  assert.equal(crate.canPickUp(), true);
   assert.equal(crate.pickUp(carrier), true);
   assert.equal(crate.isCarried, true);
-  assert.equal(body.enable, false);
+  assert.deepEqual(crate.sprite.body.velocity, { x: 0, y: 0 });
 });
+
+test("a thrown crate keeps its launch boost until it clears the thrower", () => {
+  const crate = new Crate(createScene(), "item", 5, 100, 100);
+  const carrier = thrower();
+  crate.pickUp(carrier);
+  crate.startThrow(carrier, 0, 160);
+
+  crate.updateThrow(10_000); // past the usual boost time, but still overlapping the thrower
+  assert.notEqual(crate.launch, null);
+  assert.equal(crate.launch.remainingMs, 1);
+  assert.equal(crate.isSliding(), false);
+
+  crate.sprite.setPosition(100, 200); // now clear
+  crate.updateThrow(16);
+  assert.equal(crate.launch, null);
+  assert.equal(crate.isSliding(), true);
+});
+
+test("a thrown crate that hits something ends its boost even while over the thrower", () => {
+  const crate = new Crate(createScene(), "item", 5, 100, 100);
+  const carrier = thrower();
+  crate.pickUp(carrier);
+  crate.startThrow(carrier, 0, 160);
+  crate.sprite.body.blocked = { none: false };
+  crate.updateThrow(16);
+  assert.equal(crate.launch, null);
+});
+
+for (const kind of ["item", "fixture"]) {
+  test(`a moving, pushed ${kind} crate can be picked up without waiting`, () => {
+    const crate = new Crate(createScene(), "item", 5, 100, 100,
+      kind === "fixture" ? { kind, typeId: "shelf_universal" } : {});
+    crate.push({ x: 80, y: -40 });
+    assert.equal(crate.isStationary(), false);
+    assert.equal(crate.canPickUp(), true);
+    assert.equal(crate.pickUp({ x: 200, y: 160, depth: 8 }), true);
+    assert.equal(crate.isCarried, true);
+    assert.equal(crate.isPushed, false);
+    assert.equal(crate.isThrown, false);
+    assert.equal(crate.sprite.body.enable, false);
+    assert.deepEqual(crate.sprite.body.velocity, { x: 0, y: 0 });
+    assert.equal(crate.quantity, kind === "fixture" ? 1 : 5);
+  });
+}
 
 test("stationary drops stay still and diagonal throws retain full speed", () => {
   const crate = new Crate(createScene(), "item", 2, 100, 100);
@@ -277,6 +339,14 @@ for (const kind of ["item", "fixture"]) {
         previousSpeed = nextSpeed;
       }
       assert.ok(Math.abs(previousSpeed - 400) < 0.001);
+      // A crate thrown from overhead keeps its peak speed until it clears the thrower.
+      for (let guard = 0; crate.launch && guard < 100; guard += 1) {
+        carrier.x += vx * 0.01;
+        carrier.y += vy * 0.01;
+        advanceThrow(crate, 10);
+        assert.ok(Math.abs(Math.hypot(body.velocity.x, body.velocity.y) - 400) < 0.001);
+      }
+      assert.equal(crate.throwCarrier, null);
       assert.equal(crate.launch, null);
       assert.deepEqual(body.acceleration, { x: 0, y: 0 });
       assert.ok(Math.abs(Math.hypot(body.drag.x, body.drag.y) - 480) < 0.001);
@@ -294,8 +364,9 @@ for (const kind of ["item", "fixture"]) {
       for (let elapsed = 0; elapsed < 450; elapsed += 10) advanceThrow(crate, 10);
       assert.equal(crate.isStationary(), true, "throw should stop within about one second");
       const distance = Math.hypot(crate.sprite.x - start.x, crate.sprite.y - start.y);
-      assert.ok(distance >= 200 && distance <= 220,
-        `throw should travel about 210 pixels, not the previous 490: ${distance}`);
+      // Downward throws start overhead and keep their boost until clear, so they go a bit farther.
+      assert.ok(distance >= 200 && distance <= 310,
+        `throw should travel about 210-300 pixels, not the previous 490: ${distance}`);
     }
   });
 
@@ -367,28 +438,25 @@ for (const impact of ["crate", "wall", "world"]) {
 
 test("a throw can hit each customer once, including across bounces", () => {
   const crate = new Crate(createScene(), "item", 5, 100, 100);
-  let hits = 0;
-  const customer = { isDestroyed: false, hitByCrate: () => { hits += 1; } };
-  const otherCustomer = { isDestroyed: false, hitByCrate: () => { hits += 1; } };
+  const customer = { isDestroyed: false };
+  const otherCustomer = { isDestroyed: false };
   crate.drop(100, 100, 160, 0, false);
   assert.equal(crate.tryHitCustomer(customer), true);
   assert.equal(crate.tryHitCustomer(customer), false);
   crate.sprite.body.setVelocity(-120, 0);
   assert.equal(crate.tryHitCustomer(customer), false);
   assert.equal(crate.tryHitCustomer(otherCustomer), true);
-  assert.equal(hits, 2);
   assert.equal(crate.quantity, 5);
 
   crate.sprite.body.stop();
-  assert.equal(crate.tryHitCustomer({ hitByCrate: () => { hits += 1; } }), false);
+  assert.equal(crate.tryHitCustomer({ isDestroyed: false }), false);
   crate.drop(100, 100, 160, 0, false);
   assert.equal(crate.tryHitCustomer(customer), true);
-  assert.equal(hits, 3);
 });
 
 test("only active throws can hit customers", () => {
   const crate = new Crate(createScene(), "item", 5, 100, 100);
-  const customer = { isDestroyed: false, hitByCrate: () => {} };
+  const customer = { isDestroyed: false };
   crate.sprite.body.setVelocity(10, 0);
   assert.equal(crate.tryHitCustomer(customer), false);
   crate.drop(100, 100, 0, 0, false);

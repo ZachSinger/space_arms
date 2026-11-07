@@ -53,6 +53,12 @@ export class ShelfStockDisplay {
     this.container.setPosition(x, y);
   }
 
+  // Turns the stock boxes with the shelf, but keeps quantity labels upright and readable.
+  setAngle(angle) {
+    this.container.setAngle(angle);
+    for (const label of this.labels.values()) label.setAngle(-angle);
+  }
+
   // Redraw if the placements changed since the last call; reuse labels per placement.
   sync() {
     const { placements } = this.fixture;
@@ -92,6 +98,7 @@ export class ShelfStockDisplay {
         this.labels.set(placement, label);
         this.container.add(label);
       }
+      label.setAngle(-this.container.angle);
       label.setText(`x${Math.max(0, placement.quantity)}`);
       label.setColor("#ffffff");
       label.setPosition(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);

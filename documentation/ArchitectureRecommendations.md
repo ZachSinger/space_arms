@@ -10,15 +10,17 @@ Companion document: [CodebaseCritique.md](./CodebaseCritique.md) (what's weak to
 
 These are the facts that drive every recommendation below:
 
-- **More NPC types are coming.** Employees (bible Part 6) haul crates, stock shelves, work
-  the register, take breaks, and have their own backpacks. Shoplifters and a Military
-  faction are stretch goals. Customers are only the first kind of NPC.
+- **More NPC types are coming.** Employees can now run the register, stock shelves, and
+  move delivered item crates into storage, following each hire's saved job priorities.
+  Hauling loose crates from the floor, employee schedules, and breaks remain future work;
+  shoplifters and a Military faction are stretch goals. Customers are only the first kind
+  of NPC.
 - **Items move between many containers:** loading pad crates, floor crates, the hovercart,
-  shelf slots, storage lockers, the Go-Backs bin, customer carts, and soon employee
-  backpacks.
+  shelf slots, storage lockers, the Go-Backs bin, customer carts, and employee backpacks.
 - **The game is UI-heavy.** The Manager's Tablet already has 5 working tabs, with
-  Employees, Finances, and Handbook still to come. Add checkout, Go-Backs, fixtures,
-  dialogue, settings, and "God Window" tutorials.
+  the Employee tab now supporting hiring and staff information. Finances and Handbook
+  remain to come. Add checkout, Go-Backs, fixtures, dialogue, settings, and "God Window"
+  tutorials.
 - **Many systems react to the same moments.** A sale or an angry customer touches
   reputation, money, sound, floating text, debug logs, the shift summary, and (soon)
   tutorials and music.
@@ -112,34 +114,43 @@ written the same way would duplicate most of it.
 
 ---
 
-## 4. One container model for every item location
+## 4. One transfer rule for item locations
 
-Every place an item can sit should implement the same interface:
+`InventoryTransfer.transferItems` now handles player stock moves between the hovercart,
+Go-Backs, shelves/lockers, and item crates. The containers expose the quantities and
+capacity needed by the shared operation:
 
 ```js
-interface Container {
-  canAccept(itemId, qty) -> { ok, reason }
+interface TransferContainer {
+  getAvailableUnitsFor(itemId)
+  getRemainingUnitsFor(itemId)
   add(itemId, qty)
   remove(itemId, qty)
-  entries() -> [{ itemId, qty, ... }]
 }
 ```
 
-- **Implementations:** `PoolContainer` (hovercart, Go-Backs, lockers, employee backpacks,
-  customer carts), `ShelfContainer` (spatial grid slots), `CrateContainer`.
-- **One `transfer(from, to, itemId, qty)` function** owns all movement rules: capacity,
-  stacking, license checks, and the resulting events. Right-click to cart, stocking from
-  the cart, delivering a crate to a locker, a customer grabbing an item, and an employee
-  restocking all go through it.
-- **Result:** one place to fix bugs and one place for employees to call. The UI shows
-  the same `reason` text everywhere.
+- The helper checks available stock and destination capacity, moves only what fits, restores
+  any unaccepted units, and emits `inventory-transferred`.
+- Shelf-slot placement passes the exact slot, so stocking one shelf stack can't spill into
+  another. Existing player-facing messages are unchanged.
+- Customer carts now use the same operation when taking one item from a shelf; their existing
+  one-of-each shopping rule and price snapshot are unchanged.
+- Items in abandoned customer carts now use the same operation when returned to Go-Backs.
+- Employee stock clerks use the same operation to move stock from lockers into their
+  backpacks and then onto shelf slots.
 
 ---
 
 ## 5. Fixtures as data + behaviour components
 
-- **Move `FIXTURE_TYPES` to `data/Fixtures.json`**, alongside items and licenses. Prices,
-  sizes, textures, capacities, and license requirements become data.
+- **Done:** fixture definitions live in `data/Fixtures.json`, alongside items and licenses.
+  Prices, sizes, textures, capacities, and license requirements are data; `FixtureLayout`
+  continues to provide the same lookup and placement rules.
+- The compact shelf costs 300 credits; the large shelf costs 2,000 credits. The Fixtures
+  menu identifies shelving, storage, and checkout equipment and shows each floor footprint.
+  Shelf and locker interaction covers the full front width, within 110 pixels of the front
+  edge; side/back positions cannot select a neighboring fixture. Clicking and crate
+  delivery use the same rule as E.
 - **Give fixtures components instead of `kind`/`instanceof` checks:**
 
   | Component | Used by |
@@ -150,26 +161,32 @@ interface Container {
   | `Interactable` (E-prompt, opens window) | all |
   | `Footprint` (blocks nav, placement rules) | all |
 
-- **New fixture types become JSON entries**, for example a weapon rack with tag
-  restrictions (bible Step 22) or a security scanner for the theft stretch goal. They
-  don't need new `if (kind === …)` branches scattered through the scene.
+- **Still to do:** new behavior such as weapon racks with tag restrictions (bible Step 22)
+  or a security scanner for the theft stretch goal still needs fixture behavior components
+  and currently requires code branches. Once components are in place, new fixture types can
+  use data entries instead of adding branches.
 
 ---
 
 ## 6. Events and a single state root
 
-The bible (Step 3) called for a Master State + Event Bus. We built the state part halfway
-and never built the bus.
+The bible (Step 3) called for a Master State + Event Bus. The bus now publishes customer
+outcomes, shift changes, crate pickup/drop/delivery, fixture opening, register entry/exit,
+and inventory transfers. The single state root remains future work.
 
 **Single state root.** One `GameState` object owns economy, inventory, fixtures, crates,
 market, shift, orders, and (later) employees. Save = `serialize(GameState)`.
 
-**Domain events.** A typed event bus carries game moments:
+**Current events.** `GAME_EVENTS` carries these game moments:
 
 ```
-SaleCompleted, CustomerAngered, CustomerHitByCrate, CrateDelivered, ItemStocked,
-ShelfEmptied, ShiftOpened, ShiftSoftClosed, ShiftEnded, OrderPlaced, LicenseBought …
+CUSTOMER_HIT_BY_CRATE, CUSTOMER_LEFT_ANGRY, CUSTOMER_MISSING_PRIMARY,
+CUSTOMER_SALE_COMPLETED, CRATE_PICKED_UP, CRATE_DROPPED, CRATE_DELIVERY_RESULT,
+FIXTURE_OPENED, INVENTORY_TRANSFERRED, REGISTER_SESSION_STARTED,
+REGISTER_SESSION_ENDED, SHIFT_STARTED, SHIFT_ENDED
 ```
+
+Other moments such as shelf-empty notifications and supplier orders remain future events.
 
 **Listeners subscribe instead of being called inline.** The sale code shouldn't know
 about audio, floating text, debug logs, or the shift summary:
@@ -188,28 +205,30 @@ what changed. That replaces today's `subscribe` + full `innerHTML` refresh.
 
 ## 7. Input and interaction as explicit systems
 
-**Control mode as a state machine.** Today, separate flags (`carriedCrate`,
-`fixturePlacement.active`, `operatingRegister`, `startingShift`, `loadFailed`, window
-state) are re-checked in many methods. Instead, use one `ControlMode` stack:
+**Control mode as a state machine.** `ControlMode` now resolves the active profile from
+the current game state and gates hotkeys and player movement in one place. It prioritizes
+loading, fixture placement, blocking windows, register operation, carrying, then walking:
 
 ```
-Walking → Carrying → Placing → AtRegister → ModalWindow → Cutscene/Loading
+Loading > Placing > ModalWindow > AtRegister > Carrying > Walking
 ```
 
-Each mode declares which inputs it handles. Entering a window pushes `ModalWindow`;
-closing pops it. "Can I press Space right now?" is answered in exactly one place.
+Each mode declares which actions it allows. Opening or closing a window automatically
+changes the resolved mode; only checkout and Go-Backs windows during register operation
+remain part of the register profile. Modal windows block gameplay hotkeys and movement.
+"Can I press Space right now?" is answered in exactly one place.
 
-**Interactables registry.** Shelves, crates, the register, doors, and later employees
-register an interaction with:
+**Interactables registry.** Implemented for the current shelves/lockers, crates, and
+register. Live sources describe which actions each target supports, how range and priority
+are measured, and what prompt to show:
 
-- a range,
-- a priority,
-- a key (E / Space / Q / click),
-- a hint label ("Item x5 | Space: Pick up").
+- supported action (interact, pick up, or open Go-Backs),
+- usable distance and priority when targets overlap,
+- hint text such as "Item x5 | Space: Pick up".
 
-One system picks the best target each frame and drives the context message area. That
-replaces hand-written nearest-crate and register-prompt logic. Adding a new interactable
-becomes a registration, not a scene edit.
+The registry chooses the best valid target for E, Space, or Q and supplies the crate and
+register prompts. This replaces the separate nearest-crate and register-range searches.
+Doors and employees can use the same system when those interactions are added.
 
 **Key rebinding.** Map actions (`Interact`, `PickUp`, `OpenTablet`) to keys in one table.
 Steam players expect rebinding, and it's nearly free with an action map.
@@ -297,13 +316,18 @@ Steam players expect rebinding, and it's nearly free with an action map.
 
 Ordered by what unblocks upcoming features. Each step leaves the game working.
 
+The first employee slice is in place: one hireable employee, provisional hiring and
+per-shift wage costs, register service, shelf restocking, crate-to-locker storage loading,
+editable saved task priorities, and wage reporting. Hauling loose crates from the floor,
+schedules, training, skill grades, and break-room behavior remain future work.
+
 | # | Step | Unblocks |
 |---|---|---|
 | 1 | Production build + packaging + `checkJs` | Shipping; catching contract bugs |
-| 2 | Event bus + `ControlMode` stack + interactables registry | Tutorials, audio, cleaner input; shrinks `GameScene` |
-| 3 | Container interface + `transfer()` | Employees, consistent UI messages |
-| 4 | Fixtures to JSON + components | New fixture types without code edits |
+| 2 | Expand event-bus listeners and move remaining direct consequences behind them | Tutorials, audio, cleaner input; shrinks `GameScene` |
+| 3 | **Done:** extend shared stock transfers to customers and employees | Consistent stock movement |
+| 4 | **Partly done:** fixtures to JSON; add behavior components | New fixture types without code edits |
 | 5 | Extract the sim layer out of `GameScene`, plus `SimClock` | Fast tests, fast-forward, simpler saves |
-| 6 | Agent/task system + `JobBoard` + `NavGrid` | **Employees** (the next big feature) |
-| 7 | UI components (Preact/Signals), CSS split | Finances, Employees, Handbook tabs |
+| 6 | Expand employee automation with shared agents, tasks, and navigation | Loose-crate hauling, schedules, skill grades, and more staff |
+| 7 | UI components (Preact/Signals), CSS split | Finances and Handbook tabs |
 | 8 | Tuning data + debug panel, save migrations, strings table | Balancing, post-launch patches |

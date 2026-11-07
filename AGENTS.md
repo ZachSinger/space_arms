@@ -7,6 +7,9 @@ The project owner has severe ADHD and difficulty holding context across long res
 - Keep replies brief. One topic per response — don't combine multiple topics or go on tangents.
 - Avoid long, detail-heavy explanations spanning several subjects at once. If more detail is genuinely needed, offer it rather than dumping it by default.
 - Never answer indirectly or make the owner ask a follow-up just to get a plain yes/no/which-one answer.
+- Explain work like a manager's briefing: state what is changing, why it matters to the game, and what the owner will notice. Assume the owner does not know the code or its current implementation; explain technical terms in plain language instead of relying on code-based examples.
+- Mention build or tooling warnings only when they affect the game or require the owner's attention. If one must be mentioned, immediately explain what it means and whether the owner needs to act.
+- Make suggested playtests concrete: say exactly what to do in the game and what should happen.
 - Unless the user says otherwise, don't end at a dead end: continue unfinished requested work, or briefly suggest one concrete next step. If a decision is needed, ask one focused question instead.
 
 ## Project Overview

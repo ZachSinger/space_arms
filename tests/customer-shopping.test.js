@@ -4,6 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { EventBus, GAME_EVENTS } from "../js/logic/EventBus.js";
 import { createServer } from "vite";
 
 let server;
@@ -44,10 +45,25 @@ function fixture(standPoint, placements) {
   return {
     standPoint,
     placements,
-    takeItem(placement) {
-      if (placement.quantity <= 0) return null;
-      placement.quantity -= 1;
-      return placement.itemId;
+    getAvailableUnitsFor(itemId, placement) {
+      return this.placements.includes(placement) && placement.itemId === itemId
+        ? placement.quantity
+        : 0;
+    },
+    getRemainingUnitsFor(itemId, placement) {
+      return this.getAvailableUnitsFor(itemId, placement) === 0
+        ? 0
+        : Number.MAX_SAFE_INTEGER;
+    },
+    remove(itemId, quantity, placement) {
+      const removed = Math.min(this.getAvailableUnitsFor(itemId, placement), quantity);
+      placement.quantity -= removed;
+      return removed;
+    },
+    add(itemId, quantity, placement) {
+      if (!this.placements.includes(placement) || placement.itemId !== itemId) return 0;
+      placement.quantity += quantity;
+      return quantity;
     },
   };
 }
@@ -55,8 +71,13 @@ function fixture(standPoint, placements) {
 function makeCustomer({ factionId = "scavengers", plan }) {
   const repChanges = [];
   const floatingText = [];
+  const missingPrimaryEvents = [];
+  const inventoryTransfers = [];
+  const eventBus = new EventBus();
+  eventBus.on(GAME_EVENTS.INVENTORY_TRANSFERRED, (event) => inventoryTransfers.push(event));
   const customer = Object.create(Customer.prototype);
   customer.scene = {
+    eventBus,
     getItem: (id) => ({
       id,
       tags: id === "gun" ? ["Firearm", "Rifle"] : [],
@@ -79,6 +100,8 @@ function makeCustomer({ factionId = "scavengers", plan }) {
   customer.onReserveShelfSlot = (_shelf) => _shelf.standPoint;
   customer.onReserveQueueSlot = () => ({ x: 900, y: 900 });
   customer.onJoinQueue = () => {};
+  customer.onMissingPrimary = (who, itemIds) =>
+    missingPrimaryEvents.push({ customer: who, itemIds });
   customer.setDestination = (x, y, onArrive) => {
     if (x < 900 && y < 900) onArrive();
   };
@@ -91,10 +114,10 @@ function makeCustomer({ factionId = "scavengers", plan }) {
   customer.onComplete = () => {};
   customer.isDestroyed = false;
   customer.scene.showFloatingText = (...args) => floatingText.push(args);
-  return { customer, repChanges, floatingText };
+  return { customer, repChanges, floatingText, missingPrimaryEvents, inventoryTransfers };
 }
 
-test("one missing primary item costs one store and faction reputation while remaining items are bought", () => {
+test("customers report missing primary stock while continuing to buy remaining items", () => {
   const inStock = fixture({ x: 100, y: 100 }, [{ itemId: "wanted", quantity: 1 }]);
   const soldOut = fixture({ x: 200, y: 100 }, [{ itemId: "missing", quantity: 0 }]);
   const bonusShelf = fixture({ x: 300, y: 100 }, [{ itemId: "bonus", quantity: 1 }]);
@@ -108,16 +131,37 @@ test("one missing primary item costs one store and faction reputation while rema
       { fixture: bonusShelf, standPoint: bonusShelf.standPoint },
     ],
   };
-  const { customer, repChanges, floatingText } = makeCustomer({ plan });
+  const {
+    customer,
+    repChanges,
+    floatingText,
+    missingPrimaryEvents,
+    inventoryTransfers,
+  } = makeCustomer({ plan });
   customer.visitNextShelf("primary");
 
   assert.deepEqual(customer.cart.map((entry) => entry.itemId), ["wanted", "bonus"]);
-  assert.deepEqual(repChanges, [{ amount: 1, factionId: "scavengers" }]);
-  assert.match(floatingText[0][2], /Out of stock/);
+  assert.deepEqual(inventoryTransfers, [
+    {
+      itemId: "wanted",
+      quantity: 1,
+      source: "shelf",
+      destination: "customer-cart",
+    },
+    {
+      itemId: "bonus",
+      quantity: 1,
+      source: "shelf",
+      destination: "customer-cart",
+    },
+  ]);
+  assert.deepEqual(missingPrimaryEvents, [{ customer, itemIds: ["missing"] }]);
+  assert.deepEqual(repChanges, []);
+  assert.deepEqual(floatingText, []);
   assert.equal(customer.state, "SEEK_REGISTER");
 });
 
-test("customers leave with one penalty and skip bonuses when every primary item is sold out", () => {
+test("customers report all missing primary items once and skip bonuses when none are in stock", () => {
   const primaryShelf = fixture({ x: 100, y: 100 }, [
     { itemId: "wanted", quantity: 0 },
     { itemId: "missing", quantity: 0 },
@@ -132,16 +176,17 @@ test("customers leave with one penalty and skip bonuses when every primary item 
       { fixture: bonusShelf, standPoint: bonusShelf.standPoint },
     ],
   };
-  const { customer, repChanges } = makeCustomer({ factionId: null, plan });
+  const { customer, repChanges, missingPrimaryEvents } = makeCustomer({ factionId: null, plan });
   customer.visitNextShelf("primary");
 
-  assert.deepEqual(repChanges, [{ amount: 1, factionId: null }]);
+  assert.deepEqual(missingPrimaryEvents, [{ customer, itemIds: ["wanted", "missing"] }]);
+  assert.deepEqual(repChanges, []);
   assert.equal(customer.state, "LEAVING");
   assert.deepEqual(customer.cart, []);
   assert.equal(bonusShelf.placements[0].quantity, 1);
 });
 
-test("an empty bonus list never creates a reputation penalty", () => {
+test("missing bonus items are not reported as primary stockouts", () => {
   const primaryShelf = fixture({ x: 100, y: 100 }, [{ itemId: "wanted", quantity: 1 }]);
   const bonusShelf = fixture({ x: 200, y: 100 }, [{ itemId: "bonus", quantity: 0 }]);
   const plan = {
@@ -153,10 +198,11 @@ test("an empty bonus list never creates a reputation penalty", () => {
       { fixture: bonusShelf, standPoint: bonusShelf.standPoint },
     ],
   };
-  const { customer, repChanges } = makeCustomer({ plan });
+  const { customer, repChanges, missingPrimaryEvents } = makeCustomer({ plan });
   customer.visitNextShelf("primary");
 
   assert.deepEqual(repChanges, []);
+  assert.deepEqual(missingPrimaryEvents, []);
   assert.deepEqual(customer.cart.map((entry) => entry.itemId), ["wanted"]);
   assert.equal(customer.state, "SEEK_REGISTER");
 });

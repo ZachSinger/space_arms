@@ -1,17 +1,17 @@
 // ==========================================
 // FILE: InventoryRenderer.js
 // ==========================================
-// HTML for the Manager Tablet's Inventory tab (per-item storage, stock, market price, and
-// store price controls) plus its keyboard/hover list navigation.
+// HTML for the Manager Tablet's Inventory tab (per-item storage, shelf stock, customer carts,
+// market price, and store price controls) plus its keyboard/hover list navigation.
 // See also: ManagerTablet.js (hosts the tab).
 export class InventoryRenderer {
   /**
    * Render just the Inventory tab's content; the hosting window owns the tab chrome.
-   * @param {{ item: object, storage: number, stock: number, marketPrice: number, storePrice: number }[]} entries - prices in credits
+   * @param {{ item: object, storage: number, stock: number, inCustomerCarts: number, marketPrice: number, storePrice: number }[]} entries - prices in credits
    * @returns {string}
    */
   static generateHTML(entries) {
-    const rows = entries.map(({ item, storage, stock, marketPrice, storePrice }, index) => {
+    const rows = entries.map(({ item, storage, stock, inCustomerCarts, marketPrice, storePrice }, index) => {
       const iconHTML = item.image
         ? `<img class="item-icon" src="${item.image}" alt="" />`
         : `<div class="item-icon"></div>`;
@@ -21,6 +21,7 @@ export class InventoryRenderer {
           <span class="item-card-title">${item.name}</span>
           <span class="inventory-quantity" data-inventory-storage>${storage}</span>
           <span class="inventory-quantity" data-inventory-stock>${stock}</span>
+          <span class="inventory-quantity" data-inventory-carts>${inCustomerCarts}</span>
           <span class="inventory-quantity" data-inventory-market>${marketPrice} credits</span>
           <div class="inventory-price-controls">
             <input class="inventory-price-input" type="number" min="1" step="1" value="${storePrice}"
@@ -41,12 +42,13 @@ export class InventoryRenderer {
     }).join("");
 
     return `
-      <div class="fixture-stock-meta">Storage includes lockers, hovercart, and unopened crates. Stock is on sales shelves. Market is today's galactic average; set your own Price.</div>
+      <div class="fixture-stock-meta">Storage includes lockers, the hovercart, unopened crates, and staff backpacks. Stock is on shelves; In Carts are with shoppers and return to Go-Backs if abandoned. Market is today's galactic average; set your own Price.</div>
       <div class="inventory-column-header">
         <span></span>
         <span>ITEM</span>
         <span class="inventory-quantity">STORAGE</span>
         <span class="inventory-quantity">STOCK</span>
+        <span class="inventory-quantity" title="Items shoppers have picked up but not yet bought">IN CARTS</span>
         <span class="inventory-quantity">MARKET</span>
         <span class="inventory-quantity">PRICE</span>
       </div>

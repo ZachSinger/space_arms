@@ -1,0 +1,45 @@
+{
+  "shelf_starter_2x1": {
+    "id": "shelf_starter_2x1",
+    "name": "COMPACT SHELF",
+    "kind": "shelf",
+    "w": 2,
+    "h": 1,
+    "texture": "shelf_starter_2x1",
+    "stackDepth": 10,
+    "price": 300,
+    "licenseId": "lic_fixture_basics"
+  },
+  "shelf_universal": {
+    "id": "shelf_universal",
+    "name": "LARGE SHELF",
+    "kind": "shelf",
+    "w": 3,
+    "h": 2,
+    "texture": "shelf_universal_01",
+    "stackDepth": 10,
+    "price": 2000,
+    "licenseId": "lic_fixture_expanded"
+  },
+  "locker_single": {
+    "id": "locker_single",
+    "name": "LOCKER",
+    "kind": "storage",
+    "w": 1,
+    "h": 2,
+    "texture": "locker_single",
+    "capacity": 20,
+    "price": 180,
+    "licenseId": "lic_fixture_basics"
+  },
+  "register_basic": {
+    "id": "register_basic",
+    "name": "REGISTER",
+    "kind": "register",
+    "w": 2,
+    "h": 2,
+    "texture": "register_01",
+    "price": 500,
+    "licenseId": "lic_fixture_basics"
+  }
+}

@@ -62,6 +62,20 @@ the game window, so review them before sharing.
 
 ## Working with the assistant
 
+Lockers show occupied/total storage capacity on the top edge of their front (for example,
+`7/20`). This counts the space used by the items, not the number of items. The count
+updates as stock changes and stays with the locker when it is moved. Carrying an
+item crate no longer shows the large information card at the top of the screen;
+instead a small two-row label just above the carried crate shows the item name, then
+the crate quantity and the locker spaces it fills, for example "x5 (10)" (same units
+as the locker count). A fixture crate shows, for example, "SHELF fixture".
+
+Pressing Space can pick up a crate while you are pushing it by walking into it.
+A thrown crate keeps its launch speed until it is clear of the player, then slides
+and slows down. While it is still launching it cannot be picked up; once it is
+sliding, the player bumps into it and can pick it up. This applies to both item
+and fixture crates.
+
 Before a playtest, the assistant should give one specific question to investigate
 and a short list of capture checkpoints. Afterward, provide the session folder
 path and say which capture shows the problem. The assistant can then read those

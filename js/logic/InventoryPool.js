@@ -16,6 +16,10 @@ export class InventoryPool {
     return this.stock.find((entry) => entry.itemId === itemId) || null;
   }
 
+  getAvailableUnitsFor(itemId) {
+    return this.findStockEntry(itemId)?.quantity ?? 0;
+  }
+
   usedCapacity() {
     return this.stock.reduce((sum, entry) => {
       const item = database.getItem(entry.itemId);

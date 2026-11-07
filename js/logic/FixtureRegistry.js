@@ -70,9 +70,9 @@ export class FixtureRegistry {
     return `${typeId}_${number}`;
   }
 
-  // Serializable placement data only ({ id, type, gx, gy } per fixture).
+  // Serializable placement data only ({ id, type, gx, gy, rotation } per fixture).
   layout() {
-    return this.fixtures.map(({ id, type, gx, gy }) => ({ id, type, gx, gy }));
+    return this.fixtures.map(({ id, type, gx, gy, rotation = 0 }) => ({ id, type, gx, gy, rotation }));
   }
 
   /**

@@ -28,5 +28,5 @@ test("registry ids stay unique and removal frees the id", () => {
 
   registry.remove("shelf_universal_1");
   assert.equal(registry.nextId("shelf_universal"), "shelf_universal_1");
-  assert.deepEqual(registry.layout(), [{ id: "shelf_universal_2", type: "shelf_universal", gx: 0, gy: 0 }]);
+  assert.deepEqual(registry.layout(), [{ id: "shelf_universal_2", type: "shelf_universal", gx: 0, gy: 0, rotation: 0 }]);
 });

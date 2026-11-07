@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "vite";
 import { summarizeSupplyOrder, DELIVERY_FEE } from "../js/logic/SupplyOrder.js";
+import { GAME_EVENTS } from "../js/logic/EventBus.js";
 
 let server;
 let ManagerTablet;
@@ -155,8 +156,20 @@ function createHarness() {
   const marketPrices = new Map([["rifle", 275], ["pistol", 250]]);
   const playerState = {
     listeners: [],
+    hiredEmployees: [],
+    credits: 1500,
     subscribe(listener) { this.listeners.push(listener); listener(); },
     notifyListeners() { for (const listener of this.listeners) listener(); },
+  };
+  const eventBus = {
+    listeners: new Map(),
+    on(event, listener) {
+      if (!this.listeners.has(event)) this.listeners.set(event, []);
+      this.listeners.get(event).push(listener);
+    },
+    emit(event, payload) {
+      for (const listener of this.listeners.get(event) || []) listener(payload);
+    },
   };
   const keyboard = {
     enabled: true,
@@ -166,7 +179,11 @@ function createHarness() {
   };
   const scene = {
     playerState,
+    eventBus,
     input: { keyboard },
+    employees: [],
+    customerCartCount: 0,
+    canHireEmployees: () => true,
     market: { getPrice: (itemId) => marketPrices.get(itemId) },
     storage: 1,
     getStorePrice: (itemId) => prices.get(itemId),
@@ -182,6 +199,7 @@ function createHarness() {
         item: { id: itemId, name: itemId },
         storage: this.storage,
         stock: 0,
+        inCustomerCarts: this.customerCartCount,
         marketPrice: marketPrices.get(itemId),
         storePrice: prices.get(itemId),
       }));
@@ -225,6 +243,20 @@ test("price buttons update the displayed value and retain keyboard focus", () =>
   assert.equal(h.list.scrollTop, 37);
   h.focus(null);
   assert.equal(h.keyboard.enabled, true);
+});
+
+test("inventory refreshes when customers shop and finish checkout", () => {
+  const h = createHarness();
+  h.scene.customerCartCount = 2;
+  h.scene.eventBus.emit(GAME_EVENTS.INVENTORY_TRANSFERRED, {
+    destination: "customer-cart",
+  });
+  assert.match(h.panel.markup, /data-inventory-carts>2</);
+  assert.match(h.panel.markup, /IN CARTS/);
+
+  h.scene.customerCartCount = 0;
+  h.scene.eventBus.emit(GAME_EVENTS.CUSTOMER_SALE_COMPLETED, {});
+  assert.match(h.panel.markup, /data-inventory-carts>0</);
 });
 
 test("a typed price commits before a subsequent button click", async () => {

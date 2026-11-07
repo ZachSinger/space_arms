@@ -31,7 +31,8 @@ notice something that needs doing but isn't being done right now.
       a wall stops you too. Loading pad crates block you like walls.
 - [x] Improve first-shift pacing: shortened shifts from ten to five minutes,
       keeping the same customer pool and doubling arrival frequency.
-- [x] Start with a much smaller shelf: a two-tile 2x1 starter shelf.
+- [x] Start with a much smaller shelf: a two-tile 2x1 starter shelf. (Superseded: new games now start with no shelves; the compact shelf is bought from the Fixtures tab. Placement checks preserve customer access to the register and both sides of the backroom entrance.)
+- [x] Let players turn fixtures: press R while placing or moving any fixture, including the register. Its front, keep-clear squares, customer line, and cashier spot turn with it, so shelves can line the bottom and side walls. Shelves use temporary, tile-sized overhead graphics with dark stock surfaces and a light front edge, including in placement previews. Lockers and registers still reuse rotated art until direction-specific art exists.
 - [x] Redo player-facing game messages: show a large, readable banner below the HUD for
       2.5 seconds instead of tiny text above the player. Keep customer reactions anchored
       to the customer.
@@ -82,6 +83,7 @@ notice something that needs doing but isn't being done right now.
       `gridAlignedCenter()` in game.js for the correct way to position one instead.
 
 ## Art / Assets
+- [ ] Map art is placeholder and looks bad. Replace the floor, wall, and room art.
 - [ ] Sound effects for hitting customers with boxes.
 - [ ] Emoticons for customers.
 - [ ] `att_stk_08` (Blackwood Ordnance Counter-Weight Stock) is using a placeholder image
@@ -156,8 +158,9 @@ notice something that needs doing but isn't being done right now.
       can spawn.
 - [x] ~~No real entrance/exit~~ -- customers used to spawn/despawn in an arbitrary strip of
       floor right next to the backroom doorway. There's now an actual door
-      (`TileRoom.openDoorway`, `door_light_blank_wide`) carved into the Sales Floor's south
-      exterior wall; customers spawn just inside it and walk back to it to leave.
+      (`TileRoom.openDoorway`, `door_light_blank_wide`) carved into the Sales Floor's north
+      exterior wall (moved from the south wall so the shop can expand downward; see
+      `getStoreDoorCell`); customers spawn just inside it and walk back to it to leave.
 - [x] ~~Delivering a carried crate to the shelf was too finicky, and the floating-text
       feedback explaining why was gone before it could be read~~ -- shelf delivery used to
       share Crate's own tight 56px pickup radius, measured from one single fixed pixel in
@@ -347,9 +350,8 @@ notice something that needs doing but isn't being done right now.
       out of the bin.
 - [ ] Consider a separate Go-Backs minigame: scan go-backs items before they can be loaded
       into the hovercart.
-- [ ] Inventory gap: items in a customer's cart (taken off the shelf, not yet sold or sent
-      to Go-Backs) aren't counted in Inventory totals anywhere. Decide how to show them
-      (e.g. an "in carts" count).
+- [x] Inventory tab shows how many items are in active customers' carts, updating when they
+      shop or finish checkout; abandoned carts move to Go-Backs as before.
 - [x] Item pricing (Step 52): `Market.js` keeps each item's hidden base (`baseCost`) and a
       galactic market price that moves up to ±10% per day at End Day, clamped to 50%-200%
       of base. Inventory tab shows MARKET and an editable PRICE (defaults to market when
@@ -360,7 +362,8 @@ notice something that needs doing but isn't being done right now.
       customers? more sales?).
 - [x] Price editing buttons: +10% / -10% (at least 1 credit where possible), and "Set to
       market" (current avg market price).
-- [ ] Pre-shift Start Shift onboarding flow (Step 44)
+- [ ] Pre-shift Start Shift onboarding flow (Step 44). **Deferred until the map and core
+      loop are close to final**; a tutorial built on the placeholder map would need redoing.
 - [ ] Employees: hiring, Work Register / Stock Shelves tasks (Step 13-19)
 - [x] Fixture purchasing, fixture crates, off-shift placement/crating, and fixture licenses
       (Steps 22/41; fixture catalog in `js/logic/FixtureLayout.js`).

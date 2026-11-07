@@ -30,8 +30,8 @@ export class ShiftSummaryWindow {
   }
 
   /**
-   * @param {{creditsEarned: number, reputationGained: number, customersServed: number,
-   *   customersTurnedAway: number}} stats
+   * @param {{creditsEarned: number, employeeWagesPaid: number, reputationGained: number,
+   *   customersServed: number, customersTurnedAway: number}} stats
    */
   show(stats) {
     this.bodyElement.innerHTML = `
@@ -40,6 +40,12 @@ export class ShiftSummaryWindow {
           <span>Credits earned</span>
           <span class="shift-summary-value">${stats.creditsEarned.toLocaleString()} credits</span>
         </div>
+        ${stats.employeeWagesPaid > 0 ? `
+          <div class="shift-summary-row">
+            <span>Employee wages paid</span>
+            <span class="shift-summary-value">-${stats.employeeWagesPaid.toLocaleString()} credits</span>
+          </div>
+        ` : ""}
         <div class="shift-summary-row">
           <span>Reputation gained</span>
           <span class="shift-summary-value">+${stats.reputationGained}</span>

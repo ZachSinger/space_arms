@@ -459,8 +459,8 @@ button {
 .inventory-item-card,
 .inventory-column-header {
   display: grid;
-  grid-template-columns: 56px minmax(0, 1fr) 60px 52px 64px 142px;
-  gap: 12px;
+  grid-template-columns: 48px minmax(0, 1fr) 48px 44px 56px 58px 112px;
+  gap: 8px;
   align-items: center;
 }
 
@@ -618,6 +618,11 @@ button {
 .layout-fixture-row small,
 .layout-save-status {
   color: var(--color-text-muted);
+}
+
+.layout-fixture-row small {
+  display: block;
+  margin-top: 3px;
 }
 
 .layout-fixture-row .action-btn {
@@ -916,6 +921,32 @@ button {
 
 .fixture-stock-row {
   align-items: center;
+}
+
+.employee-job-priorities {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.employee-job-priority {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: var(--font-size-11);
+}
+
+.employee-job-priority-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.employee-job-priority-controls .action-btn {
+  min-width: 46px;
+  padding: 3px 5px;
+  font-size: var(--font-size-10);
 }
 
 .go-backs-row {
@@ -1316,6 +1347,7 @@ button {
 .game-message.context-message {
   padding: 8px 14px;
   font-size: var(--font-size-16);
+  white-space: pre-line;
 }
 
 /* ================================================================= /

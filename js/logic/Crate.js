@@ -64,12 +64,39 @@ export class Crate {
     return x === 0 && y === 0;
   }
 
+  // A thrown crate becomes "sliding" once its launch boost ends (normally after it clears the
+  // thrower): from then on the player bumps into it and can pick it up, like a pushed crate.
+  isSliding() {
+    return !this.isCarried && !this.lockedToPad && !this.launch &&
+      this.sprite.body.enable && !this.isStationary();
+  }
+
+  canPickUp() {
+    return this.isPushed || this.isStationary() || this.isSliding();
+  }
+
+  getAvailableUnitsFor(itemId) {
+    return this.kind === "item" && this.itemId === itemId ? this.quantity : 0;
+  }
+
+  add(itemId, quantity) {
+    if (this.kind !== "item" || this.itemId !== itemId) return 0;
+    this.quantity += quantity;
+    return quantity;
+  }
+
+  remove(itemId, quantity) {
+    const removed = Math.min(this.getAvailableUnitsFor(itemId), quantity);
+    this.quantity -= removed;
+    return removed;
+  }
+
   /**
-   * Only a resting crate can be picked up; its body is disabled while carried.
+   * Resting, pushed, and sliding crates can be picked up; a crate still being launched cannot.
    * @param {Phaser.GameObjects.Sprite} carrierSprite
    */
   pickUp(carrierSprite) {
-    if (!this.isStationary()) return false;
+    if (!this.canPickUp()) return false;
 
     this.isCarried = true;
     this.isThrown = false;
@@ -224,12 +251,6 @@ export class Crate {
   updateThrow(delta) {
     const body = this.sprite.body;
     if (!body.enable || !body.moves) return;
-    if (this.launch) {
-      this.launch.remainingMs -= delta;
-      if (this.launch.remainingMs <= 0 || body.blocked?.none === false || body.touching?.none === false) {
-        this.refreshDrag();
-      }
-    }
     if (this.throwCarrier) {
       const carrier = this.throwCarrier.getBounds();
       const crate = this.sprite.getBounds();
@@ -239,6 +260,13 @@ export class Crate {
         this.throwCarrier = null;
         this.sprite.setDepth(2);
       }
+    }
+    if (this.launch) {
+      const collided = body.blocked?.none === false || body.touching?.none === false;
+      // Keep boosting past the usual time until the crate clears the thrower, or the player
+      // could outrun a crate thrown from overhead and walk underneath it.
+      this.launch.remainingMs = Math.max(this.throwCarrier ? 1 : 0, this.launch.remainingMs - delta);
+      if (this.launch.remainingMs <= 0 || collided) this.refreshDrag();
     }
   }
 
@@ -283,7 +311,7 @@ export class Crate {
   }
 
   /**
-   * Penalize a customer at most once per throw.
+   * Claim a valid customer hit at most once per throw; the scene handles its consequences.
    * @param {import("./Customer.js").Customer} customer
    */
   tryHitCustomer(customer) {
@@ -299,9 +327,8 @@ export class Crate {
     ) {
       return false;
     }
-
     this.hitCustomers.add(customer);
-    customer.hitByCrate();
+    this.hitCustomers.add(customer);
     return true;
   }
 

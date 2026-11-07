@@ -3,7 +3,9 @@
 // ==========================================
 // Validates a loaded shop save against the item database and layout rules, throwing a
 // readable error on anything malformed and migrating older fixture entries.
-import { getFixtureType, getShelfDisplayGrid, getShelfSlotCapacity, migrateFixtureEntry } from "./FixtureLayout.js";
+import { getFixtureType, getShelfDisplayGrid, getShelfSlotCapacity, isValidFixtureRotation, migrateFixtureEntry } from "./FixtureLayout.js";
+import employeeRoster from "../../data/Employees.json" with { type: "json" };
+import { EMPLOYEE_JOB_IDS } from "./EmployeeJobs.js";
 import { TILE_SIZE, ZONES, getTotalGridSize } from "./RoomLayout.js";
 import { MIN_BASE_RATIO, MAX_BASE_RATIO, MIN_SUPPLY_RATIO, MAX_SUPPLY_RATIO } from "./Market.js";
 import { THROW_ACCELERATION_MS } from "./Crate.js";
@@ -53,6 +55,23 @@ export function validateShopSave(data, database) {
   requireSave(isRecord(player), "missing player state.");
   requireSave(integer(player.credits) && integer(player.globalReputation) &&
     integer(player.customersTurnedAway, 0), "invalid credits or reputation.");
+  if (player.hiredEmployees !== undefined) {
+    const employeeIds = new Set(employeeRoster.map((employee) => employee.id));
+    requireSave(Array.isArray(player.hiredEmployees) &&
+      new Set(player.hiredEmployees).size === player.hiredEmployees.length &&
+      player.hiredEmployees.every((id) => employeeIds.has(id)), "invalid hired employees.");
+  }
+  if (player.employeeJobPriorities !== undefined) {
+    const hiredEmployees = player.hiredEmployees || [];
+    requireSave(isRecord(player.employeeJobPriorities) &&
+      Object.keys(player.employeeJobPriorities).length === hiredEmployees.length &&
+      hiredEmployees.every((employeeId) => {
+        const priorities = player.employeeJobPriorities[employeeId];
+        return Array.isArray(priorities) && priorities.length === EMPLOYEE_JOB_IDS.length &&
+          new Set(priorities).size === EMPLOYEE_JOB_IDS.length &&
+          priorities.every((jobId) => EMPLOYEE_JOB_IDS.includes(jobId));
+      }), "invalid employee job priorities.");
+  }
   requireSave(isRecord(player.factionReputation) &&
     ["scavengers", "mercenaries", "explorers"].every((id) => integer(player.factionReputation[id])),
   "invalid faction reputation.");
@@ -87,7 +106,8 @@ export function validateShopSave(data, database) {
   for (const entry of data.fixtures) {
     const spec = getFixtureType(entry?.type);
     requireSave(spec && typeof entry.id === "string" && !fixtureIds.has(entry.id) &&
-      integer(entry.gx, 0) && integer(entry.gy, 0), "invalid fixture position.");
+      integer(entry.gx, 0) && integer(entry.gy, 0) && isValidFixtureRotation(entry.rotation),
+    "invalid fixture position.");
     fixtureIds.add(entry.id);
     if (spec.kind === "storage") stockCapacity(entry.stock, spec.capacity);
     if (spec.kind === "shelf") {

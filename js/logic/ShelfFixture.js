@@ -73,16 +73,19 @@ export class ShelfFixture {
    * @param {number} gy
    * @param {boolean} rotated
    */
-  placeItem(itemId, gx, gy, rotated = false) {
+  placeItem(itemId, gx, gy, rotated = false, quantity = 1) {
     const item = database.getItem(itemId);
     if (!item) return null;
+    if (!Number.isInteger(quantity) || quantity < 0) {
+      throw new RangeError("Shelf placement quantity must be a non-negative integer.");
+    }
 
     const w = rotated ? item.dimensions.h : item.dimensions.w;
     const h = rotated ? item.dimensions.w : item.dimensions.h;
     if (!this.canPlaceAt(gx, gy, w, h)) return null;
 
-    const placement = { itemId, gx, gy, w, h, rotated, quantity: 1 };
-    if (this.getPlacementCapacity(placement) < 1) return null;
+    const placement = { itemId, gx, gy, w, h, rotated, quantity };
+    if (this.getPlacementCapacity(placement) < Math.max(quantity, 1)) return null;
     this.placements.push(placement);
     return placement;
   }
@@ -143,7 +146,22 @@ export class ShelfFixture {
     );
   }
 
-  getRemainingUnitsFor(itemId) {
+  getAvailableUnitsFor(itemId, placement = null) {
+    if (placement) {
+      return this.placements.includes(placement) && placement.itemId === itemId
+        ? placement.quantity
+        : 0;
+    }
+    return this.placements
+      .filter((entry) => entry.itemId === itemId)
+      .reduce((sum, entry) => sum + entry.quantity, 0);
+  }
+
+  getRemainingUnitsFor(itemId, placement = null) {
+    if (placement) {
+      if (!this.placements.includes(placement) || placement.itemId !== itemId) return 0;
+      return Math.max(0, this.getPlacementCapacity(placement) - placement.quantity);
+    }
     return this.getOpenPlacementsFor(itemId).reduce(
       (sum, p) => sum + (this.getPlacementCapacity(p) - p.quantity),
       0,
@@ -156,7 +174,12 @@ export class ShelfFixture {
    * @param {string} itemId
    * @param {number} quantity
    */
-  add(itemId, quantity) {
+  add(itemId, quantity, placement = null) {
+    if (placement) {
+      const accepted = Math.min(this.getRemainingUnitsFor(itemId, placement), quantity);
+      placement.quantity += accepted;
+      return accepted;
+    }
     let remaining = quantity;
     for (const placement of this.getOpenPlacementsFor(itemId)) {
       if (remaining <= 0) break;
@@ -172,7 +195,12 @@ export class ShelfFixture {
     return this.add(itemId, quantity);
   }
 
-  remove(itemId, quantity) {
+  remove(itemId, quantity, placement = null) {
+    if (placement) {
+      const removed = Math.min(this.getAvailableUnitsFor(itemId, placement), quantity);
+      placement.quantity -= removed;
+      return removed;
+    }
     let remaining = quantity;
     for (const placement of this.placements) {
       if (remaining <= 0) break;

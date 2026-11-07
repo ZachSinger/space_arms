@@ -59,7 +59,7 @@ export class Player {
   }
 
   update() {
-    if (!this.inputEnabled) {
+    if (!this.inputEnabled || !this.scene.controlMode.allows("move")) {
       this.sprite.body.setVelocity(0, 0);
       return;
     }

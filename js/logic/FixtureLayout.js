@@ -1,39 +1,38 @@
 // ==========================================
 // FILE: FixtureLayout.js
 // ==========================================
-// The fixture type catalog, the starting layout, and layout rules: fixture footprints,
-// access cells, and validation that a proposed layout keeps the shop walkable.
+// The starting layout and rules for fixture footprints, access cells, and validating that a
+// proposed layout keeps the shop walkable. Fixture type data lives in data/Fixtures.json.
 // See also: FixtureRegistry.js (placed fixture instances).
+import fixtureTypes from "../../data/Fixtures.json" with { type: "json" };
 import { getReachableGridCells } from "./Pathfinder.js";
-import { TILE_SIZE, getTotalGridSize, zoneAt } from "./RoomLayout.js";
+import {
+  TILE_SIZE, getTotalGridSize, zoneAt,
+} from "./RoomLayout.js";
 
 // Shelf display slots per tile along each axis.
 export const SHELF_VISUAL_SLOTS_PER_TILE = 2;
 
-// The fixture catalog: what each *type* of fixture is. Placed fixtures are instances
-// ({ id, type, gx, gy }) owned by FixtureRegistry. Prices are in credits.
-export const FIXTURE_TYPES = {
-  shelf_starter_2x1: { id: "shelf_starter_2x1", name: "COMPACT SHELF", kind: "shelf", w: 2, h: 1,
-    texture: "shelf_starter_2x1", stackDepth: 10,
-    price: 300, licenseId: "lic_fixture_basics" },
-  shelf_universal: { id: "shelf_universal", name: "SHELF", kind: "shelf", w: 3, h: 2,
-    texture: "shelf_universal_01", stackDepth: 10,
-    price: 300, licenseId: "lic_fixture_basics" },
-  locker_single: { id: "locker_single", name: "LOCKER", kind: "storage", w: 1, h: 2,
-    texture: "locker_single", capacity: 20, price: 180, licenseId: "lic_fixture_basics" },
-  register_basic: { id: "register_basic", name: "REGISTER", kind: "register", w: 2, h: 2,
-    texture: "register_01", price: 500, licenseId: "lic_fixture_basics" },
-};
+// Placed fixtures are instances ({ id, type, gx, gy }) owned by FixtureRegistry.
+export const FIXTURE_TYPES = fixtureTypes;
 
-// A new game's layout. These instance ids predate fixture types, so saves made before
-// types existed (entries without a `type`) are migrated through this list.
+// A new game's layout: no shelves, so the player buys their first one from the Fixtures tab.
 export const STARTING_FIXTURES = [
-  { id: "fixture_demo_01", type: "shelf_starter_2x1", gx: 7, gy: 2 },
   { id: "storage_demo_01", type: "locker_single", gx: 1, gy: 1 },
   { id: "storage_demo_02", type: "locker_single", gx: 2, gy: 1 },
   { id: "storage_demo_03", type: "locker_single", gx: 3, gy: 1 },
   { id: "register", type: "register_basic", gx: 12, gy: 2 },
 ];
+
+// Saves made before fixture types existed (entries without a `type`) are migrated by id.
+// Old saves used fixture_demo_01 for the original 3x2 shelf.
+const LEGACY_FIXTURE_TYPES = {
+  fixture_demo_01: "shelf_universal",
+  storage_demo_01: "locker_single",
+  storage_demo_02: "locker_single",
+  storage_demo_03: "locker_single",
+  register: "register_basic",
+};
 
 /**
  * Units of an item that fit in one shelf slot: its stackSize, capped by the shelf's stackDepth.
@@ -62,18 +61,52 @@ export function getFixtureType(typeId) {
  */
 export function migrateFixtureEntry(entry) {
   if (!entry || typeof entry !== "object" || entry.type !== undefined) return entry;
-  const legacy = STARTING_FIXTURES.find((fixture) => fixture.id === entry.id);
-  if (!legacy) return entry;
-  // Old saves used this id for the original 3x2 shelf; keep its larger grid intact.
-  const type = legacy.id === "fixture_demo_01" ? "shelf_universal" : legacy.type;
-  return { ...entry, type };
+  if (!Object.hasOwn(LEGACY_FIXTURE_TYPES, entry.id)) return entry;
+  return { ...entry, type: LEGACY_FIXTURE_TYPES[entry.id] };
+}
+
+// Quarter turns clockwise. Unturned fixtures face down; each turn moves the front one side
+// clockwise: down, left, up, right.
+export const FIXTURE_FACINGS = Object.freeze(["down", "left", "up", "right"]);
+const FACING_STEPS = Object.freeze({
+  down: { dx: 0, dy: 1 },
+  left: { dx: -1, dy: 0 },
+  up: { dx: 0, dy: -1 },
+  right: { dx: 1, dy: 0 },
+});
+
+export function isValidFixtureRotation(rotation) {
+  return rotation === undefined || (Number.isInteger(rotation) && rotation >= 0 && rotation < 4);
+}
+
+export function fixtureRotation(placement) {
+  return placement.rotation ?? 0;
+}
+
+/**
+ * The side customers and the player use: "down", "left", "up", or "right".
+ * @param {object} placement
+ * @param {boolean} [behind] - the opposite side instead
+ */
+export function fixtureFacing(placement, behind = false) {
+  return FIXTURE_FACINGS[(fixtureRotation(placement) + (behind ? 2 : 0)) % 4];
+}
+
+/**
+ * Floor footprint in tiles after rotation.
+ * @param {object} placement
+ * @returns {{ w: number, h: number }}
+ */
+export function fixtureFootprint(placement) {
+  const spec = getFixtureType(placement.type);
+  return fixtureRotation(placement) % 2 === 0 ? { w: spec.w, h: spec.h } : { w: spec.h, h: spec.w };
 }
 
 export function fixtureCells(placement) {
-  const spec = getFixtureType(placement.type);
+  const { w, h } = fixtureFootprint(placement);
   const cells = [];
-  for (let y = 0; y < spec.h; y += 1) {
-    for (let x = 0; x < spec.w; x += 1) {
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
       cells.push({ gx: placement.gx + x, gy: placement.gy + y });
     }
   }
@@ -81,17 +114,49 @@ export function fixtureCells(placement) {
 }
 
 /**
- * The row of cells a customer or the player stands on to use the fixture.
+ * The line of cells a customer or the player stands on to use the fixture.
  * @param {object} placement
- * @param {boolean} [behind] - the row behind instead (the register needs both)
+ * @param {boolean} [behind] - the line behind instead (the register needs both)
  * @returns {{ gx: number, gy: number }[]}
  */
 export function fixtureAccessCells(placement, behind = false) {
-  const spec = getFixtureType(placement.type);
-  return Array.from({ length: spec.w }, (_, x) => ({
-    gx: placement.gx + x,
-    gy: behind ? placement.gy - 1 : placement.gy + spec.h,
-  }));
+  const { w, h } = fixtureFootprint(placement);
+  const { gx, gy } = placement;
+  switch (fixtureFacing(placement, behind)) {
+    case "down": return Array.from({ length: w }, (_, x) => ({ gx: gx + x, gy: gy + h }));
+    case "up": return Array.from({ length: w }, (_, x) => ({ gx: gx + x, gy: gy - 1 }));
+    case "left": return Array.from({ length: h }, (_, y) => ({ gx: gx - 1, gy: gy + y }));
+    default: return Array.from({ length: h }, (_, y) => ({ gx: gx + w, gy: gy + y }));
+  }
+}
+
+/**
+ * Distance (px) from a point in front of the fixture to its front edge; Infinity when the
+ * point is beside or behind it.
+ */
+export function fixtureInteractionDistance(placement, { x, y }) {
+  const { w, h } = fixtureFootprint(placement);
+  const left = placement.gx * TILE_SIZE;
+  const top = placement.gy * TILE_SIZE;
+  const right = left + w * TILE_SIZE;
+  const bottom = top + h * TILE_SIZE;
+  // Shared edges belong to the fixture on the right (or below), not both neighbors.
+  const alongX = x >= left && x < right;
+  const alongY = y >= top && y < bottom;
+  switch (fixtureFacing(placement)) {
+    case "down": return alongX && y >= bottom ? y - bottom : Infinity;
+    case "up": return alongX && y <= top ? top - y : Infinity;
+    case "left": return alongY && x <= left ? left - x : Infinity;
+    default: return alongY && x >= right ? x - right : Infinity;
+  }
+}
+
+/**
+ * One cell step in the direction the fixture faces (or away from it when behind).
+ * @returns {{ dx: number, dy: number }}
+ */
+export function fixtureFacingStep(placement, behind = false) {
+  return FACING_STEPS[fixtureFacing(placement, behind)];
 }
 
 export function cellKey({ gx, gy }) {
@@ -116,7 +181,8 @@ export function validateFixtureLayout(placements, {
   for (const placement of placements) {
     const spec = getFixtureType(placement?.type);
     if (!spec || typeof placement.id !== "string" || ids.has(placement.id) ||
-      !Number.isInteger(placement.gx) || !Number.isInteger(placement.gy)) {
+      !Number.isInteger(placement.gx) || !Number.isInteger(placement.gy) ||
+      !isValidFixtureRotation(placement.rotation)) {
       return invalid("The fixture layout is invalid.");
     }
     ids.add(placement.id);
@@ -132,9 +198,10 @@ export function validateFixtureLayout(placements, {
     }
     const left = placement.gx * TILE_SIZE;
     const top = placement.gy * TILE_SIZE;
+    const footprint = fixtureFootprint(placement);
     if (occupiedRectangles.some((rect) =>
-      left < rect.right && left + spec.w * TILE_SIZE > rect.left &&
-      top < rect.bottom && top + spec.h * TILE_SIZE > rect.top,
+      left < rect.right && left + footprint.w * TILE_SIZE > rect.left &&
+      top < rect.bottom && top + footprint.h * TILE_SIZE > rect.top,
     )) {
       return invalid("Move the player or crate out of the way first.");
     }
@@ -164,8 +231,10 @@ export function validateFixtureLayout(placements, {
     }
   }
   const queueStart = access.get(registers[0].id);
+  // The line only forms on the register's front side, never curling around beside or behind it.
+  const step = fixtureFacingStep(registers[0]);
   const queueCells = getReachableGridCells(queueStart, (gx, gy) =>
-    gy >= queueStart.gy && canWalk(gx, gy) &&
+    (gx - queueStart.gx) * step.dx + (gy - queueStart.gy) * step.dy >= 0 && canWalk(gx, gy) &&
     !reservedCells.has(`${gx},${gy}`) && !otherAccessCells.has(`${gx},${gy}`),
   ).slice(0, queueSize);
   if (queueCells.length < queueSize) return invalid("Leave room in front of the register for the customer queue.");
