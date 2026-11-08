@@ -380,8 +380,9 @@ notice something that needs doing but isn't being done right now.
       first ordered). Customers get a random 1.0-1.3x markup tolerance and skip items
       priced above it; carts snapshot the store price. Supply cost doesn't follow the
       market: it's a hidden per-item 40-60% of base, so it can't be divided back into base.
-- [ ] Figure out the benefit of pricing below the average market price (happier
-      customers? more sales?).
+- [x] Cheap prices reward customers: if any unrequested shelf item is at least 10% below
+      market, each customer has a 50% chance to add one as an extra purchase. They show a
+      happy face when they buy any bargain; discounts do not grant extra reputation.
 - [x] Price editing buttons: +10% / -10% (at least 1 credit where possible), and "Set to
       market" (current avg market price).
 - [ ] Pre-shift Start Shift onboarding flow (Step 44). **Deferred until the map and core

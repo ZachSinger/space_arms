@@ -17,7 +17,9 @@ import { StorageFixture } from "../logic/ShopInventory.js";
 import { ShelfFixture } from "../logic/ShelfFixture.js";
 import { Customer, SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT } from "../logic/Customer.js";
 import { Employee } from "../logic/Employee.js";
-import { createCustomerBuyList } from "../logic/CustomerBuyLists.js";
+import {
+  addDiscountBonusItem, BARGAIN_PRICE_RATIO, createCustomerBuyList,
+} from "../logic/CustomerBuyLists.js";
 import { formatMoney, isMoney, sumMoney } from "../logic/Money.js";
 import { addTraitBonusItems } from "../logic/CustomerTraits.js";
 import {
@@ -2239,6 +2241,12 @@ export class GameScene extends Phaser.Scene {
       factionId,
       shelfItemIds,
       (itemId) => database.getItem(itemId),
+    );
+    buyList.bonusItemIds = addDiscountBonusItem(
+      buyList,
+      shelfItemIds,
+      (itemId) => this.getStorePrice(itemId) <=
+        this.market.getPrice(itemId) * BARGAIN_PRICE_RATIO,
     );
     buyList.bonusItemIds = addTraitBonusItems(buyList, shelfItemIds, traits);
     const targetIds = new Set([

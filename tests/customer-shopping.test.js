@@ -214,6 +214,24 @@ test("customers report missing primary stock while continuing to buy remaining i
   assert.equal(customer.state, "SEEK_REGISTER");
 });
 
+test("customers react happily when they pick up an item priced at least 10% below market", () => {
+  const shelf = fixture({ x: 100, y: 100 }, [{ itemId: "bargain", quantity: 1 }]);
+  const { customer, reactionGraphics } = makeCustomer({
+    factionId: null,
+    plan: { primaryItemIds: [], bonusItemIds: [], matchingAmmoIdsByFirearm: {}, shelfStops: [] },
+  });
+  customer.scene.getStorePrice = () => 90;
+  customer.fixture = shelf;
+  customer.phaseItemIds = ["bargain"];
+  customer.shoppingPhase = "bonus";
+  customer.visitNextShelfStop = () => {};
+  customer.shopAtCurrentShelf();
+
+  assert.deepEqual(customer.cart, [{ itemId: "bargain", price: 90 }]);
+  assert.equal(reactionGraphics.length, 1);
+  assert.equal(customer.reactionEventsShown.has("good-deal"), true);
+});
+
 test("customers report all missing primary items once and skip bonuses when none are in stock", () => {
   const primaryShelf = fixture({ x: 100, y: 100 }, [
     { itemId: "wanted", quantity: 0 },

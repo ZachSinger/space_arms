@@ -19,6 +19,9 @@ export const CUSTOMER_BUY_LIST_TUNING = Object.freeze({
   },
 });
 
+export const BARGAIN_PRICE_RATIO = 0.9;
+export const DISCOUNT_BONUS_CHANCE = 0.5;
+
 export const CUSTOMER_FACTION_IDS = Object.freeze([
   "scavengers",
   "mercenaries",
@@ -129,4 +132,22 @@ export function createCustomerBuyList(factionId, shelfItemIds, getItem, random =
     bonusItemIds: bonus.map((item) => item.id),
     matchingAmmoIdsByFirearm,
   };
+}
+
+/**
+ * Give a customer a chance to add one extra item priced at least 10% below market.
+ * @param {{ primaryItemIds: string[], bonusItemIds: string[] }} buyList
+ * @param {string[]} shelfItemIds
+ * @param {(id: string) => boolean} isBargain
+ * @param {() => number} [random]
+ * @returns {string[]} the updated bonus list
+ */
+export function addDiscountBonusItem(buyList, shelfItemIds, isBargain, random = Math.random) {
+  const wanted = new Set([...buyList.primaryItemIds, ...buyList.bonusItemIds]);
+  const candidates = [...new Set(shelfItemIds)].filter((id) => !wanted.has(id) && isBargain(id));
+  if (candidates.length === 0 || random() >= DISCOUNT_BONUS_CHANCE) {
+    return buyList.bonusItemIds;
+  }
+  const index = Math.floor(Math.max(0, Math.min(1 - Number.EPSILON, random())) * candidates.length);
+  return [...buyList.bonusItemIds, candidates[index]];
 }

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCustomerBuyList, CUSTOMER_BUY_LIST_TUNING } from "../js/logic/CustomerBuyLists.js";
+import {
+  addDiscountBonusItem, createCustomerBuyList, CUSTOMER_BUY_LIST_TUNING,
+  BARGAIN_PRICE_RATIO, DISCOUNT_BONUS_CHANCE,
+} from "../js/logic/CustomerBuyLists.js";
 
 const catalog = [
   { id: "rifle_a", name: "Rifle A", tags: ["Firearm", "Standard", "Rifle"], ammo: "Rifle Light Caliber" },
@@ -68,5 +71,31 @@ test("Explorers can choose either a Tool or Survival gear as a primary", () => {
   assert.deepEqual(
     new Set([...first.primaryItemIds, ...last.primaryItemIds]),
     new Set(["survival", "tool"]),
+  );
+});
+
+test("customers sometimes add one extra bargain item when an unrequested item is 10% below market", () => {
+  const buyList = { primaryItemIds: ["tool"], bonusItemIds: ["survival"] };
+  const result = addDiscountBonusItem(
+    buyList,
+    ["tool", "survival", "apparel", "old_ration"],
+    (id) => id === "apparel" || id === "old_ration",
+    () => 0,
+  );
+  assert.equal(BARGAIN_PRICE_RATIO, 0.9);
+  assert.equal(DISCOUNT_BONUS_CHANCE, 0.5);
+  assert.deepEqual(result, ["survival", "apparel"]);
+  assert.deepEqual(buyList.bonusItemIds, ["survival"]);
+});
+
+test("customers skip bargain extras when no unrequested item is discounted or the chance misses", () => {
+  const buyList = { primaryItemIds: ["tool"], bonusItemIds: [] };
+  assert.deepEqual(
+    addDiscountBonusItem(buyList, ["tool", "survival"], () => false, () => 0),
+    [],
+  );
+  assert.deepEqual(
+    addDiscountBonusItem(buyList, ["tool", "survival"], () => true, () => 0.9),
+    [],
   );
 });

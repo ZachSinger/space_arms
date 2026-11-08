@@ -6,7 +6,7 @@
 // See also: CustomerBuyLists.js (what they want), Pathfinder.js (how they route).
 
 import { pickRandomCustomerCharacter } from "./CustomerSprites.js";
-import { createCustomerBuyList } from "./CustomerBuyLists.js";
+import { BARGAIN_PRICE_RATIO, createCustomerBuyList } from "./CustomerBuyLists.js";
 import { transferItems } from "./InventoryTransfer.js";
 import { sumMoney } from "./Money.js";
 import { BASE_PATIENCE_MS, getPatienceMs, planShelfRoute, rollCustomerTraits } from "./CustomerTraits.js";
@@ -273,6 +273,10 @@ export class Customer {
       });
       if (transfer.moved === 0) continue;
       this.scene.refreshShelfStockDisplay?.(this.fixture);
+      if (this.scene.getStorePrice(itemId) <=
+        this.scene.market.getPrice(itemId) * BARGAIN_PRICE_RATIO) {
+        this.showReaction("good-deal", "happy");
+      }
       if (this.shoppingPhase === "primary") this.primaryBought.add(itemId);
       else this.bonusBought.add(itemId);
 
