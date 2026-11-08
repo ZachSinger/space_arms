@@ -78,6 +78,37 @@ test("the starting layout has accessible fronts, a register back, and six queue 
   assert.equal(result.blockedCells.has("12,2"), true);
 });
 
+const touches = (a, b) => Math.abs(a.gx - b.gx) + Math.abs(a.gy - b.gy) === 1;
+
+test("the register line is single file: straight back from the counter, then toward the door", () => {
+  const options = createRoom();
+  const result = validateFixtureLayout(initialLayout(), options);
+  const [first, second] = result.queueCells;
+  const register = initialLayout().find((entry) => entry.id === "register");
+  const step = { dx: 0, dy: 1 };
+  assert.deepEqual(second, { gx: first.gx + step.dx, gy: first.gy + step.dy });
+  result.queueCells.slice(1).forEach((cell, index) => {
+    assert.ok(touches(cell, result.queueCells[index]), `spot ${index + 2} touches spot ${index + 1}`);
+  });
+  assert.ok(result.queueCells.every((cell) => cell.gy >= register.gy + 2));
+  const doorDistance = (cell) =>
+    Math.abs(cell.gx - options.entrance.gx) + Math.abs(cell.gy - options.entrance.gy);
+  assert.ok(doorDistance(result.queueCells.at(-1)) < doorDistance(first));
+});
+
+test("a boxed-in line still bends around obstacles one step at a time", () => {
+  // A shelf beside the second spot blocks the line's turn toward the door.
+  const layout = initialLayout().map((entry) =>
+    entry.id === "fixture_demo_01" ? { ...entry, gx: 11, gy: 5 } : entry);
+  const result = validateFixtureLayout(layout, createRoom());
+  assert.equal(result.valid, true, result.reason);
+  assert.equal(result.queueCells.length, 6);
+  result.queueCells.slice(1).forEach((cell, index) => {
+    assert.ok(touches(cell, result.queueCells[index]));
+  });
+  assert.ok(result.queueCells.every((cell) => !["11,5", "12,5", "11,6", "12,6"].includes(cellKey(cell))));
+});
+
 test("fixtures can move without mutating the old layout", () => {
   const original = initialLayout();
   const result = validateFixtureLayout(moved("fixture_demo_01", 11, 5), createRoom());

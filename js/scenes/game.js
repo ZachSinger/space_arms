@@ -15,7 +15,7 @@ import { InteractableRegistry } from "../logic/InteractableRegistry.js";
 import { transferItems } from "../logic/InventoryTransfer.js";
 import { StorageFixture } from "../logic/ShopInventory.js";
 import { ShelfFixture } from "../logic/ShelfFixture.js";
-import { Customer } from "../logic/Customer.js";
+import { Customer, SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT } from "../logic/Customer.js";
 import { Employee } from "../logic/Employee.js";
 import { createCustomerBuyList } from "../logic/CustomerBuyLists.js";
 import { formatMoney, isMoney, sumMoney } from "../logic/Money.js";
@@ -78,6 +78,8 @@ const REGISTER_WIDTH = 90;
 const REGISTER_HEIGHT = 75;
 // How far the operating player's feet sit past the register graphic's top edge (px).
 const REGISTER_BEHIND_OVERLAP = 10;
+// How far (px) the first customer in line may overlap the front of the register art.
+const REGISTER_FRONT_OVERLAP = 10;
 
 // How close (px) the player must be to a fixture's standPoint to open it or deliver a crate.
 // Looser than Crate's INTERACT_RANGE because standPoint is a single pixel, so a tight radius
@@ -796,8 +798,36 @@ export class GameScene extends Phaser.Scene {
       fixture.stockDisplay?.setAngle(fixtureRotation(fixture) * 90);
       if (fixture.capacityLabel) this.refreshLockerCapacityDisplay(fixture);
     }
-    this.registerQueuePoints = result.queueCells.map(toWorld);
+    this.registerQueuePoints = this.placeRegisterQueue(result.queueCells.map(toWorld));
     this.registerQueueAnchor = this.registerQueuePoints[0];
+  }
+
+  // The register art is smaller than its floor footprint, so tile centers leave the first
+  // customer a long reach from the counter. Pull the first customer up to the counter like the
+  // player behind it, and slide the straight part of the line forward with them so the
+  // spacing between customers stays even.
+  placeRegisterQueue(points) {
+    if (points.length === 0) return points;
+    const register = this.fixtures.register();
+    const bounds = register.sprite.getBounds();
+    const { dx, dy } = fixtureFacingStep(register);
+    const reachX = bounds.width / 2 + SPRITE_DISPLAY_WIDTH / 2 - REGISTER_FRONT_OVERLAP;
+    const reachY = bounds.height / 2 + SPRITE_DISPLAY_HEIGHT / 2 - REGISTER_FRONT_OVERLAP;
+    const front = { x: bounds.centerX + dx * reachX, y: bounds.centerY + dy * reachY };
+    const shift = (front.x - points[0].x) * dx + (front.y - points[0].y) * dy;
+    if (shift >= 0) return points;
+    const straightBack = (index) => index < points.length &&
+      points[index].x === points[0].x + dx * index * TILE_SIZE &&
+      points[index].y === points[0].y + dy * index * TILE_SIZE;
+    // Slide the straight run up to the counter and center it on the register art. The spot
+    // where the line turns stays on its tile so the bent part lines up evenly.
+    return points.map((point, index) => {
+      const turnsNext = index + 1 < points.length && !straightBack(index + 1);
+      if (!straightBack(index) || (index > 0 && turnsNext)) return point;
+      return dx !== 0
+        ? { x: point.x + dx * shift, y: front.y }
+        : { x: front.x, y: point.y + dy * shift };
+    });
   }
 
   // Centered on the register graphic, just past its back edge (the side away from the
@@ -1090,7 +1120,17 @@ export class GameScene extends Phaser.Scene {
    */
   findPath(fromX, fromY, toX, toY) {
     const start = { gx: Math.floor(fromX / TILE_SIZE), gy: Math.floor(fromY / TILE_SIZE) };
-    const goal = { gx: Math.floor(toX / TILE_SIZE), gy: Math.floor(toY / TILE_SIZE) };
+    let goal = { gx: Math.floor(toX / TILE_SIZE), gy: Math.floor(toY / TILE_SIZE) };
+    // Spots like the counter front can sit over a fixture's tile; route to the closest open
+    // neighbor and let the customer walk the last few pixels directly.
+    if (!this.isCellWalkable(goal.gx, goal.gy)) {
+      const distance = ({ gx, gy }) =>
+        Math.hypot(this.room.worldX(gx) - toX, this.room.worldY(gy) - toY);
+      const open = [-1, 0, 1].flatMap((ox) => [-1, 0, 1].map((oy) => ({ gx: goal.gx + ox, gy: goal.gy + oy })))
+        .filter(({ gx, gy }) => this.isCellWalkable(gx, gy))
+        .sort((a, b) => distance(a) - distance(b));
+      if (open[0]) goal = open[0];
+    }
 
     const gridPath = findGridPath(start, goal, (gx, gy) => this.isCellWalkable(gx, gy));
     if (!gridPath) return null;

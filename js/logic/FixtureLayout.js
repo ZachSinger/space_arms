@@ -236,10 +236,80 @@ export function validateFixtureLayout(placements, {
   const queueStart = access.get(registers[0].id);
   // The line only forms on the register's front side, never curling around beside or behind it.
   const step = fixtureFacingStep(registers[0]);
-  const queueCells = getReachableGridCells(queueStart, (gx, gy) =>
+  const canQueue = (gx, gy) =>
     (gx - queueStart.gx) * step.dx + (gy - queueStart.gy) * step.dy >= 0 && canWalk(gx, gy) &&
-    !reservedCells.has(`${gx},${gy}`) && !otherAccessCells.has(`${gx},${gy}`),
-  ).slice(0, queueSize);
+    !reservedCells.has(`${gx},${gy}`) && !otherAccessCells.has(`${gx},${gy}`);
+  const queueCells = planRegisterQueue(queueStart, step, entrance, canQueue, canWalk, queueSize);
   if (queueCells.length < queueSize) return invalid("Leave room in front of the register for the customer queue.");
   return { valid: true, reason: "Click to place. Contents stay on the fixture.", blockedCells, access, queueCells };
+}
+
+const ORTHOGONAL_STEPS = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+
+// Steps from each walkable cell to the entrance, walking orthogonally.
+function stepsToEntrance(entrance, canWalk) {
+  const distances = new Map([[cellKey(entrance), 0]]);
+  const cells = [entrance];
+  for (let index = 0; index < cells.length; index += 1) {
+    const cell = cells[index];
+    for (const [dx, dy] of ORTHOGONAL_STEPS) {
+      const next = { gx: cell.gx + dx, gy: cell.gy + dy };
+      const key = cellKey(next);
+      if (distances.has(key) || !canWalk(next.gx, next.gy)) continue;
+      distances.set(key, distances.get(cellKey(cell)) + 1);
+      cells.push(next);
+    }
+  }
+  return distances;
+}
+
+/**
+ * A single-file line: the first customer at the counter, the next straight behind them, and
+ * each later customer one step behind the last, bending toward the front door when the
+ * line can't go straight. Each spot touches the one before it.
+ * @returns {{ gx: number, gy: number }[]} front of the line first
+ */
+export function planRegisterQueue(start, step, entrance, canQueue, canWalk, queueSize) {
+  if (!canQueue(start.gx, start.gy)) return [];
+  const doorSteps = stepsToEntrance(entrance, canWalk);
+  const toDoor = (cell) => doorSteps.get(cellKey(cell)) ?? Infinity;
+  const line = [start];
+  const used = new Set([cellKey(start)]);
+  while (line.length < queueSize) {
+    const last = line.at(-1);
+    const previous = line.at(-2);
+    const heading = previous ? { dx: last.gx - previous.gx, dy: last.gy - previous.gy } : step;
+    const options = ORTHOGONAL_STEPS
+      .map(([dx, dy]) => ({ gx: last.gx + dx, gy: last.gy + dy, straight: dx === heading.dx && dy === heading.dy }))
+      .filter((cell) => canQueue(cell.gx, cell.gy) && !used.has(cellKey(cell)));
+    if (options.length === 0) break;
+    // The second customer always stands straight back from the counter when there's room.
+    const straight = options.find((cell) => cell.straight);
+    let next;
+    if (line.length === 1 && straight) {
+      next = straight;
+    } else {
+      // Head toward the door, keeping straight on ties so the line bends as little as possible.
+      next = options.reduce((best, cell) => {
+        const difference = toDoor(cell) - toDoor(best);
+        if (difference < 0 || (difference === 0 && cell.straight)) return cell;
+        return best;
+      });
+      // Already at the door: keep the line going straight rather than doubling back.
+      if (toDoor(next) >= toDoor(last) && straight) next = straight;
+    }
+    line.push({ gx: next.gx, gy: next.gy });
+    used.add(cellKey(next));
+  }
+  // A dead end (the line boxed in) still fills the remaining spots from the nearest open floor.
+  if (line.length < queueSize) {
+    for (const cell of getReachableGridCells(start, canQueue)) {
+      if (line.length >= queueSize) break;
+      if (!used.has(cellKey(cell))) {
+        line.push(cell);
+        used.add(cellKey(cell));
+      }
+    }
+  }
+  return line;
 }
