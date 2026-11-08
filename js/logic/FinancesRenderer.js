@@ -3,8 +3,9 @@
 // ==========================================
 // Finances tab HTML (bible Step 43): today's itemized receipt, the End Day button, and
 // the previous day's final receipt.
+import { formatMoney } from "./Money.js";
 
-const credits = (amount) => `${amount.toLocaleString()} credits`;
+const credits = formatMoney;
 const signed = (amount) => (amount === 0 ? credits(0) : `${amount > 0 ? "+" : "-"}${credits(Math.abs(amount))}`);
 const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
 

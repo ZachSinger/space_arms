@@ -18,6 +18,7 @@ import { ShelfFixture } from "../logic/ShelfFixture.js";
 import { Customer } from "../logic/Customer.js";
 import { Employee } from "../logic/Employee.js";
 import { createCustomerBuyList } from "../logic/CustomerBuyLists.js";
+import { formatMoney, isMoney, sumMoney } from "../logic/Money.js";
 import { addTraitBonusItems } from "../logic/CustomerTraits.js";
 import {
   createCustomerArrivalSchedule,
@@ -1223,15 +1224,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Rounds to whole credits and rejects anything below 1.
+   * Accepts prices to the cent and rejects anything below 1 credit.
    * @param {string} itemId
    * @param {number} price - credits
    * @returns {boolean} whether the price was accepted
    */
   setStorePrice(itemId, price) {
-    const rounded = Math.round(price);
-    if (!Number.isFinite(rounded) || rounded < 1) return false;
-    this.playerState.setStorePrice(itemId, rounded);
+    if (!isMoney(price) || price < 1) {
+      this.showShopMessage("Enter a price of at least 1 credit, with no more than two decimal places.");
+      return false;
+    }
+    this.playerState.setStorePrice(itemId, price);
     return true;
   }
 
@@ -2245,6 +2248,9 @@ export class GameScene extends Phaser.Scene {
         // Nothing left to scan: the belt closes, but the player stays at the counter.
         this.checkoutWindow.close();
       }
+    }, {
+      cash: true,
+      onWrongChange: () => this.playerState.subReputation(1),
     });
   }
 
@@ -2256,7 +2262,7 @@ export class GameScene extends Phaser.Scene {
     this.showFloatingText(
       employee.sprite.x,
       employee.sprite.y - 40,
-      `Sale completed: ${total} credits`,
+      `Sale completed: ${formatMoney(total)}`,
       "#10b981",
     );
     this.registerLine.shift();
@@ -2343,7 +2349,7 @@ export class GameScene extends Phaser.Scene {
     const sold = new Map();
     for (const { itemId, price } of cart) {
       const line = sold.get(itemId) ?? { amount: 0, quantity: 0 };
-      line.amount += price;
+      line.amount = sumMoney([line.amount, price]);
       line.quantity += 1;
       sold.set(itemId, line);
     }

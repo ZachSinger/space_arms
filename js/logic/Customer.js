@@ -8,6 +8,7 @@
 import { pickRandomCustomerCharacter } from "./CustomerSprites.js";
 import { createCustomerBuyList } from "./CustomerBuyLists.js";
 import { transferItems } from "./InventoryTransfer.js";
+import { sumMoney } from "./Money.js";
 import { BASE_PATIENCE_MS, getPatienceMs, planShelfRoute, rollCustomerTraits } from "./CustomerTraits.js";
 
 const SPEED = 120; // px/s
@@ -444,7 +445,7 @@ export class Customer {
 
   // Finish the customer's sale state and return proceeds for the scene's sale event.
   completeSale() {
-    const total = this.cart.reduce((sum, entry) => sum + entry.price, 0);
+    const total = sumMoney(this.cart.map((entry) => entry.price));
     this.clearPatience();
     this.enterLeaving();
     return total;

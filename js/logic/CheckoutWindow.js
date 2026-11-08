@@ -1,12 +1,14 @@
 // ==========================================
 // FILE: CheckoutWindow.js
 // ==========================================
-// Bible Step 54/55 checkout (card payment only for now). The cart rides a conveyor belt
+// Bible Step 54/55 checkout. The cart rides a conveyor belt
 // to a scanner; clicking or dragging across items scans them. Once all are scanned, the
-// player types the exact total on a numpad to complete the sale.
+// player types the total, then counts cash change from an unlimited placeholder drawer.
 
 import { UIWindow } from "./UIWindow.js";
 import { CheckoutRenderer } from "./CheckoutRenderer.js";
+import { CashPayment, splitCash } from "./CashPayment.js";
+import { formatMoney, fromCents, sumMoney, toCents } from "./Money.js";
 import {
   playScanBeep,
   playKeypadClick,
@@ -44,7 +46,7 @@ export class CheckoutWindow {
         width: `${CHECKOUT_WIDTH_VW}vw`,
         height: "auto",
         x: Math.round(rightAlignedX),
-        y: 160,
+        y: 80,
         closable: false,
       },
       windowManager,
@@ -59,8 +61,8 @@ export class CheckoutWindow {
     this.total = 0;
 
     // Global, so a drag-scan works even if it doesn't start on a card.
-    this.handleMouseDown = () => {
-      this.isScanning = true;
+    this.handleMouseDown = (event) => {
+      this.isScanning = event.button === 0;
     };
     this.handleMouseUp = () => {
       this.isScanning = false;
@@ -89,12 +91,22 @@ export class CheckoutWindow {
     if (this.uiWindow.element.classList.contains("hidden")) return;
     const panel = this.bodyElement.querySelector("#checkout-payment");
     if (!panel || panel.classList.contains("hidden")) return;
+    if (event.repeat) return;
 
-    if (/^[0-9]$/.test(event.key)) {
+    if (this.paymentStage === "change") {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        this.handOverChange();
+      }
+      return;
+    }
+    if (/^[0-9.]$/.test(event.key)) {
+      event.preventDefault?.();
       this.appendDigit?.(event.key);
     } else if (event.key === "Backspace" || event.key === "Delete" || event.key === "Escape") {
       this.clearBuffer?.();
     } else if (event.key === "Enter") {
+      event.preventDefault?.();
       this.confirmPayment?.();
     }
   }
@@ -102,6 +114,8 @@ export class CheckoutWindow {
   close() {
     this.mode = null;
     this.onComplete = null;
+    this.onWrongChange = null;
+    this.cashPayment = null;
     this.uiWindow.close();
   }
 
@@ -117,17 +131,22 @@ export class CheckoutWindow {
   /**
    * Render and open the register for one customer's cart (also used to switch customers).
    * @param {{ itemId: string, price: number }[]} cart - prices in credits
-   * @param {() => void} onComplete - fired when the exact total is entered
+   * @param {() => void} onComplete - fired when payment and change are correct
+   * @param {{ cash?: boolean, onWrongChange?: () => void }} [options]
    */
-  openForCustomer(cart, onComplete) {
+  openForCustomer(cart, onComplete, { cash = true, onWrongChange = null } = {}) {
     this.mode = "checkout";
     this.onComplete = onComplete;
+    this.onWrongChange = onWrongChange;
     this.paymentBuffer = "";
-    this.total = cart.reduce((sum, entry) => sum + entry.price, 0);
+    this.paymentStage = "total";
+    this.total = sumMoney(cart.map((entry) => entry.price));
+    this.cashPayment = cash ? new CashPayment(this.total) : null;
 
     this.bodyElement.innerHTML = CheckoutRenderer.generateHTML(
       cart,
       database,
+      this.cashPayment,
     );
     // Open first: the belt needs real laid-out dimensions to place the cards.
     this.uiWindow.openWindow();
@@ -210,8 +229,8 @@ export class CheckoutWindow {
       scannedCount += 1;
 
       const index = Number(card.dataset.index);
-      runningTotal += cart[index].price;
-      totalValueElement.textContent = `${runningTotal.toLocaleString()} credits`;
+      runningTotal = sumMoney([runningTotal, cart[index].price]);
+      totalValueElement.textContent = formatMoney(runningTotal);
 
       playScanBeep();
       this.slideOverScanner(card);
@@ -257,10 +276,12 @@ export class CheckoutWindow {
 
     // Shared by the on-screen numpad and the physical keyboard (handleNumpadKeydown).
     this.appendDigit = (digit) => {
+      if (this.paymentStage !== "total") return;
       playKeypadClick();
-      // Never more digits than the total itself has.
-      if (this.paymentBuffer.length >= String(this.total).length) return;
-      this.paymentBuffer += digit;
+      const next = this.paymentBuffer + digit;
+      const maxWholeDigits = Math.floor(this.total).toString().length;
+      if (!new RegExp(`^\\d{0,${maxWholeDigits}}(?:\\.\\d{0,2})?$`).test(next)) return;
+      this.paymentBuffer = next === "." ? "0." : next;
       refreshDisplay();
     };
 
@@ -272,7 +293,21 @@ export class CheckoutWindow {
     };
 
     this.confirmPayment = () => {
-      if (Number(this.paymentBuffer) === this.total) {
+      if (this.paymentStage !== "total") return;
+      if (this.paymentBuffer !== "" && toCents(Number(this.paymentBuffer)) === toCents(this.total)) {
+        if (this.cashPayment) {
+          this.paymentStage = "change";
+          feedbackElement.textContent = "";
+          displayElement.classList.add("hidden");
+          this.bodyElement.querySelector(".checkout-belt").classList.add("hidden");
+          this.bodyElement.querySelector(".checkout-numpad").classList.add("hidden");
+          this.bodyElement.querySelector(".checkout-payment-prompt").textContent = "COUNT THE CUSTOMER'S CHANGE";
+          this.bodyElement.querySelector("#checkout-cash").classList.remove("hidden");
+          this.refreshCash();
+          this.bodyElement.scrollTop = 0;
+          return;
+        }
+        this.paymentStage = "complete";
         playSaleComplete();
         // Don't close here: the caller either re-renders for the next queued customer or
         // closes when no one is left, so the player isn't ejected after every sale.
@@ -297,5 +332,55 @@ export class CheckoutWindow {
 
     clearButton.addEventListener("click", () => this.clearBuffer());
     confirmButton.addEventListener("click", () => this.confirmPayment());
+    if (this.cashPayment) {
+      this.bodyElement.querySelectorAll("[data-cash-cents]").forEach((button) => {
+        const adjust = (direction) => {
+          if (this.paymentStage !== "change") return;
+          this.cashPayment.adjustChange(Number(button.dataset.cashCents), direction);
+          playKeypadClick();
+          this.refreshCash();
+        };
+        button.addEventListener("click", () => adjust(1));
+        button.addEventListener("contextmenu", (event) => {
+          event.preventDefault();
+          adjust(-1);
+        });
+      });
+      this.bodyElement.querySelector("#cash-hand-over").addEventListener("click", () => this.handOverChange());
+    }
+  }
+
+  refreshCash() {
+    const cash = this.cashPayment;
+    this.bodyElement.querySelector("#checkout-change-selected").textContent = formatMoney(fromCents(cash.changeCents));
+    this.bodyElement.querySelectorAll("[data-cash-count]").forEach((element) => {
+      element.textContent = `${cash.change.get(Number(element.dataset.cashCount)) ?? 0} in change`;
+    });
+    const piecesHTML = (pieces) => pieces.map(({ kind, label, count }) => `
+      <span class="cash-piece cash-${kind}"><span>${count} x ${label}</span></span>`).join("");
+    this.bodyElement.querySelector("#checkout-cash-tender").innerHTML =
+      `<span class="cash-row-label">BILLS FROM CUSTOMER</span>${piecesHTML(splitCash(cash.tenderCents))}`;
+    const selected = [...cash.change].map(([cents, count]) => ({
+      ...splitCash(cents)[0], count,
+    }));
+    this.bodyElement.querySelector("#checkout-change-pile").innerHTML = selected.length
+      ? `<span class="cash-row-label">CHANGE TO HAND OVER</span>${piecesHTML(selected)}`
+      : "No change selected.";
+  }
+
+  handOverChange() {
+    if (this.paymentStage !== "change") return;
+    const result = this.cashPayment.handOver();
+    if (result.accepted) {
+      this.paymentStage = "complete";
+      playSaleComplete();
+      this.onComplete?.();
+      return;
+    }
+    playErrorBuzz();
+    this.bodyElement.querySelector("#checkout-payment-feedback").textContent = result.penalty
+      ? "Wrong change refused. Store reputation -1. Correct the change and try again."
+      : "Wrong change refused. Correct it and try again. Another mistake will cost store reputation.";
+    if (result.penalty) this.onWrongChange?.();
   }
 }

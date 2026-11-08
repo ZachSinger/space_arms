@@ -78,6 +78,23 @@ test("saved receipts must belong to the saved day", () => {
   }
 });
 
+test("saves accept cent balances and prices and reject fractions smaller than a cent", () => {
+  const data = snapshot();
+  data.playerState.credits = 1500.23;
+  data.playerState.storePrices.wpn_rif_01 = 123.45;
+  data.market = new Market(database.getAllItems(), () => 0.123).serialize();
+  assert.doesNotThrow(() => validateShopSave(JSON.parse(JSON.stringify(data)), database));
+  for (const corrupt of [
+    (saved) => { saved.playerState.credits = 1500.001; },
+    (saved) => { saved.playerState.storePrices.wpn_rif_01 = 123.456; },
+    (saved) => { saved.market.prices.wpn_rif_01 += 0.001; },
+  ]) {
+    const invalid = structuredClone(data);
+    corrupt(invalid);
+    assert.throws(() => validateShopSave(invalid, database), /Invalid saved game/);
+  }
+});
+
 test("saved launch acceleration is preserved, and malformed launch states are rejected", () => {
   const data = snapshot();
   data.crates[0].launch = { remainingMs: 80, accelerationX: 1500, accelerationY: 0, maxSpeed: 400 };

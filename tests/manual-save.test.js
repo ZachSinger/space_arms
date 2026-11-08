@@ -118,6 +118,22 @@ function createRegisterHarness() {
   return { scene, checkout, tablet };
 }
 
+test("actual store price edits preserve cents and explain invalid prices", () => {
+  const scene = Object.create(GameScene.prototype);
+  const prices = new Map([["ration", 10]]);
+  const warnings = [];
+  scene.playerState = { setStorePrice: (id, price) => prices.set(id, price) };
+  scene.showShopMessage = (message) => warnings.push(message);
+  assert.equal(scene.setStorePrice("ration", 10.23), true);
+  assert.equal(prices.get("ration"), 10.23);
+  for (const invalid of [0.99, 10.234, NaN, Infinity]) {
+    assert.equal(scene.setStorePrice("ration", invalid), false);
+    assert.equal(prices.get("ration"), 10.23);
+  }
+  assert.equal(warnings.length, 4);
+  assert.match(warnings[0], /two decimal places/);
+});
+
 test("customers queue without opening the register or freezing patience while the tablet is open", () => {
   const { scene, checkout, tablet } = createRegisterHarness();
   tablet.isOpen = true;

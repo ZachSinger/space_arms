@@ -6,6 +6,7 @@
 import { InventoryPool } from "./InventoryPool.js";
 import { transferItems } from "./InventoryTransfer.js";
 import { DayLedger } from "./DayLedger.js";
+import { isMoney, sumMoney } from "./Money.js";
 import employeeRoster from "../../data/Employees.json" with { type: "json" };
 
 // What one character can personally carry, in units; smaller than any fixture.
@@ -61,28 +62,30 @@ export class PlayerState {
   }
 
   /**
-   * @param {number} amount - whole credits, at least 0
+   * @param {number} amount - credits with up to two decimal places, at least 0
    * @param {{ category: string, label: string, quantity?: number }} entry - receipt line
    */
   addCredits(amount, entry) {
-    if (!Number.isSafeInteger(amount) || amount < 0) {
-      throw new TypeError(`Credits earned must be a whole number, got ${amount}.`);
+    if (!isMoney(amount) || amount < 0) {
+      throw new TypeError(`Credits earned must be non-negative money with at most two decimal places, got ${amount}.`);
     }
+    const balance = sumMoney([this.credits, amount]);
     this.dayLedger.record({ ...entry, amount });
-    this.credits += amount;
+    this.credits = balance;
     this.notifyListeners();
   }
 
   /**
-   * @param {number} amount - whole credits, at least 0
+   * @param {number} amount - credits with up to two decimal places, at least 0
    * @param {{ category: string, label: string, quantity?: number }} entry - receipt line
    */
   spendCredits(amount, entry) {
-    if (!Number.isSafeInteger(amount) || amount < 0) {
-      throw new TypeError(`Credits spent must be a whole number, got ${amount}.`);
+    if (!isMoney(amount) || amount < 0) {
+      throw new TypeError(`Credits spent must be non-negative money with at most two decimal places, got ${amount}.`);
     }
+    const balance = sumMoney([this.credits, -amount]);
     this.dayLedger.record({ ...entry, amount: -amount });
-    this.credits -= amount;
+    this.credits = balance;
     this.notifyListeners();
     return true;
   }
@@ -141,6 +144,7 @@ export class PlayerState {
   }
 
   setStorePrice(itemId, price) {
+    if (!isMoney(price) || price < 1) throw new TypeError(`Invalid store price: ${price}.`);
     this.storePrices[itemId] = price;
     this.notifyListeners();
   }
@@ -158,7 +162,7 @@ export class PlayerState {
       label: `${employee.name} (${employee.role})`,
       amount: -hireCost,
     });
-    this.credits -= hireCost;
+    this.credits = sumMoney([this.credits, -hireCost]);
     this.hiredEmployees.push(employeeId);
     this.employeeJobPriorities[employeeId] = jobPriorities;
     this.notifyListeners();

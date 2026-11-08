@@ -3,6 +3,7 @@
 // ==========================================
 // The persistent DOM HUD: credits, reputation, hovercart capacity, shift clock, and the
 // pause / start-shift / end-day / save buttons. Re-renders from PlayerState and ShiftClock.
+import { formatMoney } from "./Money.js";
 export class HUDController {
     /**
      * @param {PlayerState} playerState
@@ -60,7 +61,7 @@ export class HUDController {
     }
 
     render(state) {
-        this.creditsEl.innerText = `${state.credits.toLocaleString()} credits`;
+        this.creditsEl.innerText = formatMoney(state.credits);
         
         if (state.credits < 0) {
             this.creditsEl.classList.add('deficit');

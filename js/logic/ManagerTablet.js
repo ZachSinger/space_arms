@@ -14,6 +14,7 @@ import { FinancesRenderer } from "./FinancesRenderer.js";
 import { FixtureHighlight } from "./FixtureHighlight.js";
 import { playErrorBuzz } from "./Sfx.js";
 import { GAME_EVENTS } from "./EventBus.js";
+import { roundMoney } from "./Money.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
 // The bible's full Step 40 tab list (Part 8). Tabs with no system yet render a
@@ -312,9 +313,9 @@ export class ManagerTablet {
     const marketPrice = this.scene.market.getPrice(itemId);
     const nextPrice =
       action === "decrease"
-        ? Math.max(1, Math.min(currentPrice - 1, Math.round(currentPrice * 0.9)))
+        ? Math.max(1, Math.min(roundMoney(currentPrice - 1), roundMoney(currentPrice * 0.9)))
         : action === "increase"
-          ? Math.max(currentPrice + 1, Math.round(currentPrice * 1.1))
+          ? Math.max(roundMoney(currentPrice + 1), roundMoney(currentPrice * 1.1))
           : action === "market"
             ? marketPrice
             : null;

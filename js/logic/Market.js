@@ -4,6 +4,7 @@
 // Galactic average market price per item. Each item's Items.json baseCost is a hidden base
 // price, never shown. The market price random-walks once per day from the previous day's
 // price, clamped to a band around the hidden base so it can't drift off forever.
+import { roundMoney } from "./Money.js";
 
 // Daily random-walk swing (fraction of price) and the clamp band (multiples of base).
 export const DAILY_SWING = 0.1;
@@ -38,7 +39,7 @@ export class Market {
       basePrice * MAX_BASE_RATIO,
       Math.max(basePrice * MIN_BASE_RATIO, previousPrice * change),
     );
-    return Math.max(1, Math.round(clamped));
+    return Math.max(1, roundMoney(clamped));
   }
 
   getPrice(itemId) {

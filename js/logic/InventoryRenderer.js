@@ -4,6 +4,7 @@
 // HTML for the Manager Tablet's Inventory tab (per-item storage, shelf stock, customer carts,
 // market price, and store price controls) plus its keyboard/hover list navigation.
 // See also: ManagerTablet.js (hosts the tab).
+import { formatMoney } from "./Money.js";
 export class InventoryRenderer {
   /**
    * Render just the Inventory tab's content; the hosting window owns the tab chrome.
@@ -22,9 +23,9 @@ export class InventoryRenderer {
           <span class="inventory-quantity" data-inventory-storage>${storage}</span>
           <span class="inventory-quantity" data-inventory-stock>${stock}</span>
           <span class="inventory-quantity" data-inventory-carts>${inCustomerCarts}</span>
-          <span class="inventory-quantity" data-inventory-market>${marketPrice} credits</span>
+          <span class="inventory-quantity" data-inventory-market>${formatMoney(marketPrice)}</span>
           <div class="inventory-price-controls">
-            <input class="inventory-price-input" type="number" min="1" step="1" value="${storePrice}"
+            <input class="inventory-price-input" type="number" min="1" step="0.01" value="${storePrice}"
               data-price-item-id="${item.id}" aria-label="Store price for ${item.name}" />
             <div class="inventory-price-buttons">
               <button type="button" data-price-action="decrease" data-price-item-id="${item.id}"

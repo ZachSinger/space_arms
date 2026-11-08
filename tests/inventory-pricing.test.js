@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { createServer } from "vite";
 import { summarizeSupplyOrder, DELIVERY_FEE } from "../js/logic/SupplyOrder.js";
 import { GAME_EVENTS } from "../js/logic/EventBus.js";
+import { isMoney } from "../js/logic/Money.js";
 
 let server;
 let ManagerTablet;
@@ -188,9 +189,8 @@ function createHarness() {
     storage: 1,
     getStorePrice: (itemId) => prices.get(itemId),
     setStorePrice(itemId, price) {
-      const rounded = Math.round(price);
-      if (!Number.isFinite(rounded) || rounded < 1) return false;
-      prices.set(itemId, rounded);
+      if (!isMoney(price) || price < 1) return false;
+      prices.set(itemId, price);
       playerState.notifyListeners();
       return true;
     },
@@ -246,7 +246,7 @@ test("price buttons update the displayed value and retain keyboard focus", () =>
   assert.equal(h.panel.input("rifle").value, "121");
 
   h.click("rifle", "decrease");
-  assert.equal(h.panel.input("rifle").value, "109");
+  assert.equal(h.panel.input("rifle").value, "108.9");
   h.marketPrices.set("rifle", 300);
   h.click("rifle", "market");
   assert.equal(h.panel.input("rifle").value, "300");

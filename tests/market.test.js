@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Market, DAILY_SWING, MIN_BASE_RATIO, MAX_BASE_RATIO, MIN_SUPPLY_RATIO, MAX_SUPPLY_RATIO } from "../js/logic/Market.js";
+import { isMoney, roundMoney } from "../js/logic/Money.js";
 
 const items = [{ id: "rifle", baseCost: 1000 }];
 
@@ -53,5 +54,16 @@ test("restoring a market keeps its day, supplier rates, and subsequent price cha
   assert.deepEqual(restored.serialize(), saved);
   assert.equal(restored.getSupplyCost("rifle", 5), original.getSupplyCost("rifle", 5));
   restored.advanceDay();
-  assert.equal(restored.getPrice("rifle"), Math.round(saved.prices.rifle * 0.9));
+  assert.equal(restored.getPrice("rifle"), roundMoney(saved.prices.rifle * 0.9));
+});
+
+test("average market prices include cents on day one and after daily changes", () => {
+  const market = new Market([{ id: "ration", baseCost: 13 }], () => 0.123);
+  assert.equal(market.getPrice("ration"), 12.02);
+  market.advanceDay();
+  assert.equal(market.getPrice("ration"), 11.11);
+  for (let day = 0; day < 100; day += 1) {
+    market.advanceDay();
+    assert.equal(isMoney(market.getPrice("ration")), true);
+  }
 });

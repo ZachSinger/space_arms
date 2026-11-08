@@ -63,12 +63,12 @@ test("receipt lines merge by item and keep earned and spent apart", () => {
   assert.deepEqual(receipt.spent.map((line) => line.category), ["stock_orders", "delivery_fees"]);
 });
 
-test("receipt entries without a known category or a whole-credit amount are rejected", () => {
+test("receipt entries without a known category or cent-precision amount are rejected", () => {
   const ledger = new DayLedger({ day: 1, openingCredits: 0, openingReputation: 0 });
   for (const entry of [
     { category: "bribes", label: "x", amount: -1 },
     { category: "sales", label: "", amount: 1 },
-    { category: "sales", label: "x", amount: 1.5 },
+    { category: "sales", label: "x", amount: 1.501 },
     { category: "sales", label: "x", amount: 1, quantity: 0 },
   ]) {
     assert.throws(() => ledger.record(entry), /Invalid receipt entry/);
@@ -86,8 +86,28 @@ test("every credit change is itemized, so the receipt always matches the balance
   assert.deepEqual(state.dayLedger.lines.find((line) => line.category === "hiring"),
     { category: "hiring", label: "Tavi (Stock Clerk)", amount: -250, quantity: 1 });
   assert.throws(() => state.spendCredits(10), /Invalid receipt entry/);
-  assert.throws(() => state.addCredits(-5, { category: "sales", label: "x" }), /whole number/);
+  assert.throws(() => state.addCredits(-5, { category: "sales", label: "x" }), /non-negative money/);
   assert.equal(state.credits, 1325);
+});
+
+test("cent-priced sales, spending and receipts survive ending the day and saving", () => {
+  const state = new PlayerState();
+  state.addCredits(1.23, { category: "sales", label: "Ration" });
+  state.addCredits(2.34, { category: "sales", label: "Ration" });
+  state.spendCredits(25, { category: "delivery_fees", label: "Delivery fee" });
+  assert.equal(state.hireEmployee("tavi_stock_clerk", 250), true);
+  assert.equal(state.credits, 1228.57);
+  assert.equal(state.dayLedger.lines[0].amount, 3.57);
+  state.finishShift({ customersServed: 2, customersTurnedAway: 0 });
+  state.endDay(2);
+  const restored = PlayerState.deserialize(JSON.parse(JSON.stringify(state.serialize())));
+  assert.equal(restored.credits, 1228.57);
+  assert.equal(restored.lastDayReceipt.closingCredits, 1228.57);
+  assert.equal(isValidLedgerData(restored.lastDayReceipt, { closed: true }), true);
+  assert.equal(summarizeReceipt(restored.lastDayReceipt, restored.credits, 2).totalEarned, 3.57);
+  assert.match(FinancesRenderer.generateHTML({
+    ...financesView(), today: summarizeReceipt(restored.lastDayReceipt, restored.credits, 2),
+  }), /1,228\.57 credits/);
 });
 
 test("ending a day closes the receipt and starts the next day from the closing balance", () => {

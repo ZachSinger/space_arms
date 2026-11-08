@@ -3,6 +3,7 @@
 // ==========================================
 // One day's money record (bible Step 43), from one End Day to the next: every credit
 // earned or spent, grouped into receipt lines, plus how the day's shift went.
+import { isMoney, sumMoney } from "./Money.js";
 
 // Receipt sections, in display order.
 export const LEDGER_CATEGORIES = Object.freeze([
@@ -23,7 +24,7 @@ const isRecord = (value) => value !== null && typeof value === "object" && !Arra
 function isValidLine(line) {
   return isRecord(line) && LEDGER_CATEGORIES.includes(line.category) &&
     typeof line.label === "string" && line.label.length > 0 &&
-    isWholeNumber(line.quantity, 1) && isWholeNumber(line.amount);
+    isWholeNumber(line.quantity, 1) && isMoney(line.amount);
 }
 
 function isValidShift(shift) {
@@ -39,12 +40,12 @@ function isValidShift(shift) {
  */
 export function isValidLedgerData(data, { closed = false } = {}) {
   if (!isRecord(data) || !isWholeNumber(data.day, 1) ||
-    !isWholeNumber(data.openingCredits) || !isWholeNumber(data.openingReputation) ||
+    !isMoney(data.openingCredits) || !isWholeNumber(data.openingReputation) ||
     !Array.isArray(data.lines) || !data.lines.every(isValidLine) ||
     !isValidShift(data.shift ?? null)) return false;
   const keys = data.lines.map((line) => `${line.category}\u0000${line.label}`);
   if (new Set(keys).size !== keys.length) return false;
-  return !closed || (isWholeNumber(data.closingCredits) && isWholeNumber(data.closingReputation));
+  return !closed || (isMoney(data.closingCredits) && isWholeNumber(data.closingReputation));
 }
 
 export class DayLedger {
@@ -52,9 +53,9 @@ export class DayLedger {
    * @param {{ day: number, openingCredits: number, openingReputation: number }} start
    */
   constructor({ day, openingCredits, openingReputation }) {
-    if (!isWholeNumber(day, 1) || !isWholeNumber(openingCredits) ||
+    if (!isWholeNumber(day, 1) || !isMoney(openingCredits) ||
       !isWholeNumber(openingReputation)) {
-      throw new TypeError("A day ledger needs a day number and whole-number opening totals.");
+      throw new TypeError("A day ledger needs valid opening credits and whole-number day and reputation.");
     }
     this.day = day;
     this.openingCredits = openingCredits;
@@ -76,7 +77,7 @@ export class DayLedger {
     const existing = this.lines.find((candidate) =>
       candidate.category === category && candidate.label === label);
     if (existing) {
-      existing.amount += amount;
+      existing.amount = sumMoney([existing.amount, amount]);
       existing.quantity += quantity;
     } else {
       this.lines.push(line);
@@ -138,8 +139,8 @@ export function summarizeReceipt(data, currentCredits, currentReputation) {
     reputationChange: currentReputation - data.openingReputation,
     earned,
     spent,
-    totalEarned: earned.reduce((sum, line) => sum + line.amount, 0),
-    totalSpent: -spent.reduce((sum, line) => sum + line.amount, 0),
+    totalEarned: sumMoney(earned.map((line) => line.amount)),
+    totalSpent: -sumMoney(spent.map((line) => line.amount)),
     shift: data.shift ?? null,
   };
 }

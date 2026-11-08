@@ -10,6 +10,7 @@ import { TILE_SIZE, ZONES, getTotalGridSize } from "./RoomLayout.js";
 import { MIN_BASE_RATIO, MAX_BASE_RATIO, MIN_SUPPLY_RATIO, MAX_SUPPLY_RATIO } from "./Market.js";
 import { THROW_ACCELERATION_MS } from "./Crate.js";
 import { isValidLedgerData } from "./DayLedger.js";
+import { isMoney, roundMoney } from "./Money.js";
 
 // Older saves used "slot depth 12 ÷ stackSize". Stacks valid under that rule still load;
 // trimShelfOverflow() then moves anything over the current cap to the Go-Backs bin.
@@ -54,7 +55,7 @@ export function validateShopSave(data, database) {
   };
   const player = data.playerState;
   requireSave(isRecord(player), "missing player state.");
-  requireSave(integer(player.credits) && integer(player.globalReputation) &&
+  requireSave(isMoney(player.credits) && integer(player.globalReputation) &&
     integer(player.customersTurnedAway, 0), "invalid credits or reputation.");
   if (player.hiredEmployees !== undefined) {
     const employeeIds = new Set(employeeRoster.map((employee) => employee.id));
@@ -80,7 +81,7 @@ export function validateShopSave(data, database) {
     new Set(player.activeLicenses).size === player.activeLicenses.length &&
     player.activeLicenses.every((id) => database.getLicense(id)), "unknown supplier license.");
   requireSave(isRecord(player.storePrices) && Object.entries(player.storePrices).every(
-    ([id, price]) => itemById.has(id) && integer(price, 1),
+    ([id, price]) => itemById.has(id) && isMoney(price) && price >= 1,
   ), "invalid store price.");
   requireSave(isRecord(player.hovercart) && player.hovercart.capacity === 10, "invalid hovercart.");
   stockCapacity(player.hovercart.stock, player.hovercart.capacity);
@@ -95,9 +96,10 @@ export function validateShopSave(data, database) {
   for (const item of items) {
     const price = market.prices[item.id];
     const ratio = market.supplyRatios[item.id];
-    requireSave(integer(price, 1) &&
-      price >= Math.max(1, Math.round(item.baseCost * MIN_BASE_RATIO)) &&
-      price <= Math.max(1, Math.round(item.baseCost * MAX_BASE_RATIO)),
+    // Whole-credit saves can sit just outside today's cent-rounded bounds.
+    requireSave(isMoney(price) && price >= 1 &&
+      price >= Math.max(1, Math.min(Math.round(item.baseCost * MIN_BASE_RATIO), roundMoney(item.baseCost * MIN_BASE_RATIO))) &&
+      price <= Math.max(1, Math.max(Math.round(item.baseCost * MAX_BASE_RATIO), roundMoney(item.baseCost * MAX_BASE_RATIO))),
     `invalid market price for ${item.id}.`);
     requireSave(Number.isFinite(ratio) && ratio >= MIN_SUPPLY_RATIO && ratio <= MAX_SUPPLY_RATIO,
       `invalid supplier rate for ${item.id}.`);

@@ -4,6 +4,12 @@ Running task list. Consult this before deciding what to work on. Add to it any t
 notice something that needs doing but isn't being done right now.
 
 ## Playtest follow-ups
+- [x] Cash drawer mockup: all customers pay cash, with unlimited 1/5/10/20 credit bills
+      and 1/5/10/25/50 cent coins. Click adds change, right-click removes it, and Enter
+      hands it over. Wrong change is refused; the first mistake warns, later mistakes
+      cost store reputation. Market/store prices, decimal keypad, balances, receipts,
+      and saves support cents; existing whole-credit saves keep their original values.
+- [ ] After testing the cash drawer, introduce a mix of cash and cashless customers.
 - [x] Give fixture movement/placement priority over UI windows: while moving a fixture,
       hovering a window should make it nearly transparent and allow placement through
       it. Restore the window when the pointer leaves it or the fixture is placed.
