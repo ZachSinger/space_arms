@@ -11,6 +11,8 @@ import { CheckoutRenderer } from "../js/logic/CheckoutRenderer.js";
 let server;
 let cacheDirectory;
 let CheckoutWindow;
+let CASH_PAYMENT_CHANCE;
+let customerPaysCash;
 
 before(async () => {
   cacheDirectory = await mkdtemp(join(tmpdir(), "space-arms-cash-test-"));
@@ -39,7 +41,8 @@ before(async () => {
       },
     }],
   });
-  ({ CheckoutWindow } = await server.ssrLoadModule("/js/logic/CheckoutWindow.js"));
+  ({ CheckoutWindow, CASH_PAYMENT_CHANCE, customerPaysCash } =
+    await server.ssrLoadModule("/js/logic/CheckoutWindow.js"));
 });
 
 after(async () => {
@@ -172,6 +175,7 @@ test("held Space and a hidden register cannot hand over change", () => {
 
 test("cashless checkout still completes after entering the decimal total", () => {
   const h = harness({ cash: false });
+  assert.equal(h.checkout.cashPayment, null);
   h.elements.get("#checkout-payment").classList.add("hidden");
   h.checkout.beginPayment();
   assert.equal(h.elements.get("#checkout-payment").classList.contains("hidden"), false);
@@ -179,6 +183,14 @@ test("cashless checkout still completes after entering the decimal total", () =>
   h.checkout.confirmPayment();
   h.checkout.confirmPayment();
   assert.equal(h.completed(), 1);
+});
+
+test("about half of customers pay cash, with a clear card keypad prompt", () => {
+  assert.equal(CASH_PAYMENT_CHANCE, 0.5);
+  assert.equal(customerPaysCash(() => 0.49), true);
+  assert.equal(customerPaysCash(() => 0.5), false);
+  const html = CheckoutRenderer.generateHTML([], {}, null);
+  assert.match(html, /CARD PAYMENT - ENTER TOTAL/);
 });
 
 test("the change drawer shows bare numbers on bills and coins, with no row headings", () => {

@@ -28,6 +28,11 @@ const SCAN_SLIDE_MS = 220;
 const CHECKOUT_WIDTH_VW = 44;
 const RIGHT_MARGIN_PX = 24;
 export const EXACT_PAYMENT_CHANCE = 0.25;
+export const CASH_PAYMENT_CHANCE = 0.5;
+
+export function customerPaysCash(random = Math.random) {
+  return random() < CASH_PAYMENT_CHANCE;
+}
 
 /**
  * The single register window, re-rendered for each customer at checkout.
@@ -153,7 +158,7 @@ export class CheckoutWindow {
     this.paymentStage = "total";
     this.total = sumMoney(cart.map((entry) => entry.price));
     // Some customers count out the exact amount, coins included, so no change is owed.
-    const exact = Math.random() < EXACT_PAYMENT_CHANCE;
+    const exact = cash && Math.random() < EXACT_PAYMENT_CHANCE;
     this.cashPayment = cash ? new CashPayment(this.total, exact ? this.total : undefined) : null;
     this.removeTenderOverlay();
 

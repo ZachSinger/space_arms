@@ -12,7 +12,8 @@ notice something that needs doing but isn't being done right now.
       amount paid in green. Wrong change is refused; the first mistake warns, later mistakes
       cost store reputation. Market/store prices, decimal keypad, balances, receipts,
       and saves support cents; existing whole-credit saves keep their original values.
-- [ ] After testing the cash drawer, introduce a mix of cash and cashless customers.
+- [x] Mix cash and card customers at checkout (about half each). Cash customers keep the
+      hand-over and change flow; card customers enter the total on the keypad.
 - [x] Give fixture movement/placement priority over UI windows: while moving a fixture,
       hovering a window should make it nearly transparent and allow placement through
       it. Restore the window when the pointer leaves it or the fixture is placed.

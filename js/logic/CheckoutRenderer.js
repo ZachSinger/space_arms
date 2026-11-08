@@ -56,7 +56,7 @@ export class CheckoutRenderer {
         <span class="checkout-total">TOTAL: <span id="checkout-total-value">0 credits</span></span>
       </div>
       <div class="checkout-payment hidden" id="checkout-payment">
-        <div class="checkout-payment-prompt">ENTER EXACT AMOUNT DUE</div>
+        <div class="checkout-payment-prompt">${cashPayment ? "ENTER EXACT AMOUNT DUE" : "CARD PAYMENT - ENTER TOTAL"}</div>
         <div class="checkout-payment-display" id="checkout-payment-display">0</div>
         <div class="checkout-numpad">
           ${digitButtons}

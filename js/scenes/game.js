@@ -30,7 +30,7 @@ import { Player } from "../logic/Player.js";
 import { Crate, INTERACT_RANGE } from "../logic/Crate.js";
 import { summarizeSupplyOrder } from "../logic/SupplyOrder.js";
 import { solveCratePush } from "../logic/CratePushing.js";
-import { CheckoutWindow } from "../logic/CheckoutWindow.js";
+import { CheckoutWindow, customerPaysCash } from "../logic/CheckoutWindow.js";
 import { FixtureWindow } from "../logic/FixtureWindow.js";
 import { GoBacksWindow } from "../logic/GoBacksWindow.js";
 import { TileRoom } from "../logic/TileRoom.js";
@@ -2254,7 +2254,7 @@ export class GameScene extends Phaser.Scene {
         this.checkoutWindow.close();
       }
     }, {
-      cash: true,
+      cash: customerPaysCash(),
       onWrongChange: () => this.playerState.subReputation(1),
     });
   }
