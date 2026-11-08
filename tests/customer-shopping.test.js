@@ -73,6 +73,29 @@ function makeCustomer({ factionId = "scavengers", plan }) {
   const floatingText = [];
   const missingPrimaryEvents = [];
   const inventoryTransfers = [];
+  const reactionGraphics = [];
+  const addReactionGraphics = () => {
+    const graphic = {
+      x: 0,
+      y: 0,
+      alpha: 1,
+      destroyed: false,
+      setDepth() { return this; },
+      setPosition(x, y) { this.x = x; this.y = y; return this; },
+      setAlpha(alpha) { this.alpha = alpha; return this; },
+      fillStyle() { return this; },
+      fillCircle() { return this; },
+      lineStyle() { return this; },
+      strokeCircle() { return this; },
+      beginPath() { return this; },
+      moveTo() { return this; },
+      lineTo() { return this; },
+      strokePath() { return this; },
+      destroy() { this.destroyed = true; },
+    };
+    reactionGraphics.push(graphic);
+    return graphic;
+  };
   const eventBus = new EventBus();
   eventBus.on(GAME_EVENTS.INVENTORY_TRANSFERRED, (event) => inventoryTransfers.push(event));
   const customer = Object.create(Customer.prototype);
@@ -85,6 +108,7 @@ function makeCustomer({ factionId = "scavengers", plan }) {
     getStorePrice: () => 10,
     market: { getPrice: () => 100 },
     showFloatingText: (...args) => floatingText.push(args),
+    add: { graphics: addReactionGraphics },
   };
   customer.sprite = { x: 100, y: 100 };
   customer.factionId = factionId;
@@ -111,11 +135,40 @@ function makeCustomer({ factionId = "scavengers", plan }) {
   customer.bonusBought = new Set();
   customer.bonusAttempted = new Set();
   customer.purchasedFirearms = new Set();
+  customer.reactionEventsShown = new Set();
+  customer.reactionBubble = null;
+  customer.reactionRemainingMs = 0;
   customer.onComplete = () => {};
   customer.isDestroyed = false;
   customer.scene.showFloatingText = (...args) => floatingText.push(args);
-  return { customer, repChanges, floatingText, missingPrimaryEvents, inventoryTransfers };
+  return {
+    customer,
+    repChanges,
+    floatingText,
+    missingPrimaryEvents,
+    inventoryTransfers,
+    reactionGraphics,
+  };
 }
+
+test("customer emoticons appear only for a new event and fade while following the customer", () => {
+  const { customer, reactionGraphics } = makeCustomer({ plan: {} });
+
+  assert.equal(customer.showReaction("price-too-high", "disappointed"), true);
+  assert.equal(customer.showReaction("price-too-high", "disappointed"), false);
+  assert.equal(customer.showReaction("left-angry", "angry"), false);
+  assert.deepEqual([reactionGraphics[0].x, reactionGraphics[0].y], [123, 64]);
+
+  customer.sprite.x = 130;
+  customer.updateReaction(1500);
+  assert.equal(reactionGraphics[0].x, 153);
+  assert.equal(reactionGraphics[0].alpha, 1);
+  customer.updateReaction(150);
+  assert.equal(reactionGraphics[0].alpha, 0.5);
+  customer.updateReaction(150);
+  assert.equal(reactionGraphics[0].destroyed, true);
+  assert.equal(customer.showReaction("left-angry", "angry"), true);
+});
 
 test("customers report missing primary stock while continuing to buy remaining items", () => {
   const inStock = fixture({ x: 100, y: 100 }, [{ itemId: "wanted", quantity: 1 }]);

@@ -95,7 +95,9 @@ notice something that needs doing but isn't being done right now.
 ## Art / Assets
 - [ ] Map art is placeholder and looks bad. Replace the floor, wall, and room art.
 - [ ] Sound effects for hitting customers with boxes.
-- [ ] Emoticons for customers.
+- [x] Brief, event-based customer emoticons: show one at a time for being priced out,
+      missing primary stock, leaving angry, or completing a purchase of 3+ items. Each
+      lasts about 2 seconds and each event only triggers once per customer.
 - [ ] `att_stk_08` (Blackwood Ordnance Counter-Weight Stock) is using a placeholder image
       (`_Bonus_Variety/attachments_stocks/stock-tech-black-blue-orb.png`), not real art made
       for this specific item. Replace with a proper generated icon.

@@ -53,6 +53,7 @@ function queuedCustomer({ serving = () => false } = {}) {
   const customer = Object.create(Customer.prototype);
   const angry = [];
   const floating = [];
+  const reactionGraphics = [];
   customer.sprite = { x: 100, y: 100 };
   customer.state = "QUEUEING";
   customer.cart = [{ itemId: "amo_01", price: 5 }, { itemId: "big", price: 50 }];
@@ -60,16 +61,39 @@ function queuedCustomer({ serving = () => false } = {}) {
   customer.playerState = new PlayerState();
   customer.patienceBubble = bubble;
   customer.patienceLevel = -1;
+  customer.reactionEventsShown = new Set();
+  customer.reactionBubble = null;
+  customer.reactionRemainingMs = 0;
   customer.scene = {
     isServingCustomer: serving,
     showFloatingText: (...args) => floating.push(args),
+    add: {
+      graphics: () => {
+        const graphic = {
+          setDepth() { return this; },
+          setPosition() { return this; },
+          setAlpha() { return this; },
+          fillStyle() { return this; },
+          fillCircle() { return this; },
+          lineStyle() { return this; },
+          strokeCircle() { return this; },
+          beginPath() { return this; },
+          moveTo() { return this; },
+          lineTo() { return this; },
+          strokePath() { return this; },
+          destroy() {},
+        };
+        reactionGraphics.push(graphic);
+        return graphic;
+      },
+    },
   };
   customer.followPath = () => {};
   customer.updateFacing = () => {};
   customer.onLeaveAngry = (who, cart) => angry.push({ who, cart });
   customer.enterLeaving = () => { customer.state = "LEAVING"; };
   customer.resetPatience();
-  return { customer, angry, floating, bubble };
+  return { customer, angry, floating, bubble, reactionGraphics };
 }
 
 test("patience bubbles escalate from calm to urgent", () => {
@@ -199,4 +223,13 @@ test("completing a sale returns proceeds without directly changing player state"
   assert.equal(customer.playerState.factionReputation.mercenaries, factionBefore);
   assert.equal(customer.playerState.credits, creditsBefore);
   assert.equal(customer.state, "LEAVING");
+});
+
+test("only purchases of three or more items get the happy reaction", () => {
+  const { customer, reactionGraphics } = queuedCustomer();
+  customer.cart.push({ itemId: "third", price: 10 });
+
+  customer.completeSale();
+
+  assert.equal(reactionGraphics.length, 1);
 });

@@ -19,6 +19,9 @@ export const MAX_PRICE_TOLERANCE = 1.3;
 // Seeking is deliberately far longer than any legitimate walk across the map.
 const LEAVING_TIMEOUT_MS = 6000;
 const SEEKING_TIMEOUT_MS = 15000;
+const CUSTOMER_REACTION_MS = 1800;
+const CUSTOMER_REACTION_FADE_MS = 300;
+const BIG_PURCHASE_ITEM_COUNT = 3;
 
 // Bible Steps 53/12/51: how long a typical queued customer waits (ms, paused with the game).
 // Traits such as Impatient change it per customer (CustomerTraits.js).
@@ -87,6 +90,9 @@ export class Customer {
     this.patienceRemainingMs = null; // only ticks once queued
     this.patienceBubble = null;
     this.patienceLevel = -1;
+    this.reactionBubble = null;
+    this.reactionRemainingMs = 0;
+    this.reactionEventsShown = new Set();
 
     this.path = [];
     this.destination = null;
@@ -164,6 +170,7 @@ export class Customer {
         if (!this.isDestroyed) this.updateFacing(); // arrival may have just destroyed this
         break;
     }
+    if (!this.isDestroyed) this.updateReaction(delta);
   }
 
   // --- Shopping ---
@@ -248,6 +255,7 @@ export class Customer {
 
       const placement = placements.find((candidate) => this.acceptsPrice(itemId));
       if (!placement) {
+        this.showReaction("price-too-high", "disappointed");
         this.scene.showFloatingText(
           this.sprite.x,
           this.sprite.y - 40,
@@ -358,6 +366,7 @@ export class Customer {
 
   // The scene applies reputation and feedback when this customer misses primary stock.
   reportMissingPrimary() {
+    this.showReaction("primary-item-out-of-stock", "disappointed");
     this.onMissingPrimary?.(this, [...this.primaryMissing]);
   }
 
@@ -424,8 +433,72 @@ export class Customer {
     this.patienceBubble = null;
   }
 
+  showReaction(event, mood) {
+    if (this.reactionEventsShown.has(event) || this.reactionBubble) return false;
+    const colors = {
+      happy: 0x86efac,
+      disappointed: 0xfcd34d,
+      angry: 0xfca5a5,
+    };
+    const color = colors[mood];
+    if (color === undefined) throw new RangeError(`Unknown customer reaction: ${mood}`);
+
+    const graphics = this.scene.add.graphics().setDepth(9001);
+    graphics.fillStyle(color, 1);
+    graphics.fillCircle(0, 0, 10);
+    graphics.lineStyle(1.5, 0x1f2937, 1);
+    graphics.strokeCircle(0, 0, 10);
+    graphics.fillStyle(0x1f2937, 1);
+    graphics.fillCircle(-3, -2, 1.2);
+    graphics.fillCircle(3, -2, 1.2);
+    graphics.beginPath();
+    if (mood === "happy") {
+      graphics.moveTo(-4, 1);
+      graphics.lineTo(0, 4);
+      graphics.lineTo(4, 1);
+    } else {
+      if (mood === "angry") {
+        graphics.moveTo(-5, -5);
+        graphics.lineTo(-1, -3);
+        graphics.moveTo(5, -5);
+        graphics.lineTo(1, -3);
+      }
+      graphics.moveTo(-4, 4);
+      graphics.lineTo(0, 1);
+      graphics.lineTo(4, 4);
+    }
+    graphics.strokePath();
+
+    this.reactionEventsShown.add(event);
+    this.reactionBubble = graphics;
+    this.reactionRemainingMs = CUSTOMER_REACTION_MS;
+    this.positionReaction();
+    return true;
+  }
+
+  positionReaction() {
+    this.reactionBubble?.setPosition(
+      this.sprite.x + SPRITE_DISPLAY_WIDTH / 2,
+      this.sprite.y - SPRITE_DISPLAY_HEIGHT / 2 - 12,
+    );
+  }
+
+  updateReaction(delta) {
+    if (!this.reactionBubble) return;
+    this.reactionRemainingMs = Math.max(0, this.reactionRemainingMs - delta);
+    this.positionReaction();
+    this.reactionBubble.setAlpha(
+      Math.min(1, this.reactionRemainingMs / CUSTOMER_REACTION_FADE_MS),
+    );
+    if (this.reactionRemainingMs === 0) {
+      this.reactionBubble.destroy();
+      this.reactionBubble = null;
+    }
+  }
+
   // Bible Steps 12/51: abandons the cart for the scene to process, then leaves.
   leaveAngry() {
+    this.showReaction("left-angry", "angry");
     const cart = this.cart;
     this.cart = [];
     this.clearPatience();
@@ -446,6 +519,9 @@ export class Customer {
   // Finish the customer's sale state and return proceeds for the scene's sale event.
   completeSale() {
     const total = sumMoney(this.cart.map((entry) => entry.price));
+    if (this.cart.length >= BIG_PURCHASE_ITEM_COUNT) {
+      this.showReaction("large-purchase", "happy");
+    }
     this.clearPatience();
     this.enterLeaving();
     return total;
@@ -532,6 +608,8 @@ export class Customer {
   destroy() {
     this.isDestroyed = true;
     this.clearPatience();
+    this.reactionBubble?.destroy();
+    this.reactionBubble = null;
     this.sprite.destroy();
     this.onComplete(this);
   }
