@@ -223,14 +223,11 @@ export class CheckoutWindow {
     const totalValueElement = this.bodyElement.querySelector(
       "#checkout-total-value",
     );
-    const paymentSection = this.bodyElement.querySelector("#checkout-payment");
 
     let scannedCount = 0;
     let runningTotal = 0;
 
-    if (cart.length === 0) {
-      paymentSection.classList.remove("hidden");
-    }
+    if (cart.length === 0) this.beginPayment();
 
     const scan = (card) => {
       if (card.dataset.scanned === "true") return;
@@ -245,9 +242,7 @@ export class CheckoutWindow {
       this.slideOverScanner(card);
       this.advanceBelt();
 
-      if (scannedCount === cart.length) {
-        paymentSection.classList.remove("hidden");
-      }
+      if (scannedCount === cart.length) this.beginPayment();
     };
 
     cards.forEach((card) => {
@@ -261,6 +256,20 @@ export class CheckoutWindow {
     });
 
     this.bindNumpad(cart);
+  }
+
+  // Cash customers hand over their money as soon as everything is scanned. Only cashless
+  // customers need the total keyed in.
+  beginPayment() {
+    if (!this.cashPayment) {
+      this.bodyElement.querySelector("#checkout-payment").classList.remove("hidden");
+      return;
+    }
+    const payment = this.cashPayment;
+    // Let the last item finish sliding over the scanner first.
+    setTimeout(() => {
+      if (this.cashPayment === payment && this.paymentStage === "total") this.startTakingPayment();
+    }, SCAN_SLIDE_MS);
   }
 
   /**
@@ -303,12 +312,8 @@ export class CheckoutWindow {
 
     this.confirmPayment = () => {
       if (this.paymentStage !== "total") return;
+      if (this.cashPayment) return;
       if (this.paymentBuffer !== "" && toCents(Number(this.paymentBuffer)) === toCents(this.total)) {
-        if (this.cashPayment) {
-          feedbackElement.textContent = "";
-          this.startTakingPayment();
-          return;
-        }
         this.paymentStage = "complete";
         playSaleComplete();
         // Don't close here: the caller either re-renders for the next queued customer or
@@ -352,7 +357,8 @@ export class CheckoutWindow {
     }
   }
 
-  // The customer holds out their cash over a blurred screen; each piece is clicked to take it.
+  // The customer holds out their cash over a blurred screen. Each piece is taken by clicking
+  // it or by holding the mouse button and sweeping over it, like scanning items.
   startTakingPayment() {
     this.paymentStage = "take";
     this.renderTenderOverlay();
@@ -366,7 +372,7 @@ export class CheckoutWindow {
       <div class="cash-tender-panel">
         <div class="cash-tender-title">THE CUSTOMER HANDS YOU ${formatMoney(this.cashPayment.tender).toUpperCase()}</div>
         <div class="cash-tender-area"></div>
-        <div class="cash-tender-hint">Click each bill and coin to take it.</div>
+        <div class="cash-tender-hint">Click each bill and coin to take it, or hold the mouse button and sweep across them.</div>
       </div>`;
     const area = overlay.querySelector(".cash-tender-area");
     this.cashPayment.tenderPieces.forEach((piece, index) => {
@@ -380,9 +386,17 @@ export class CheckoutWindow {
       element.style.left = `${8 + Math.random() * 64}%`;
       element.style.top = `${10 + Math.random() * 60}%`;
       element.style.transform = `translate(-50%, -50%) rotate(${Math.round(Math.random() * 50 - 25)}deg)`;
-      element.addEventListener("click", () => this.takeTenderPiece(index, element));
+      // The global mousedown listener (constructor) sets isScanning for click-and-drag.
+      element.addEventListener("mousedown", (event) => {
+        if (event.button === 0) this.takeTenderPiece(index, element);
+      });
+      element.addEventListener("mouseenter", () => {
+        if (this.isScanning) this.takeTenderPiece(index, element);
+      });
       area.appendChild(element);
     });
+    // The Manager's Tablet may have been opened while the last item was scanning.
+    if (this.uiWindow.element.classList.contains("hidden")) overlay.classList.add("hidden");
     document.body.appendChild(overlay);
     this.tenderOverlay = overlay;
   }
@@ -408,6 +422,7 @@ export class CheckoutWindow {
       return;
     }
     this.paymentStage = "change";
+    this.bodyElement.querySelector("#checkout-payment").classList.remove("hidden");
     this.bodyElement.querySelector("#checkout-payment-display").classList.add("hidden");
     this.bodyElement.querySelector(".checkout-belt").classList.add("hidden");
     this.bodyElement.querySelector(".checkout-numpad").classList.add("hidden");

@@ -90,12 +90,20 @@ function harness({ cash = true, tender = 5 } = {}) {
   return { overlays: () => overlays, takeAll, checkout, elements, button, completed: () => completed, penalties: () => penalties };
 }
 
-test("after the exact total, the customer's cash must all be taken before the drawer opens", () => {
+test("cash customers hand over money once scanning ends, with no total to key in", (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
   const h = harness();
-  for (const digit of "1.239.") h.checkout.appendDigit(digit);
-  assert.equal(h.checkout.paymentBuffer, "1.23");
+  for (const digit of "1.23") h.checkout.appendDigit(digit);
   h.checkout.confirmPayment();
+  assert.equal(h.checkout.paymentStage, "total");
+  assert.equal(h.overlays(), 0);
+  const keypadPanel = h.elements.get("#checkout-payment");
+  keypadPanel.classList.add("hidden");
+  h.checkout.beginPayment();
+  assert.equal(keypadPanel.classList.contains("hidden"), true);
+  context.mock.timers.tick(1000);
   assert.equal(h.checkout.paymentStage, "take");
+  assert.equal(keypadPanel.classList.contains("hidden"), true);
   assert.equal(h.overlays(), 1);
   h.checkout.handleNumpadKeydown({ key: "Enter", preventDefault() {} });
   assert.equal(h.checkout.cashPayment.mistakes, 0);
@@ -103,13 +111,13 @@ test("after the exact total, the customer's cash must all be taken before the dr
   assert.equal(h.checkout.paymentStage, "change");
   assert.equal(h.completed(), 0);
   assert.equal(h.elements.get(".checkout-numpad").classList.contains("hidden"), true);
+  assert.equal(keypadPanel.classList.contains("hidden"), false);
   assert.equal(h.elements.get("#checkout-cash").classList.contains("hidden"), false);
 });
 
 test("exact payment skips counting change once every bill and coin is taken", () => {
   const h = harness({ tender: 1.23 });
-  for (const digit of "1.23") h.checkout.appendDigit(digit);
-  h.checkout.confirmPayment();
+  h.checkout.startTakingPayment();
   assert.deepEqual(h.checkout.cashPayment.tenderPieces.map((piece) => piece.cents), [100, 10, 10, 1, 1, 1]);
   h.checkout.takeTenderPiece(0);
   h.checkout.takeTenderPiece(0);
@@ -121,8 +129,7 @@ test("exact payment skips counting change once every bill and coin is taken", ()
 
 test("drawer clicks and right-clicks adjust change, and Enter rejects mistakes until exact", () => {
   const h = harness();
-  for (const digit of "1.23") h.checkout.appendDigit(digit);
-  h.checkout.confirmPayment();
+  h.checkout.startTakingPayment();
   h.takeAll();
   h.button.listeners.get("click")();
   let prevented = 0;
@@ -160,6 +167,9 @@ test("held Enter and a hidden register cannot hand over change", () => {
 
 test("cashless checkout still completes after entering the decimal total", () => {
   const h = harness({ cash: false });
+  h.elements.get("#checkout-payment").classList.add("hidden");
+  h.checkout.beginPayment();
+  assert.equal(h.elements.get("#checkout-payment").classList.contains("hidden"), false);
   for (const digit of "1.23") h.checkout.appendDigit(digit);
   h.checkout.confirmPayment();
   h.checkout.confirmPayment();
