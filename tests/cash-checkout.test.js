@@ -64,7 +64,7 @@ function harness({ cash = true, tender = 5 } = {}) {
     "#checkout-payment-display", "#checkout-payment-feedback", "#numpad-clear",
     "#numpad-confirm", ".checkout-numpad", ".checkout-payment-prompt",
     "#checkout-payment", "#checkout-cash", "#cash-hand-over", ".checkout-belt",
-    "#checkout-change-selected", "#checkout-change-pile",
+    "#checkout-change-selected", "#checkout-change-pile", "#checkout-total-value",
   ]) elements.set(selector, element());
   const button = element();
   button.dataset.cashCents = "1";
@@ -113,6 +113,8 @@ test("cash customers hand over money once scanning ends, with no total to key in
   assert.equal(h.elements.get(".checkout-numpad").classList.contains("hidden"), true);
   assert.equal(keypadPanel.classList.contains("hidden"), false);
   assert.equal(h.elements.get("#checkout-cash").classList.contains("hidden"), false);
+  assert.equal(h.elements.get("#checkout-total-value").innerHTML,
+    '1.23 - <span class="checkout-paid">5.00</span>');
 });
 
 test("exact payment skips counting change once every bill and coin is taken", () => {
@@ -179,11 +181,13 @@ test("cashless checkout still completes after entering the decimal total", () =>
   assert.equal(h.completed(), 1);
 });
 
-test("cash checkout labels separate bills in credits from coins in cents", () => {
+test("the change drawer shows bare numbers on bills and coins, with no row headings", () => {
   const html = CheckoutRenderer.generateHTML([], {}, new CashPayment(1.23, 5));
   assert.match(html, /data-digit="\."/);
-  assert.match(html, /BILLS - CREDITS/);
-  assert.match(html, /COINS - CENTS \(100 CENTS = 1 CREDIT\)/);
+  assert.doesNotMatch(html, /BILLS - CREDITS|COINS - CENTS|CUSTOMER PAYS|CHANGE SELECTED/);
+  assert.match(html, /CURRENT CHANGE/);
+  const faces = [...html.matchAll(/class="cash-art"><span>([^<]*)</g)].map((match) => match[1]);
+  assert.deepEqual(faces, ["1", "5", "10", "20", "1", "5", "10", "25", "50"]);
   assert.match(html, /HAND OVER CHANGE \(SPACE\)/);
   assert.match(html, /3\.77 credits/);
   assert.equal((html.match(/data-cash-cents=/g) ?? []).length, 9);

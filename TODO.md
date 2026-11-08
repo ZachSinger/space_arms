@@ -8,7 +8,8 @@ notice something that needs doing but isn't being done right now.
       and 1/5/10/25/50 cent coins. The customer first holds out their cash over a blurred
       screen as soon as scanning ends (no keypad), and each piece is clicked or swept to take it; about 1 in 4 pay exact, skipping change.
       In the drawer, click adds change, right-click removes it, and Space
-      hands it over. Wrong change is refused; the first mistake warns, later mistakes
+      hands it over. Drawer pieces show bare numbers, and the total line shows the
+      amount paid in green. Wrong change is refused; the first mistake warns, later mistakes
       cost store reputation. Market/store prices, decimal keypad, balances, receipts,
       and saves support cents; existing whole-credit saves keep their original values.
 - [ ] After testing the cash drawer, introduce a mix of cash and cashless customers.

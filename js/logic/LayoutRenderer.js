@@ -4,6 +4,7 @@
 // HTML for the fixture layout panel: placed fixtures with MOVE / CRATE UP buttons, plus
 // (optionally) the fixture purchase list.
 import { getFixtureType } from "./FixtureLayout.js";
+import { LOADING_PAD_SPOTS } from "./SupplyOrder.js";
 
 const FIXTURE_PURPOSES = {
   shelf: "SHELVING - displays items for customers",
@@ -15,13 +16,23 @@ export class LayoutRenderer {
   /**
    * @param {GameScene} scene
    * @param {boolean} includePurchases - also show buying and crating (the full Layout tab)
+   * @param {string} [purchaseNotice] - confirmation of the fixture just bought
    * @returns {string} HTML
    */
-  static generateHTML(scene, includePurchases = false) {
+  static generateHTML(scene, includePurchases = false, purchaseNotice = "") {
     const enabled = scene.canRearrangeFixtures();
     const { fixtures } = scene;
+    const waitingNames = (scene.restockCrates ?? [])
+      .filter((crate) => crate.kind === "fixture" && crate.lockedToPad)
+      .map((crate) => getFixtureType(crate.typeId).name);
+    const freeSpots = scene.getLoadingPadSpawnPositions?.().length ?? LOADING_PAD_SPOTS;
     const purchaseHTML = includePurchases ? `
       <h3 class="fixture-section-title">AVAILABLE FIXTURES</h3>
+      ${purchaseNotice ? `<p class="layout-purchase-notice" role="status">${purchaseNotice}</p>` : ""}
+      <p class="fixture-stock-meta layout-pad-status">Loading Pad: ${freeSpots} of ${LOADING_PAD_SPOTS} spots free.
+        ${waitingNames.length
+          ? `Fixture crates waiting there: ${waitingNames.join(", ")}.`
+          : "No fixture crates waiting there."}</p>
       <div class="fixture-purchase-list">
         ${scene.getFixturePurchaseOptions().map(({ spec, license, licensed, canAfford, uniqueAlreadyPlaced, hasDeliverySpace }) => {
           const disabled = !licensed || !canAfford || uniqueAlreadyPlaced || !hasDeliverySpace;

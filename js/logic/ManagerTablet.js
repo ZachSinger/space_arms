@@ -15,6 +15,7 @@ import { FixtureHighlight } from "./FixtureHighlight.js";
 import { playErrorBuzz } from "./Sfx.js";
 import { GAME_EVENTS } from "./EventBus.js";
 import { roundMoney } from "./Money.js";
+import { getFixtureType } from "./FixtureLayout.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
 // The bible's full Step 40 tab list (Part 8). Tabs with no system yet render a
@@ -121,8 +122,15 @@ export class ManagerTablet {
       if (moveButton) this.scene.fixturePlacement.begin(moveButton.dataset.moveFixtureId);
 
       const buyFixtureButton = event.target.closest("[data-buy-fixture-id]");
-      if (buyFixtureButton && !this.scene.buyFixture(buyFixtureButton.dataset.buyFixtureId)) {
-        this.scene.showShopMessage("Fixture purchase is unavailable. Check its license, cost, and requirements.");
+      if (buyFixtureButton) {
+        const typeId = buyFixtureButton.dataset.buyFixtureId;
+        const name = getFixtureType(typeId)?.name ?? "Fixture";
+        // Set before buying: the purchase re-renders this tab through the state listener.
+        this.fixturePurchaseNotice = `Bought ${name}. Its crate is waiting on the Loading Pad.`;
+        if (!this.scene.buyFixture(typeId)) {
+          this.fixturePurchaseNotice = "";
+          this.scene.showShopMessage("Fixture purchase is unavailable. Check its license, cost, and requirements.");
+        }
       }
 
       const crateFixtureButton = event.target.closest("[data-crate-fixture-id]");
@@ -209,7 +217,7 @@ export class ManagerTablet {
       return ContractRenderer.generateHTML(database.getAllLicenses(), this.playerState);
     }
     if (tabId === "supply") return SupplyRenderer.generateHTML(this.scene, this.supplyOrder);
-    if (tabId === "fixtures") return LayoutRenderer.generateHTML(this.scene, true);
+    if (tabId === "fixtures") return LayoutRenderer.generateHTML(this.scene, true, this.fixturePurchaseNotice);
     if (tabId === "layout") return LayoutRenderer.generateHTML(this.scene);
     if (tabId === "finances") return FinancesRenderer.generateHTML(this.scene.getFinancesView());
     return `<div class="tablet-placeholder">COMING SOON</div>`;
@@ -218,6 +226,7 @@ export class ManagerTablet {
   switchTab(tabId) {
     if (this.bodyElement.contains(document.activeElement)) document.activeElement.blur();
     this.fixtureHighlight.reset();
+    this.fixturePurchaseNotice = "";
     if (tabId === "inventory") this.refreshInventoryPanel();
     if (tabId === "employee") this.refreshEmployeePanel();
     if (tabId === "supply") this.refreshSupplyPanel();

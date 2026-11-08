@@ -5,12 +5,17 @@
 import { CASH_DENOMINATIONS } from "./CashPayment.js";
 import { formatMoney } from "./Money.js";
 
+// The number printed on a bill (credits) or coin (cents); its shape shows which it is.
+export function cashFaceValue({ kind, cents }) {
+  return String(kind === "bill" ? cents / 100 : cents);
+}
+
 function renderDrawer(kind) {
   return CASH_DENOMINATIONS.filter((denomination) => denomination.kind === kind)
     .map(({ cents, label }) => `
       <button type="button" class="cash-denomination cash-${kind}" data-cash-cents="${cents}"
         aria-label="Add ${label} to change; right-click to remove" title="Click to add ${label}. Right-click to remove one.">
-        <span class="cash-art"><span>${label}</span></span>
+        <span class="cash-art"><span>${cashFaceValue({ kind, cents })}</span></span>
         <span class="cash-count" data-cash-count="${cents}">0 in change</span>
       </button>`).join("");
 }
@@ -64,15 +69,12 @@ export class CheckoutRenderer {
         ${cashPayment ? `
           <div class="cash-checkout hidden" id="checkout-cash">
             <div class="cash-summary">
-              <div><span>CUSTOMER PAYS</span><strong>${formatMoney(cashPayment.tender)}</strong></div>
               <div><span>CHANGE OWED</span><strong>${formatMoney(cashPayment.changeDueCents / 100)}</strong></div>
-              <div><span>CHANGE SELECTED</span><strong id="checkout-change-selected">0 credits</strong></div>
+              <div><span>CURRENT CHANGE</span><strong id="checkout-change-selected">0 credits</strong></div>
             </div>
             <button type="button" class="action-btn cash-hand-over" id="cash-hand-over">HAND OVER CHANGE (SPACE)</button>
             <div class="cash-drawer">
-              <div class="cash-row-label">BILLS - CREDITS</div>
               <div class="cash-bills">${renderDrawer("bill")}</div>
-              <div class="cash-row-label">COINS - CENTS (100 CENTS = 1 CREDIT)</div>
               <div class="cash-coins">${renderDrawer("coin")}</div>
             </div>
             <div class="cash-change-pile" id="checkout-change-pile">No change selected.</div>

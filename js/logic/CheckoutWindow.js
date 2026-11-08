@@ -6,7 +6,7 @@
 // player types the total, then counts cash change from an unlimited placeholder drawer.
 
 import { UIWindow } from "./UIWindow.js";
-import { CheckoutRenderer } from "./CheckoutRenderer.js";
+import { CheckoutRenderer, cashFaceValue } from "./CheckoutRenderer.js";
 import { CashPayment, splitCash } from "./CashPayment.js";
 import { formatMoney, fromCents, sumMoney, toCents } from "./Money.js";
 import {
@@ -431,6 +431,10 @@ export class CheckoutWindow {
       return;
     }
     this.paymentStage = "change";
+    // What the customer paid sits next to the total, in green.
+    const twoDecimals = (cents) => (cents / 100).toFixed(2);
+    this.bodyElement.querySelector("#checkout-total-value").innerHTML =
+      `${twoDecimals(toCents(this.total))} - <span class="checkout-paid">${twoDecimals(this.cashPayment.tenderCents)}</span>`;
     this.bodyElement.querySelector("#checkout-payment").classList.remove("hidden");
     this.bodyElement.querySelector("#checkout-payment-display").classList.add("hidden");
     this.bodyElement.querySelector(".checkout-belt").classList.add("hidden");
@@ -447,8 +451,8 @@ export class CheckoutWindow {
     this.bodyElement.querySelectorAll("[data-cash-count]").forEach((element) => {
       element.textContent = `${cash.change.get(Number(element.dataset.cashCount)) ?? 0} in change`;
     });
-    const piecesHTML = (pieces) => pieces.map(({ kind, label, count }) => `
-      <span class="cash-piece cash-${kind}"><span>${count} x ${label}</span></span>`).join("");
+    const piecesHTML = (pieces) => pieces.map(({ kind, cents, count }) => `
+      <span class="cash-piece cash-${kind}"><span>${count} x ${cashFaceValue({ kind, cents })}</span></span>`).join("");
     const selected = [...cash.change].map(([cents, count]) => ({
       ...splitCash(cents)[0], count,
     }));
