@@ -192,6 +192,9 @@ notice something that needs doing but isn't being done right now.
 - [x] ~~Shelf placement item picker showed the whole catalog~~ -- you could pick an item
       to place on the shelf that you weren't actually carrying. Filtered
       `FixtureRenderer.itemPickerHTML` to only the player's own hovercart stock.
+- [x] ~~Shelf window: "+ ADD ITEM" opened a separate picker list~~ -- removed. Clicking an
+      item in the shelf window's hovercart list now starts placing it directly. The shelf
+      grid is centered and labeled "THIS SHELF"; the hovercart has a title and a hint.
 - [x] ~~Supply tab only listed items already stocked somewhere, so a fixture that starts
       completely empty (both now do) had nothing orderable at all, ever~~ -- genuinely
       broken, not a design choice. `GameScene.getRestockableItems`/`orderRestockCrate` now

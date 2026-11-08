@@ -36,7 +36,7 @@ export class FixtureRenderer {
       <div class="retro-slot custom-scrollbar fixture-stock-list" style="padding: 10px; display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow-y: auto;">
         ${fixtureRows || `<div class="fixture-empty-hint">Nothing stocked here yet -- order it from the Supply tab, then haul it over.</div>`}
       </div>
-      ${this.hovercartSectionHTML(hovercart, hovercartRows, databaseManager)}
+      ${this.hovercartSectionHTML(hovercart, hovercartRows)}
     `;
   }
 
@@ -53,9 +53,9 @@ export class FixtureRenderer {
     `;
   }
 
-  static hovercartSectionHTML(hovercart, hovercartRows) {
+  static hovercartSectionHTML(hovercart, hovercartRows, hint = "") {
     return `
-      <div class="fixture-section-divider">YOUR HOVERCART</div>
+      <div class="fixture-section-title">YOUR HOVERCART${hint ? `<span class="fixture-section-hint">${hint}</span>` : ""}</div>
       ${this.capacityBarHTML(hovercart)}
       <div class="retro-slot custom-scrollbar fixture-stock-list" style="padding: 10px; display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow-y: auto;">
         ${hovercartRows || `<div class="fixture-empty-hint">Nothing in your hovercart right now.</div>`}
@@ -114,30 +114,59 @@ export class FixtureRenderer {
   // --- Sales Shelf (manual grid placement, see ShelfFixture.js) ---
 
   /**
-   * Sales shelf grid with a "+ ADD ITEM" button, or, while placing an item, the grid
-   * with a rotate/cancel toolbar instead.
+   * Sales shelf grid above the hovercart. Clicking a hovercart item starts placing it; while
+   * placing, a rotate/cancel toolbar replaces the hovercart.
    * @param {ShelfFixture} shelfFixture
    * @param {InventoryPool} hovercart
    * @param {DatabaseManager} databaseManager
    * @param {{itemId: string, rotated: boolean}|null} pendingPlacement
    */
   static generateShelfHTML(shelfFixture, hovercart, databaseManager, pendingPlacement) {
-    const topHTML = pendingPlacement
-      ? this.placementToolbarHTML(pendingPlacement, databaseManager)
-      : `<button class="action-btn fixture-add-item-btn" data-add-item>+ ADD ITEM</button>`;
-
-    const hovercartRows = this.poolStockRowsHTML(
-      hovercart.stock,
-      shelfFixture,
-      databaseManager,
-      null,
-    );
-
     return `
-      ${topHTML}
+      ${pendingPlacement ? this.placementToolbarHTML(pendingPlacement, databaseManager) : ""}
+      <div class="fixture-section-title">THIS SHELF</div>
       ${this.placementGridHTML(shelfFixture, pendingPlacement, databaseManager)}
-      ${pendingPlacement ? "" : this.hovercartSectionHTML(hovercart, hovercartRows)}
+      ${pendingPlacement ? "" : this.hovercartSectionHTML(
+        hovercart,
+        this.shelfHovercartRowsHTML(hovercart, shelfFixture, databaseManager),
+        "Click an item to place it on this shelf",
+      )}
     `;
+  }
+
+  /**
+   * Hovercart rows in the shelf window; clicking one starts placing that item.
+   * @param {InventoryPool} hovercart
+   * @param {ShelfFixture} shelfFixture
+   * @param {DatabaseManager} databaseManager
+   */
+  static shelfHovercartRowsHTML(hovercart, shelfFixture, databaseManager) {
+    return hovercart.stock
+      .filter((entry) => entry.quantity > 0)
+      .map((entry) => {
+        const item = databaseManager.getItem(entry.itemId);
+        const perSlot = shelfFixture.getPlacementCapacity({ itemId: item.id });
+        const fitHTML = perSlot > 0
+          ? `Size ${item.dimensions.w}x${item.dimensions.h} | Fits ${perSlot} per shelf spot`
+          : `<span class="fixture-too-bulky">Too bulky for this shelf</span>`;
+        const iconHTML = item.image
+          ? `<img class="item-icon" src="${item.image}" alt="" />`
+          : `<div class="item-icon"></div>`;
+        return `
+          <div class="item-card fixture-stock-row fixture-pick-row" data-pick-item-id="${item.id}"
+            title="Place ${item.name} on this shelf">
+            ${iconHTML}
+            <div class="item-details">
+              <div class="item-card-header">
+                <span class="item-card-title">${item.name}</span>
+                <span class="item-card-cost">x${entry.quantity}</span>
+              </div>
+              <div class="fixture-stock-meta">${fitHTML}</div>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
   }
 
   static placementToolbarHTML(pendingPlacement, databaseManager) {
@@ -217,54 +246,6 @@ export class FixtureRenderer {
         ${interactiveAttr}>
         ${imageHTML}
         <span class="fixture-cell-badge">${placement.quantity}/${capacity}</span>
-      </div>
-    `;
-  }
-
-  /**
-   * Item picker shown after "+ ADD ITEM". Offers only items in the hovercart: you can't
-   * place stock you aren't carrying.
-   * @param {DatabaseManager} databaseManager
-   * @param {InventoryPool} hovercart
-   * @param {ShelfFixture} shelfFixture
-   */
-  static itemPickerHTML(databaseManager, hovercart, shelfFixture) {
-    const availableEntries = hovercart.stock.filter((entry) => entry.quantity > 0);
-
-    const rowsHTML = availableEntries
-      .map((entry) => {
-        const item = databaseManager.getItem(entry.itemId);
-        const perSlot = shelfFixture.getPlacementCapacity({ itemId: item.id });
-        const fitHTML = perSlot > 0
-          ? `Fits ${perSlot} per slot`
-          : `<span class="fixture-too-bulky">Too bulky for this shelf</span>`;
-        const iconHTML = item.image
-          ? `<img class="item-icon" src="${item.image}" alt="" />`
-          : `<div class="item-icon"></div>`;
-        return `
-          <div class="item-card fixture-picker-row" data-pick-item-id="${item.id}">
-            ${iconHTML}
-            <div class="item-details">
-              <div class="item-card-header">
-                <span class="item-card-title">${item.name}</span>
-                <span class="item-card-cost">x${entry.quantity} in cart</span>
-              </div>
-              <div class="fixture-stock-meta">Dim: ${item.dimensions.w}x${item.dimensions.h} | ${fitHTML}</div>
-            </div>
-          </div>
-        `;
-      })
-      .join("");
-
-    const emptyHTML =
-      availableEntries.length === 0
-        ? `<div class="fixture-empty-hint">Nothing in your hovercart to place -- take something from a fixture first.</div>`
-        : "";
-
-    return `
-      <button class="action-btn fixture-picker-back" data-picker-back>&lt; BACK</button>
-      <div class="retro-slot custom-scrollbar fixture-picker-list" style="padding: 10px; display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0; overflow-y: auto;">
-        ${rowsHTML}${emptyHTML}
       </div>
     `;
   }

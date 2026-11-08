@@ -1195,18 +1195,30 @@ button {
   cursor: not-allowed;
 }
 
-.fixture-add-item-btn {
-  margin: 10px 14px 0;
-  width: calc(100% - 28px);
+.fixture-section-title {
+  margin: 12px 14px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--color-text-main);
+  font-size: var(--font-size-12, 12px);
+  font-weight: bold;
+  letter-spacing: 1px;
 }
 
-.fixture-picker-back {
-  margin: 10px 10px 0;
-  width: calc(100% - 20px);
+.fixture-section-hint {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-10);
+  font-weight: normal;
+  letter-spacing: 0;
 }
 
-.fixture-picker-row {
+.fixture-pick-row {
   cursor: pointer;
+}
+
+.fixture-pick-row:hover {
+  border-color: var(--color-border-active);
 }
 
 .fixture-placement-toolbar {
@@ -1233,6 +1245,7 @@ button {
 
 .fixture-placement-grid {
   display: grid;
+  justify-content: center;
   gap: 4px;
   padding: 14px;
 }

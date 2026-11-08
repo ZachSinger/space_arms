@@ -33,7 +33,7 @@ export function showPopupText(x, y, text) {
 
 /**
  * One shared window, re-targeted and re-titled for each fixture opened.
- * Owns the shelf placement UI state (picker, pending placement, drag).
+ * Owns the shelf placement UI state (pending placement, drag).
  */
 export class FixtureWindow {
   constructor(windowManager, playerState, eventBus = null) {
@@ -57,7 +57,6 @@ export class FixtureWindow {
     this.fixture = null;
 
     // Shelf-only: the item being placed and its rotation; null when not placing.
-    this.pickingItem = false;
     this.pendingPlacement = null;
     // Placement anchor, tracked from hover rather than the click target because the
     // preview can span several cells and must still anchor at its top-left one.
@@ -213,7 +212,6 @@ export class FixtureWindow {
     this.cancelPendingPlacement(); // restores a mid-move stack to the fixture it came from
     this.fixture = fixture;
     this.titleElement.textContent = title;
-    this.pickingItem = false;
     this.render();
     this.uiWindow.openWindow();
   }
@@ -310,26 +308,13 @@ export class FixtureWindow {
 
     if (!this.isShelf()) return;
 
-    // --- Shelf-only: picking what to place ---
-    const addItemBtn = event.target.closest("[data-add-item]");
-    if (addItemBtn) {
-      this.pickingItem = true;
-      this.render();
-      return;
-    }
-    const backBtn = event.target.closest("[data-picker-back]");
-    if (backBtn) {
-      this.pickingItem = false;
-      this.render();
-      return;
-    }
+    // --- Shelf-only: clicking a hovercart item starts placing it ---
     const pickBtn = event.target.closest("[data-pick-item-id]");
     if (pickBtn) {
       if (this.fixture.getPlacementCapacity({ itemId: pickBtn.dataset.pickItemId }) < 1) {
         this.showPopupText(event.clientX, event.clientY, "Too Bulky For This Shelf");
         return;
       }
-      this.pickingItem = false;
       this.pendingPlacement = { itemId: pickBtn.dataset.pickItemId, rotated: false };
       this.hoveredCell = null;
       this.render();
@@ -517,17 +502,15 @@ export class FixtureWindow {
     this.playerState.notifyListeners(); // keeps the HUD's hovercart readout live
   }
 
-  // Storage bar/list, shelf item picker, or shelf grid, depending on fixture and UI state.
+  // Storage bar/list or shelf grid, depending on fixture and UI state.
   render() {
     if (this.isShelf()) {
-      this.bodyElement.innerHTML = this.pickingItem
-        ? FixtureRenderer.itemPickerHTML(database, this.playerState.hovercart, this.fixture)
-        : FixtureRenderer.generateShelfHTML(
-            this.fixture,
-            this.playerState.hovercart,
-            database,
-            this.pendingPlacement,
-          );
+      this.bodyElement.innerHTML = FixtureRenderer.generateShelfHTML(
+        this.fixture,
+        this.playerState.hovercart,
+        database,
+        this.pendingPlacement,
+      );
     } else {
       this.bodyElement.innerHTML = FixtureRenderer.generateStorageHTML(
         this.fixture,
