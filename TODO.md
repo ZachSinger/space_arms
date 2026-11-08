@@ -355,9 +355,9 @@ notice something that needs doing but isn't being done right now.
       actually unified into one shared concept -- duck-typed to the same small public API
       (`stock`/`add`/`remove`/`getRemainingUnitsFor`/etc.) so GameScene and FixtureWindow
       can treat both generically, but the internal models remain genuinely different.
-- [x] Single-file register line: spots run straight back from the counter, then bend
-  toward the door one touching step at a time (planRegisterQueue); the first customer
-  stands at the counter like the player does behind it.
+- [x] Single-file register line: runs straight out from the counter until blocked, then
+  turns toward the door (planRegisterQueue); the first customer stands at the counter like
+  the player does behind it, and everyone is spaced evenly along the line.
 - [x] Customer patience bubbles + Go-Backs bin (Step 53/12/51): queued customers show a
       colored bubble (green `...` > yellow `!` > red `!!`) as their 40s real-time patience
       (`PATIENCE_MS` in Customer.js) drains; it pauses with the game and while the player is

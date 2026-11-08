@@ -80,20 +80,24 @@ test("the starting layout has accessible fronts, a register back, and six queue 
 
 const touches = (a, b) => Math.abs(a.gx - b.gx) + Math.abs(a.gy - b.gy) === 1;
 
-test("the register line is single file: straight back from the counter, then toward the door", () => {
+test("the register line runs straight out from the counter until blocked, then turns toward the door", () => {
   const options = createRoom();
   const result = validateFixtureLayout(initialLayout(), options);
-  const [first, second] = result.queueCells;
-  const register = initialLayout().find((entry) => entry.id === "register");
-  const step = { dx: 0, dy: 1 };
-  assert.deepEqual(second, { gx: first.gx + step.dx, gy: first.gy + step.dy });
+  const cells = result.queueCells;
+  const first = cells[0];
   result.queueCells.slice(1).forEach((cell, index) => {
-    assert.ok(touches(cell, result.queueCells[index]), `spot ${index + 2} touches spot ${index + 1}`);
+    assert.ok(touches(cell, cells[index]), `spot ${index + 2} touches spot ${index + 1}`);
   });
-  assert.ok(result.queueCells.every((cell) => cell.gy >= register.gy + 2));
+  const turn = cells.findIndex((cell) => cell.gx !== first.gx);
+  assert.ok(turn > 1, "at least two spots run straight out");
+  cells.slice(0, turn).forEach((cell, index) => assert.equal(cell.gy, first.gy + index));
+  const corner = cells[turn - 1];
+  const beyond = { gx: corner.gx, gy: corner.gy + 1 };
+  assert.ok(!options.isWalkable(beyond.gx, beyond.gy) || result.blockedCells.has(cellKey(beyond)),
+    "the line only turns once the straight path is blocked");
   const doorDistance = (cell) =>
     Math.abs(cell.gx - options.entrance.gx) + Math.abs(cell.gy - options.entrance.gy);
-  assert.ok(doorDistance(result.queueCells.at(-1)) < doorDistance(first));
+  assert.ok(doorDistance(cells[turn]) < doorDistance(corner), "the turn heads toward the door");
 });
 
 test("a boxed-in line still bends around obstacles one step at a time", () => {

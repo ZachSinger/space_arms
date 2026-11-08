@@ -80,6 +80,8 @@ const REGISTER_HEIGHT = 75;
 const REGISTER_BEHIND_OVERLAP = 10;
 // How far (px) the first customer in line may overlap the front of the register art.
 const REGISTER_FRONT_OVERLAP = 10;
+// Distance between customers waiting in the register line; just over a customer's height.
+const REGISTER_QUEUE_SPACING = 52;
 
 // How close (px) the player must be to a fixture's standPoint to open it or deliver a crate.
 // Looser than Crate's INTERACT_RANGE because standPoint is a single pixel, so a tight radius
@@ -803,9 +805,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   // The register art is smaller than its floor footprint, so tile centers leave the first
-  // customer a long reach from the counter. Pull the first customer up to the counter like the
-  // player behind it, and slide the straight part of the line forward with them so the
-  // spacing between customers stays even.
+  // customer a long reach from the counter. The first customer stands at the counter like the
+  // player behind it; everyone else stands an even step apart along the line's path.
   placeRegisterQueue(points) {
     if (points.length === 0) return points;
     const register = this.fixtures.register();
@@ -816,18 +817,33 @@ export class GameScene extends Phaser.Scene {
     const front = { x: bounds.centerX + dx * reachX, y: bounds.centerY + dy * reachY };
     const shift = (front.x - points[0].x) * dx + (front.y - points[0].y) * dy;
     if (shift >= 0) return points;
-    const straightBack = (index) => index < points.length &&
-      points[index].x === points[0].x + dx * index * TILE_SIZE &&
-      points[index].y === points[0].y + dy * index * TILE_SIZE;
-    // Slide the straight run up to the counter and center it on the register art. The spot
-    // where the line turns stays on its tile so the bent part lines up evenly.
-    return points.map((point, index) => {
-      const turnsNext = index + 1 < points.length && !straightBack(index + 1);
-      if (!straightBack(index) || (index > 0 && turnsNext)) return point;
-      return dx !== 0
-        ? { x: point.x + dx * shift, y: front.y }
-        : { x: front.x, y: point.y + dy * shift };
-    });
+    // The straight run out from the counter is centered on the register art.
+    let straight = true;
+    const path = [front, ...points.slice(1).map((point, offset) => {
+      const index = offset + 1;
+      straight = straight && point.x === points[0].x + dx * index * TILE_SIZE &&
+        point.y === points[0].y + dy * index * TILE_SIZE;
+      if (!straight) return point;
+      return dx !== 0 ? { x: point.x, y: front.y } : { x: front.x, y: point.y };
+    })];
+    const placed = [front];
+    const segmentLength = (i) => Math.hypot(path[i + 1].x - path[i].x, path[i + 1].y - path[i].y);
+    let segment = 0;
+    let along = 0;
+    while (placed.length < points.length) {
+      along += REGISTER_QUEUE_SPACING;
+      while (segment < path.length - 1 && along > segmentLength(segment)) {
+        along -= segmentLength(segment);
+        segment += 1;
+      }
+      if (segment >= path.length - 1) break;
+      const t = along / segmentLength(segment);
+      const a = path[segment];
+      const b = path[segment + 1];
+      placed.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+    }
+    // Spare spots (the path ran out) fall back to the remaining tile centers.
+    return placed.concat(points.slice(placed.length));
   }
 
   // Centered on the register graphic, just past its back edge (the side away from the

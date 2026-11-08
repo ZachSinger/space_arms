@@ -275,6 +275,7 @@ export function planRegisterQueue(start, step, entrance, canQueue, canWalk, queu
   const toDoor = (cell) => doorSteps.get(cellKey(cell)) ?? Infinity;
   const line = [start];
   const used = new Set([cellKey(start)]);
+  let turned = false;
   while (line.length < queueSize) {
     const last = line.at(-1);
     const previous = line.at(-2);
@@ -283,12 +284,13 @@ export function planRegisterQueue(start, step, entrance, canQueue, canWalk, queu
       .map(([dx, dy]) => ({ gx: last.gx + dx, gy: last.gy + dy, straight: dx === heading.dx && dy === heading.dy }))
       .filter((cell) => canQueue(cell.gx, cell.gy) && !used.has(cellKey(cell)));
     if (options.length === 0) break;
-    // The second customer always stands straight back from the counter when there's room.
+    // The line runs straight out from the counter until something blocks it, then turns.
     const straight = options.find((cell) => cell.straight);
     let next;
-    if (line.length === 1 && straight) {
+    if (!turned && straight) {
       next = straight;
     } else {
+      turned = true;
       // Head toward the door, keeping straight on ties so the line bends as little as possible.
       next = options.reduce((best, cell) => {
         const difference = toDoor(cell) - toDoor(best);
