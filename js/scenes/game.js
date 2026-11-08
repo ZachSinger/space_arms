@@ -1138,6 +1138,9 @@ export class GameScene extends Phaser.Scene {
    * @returns {Array<{ x: number, y: number }> | null} world-space waypoints
    */
   findPath(fromX, fromY, toX, toY) {
+    // Close enough to step straight there; routing via tile centers would make a customer
+    // already at their spot (like the counter front) walk out and back.
+    if (Math.hypot(toX - fromX, toY - fromY) < TILE_SIZE) return [];
     const start = { gx: Math.floor(fromX / TILE_SIZE), gy: Math.floor(fromY / TILE_SIZE) };
     let goal = { gx: Math.floor(toX / TILE_SIZE), gy: Math.floor(toY / TILE_SIZE) };
     // Spots like the counter front can sit over a fixture's tile; route to the closest open
