@@ -438,6 +438,9 @@ export class GameScene extends Phaser.Scene {
     // Debug-only: tile-grid overlay that makes off-grid fixtures obvious.
     this.bindControlKey("keydown-G", "debug", () => this.toggleDebugGrid());
 
+    // Debug-only: lets one random customer in right away.
+    this.bindControlKey("keydown-Y", "debug", () => this.spawnCustomer(null));
+
     // The shift clock's manual pause: freezes time entirely so the player can think.
     this.bindControlKey("keydown-P", "pause", () => this.shiftClock.togglePause());
 

@@ -83,6 +83,7 @@ notice something that needs doing but isn't being done right now.
 - [x] Desktop HUD "Debug Info": numbered full-window PNG screenshots and readable
       live-state reports in local playtest sessions, with recent events/errors and
       customer-pool calculations. See `documentation/DebugPlaytesting.md`.
+- [x] Spawn-customer debug key (Y key): lets one random customer in right away.
 - [x] Tile-grid overlay (G key, `GameScene.toggleDebugGrid`): draws a 1px line every
       TILE_SIZE across the whole authored map (including locked/not-yet-built zones), on
       top of everything else. Added after discovering the Storage Fixture's lockers (and,
