@@ -47,7 +47,7 @@ after(async () => {
   if (cacheDirectory) await rm(cacheDirectory, { recursive: true, force: true });
 });
 
-function harness({ cash = true } = {}) {
+function harness({ cash = true, tender = 5 } = {}) {
   const element = () => {
     const classes = new Set();
     return {
@@ -64,7 +64,7 @@ function harness({ cash = true } = {}) {
     "#checkout-payment-display", "#checkout-payment-feedback", "#numpad-clear",
     "#numpad-confirm", ".checkout-numpad", ".checkout-payment-prompt",
     "#checkout-payment", "#checkout-cash", "#cash-hand-over", ".checkout-belt",
-    "#checkout-change-selected", "#checkout-cash-tender", "#checkout-change-pile",
+    "#checkout-change-selected", "#checkout-change-pile",
   ]) elements.set(selector, element());
   const button = element();
   button.dataset.cashCents = "1";
@@ -73,7 +73,7 @@ function harness({ cash = true } = {}) {
   const checkout = Object.create(CheckoutWindow.prototype);
   Object.assign(checkout, {
     total: 1.23, paymentStage: "total", paymentBuffer: "",
-    cashPayment: cash ? new CashPayment(1.23, 5) : null,
+    cashPayment: cash ? new CashPayment(1.23, tender) : null,
     bodyElement: {
       querySelector: (selector) => elements.get(selector),
       querySelectorAll: (selector) => selector === "[data-cash-cents]" ? [button] : [],
@@ -82,26 +82,48 @@ function harness({ cash = true } = {}) {
     onComplete: () => { completed += 1; },
     onWrongChange: () => { penalties += 1; },
   });
+  let overlays = 0;
+  checkout.renderTenderOverlay = () => { overlays += 1; };
   checkout.bindNumpad([]);
-  return { checkout, elements, button, completed: () => completed, penalties: () => penalties };
+  const takeAll = () => checkout.cashPayment.tenderPieces.forEach((_, index) =>
+    checkout.takeTenderPiece(index));
+  return { overlays: () => overlays, takeAll, checkout, elements, button, completed: () => completed, penalties: () => penalties };
 }
 
-test("decimal keypad accepts cents, rejects extra decimals, and opens the drawer after the exact total", () => {
+test("after the exact total, the customer's cash must all be taken before the drawer opens", () => {
   const h = harness();
   for (const digit of "1.239.") h.checkout.appendDigit(digit);
   assert.equal(h.checkout.paymentBuffer, "1.23");
   h.checkout.confirmPayment();
+  assert.equal(h.checkout.paymentStage, "take");
+  assert.equal(h.overlays(), 1);
+  h.checkout.handleNumpadKeydown({ key: "Enter", preventDefault() {} });
+  assert.equal(h.checkout.cashPayment.mistakes, 0);
+  h.takeAll();
   assert.equal(h.checkout.paymentStage, "change");
   assert.equal(h.completed(), 0);
   assert.equal(h.elements.get(".checkout-numpad").classList.contains("hidden"), true);
   assert.equal(h.elements.get("#checkout-cash").classList.contains("hidden"), false);
-  assert.match(h.elements.get("#checkout-cash-tender").innerHTML, /5 credits/);
+});
+
+test("exact payment skips counting change once every bill and coin is taken", () => {
+  const h = harness({ tender: 1.23 });
+  for (const digit of "1.23") h.checkout.appendDigit(digit);
+  h.checkout.confirmPayment();
+  assert.deepEqual(h.checkout.cashPayment.tenderPieces.map((piece) => piece.cents), [100, 10, 10, 1, 1, 1]);
+  h.checkout.takeTenderPiece(0);
+  h.checkout.takeTenderPiece(0);
+  assert.equal(h.checkout.paymentStage, "take");
+  h.takeAll();
+  assert.equal(h.checkout.paymentStage, "complete");
+  assert.equal(h.completed(), 1);
 });
 
 test("drawer clicks and right-clicks adjust change, and Enter rejects mistakes until exact", () => {
   const h = harness();
   for (const digit of "1.23") h.checkout.appendDigit(digit);
   h.checkout.confirmPayment();
+  h.takeAll();
   h.button.listeners.get("click")();
   let prevented = 0;
   h.button.listeners.get("contextmenu")({ preventDefault: () => { prevented += 1; } });

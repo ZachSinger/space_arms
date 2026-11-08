@@ -27,6 +27,7 @@ const SCAN_SLIDE_MS = 220;
 // UIWindow's x is plain px, so right-aligning a vw-wide window is computed here.
 const CHECKOUT_WIDTH_VW = 44;
 const RIGHT_MARGIN_PX = 24;
+export const EXACT_PAYMENT_CHANCE = 0.25;
 
 /**
  * The single register window, re-rendered for each customer at checkout.
@@ -92,6 +93,7 @@ export class CheckoutWindow {
     const panel = this.bodyElement.querySelector("#checkout-payment");
     if (!panel || panel.classList.contains("hidden")) return;
     if (event.repeat) return;
+    if (this.paymentStage === "take") return;
 
     if (this.paymentStage === "change") {
       if (event.key === "Enter") {
@@ -116,16 +118,20 @@ export class CheckoutWindow {
     this.onComplete = null;
     this.onWrongChange = null;
     this.cashPayment = null;
+    this.removeTenderOverlay();
     this.uiWindow.close();
   }
 
   suspend() {
     this.isScanning = false;
+    this.tenderOverlay?.classList.add("hidden");
     this.uiWindow.close();
   }
 
   resume() {
-    if (this.mode === "checkout") this.uiWindow.openWindow();
+    if (this.mode !== "checkout") return;
+    this.uiWindow.openWindow();
+    this.tenderOverlay?.classList.remove("hidden");
   }
 
   /**
@@ -141,7 +147,10 @@ export class CheckoutWindow {
     this.paymentBuffer = "";
     this.paymentStage = "total";
     this.total = sumMoney(cart.map((entry) => entry.price));
-    this.cashPayment = cash ? new CashPayment(this.total) : null;
+    // Some customers count out the exact amount, coins included, so no change is owed.
+    const exact = Math.random() < EXACT_PAYMENT_CHANCE;
+    this.cashPayment = cash ? new CashPayment(this.total, exact ? this.total : undefined) : null;
+    this.removeTenderOverlay();
 
     this.bodyElement.innerHTML = CheckoutRenderer.generateHTML(
       cart,
@@ -296,15 +305,8 @@ export class CheckoutWindow {
       if (this.paymentStage !== "total") return;
       if (this.paymentBuffer !== "" && toCents(Number(this.paymentBuffer)) === toCents(this.total)) {
         if (this.cashPayment) {
-          this.paymentStage = "change";
           feedbackElement.textContent = "";
-          displayElement.classList.add("hidden");
-          this.bodyElement.querySelector(".checkout-belt").classList.add("hidden");
-          this.bodyElement.querySelector(".checkout-numpad").classList.add("hidden");
-          this.bodyElement.querySelector(".checkout-payment-prompt").textContent = "COUNT THE CUSTOMER'S CHANGE";
-          this.bodyElement.querySelector("#checkout-cash").classList.remove("hidden");
-          this.refreshCash();
-          this.bodyElement.scrollTop = 0;
+          this.startTakingPayment();
           return;
         }
         this.paymentStage = "complete";
@@ -350,6 +352,71 @@ export class CheckoutWindow {
     }
   }
 
+  // The customer holds out their cash over a blurred screen; each piece is clicked to take it.
+  startTakingPayment() {
+    this.paymentStage = "take";
+    this.renderTenderOverlay();
+  }
+
+  renderTenderOverlay() {
+    this.removeTenderOverlay();
+    const overlay = document.createElement("div");
+    overlay.className = "cash-tender-overlay";
+    overlay.innerHTML = `
+      <div class="cash-tender-panel">
+        <div class="cash-tender-title">THE CUSTOMER HANDS YOU ${formatMoney(this.cashPayment.tender).toUpperCase()}</div>
+        <div class="cash-tender-area"></div>
+        <div class="cash-tender-hint">Click each bill and coin to take it.</div>
+      </div>`;
+    const area = overlay.querySelector(".cash-tender-area");
+    this.cashPayment.tenderPieces.forEach((piece, index) => {
+      if (piece.taken) return;
+      const element = document.createElement("button");
+      element.type = "button";
+      element.className = `cash-loose cash-${piece.kind}`;
+      element.setAttribute("aria-label", `Take ${piece.label}`);
+      element.innerHTML = `<span>${piece.label}</span>`;
+      // Random spot and tilt inside the area, kept clear of its edges.
+      element.style.left = `${8 + Math.random() * 64}%`;
+      element.style.top = `${10 + Math.random() * 60}%`;
+      element.style.transform = `translate(-50%, -50%) rotate(${Math.round(Math.random() * 50 - 25)}deg)`;
+      element.addEventListener("click", () => this.takeTenderPiece(index, element));
+      area.appendChild(element);
+    });
+    document.body.appendChild(overlay);
+    this.tenderOverlay = overlay;
+  }
+
+  removeTenderOverlay() {
+    this.tenderOverlay?.remove();
+    this.tenderOverlay = null;
+  }
+
+  takeTenderPiece(index, element = null) {
+    if (this.paymentStage !== "take" || !this.cashPayment.takeTenderPiece(index)) return;
+    playKeypadClick();
+    element?.remove();
+    if (this.cashPayment.allTenderTaken) this.finishTakingPayment();
+  }
+
+  finishTakingPayment() {
+    this.removeTenderOverlay();
+    if (this.cashPayment.changeDueCents === 0) {
+      this.paymentStage = "complete";
+      playSaleComplete();
+      this.onComplete?.();
+      return;
+    }
+    this.paymentStage = "change";
+    this.bodyElement.querySelector("#checkout-payment-display").classList.add("hidden");
+    this.bodyElement.querySelector(".checkout-belt").classList.add("hidden");
+    this.bodyElement.querySelector(".checkout-numpad").classList.add("hidden");
+    this.bodyElement.querySelector(".checkout-payment-prompt").textContent = "COUNT THE CUSTOMER'S CHANGE";
+    this.bodyElement.querySelector("#checkout-cash").classList.remove("hidden");
+    this.refreshCash();
+    this.bodyElement.scrollTop = 0;
+  }
+
   refreshCash() {
     const cash = this.cashPayment;
     this.bodyElement.querySelector("#checkout-change-selected").textContent = formatMoney(fromCents(cash.changeCents));
@@ -358,8 +425,6 @@ export class CheckoutWindow {
     });
     const piecesHTML = (pieces) => pieces.map(({ kind, label, count }) => `
       <span class="cash-piece cash-${kind}"><span>${count} x ${label}</span></span>`).join("");
-    this.bodyElement.querySelector("#checkout-cash-tender").innerHTML =
-      `<span class="cash-row-label">BILLS FROM CUSTOMER</span>${piecesHTML(splitCash(cash.tenderCents))}`;
     const selected = [...cash.change].map(([cents, count]) => ({
       ...splitCash(cents)[0], count,
     }));

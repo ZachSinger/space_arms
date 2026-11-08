@@ -5,7 +5,9 @@ notice something that needs doing but isn't being done right now.
 
 ## Playtest follow-ups
 - [x] Cash drawer mockup: all customers pay cash, with unlimited 1/5/10/20 credit bills
-      and 1/5/10/25/50 cent coins. Click adds change, right-click removes it, and Enter
+      and 1/5/10/25/50 cent coins. The customer first holds out their cash over a blurred
+      screen and each piece is clicked to take it; about 1 in 4 pay exact, skipping change.
+      In the drawer, click adds change, right-click removes it, and Enter
       hands it over. Wrong change is refused; the first mistake warns, later mistakes
       cost store reputation. Market/store prices, decimal keypad, balances, receipts,
       and saves support cents; existing whole-credit saves keep their original values.

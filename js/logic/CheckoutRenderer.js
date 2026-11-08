@@ -69,7 +69,6 @@ export class CheckoutRenderer {
               <div><span>CHANGE SELECTED</span><strong id="checkout-change-selected">0 credits</strong></div>
             </div>
             <button type="button" class="action-btn cash-hand-over" id="cash-hand-over">HAND OVER CHANGE (ENTER)</button>
-            <div class="cash-tender" id="checkout-cash-tender"></div>
             <div class="cash-drawer">
               <div class="cash-row-label">BILLS - CREDITS</div>
               <div class="cash-bills">${renderDrawer("bill")}</div>

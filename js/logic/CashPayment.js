@@ -32,9 +32,27 @@ export class CashPayment {
     this.tenderCents = tender === undefined ? twenties + lastBill : toCents(tender);
     if (this.tenderCents < this.totalCents) throw new TypeError("Cash offered must cover the total.");
     this.changeDueCents = this.tenderCents - this.totalCents;
+    // One entry per physical bill or coin the customer hands over; each must be taken.
+    this.tenderPieces = splitCash(this.tenderCents).flatMap(({ count, ...denomination }) =>
+      Array.from({ length: count }, () => ({ ...denomination, taken: false })));
     this.change = new Map();
     this.mistakes = 0;
     this.completed = false;
+  }
+
+  get allTenderTaken() {
+    return this.tenderPieces.every((piece) => piece.taken);
+  }
+
+  /**
+   * @param {number} index - into tenderPieces
+   * @returns {boolean} whether that was a piece still waiting to be taken
+   */
+  takeTenderPiece(index) {
+    const piece = this.tenderPieces[index];
+    if (!piece || piece.taken) return false;
+    piece.taken = true;
+    return true;
   }
 
   get changeCents() {
