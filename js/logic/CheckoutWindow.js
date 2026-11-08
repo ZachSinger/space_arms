@@ -83,6 +83,11 @@ export class CheckoutWindow {
     window.removeEventListener("keydown", this.handleKeyDown);
   }
 
+  // While counting change, Space hands it over, so the game's crate key leaves it alone.
+  usesSpaceKey() {
+    return this.paymentStage === "change" && !this.uiWindow.element.classList.contains("hidden");
+  }
+
   /**
    * Ignored unless the window is open and the payment panel (shown after scanning) is visible.
    * @param {KeyboardEvent} event
@@ -96,7 +101,7 @@ export class CheckoutWindow {
     if (this.paymentStage === "take") return;
 
     if (this.paymentStage === "change") {
-      if (event.key === "Enter") {
+      if (event.key === " ") {
         event.preventDefault();
         this.handOverChange();
       }
@@ -348,12 +353,16 @@ export class CheckoutWindow {
           this.refreshCash();
         };
         button.addEventListener("click", () => adjust(1));
+        // Keep focus off drawer buttons, or Space would also press the last one clicked.
+        button.addEventListener("mousedown", (event) => event.preventDefault());
         button.addEventListener("contextmenu", (event) => {
           event.preventDefault();
           adjust(-1);
         });
       });
-      this.bodyElement.querySelector("#cash-hand-over").addEventListener("click", () => this.handOverChange());
+      const handOverButton = this.bodyElement.querySelector("#cash-hand-over");
+      handOverButton.addEventListener("click", () => this.handOverChange());
+      handOverButton.addEventListener("mousedown", (event) => event.preventDefault());
     }
   }
 

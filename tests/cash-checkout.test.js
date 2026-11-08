@@ -105,7 +105,7 @@ test("cash customers hand over money once scanning ends, with no total to key in
   assert.equal(h.checkout.paymentStage, "take");
   assert.equal(keypadPanel.classList.contains("hidden"), true);
   assert.equal(h.overlays(), 1);
-  h.checkout.handleNumpadKeydown({ key: "Enter", preventDefault() {} });
+  h.checkout.handleNumpadKeydown({ key: " ", preventDefault() {} });
   assert.equal(h.checkout.cashPayment.mistakes, 0);
   h.takeAll();
   assert.equal(h.checkout.paymentStage, "change");
@@ -127,7 +127,7 @@ test("exact payment skips counting change once every bill and coin is taken", ()
   assert.equal(h.completed(), 1);
 });
 
-test("drawer clicks and right-clicks adjust change, and Enter rejects mistakes until exact", () => {
+test("drawer clicks and right-clicks adjust change, and Space rejects mistakes until exact", () => {
   const h = harness();
   h.checkout.startTakingPayment();
   h.takeAll();
@@ -135,11 +135,13 @@ test("drawer clicks and right-clicks adjust change, and Enter rejects mistakes u
   let prevented = 0;
   h.button.listeners.get("contextmenu")({ preventDefault: () => { prevented += 1; } });
   assert.equal(h.checkout.cashPayment.changeCents, 0);
-  const enter = { key: "Enter", preventDefault: () => { prevented += 1; } };
-  h.checkout.handleNumpadKeydown(enter);
+  const space = { key: " ", preventDefault: () => { prevented += 1; } };
+  assert.equal(h.checkout.usesSpaceKey(), true);
+  assert.ok(h.button.listeners.has("mousedown"));
+  h.checkout.handleNumpadKeydown(space);
   assert.equal(h.penalties(), 0);
   assert.match(h.elements.get("#checkout-payment-feedback").textContent, /Another mistake/);
-  h.checkout.handleNumpadKeydown(enter);
+  h.checkout.handleNumpadKeydown(space);
   assert.equal(h.penalties(), 1);
   assert.equal(h.completed(), 0);
   h.checkout.cashPayment.adjustChange(100, 1);
@@ -149,19 +151,20 @@ test("drawer clicks and right-clicks adjust change, and Enter rejects mistakes u
   h.checkout.cashPayment.adjustChange(25, 1);
   h.checkout.cashPayment.adjustChange(1, 1);
   h.checkout.cashPayment.adjustChange(1, 1);
-  h.checkout.handleNumpadKeydown(enter);
+  h.checkout.handleNumpadKeydown(space);
+  assert.equal(h.completed(), 1);
   h.checkout.handOverChange();
   assert.equal(h.completed(), 1);
   assert.equal(prevented, 4);
 });
 
-test("held Enter and a hidden register cannot hand over change", () => {
+test("held Space and a hidden register cannot hand over change", () => {
   const h = harness();
   h.checkout.paymentStage = "change";
-  h.checkout.handleNumpadKeydown({ key: "Enter", repeat: true });
+  h.checkout.handleNumpadKeydown({ key: " ", repeat: true });
   assert.equal(h.checkout.cashPayment.mistakes, 0);
   h.checkout.uiWindow.element.classList.add("hidden");
-  h.checkout.handleNumpadKeydown({ key: "Enter" });
+  h.checkout.handleNumpadKeydown({ key: " " });
   assert.equal(h.checkout.cashPayment.mistakes, 0);
 });
 
@@ -181,7 +184,7 @@ test("cash checkout labels separate bills in credits from coins in cents", () =>
   assert.match(html, /data-digit="\."/);
   assert.match(html, /BILLS - CREDITS/);
   assert.match(html, /COINS - CENTS \(100 CENTS = 1 CREDIT\)/);
-  assert.match(html, /HAND OVER CHANGE \(ENTER\)/);
+  assert.match(html, /HAND OVER CHANGE \(SPACE\)/);
   assert.match(html, /3\.77 credits/);
   assert.equal((html.match(/data-cash-cents=/g) ?? []).length, 9);
 });

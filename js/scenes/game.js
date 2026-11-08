@@ -1659,6 +1659,7 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard.on("keydown-SPACE", (event) => {
       if (event.target?.closest?.("#ui-layer")) return;
       event.preventDefault();
+      if (this.checkoutWindow?.usesSpaceKey()) return;
       if (!event.repeat && this.controlMode.allows("crate")) this.handleCrateInteract();
     });
   }
