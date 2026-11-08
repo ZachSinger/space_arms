@@ -359,6 +359,8 @@ notice something that needs doing but isn't being done right now.
 - [x] Single-file register line: runs straight out from the counter until blocked, then
   turns toward the door (planRegisterQueue); the first customer stands at the counter like
   the player does behind it, and everyone is spaced evenly along the line.
+- [x] Shelf-lined checkout aisles: the line may stand in front of shelves; routes start and
+  end on open floor so customers leaving the counter back out instead of cutting behind it.
 - [x] Customer patience bubbles + Go-Backs bin (Step 53/12/51): queued customers show a
       colored bubble (green `...` > yellow `!` > red `!!`) as their 40s real-time patience
       (`PATIENCE_MS` in Customer.js) drains; it pauses with the game and while the player is

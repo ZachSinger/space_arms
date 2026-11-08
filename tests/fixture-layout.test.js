@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { STARTING_FIXTURES, fixtureAccessCells, fixtureCells, fixtureFacing, fixtureFootprint, cellKey, getFixtureType, migrateFixtureEntry, validateFixtureLayout, fixtureInteractionDistance } from "../js/logic/FixtureLayout.js";
 import { TileRoom } from "../js/logic/TileRoom.js";
+import { findGridPath } from "../js/logic/Pathfinder.js";
 import { getZone, getStoreDoorCell, TILE_SIZE } from "../js/logic/RoomLayout.js";
 
 test("fixture interaction covers its entire front but not its sides or back", () => {
@@ -110,7 +111,41 @@ test("a boxed-in line still bends around obstacles one step at a time", () => {
   result.queueCells.slice(1).forEach((cell, index) => {
     assert.ok(touches(cell, result.queueCells[index]));
   });
-  assert.ok(result.queueCells.every((cell) => !["11,5", "12,5", "11,6", "12,6"].includes(cellKey(cell))));
+  assert.ok(result.queueCells.every((cell) => !["11,5", "12,5"].includes(cellKey(cell))));
+});
+
+// Shelves wall off both sides of the space in front of the register (and its left side), so
+// the only way to the counter is around the bottom of the shop and up a shelf-lined aisle.
+const gauntletLayout = () => [...STARTING_FIXTURES.map((entry) => ({ ...entry })),
+  { id: "gauntlet_top_left", type: "shelf_starter_2x1", gx: 11, gy: 2, rotation: 1 },
+  { id: "gauntlet_left", type: "shelf_starter_2x1", gx: 11, gy: 4, rotation: 3 },
+  { id: "gauntlet_right", type: "shelf_starter_2x1", gx: 14, gy: 4, rotation: 1 },
+];
+
+test("a shelf-lined checkout aisle is allowed and the line forms single file through it", () => {
+  const options = createRoom();
+  const result = validateFixtureLayout(gauntletLayout(), options);
+  assert.equal(result.valid, true, result.reason);
+  const cells = result.queueCells;
+  assert.deepEqual(cells.slice(0, 3), [{ gx: 13, gy: 4 }, { gx: 13, gy: 5 }, { gx: 13, gy: 6 }]);
+  cells.slice(1).forEach((cell, index) => assert.ok(touches(cell, cells[index])));
+  assert.ok(cells.every((cell) => !result.blockedCells.has(cellKey(cell))));
+});
+
+test("customers can walk into the checkout aisle to every spot in line, and back out to the door", () => {
+  const options = createRoom();
+  const result = validateFixtureLayout(gauntletLayout(), options);
+  const canWalk = (gx, gy) => options.isWalkable(gx, gy) && !result.blockedCells.has(`${gx},${gy}`);
+  const inside = { gx: options.entrance.gx, gy: options.entrance.gy + 1 };
+  for (const cell of result.queueCells) {
+    const path = findGridPath(inside, cell, canWalk);
+    assert.ok(path, `route from the door to ${cellKey(cell)}`);
+    assert.ok(path.every((step) => canWalk(step.gx, step.gy)));
+  }
+  // The aisle is closed at the top, so the route in has to come up from the bottom row.
+  const toCounter = findGridPath(inside, result.queueCells[0], canWalk);
+  assert.ok(toCounter.some((step) => step.gy === 6));
+  assert.ok(findGridPath(result.queueCells[0], inside, canWalk), "route from the counter back to the door");
 });
 
 test("fixtures can move without mutating the old layout", () => {

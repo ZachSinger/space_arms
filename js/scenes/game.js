@@ -1128,6 +1128,21 @@ export class GameScene extends Phaser.Scene {
     return !this.blockedCells.has(`${gx},${gy}`);
   }
 
+  // Whether a customer can walk this segment without brushing a wall or a solid fixture.
+  isStraightWalkClear(fromX, fromY, toX, toY) {
+    const line = new Phaser.Geom.Line(fromX, fromY, toX, toY);
+    const halfW = SPRITE_DISPLAY_WIDTH / 2;
+    const halfH = SPRITE_DISPLAY_HEIGHT / 2;
+    const solids = [...this.obstacleGroup.getChildren(), ...this.room.wallGroup.getChildren()];
+    return solids.every((solid) => {
+      const body = solid.body;
+      if (!body) return true;
+      const padded = new Phaser.Geom.Rectangle(body.x - halfW, body.y - halfH,
+        body.width + halfW * 2, body.height + halfH * 2);
+      return !Phaser.Geom.Intersects.LineToRectangle(line, padded);
+    });
+  }
+
   /**
    * A grid path between two world points, routed around walls and fixtures. On null,
    * callers should walk directly instead (see Customer.followPath).
@@ -1140,22 +1155,28 @@ export class GameScene extends Phaser.Scene {
   findPath(fromX, fromY, toX, toY) {
     // Close enough to step straight there; routing via tile centers would make a customer
     // already at their spot (like the counter front) walk out and back.
-    if (Math.hypot(toX - fromX, toY - fromY) < TILE_SIZE) return [];
-    const start = { gx: Math.floor(fromX / TILE_SIZE), gy: Math.floor(fromY / TILE_SIZE) };
-    let goal = { gx: Math.floor(toX / TILE_SIZE), gy: Math.floor(toY / TILE_SIZE) };
-    // Spots like the counter front can sit over a fixture's tile; route to the closest open
-    // neighbor and let the customer walk the last few pixels directly.
-    if (!this.isCellWalkable(goal.gx, goal.gy)) {
-      const distance = ({ gx, gy }) =>
-        Math.hypot(this.room.worldX(gx) - toX, this.room.worldY(gy) - toY);
-      const open = [-1, 0, 1].flatMap((ox) => [-1, 0, 1].map((oy) => ({ gx: goal.gx + ox, gy: goal.gy + oy })))
+    if (Math.hypot(toX - fromX, toY - fromY) < TILE_SIZE && this.isStraightWalkClear(fromX, fromY, toX, toY)) {
+      return [];
+    }
+    const cellAt = (x, y) => ({ gx: Math.floor(x / TILE_SIZE), gy: Math.floor(y / TILE_SIZE) });
+    // Spots like the counter front sit over the register's floor space. Route from and to the
+    // closest open floor instead, so a customer leaving the counter backs out the way they came
+    // rather than slipping around the side of the register.
+    const nearestOpenCell = (x, y) => {
+      const cell = cellAt(x, y);
+      if (this.isCellWalkable(cell.gx, cell.gy)) return { cell, snapped: false };
+      const distance = ({ gx, gy }) => Math.hypot(this.room.worldX(gx) - x, this.room.worldY(gy) - y);
+      const open = [-1, 0, 1].flatMap((ox) => [-1, 0, 1].map((oy) => ({ gx: cell.gx + ox, gy: cell.gy + oy })))
         .filter(({ gx, gy }) => this.isCellWalkable(gx, gy))
         .sort((a, b) => distance(a) - distance(b));
-      if (open[0]) goal = open[0];
-    }
+      return open[0] ? { cell: open[0], snapped: true } : { cell, snapped: false };
+    };
+    const start = nearestOpenCell(fromX, fromY);
+    const goal = nearestOpenCell(toX, toY).cell;
 
-    const gridPath = findGridPath(start, goal, (gx, gy) => this.isCellWalkable(gx, gy));
+    const gridPath = findGridPath(start.cell, goal, (gx, gy) => this.isCellWalkable(gx, gy));
     if (!gridPath) return null;
+    if (start.snapped) gridPath.unshift(start.cell);
 
     return gridPath.map(({ gx, gy }) => ({
       x: this.room.worldX(gx),

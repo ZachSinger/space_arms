@@ -212,7 +212,6 @@ export function validateFixtureLayout(placements, {
   const canWalk = (gx, gy) => isWalkable(gx, gy) && !blockedCells.has(`${gx},${gy}`);
   const reachable = new Set(getReachableGridCells(entrance, canWalk).map(cellKey));
   const access = new Map();
-  const otherAccessCells = new Set();
   for (const placement of placements) {
     const isRegister = placement === registers[0];
     const front = fixtureAccessCells(placement);
@@ -224,7 +223,6 @@ export function validateFixtureLayout(placements, {
       return invalid(`Keep the front${isRegister ? " and back" : ""} of ${getFixtureType(placement.type).name} accessible.`);
     }
     access.set(placement.id, front[Math.floor(front.length / 2)]);
-    if (!isRegister) front.forEach((cell) => otherAccessCells.add(cellKey(cell)));
   }
   for (let gy = 0; gy < gridSize.gridH; gy += 1) {
     for (let gx = 0; gx < gridSize.gridW; gx += 1) {
@@ -235,10 +233,12 @@ export function validateFixtureLayout(placements, {
   }
   const queueStart = access.get(registers[0].id);
   // The line only forms on the register's front side, never curling around beside or behind it.
+  // It may pass in front of shelves (a checkout aisle lined with impulse buys); customers don't
+  // bump into each other, so shoppers can still reach those shelves.
   const step = fixtureFacingStep(registers[0]);
   const canQueue = (gx, gy) =>
     (gx - queueStart.gx) * step.dx + (gy - queueStart.gy) * step.dy >= 0 && canWalk(gx, gy) &&
-    !reservedCells.has(`${gx},${gy}`) && !otherAccessCells.has(`${gx},${gy}`);
+    !reservedCells.has(`${gx},${gy}`);
   const queueCells = planRegisterQueue(queueStart, step, entrance, canQueue, canWalk, queueSize);
   if (queueCells.length < queueSize) return invalid("Leave room in front of the register for the customer queue.");
   return { valid: true, reason: "Click to place. Contents stay on the fixture.", blockedCells, access, queueCells };
