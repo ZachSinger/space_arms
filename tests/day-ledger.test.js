@@ -234,6 +234,7 @@ test("the top bar shows PAUSE during a shift, END DAY after it, and START SHIFT 
       removeEventListener(event) { this.listeners.delete(event); },
     });
   }
+  elements.get("persistent-hud").querySelectorAll = () => [];
   const originalDocument = globalThis.document;
   globalThis.document = { getElementById: (id) => elements.get(id) };
   context.after(() => {

@@ -67,6 +67,8 @@ export const RESTOCK_QUANTITY = 5;
 // Loading Pad: a 3x3 grid of crate spots, each fitting one 40px crate (all px).
 const LOADING_PAD_SPOT_SIZE = 40;
 const LOADING_PAD_SPOT_SPACING = 42;
+// How far (px) a crate may overhang a neighboring spot before that spot counts as taken.
+const LOADING_PAD_OVERHANG_ALLOWANCE = 6;
 const LOADING_PAD_WIDTH = 136;
 const LOADING_PAD_HEIGHT = 128;
 
@@ -1171,9 +1173,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   // Every Loading Pad spot a new crate could land on without overlapping an existing crate.
+  // A crate only blocks a spot it really sits on: fixture crates are drawn larger than a spot
+  // and slightly overhang their neighbors, which shouldn't count.
   getLoadingPadSpawnPositions() {
     return this.getLoadingPadSpots().filter((position) => !this.restockCrates.some((crate) => {
-      const reach = crate.sprite.displayWidth / 2 + LOADING_PAD_SPOT_SIZE / 2;
+      const reach = crate.sprite.displayWidth / 2 + LOADING_PAD_SPOT_SIZE / 2 - LOADING_PAD_OVERHANG_ALLOWANCE;
       return Math.abs(crate.sprite.x - position.x) < reach && Math.abs(crate.sprite.y - position.y) < reach;
     }));
   }

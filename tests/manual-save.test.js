@@ -298,6 +298,10 @@ test("HUD Save button is wired, reflects availability, and removes its handler o
       removeEventListener(event) { this.listeners.delete(event); },
     });
   }
+  const hudButtons = ["hud-pause-btn", "hud-start-shift-btn", "hud-end-day-btn", "hud-save-btn"]
+    .map((id) => elements.get(id));
+  const hudRoot = elements.get("persistent-hud");
+  hudRoot.querySelectorAll = (selector) => (selector === "button" ? hudButtons : []);
   const originalDocument = globalThis.document;
   globalThis.document = { getElementById: (id) => elements.get(id) };
   context.after(() => {
@@ -314,6 +318,14 @@ test("HUD Save button is wired, reflects availability, and removes its handler o
   }, () => {}, () => { saves += 1; });
   const button = elements.get("hud-save-btn");
   assert.equal(button.disabled, true);
+  // Top bar buttons never hold keyboard focus, so Space stays with the game.
+  assert.ok(hudButtons.every((hudButton) => hudButton.tabIndex === -1));
+  let focusPrevented = false;
+  hudRoot.listeners.get("mousedown")({
+    target: { closest: (selector) => (selector === "button" ? button : null) },
+    preventDefault() { focusPrevented = true; },
+  });
+  assert.equal(focusPrevented, true);
   hud.renderSaveState({ canSave: true, saving: false, status: "Saved." });
   assert.equal(button.disabled, false);
   button.listeners.get("click")();
@@ -330,4 +342,5 @@ test("HUD Save button is wired, reflects availability, and removes its handler o
   assert.match(button.title, /Finish the shift/);
   hud.destroy();
   assert.equal(button.listeners.size, 0);
+  assert.equal(hudRoot.listeners.size, 0);
 });

@@ -23,6 +23,13 @@ export class HUDController {
         this.saveBtn = document.getElementById('hud-save-btn');
         this.rootEl = document.getElementById('persistent-hud');
         this.rootEl.classList.remove('hidden');
+        // Top bar buttons are mouse-only. If one held keyboard focus, Space would press it
+        // instead of picking up or dropping a crate.
+        for (const button of this.rootEl.querySelectorAll('button')) button.tabIndex = -1;
+        this.preventButtonFocus = (event) => {
+            if (event.target.closest?.('button')) event.preventDefault();
+        };
+        this.rootEl.addEventListener('mousedown', this.preventButtonFocus);
         this.saveBtn.disabled = true;
         this.saveBtn.textContent = 'SAVE';
         this.handleSave = () => onSave?.();
@@ -45,6 +52,7 @@ export class HUDController {
 
     destroy() {
         this.rootEl.classList.add('hidden');
+        this.rootEl.removeEventListener('mousedown', this.preventButtonFocus);
         this.pauseBtn.removeEventListener('click', this.handlePause);
         this.startShiftBtn.removeEventListener('click', this.handleStartShift);
         this.endDayBtn.removeEventListener('click', this.handleEndDay);
