@@ -44,7 +44,7 @@ import { findGridPath } from "../logic/Pathfinder.js";
 import { FixturePlacement } from "../logic/FixturePlacement.js";
 import { ShelfStockDisplay } from "../logic/ShelfStockDisplay.js";
 import { getFixtureTexture } from "../logic/FixtureTexture.js";
-import { STARTING_FIXTURES, FIXTURE_TYPES, getFixtureType, getShelfDisplayGrid, fixtureAccessCells, fixtureFacing, fixtureFacingStep, fixtureFootprint, fixtureInteractionDistance, fixtureRotation, validateFixtureLayout } from "../logic/FixtureLayout.js";
+import { STARTING_FIXTURES, FIXTURE_TYPES, getFixtureType, getFixtureResaleValue, getShelfDisplayGrid, fixtureAccessCells, fixtureFacing, fixtureFacingStep, fixtureFootprint, fixtureInteractionDistance, fixtureRotation, validateFixtureLayout } from "../logic/FixtureLayout.js";
 import { FixtureRegistry } from "../logic/FixtureRegistry.js";
 import { validateShopSave } from "../logic/ShopSave.js";
 import { UIWindow } from "../logic/UIWindow.js";
@@ -1508,17 +1508,45 @@ export class GameScene extends Phaser.Scene {
    * @returns {string | null} why it can't be packed into a crate, or null if it can
    */
   getFixtureCrateBlockReason(fixture) {
+    return this.getFixtureRemovalBlockReason(fixture, "crated");
+  }
+
+  getFixtureSaleBlockReason(fixture) {
+    return this.getFixtureRemovalBlockReason(fixture, "sold");
+  }
+
+  getFixtureRemovalBlockReason(fixture, action) {
     if (!fixture) return "Fixture not found.";
-    if (!this.canRearrangeFixtures()) return "Fixtures can only be crated while the store is closed.";
+    if (!this.canRearrangeFixtures()) return `Fixtures can only be ${action} while the store is closed.`;
     if (getFixtureType(fixture.type).kind === "register" &&
-      this.fixtures.ofKind("register").length <= 1) return "The last register cannot be crated.";
-    if (fixture instanceof ShelfFixture && fixture.placements.some((stack) => stack.quantity > 0)) {
-      return "Only empty fixtures can be crated.";
+      this.fixtures.ofKind("register").length <= 1) return `The last register cannot be ${action}.`;
+    const pending = this.fixtureWindow?.fixture === fixture
+      ? this.fixtureWindow.pendingPlacement?.moving
+      : null;
+    if (fixture instanceof ShelfFixture &&
+      (fixture.placements.some((stack) => stack.quantity > 0) || pending?.quantity > 0)) {
+      return `Only empty fixtures can be ${action}.`;
     }
     if (fixture instanceof StorageFixture && fixture.stock.some((stack) => stack.quantity > 0)) {
-      return "Only empty fixtures can be crated.";
+      return `Only empty fixtures can be ${action}.`;
     }
     return null;
+  }
+
+  removePlacedFixture(fixture) {
+    const layout = this.fixtures.layout().filter((entry) => entry.id !== fixture.id);
+    const result = validateFixtureLayout(layout, { ...this.getLayoutOptions(), requireSalesFloor: false });
+    if (!result.valid) {
+      this.showShopMessage(result.reason);
+      return false;
+    }
+    if (this.fixtureWindow.fixture === fixture) this.fixtureWindow.uiWindow.close();
+    fixture.stockDisplay?.destroy();
+    fixture.capacityLabel?.destroy();
+    fixture.sprite.destroy();
+    this.fixtures.remove(fixture.id);
+    this.applyFixtureLayout(layout, result);
+    return true;
   }
 
   /**
@@ -1534,11 +1562,7 @@ export class GameScene extends Phaser.Scene {
       this.showShopMessage(reason);
       return false;
     }
-    if (this.fixtureWindow.fixture === fixture) this.fixtureWindow.uiWindow.close();
-    fixture.stockDisplay?.destroy();
-    fixture.capacityLabel?.destroy();
-    fixture.sprite.destroy();
-    this.fixtures.remove(id);
+    if (!this.removePlacedFixture(fixture)) return false;
     const crate = new Crate(this, null, 1, fixture.x, fixture.y, {
       kind: "fixture",
       typeId: fixture.type,
@@ -1546,6 +1570,44 @@ export class GameScene extends Phaser.Scene {
     crate.setPaused(this.crateMotionPaused);
     this.restockCrates.push(crate);
     this.playerState.notifyListeners();
+    return true;
+  }
+
+  sellFixture(id) {
+    const fixture = this.fixtures.get(id);
+    const reason = this.getFixtureSaleBlockReason(fixture);
+    if (reason) {
+      this.showShopMessage(reason);
+      return false;
+    }
+    const spec = getFixtureType(fixture.type);
+    const value = getFixtureResaleValue(fixture.type);
+    if (!this.removePlacedFixture(fixture)) return false;
+    this.playerState.addCredits(value, { category: "fixture_sales", label: spec.name });
+    return true;
+  }
+
+  getFixtureCrateSaleBlockReason(crate) {
+    if (!crate || crate.kind !== "fixture" ||
+      (crate !== this.carriedCrate && !this.restockCrates.includes(crate))) {
+      return "Fixture crate not found.";
+    }
+    if (!this.canRearrangeFixtures()) return "Fixtures can only be sold while the store is closed.";
+    return null;
+  }
+
+  sellFixtureCrate(crate) {
+    const reason = this.getFixtureCrateSaleBlockReason(crate);
+    if (reason) {
+      this.showShopMessage(reason);
+      return false;
+    }
+    const spec = getFixtureType(crate.typeId);
+    const value = getFixtureResaleValue(crate.typeId);
+    if (crate === this.carriedCrate) this.carriedCrate = null;
+    else this.restockCrates = this.restockCrates.filter((candidate) => candidate !== crate);
+    crate.destroy();
+    this.playerState.addCredits(value, { category: "fixture_sales", label: spec.name });
     return true;
   }
 

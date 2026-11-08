@@ -11,7 +11,7 @@ import { MIN_BASE_RATIO, MAX_BASE_RATIO, MIN_SUPPLY_RATIO, MAX_SUPPLY_RATIO } fr
 import { THROW_ACCELERATION_MS } from "./Crate.js";
 import { isValidLedgerData } from "./DayLedger.js";
 import { isMoney, roundMoney } from "./Money.js";
-import { HOVERCART_CAPACITY, LEGACY_HOVERCART_CAPACITY } from "./Hovercart.js";
+import { isValidHovercartCapacity } from "./Hovercart.js";
 
 // Older saves used "slot depth 12 ÷ stackSize". Stacks valid under that rule still load;
 // trimShelfOverflow() then moves anything over the current cap to the Go-Backs bin.
@@ -85,7 +85,7 @@ export function validateShopSave(data, database) {
     ([id, price]) => itemById.has(id) && isMoney(price) && price >= 1,
   ), "invalid store price.");
   requireSave(isRecord(player.hovercart) &&
-    [LEGACY_HOVERCART_CAPACITY, HOVERCART_CAPACITY].includes(player.hovercart.capacity), "invalid hovercart.");
+    isValidHovercartCapacity(player.hovercart.capacity), "invalid hovercart.");
   stockCapacity(player.hovercart.stock, player.hovercart.capacity);
   // Optional so saves from before the Go-Backs bin existed still load.
   if (player.goBacks !== undefined) stockCapacity(player.goBacks, Infinity);

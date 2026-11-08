@@ -5,6 +5,7 @@
 // proposed layout keeps the shop walkable. Fixture type data lives in data/Fixtures.json.
 // See also: FixtureRegistry.js (placed fixture instances).
 import fixtureTypes from "../../data/Fixtures.json" with { type: "json" };
+import { roundMoney } from "./Money.js";
 import { getReachableGridCells } from "./Pathfinder.js";
 import {
   TILE_SIZE, getTotalGridSize, zoneAt,
@@ -20,7 +21,6 @@ export const FIXTURE_TYPES = fixtureTypes;
 export const STARTING_FIXTURES = [
   { id: "storage_demo_01", type: "locker_single", gx: 1, gy: 1 },
   { id: "storage_demo_02", type: "locker_single", gx: 2, gy: 1 },
-  { id: "storage_demo_03", type: "locker_single", gx: 3, gy: 1 },
   { id: "register", type: "register_basic", gx: 12, gy: 2 },
 ];
 
@@ -53,6 +53,12 @@ export function getShelfDisplayGrid(fixtureType) {
 
 export function getFixtureType(typeId) {
   return Object.hasOwn(FIXTURE_TYPES, typeId) ? FIXTURE_TYPES[typeId] : undefined;
+}
+
+export function getFixtureResaleValue(typeId) {
+  const fixture = getFixtureType(typeId);
+  if (!fixture) throw new RangeError(`Unknown fixture type: ${typeId}`);
+  return roundMoney(fixture.price * 0.5);
 }
 
 /**

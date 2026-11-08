@@ -10,12 +10,14 @@ import { EventBus, GAME_EVENTS } from "../js/logic/EventBus.js";
 import { InteractableRegistry } from "../js/logic/InteractableRegistry.js";
 import { Crate } from "../js/logic/Crate.js";
 import { getFixtureType } from "../js/logic/FixtureLayout.js";
+import { FixtureRegistry } from "../js/logic/FixtureRegistry.js";
 import { TILE_SIZE } from "../js/logic/RoomLayout.js";
 
 let server;
 let cacheDirectory;
 let GameScene;
 let StorageFixture;
+let ShelfFixture;
 const originalPhaser = globalThis.Phaser;
 
 before(async () => {
@@ -45,6 +47,7 @@ before(async () => {
   });
   ({ GameScene } = await server.ssrLoadModule("/js/scenes/game.js"));
   ({ StorageFixture } = await server.ssrLoadModule("/js/logic/ShopInventory.js"));
+  ({ ShelfFixture } = await server.ssrLoadModule("/js/logic/ShelfFixture.js"));
 });
 
 after(async () => {
@@ -677,4 +680,142 @@ test("inventory totals include active customer carts but not sold customers", ()
   const inventory = scene.getInventoryItems();
   assert.equal(inventory.find(({ item }) => item.id === "rifle").inCustomerCarts, 2);
   assert.equal(inventory.find(({ item }) => item.id === "pistol").inCustomerCarts, 1);
+});
+
+test("selling an empty placed fixture pays half, updates walkable space, and preserves the register", () => {
+  const { scene } = createHarness();
+  const registry = new FixtureRegistry();
+  const locker = new StorageFixture({ id: "locker", x: 96, y: 128, capacity: 20, stock: [] });
+  let destroyed = false;
+  Object.assign(locker, {
+    type: "locker_single", gx: 1, gy: 1, rotation: 0,
+    sprite: { destroy() { destroyed = true; } },
+  });
+  const register = { id: "register", type: "register_basic", gx: 4, gy: 2, rotation: 0 };
+  registry.add(locker);
+  registry.add(register);
+  scene.fixtures = registry;
+  scene.fixtureWindow = { fixture: null, pendingPlacement: null, uiWindow: { close() {} } };
+  scene.canRearrangeFixtures = () => true;
+  scene.getLayoutOptions = () => ({
+    entrance: { gx: 0, gy: 0 },
+    gridSize: { gridW: 8, gridH: 8 },
+    isWalkable: (gx, gy) => gx >= 0 && gx < 8 && gy >= 0 && gy < 8,
+  });
+  scene.blockedCells = new Set(["1,1", "1,2"]);
+  scene.applyFixtureLayout = (_layout, result) => { scene.blockedCells = result.blockedCells; };
+  const payments = [];
+  scene.playerState.addCredits = (amount, entry) => {
+    assert.equal(scene.fixtures.get("locker"), undefined);
+    payments.push({ amount, ...entry });
+  };
+  const messages = [];
+  scene.showShopMessage = (message) => messages.push(message);
+
+  assert.equal(scene.sellFixture("register"), false);
+  assert.match(messages.at(-1), /last register cannot be sold/);
+  locker.stock.push({ itemId: "item", quantity: 1 });
+  assert.equal(scene.sellFixture("locker"), false);
+  assert.match(messages.at(-1), /Only empty fixtures/);
+  locker.stock = [];
+  assert.equal(scene.sellFixture("locker"), true);
+  assert.equal(destroyed, true);
+  assert.equal(scene.blockedCells.has("1,1"), false);
+  assert.equal(scene.blockedCells.has("1,2"), false);
+  assert.equal(scene.fixtures.get("register"), register);
+  assert.deepEqual(payments, [{ amount: 90, category: "fixture_sales", label: "LOCKER" }]);
+  assert.equal(scene.sellFixture("locker"), false);
+  assert.equal(payments.length, 1);
+});
+
+test("crating an empty fixture still creates its crate and opens its floor space", () => {
+  const { scene } = createHarness();
+  const locker = new StorageFixture({ id: "locker", x: 96, y: 128, capacity: 20, stock: [] });
+  Object.assign(locker, {
+    type: "locker_single", gx: 1, gy: 1, rotation: 0,
+    sprite: { destroy() {} },
+  });
+  scene.fixtures = new FixtureRegistry();
+  scene.fixtures.add(locker);
+  scene.fixtures.add({ id: "register", type: "register_basic", gx: 4, gy: 2, rotation: 0 });
+  scene.fixtureWindow = { fixture: null, pendingPlacement: null, uiWindow: { close() {} } };
+  scene.canRearrangeFixtures = () => true;
+  scene.getLayoutOptions = () => ({
+    entrance: { gx: 0, gy: 0 },
+    gridSize: { gridW: 8, gridH: 8 },
+    isWalkable: (gx, gy) => gx >= 0 && gx < 8 && gy >= 0 && gy < 8,
+  });
+  scene.applyFixtureLayout = (_layout, result) => { scene.blockedCells = result.blockedCells; };
+  const body = {
+    setAllowGravity() { return this; },
+    setAllowRotation() { return this; },
+    setBounce() { return this; },
+    setBoundsRectangle() { return this; },
+    setCollideWorldBounds() { return this; },
+  };
+  scene.add = { image: () => ({
+    body,
+    setDisplaySize() { return this; },
+    setDepth() { return this; },
+  }) };
+  scene.crateGroup = { add() {} };
+  scene.crateBounds = {};
+  scene.crateMotionPaused = false;
+  let notifications = 0;
+  scene.playerState.notifyListeners = () => { notifications += 1; };
+
+  assert.equal(scene.crateFixture("locker"), true);
+  assert.equal(scene.fixtures.get("locker"), undefined);
+  assert.equal(scene.blockedCells.has("1,1"), false);
+  assert.equal(scene.restockCrates.length, 1);
+  assert.equal(scene.restockCrates[0].kind, "fixture");
+  assert.equal(scene.restockCrates[0].typeId, "locker_single");
+  assert.equal(notifications, 1);
+});
+
+test("a shelf with a temporarily lifted item cannot be sold or crated", () => {
+  const { scene } = createHarness();
+  scene.canRearrangeFixtures = () => true;
+  const shelf = new ShelfFixture({ id: "shelf", placements: [] });
+  shelf.type = "shelf_starter_2x1";
+  scene.fixtureWindow = { fixture: shelf, pendingPlacement: { moving: { quantity: 1 } } };
+  assert.match(scene.getFixtureSaleBlockReason(shelf), /Only empty fixtures/);
+  assert.match(scene.getFixtureCrateBlockReason(shelf), /Only empty fixtures/);
+  scene.fixtureWindow.pendingPlacement = null;
+  assert.equal(scene.getFixtureSaleBlockReason(shelf), null);
+});
+
+test("fixture crates can be sold on the loading pad or while carried, only once and off shift", () => {
+  const { scene } = createHarness();
+  const paid = [];
+  const messages = [];
+  scene.playerState.addCredits = (amount, entry) => paid.push({ amount, ...entry });
+  scene.showShopMessage = (message) => messages.push(message);
+  let closed = true;
+  scene.canRearrangeFixtures = () => closed;
+  const padCrate = {
+    kind: "fixture", typeId: "shelf_starter_2x1", lockedToPad: true, destroyed: false,
+    destroy() { this.destroyed = true; },
+  };
+  const carried = {
+    kind: "fixture", typeId: "locker_single", destroyed: false,
+    destroy() { this.destroyed = true; },
+  };
+  scene.restockCrates = [padCrate];
+  scene.carriedCrate = carried;
+  closed = false;
+  assert.equal(scene.sellFixtureCrate(padCrate), false);
+  assert.match(messages.at(-1), /while the store is closed/);
+  closed = true;
+  assert.equal(scene.sellFixtureCrate(padCrate), true);
+  assert.equal(padCrate.destroyed, true);
+  assert.deepEqual(scene.restockCrates, []);
+  assert.equal(scene.sellFixtureCrate(padCrate), false);
+  assert.equal(scene.sellFixtureCrate(carried), true);
+  assert.equal(scene.carriedCrate, null);
+  assert.equal(carried.destroyed, true);
+  assert.deepEqual(paid, [
+    { amount: 150, category: "fixture_sales", label: "COMPACT SHELF" },
+    { amount: 90, category: "fixture_sales", label: "LOCKER" },
+  ]);
 });

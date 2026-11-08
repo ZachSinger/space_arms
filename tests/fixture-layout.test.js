@@ -60,6 +60,7 @@ const moved = (id, gx, gy) => initialLayout().map((entry) => entry.id === id ? {
 
 test("a new game starts with lockers and a register but no shelves", () => {
   assert.equal(STARTING_FIXTURES.some((entry) => getFixtureType(entry.type).kind === "shelf"), false);
+  assert.equal(STARTING_FIXTURES.filter((entry) => getFixtureType(entry.type).kind === "storage").length, 2);
   assert.equal(STARTING_FIXTURES.filter((entry) => getFixtureType(entry.type).kind === "register").length, 1);
   const result = validateFixtureLayout(STARTING_FIXTURES, createRoom());
   assert.equal(result.valid, true, result.reason);
@@ -69,7 +70,7 @@ test("the starting layout has accessible fronts, a register back, and six queue 
   const options = createRoom();
   const result = validateFixtureLayout(initialLayout(), options);
   assert.equal(result.valid, true, result.reason);
-  assert.equal(result.access.size, 5);
+  assert.equal(result.access.size, 4);
   assert.equal(result.queueCells.length, 6);
   assert.equal(new Set(result.queueCells.map(cellKey)).size, 6);
   for (const cell of result.queueCells) {
@@ -162,7 +163,7 @@ test("placement rejects walls, locked rooms, overlaps, blocked fronts, and obstr
     ["fixture_demo_01", 0, 0],
     ["fixture_demo_01", 16, 2],
     ["fixture_demo_01", 1, 1],
-    ["storage_demo_03", 1, 3],
+    ["storage_demo_02", 1, 3],
     ["register", 12, 1],
     ["fixture_demo_01", 7, 7],
   ]) {

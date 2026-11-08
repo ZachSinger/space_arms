@@ -159,6 +159,7 @@ function createHarness() {
     listeners: [],
     hiredEmployees: [],
     credits: 1500,
+    hovercart: { capacity: 15, usedCapacity: () => 0 },
     subscribe(listener) { this.listeners.push(listener); listener(); },
     notifyListeners() { for (const listener of this.listeners) listener(); },
   };
@@ -264,8 +265,14 @@ test("opening the tablet hides checkout and closing it resumes register work", (
   tablet.uiWindow.openWindow = () => calls.push("tablet-open");
   tablet.openWindow();
   assert.deepEqual(calls, ["tablet-open", "suspend"]);
+  tablet.fixturePurchaseNotice = "Bought a fixture.";
+  tablet.fixtureSaleConfirmation = { name: "LOCKER" };
+  tablet.equipmentPurchaseNotice = "Hovercart upgraded.";
   tablet.uiWindow.onClose();
   assert.deepEqual(calls, ["tablet-open", "suspend", "resume"]);
+  assert.equal(tablet.fixturePurchaseNotice, "");
+  assert.equal(tablet.fixtureSaleConfirmation, null);
+  assert.equal(tablet.equipmentPurchaseNotice, "");
 });
 
 test("inventory refreshes when customers shop and finish checkout", () => {
@@ -394,4 +401,61 @@ test("lower funds reject additions but never prevent removing crates from the or
   h.tablet.changeSupplyOrder("ammo", -1);
   assert.equal(h.tablet.supplyOrder.size, 0);
   assert.equal(h.buzzes(), 1);
+});
+
+test("fixture sale confirmations identify the chosen fixture or crate", () => {
+  const tablet = Object.create(ManagerTablet.prototype);
+  const locker = { id: "locker_2", type: "locker_single" };
+  const crate = { kind: "fixture", typeId: "shelf_starter_2x1" };
+  tablet.scene = {
+    fixtures: { displayName: () => "LOCKER 2" },
+    getFixtureSaleBlockReason: () => null,
+    getFixtureCrateSaleBlockReason: () => null,
+  };
+  tablet.refreshLayoutPanels = () => {};
+  tablet.prepareFixtureSale("placed", locker);
+  assert.equal(tablet.fixtureSaleConfirmation.name, "LOCKER 2");
+  assert.equal(tablet.fixtureSaleConfirmation.value, 90);
+  tablet.prepareFixtureSale("crate", crate);
+  assert.equal(tablet.fixtureSaleConfirmation.name, "COMPACT SHELF crate");
+  assert.equal(tablet.fixtureSaleConfirmation.value, 150);
+});
+
+test("a removed fixture cannot be sold through an old confirmation", () => {
+  const tablet = Object.create(ManagerTablet.prototype);
+  const locker = { id: "locker_2", type: "locker_single" };
+  const messages = [];
+  tablet.scene = {
+    fixtures: { displayName: () => "LOCKER 2", get: () => undefined },
+    getFixtureSaleBlockReason: () => null,
+    showShopMessage: (message) => messages.push(message),
+  };
+  tablet.refreshLayoutPanels = () => {};
+  tablet.prepareFixtureSale("placed", locker);
+  tablet.confirmFixtureSale();
+  assert.equal(tablet.fixtureSaleConfirmation, null);
+  assert.match(messages[0], /no longer available/);
+});
+
+test("refreshing fixture panels preserves list scroll positions", () => {
+  const makePanel = (positions) => {
+    let lists = Object.fromEntries(Object.entries(positions).map(([selector, top]) => [selector, { scrollTop: top }]));
+    return {
+      querySelector: (selector) => lists[selector] ?? null,
+      set innerHTML(_html) {
+        lists = Object.fromEntries(Object.keys(lists).map((selector) => [selector, { scrollTop: 0 }]));
+      },
+    };
+  };
+  const fixtures = makePanel({ ".fixture-management-scroll": 137 });
+  const layout = makePanel({ ".layout-fixture-list": 23 });
+  const tablet = Object.create(ManagerTablet.prototype);
+  tablet.bodyElement = {
+    querySelector: (selector) => selector.includes('"fixtures"') ? fixtures : layout,
+  };
+  tablet.renderPanelContent = () => "";
+  tablet.updateSaveStatus = () => {};
+  tablet.refreshLayoutPanels();
+  assert.equal(fixtures.querySelector(".fixture-management-scroll").scrollTop, 137);
+  assert.equal(layout.querySelector(".layout-fixture-list").scrollTop, 23);
 });

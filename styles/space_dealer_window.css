@@ -606,6 +606,18 @@ button {
   font-weight: bold;
 }
 
+.fixture-management-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.fixture-management-scroll .fixture-purchase-list,
+.fixture-management-scroll .layout-fixture-list {
+  max-height: none;
+  overflow: visible;
+}
+
 .layout-fixture-list {
   flex: 1;
   padding: 10px;
@@ -646,6 +658,17 @@ button {
   font-weight: bold;
 }
 
+.layout-sale-confirmation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 0;
+  padding: 8px;
+  border: 1px solid #f59e0b;
+}
+
 .layout-fixture-row small {
   display: block;
   margin-top: 3px;
@@ -676,6 +699,8 @@ button {
 
 .layout-fixture-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
 }
 

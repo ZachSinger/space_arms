@@ -16,6 +16,8 @@ function describeLine({ category, label, quantity }) {
     case "stock_orders": return `Ordered ${label} (${plural(quantity, "crate", "crates")})`;
     case "delivery_fees": return `Delivery fees (${plural(quantity, "order", "orders")})`;
     case "fixtures": return `Bought fixture: ${label}${quantity > 1 ? ` (${quantity})` : ""}`;
+    case "fixture_sales": return `Sold fixture: ${label}${quantity > 1 ? ` (${quantity})` : ""}`;
+    case "equipment": return `Equipment upgrade: ${label}`;
     case "licenses": return `Signed supplier license: ${label}`;
     case "hiring": return `Hired ${label}`;
     case "wages": return `Wages paid to ${label}${quantity > 1 ? ` (${plural(quantity, "shift", "shifts")})` : ""}`;

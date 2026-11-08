@@ -78,6 +78,19 @@ test("saved receipts must belong to the saved day", () => {
   }
 });
 
+test("saved hovercarts accept legacy and upgrade capacities but reject invalid sizes", () => {
+  for (const capacity of [10, 15, 20, 25, 30, 35, 40]) {
+    const data = snapshot();
+    data.playerState.hovercart.capacity = capacity;
+    assert.doesNotThrow(() => validateShopSave(data, database), `${capacity} spaces`);
+  }
+  for (const capacity of [5, 14, 16, 21, 41, 45]) {
+    const data = snapshot();
+    data.playerState.hovercart.capacity = capacity;
+    assert.throws(() => validateShopSave(data, database), /invalid hovercart/);
+  }
+});
+
 test("saves accept cent balances and prices and reject fractions smaller than a cent", () => {
   const data = snapshot();
   data.playerState.credits = 1500.23;
@@ -196,6 +209,19 @@ test("saves from before fixture types existed load with types filled in", () => 
   assert.deepEqual(migrated.fixtures, snapshot().fixtures.map((fixture, index) =>
     index === 0 ? { ...fixture, type: "shelf_universal" } : fixture));
   assert.equal(legacy.fixtures[0].type, undefined);
+});
+
+test("older saves keep the third starting locker and its contents", () => {
+  const data = snapshot();
+  const thirdLocker = {
+    id: "storage_demo_03", gx: 3, gy: 1, stock: [{ itemId: "srv_01", quantity: 5 }],
+  };
+  data.fixtures.push(thirdLocker);
+  const restored = validateShopSave(data, database);
+  assert.equal(restored.fixtures.filter((fixture) => fixture.type === "locker_single").length, 3);
+  assert.deepEqual(restored.fixtures.find((fixture) => fixture.id === thirdLocker.id), {
+    ...thirdLocker, type: "locker_single",
+  });
 });
 
 test("fixture rotation is saved, and older saves without it still load", () => {

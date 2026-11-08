@@ -220,7 +220,8 @@ notice something that needs doing but isn't being done right now.
       one bank of lockers. (First attempt cropped 3 fixtures to thirds of the same combined
       `locker_storage.png` texture instead -- looked bad, replaced with real single-door
       art provided afterward.) `FixtureWindow` titles now read "LOCKER 1"/"LOCKER
-      2"/"LOCKER 3" so they're distinguishable when opened.
+      2"/"LOCKER 3" so they're distinguishable when opened. New games now start with two
+      lockers; existing saves keep all of their lockers.
 - [x] ~~Shelf placement UI highlighted every valid anchor cell green at once~~ -- looked
       like one solid block of taken-up space, not "here's everywhere a 2x1 item COULD go."
       Confusing in practice -- a 2x1 item on a 4x2 grid highlighting 6 cells read as
@@ -235,7 +236,7 @@ notice something that needs doing but isn't being done right now.
       only existed for the old all-cells-highlighted approach.
 
 ## Bigger Features Not Yet Built (from the bible)
-- [x] Off-shift rearrangement of the existing shelf, three lockers, and register through
+- [x] Off-shift rearrangement of shelves, lockers, and the register through
       Manager Tablet Fixtures/Layout MOVE controls. Grid-snapped previews reject overlaps,
       blocked access, disconnected floor, doors/loading-area obstruction, and insufficient
       register queue space. Contents stay attached; right-click/Escape cancels.
@@ -311,8 +312,9 @@ notice something that needs doing but isn't being done right now.
       physical moving entity"): extracted the capacity-pool logic shared by every
       StorageFixture into a new base class (`InventoryPool.js` -- capacity + stock +
       add/remove/usedCapacity/etc.), and gave `PlayerState` its own instance
-      (`HOVERCART_CAPACITY` = 20, raised from 10; older saves load at 20, smaller than a Storage Fixture's own capacity since it's
-      one character's personal carry limit, not a whole locker). `FixtureWindow` shows the
+      (15 spaces in new games; Equipment upgrades add 5 spaces at a time up to 40 for
+      200/300/400/500/600 credits. Old 10-space carts load at 15; 20-space and upgraded
+      carts keep their capacity and contents). `FixtureWindow` shows the
       open fixture's stock AND the hovercart's own stock side by side, each row with a
       TAKE (fixture -> hovercart) or STOCK (hovercart -> fixture) button that moves 1 unit
       at a time, disabled the instant the receiving side has no room left for that item.
@@ -397,7 +399,9 @@ notice something that needs doing but isn't being done right now.
       `EmployeeJobs.js`, `EmployeeRenderer.js`, `data/Employees.json`).
 - [x] Fixture purchasing, fixture crates, off-shift placement/crating, and fixture licenses
       (Steps 22/41; fixture catalog in `js/logic/FixtureLayout.js`).
-- [ ] Sell fixtures back for partial credit (after fixture purchasing/crating is built)
+- [x] Sell empty placed fixtures and fixture crates for half price while closed, with
+      confirmation and a separate receipt entry. Fixtures containing stock and the only
+      register cannot be sold.
 - [x] MVP faction customer buy lists (Steps 12, 25-28): primary items come from assigned
       shelf slots (including sold-out slots); customers visit multiple shelves, penalize
       once for missing primary stock, and leave if none of their primary items are in stock.
@@ -415,16 +419,20 @@ notice something that needs doing but isn't being done right now.
 - [x] Faction sale reputation (Step 51): a completed sale gives +1 store rep and +1 rep
       with the customer's faction. Rewards and penalties apply independently, when each happens.
 - [x] Manager's Tablet UI: unified tabbed window shell built (`js/logic/ManagerTablet.js`),
-      Inventory + Contracts + Supply + Fixtures + Layout tabs have real content.
+      Inventory + Employee + Contracts + Supply + Fixtures + Equipment + Layout +
+      Finances tabs have real content.
       Remaining tab (Handbook) still shows a "COMING SOON" placeholder
       until each one's own system exists -- see below.
 - [x] Employee tab: hiring, wages, and per-employee job priority ordering (see the
       Employees entry above).
-- [x] Fixtures tab: purchase licensed fixtures, place/crate fixtures, and move existing fixtures.
+- [x] Fixtures tab: purchase licensed fixtures, place/crate fixtures, move existing fixtures,
+      and sell empty fixtures or fixture crates.
+- [x] Equipment tab: buy hovercart upgrades directly without a license.
 - [x] Layout tab: safe off-shift fixture placement with autosave status (Step 63)
 - [x] Finances tab + End Day (Step 43): when a shift ends, a blinking END DAY button replaces
       START SHIFT in the top bar and opens the Finances tab. The tab shows today's itemized
-      receipt (every sale, stock order, delivery fee, fixture, license, hire, and wage) and
+      receipt (every sale, stock order, delivery fee, fixture purchase/resale, equipment
+      upgrade, license, hire, and wage) and
       the previous day's final receipt. END DAY moves to the next day and changes market prices;
       the next shift can't start until the day is ended. Wages are still paid at shift start
       (Step 32), not at End Day. Money changes must go through `PlayerState.addCredits` /

@@ -61,6 +61,37 @@ test("fixture purchases explain shelving, storage, checkout, and floor space", (
   assert.match(html, /PRICE 2000 credits/);
 });
 
+test("fixtures tab offers resale with a clear value and a confirmation", () => {
+  const locker = { id: "locker_1", type: "locker_single", gx: 1, gy: 1 };
+  const padCrate = { kind: "fixture", typeId: "shelf_starter_2x1", lockedToPad: true };
+  const scene = {
+    canRearrangeFixtures: () => true,
+    fixtures: { all: () => [locker], displayName: () => "LOCKER" },
+    restockCrates: [padCrate],
+    carriedCrate: { kind: "fixture", typeId: "locker_single" },
+    getFixturePurchaseOptions: () => [],
+    getFixtureCrateBlockReason: () => null,
+    canCrateFixture: () => true,
+    getFixtureSaleBlockReason: () => null,
+    getFixtureCrateSaleBlockReason: () => null,
+  };
+  const html = LayoutRenderer.generateHTML(scene, true, "Purchase complete.", { name: "LOCKER", value: 90 });
+  assert.match(html, /Sell LOCKER for 90 credits\?/);
+  assert.match(html, /data-confirm-fixture-sale/);
+  assert.match(html, /data-cancel-fixture-sale/);
+  assert.match(html, /data-sell-fixture-id="locker_1"/);
+  assert.match(html, /data-sell-fixture-crate="0"/);
+  assert.match(html, /data-sell-fixture-crate="carried"/);
+  assert.match(html, /Loading Pad \| Resale value: 150 credits/);
+  assert.ok(html.indexOf("Purchase complete.") < html.indexOf("fixture-management-scroll"));
+  assert.ok(html.indexOf("layout-sale-confirmation") < html.indexOf("fixture-management-scroll"));
+
+  scene.getFixtureSaleBlockReason = () => "Only empty fixtures can be sold.";
+  const blocked = LayoutRenderer.generateHTML(scene, true);
+  assert.match(blocked, /<small>Only empty fixtures can be sold\.<\/small>/);
+  assert.match(blocked, /data-sell-fixture-id="locker_1"[\s\S]*?disabled>SELL/);
+});
+
 test("early supplier license prices reflect the value of their item catalogs", () => {
   const expectedPrices = {
     lic_start_rations: 25,

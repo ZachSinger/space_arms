@@ -90,6 +90,57 @@ test("every credit change is itemized, so the receipt always matches the balance
   assert.equal(state.credits, 1325);
 });
 
+test("hovercart upgrades cost more for each five-space increase and stop at 40", () => {
+  const state = new PlayerState();
+  assert.equal(state.hovercart.capacity, 15);
+  assert.equal(state.hovercart.add("test_item", 3), 3);
+  state.addCredits(1000, { category: "sales", label: "Test sale" });
+  for (const [capacity, price] of [[20, 200], [25, 300], [30, 400], [35, 500], [40, 600]]) {
+    const before = state.credits;
+    assert.equal(state.upgradeHovercart(), true);
+    assert.equal(state.hovercart.capacity, capacity);
+    assert.equal(state.credits, before - price);
+    assert.equal(state.hovercart.getAvailableUnitsFor("test_item"), 3);
+  }
+  const balance = state.credits;
+  assert.equal(state.upgradeHovercart(), false);
+  assert.equal(state.credits, balance);
+  assert.equal(state.dayLedger.lines.filter((line) => line.category === "equipment").length, 5);
+  assert.equal(balanceOf(state), state.credits);
+});
+
+test("an unaffordable hovercart upgrade changes neither capacity nor credits", () => {
+  const state = new PlayerState();
+  state.spendCredits(1301, { category: "fixtures", label: "Test fixture" });
+  assert.equal(state.upgradeHovercart(), false);
+  assert.equal(state.hovercart.capacity, 15);
+  assert.equal(state.credits, 199);
+  assert.equal(state.dayLedger.lines.some((line) => line.category === "equipment"), false);
+});
+
+test("saved hovercart upgrades and older carts keep their capacity and contents", () => {
+  for (const [savedCapacity, restoredCapacity] of [[10, 15], [20, 20], [25, 25], [40, 40]]) {
+    const saved = new PlayerState().serialize();
+    saved.hovercart = { capacity: savedCapacity, stock: [{ itemId: "test_item", quantity: savedCapacity }] };
+    const restored = PlayerState.deserialize(saved);
+    assert.equal(restored.hovercart.capacity, restoredCapacity);
+    assert.equal(restored.hovercart.getAvailableUnitsFor("test_item"), savedCapacity);
+    assert.equal(restored.serialize().hovercart.capacity, restoredCapacity);
+  }
+});
+
+test("receipts describe fixture resale and hovercart upgrades separately", () => {
+  const state = new PlayerState();
+  state.addCredits(90, { category: "fixture_sales", label: "LOCKER" });
+  assert.equal(state.upgradeHovercart(), true);
+  const receipt = summarizeReceipt(state.dayLedger.serialize(), state.credits, state.globalReputation);
+  const html = FinancesRenderer.generateHTML({ ...financesView(), today: receipt });
+  assert.match(html, /Sold fixture: LOCKER/);
+  assert.match(html, /Equipment upgrade: Hovercart capacity: 20 spaces/);
+  assert.equal(receipt.totalEarned, 90);
+  assert.equal(receipt.totalSpent, 200);
+});
+
 test("cent-priced sales, spending and receipts survive ending the day and saving", () => {
   const state = new PlayerState();
   state.addCredits(1.23, { category: "sales", label: "Ration" });

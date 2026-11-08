@@ -9,8 +9,8 @@ import { DayLedger } from "./DayLedger.js";
 import { isMoney, sumMoney } from "./Money.js";
 import employeeRoster from "../../data/Employees.json" with { type: "json" };
 
-// What one character can personally carry, in units; smaller than any fixture.
-import { HOVERCART_CAPACITY } from "./Hovercart.js";
+// The starting capacity and upgrade rules for the player's hovercart.
+import { getNextHovercartUpgrade, HOVERCART_CAPACITY } from "./Hovercart.js";
 
 export { HOVERCART_CAPACITY };
 
@@ -89,6 +89,17 @@ export class PlayerState {
     this.dayLedger.record({ ...entry, amount: -amount });
     this.credits = balance;
     this.notifyListeners();
+    return true;
+  }
+
+  upgradeHovercart() {
+    const upgrade = getNextHovercartUpgrade(this.hovercart.capacity);
+    if (!upgrade || this.credits < upgrade.price) return false;
+    this.hovercart.capacity = upgrade.capacity;
+    this.spendCredits(upgrade.price, {
+      category: "equipment",
+      label: `Hovercart capacity: ${upgrade.capacity} spaces`,
+    });
     return true;
   }
 
@@ -304,8 +315,8 @@ export class PlayerState {
       activeLicenses: new Set([...data.activeLicenses, "lic_fixture_basics"]),
       storePrices: { ...data.storePrices },
       hovercart: new InventoryPool({
-        // Saves from when the hovercart held 10 load at the current size.
-        capacity: HOVERCART_CAPACITY,
+        // Keep larger carts from existing saves, including their contents.
+        capacity: Math.max(HOVERCART_CAPACITY, data.hovercart?.capacity ?? HOVERCART_CAPACITY),
         stock: (data.hovercart?.stock || []).map((entry) => ({ ...entry })),
       }),
       goBacks: new InventoryPool({

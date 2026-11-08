@@ -9,13 +9,15 @@ import { InventoryRenderer } from "./InventoryRenderer.js";
 import { ContractRenderer } from "./ContractRenderer.js";
 import { SupplyRenderer } from "./SupplyRenderer.js";
 import { LayoutRenderer } from "./LayoutRenderer.js";
+import { EquipmentRenderer } from "./EquipmentRenderer.js";
 import { EmployeeRenderer } from "./EmployeeRenderer.js";
 import { FinancesRenderer } from "./FinancesRenderer.js";
 import { FixtureHighlight } from "./FixtureHighlight.js";
 import { playErrorBuzz } from "./Sfx.js";
 import { GAME_EVENTS } from "./EventBus.js";
-import { roundMoney } from "./Money.js";
-import { getFixtureType } from "./FixtureLayout.js";
+import { formatMoney, roundMoney } from "./Money.js";
+import { getNextHovercartUpgrade } from "./Hovercart.js";
+import { getFixtureResaleValue, getFixtureType } from "./FixtureLayout.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
 // The bible's full Step 40 tab list (Part 8). Tabs with no system yet render a
@@ -26,6 +28,7 @@ const TAB_DEFS = [
   { id: "contracts", label: "Contracts" },
   { id: "supply", label: "Supply" },
   { id: "fixtures", label: "Fixtures" },
+  { id: "equipment", label: "Equipment" },
   { id: "layout", label: "Layout" },
   { id: "finances", label: "Finances" },
   { id: "handbook", label: "Handbook" },
@@ -44,6 +47,9 @@ export class ManagerTablet {
     this.playerState = playerState;
     this.scene = scene; // needed by the Supply tab to read/order fixture stock
     this.supplyOrder = new Map(); // item id -> crates in the order being built
+    this.fixturePurchaseNotice = "";
+    this.fixtureSaleConfirmation = null;
+    this.equipmentPurchaseNotice = "";
 
     const tabBarHTML = TAB_DEFS.map(
       ({ id, label }, index) =>
@@ -74,6 +80,9 @@ export class ManagerTablet {
     this.bodyElement = this.uiWindow.element.querySelector(".retro-window-body");
     this.fixtureHighlight = new FixtureHighlight(scene, this.uiWindow);
     this.uiWindow.onClose = () => {
+      this.fixturePurchaseNotice = "";
+      this.fixtureSaleConfirmation = null;
+      this.equipmentPurchaseNotice = "";
       this.fixtureHighlight.reset();
       this.scene.resumeRegisterCheckout();
     };
@@ -136,6 +145,37 @@ export class ManagerTablet {
       const crateFixtureButton = event.target.closest("[data-crate-fixture-id]");
       if (crateFixtureButton) this.scene.crateFixture(crateFixtureButton.dataset.crateFixtureId);
 
+      const sellFixtureButton = event.target.closest("[data-sell-fixture-id]");
+      if (sellFixtureButton) {
+        this.prepareFixtureSale("placed", this.scene.fixtures.get(sellFixtureButton.dataset.sellFixtureId));
+      }
+
+      const sellCrateButton = event.target.closest("[data-sell-fixture-crate]");
+      if (sellCrateButton) {
+        const key = sellCrateButton.dataset.sellFixtureCrate;
+        const crate = key === "carried" ? this.scene.carriedCrate : this.scene.restockCrates[Number(key)];
+        this.prepareFixtureSale("crate", crate);
+      }
+      if (event.target.closest("[data-confirm-fixture-sale]")) this.confirmFixtureSale();
+      if (event.target.closest("[data-cancel-fixture-sale]")) {
+        this.fixtureSaleConfirmation = null;
+        this.refreshLayoutPanels();
+      }
+
+      if (event.target.closest("[data-upgrade-hovercart]")) {
+        const upgrade = getNextHovercartUpgrade(this.playerState.hovercart.capacity);
+        this.equipmentPurchaseNotice = upgrade
+          ? `Hovercart upgraded to ${upgrade.capacity} spaces.`
+          : "";
+        if (!this.playerState.upgradeHovercart()) {
+          this.equipmentPurchaseNotice = "";
+          this.scene.showShopMessage(upgrade
+            ? `Not enough credits. This upgrade costs ${formatMoney(upgrade.price)}.`
+            : "Your hovercart is already at its maximum capacity.");
+          this.refreshEquipmentPanel();
+        }
+      }
+
       const priceButton = event.target.closest(PRICE_BUTTON_SELECTOR);
       if (priceButton) {
         this.handlePriceAdjustment(
@@ -186,6 +226,7 @@ export class ManagerTablet {
       this.refreshContractsPanel();
       this.refreshSupplyPanel();
       this.refreshLayoutPanels();
+      this.refreshEquipmentPanel();
       this.refreshFinancesPanel();
     });
     this.scene.eventBus.on(GAME_EVENTS.INVENTORY_TRANSFERRED, ({ destination }) => {
@@ -217,7 +258,12 @@ export class ManagerTablet {
       return ContractRenderer.generateHTML(database.getAllLicenses(), this.playerState);
     }
     if (tabId === "supply") return SupplyRenderer.generateHTML(this.scene, this.supplyOrder);
-    if (tabId === "fixtures") return LayoutRenderer.generateHTML(this.scene, true, this.fixturePurchaseNotice);
+    if (tabId === "fixtures") {
+      return LayoutRenderer.generateHTML(
+        this.scene, true, this.fixturePurchaseNotice, this.fixtureSaleConfirmation,
+      );
+    }
+    if (tabId === "equipment") return EquipmentRenderer.generateHTML(this.playerState, this.equipmentPurchaseNotice);
     if (tabId === "layout") return LayoutRenderer.generateHTML(this.scene);
     if (tabId === "finances") return FinancesRenderer.generateHTML(this.scene.getFinancesView());
     return `<div class="tablet-placeholder">COMING SOON</div>`;
@@ -227,10 +273,13 @@ export class ManagerTablet {
     if (this.bodyElement.contains(document.activeElement)) document.activeElement.blur();
     this.fixtureHighlight.reset();
     this.fixturePurchaseNotice = "";
+    this.fixtureSaleConfirmation = null;
+    this.equipmentPurchaseNotice = "";
     if (tabId === "inventory") this.refreshInventoryPanel();
     if (tabId === "employee") this.refreshEmployeePanel();
     if (tabId === "supply") this.refreshSupplyPanel();
     if (tabId === "layout" || tabId === "fixtures") this.refreshLayoutPanels();
+    if (tabId === "equipment") this.refreshEquipmentPanel();
     if (tabId === "finances") this.refreshFinancesPanel();
     this.bodyElement.querySelectorAll(".tablet-tab-btn").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.tab === tabId);
@@ -283,6 +332,11 @@ export class ManagerTablet {
     if (panel) panel.innerHTML = this.renderPanelContent("employee");
   }
 
+  refreshEquipmentPanel() {
+    const panel = this.bodyElement.querySelector('[data-tab-panel="equipment"]');
+    if (panel) panel.innerHTML = this.renderPanelContent("equipment");
+  }
+
   refreshFinancesPanel() {
     const panel = this.bodyElement.querySelector('[data-tab-panel="finances"]');
     if (panel) panel.innerHTML = this.renderPanelContent("finances");
@@ -299,7 +353,16 @@ export class ManagerTablet {
   refreshLayoutPanels() {
     for (const id of ["layout", "fixtures"]) {
       const panel = this.bodyElement.querySelector(`[data-tab-panel="${id}"]`);
-      if (panel) panel.innerHTML = this.renderPanelContent(id);
+      if (!panel) continue;
+      const positions = [".fixture-management-scroll", ".layout-fixture-list"].map((selector) => ({
+        selector,
+        top: panel.querySelector(selector)?.scrollTop ?? 0,
+      }));
+      panel.innerHTML = this.renderPanelContent(id);
+      for (const { selector, top } of positions) {
+        const list = panel.querySelector(selector);
+        if (list) list.scrollTop = top;
+      }
     }
     this.updateSaveStatus();
   }
@@ -308,6 +371,50 @@ export class ManagerTablet {
     this.bodyElement.querySelectorAll("[data-save-status]").forEach((element) => {
       element.textContent = this.scene.saveStatus;
     });
+  }
+
+  prepareFixtureSale(kind, target) {
+    const reason = kind === "placed"
+      ? this.scene.getFixtureSaleBlockReason(target)
+      : this.scene.getFixtureCrateSaleBlockReason(target);
+    if (reason) {
+      this.scene.showShopMessage(reason);
+      return;
+    }
+    const typeId = kind === "placed" ? target.type : target.typeId;
+    this.fixturePurchaseNotice = "";
+    this.fixtureSaleConfirmation = {
+      kind,
+      target,
+      name: kind === "placed"
+        ? this.scene.fixtures.displayName(target)
+        : `${getFixtureType(typeId).name} crate`,
+      value: getFixtureResaleValue(typeId),
+    };
+    this.refreshLayoutPanels();
+  }
+
+  confirmFixtureSale() {
+    const sale = this.fixtureSaleConfirmation;
+    if (!sale) {
+      this.scene.showShopMessage("Choose a fixture to sell first.");
+      return;
+    }
+    this.fixtureSaleConfirmation = null;
+    if (sale.kind === "placed" && this.scene.fixtures.get(sale.target.id) !== sale.target) {
+      this.scene.showShopMessage("That fixture is no longer available.");
+      this.refreshLayoutPanels();
+      return;
+    }
+    this.fixturePurchaseNotice = `Sold ${sale.name} for ${formatMoney(sale.value)}.`;
+    this.fixtureHighlight.reset();
+    const sold = sale.kind === "placed"
+      ? this.scene.sellFixture(sale.target.id)
+      : this.scene.sellFixtureCrate(sale.target);
+    if (!sold) {
+      this.fixturePurchaseNotice = "";
+      this.refreshLayoutPanels();
+    }
   }
 
   // --- Prices, contracts, and supply orders ---
@@ -381,6 +488,7 @@ export class ManagerTablet {
     this.refreshInventoryPanel();
     this.refreshSupplyPanel(); // loading pad spots free up without any playerState change
     this.refreshLayoutPanels();
+    this.refreshEquipmentPanel();
     this.refreshFinancesPanel();
     this.uiWindow.openWindow();
     this.scene.checkoutWindow.suspend();
