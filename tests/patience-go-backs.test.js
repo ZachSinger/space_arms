@@ -109,6 +109,7 @@ test("the Go-Backs bin only empties into the hovercart, within its capacity", ()
   const state = new PlayerState({
     emit: (event, payload) => transfers.push({ event, payload }),
   });
+  state.hovercart.capacity = 10;
   state.addToGoBacks([{ itemId: "big" }, { itemId: "big" }, { itemId: "big" }, { itemId: "amo_01" }]);
   assert.equal(state.goBacks.findStockEntry("big").quantity, 3);
   assert.deepEqual(transfers.slice(0, 2), [

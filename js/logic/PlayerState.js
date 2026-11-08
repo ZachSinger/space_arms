@@ -10,7 +10,9 @@ import { isMoney, sumMoney } from "./Money.js";
 import employeeRoster from "../../data/Employees.json" with { type: "json" };
 
 // What one character can personally carry, in units; smaller than any fixture.
-export const HOVERCART_CAPACITY = 10;
+import { HOVERCART_CAPACITY } from "./Hovercart.js";
+
+export { HOVERCART_CAPACITY };
 
 function defaultEmployeeJobPriorities(employeeId) {
   const employee = employeeRoster.find((candidate) => candidate.id === employeeId);
@@ -302,7 +304,8 @@ export class PlayerState {
       activeLicenses: new Set([...data.activeLicenses, "lic_fixture_basics"]),
       storePrices: { ...data.storePrices },
       hovercart: new InventoryPool({
-        capacity: data.hovercart?.capacity ?? HOVERCART_CAPACITY,
+        // Saves from when the hovercart held 10 load at the current size.
+        capacity: HOVERCART_CAPACITY,
         stock: (data.hovercart?.stock || []).map((entry) => ({ ...entry })),
       }),
       goBacks: new InventoryPool({

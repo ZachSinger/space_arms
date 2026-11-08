@@ -303,7 +303,7 @@ notice something that needs doing but isn't being done right now.
       physical moving entity"): extracted the capacity-pool logic shared by every
       StorageFixture into a new base class (`InventoryPool.js` -- capacity + stock +
       add/remove/usedCapacity/etc.), and gave `PlayerState` its own instance
-      (`HOVERCART_CAPACITY` = 10, smaller than a Storage Fixture's own capacity since it's
+      (`HOVERCART_CAPACITY` = 20, raised from 10; older saves load at 20, smaller than a Storage Fixture's own capacity since it's
       one character's personal carry limit, not a whole locker). `FixtureWindow` shows the
       open fixture's stock AND the hovercart's own stock side by side, each row with a
       TAKE (fixture -> hovercart) or STOCK (hovercart -> fixture) button that moves 1 unit
