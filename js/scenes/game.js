@@ -36,7 +36,11 @@ import { CheckoutWindow, customerPaysCash } from "../logic/CheckoutWindow.js";
 import { FixtureWindow } from "../logic/FixtureWindow.js";
 import { GoBacksWindow } from "../logic/GoBacksWindow.js";
 import { TileRoom } from "../logic/TileRoom.js";
-import { TILE_SIZE, getZone, getTotalGridSize, getStoreDoorCell } from "../logic/RoomLayout.js";
+import { FLOOR_COUNT, WALL_COUNT, floorTileKey, wallTileKey } from "../logic/ShopTiles.js";
+import {
+  TILE_SIZE, getZone, getTotalGridSize, getAuthoredGridSize, getStoreDoorCell, EXPANSION_ORDER,
+  BACKROOM_UPGRADE_ORDER, getBackroomDoorCell, getBackroomExitCell, getBackroomLink, isBackroomRow,
+} from "../logic/RoomLayout.js";
 import { ShiftClock, SHIFT_DURATION_MS } from "../logic/ShiftClock.js";
 import { summarizeReceipt } from "../logic/DayLedger.js";
 import { Market } from "../logic/Market.js";
@@ -46,7 +50,7 @@ import { ShelfStockDisplay } from "../logic/ShelfStockDisplay.js";
 import { getFixtureTexture } from "../logic/FixtureTexture.js";
 import { STARTING_FIXTURES, FIXTURE_TYPES, getFixtureType, getFixtureResaleValue, getShelfDisplayGrid, fixtureAccessCells, fixtureFacing, fixtureFacingStep, fixtureFootprint, fixtureInteractionDistance, fixtureRotation, validateFixtureLayout } from "../logic/FixtureLayout.js";
 import { FixtureRegistry } from "../logic/FixtureRegistry.js";
-import { validateShopSave } from "../logic/ShopSave.js";
+import { SHOP_LAYOUT_VERSION, validateShopSave } from "../logic/ShopSave.js";
 import { UIWindow } from "../logic/UIWindow.js";
 import { SaveManager } from "../../SaveManager.js";
 import { database } from "./boot.js"; // the exported DatabaseManager singleton
@@ -55,6 +59,20 @@ import employeeRoster from "../../data/Employees.json" with { type: "json" };
 // Most customers inside the store at once. When full, the next arrival is lost for good,
 // so a backed-up dealer really does lose that sale.
 const MAX_CUSTOMERS_IN_STORE = 6;
+
+// Screen space kept clear when fitting the map: the top status bar (36px + 2px border)
+// and a small margin around the map.
+const MAP_SCREEN_TOP = 38;
+const MAP_SCREEN_MARGIN = 8;
+// Closest zoom-in still shows this many tile rows top to bottom.
+const CAMERA_MIN_VISIBLE_ROWS = 8;
+const CAMERA_ZOOM_STEP = 1.15;
+// The backroom window: at most this share of the screen below the status bar, tiles never
+// drawn larger than this zoom, and a title strip above the window's map.
+const BACKROOM_WINDOW_SHARE = 0.9;
+const BACKROOM_MAX_ZOOM = 1.25;
+const BACKROOM_TITLE_HEIGHT = 26;
+const BACKROOM_FRAME_BORDER = 3;
 
 // Reputation lost when a thrown crate hits a customer.
 const CRATE_HIT_REPUTATION_PENALTY = 1;
@@ -197,20 +215,18 @@ export class GameScene extends Phaser.Scene {
     this.room.openDoorway(doorGX, doorGY, "door_light_blank_wide");
     this.storeDoor = { x: this.room.worldX(doorGX), y: this.room.worldY(doorGY) };
 
-    // TileRoom only walls a zone edge next to a locked zone, so the unlocked Storeroom and
-    // Sales Floor need an explicit wall with one keypad door. The Storeroom's south side
-    // stays open: it and the Loading Pad form one loading corridor.
-    const storeroom = getZone("storeroom");
-    const backroomDoorGX = storeroom.gridX + storeroom.gridW - 1;
-    const backroomDoorGY = storeroom.gridY + 3;
-    for (let gy = storeroom.gridY; gy < storeroom.gridY + storeroom.gridH; gy += 1) {
-      this.room.addWall(backroomDoorGX, gy, storeroom.wallTile, true);
-    }
-    this.room.openDoorway(backroomDoorGX, backroomDoorGY, "door_blast_keypad_01");
-    this.backroomDoor = {
-      x: this.room.worldX(backroomDoorGX),
-      y: this.room.worldY(backroomDoorGY),
-    };
+    // The Sales Floor's door to the backroom, and the backroom's exit back out. Both are
+    // solid; pressing E in front of one moves the player to the floor just inside the other.
+    this.room.addBackroomDoors();
+    const link = getBackroomLink();
+    const doorCell = getBackroomDoorCell();
+    const exitCell = getBackroomExitCell();
+    this.backroomDoor = { x: this.room.worldX(doorCell.gx), y: this.room.worldY(doorCell.gy) };
+    this.backroomDoorFront = { x: this.room.worldX(link.shop.gx), y: this.room.worldY(link.shop.gy) };
+    this.backroomExit = { x: this.room.worldX(exitCell.gx), y: this.room.worldY(exitCell.gy) };
+    this.backroomExitFront = { x: this.room.worldX(link.backroom.gx), y: this.room.worldY(link.backroom.gy) };
+    this.playerInBackroom = false;
+    this.setupBackroomWindow();
 
     // Every placed fixture lives in this registry: shelves, shared-capacity lockers, and
     // the register.
@@ -256,12 +272,12 @@ export class GameScene extends Phaser.Scene {
     // The player spawns in open floor clear of the shelf and register. Like customers,
     // the player passes through customers.
     this.player = new Player(this, zonePixelX + zonePixelW * 0.5, zonePixelY + zonePixelH * 0.75);
+    this.refreshCamera();
     this.physics.add.collider(this.player.sprite, this.room.wallGroup);
     this.physics.add.collider(this.player.sprite, this.obstacleGroup);
     // The register is its own group so customers (who share obstacleGroup) can queue
     // flush against it; the player still collides with it.
     this.physics.add.collider(this.player.sprite, this.registerGroup);
-    this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
 
     // Loading Pad: ordered crates spawn here and must be hauled in by hand. It fills the
     // zone's two rows above its south wall; the top row stays open as the walkway into
@@ -278,7 +294,7 @@ export class GameScene extends Phaser.Scene {
       LOADING_PAD_WIDTH,
       LOADING_PAD_HEIGHT,
     );
-    const { gridW, gridH } = getTotalGridSize();
+    const { gridW, gridH } = getAuthoredGridSize();
     this.crateBounds = new Phaser.Geom.Rectangle(0, 0, gridW * TILE_SIZE, gridH * TILE_SIZE);
     this.crateGroup = this.physics.add.group();
     this.physics.add.collider(this.crateGroup, this.crateGroup, (spriteA, spriteB) => {
@@ -434,14 +450,25 @@ export class GameScene extends Phaser.Scene {
     });
     this.bindControlKey("keydown-I", "tablet", () => this.managerTablet.openWindow());
 
-    // Debug-only: unlocks the store expansion until a real purchase UI exists.
+    // The shop camera: PageUp zooms in, PageDown zooms out (never past the whole shop).
+    this.bindControlKey("keydown-PAGE_UP", "cameraZoom", () => this.zoomCamera(1));
+    this.bindControlKey("keydown-PAGE_DOWN", "cameraZoom", () => this.zoomCamera(-1));
+
+    // Debug-only: each press unlocks the next store expansion until a real purchase UI exists.
     this.bindControlKey("keydown-U", "debug", () => this.debugUnlockExpansion());
+    this.bindControlKey("keydown-B", "debug", () => this.debugUnlockBackroomUpgrade());
 
     // Debug-only: tile-grid overlay that makes off-grid fixtures obvious.
     this.bindControlKey("keydown-G", "debug", () => this.toggleDebugGrid());
 
     // Debug-only: lets one random customer in right away.
     this.bindControlKey("keydown-Y", "debug", () => this.spawnCustomer(null));
+
+    // Debug-only: cycle the sales floor's floor (T) and wall (H) art to pick favorites.
+    this.debugFloorStyle = 0;
+    this.debugWallStyle = 0;
+    this.bindControlKey("keydown-T", "debug", () => this.debugCycleSalesTiles("floor"));
+    this.bindControlKey("keydown-H", "debug", () => this.debugCycleSalesTiles("wall"));
 
     // The shift clock's manual pause: freezes time entirely so the player can think.
     this.bindControlKey("keydown-P", "pause", () => this.shiftClock.togglePause());
@@ -490,9 +517,208 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  // The camera starts zoomed so the shop the player owns fills the screen. PageUp/PageDown
+  // zoom in and out; the furthest zoom-out always shows the whole owned shop. Buying an
+  // expansion keeps the current zoom, so the camera follows the player whenever the shop
+  // is bigger than the screen.
   setupCamera() {
-    const bounds = this.room.getCameraBounds();
-    this.cameras.main.setBounds(bounds.x, bounds.y, bounds.width, bounds.height);
+    if (!this.cameraResizeListening) {
+      this.cameraResizeListening = true;
+      this.scale.on(Phaser.Scale.Events.RESIZE, this.handleCameraResize, this);
+      this.events.once("shutdown", () => {
+        this.scale.off(Phaser.Scale.Events.RESIZE, this.handleCameraResize, this);
+        this.cameraResizeListening = false;
+      });
+    }
+    this.cameraZoom = null;
+    this.cameraViewHeight = null;
+    this.refreshCamera();
+  }
+
+  // Keeps the same amount of shop visible when the window or resolution changes.
+  handleCameraResize() {
+    const viewH = Math.max(1, this.scale.height - MAP_SCREEN_TOP);
+    if (this.cameraZoom && this.cameraViewHeight) this.cameraZoom *= viewH / this.cameraViewHeight;
+    this.refreshCamera();
+  }
+
+  getCameraZoomRange() {
+    const viewW = Math.max(1, this.scale.width);
+    const viewH = Math.max(1, this.scale.height - MAP_SCREEN_TOP);
+    const shop = this.room.getCameraBounds();
+    const fitZoom = Math.min(
+      Math.max(1, viewW - 2 * MAP_SCREEN_MARGIN) / shop.width,
+      Math.max(1, viewH - 2 * MAP_SCREEN_MARGIN) / shop.height,
+    );
+    const closestZoom = viewH / (CAMERA_MIN_VISIBLE_ROWS * TILE_SIZE);
+    return { min: fitZoom, max: Math.max(fitZoom, closestZoom) };
+  }
+
+  // Pop-ups drawn in the map (prompts, labels, customer bubbles) use this scale so they
+  // stay the same size on screen no matter how far the camera showing them is zoomed.
+  getPopupScale(worldX, worldY) {
+    return 1 / (this.cameraAt(worldX, worldY)?.zoom || 1);
+  }
+
+  /**
+   * The camera that draws a world point: the backroom window's for backroom points while
+   * it's open, otherwise the shop camera. With no point, the shop camera.
+   * @param {number} [worldX]
+   * @param {number} [worldY]
+   */
+  cameraAt(worldX, worldY) {
+    const backroom = this.backroomCamera;
+    if (backroom?.visible && Number.isFinite(worldY) && isBackroomRow(Math.floor(worldY / TILE_SIZE))) {
+      return backroom;
+    }
+    return this.cameras?.main;
+  }
+
+  /**
+   * Screen position to world position, through whichever camera is drawn there.
+   * @param {number} screenX
+   * @param {number} screenY
+   */
+  screenToWorld(screenX, screenY) {
+    const backroom = this.backroomCamera;
+    const overBackroom = backroom?.visible &&
+      Phaser.Geom.Rectangle.Contains(new Phaser.Geom.Rectangle(backroom.x, backroom.y, backroom.width, backroom.height), screenX, screenY);
+    return (overBackroom ? backroom : this.cameras.main).getWorldPoint(screenX, screenY);
+  }
+
+  zoomCamera(direction) {
+    this.cameraZoom = (this.cameraZoom ?? this.cameras.main.zoom) * CAMERA_ZOOM_STEP ** direction;
+    this.refreshCamera();
+  }
+
+  refreshCamera() {
+    const camera = this.cameras.main;
+    const viewW = Math.max(1, this.scale.width);
+    const viewH = Math.max(1, this.scale.height - MAP_SCREEN_TOP);
+    // The map is drawn only below the top status bar.
+    camera.setViewport(0, MAP_SCREEN_TOP, viewW, viewH);
+
+    const { min, max } = this.getCameraZoomRange();
+    const zoom = Phaser.Math.Clamp(this.cameraZoom ?? min, min, max);
+    this.cameraZoom = zoom;
+    this.cameraViewHeight = viewH;
+    camera.setZoom(zoom);
+
+    // Pad the shop's edges with a small margin, and widen any side shorter than the
+    // screen so the shop sits centered instead of stuck to one edge.
+    const shop = this.room.getCameraBounds();
+    const margin = MAP_SCREEN_MARGIN / zoom;
+    const visibleW = viewW / zoom;
+    const visibleH = viewH / zoom;
+    const boundsW = Math.max(shop.width + 2 * margin, visibleW);
+    const boundsH = Math.max(shop.height + 2 * margin, visibleH);
+    camera.setBounds(
+      shop.x + shop.width / 2 - boundsW / 2,
+      shop.y + shop.height / 2 - boundsH / 2,
+      boundsW,
+      boundsH,
+    );
+
+    // In the backroom the shop view holds still where the player left it.
+    if (this.player?.sprite && !this.playerInBackroom) {
+      camera.startFollow(this.player.sprite, true);
+    } else if (this.player?.sprite) {
+      camera.stopFollow();
+    } else {
+      camera.centerOn(shop.x + shop.width / 2, shop.y + shop.height / 2);
+    }
+    this.refreshBackroomWindow();
+  }
+
+  // --- Backroom window ---
+
+  // The backroom has its own camera, drawn as a framed window over the middle of the shop
+  // while the player is inside. The shop keeps running behind it.
+  setupBackroomWindow() {
+    this.backroomCamera = this.cameras.add(0, 0, 1, 1, false, "backroom")
+      .setBackgroundColor("#05080f")
+      .setVisible(false);
+    const frame = document.createElement("div");
+    frame.id = "backroom-window";
+    frame.className = "backroom-window hidden";
+    frame.innerHTML = '<div class="backroom-window-title">BACKROOM</div>';
+    document.getElementById("ui-layer")?.appendChild(frame);
+    this.backroomFrame = frame;
+    this.events.once("shutdown", () => {
+      frame.remove();
+      this.backroomFrame = null;
+    });
+    this.refreshBackroomWindow();
+  }
+
+  // Sizes the window to fit the backroom the player owns: buying a backroom upgrade makes
+  // both the room and its window bigger.
+  refreshBackroomWindow() {
+    const camera = this.backroomCamera;
+    if (!camera) return;
+    const open = this.playerInBackroom;
+    camera.setVisible(open);
+    this.backroomFrame?.classList.toggle("hidden", !open);
+    if (!open) return;
+
+    const screenW = Math.max(1, this.scale.width);
+    const screenH = Math.max(1, this.scale.height - MAP_SCREEN_TOP);
+    const room = this.room.getCameraBounds("backroom");
+    const zoom = Math.min(
+      (screenW * BACKROOM_WINDOW_SHARE) / room.width,
+      (screenH * BACKROOM_WINDOW_SHARE - BACKROOM_TITLE_HEIGHT) / room.height,
+      BACKROOM_MAX_ZOOM,
+    );
+    const width = Math.round(room.width * zoom);
+    const height = Math.round(room.height * zoom);
+    const x = Math.round((screenW - width) / 2);
+    const y = Math.round(MAP_SCREEN_TOP + (screenH - height + BACKROOM_TITLE_HEIGHT) / 2);
+    camera.setViewport(x, y, width, height).setZoom(zoom);
+    camera.setBounds(room.x, room.y, room.width, room.height);
+    camera.centerOn(room.x + room.width / 2, room.y + room.height / 2);
+
+    const frame = this.backroomFrame;
+    if (!frame) return;
+    const canvas = this.game.canvas.getBoundingClientRect();
+    const layer = frame.parentElement.getBoundingClientRect();
+    const scaleX = canvas.width / this.scale.width;
+    const scaleY = canvas.height / this.scale.height;
+    const border = BACKROOM_FRAME_BORDER;
+    Object.assign(frame.style, {
+      left: `${canvas.left - layer.left + x * scaleX - border}px`,
+      top: `${canvas.top - layer.top + y * scaleY - BACKROOM_TITLE_HEIGHT - border}px`,
+      width: `${width * scaleX}px`,
+      height: `${height * scaleY + BACKROOM_TITLE_HEIGHT}px`,
+      borderWidth: `${border}px`,
+    });
+  }
+
+  /**
+   * The backroom door the player is standing in front of (the shop's door, or the backroom's
+   * exit while inside), or null. E goes through it.
+   * @returns {{ x: number, y: number } | null}
+   */
+  getNearbyBackroomDoor() {
+    if (!this.player?.sprite || !this.backroomDoor) return null;
+    const door = this.playerInBackroom ? this.backroomExit : this.backroomDoor;
+    const { x, y } = this.player.sprite;
+    const below = y - door.y;
+    return Math.abs(x - door.x) < TILE_SIZE * 0.75 && below > 0 && below < TILE_SIZE * 1.75 ? door : null;
+  }
+
+  /**
+   * Moves the player (and anything they carry) between the shop and the backroom, arriving
+   * on the floor just inside the other door, facing away from it.
+   * @param {boolean} inBackroom
+   */
+  setPlayerInBackroom(inBackroom) {
+    this.playerInBackroom = inBackroom;
+    const arrival = inBackroom ? this.backroomExitFront : this.backroomDoorFront;
+    this.player.teleportTo(arrival.x, arrival.y);
+    this.player.forceFacing("down");
+    this.carriedCrate?.followCarrier(this.player.sprite);
+    this.refreshCamera();
+    this.debugInfo?.record(inBackroom ? "entered-backroom" : "left-backroom", {});
   }
 
   registerInteractableSources() {
@@ -635,13 +861,12 @@ export class GameScene extends Phaser.Scene {
   getLayoutOptions(occupiedRectangles = []) {
     const cellAt = (point) => ({ gx: Math.floor(point.x / TILE_SIZE), gy: Math.floor(point.y / TILE_SIZE) });
     const entrance = cellAt(this.storeDoor);
-    const backroomDoor = cellAt(this.backroomDoor);
+    const link = getBackroomLink();
     const doorwayCells = new Set([
       `${entrance.gx},${entrance.gy}`,
       `${entrance.gx},${entrance.gy + 1}`,
-      `${backroomDoor.gx - 1},${backroomDoor.gy}`,
-      `${backroomDoor.gx},${backroomDoor.gy}`,
-      `${backroomDoor.gx + 1},${backroomDoor.gy}`,
+      `${link.shop.gx},${link.shop.gy}`,
+      `${link.backroom.gx},${link.backroom.gy}`,
     ]);
     const reservedCells = new Set([
       ...doorwayCells,
@@ -652,7 +877,10 @@ export class GameScene extends Phaser.Scene {
         LOADING_PAD_HEIGHT,
       ),
     ]);
-    return { isWalkable: (gx, gy) => this.room.isWalkable(gx, gy), entrance, reservedCells, doorwayCells, occupiedRectangles };
+    return {
+      isWalkable: (gx, gy) => this.room.isWalkable(gx, gy),
+      entrance, reservedCells, doorwayCells, occupiedRectangles, links: [[link.shop, link.backroom]],
+    };
   }
 
   // Saving needs a quiet store: no shift running and nobody inside.
@@ -887,6 +1115,7 @@ export class GameScene extends Phaser.Scene {
         return entry;
       }),
       unlockedZones: this.room.zones.filter((zone) => !zone.locked).map((zone) => zone.id),
+      layoutVersion: SHOP_LAYOUT_VERSION,
       crates: this.restockCrates.map((crate) => crate.serialize()),
       carriedCrate: this.carriedCrate ? {
         ...this.carriedCrate.serializePayload(),
@@ -913,7 +1142,9 @@ export class GameScene extends Phaser.Scene {
     }
     this.applyFixtureLayout(data.fixtures, result);
     this.market.applySave(data.market);
+    this.playerInBackroom = false;
     this.player.teleportTo(this.storeDoor.x, this.storeDoor.y + TILE_SIZE);
+    this.refreshCamera();
     for (const crate of this.restockCrates) crate.destroy();
     this.restockCrates = data.crates.map((entry) => {
       const crate = new Crate(this, entry.itemId, entry.quantity, entry.x, entry.y,
@@ -1155,6 +1386,22 @@ export class GameScene extends Phaser.Scene {
    * @returns {Array<{ x: number, y: number }> | null} world-space waypoints
    */
   findPath(fromX, fromY, toX, toY) {
+    // The shop and backroom only connect through their door pair: walk to this side's door,
+    // step through it, then walk on from the other side's door.
+    const inBackroom = (y) => isBackroomRow(Math.floor(y / TILE_SIZE));
+    if (this.backroomDoorFront && inBackroom(fromY) !== inBackroom(toY)) {
+      const [near, far] = inBackroom(fromY)
+        ? [this.backroomExitFront, this.backroomDoorFront]
+        : [this.backroomDoorFront, this.backroomExitFront];
+      const toDoor = this.findAreaPath(fromX, fromY, near.x, near.y);
+      const fromDoor = toDoor && this.findAreaPath(far.x, far.y, toX, toY);
+      if (!fromDoor) return null;
+      return [...toDoor, { x: near.x, y: near.y, teleportTo: { x: far.x, y: far.y } }, ...fromDoor];
+    }
+    return this.findAreaPath(fromX, fromY, toX, toY);
+  }
+
+  findAreaPath(fromX, fromY, toX, toY) {
     // Close enough to step straight there; routing via tile centers would make a customer
     // already at their spot (like the counter front) walk out and back.
     if (Math.hypot(toX - fromX, toY - fromY) < TILE_SIZE && this.isStraightWalkClear(fromX, fromY, toX, toY)) {
@@ -1194,10 +1441,51 @@ export class GameScene extends Phaser.Scene {
       this.showShopMessage("Expand the shop while the store is closed.");
       return;
     }
-    const bounds = this.room.unlockZone("expansion_a");
-    this.cameras.main.setBounds(bounds.x, bounds.y, bounds.width, bounds.height);
+    const nextId = EXPANSION_ORDER.find((id) => this.room.zones.find((zone) => zone.id === id)?.locked);
+    if (!nextId) {
+      this.showShopMessage("Every shop expansion is already bought.");
+      return;
+    }
+    this.room.unlockZone(nextId);
+    this.refreshCamera();
     this.playerState.notifyListeners();
-    console.log("Unlocked expansion_a; camera bounds now", bounds);
+    const bought = EXPANSION_ORDER.indexOf(nextId) + 1;
+    this.showShopMessage(`Shop expansion ${bought} of ${EXPANSION_ORDER.length} bought.`);
+  }
+
+  // B key: buys the next backroom upgrade until a real purchase UI exists.
+  debugUnlockBackroomUpgrade() {
+    if (!this.canRearrangeFixtures()) {
+      this.showShopMessage("Upgrade the backroom while the store is closed.");
+      return;
+    }
+    const nextId = BACKROOM_UPGRADE_ORDER.find((id) => this.room.zones.find((zone) => zone.id === id)?.locked);
+    if (!nextId) {
+      this.showShopMessage("Every backroom upgrade is already bought.");
+      return;
+    }
+    this.room.unlockZone(nextId);
+    this.refreshCamera();
+    this.playerState.notifyListeners();
+    const bought = BACKROOM_UPGRADE_ORDER.indexOf(nextId) + 1;
+    this.showShopMessage(`Backroom upgrade ${bought} of ${BACKROOM_UPGRADE_ORDER.length} bought.`);
+  }
+
+  // T / H keys: step through the licensed tileset's floor or wall styles on the sales floor.
+  debugCycleSalesTiles(part) {
+    if (!this.textures.exists(floorTileKey(0))) {
+      this.showShopMessage("The sci-fi tileset isn't installed on this PC.");
+      return;
+    }
+    if (part === "floor") {
+      this.debugFloorStyle = (this.debugFloorStyle + 1) % FLOOR_COUNT;
+      this.room.setSalesFloorTiles({ floorTile: floorTileKey(this.debugFloorStyle) });
+      this.showShopMessage(`Sales floor: floor style ${this.debugFloorStyle} (of 0-${FLOOR_COUNT - 1})`);
+    } else {
+      this.debugWallStyle = (this.debugWallStyle + 1) % WALL_COUNT;
+      this.room.setSalesFloorTiles({ wallTile: wallTileKey(this.debugWallStyle) });
+      this.showShopMessage(`Sales floor: wall style ${this.debugWallStyle} (of 0-${WALL_COUNT - 1})`);
+    }
   }
 
   // G key: tile-grid overlay over the whole map, locked zones included. Depth 9998 sits
@@ -1661,6 +1949,11 @@ export class GameScene extends Phaser.Scene {
   // E delivers/places a carried crate, opens a nearby fixture, or toggles register operation.
   handleInteract() {
     if (!this.controlMode.allows("interact")) return;
+    // Doors come first so a carried crate goes through with the player, not onto the floor.
+    if (!this.operatingRegister && this.getNearbyBackroomDoor()) {
+      this.setPlayerInBackroom(!this.playerInBackroom);
+      return;
+    }
     if (this.carriedCrate) {
       if (this.carriedCrate.kind === "fixture") {
         const nearby = this.getNearbyFixture();
@@ -1933,6 +2226,7 @@ export class GameScene extends Phaser.Scene {
    */
   showFloatingText(x, y, text, color) {
     this.debugInfo?.record("game-message", { x, y, text, color });
+    const scale = this.getPopupScale(x, y);
     const label = this.add
       .text(x, y, text, {
         fontFamily: '"Courier New", monospace',
@@ -1943,11 +2237,12 @@ export class GameScene extends Phaser.Scene {
         strokeThickness: 4,
       })
       .setOrigin(0.5, 1)
-      .setDepth(9999);
+      .setDepth(9999)
+      .setScale(scale);
 
     this.tweens.add({
       targets: label,
-      y: y - 36,
+      y: y - 36 * scale,
       alpha: 0,
       duration: 900,
       delay: 900,
@@ -2008,11 +2303,12 @@ export class GameScene extends Phaser.Scene {
     }
     if (label.text !== text) label.setText(text);
     const bounds = crate.sprite.getBounds();
+    label.setScale(this.getPopupScale(bounds.centerX, bounds.centerY));
     let x = bounds.centerX;
-    const view = this.cameras?.main?.worldView;
-    if (view && label.width) {
+    const view = this.cameraAt(bounds.centerX, bounds.centerY)?.worldView;
+    if (view && label.displayWidth) {
       // Keep the whole label on screen near the room's edges.
-      const half = label.width / 2 + 2;
+      const half = label.displayWidth / 2 + 2;
       x = Math.min(Math.max(x, view.x + half), view.right - half);
     }
     label.setPosition(x, bounds.top - 2).setDepth(crate.sprite.depth + 1).setVisible(true);
@@ -2073,16 +2369,30 @@ export class GameScene extends Phaser.Scene {
     this.goBacksWindow.open();
   }
 
-  // Shown above the register whenever the player is in range of it.
+  // Shown above the register, or above a backroom door, whenever the player is in range of it.
   updateRegisterPrompt() {
+    const mode = this.controlMode.getMode();
+    const door = (mode === CONTROL_MODES.WALKING || mode === CONTROL_MODES.CARRYING) && this.getNearbyBackroomDoor();
+    if (door) {
+      const text = this.playerInBackroom ? "Press E to return to the shop" : "Press E to enter the Backroom";
+      if (this.registerPrompt.text !== text) this.registerPrompt.setText(text);
+      this.registerPrompt.setVisible(true).setScale(this.getPopupScale(door.x, door.y));
+      // Keep the hint fully inside whatever view the player is in (the backroom window is narrow).
+      const view = (this.playerInBackroom ? this.backroomCamera : this.cameras.main).worldView;
+      const half = this.registerPrompt.displayWidth / 2 + 4;
+      const x = view.width > half * 2 ? Phaser.Math.Clamp(door.x, view.x + half, view.right - half) : view.centerX;
+      // On the door itself: above it is off the map (and outside the backroom window).
+      this.registerPrompt.setPosition(x, door.y + TILE_SIZE / 2 - 4);
+      return;
+    }
     const target = this.interactables.findTarget("register", this.getInteractionOrigin());
-    const show = Boolean(target) && this.controlMode.getMode() === CONTROL_MODES.WALKING;
+    const show = Boolean(target) && mode === CONTROL_MODES.WALKING;
     this.registerPrompt.setVisible(show);
     if (!show) return;
     const text = target.hint;
     if (this.registerPrompt.text !== text) this.registerPrompt.setText(text);
     const bounds = target.target.sprite.getBounds();
-    this.registerPrompt.setPosition(bounds.centerX, bounds.top - 6);
+    this.registerPrompt.setScale(this.getPopupScale()).setPosition(bounds.centerX, bounds.top - 6);
   }
 
   /**
@@ -2432,7 +2742,7 @@ export class GameScene extends Phaser.Scene {
   // --- Frame update and shift flow ---
 
   update(time, delta) {
-    this.fixturePlacement.update(delta);
+    this.fixturePlacement.update();
     for (const crate of this.restockCrates) crate.updateThrow(delta);
     // Pausing a started shift freezes time entirely: customers and arrivals included.
     // Before the shift starts the clock also reads as paused, but the player moves freely.

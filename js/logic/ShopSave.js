@@ -6,7 +6,7 @@
 import { getFixtureType, getShelfDisplayGrid, getShelfSlotCapacity, isValidFixtureRotation, migrateFixtureEntry } from "./FixtureLayout.js";
 import employeeRoster from "../../data/Employees.json" with { type: "json" };
 import { EMPLOYEE_JOB_IDS } from "./EmployeeJobs.js";
-import { TILE_SIZE, ZONES, getTotalGridSize } from "./RoomLayout.js";
+import { BACKROOM_GRID_Y, TILE_SIZE, ZONES, getAuthoredGridSize } from "./RoomLayout.js";
 import { MIN_BASE_RATIO, MAX_BASE_RATIO, MIN_SUPPLY_RATIO, MAX_SUPPLY_RATIO } from "./Market.js";
 import { THROW_ACCELERATION_MS } from "./Crate.js";
 import { isValidLedgerData } from "./DayLedger.js";
@@ -29,6 +29,32 @@ function integer(value, minimum = Number.MIN_SAFE_INTEGER) {
   return Number.isSafeInteger(value) && value >= minimum;
 }
 
+// 2: the backroom became its own map (see BACKROOM_GRID_Y).
+export const SHOP_LAYOUT_VERSION = 2;
+
+// Saves from before then kept the Storeroom and Loading Pad as a 6-by-12 block at the shop's
+// top-left corner. Anything placed there moves down into the backroom, which has the same
+// shape at the same columns.
+function migrateDetachedBackroom(data) {
+  const inOldBackroom = (gx, gy) => gx >= 0 && gx < 6 && gy >= 0 && gy < 12;
+  const cellOf = (pixels) => Math.floor(pixels / TILE_SIZE);
+  return {
+    ...data,
+    layoutVersion: SHOP_LAYOUT_VERSION,
+    fixtures: data.fixtures.map((fixture) =>
+      isRecord(fixture) && inOldBackroom(fixture.gx, fixture.gy)
+        ? { ...fixture, gy: fixture.gy + BACKROOM_GRID_Y }
+        : fixture),
+    crates: Array.isArray(data.crates)
+      ? data.crates.map((crate) =>
+        isRecord(crate) && Number.isFinite(crate.x) && Number.isFinite(crate.y) &&
+          inOldBackroom(cellOf(crate.x), cellOf(crate.y))
+          ? { ...crate, y: crate.y + BACKROOM_GRID_Y * TILE_SIZE }
+          : crate)
+      : data.crates,
+  };
+}
+
 /**
  * Validate a shop save and return it, with pre-fixture-type entries migrated.
  * Throws on the first invalid field.
@@ -40,6 +66,8 @@ export function validateShopSave(data, database) {
   requireSave(isRecord(data), "missing shop state.");
   requireSave(Array.isArray(data.fixtures) && data.fixtures.length > 0, "missing fixture layout.");
   data = { ...data, fixtures: data.fixtures.map(migrateFixtureEntry) };
+  if (data.layoutVersion === undefined) data = migrateDetachedBackroom(data);
+  requireSave(data.layoutVersion === SHOP_LAYOUT_VERSION, "unknown shop layout version.");
   const items = database.getAllItems();
   const itemById = new Map(items.map((item) => [item.id, item]));
   const stockCapacity = (stock, capacity) => {
@@ -170,7 +198,7 @@ export function validateShopSave(data, database) {
     requireSave(kind === "item" && itemById.has(crate.itemId) &&
       integer(crate.quantity, 1), "invalid crate contents.");
   };
-  const { gridW, gridH } = getTotalGridSize();
+  const { gridW, gridH } = getAuthoredGridSize();
   requireSave(Array.isArray(data.crates), "missing crates.");
   for (const crate of data.crates) {
     validateCrateContents(crate);

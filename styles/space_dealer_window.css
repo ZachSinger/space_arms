@@ -1773,6 +1773,36 @@ button {
   pointer-events: none;
 }
 
+/* Frame around the backroom camera's view. The see-through middle shows the game
+   canvas; the huge shadow dims the shop behind it. Sits under the HUD and windows. */
+.backroom-window {
+  position: absolute;
+  z-index: 50;
+  box-sizing: content-box;
+  border: 3px solid var(--color-border-active, #38bdf8);
+  border-radius: 4px;
+  box-shadow: 0 0 0 100vmax rgba(2, 6, 14, 0.6), 0 0 18px rgba(56, 189, 248, 0.35);
+  pointer-events: none;
+}
+
+.backroom-window.hidden {
+  display: none;
+}
+
+.backroom-window-title {
+  box-sizing: border-box;
+  height: 26px;
+  line-height: 24px;
+  padding: 0 10px;
+  background: #0b1220;
+  border-bottom: 2px solid var(--color-border-subtle, #334155);
+  color: #e2e8f0;
+  font-family: "Courier New", monospace;
+  font-weight: bold;
+  letter-spacing: 2px;
+  font-size: 14px;
+}
+
 .dialogue-window {
   left: 50%;
   bottom: 5%;

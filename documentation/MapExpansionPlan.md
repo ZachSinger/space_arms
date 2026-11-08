@@ -1,23 +1,49 @@
 # Map & Store Expansion Plan
 
-## What changed from the original MVP design
+## Camera: player-controlled zoom
 
-`space_arms_dealer_bible.md` Step 57 originally said the shop floor would never
-exceed a single screen and the camera would never pan. That's been superseded:
-the player should be able to expand both the Sales Floor and the Storeroom, so
-the map now needs to be bigger than the viewport and the camera needs to scroll.
+A new game starts zoomed so the shop the player owns fills the area below the
+top status bar. PageUp zooms in (down to about 8 tile rows on screen) and
+PageDown zooms out, never further than the point where the whole owned shop
+fits. When the shop doesn't fit at the chosen zoom, the camera follows the
+player, kept within the owned rooms. Buying an expansion keeps the current zoom;
+the player can zoom out to see more if they want. Resizing the window keeps the
+same amount of shop visible. See `GameScene.refreshCamera()`.
+
+The whole shop, every expansion included, is limited to **39 by 21 tiles**, so
+it always fits on one 1920×1080 screen with tiles displayed at about 48 pixels
+when fully zoomed out. The current sales floor zones cover 34 by 13 tiles;
+additional expansion zones must be designed within that limit.
+
+## Backroom window
+
+The backroom (Storeroom, Loading Pad, and its upgrades) is a separate little map
+authored at row `BACKROOM_GRID_Y` (100), far below the shop, so the shop camera
+never sees it. A second camera draws it inside a framed "BACKROOM" window
+(`#backroom-window`, under the HUD and pop-up windows) while the player is
+inside; the shop stays visible, dimmed, and keeps running behind it.
+
+- The Sales Floor's backroom door (`getBackroomDoorCell()`) and the backroom's exit
+  (`getBackroomExitCell()`) are solid doors in north walls. Pressing E while
+  standing in front of one moves the player (and a carried crate) to the floor
+  just inside the other (`getBackroomLink()`). A prompt above the door says so.
+- Employees route through the same door pair (`GameScene.findPath()` adds a
+  `teleportTo` waypoint) and start each shift inside the backroom.
+- Fixture layout checks treat the two door fronts as connected (`links`).
+- The window fits the whole owned backroom; each backroom upgrade in
+  `BACKROOM_UPGRADE_ORDER` widens the room and its window. Debug key `B` buys
+  the next one.
+- Saves from before the move (no `layoutVersion`) have fixtures and crates from
+  the old top-left backroom moved down into the new one (`ShopSave.js`).
 
 ## Core idea: author the max size, don't resize at runtime
 
 Growing a Phaser tilemap at runtime is painful (re-tiling, re-colliding,
-re-pathing). Instead, the **entire maximum possible store footprint is
-authored up front** as a set of rectangular `Zones` (see
-`js/logic/RoomLayout.js`). A zone can be `locked`, meaning it renders **nothing
-at all** — no floor, no walls, it simply doesn't exist to the player yet — and
-is excluded from the camera's scrollable area. The instant it's "purchased,"
-unlocking it builds its tiles for the first time and tears down whatever
-boundary walls no longer need to exist. No zone is ever destroyed or resized;
-expansion only ever adds.
+re-pathing). The shop has a fixed 39-by-21 tile limit. Rectangular `Zones`
+in `js/logic/RoomLayout.js` describe the rooms that are built; additional
+expansion zones must fit within that limit. A `locked` zone renders **nothing
+at all** until unlocked. Unlocking it builds its tiles and tears down any
+boundary walls that no longer need to exist.
 
 This is the same pattern used by games like *Supermarket Simulator* and
 *Moonlighter*'s shop expansions: the building already physically exists,
@@ -28,43 +54,43 @@ exists" means "already authored in data," not "already rendered."
 
 - **`RoomLayout.js`** — the authored data: a flat list of zones, each with a
   grid position/size, a floor/wall tile key, and a `locked` flag. Currently
-  defines 3 zones in a single row: `storeroom` (unlocked) → `sales_floor`
-  (unlocked) → `expansion_a` (locked, placeholder `cost: 5000`).
+  defines `storeroom` and `loading_pad` (the backroom), two locked backroom
+  upgrades (`BACKROOM_UPGRADE_ORDER`), `sales_floor`, and five locked sales-floor
+  expansions (`EXPANSION_ORDER`), starting with `expansion_west` where the
+  backroom used to stand. The sales floor zones occupy a 34-by-13 area inside
+  the reserved 39-by-21 map.
 - **`TileRoom.js`** — the renderer. On construction, builds tiles only for
   zones that start unlocked. For each built zone, draws a floor tile per cell
   and a full wall tile on any perimeter cell whose edge faces the outer map
   boundary or a *locked* neighboring zone (a locked zone renders nothing, so
   its neighbor must seal that side). Wall cells get a static Arcade Physics
   body. `unlockZone(id)` builds that zone's tiles for the first time, then
-  tears down any now-unnecessary wall cells on its neighbors, returning new
-  camera bounds. `getCameraBounds()` computes the pixel bounding box of every
-  currently-unlocked zone.
-- **`GameScene.js`** — builds one `TileRoom`, calls `cameras.main.setBounds()`
-  from it, and implements a simple pointer-drag-to-pan (there's no player
-  avatar yet, so dragging is the stand-in for "looking around a store bigger
-  than the screen"). A debug-only `U` keybind calls
-  `room.unlockZone("expansion_a")` to prove the mechanism end-to-end.
+  tears down any now-unnecessary wall cells on its neighbors.
+- **`GameScene.js`** — builds one `TileRoom` and runs the zoomable camera
+  (see above). Each press of the debug-only `U` key unlocks the next expansion
+  in `EXPANSION_ORDER`.
 - Tile art comes from `img/Icons_Extracted/Tileset/` (64 floor/wall tiles,
   fixed 256×256 grid-sliced from `Sheet1_A.jpg`) and
   `img/Icons_Extracted/Tileset/Fixtures/` (104 shop fixtures, chroma-key
   extracted from `Sheet2_A.jpg`). `data/TilesetManifest.json` lists every tile
   key/path so `boot.js` can bulk-load them without a hand-maintained list.
+  The Sales Floor and its expansion use plain floor and wall tiles cut from the
+  licensed sci-fi tileset in `img/Tilesets/scifi/` (see `js/logic/ShopTiles.js`;
+  local-only, never committed). Debug keys `T` and `H` cycle through its floor and
+  wall styles in-game.
   **Known issue:** this batch has a visible dark outline baked into every
   tile, so adjacent floor/wall tiles don't actually tile seamlessly — see
   `img/prompts/resourceRequest_04_SeamlessTilesetFix.md` for the regeneration
   request to fix this.
 
-## Verified working (tested via a shrunk viewport, since the authored room is
-smaller than a normal desktop window)
+## Verified working
 
-- Floor/wall tiles render correctly, storeroom and sales floor sit side by
-  side with no wall between them (both unlocked).
-- Drag-to-pan moves the camera, correctly clamped to the bounds of whatever is
-  currently unlocked.
-- Pressing `U` extends the camera bounds and removes the dividing wall;
-  panning into the newly-unlocked zone reveals its floor with no visible seam,
-  and the *true* outer map boundary (the far edge of `expansion_a`) correctly
-  stays walled.
+- Floor/wall tiles render correctly; the backroom opens in its own window and
+  the player, crates, and employees cross through its doors.
+- Fully zoomed out, the whole owned shop fits the window at every size.
+- Pressing `U` removes the dividing wall and reveals the expansion's floor in
+  its reserved space; the *true* outer map boundary (the far edge of
+  `expansion_a`) correctly stays walled.
 
 ## What's deliberately NOT built yet (next steps, roughly in order)
 
@@ -99,8 +125,8 @@ smaller than a normal desktop window)
    Still not modeled: path recomputation if a *new* fixture gets placed while
    a customer is already mid-walk (static obstacles are snapshotted once at
    scene creation), and a real navmesh for non-grid-aligned movement.
-6. **Player avatar + camera follow -- DONE.** `js/logic/Player.js` + `GameScene` now have a
+6. **Player avatar -- DONE.** `js/logic/Player.js` + `GameScene` now have a
    WASD/arrow-controlled player (temporary tinted reuse of customer art, see TODO.md),
    colliding with walls/fixtures but not customers (bible Step 30/58, highest Z-index via
-   `setDepth(9999)`). The camera now calls `startFollow()` on it instead of the old
-   drag-to-pan placeholder, still clamped to the same unlocked zone bounds.
+   `setDepth(9999)`). The camera follows the player whenever the shop is bigger than
+      the screen at the chosen zoom.

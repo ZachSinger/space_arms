@@ -25,7 +25,7 @@ const overlaps = (a, b) =>
  * @returns {{ left: number, top: number, right: number, bottom: number }}
  */
 export function worldToClientRect(scene, x, y, width, height) {
-  const camera = scene.cameras.main;
+  const camera = scene.cameraAt?.(x + width / 2, y + height / 2) ?? scene.cameras.main;
   const canvas = scene.game.canvas.getBoundingClientRect();
   const scaleX = canvas.width / scene.scale.width;
   const scaleY = canvas.height / scene.scale.height;

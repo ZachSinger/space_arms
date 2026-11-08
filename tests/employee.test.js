@@ -313,3 +313,16 @@ test("the employee panel lists all three jobs in the saved priority order", () =
   assert.ok(html.indexOf("2. Run register") < html.indexOf("3. Stock shelves"));
   assert.match(html, /data-employee-priority-job="load_storage"/);
 });
+
+test("an employee reaching a door waypoint steps through to the other side", () => {
+  const { employee } = makeEmployee();
+  const resets = [];
+  employee.sprite.body.reset = (x, y) => { resets.push({ x, y }); employee.sprite.x = x; employee.sprite.y = y; };
+  employee.sprite.x = 20;
+  employee.sprite.y = 20;
+  employee.path = [{ x: 20, y: 20, teleportTo: { x: 900, y: 96 } }];
+  employee.destination = { x: 900, y: 300 };
+  employee.followPath();
+  assert.deepEqual(resets, [{ x: 900, y: 96 }]);
+  assert.equal(employee.path.length, 0);
+});

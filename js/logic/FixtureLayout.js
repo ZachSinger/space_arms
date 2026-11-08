@@ -8,7 +8,7 @@ import fixtureTypes from "../../data/Fixtures.json" with { type: "json" };
 import { roundMoney } from "./Money.js";
 import { getReachableGridCells } from "./Pathfinder.js";
 import {
-  TILE_SIZE, getTotalGridSize, zoneAt,
+  BACKROOM_GRID_Y, TILE_SIZE, getAuthoredGridSize, zoneAt,
 } from "./RoomLayout.js";
 
 // Shelf display slots per tile along each axis.
@@ -19,8 +19,8 @@ export const FIXTURE_TYPES = fixtureTypes;
 
 // A new game's layout: no shelves, so the player buys their first one from the Fixtures tab.
 export const STARTING_FIXTURES = [
-  { id: "storage_demo_01", type: "locker_single", gx: 1, gy: 1 },
-  { id: "storage_demo_02", type: "locker_single", gx: 2, gy: 1 },
+  { id: "storage_demo_01", type: "locker_single", gx: 1, gy: BACKROOM_GRID_Y + 1 },
+  { id: "storage_demo_02", type: "locker_single", gx: 2, gy: BACKROOM_GRID_Y + 1 },
   { id: "register", type: "register_basic", gx: 12, gy: 2 },
 ];
 
@@ -171,14 +171,15 @@ export function cellKey({ gx, gy }) {
 
 /**
  * Check a whole fixture layout: no overlaps, legal zones, every fixture reachable from the
- * entrance, no cut-off floor, and room for the register queue.
+ * entrance, no cut-off floor, and room for the register queue. `links` are pairs of cells
+ * joined by a door (the shop and the backroom), so walking reaches one from the other.
  * @param {object[]} placements
  * @param {object} options
  * @returns {{ valid: boolean, reason: string, blockedCells?: Set<string>, access?: Map, queueCells?: object[] }}
  */
 export function validateFixtureLayout(placements, {
   isWalkable, entrance, reservedCells = new Set(), doorwayCells = new Set(), occupiedRectangles = [],
-  gridSize = getTotalGridSize(), queueSize = 6, requireSalesFloor = true,
+  gridSize = getAuthoredGridSize(), queueSize = 6, requireSalesFloor = true, links = [],
 }) {
   const invalid = (reason) => ({ valid: false, reason });
   if (!Array.isArray(placements)) return invalid("The fixture layout is invalid.");
@@ -217,6 +218,12 @@ export function validateFixtureLayout(placements, {
   if (registers.length !== 1) return invalid("The shop needs exactly one register.");
   const canWalk = (gx, gy) => isWalkable(gx, gy) && !blockedCells.has(`${gx},${gy}`);
   const reachable = new Set(getReachableGridCells(entrance, canWalk).map(cellKey));
+  for (const [a, b] of links) {
+    for (const [from, to] of [[a, b], [b, a]]) {
+      if (!reachable.has(cellKey(from)) || reachable.has(cellKey(to)) || !canWalk(to.gx, to.gy)) continue;
+      for (const cell of getReachableGridCells(to, canWalk)) reachable.add(cellKey(cell));
+    }
+  }
   const access = new Map();
   for (const placement of placements) {
     const isRegister = placement === registers[0];

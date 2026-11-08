@@ -36,7 +36,8 @@ export class Employee {
     const character = pickRandomCustomerCharacter();
     this.facingTextures = character.facingTextures;
     this.currentFacing = "down";
-    this.sprite = scene.add.image(scene.backroomDoor.x, scene.backroomDoor.y, this.facingTextures.down)
+    const spawn = scene.backroomExitFront ?? scene.backroomDoor;
+    this.sprite = scene.add.image(spawn.x, spawn.y, this.facingTextures.down)
       .setDisplaySize(DISPLAY_WIDTH, DISPLAY_HEIGHT)
       .setTint(0x4ade80)
       .setDepth(3);
@@ -216,6 +217,8 @@ export class Employee {
       this.sprite.body.setVelocity(0, 0);
       if (this.path.length > 0) {
         this.path.shift();
+        // Reaching a door: step through to the floor just inside the other one.
+        if (waypoint.teleportTo) this.sprite.body.reset(waypoint.teleportTo.x, waypoint.teleportTo.y);
         return;
       }
       this.arriveAtDestination();

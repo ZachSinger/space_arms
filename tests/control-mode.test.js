@@ -56,7 +56,6 @@ test("each mode exposes only its declared actions", () => {
 
   assert.equal(controls.allows("move"), true);
   scene.fixturePlacement.active = true;
-  assert.equal(controls.allows("cameraPan"), true);
   assert.equal(controls.allows("rotateFixture"), true);
   assert.equal(controls.allows("crate"), false);
 

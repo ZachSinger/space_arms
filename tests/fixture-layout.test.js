@@ -3,7 +3,7 @@ import test from "node:test";
 import { STARTING_FIXTURES, fixtureAccessCells, fixtureCells, fixtureFacing, fixtureFootprint, cellKey, getFixtureType, migrateFixtureEntry, validateFixtureLayout, fixtureInteractionDistance } from "../js/logic/FixtureLayout.js";
 import { TileRoom } from "../js/logic/TileRoom.js";
 import { findGridPath } from "../js/logic/Pathfinder.js";
-import { getZone, getStoreDoorCell, TILE_SIZE } from "../js/logic/RoomLayout.js";
+import { getZone, getStoreDoorCell, getBackroomLink, TILE_SIZE } from "../js/logic/RoomLayout.js";
 
 test("fixture interaction covers its entire front but not its sides or back", () => {
   const shelf = { type: "shelf_universal", gx: 9, gy: 2 };
@@ -27,20 +27,15 @@ function createRoom() {
     physics: { add: { staticGroup: () => ({ add() {}, remove() {} }) } },
   };
   const room = new TileRoom(scene);
-  const storage = getZone("storeroom");
   const entrance = getStoreDoorCell();
   room.openDoorway(entrance.gx, entrance.gy, "door");
-  const door = { gx: storage.gridX + storage.gridW - 1, gy: storage.gridY + 3 };
-  for (let gy = storage.gridY; gy < storage.gridY + storage.gridH; gy += 1) {
-    room.addWall(door.gx, gy, "wall", true);
-  }
-  room.openDoorway(door.gx, door.gy, "door");
+  room.addBackroomDoors();
+  const link = getBackroomLink();
   const doorwayCells = new Set([
     cellKey(entrance),
     `${entrance.gx},${entrance.gy + 1}`,
-    `${door.gx - 1},${door.gy}`,
-    cellKey(door),
-    `${door.gx + 1},${door.gy}`,
+    cellKey(link.shop),
+    cellKey(link.backroom),
   ]);
   const reservedCells = new Set(doorwayCells);
   const pad = getZone("loading_pad");
@@ -49,7 +44,10 @@ function createRoom() {
       reservedCells.add(`${gx},${gy}`);
     }
   }
-  return { room, entrance, reservedCells, doorwayCells, isWalkable: (gx, gy) => room.isWalkable(gx, gy) };
+  return {
+    room, entrance, reservedCells, doorwayCells, links: [[link.shop, link.backroom]],
+    isWalkable: (gx, gy) => room.isWalkable(gx, gy),
+  };
 }
 
 // New games start with no shelves, so most layout tests add one clear of the front door.
@@ -156,6 +154,7 @@ test("fixtures can move without mutating the old layout", () => {
   assert.deepEqual(original[0], TEST_SHELF);
   assert.equal(validateFixtureLayout(moved("register", 12, 3), createRoom()).valid, true);
   assert.equal(validateFixtureLayout(moved("storage_demo_01", 6, 4), createRoom()).valid, true);
+  assert.equal(validateFixtureLayout(moved("storage_demo_01", 3, 104), createRoom()).valid, true);
 });
 
 test("placement rejects walls, locked rooms, overlaps, blocked fronts, and obstructed register backs", () => {
@@ -173,10 +172,11 @@ test("placement rejects walls, locked rooms, overlaps, blocked fronts, and obstr
 
 test("placement preserves doors, both sides of the backroom entrance, the loading pad, and player or crate space", () => {
   const options = createRoom();
-  assert.equal(validateFixtureLayout(moved("storage_demo_01", 2, 9), options).valid, false);
-  for (const gx of [4, 5, 6]) {
-    const blockedEntrance = validateFixtureLayout(moved("storage_demo_01", gx, 3), options);
-    assert.equal(blockedEntrance.valid, false, `backroom entrance at ${gx},3`);
+  assert.equal(validateFixtureLayout(moved("storage_demo_01", 2, 109), options).valid, false);
+  const link = getBackroomLink();
+  for (const { gx, gy } of [link.shop, link.backroom]) {
+    const blockedEntrance = validateFixtureLayout(moved("storage_demo_01", gx, gy), options);
+    assert.equal(blockedEntrance.valid, false, `backroom entrance at ${gx},${gy}`);
     assert.match(blockedEntrance.reason, /entrances/);
   }
   options.occupiedRectangles = [{ left: 720, right: 760, top: 330, bottom: 370 }];
@@ -216,7 +216,7 @@ test("shelves can be placed near the front door if they preserve the route to th
 
 test("otherwise valid layouts cannot leave an isolated floor pocket", () => {
   const options = createRoom();
-  for (const [gx, gy] of [[2, 6], [1, 5], [1, 7]]) options.room.addWall(gx, gy, "wall", true);
+  for (const [gx, gy] of [[2, 106], [1, 105], [1, 107]]) options.room.addWall(gx, gy, "wall", true);
   const result = validateFixtureLayout(initialLayout(), options);
   assert.equal(result.valid, false);
   assert.match(result.reason, /cuts off/);
@@ -226,7 +226,7 @@ test("expansion unlock preserves authored walls and does not unlock a new game's
   const { room } = createRoom();
   room.unlockZone("expansion_a");
   assert.equal(room.isWalkable(5, 2), false);
-  assert.equal(room.isWalkable(5, 3), true);
+  assert.equal(room.isWalkable(6, 3), true);
   assert.equal(room.isWalkable(17, 2), true);
   assert.equal(new TileRoom(room.scene).isWalkable(17, 2), false);
   assert.equal(getZone("expansion_a").locked, true);
@@ -355,15 +355,27 @@ test("invalid rotations are rejected", () => {
 });
 
 test("registers and shelves stay on the sales floor; storage can go anywhere", () => {
-  for (const [id, gx, gy] of [["register", 1, 4], ["fixture_demo_01", 1, 4]]) {
+  for (const [id, gx, gy] of [["register", 1, 104], ["fixture_demo_01", 1, 104]]) {
     const result = validateFixtureLayout(moved(id, gx, gy), createRoom());
     assert.equal(result.valid, false, `${id} at ${gx},${gy}`);
     assert.match(result.reason, /sales floor/);
   }
-  assert.equal(validateFixtureLayout(moved("storage_demo_01", 1, 4), createRoom()).valid, true);
+  assert.equal(validateFixtureLayout(moved("storage_demo_01", 1, 104), createRoom()).valid, true);
   assert.equal(validateFixtureLayout(moved("storage_demo_01", 6, 4), createRoom()).valid, true);
 
   // Older saves with a register in the back still load so it can be moved out.
-  const legacy = validateFixtureLayout(moved("register", 1, 4), { ...createRoom(), requireSalesFloor: false });
+  const legacy = validateFixtureLayout(moved("register", 1, 104), { ...createRoom(), requireSalesFloor: false });
   assert.equal(legacy.valid, true, legacy.reason);
+});
+
+test("the backroom only connects to the shop through its door pair", () => {
+  const options = createRoom();
+  const link = getBackroomLink();
+  const walkable = (gx, gy) => options.room.isWalkable(gx, gy);
+  assert.equal(findGridPath(options.entrance, link.backroom, walkable), null);
+  assert.ok(findGridPath(options.entrance, link.shop, walkable));
+  assert.ok(findGridPath(link.backroom, { gx: 2, gy: 109 }, walkable));
+  const unlinked = validateFixtureLayout(initialLayout(), { ...options, links: [] });
+  assert.equal(unlinked.valid, false);
+  assert.match(unlinked.reason, /LOCKER accessible/);
 });

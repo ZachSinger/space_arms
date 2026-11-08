@@ -134,7 +134,6 @@ export class FixturePlacement {
     }
     this.scene.player.inputEnabled = false;
     this.scene.player.sprite.body.stop();
-    this.scene.cameras.main.stopFollow();
     this.scene.restockCrates.forEach((crate) => crate.setPaused(true));
     const x = original?.x ?? fixtureCrate.sprite.x;
     const y = original?.y ?? fixtureCrate.sprite.y;
@@ -154,7 +153,7 @@ export class FixturePlacement {
    * @param {Phaser.Input.Pointer} pointer
    */
   updatePreview(pointer) {
-    const world = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const world = this.scene.screenToWorld?.(pointer.x, pointer.y) ?? this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
     const { w, h } = fixtureFootprint({ type: this.spec.id, rotation: this.rotation });
     this.placement = {
       id: this.original?.id ?? this.scene.fixtures.nextId(this.spec.id),
@@ -186,20 +185,15 @@ export class FixturePlacement {
   }
 
   /**
-   * Pan the camera with movement keys while placing.
-   * @param {number} delta - ms since last frame
+   * Keep the preview under the pointer each frame. The whole map is always on screen,
+   * so the camera never pans.
    */
-  update(delta) {
-    if (!this.active || !this.scene.controlMode.allows("cameraPan")) return;
-    const camera = this.scene.cameras.main;
-    const { cursors, wasd } = this.scene.player;
-    const amount = 400 * delta / 1000; // 400 px/s pan speed
-    camera.scrollX += amount * (Number(cursors.right.isDown || wasd.right.isDown) - Number(cursors.left.isDown || wasd.left.isDown));
-    camera.scrollY += amount * (Number(cursors.down.isDown || wasd.down.isDown) - Number(cursors.up.isDown || wasd.up.isDown));
+  update() {
+    if (!this.active) return;
     this.updatePreview(this.scene.input.activePointer);
   }
 
-  // Leave placement mode and restore the player, camera, and crates. Doesn't close the
+  // Leave placement mode and restore the player and crates. Doesn't close the
   // window (it calls this from onClose); use cancel() for that.
   finish() {
     if (!this.active) return;
@@ -213,7 +207,6 @@ export class FixturePlacement {
     this.scene.player.inputEnabled = true;
     // Keys held while placing would otherwise keep the player walking.
     this.scene.input.keyboard.resetKeys();
-    this.scene.cameras.main.startFollow(this.scene.player.sprite, true, 0.1, 0.1);
     this.scene.restockCrates.forEach((crate) => crate.setPaused(this.scene.crateMotionPaused));
     this.original = null;
     this.fixtureCrate = null;

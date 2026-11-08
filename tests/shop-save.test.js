@@ -5,7 +5,7 @@ import { SaveManager, createSaveStorage, SAVE_STORAGE_KEY } from "../SaveManager
 import { DatabaseManager } from "../js/logic/DatabaseManager.js";
 import { STARTING_FIXTURES, getFixtureType } from "../js/logic/FixtureLayout.js";
 import { Market } from "../js/logic/Market.js";
-import { validateShopSave } from "../js/logic/ShopSave.js";
+import { SHOP_LAYOUT_VERSION, validateShopSave } from "../js/logic/ShopSave.js";
 
 const database = new DatabaseManager();
 database.loadItemsJSON(JSON.parse(await readFile(new URL("../data/Items.json", import.meta.url), "utf8")));
@@ -33,8 +33,9 @@ function snapshot() {
       ...(getFixtureType(type).kind === "storage" ? { stock: [{ itemId: "srv_01", quantity: 5 }] } : {}),
     })),
     unlockedZones: ["storeroom", "sales_floor", "loading_pad"],
-    crates: [{ itemId: "wpn_rif_01", quantity: 5, x: 192, y: 640, velocityX: 120, velocityY: 0 }],
+    crates: [{ itemId: "wpn_rif_01", quantity: 5, x: 192, y: 7040, velocityX: 120, velocityY: 0 }],
     carriedCrate: { itemId: "srv_01", quantity: 2 },
+    layoutVersion: SHOP_LAYOUT_VERSION,
   };
 }
 
@@ -214,7 +215,7 @@ test("saves from before fixture types existed load with types filled in", () => 
 test("older saves keep the third starting locker and its contents", () => {
   const data = snapshot();
   const thirdLocker = {
-    id: "storage_demo_03", gx: 3, gy: 1, stock: [{ itemId: "srv_01", quantity: 5 }],
+    id: "storage_demo_03", gx: 3, gy: 101, stock: [{ itemId: "srv_01", quantity: 5 }],
   };
   data.fixtures.push(thirdLocker);
   const restored = validateShopSave(data, database);
@@ -222,6 +223,20 @@ test("older saves keep the third starting locker and its contents", () => {
   assert.deepEqual(restored.fixtures.find((fixture) => fixture.id === thirdLocker.id), {
     ...thirdLocker, type: "locker_single",
   });
+});
+
+test("saves from before the backroom window move backroom fixtures and crates into it", () => {
+  const legacy = snapshot();
+  delete legacy.layoutVersion;
+  for (const entry of legacy.fixtures) if (entry.gy >= 100) entry.gy -= 100;
+  legacy.crates[0].y = 640;
+  const sales = legacy.fixtures[0];
+  const migrated = validateShopSave(legacy, database);
+  assert.equal(migrated.layoutVersion, SHOP_LAYOUT_VERSION);
+  assert.deepEqual(migrated.fixtures, snapshot().fixtures);
+  assert.deepEqual(migrated.fixtures[0], sales, "sales floor fixtures stay put");
+  assert.equal(migrated.crates[0].y, 7040);
+  assert.equal(legacy.crates[0].y, 640, "the save being loaded is not changed");
 });
 
 test("fixture rotation is saved, and older saves without it still load", () => {

@@ -395,6 +395,8 @@ test("a carried crate shows what is inside and, for items, the locker spaces it 
     setPosition(x, y) { this.x = x; this.y = y; return this; },
     setDepth(depth) { this.depth = depth; return this; },
     setVisible(visible) { this.visible = visible; return this; },
+    setScale(scale) { this.scale = scale; return this; },
+    get displayWidth() { return (this.width ?? 0) * (this.scale ?? 1); },
   };
   h.scene.carriedCrateLabel = label;
   const sprite = { depth: 10000, getBounds: () => ({ centerX: 100, top: 52 }) };
@@ -417,6 +419,12 @@ test("a carried crate shows what is inside and, for items, the locker spaces it 
   label.width = 300;
   h.scene.refreshCarriedCrateLabel();
   assert.equal(label.x, 152);
+
+  // Zoomed in 2x, the label is drawn at half size so it looks the same on screen.
+  h.scene.cameras.main.zoom = 2;
+  h.scene.refreshCarriedCrateLabel();
+  assert.equal(label.scale, 0.5);
+  assert.equal(label.x, 100); // half as wide, so it fits without being nudged right
   delete h.scene.cameras;
 
   h.scene.carriedCrate = { kind: "fixture", typeId: "shelf_universal", quantity: 1, sprite };

@@ -4,7 +4,9 @@
 // Renders the authored RoomLayout as floor/wall tiles and handles store expansion.
 // Locked zones render nothing until unlocked; unlocking builds their tiles and tears
 // down boundary walls that are no longer needed.
-import { TILE_SIZE, ZONES, zoneAt } from "./RoomLayout.js";
+import {
+  BACKROOM_DOOR_TILE, TILE_SIZE, ZONES, getBackroomDoorCell, getBackroomExitCell, zoneAt,
+} from "./RoomLayout.js";
 
 export class TileRoom {
   constructor(scene) {
@@ -89,14 +91,14 @@ export class TileRoom {
   }
 
   /**
-   * Place a solid wall over a cell. Also used to divide two unlocked zones (e.g. the
-   * Storeroom from the Sales Floor), which needsWallAt() never seals on its own.
+   * Place a solid wall over a cell.
    * @param {number} gx
    * @param {number} gy
    * @param {string} wallTileKey
    * @param {boolean} [permanent] - survives the wall teardown in unlockZone()
+   * @param {boolean} [door] - solid door art, kept when the wall style changes
    */
-  addWall(gx, gy, wallTileKey, permanent = false) {
+  addWall(gx, gy, wallTileKey, permanent = false, door = false) {
     const previous = this.wallCells.get(`${gx},${gy}`);
     if (previous) this.wallGroup.remove(previous.image, true, true);
     const image = this.scene.add
@@ -104,7 +106,42 @@ export class TileRoom {
       .setDisplaySize(TILE_SIZE, TILE_SIZE)
       .setDepth(1);
     this.wallGroup.add(image);
-    this.wallCells.set(`${gx},${gy}`, { image, permanent });
+    this.wallCells.set(`${gx},${gy}`, { image, permanent, door });
+  }
+
+  // The backroom door and exit stay solid, with door art: walking into one moves the player
+  // through to the other (see GameScene.updateBackroomDoors).
+  addBackroomDoors() {
+    for (const cell of [getBackroomDoorCell(), getBackroomExitCell()]) {
+      this.addWall(cell.gx, cell.gy, BACKROOM_DOOR_TILE, true, true);
+    }
+  }
+
+  /**
+   * Swap the floor or wall art of every customer-facing zone, built or not yet unlocked.
+   * Only changes appearance; walls and walkable cells stay exactly where they are.
+   * @param {{ floorTile?: string, wallTile?: string }} tiles
+   */
+  setSalesFloorTiles({ floorTile, wallTile }) {
+    for (const zone of this.zones) {
+      if (!zone.salesFloor) continue;
+      if (floorTile) zone.floorTile = floorTile;
+      if (wallTile) zone.wallTile = wallTile;
+    }
+    const isSales = (key) => {
+      const [gx, gy] = key.split(",").map(Number);
+      return zoneAt(gx, gy, this.zones)?.salesFloor;
+    };
+    if (floorTile) {
+      for (const [key, image] of this.floorCells) {
+        if (isSales(key)) image.setTexture(floorTile).setDisplaySize(TILE_SIZE, TILE_SIZE);
+      }
+    }
+    if (wallTile) {
+      for (const [key, { image, door }] of this.wallCells) {
+        if (!door && isSales(key)) image.setTexture(wallTile).setDisplaySize(TILE_SIZE, TILE_SIZE);
+      }
+    }
   }
 
   openDoorway(gx, gy, doorTileKey) {
@@ -145,13 +182,15 @@ export class TileRoom {
     return this.getCameraBounds();
   }
 
-  // Pixel bounding box across every currently-unlocked zone, for camera.setBounds().
-  // Includes one empty tile row above the map so the top wall isn't flush with the screen
-  // edge. No zone exists there, so it can never be built on or expanded into.
-  getCameraBounds() {
-    const unlocked = this.zones.filter((zone) => !zone.locked);
+  // Pixel bounding box across every unlocked zone of one area: "shop" (the sales floor the
+  // main camera shows) or "backroom" (shown in its own window). The shop's box includes one
+  // empty tile row above the map so the top wall isn't flush with the screen edge. No zone
+  // exists there, so it can never be built on or expanded into.
+  getCameraBounds(area = "shop") {
+    const inBackroom = area === "backroom";
+    const unlocked = this.zones.filter((zone) => !zone.locked && Boolean(zone.backroom) === inBackroom);
     const minX = Math.min(...unlocked.map((z) => z.gridX)) * TILE_SIZE;
-    const minY = Math.min(...unlocked.map((z) => z.gridY)) * TILE_SIZE - TILE_SIZE;
+    const minY = Math.min(...unlocked.map((z) => z.gridY)) * TILE_SIZE - (inBackroom ? 0 : TILE_SIZE);
     const maxX = Math.max(...unlocked.map((z) => z.gridX + z.gridW)) * TILE_SIZE;
     const maxY = Math.max(...unlocked.map((z) => z.gridY + z.gridH)) * TILE_SIZE;
     return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
