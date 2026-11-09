@@ -7,6 +7,7 @@
 import { WindowManager } from "../logic/WindowManager.js";
 import { ManagerTablet } from "../logic/ManagerTablet.js";
 import { PlayerState } from "../logic/PlayerState.js";
+import { getShopLevelRequirement, MAX_IMPLEMENTED_SHOP_REWARD_LEVEL } from "../logic/ShopProgression.js";
 import { HUDController } from "../logic/HUDController.js";
 import { DebugInfo } from "../logic/DebugInfo.js";
 import { EventBus, GAME_EVENTS } from "../logic/EventBus.js";
@@ -21,7 +22,7 @@ import {
   addDiscountBonusItem, BARGAIN_PRICE_RATIO, createCustomerBuyList,
 } from "../logic/CustomerBuyLists.js";
 import { formatMoney, isMoney, sumMoney } from "../logic/Money.js";
-import { addTraitBonusItems } from "../logic/CustomerTraits.js";
+import { addTraitBonusItems, CUSTOMER_TRAITS } from "../logic/CustomerTraits.js";
 import {
   createCustomerArrivalSchedule,
   growCustomerArrivalSchedule,
@@ -59,6 +60,12 @@ import employeeRoster from "../../data/Employees.json" with { type: "json" };
 // Most customers inside the store at once. When full, the next arrival is lost for good,
 // so a backed-up dealer really does lose that sale.
 const MAX_CUSTOMERS_IN_STORE = 6;
+
+function reputationPenaltyText(penalty, factionId) {
+  const faction = factionId ? CUSTOMER_TRAITS[factionId] : null;
+  if (factionId && !faction?.group) throw new Error(`Unknown customer faction: ${factionId}.`);
+  return `-${penalty} store reputation${faction ? `\n-${penalty} ${faction.name} reputation` : ""}\nat shift end`;
+}
 
 // Screen space kept clear when fitting the map: the top status bar (36px + 2px border)
 // and a small margin around the map.
@@ -173,6 +180,8 @@ export class GameScene extends Phaser.Scene {
       this.gameMessageTimeout = null;
       this.gameMessageElement.classList.add("hidden");
     });
+    // Sync after Arcade Physics finalizes the player's position for this frame.
+    this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.syncCarriedCrate, this);
     this.playerState = new PlayerState(this.eventBus);
     this.recalculateActiveFactions();
     this.market = new Market(database.getAllItems());
@@ -382,7 +391,7 @@ export class GameScene extends Phaser.Scene {
       this.showFloatingText(
         customer.sprite.x,
         customer.sprite.y - 40,
-        `Store rep -${penalty}${customer.factionId ? ` / Faction rep -${penalty}` : ""}`,
+        `Customer hit!\n${reputationPenaltyText(penalty, customer.factionId)}`,
         "#ef4444",
       );
       this.debugInfo?.recordCustomer("customer-hit-by-crate", customer);
@@ -393,7 +402,7 @@ export class GameScene extends Phaser.Scene {
       this.showFloatingText(
         customer.sprite.x,
         customer.sprite.y - 40,
-        `Left angry! Store rep -${penalty}${customer.factionId ? ` / Faction rep -${penalty}` : ""}`,
+        `Left angry!\n${reputationPenaltyText(penalty, customer.factionId)}`,
         "#ef4444",
       );
       this.handleAngryLeave(customer, cart);
@@ -404,7 +413,7 @@ export class GameScene extends Phaser.Scene {
       this.showFloatingText(
         customer.sprite.x,
         customer.sprite.y - 40,
-        `Out of stock! Store rep -${penalty}${customer.factionId ? ` / Faction rep -${penalty}` : ""}`,
+        `Out of stock!\n${reputationPenaltyText(penalty, customer.factionId)}`,
         "#ef4444",
       );
       this.debugInfo?.record("customer-missing-primary", {
@@ -721,6 +730,10 @@ export class GameScene extends Phaser.Scene {
     this.debugInfo?.record(inBackroom ? "entered-backroom" : "left-backroom", {});
   }
 
+  syncCarriedCrate() {
+    this.carriedCrate?.followCarrier(this.player.sprite);
+  }
+
   registerInteractableSources() {
     this.interactables.registerProvider("stock-holders", () =>
       this.fixtures.stockHolders().map((fixture) => ({
@@ -900,6 +913,13 @@ export class GameScene extends Phaser.Scene {
       return false;
     }
     if (this.playerState.hiredEmployees.includes(employeeId)) return false;
+    if (this.playerState.shopLevel < employee.requiredShopLevel) {
+      const reputation = getShopLevelRequirement(employee.requiredShopLevel);
+      this.showShopMessage(
+        `To hire ${employee.name}, reach Shop Level ${employee.requiredShopLevel}: finish a shift with at least ${reputation} store reputation.`,
+      );
+      return false;
+    }
     if (!this.playerState.hireEmployee(employeeId, employee.hireCost)) {
       this.showShopMessage(`Not enough credits. ${employee.hireCost} credits are required.`);
       return false;
@@ -2761,10 +2781,6 @@ export class GameScene extends Phaser.Scene {
       this.updateCratePushing(delta);
       this.customers.forEach((customer) => customer.update(delta));
       this.employees.forEach((employee) => employee.update(delta));
-
-      if (this.carriedCrate) {
-        this.carriedCrate.followCarrier(this.player.sprite);
-      }
     }
 
     this.shiftClock.update(delta);
@@ -2791,12 +2807,7 @@ export class GameScene extends Phaser.Scene {
   // The shift ends quietly once the doors are locked and the last customer is gone. The
   // day stays open (prices, calendar) until the player clicks End Day in Finances.
   endShift() {
-    this.eventBus.emit(GAME_EVENTS.SHIFT_ENDED, {
-      served: this.customersServedThisShift,
-      turnedAway: this.playerState.customersTurnedAway,
-      reputation: this.playerState.globalReputation,
-      factionReputation: this.playerState.factionReputation,
-    });
+    const previousLevel = this.playerState.shopLevel;
     this.clearEmployees();
     this.shiftEnded = true;
     this.shiftClock.started = false;
@@ -2806,7 +2817,35 @@ export class GameScene extends Phaser.Scene {
       customersServed: this.customersServedThisShift,
       customersTurnedAway: this.playerState.customersTurnedAway,
     });
-    this.showGameMessage("Shift over. Click END DAY at the top to see today's receipt.", "#10b981");
+    this.eventBus.emit(GAME_EVENTS.SHIFT_ENDED, {
+      served: this.customersServedThisShift,
+      turnedAway: this.playerState.customersTurnedAway,
+      reputation: this.playerState.globalReputation,
+      factionReputation: this.playerState.factionReputation,
+    });
+    let levelMessage = "";
+    if (this.playerState.shopLevel > previousLevel) {
+      const newContracts = database.getAllLicenses().filter((license) =>
+        license.requiredShopLevel > previousLevel &&
+        license.requiredShopLevel <= this.playerState.shopLevel &&
+        !this.playerState.activeLicenses.has(license.id) &&
+        license.isUnlocked(this.playerState));
+      const newStaff = employeeRoster.filter((employee) =>
+        employee.requiredShopLevel > previousLevel &&
+        employee.requiredShopLevel <= this.playerState.shopLevel &&
+        !this.playerState.hiredEmployees.includes(employee.id));
+      levelMessage = ` Shop Level ${this.playerState.shopLevel} reached!`;
+      if (newContracts.length) {
+        levelMessage += ` Contracts unlocked: ${newContracts.map((license) => license.name).join(", ")} (Contracts tab).`;
+      }
+      if (newStaff.length) {
+        levelMessage += ` Staff unlocked: ${newStaff.map((employee) => employee.name).join(", ")} (Employee tab).`;
+      }
+      if (this.playerState.shopLevel > MAX_IMPLEMENTED_SHOP_REWARD_LEVEL) {
+        levelMessage += ` Rewards for Shop Level ${MAX_IMPLEMENTED_SHOP_REWARD_LEVEL + 1} and above are not in the game yet.`;
+      }
+    }
+    this.showGameMessage(`Shift over.${levelMessage} Click END DAY at the top to see today's receipt.`, "#10b981");
   }
 
   /**
@@ -2854,9 +2893,11 @@ export class GameScene extends Phaser.Scene {
   getFinancesView() {
     const state = this.playerState;
     const last = state.lastDayReceipt;
+    const shiftRunning = this.shiftClock.started && !this.shiftEnded;
     return {
       day: this.market.day,
-      shiftRunning: this.shiftClock.started && !this.shiftEnded,
+      shiftRunning,
+      pendingReputationChange: shiftRunning ? state.pendingReputation.global : null,
       awaitingEndDay: state.awaitingEndDay,
       canEndDay: this.canEndDay(),
       today: summarizeReceipt(state.dayLedger.serialize(), state.credits, state.globalReputation),

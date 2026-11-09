@@ -21,13 +21,16 @@ export class ContractRenderer {
       html += `<div style="color: var(--color-text-muted); text-align: center; padding: 20px;">No contracts available in database.</div>`;
     } else {
       licenses.forEach((license) => {
+        const isShopLevelMet =
+          playerState.shopLevel >= license.requiredShopLevel;
         const isGlobalRepMet =
+          license.reqReputation === null ||
           playerState.globalReputation >= license.reqReputation;
         const isFactionRepMet =
           !license.reqFaction ||
           playerState.factionReputation[license.reqFaction] >=
             license.reqFactionRep;
-        const isUnlocked = isGlobalRepMet && isFactionRepMet;
+        const isUnlocked = license.isUnlocked(playerState);
         const canAfford = license.canAfford(playerState);
         const isOwned =
           playerState.activeLicenses &&
@@ -54,6 +57,13 @@ export class ContractRenderer {
         const globalRepColor = isGlobalRepMet
           ? "var(--color-text-muted)"
           : "#ef4444";
+        const levelColor = isShopLevelMet ? "var(--color-text-muted)" : "#ef4444";
+        const levelHtml = license.requiredShopLevel > 1
+          ? `<span style="color: ${levelColor};">Requires Shop Level ${license.requiredShopLevel}</span>`
+          : "";
+        const globalHtml = license.reqReputation !== null
+          ? `<span style="color: ${globalRepColor};">Store reputation: ${license.reqReputation}</span>`
+          : "";
         let factionHtml = "";
 
         if (license.reqFaction) {
@@ -63,8 +73,11 @@ export class ContractRenderer {
           const factionName =
             license.reqFaction.charAt(0).toUpperCase() +
             license.reqFaction.slice(1);
-          factionHtml = ` | <span style="color: ${factionRepColor};">Req ${factionName}: ${license.reqFactionRep}</span>`;
+          factionHtml = `<span style="color: ${factionRepColor};">${factionName} reputation: ${license.reqFactionRep}</span>`;
         }
+        const requirementsHtml = isOwned
+          ? "Purchased; stays available."
+          : [levelHtml, globalHtml, factionHtml].filter(Boolean).join(" | ");
 
         html += `
                     <div class="item-card">
@@ -76,7 +89,7 @@ export class ContractRenderer {
                             <div class="item-card-flavor">"${license.description}"</div>
                             ${fixtureUnlocksHTML}
                             <div style="display: flex; justify-content: space-between; font-size: var(--font-size-11); margin-top: 6px; border-top: 1px dashed var(--color-border-subtle); padding-top: 6px;">
-                                <span><span style="color: ${globalRepColor};">Req Rep: ${license.reqReputation} Pts</span>${factionHtml}</span>
+                                <span>${requirementsHtml}</span>
                                 <span style="color: var(--color-text-main); font-weight: bold;">Cost: ${license.baseCost.toLocaleString()} credits</span>
                             </div>
                             <div style="margin-top: 8px;">

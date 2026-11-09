@@ -252,6 +252,7 @@ export class ManagerTablet {
         employeeJobPriorities: this.playerState.employeeJobPriorities,
         credits: this.playerState.credits,
         canHire: this.scene.canHireEmployees(),
+        shopLevel: this.playerState.shopLevel,
       });
     }
     if (tabId === "contracts") {
@@ -440,9 +441,12 @@ export class ManagerTablet {
 
   handleSignContract(licenseId) {
     const license = database.getLicense(licenseId);
-    if (!license) return;
+    if (!license) throw new Error(`Unknown supplier license: ${licenseId}.`);
     if (this.playerState.activeLicenses.has(licenseId)) return; // already owned
-    if (!license.isUnlocked(this.playerState)) return; // reputation requirement not met
+    if (!license.isUnlocked(this.playerState)) {
+      this.scene.showShopMessage("This contract is locked. Check its requirements in the Contracts tab.");
+      return;
+    }
     if (!license.canAfford(this.playerState)) return; // can't afford it
 
     this.playerState.spendCredits(license.baseCost, { category: "licenses", label: license.name });

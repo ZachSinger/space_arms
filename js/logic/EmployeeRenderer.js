@@ -4,6 +4,7 @@
 // The Employee tab's hiring roster and current staff list.
 import employeeRoster from "../../data/Employees.json" with { type: "json" };
 import { EMPLOYEE_JOBS } from "./EmployeeJobs.js";
+import { getShopLevelRequirement } from "./ShopProgression.js";
 
 export class EmployeeRenderer {
   static generateHTML({
@@ -12,6 +13,7 @@ export class EmployeeRenderer {
     employeeJobPriorities,
     credits,
     canHire,
+    shopLevel,
   }) {
     const hired = new Set(hiredEmployeeIds);
     const active = new Set(activeEmployeeIds);
@@ -19,12 +21,19 @@ export class EmployeeRenderer {
       .filter((employee) => !hired.has(employee.id))
       .map((employee) => {
         const affordable = credits >= employee.hireCost;
-        const disabled = !canHire || !affordable;
-        const reason = !canHire
-          ? "Hire between shifts."
-          : !affordable
-            ? `You need ${employee.hireCost - credits} more credits.`
-            : "Can run the register, stock shelves, and load delivered crates into storage.";
+        const requiredReputation = getShopLevelRequirement(employee.requiredShopLevel);
+        const unlocked = shopLevel >= employee.requiredShopLevel;
+        const disabled = !unlocked || !canHire || !affordable;
+        const buttonLabel = unlocked
+          ? `Hire ${employee.name} for ${employee.hireCost} credits`
+          : `${employee.name} is locked until Shop Level ${employee.requiredShopLevel}`;
+        const reason = !unlocked
+          ? `Reach Shop Level ${employee.requiredShopLevel} by having at least ${requiredReputation} store reputation at the end of a shift.`
+          : !canHire
+            ? "Hire between shifts."
+            : !affordable
+              ? `You need ${employee.hireCost - credits} more credits.`
+              : "Can run the register, stock shelves, and load delivered crates into storage.";
         return `
           <div class="fixture-stock-row">
             <div>
@@ -34,8 +43,8 @@ export class EmployeeRenderer {
                 Wages: ${employee.wagePerShift} credits per shift.</div>
             </div>
             <button type="button" class="action-btn" data-hire-employee-id="${employee.id}"
-              ${disabled ? "disabled" : ""} aria-label="Hire ${employee.name} for ${employee.hireCost} credits">
-              HIRE
+              ${disabled ? "disabled" : ""} aria-label="${buttonLabel}">
+              ${unlocked ? "HIRE" : "LOCKED"}
             </button>
           </div>
         `;
@@ -85,7 +94,7 @@ export class EmployeeRenderer {
         Each employee can run the register, stock shelves, or move delivered crates into
         storage. Set their job order below. Wages are paid when a shift starts.
       </div>
-      <div class="fixture-section-divider">AVAILABLE STAFF</div>
+      <div class="fixture-section-divider">STAFF TO HIRE</div>
       ${availableRows || `<div class="fixture-empty-hint">No other staff are available to hire.</div>`}
       <div class="fixture-section-divider">YOUR STAFF</div>
       ${hiredRows || `<div class="fixture-empty-hint">You have not hired any staff.</div>`}

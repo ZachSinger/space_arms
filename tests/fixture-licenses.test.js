@@ -3,12 +3,66 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { FIXTURE_TYPES } from "../js/logic/FixtureLayout.js";
 import { LayoutRenderer } from "../js/logic/LayoutRenderer.js";
+import { SupplierLicense } from "../js/logic/Licenses.js";
+import { ContractRenderer } from "../js/logic/ContractRenderer.js";
 
 const licenses = JSON.parse(await readFile(
   new URL("../data/Licenses.json", import.meta.url),
   "utf8",
 ));
 const licenseById = new Map(licenses.map((license) => [license.id, license]));
+
+test("the first level rewards unlock a supply contract at 2 and a fixture contract at 3", () => {
+  const supply = new SupplierLicense(licenseById.get("lic_start_apparel"));
+  const fixture = new SupplierLicense(licenseById.get("lic_fixture_expanded"));
+  const state = {
+    shopLevel: 1,
+    globalReputation: 1000,
+    factionReputation: { scavengers: 0, mercenaries: 0, explorers: 0 },
+    credits: 1500,
+    activeLicenses: new Set(),
+  };
+  assert.equal(supply.isUnlocked(state), false);
+  assert.equal(fixture.isUnlocked(state), false);
+  let html = ContractRenderer.generateHTML([supply, fixture], state);
+  assert.match(html, /Shop Level 2/);
+  assert.match(html, /Shop Level 3/);
+  assert.doesNotMatch(html, /data-license-id=/);
+
+  state.shopLevel = 2;
+  state.globalReputation = -5;
+  assert.equal(supply.isUnlocked(state), true);
+  assert.equal(fixture.isUnlocked(state), false);
+  html = ContractRenderer.generateHTML([supply, fixture], state);
+  assert.match(html, /data-license-id="lic_start_apparel"/);
+  assert.doesNotMatch(html, /data-license-id="lic_fixture_expanded"/);
+  state.shopLevel = 3;
+  assert.equal(fixture.isUnlocked(state), true);
+  html = ContractRenderer.generateHTML([supply, fixture], state);
+  assert.match(html, /data-license-id="lic_fixture_expanded"/);
+
+  state.shopLevel = 1;
+  state.activeLicenses.add("lic_fixture_expanded");
+  html = ContractRenderer.generateHTML([fixture], state);
+  assert.match(html, /PURCHASED/);
+  assert.match(html, /Purchased; stays available/);
+  assert.doesNotMatch(html, />LOCKED</);
+});
+
+test("starter contracts and existing faction reputation requirements remain available", () => {
+  const state = {
+    shopLevel: 1,
+    globalReputation: 2,
+    factionReputation: { scavengers: 0, mercenaries: 0, explorers: 0 },
+    credits: 1500,
+  };
+  const rations = new SupplierLicense(licenseById.get("lic_start_rations"));
+  const scavengerArmor = new SupplierLicense(licenseById.get("lic_start_armor_melee"));
+  assert.equal(rations.isUnlocked(state), true);
+  assert.equal(scavengerArmor.isUnlocked(state), false);
+  state.factionReputation.scavengers = 2;
+  assert.equal(scavengerArmor.isUnlocked(state), true);
+});
 
 test("each fixture type is unlocked by its configured license", () => {
   for (const spec of Object.values(FIXTURE_TYPES)) {

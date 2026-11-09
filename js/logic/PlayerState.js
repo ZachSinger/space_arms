@@ -7,12 +7,22 @@ import { InventoryPool } from "./InventoryPool.js";
 import { transferItems } from "./InventoryTransfer.js";
 import { DayLedger } from "./DayLedger.js";
 import { isMoney, sumMoney } from "./Money.js";
+import { getShopLevelForReputation, isKnownShopLevel } from "./ShopProgression.js";
+import { CUSTOMER_FACTION_IDS } from "./CustomerBuyLists.js";
 import employeeRoster from "../../data/Employees.json" with { type: "json" };
 
 // The starting capacity and upgrade rules for the player's hovercart.
 import { getNextHovercartUpgrade, HOVERCART_CAPACITY } from "./Hovercart.js";
 
 export { HOVERCART_CAPACITY };
+
+function emptyFactionReputation() {
+  return Object.fromEntries(CUSTOMER_FACTION_IDS.map((id) => [id, 0]));
+}
+
+function emptyReputationTally() {
+  return { global: 0, factions: emptyFactionReputation() };
+}
 
 function defaultEmployeeJobPriorities(employeeId) {
   const employee = employeeRoster.find((candidate) => candidate.id === employeeId);
@@ -24,16 +34,14 @@ export class PlayerState {
   constructor(eventBus = null) {
     this.eventBus = eventBus;
     this.credits = 1500;
-    this.globalReputation = 2;
+    this.globalReputation = 0;
+    this.shopLevel = 1;
+    this.pendingReputation = emptyReputationTally();
     // Customers lost because the store was at capacity: lost sales, not delayed ones.
     this.customersTurnedAway = 0;
 
     // Factions strictly adhere to the MVP Tag Taxonomy. No Military.
-    this.factionReputation = {
-      scavengers: 0,
-      mercenaries: 0,
-      explorers: 0,
-    };
+    this.factionReputation = emptyFactionReputation();
     this.activeFactions = new Set();
 
     // Starting license keeps the basic fixtures usable and purchasable.
@@ -108,7 +116,21 @@ export class PlayerState {
    * @param {{ customersServed: number, customersTurnedAway: number }} results
    */
   finishShift(results) {
+    const globalReputation = this.globalReputation + this.pendingReputation.global;
+    const factionReputation = Object.fromEntries(
+      Object.entries(this.factionReputation).map(([id, reputation]) => [
+        id, reputation + (this.pendingReputation.factions[id] ?? 0),
+      ]),
+    );
+    if (!Number.isSafeInteger(globalReputation) ||
+      !Object.values(factionReputation).every(Number.isSafeInteger)) {
+      throw new RangeError("Shift reputation exceeds the supported range.");
+    }
     this.dayLedger.recordShift(results);
+    this.globalReputation = globalReputation;
+    this.factionReputation = factionReputation;
+    this.pendingReputation = emptyReputationTally();
+    this.shopLevel = Math.max(this.shopLevel, getShopLevelForReputation(globalReputation));
     this.awaitingEndDay = true;
     this.notifyListeners();
   }
@@ -132,27 +154,34 @@ export class PlayerState {
   }
 
   /**
-   * Change global reputation, and the faction's too when one is given.
+   * Tally store reputation, and the faction's too when one is given.
    * @param {number} amount
    * @param {string | null} [factionId]
    */
   addReputation(amount, factionId = null) {
-    this.globalReputation += amount;
-
-    if (factionId && this.factionReputation[factionId] !== undefined) {
-      this.factionReputation[factionId] += amount;
+    if (!Number.isSafeInteger(amount) || amount < 0) {
+      throw new TypeError(`Reputation gain must be a non-negative whole number, got ${amount}.`);
     }
-
-    this.notifyListeners();
+    this.tallyReputation(amount, factionId);
   }
 
   subReputation(amount, factionId = null) {
-    this.globalReputation -= amount;
-
-    if (factionId && this.factionReputation[factionId] !== undefined) {
-      this.factionReputation[factionId] -= amount;
+    if (!Number.isSafeInteger(amount) || amount < 0) {
+      throw new TypeError(`Reputation loss must be a non-negative whole number, got ${amount}.`);
     }
+    this.tallyReputation(-amount, factionId);
+  }
 
+  tallyReputation(change, factionId) {
+    const global = this.pendingReputation.global + change;
+    const faction = factionId && this.pendingReputation.factions[factionId] !== undefined
+      ? this.pendingReputation.factions[factionId] + change
+      : null;
+    if (!Number.isSafeInteger(global) || (faction !== null && !Number.isSafeInteger(faction))) {
+      throw new RangeError("Pending reputation exceeds the supported range.");
+    }
+    this.pendingReputation.global = global;
+    if (faction !== null) this.pendingReputation.factions[factionId] = faction;
     this.notifyListeners();
   }
 
@@ -168,8 +197,12 @@ export class PlayerState {
       throw new TypeError("Hiring requires an employee id and a non-negative whole-credit cost.");
     }
     const jobPriorities = defaultEmployeeJobPriorities(employeeId);
-    if (this.hiredEmployees.includes(employeeId) || this.credits < hireCost) return false;
     const employee = employeeRoster.find((candidate) => candidate.id === employeeId);
+    if (!isKnownShopLevel(employee.requiredShopLevel)) {
+      throw new Error(`Unknown required Shop Level for ${employeeId}.`);
+    }
+    if (this.shopLevel < employee.requiredShopLevel ||
+      this.hiredEmployees.includes(employeeId) || this.credits < hireCost) return false;
     this.dayLedger.record({
       category: "hiring",
       label: `${employee.name} (${employee.role})`,
@@ -262,7 +295,12 @@ export class PlayerState {
     return {
       credits: this.credits,
       globalReputation: this.globalReputation,
+      shopLevel: this.shopLevel,
       factionReputation: { ...this.factionReputation },
+      pendingReputation: {
+        global: this.pendingReputation.global,
+        factions: { ...this.pendingReputation.factions },
+      },
       hiredEmployees: [...this.hiredEmployees],
       employeeJobPriorities: Object.fromEntries(
         this.hiredEmployees.map((employeeId) => [
@@ -301,7 +339,11 @@ export class PlayerState {
     Object.assign(this, {
       credits: data.credits,
       globalReputation: data.globalReputation,
+      shopLevel: Math.max(data.shopLevel ?? 1, getShopLevelForReputation(data.globalReputation)),
       factionReputation: { ...data.factionReputation },
+      pendingReputation: data.pendingReputation
+        ? { global: data.pendingReputation.global, factions: { ...data.pendingReputation.factions } }
+        : emptyReputationTally(),
       hiredEmployees: [...(data.hiredEmployees || [])],
       employeeJobPriorities: Object.fromEntries(
         (data.hiredEmployees || []).map((employeeId) => [

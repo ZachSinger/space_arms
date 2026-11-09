@@ -122,7 +122,7 @@ test("queued customers drain patience, hold while served, and leave angry at zer
   assert.equal(angry.length, 1);
   assert.deepEqual(angry[0].cart.map((entry) => entry.itemId), ["amo_01", "big"]);
   assert.deepEqual(customer.cart, []);
-  assert.equal(customer.playerState.globalReputation, 2);
+  assert.equal(customer.playerState.globalReputation, 0);
   assert.equal(customer.playerState.factionReputation.mercenaries, 0);
   assert.deepEqual(floating, []);
   assert.equal(bubble.destroyed, true);
@@ -183,6 +183,9 @@ test("the Go-Backs bin only empties into the hovercart, within its capacity", ()
 
 test("hiring staff spends the fee once and keeps the hire when player state is restored", () => {
   const state = new PlayerState();
+  state.addReputation(60);
+  state.finishShift({ customersServed: 60, customersTurnedAway: 0 });
+  state.endDay(2);
   assert.equal(state.hireEmployee("tavi_stock_clerk", 250), true);
   assert.equal(state.credits, 1250);
   assert.deepEqual(state.hiredEmployees, ["tavi_stock_clerk"]);

@@ -146,8 +146,10 @@ test("drawer clicks and right-clicks adjust change, and Space rejects mistakes u
   h.checkout.handleNumpadKeydown(space);
   assert.equal(h.penalties(), 0);
   assert.match(h.elements.get("#checkout-payment-feedback").textContent, /Another mistake/);
+  assert.match(h.elements.get("#checkout-payment-feedback").textContent, /end of the shift/);
   h.checkout.handleNumpadKeydown(space);
   assert.equal(h.penalties(), 1);
+  assert.match(h.elements.get("#checkout-payment-feedback").textContent, /Lose 1 store reputation at the end of the shift/);
   assert.equal(h.completed(), 0);
   h.checkout.cashPayment.adjustChange(100, 1);
   h.checkout.cashPayment.adjustChange(100, 1);

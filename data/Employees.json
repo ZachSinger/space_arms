@@ -3,6 +3,7 @@
     "id": "tavi_stock_clerk",
     "name": "Tavi",
     "role": "Stock Clerk",
+    "requiredShopLevel": 4,
     "hireCost": 250,
     "wagePerShift": 50,
     "backpackCapacity": 10,

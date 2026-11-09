@@ -477,8 +477,8 @@ export class CheckoutWindow {
     }
     playErrorBuzz();
     this.bodyElement.querySelector("#checkout-payment-feedback").textContent = result.penalty
-      ? "Wrong change refused. Store reputation -1. Correct the change and try again."
-      : "Wrong change refused. Correct it and try again. Another mistake will cost store reputation.";
+      ? "Wrong change refused. Lose 1 store reputation at the end of the shift. Correct the change and try again."
+      : "Wrong change refused. Correct it and try again. Another mistake will cost store reputation at the end of the shift.";
     if (result.penalty) this.onWrongChange?.();
   }
 }

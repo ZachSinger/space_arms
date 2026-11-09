@@ -28,10 +28,13 @@ function describeLine({ category, label, quantity }) {
 const row = (label, value, className = "") =>
   `<div class="finances-row ${className}"><span>${label}</span><span class="finances-value">${value}</span></div>`;
 
-function renderReceipt(receipt, { final }) {
+function renderReceipt(receipt, { final, pendingReputationChange = null }) {
   const lines = (entries) => entries.map((line) =>
     row(describeLine(line), signed(line.amount), line.amount >= 0 ? "earned" : "spent")).join("");
   const shift = receipt.shift;
+  const reputationChange = pendingReputationChange === null
+    ? receipt.reputationChange
+    : pendingReputationChange;
   return `
     <div class="finances-receipt">
       ${row("Credits at the start of the day", credits(receipt.openingCredits))}
@@ -43,8 +46,8 @@ function renderReceipt(receipt, { final }) {
         ${row("Total earned", signed(receipt.totalEarned), receipt.totalEarned > 0 ? "earned" : "")}
         ${row("Total spent", signed(-receipt.totalSpent), receipt.totalSpent > 0 ? "spent" : "")}
         ${row(final ? "Credits at the end of the day" : "Credits right now", credits(receipt.closingCredits), "finances-balance")}
-        ${row("Store reputation change", receipt.reputationChange === 0 ? "No change"
-          : `${receipt.reputationChange > 0 ? "+" : ""}${receipt.reputationChange}`)}
+        ${row(pendingReputationChange === null ? "Store reputation change" : "Reputation change at shift end",
+    reputationChange === 0 ? "No change" : `${reputationChange > 0 ? "+" : ""}${reputationChange}`)}
         ${shift ? row("Customers served", shift.customersServed) : ""}
         ${shift ? row("Customers turned away (store was full)", shift.customersTurnedAway, shift.customersTurnedAway > 0 ? "spent" : "") : ""}
       </div>
@@ -55,14 +58,14 @@ function renderReceipt(receipt, { final }) {
 export const FinancesRenderer = {
   /**
    * @param {{ day: number, shiftRunning: boolean, awaitingEndDay: boolean, canEndDay: boolean,
-   *   today: object, lastDay: object | null }} view - from GameScene.getFinancesView()
+   *   pendingReputationChange: number | null, today: object, lastDay: object | null }} view
    * @returns {string}
    */
   generateHTML(view) {
     let status;
     let action = "";
     if (view.shiftRunning) {
-      status = "The shift is running. This receipt updates as you earn and spend credits.";
+      status = "The shift is running. Credits update now; reputation changes are applied at the end of the shift.";
     } else if (view.awaitingEndDay) {
       status = `The shift is over. Restock and change prices now if you like, then end the day. Ending the day moves to Day ${view.day + 1} and changes market prices.`;
       action = `<button type="button" class="action-btn finances-end-day-btn" data-end-day
@@ -76,7 +79,7 @@ export const FinancesRenderer = {
         <div class="fixture-stock-meta">${status}</div>
         ${action}
         <div class="finances-heading">DAY ${view.today.day} RECEIPT${view.awaitingEndDay ? "" : " (SO FAR)"}</div>
-        ${renderReceipt(view.today, { final: false })}
+        ${renderReceipt(view.today, { final: false, pendingReputationChange: view.pendingReputationChange })}
         ${view.lastDay ? `
           <div class="finances-heading">DAY ${view.lastDay.day} RECEIPT (FINAL)</div>
           ${renderReceipt(view.lastDay, { final: true })}

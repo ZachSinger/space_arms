@@ -3,6 +3,57 @@
 Running task list. Consult this before deciding what to work on. Add to it any time we
 notice something that needs doing but isn't being done right now.
 
+## Base-loop follow-ups
+- [x] Fixed closing when an employee is walking to the backroom: they finish walking or
+      turn back for a waiting customer, so they cannot prevent the shift from ending.
+- [x] Fixed closing when an employee is already on break: they return to the register for
+      customers still in the store, unless the player is already working the register.
+- [x] Prevent shelf placement mode from starting in the backroom. Keep the shelf carried
+      and explain that shelves belong on the sales floor.
+- [x] Fixed shelf fixture crates vibrating while carried. Their position is now synced
+      after the player's final position for each frame is applied.
+- [x] Batch employee shelf restocking across multiple open shelf stacks. They previously
+      picked up only enough to fill one stack per trip, even when their backpack and
+      nearby shelf space had room for more.
+- [x] Check landing-pad unloading with Load storage first. In a clean shift, Tavi moved
+      four 5-unit crates (20 units total) into an empty 20-slot locker in about 20
+      seconds. No stall occurred while that storage had room.
+- [x] Lock Tavi's hiring until Shop Level 4. Existing hires remain employed.
+- [ ] Let the player close the store temporarily with no penalty. New customers stop
+      coming in, customers already inside finish up, and the clock keeps running. This
+      gives the player time to catch up on stocking without losing reputation to
+      impatient customers.
+- [ ] Add normal purchases for sales-floor expansions and backroom upgrades. The U and B
+      debug keys currently unlock them for free; players need a way to buy them with credits.
+- [ ] Play at least three shifts from a new game without debug keys. Check whether sales
+      cover stock orders and wages, customers are served through closing, and saving and
+      continuing between shifts works.
+- [ ] Decide what happens if wages put the player in debt and they run out of sellable
+      stock. Currently this can leave the player unable to continue.
+- [ ] Expand the employee system beyond Tavi, the only available hire. The design also
+      describes training and shift scheduling; decide which parts belong in the base loop.
+
+## Progression
+- [x] New shops start at 0 reputation. Store and faction reputation changes are tallied
+      during the shift and applied once when it ends; Finances shows the pending change.
+- [x] Add provisional reputation thresholds for Shop Levels 1-30. Earned levels stay
+      unlocked if reputation later falls; older level-capped saves catch up to earned reputation.
+- [x] Add the first roadmap unlocks: Level 2 opens the Civilian Threads supply contract,
+      Level 3 opens Expanded Fixture Supply, and Level 4 makes Tavi available to hire.
+- [ ] Playtest the [Store Level roadmap](documentation/StoreLevel.md) and adjust reputation
+      thresholds, especially whether 15 is reasonable by the end of the first shift.
+- [ ] Implement the roadmap's Level 5-30 unlocks and assign the remaining licenses,
+      employees, and expansions. Unassigned licenses currently use their existing reputation
+      requirements; paid expansion purchases and additional employees are not built yet.
+
+## Post-base-loop module concepts
+- [ ] Gunsmithing.
+- [ ] Repair for gear and weapons.
+- [ ] Vehicle sales.
+- [ ] Vehicle repair.
+- [ ] Security: introduce thieves and a minigame to stop them.
+- [ ] Ways to customize the shop.
+
 ## Playtest follow-ups
 - [x] Cash drawer mockup: all customers pay cash, with unlimited 1/5/10/20 credit bills
       and 1/5/10/25/50 cent coins. The customer first holds out their cash over a blurred
@@ -94,7 +145,8 @@ notice something that needs doing but isn't being done right now.
       `gridAlignedCenter()` in game.js for the correct way to position one instead.
 
 ## Art / Assets
-- [ ] Map art is placeholder and looks bad. Replace the floor, wall, and room art.
+- [ ] Map art is placeholder and looks bad. Replace the floor, wall, and room art; Tiled
+      map-making is intentionally deferred until the end of the project.
 - [ ] Sound effects for hitting customers with boxes.
 - [x] Brief, event-based customer emoticons: show one at a time for being priced out,
       missing primary stock, leaving angry, or completing a purchase of 3+ items. Each
@@ -273,13 +325,11 @@ notice something that needs doing but isn't being done right now.
         Pad to the sales-floor shelf, skipping Storage Fixtures / the Storeroom entirely~~
         -- see the new Storage Shelving entry below; crates can now be delivered to either
         fixture depending on which one the player is standing near.
-  - [ ] Only fixtures already assigned to an item can be restocked by ordering -- ordering
-        itself still doesn't let you introduce a brand new item type on the spot (that's
-        what assigning an empty block to a Fixture window now does instead -- see below --
-        but the two are still separate actions, not unified into one flow yet).
-  - [ ] Restock pricing is a hidden, fixed per-item 40-60% of base (`Market.getSupplyCost`,
-        `RESTOCK_QUANTITY` in game.js), not a real Supplier Contract
-        pricing model (bible Step 45/48).
+  - [ ] Decide whether ordering a new product and assigning it a shelf spot should be one
+        flow. Any product covered by a signed supplier contract can already be ordered
+        before it has a shelf spot; ordering and shelf assignment are separate actions.
+  - [ ] Supplier prices are shown per crate, but use a fixed per-item percentage of a
+        hidden base price rather than a full Supplier Contract pricing model (Step 45/48).
   - [x] ~~No employee auto-hauling (bible Step 14/15)~~ -- hired employees with the
         "Load storage" job now carry delivered crates from the Loading Pad into lockers
         on their own (`Employee.js`, `EmployeeJobs.js`).
@@ -321,10 +371,10 @@ notice something that needs doing but isn't being done right now.
       This is what actually gives the Storage Fixture a purpose: haul a crate to Storage
       (or the shelf, whichever's closer/has room), then separately walk between the two
       moving units via the hovercart as needed. The HUD gained a live `HOVERCART x/y`
-      readout next to Credits/Reputation. Known simplifications: only the player has a
-      hovercart (no employees yet, Step 14/15); only 1 unit moves per click (no bulk-
-      transfer input); crates from the Loading Pad still deliver straight into a fixture
-      rather than routing through the hovercart first.
+      readout next to Credits/Reputation. Employees now carry stock in their own backpacks.
+      Known simplifications: only 1 unit moves per click (no bulk-transfer input); crates
+      from the Loading Pad still deliver straight into a fixture rather than routing
+      through the hovercart first.
 - [x] Sales Shelf: manual grid placement (bible Steps 4/5/22) -- NOT the same model as a
       Storage Fixture above. Originally built as a shared capacity pool (same as Storage),
       but that's wrong for a real storefront shelf: items need actual physical placement
@@ -416,8 +466,8 @@ notice something that needs doing but isn't being done right now.
       mix are calculated once at shift start, with licensed factions represented and
       arrivals scheduled across the shift. Tune traffic/reputation curves after playtesting.
 - [ ] Remaining faction systems: faction-specific currencies (Steps 25-28).
-- [x] Faction sale reputation (Step 51): a completed sale gives +1 store rep and +1 rep
-      with the customer's faction. Rewards and penalties apply independently, when each happens.
+- [x] Faction sale reputation (Step 51): a completed sale tallies +1 store reputation and
+      +1 reputation with the customer's faction. Gains and losses apply at shift end.
 - [x] Manager's Tablet UI: unified tabbed window shell built (`js/logic/ManagerTablet.js`),
       Inventory + Employee + Contracts + Supply + Fixtures + Equipment + Layout +
       Finances tabs have real content.

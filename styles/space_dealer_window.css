@@ -1215,6 +1215,11 @@ button {
   font-size: var(--font-size-10);
 }
 
+[data-hire-employee-id]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .go-backs-row {
   cursor: pointer;
 }
@@ -1583,6 +1588,85 @@ button {
 .hud-end-day-btn:hover {
   --bg-color: #d97706;
   animation: none;
+}
+
+@media (max-width: 1150px) {
+  #persistent-hud {
+    gap: 8px;
+    padding: 0 8px;
+  }
+
+  .hud-section {
+    gap: 6px;
+  }
+
+  .hud-stat {
+    gap: 3px;
+    font-size: var(--font-size-12);
+    white-space: nowrap;
+  }
+
+  .hud-label {
+    letter-spacing: 0.5px;
+  }
+
+  .hud-value {
+    font-size: var(--font-size-14);
+  }
+
+  .hud-pause-btn,
+  .hud-start-shift-btn,
+  .hud-end-day-btn {
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 960px) {
+  .hud-stat,
+  .hud-pause-btn,
+  .hud-start-shift-btn,
+  .hud-end-day-btn {
+    font-size: var(--font-size-11);
+  }
+
+  .hud-value {
+    font-size: var(--font-size-12);
+  }
+}
+
+@media (max-width: 850px) {
+  #persistent-hud {
+    gap: 4px;
+    padding: 0 4px;
+  }
+
+  .hud-section {
+    gap: 4px;
+  }
+
+  .hud-stat {
+    gap: 2px;
+  }
+
+  .hud-stat,
+  .hud-value,
+  .hud-pause-btn,
+  .hud-start-shift-btn,
+  .hud-end-day-btn {
+    font-size: var(--font-size-10);
+    letter-spacing: 0;
+  }
+
+  .hud-label {
+    letter-spacing: 0;
+  }
+
+  .hud-pause-btn,
+  .hud-start-shift-btn,
+  .hud-end-day-btn {
+    padding: 4px 6px;
+  }
 }
 
 @keyframes hud-end-day-blink {

@@ -47,19 +47,27 @@ after(async () => {
   if (cacheDirectory) await rm(cacheDirectory, { recursive: true, force: true });
 });
 
-function makeShelf(quantity = 0, capacity = 3) {
-  const placement = { itemId: "amo_01", quantity };
+function makeShelf(quantity = 0, capacity = 3, placementCount = 1) {
+  const placements = Array.from({ length: placementCount }, () => ({
+    itemId: "amo_01",
+    quantity,
+  }));
   return {
     type: "shelf_starter_2x1",
     standPoint: { x: 100, y: 100 },
-    placements: [placement],
+    placements,
     getRemainingUnitsFor(itemId, entry) {
-      return entry === placement && itemId === placement.itemId
-        ? Math.max(0, capacity - placement.quantity)
-        : 0;
+      return this.placements
+        .filter((placement) => itemId === placement.itemId &&
+          (!entry || placement === entry))
+        .reduce((sum, placement) => sum + Math.max(0, capacity - placement.quantity), 0);
     },
     add(itemId, amount, entry) {
-      if (entry !== placement || itemId !== placement.itemId) return 0;
+      const placement = this.placements.find((candidate) =>
+        itemId === candidate.itemId && (!entry || candidate === entry) &&
+        candidate.quantity < capacity,
+      );
+      if (!placement) return 0;
       const accepted = Math.min(amount, capacity - placement.quantity);
       placement.quantity += accepted;
       return accepted;
@@ -94,11 +102,13 @@ function makeLocker(quantity = 5) {
 
 function makeEmployee({
   shelfQuantity = 0,
+  shelfCapacity = 3,
+  shelfPlacementCount = 1,
   lockerQuantity = 5,
   jobPriorities = ["register", "stock_shelves", "load_storage"],
   hasRegister = false,
 } = {}) {
-  const shelf = makeShelf(shelfQuantity);
+  const shelf = makeShelf(shelfQuantity, shelfCapacity, shelfPlacementCount);
   const locker = makeLocker(lockerQuantity);
   const transfers = [];
   const completedSales = [];
@@ -106,6 +116,7 @@ function makeEmployee({
   eventBus.on(GAME_EVENTS.INVENTORY_TRANSFERRED, (event) => transfers.push(event));
   const scene = {
     backroomDoor: { x: 20, y: 20 },
+    backroomExitFront: { x: 20, y: 20 },
     eventBus,
     fixtures: {
       shelves: () => [shelf],
@@ -136,13 +147,18 @@ function makeEmployee({
         setTint() { return this; },
         setDepth() { return this; },
         setTexture() { return this; },
+        setVisible(visible) { this.visible = visible; return this; },
         destroy() {},
       }),
     },
     physics: {
       add: {
         existing(sprite) {
-          sprite.body = { setVelocity() {} };
+          sprite.body = {
+            velocity: { x: 0, y: 0 },
+            setVelocity(x, y) { this.velocity = { x, y }; },
+            reset(x, y) { sprite.x = x; sprite.y = y; this.setVelocity(0, 0); },
+          };
         },
       },
     },
@@ -188,16 +204,177 @@ test("a stock clerk takes only the shelf's free quantity from a locker and fills
   ]);
 });
 
+test("a stock clerk carries enough stock to fill multiple open shelf slots per trip", () => {
+  const { employee, shelf, locker } = makeEmployee({
+    lockerQuantity: 10,
+    shelfCapacity: 3,
+    shelfPlacementCount: 2,
+  });
+
+  employee.startNextTask();
+  employee.takeStockFromLocker();
+
+  assert.equal(employee.backpack.getAvailableUnitsFor("amo_01"), 6);
+  assert.equal(locker.stock[0].quantity, 4);
+
+  employee.stockShelf();
+  assert.equal(shelf.placements[0].quantity, 3);
+  assert.equal(employee.backpack.getAvailableUnitsFor("amo_01"), 3);
+
+  employee.startNextTask();
+  assert.equal(employee.currentJob.placement, shelf.placements[1]);
+  employee.stockShelf();
+
+  assert.deepEqual(shelf.placements.map(({ quantity }) => quantity), [3, 3]);
+  assert.equal(employee.backpack.usedCapacity(), 0);
+});
+
+test("a stock clerk does not take stock for a shelf slot reserved by another employee", () => {
+  const { employee, shelf } = makeEmployee({
+    lockerQuantity: 10,
+    shelfCapacity: 3,
+    shelfPlacementCount: 2,
+  });
+  employee.scene.employees.push({
+    currentJob: { placement: shelf.placements[1] },
+  });
+
+  employee.startNextTask();
+  employee.takeStockFromLocker();
+
+  assert.equal(employee.currentJob.placement, shelf.placements[0]);
+  assert.equal(employee.backpack.getAvailableUnitsFor("amo_01"), 3);
+});
+
 test("a stock clerk waits when no matching locker stock or shelf space is available", () => {
   const noStock = makeEmployee({ lockerQuantity: 0 });
   noStock.employee.startNextTask();
-  assert.equal(noStock.employee.state, "IDLE");
+  assert.equal(noStock.employee.state, "TO_BREAKROOM");
   assert.equal(noStock.employee.currentJob, null);
 
   const fullShelf = makeEmployee({ shelfQuantity: 3 });
   fullShelf.employee.startNextTask();
-  assert.equal(fullShelf.employee.state, "IDLE");
+  assert.equal(fullShelf.employee.state, "TO_BREAKROOM");
   assert.equal(fullShelf.employee.currentJob, null);
+});
+
+test("employees walk into the backroom to take a break and return when work opens", () => {
+  const { employee, locker } = makeEmployee({ lockerQuantity: 0 });
+
+  employee.startNextTask();
+  assert.equal(employee.state, "TO_BREAKROOM");
+  employee.update(16);
+  assert.equal(employee.state, "ON_BREAK");
+  assert.equal(employee.sprite.visible, false);
+
+  locker.stock[0].quantity = 5;
+  employee.update(100);
+  assert.equal(employee.state, "TO_STORAGE");
+  assert.equal(employee.sprite.visible, true);
+});
+
+test("an employee heading to break finishes walking and can clock out after closing", () => {
+  const { employee } = makeEmployee({ lockerQuantity: 0 });
+  employee.sprite.x = 100;
+  employee.scene.findPath = () => [{
+    x: 90, y: 20, teleportTo: { x: 20, y: 20 },
+  }];
+  employee.startNextTask();
+  employee.requestClockOut();
+
+  employee.update(100);
+  assert.equal(employee.state, "TO_BREAKROOM");
+  assert.ok(employee.sprite.body.velocity.x < 0);
+  assert.equal(employee.isReadyToClockOut(), false);
+
+  employee.sprite.x = 90;
+  employee.update(100);
+  assert.deepEqual({ x: employee.sprite.x, y: employee.sprite.y }, { x: 20, y: 20 });
+  employee.update(100);
+  assert.equal(employee.state, "ON_BREAK");
+  assert.equal(employee.sprite.visible, false);
+  assert.equal(employee.isReadyToClockOut(), true);
+});
+
+test("an employee on break serves customers who reach the register after closing", () => {
+  const { employee, completedSales } = makeEmployee({ lockerQuantity: 0, hasRegister: true });
+  employee.startNextTask();
+  employee.update(16);
+  assert.equal(employee.state, "ON_BREAK");
+
+  employee.requestClockOut();
+  const customer = { cart: [{ itemId: "amo_01", price: 4 }] };
+  employee.scene.registerLine.push(customer);
+  employee.update(100);
+  assert.equal(employee.state, "TO_REGISTER");
+  assert.equal(employee.currentJob.customer, customer);
+  assert.equal(employee.sprite.visible, true);
+  assert.equal(employee.isReadyToClockOut(), false);
+
+  employee.beginRegisterService();
+  employee.update(1000);
+  assert.deepEqual(completedSales, [{ employee, customer }]);
+  assert.equal(employee.isReadyToClockOut(), true);
+});
+
+test("an employee heading to break can turn around to serve a customer after closing", () => {
+  const { employee } = makeEmployee({ lockerQuantity: 0, hasRegister: true });
+  employee.sprite.x = 100;
+  employee.startNextTask();
+  employee.requestClockOut();
+  const customer = { cart: [{ itemId: "amo_01", price: 4 }] };
+  employee.scene.registerLine.push(customer);
+
+  employee.update(100);
+  assert.equal(employee.state, "TO_REGISTER");
+  assert.equal(employee.currentJob.customer, customer);
+  assert.equal(employee.isReadyToClockOut(), false);
+});
+
+test("an employee on break waits while the player is using the register", () => {
+  const { employee } = makeEmployee({ lockerQuantity: 0, hasRegister: true });
+  employee.startNextTask();
+  employee.update(16);
+  employee.requestClockOut();
+  employee.scene.registerLine.push({ cart: [{ itemId: "amo_01", price: 4 }] });
+  employee.scene.operatingRegister = true;
+
+  employee.update(100);
+  assert.equal(employee.state, "ON_BREAK");
+  assert.equal(employee.sprite.visible, false);
+
+  employee.scene.operatingRegister = false;
+  employee.update(16);
+  assert.equal(employee.state, "TO_REGISTER");
+  assert.equal(employee.sprite.visible, true);
+});
+
+test("an employee on break does not start new stocking work after closing", () => {
+  const { employee, locker } = makeEmployee({ lockerQuantity: 0 });
+  employee.startNextTask();
+  employee.update(16);
+  employee.requestClockOut();
+  locker.stock[0].quantity = 5;
+
+  employee.update(100);
+  assert.equal(employee.state, "ON_BREAK");
+  assert.equal(employee.sprite.visible, false);
+  assert.equal(employee.isReadyToClockOut(), true);
+  assert.equal(locker.stock[0].quantity, 5);
+});
+
+test("an employee heading to break does not start new stocking work after closing", () => {
+  const { employee, locker } = makeEmployee({ lockerQuantity: 0 });
+  employee.sprite.x = 100;
+  employee.startNextTask();
+  employee.requestClockOut();
+  locker.stock[0].quantity = 5;
+
+  employee.update(100);
+  assert.equal(employee.state, "TO_BREAKROOM");
+  assert.equal(employee.currentJob, null);
+  assert.ok(employee.sprite.body.velocity.x < 0);
+  assert.equal(locker.stock[0].quantity, 5);
 });
 
 test("clocking out waits for locker space before returning stock", () => {
@@ -308,10 +485,35 @@ test("the employee panel lists all three jobs in the saved priority order", () =
     },
     credits: 1000,
     canHire: true,
+    shopLevel: 1,
   });
   assert.ok(html.indexOf("1. Load storage") < html.indexOf("2. Run register"));
   assert.ok(html.indexOf("2. Run register") < html.indexOf("3. Stock shelves"));
   assert.match(html, /data-employee-priority-job="load_storage"/);
+  assert.match(html, /data-employee-priority-job="load_storage" data-employee-priority-direction="1"\s+aria-label/);
+});
+
+test("the employee panel explains the Shop Level 4 requirement before Tavi can be hired", () => {
+  const options = {
+    hiredEmployeeIds: [],
+    activeEmployeeIds: [],
+    employeeJobPriorities: {},
+    credits: 1000,
+    canHire: true,
+  };
+  const locked = EmployeeRenderer.generateHTML({ ...options, shopLevel: 1 });
+  assert.match(locked, /Shop Level 4/);
+  assert.match(locked, /60 store reputation/);
+  assert.match(locked, /end of a shift/);
+  assert.match(locked, /data-hire-employee-id="tavi_stock_clerk"[\s\S]*?disabled/);
+  assert.match(locked, /Tavi is locked until Shop Level 4/);
+  assert.match(locked, />\s*LOCKED\s*<\/button>/);
+
+  const almost = EmployeeRenderer.generateHTML({ ...options, shopLevel: 3 });
+  assert.match(almost, /data-hire-employee-id="tavi_stock_clerk"[\s\S]*?disabled/);
+  const unlocked = EmployeeRenderer.generateHTML({ ...options, shopLevel: 4 });
+  assert.doesNotMatch(unlocked, /data-hire-employee-id="tavi_stock_clerk"[\s\S]*?disabled/);
+  assert.match(unlocked, />\s*HIRE\s*<\/button>/);
 });
 
 test("an employee reaching a door waypoint steps through to the other side", () => {

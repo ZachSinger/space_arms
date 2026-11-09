@@ -8,15 +8,20 @@ import { createServer } from "vite";
 import { HUDController } from "../js/logic/HUDController.js";
 import { SaveManager } from "../SaveManager.js";
 import { ControlMode } from "../js/logic/ControlMode.js";
+import { GAME_EVENTS } from "../js/logic/EventBus.js";
+import { SupplierLicense } from "../js/logic/Licenses.js";
 
 let server;
 let cacheDirectory;
 let GameScene;
 let CheckoutWindow;
+let PlayerState;
 const originalPhaser = globalThis.Phaser;
 
 before(async () => {
   globalThis.Phaser = { Scene: class {} };
+  const licenses = JSON.parse(await readFile(new URL("../data/Licenses.json", import.meta.url), "utf8"));
+  globalThis.__progressionTestLicenses = licenses.map((data) => new SupplierLicense(data));
   cacheDirectory = await mkdtemp(join(tmpdir(), "space-arms-manual-save-test-"));
   server = await createServer({
     root: fileURLToPath(new URL("..", import.meta.url)),
@@ -34,17 +39,21 @@ before(async () => {
         }
       },
       load(id) {
-        if (id === "\0manual-save-test-database") return "export const database = {};";
+        if (id === "\0manual-save-test-database") {
+          return "export const database = { getAllLicenses: () => globalThis.__progressionTestLicenses };";
+        }
       },
     }],
   });
   ({ GameScene } = await server.ssrLoadModule("/js/scenes/game.js"));
   ({ CheckoutWindow } = await server.ssrLoadModule("/js/logic/CheckoutWindow.js"));
+  ({ PlayerState } = await server.ssrLoadModule("/js/logic/PlayerState.js"));
 });
 
 after(async () => {
   if (server) await server.close();
   if (cacheDirectory) await rm(cacheDirectory, { recursive: true, force: true });
+  delete globalThis.__progressionTestLicenses;
   if (originalPhaser === undefined) delete globalThis.Phaser;
   else globalThis.Phaser = originalPhaser;
 });
@@ -117,6 +126,133 @@ function createRegisterHarness() {
   scene.controlMode = new ControlMode(scene);
   return { scene, checkout, tablet };
 }
+
+test("the shift-end event, receipt, and save observers see the applied reputation and level", () => {
+  const scene = Object.create(GameScene.prototype);
+  const state = new PlayerState();
+  const events = [];
+  const messages = [];
+  const savedStates = [];
+  Object.assign(scene, {
+    playerState: state,
+    customersServedThisShift: 16,
+    customers: [],
+    loadFailed: false,
+    startingShift: false,
+    shiftEnded: false,
+    shiftClock: { started: true, isPaused: false, notifyListeners() {} },
+    market: { day: 1 },
+    fixturePlacement: { active: false },
+    eventBus: { emit: (name, details) => events.push({ name, details }) },
+    clearEmployees() {},
+    showGameMessage: (message) => messages.push(message),
+  });
+  state.subscribe((current) => {
+    if (current.awaitingEndDay && scene.canSaveOffShift()) {
+      savedStates.push(current.serialize());
+    }
+  });
+  state.addReputation(16, "scavengers");
+  state.subReputation(1, "mercenaries");
+  assert.equal(state.globalReputation, 0);
+  assert.equal(scene.getFinancesView().pendingReputationChange, 15);
+
+  scene.endShift();
+  assert.equal(state.globalReputation, 15);
+  assert.equal(state.shopLevel, 2);
+  assert.equal(scene.shiftClock.started, false);
+  assert.deepEqual(events, [{
+    name: GAME_EVENTS.SHIFT_ENDED,
+    details: {
+      served: 16,
+      turnedAway: 0,
+      reputation: 15,
+      factionReputation: { scavengers: 16, mercenaries: -1, explorers: 0 },
+    },
+  }]);
+  assert.equal(scene.getFinancesView().today.reputationChange, 15);
+  assert.equal(scene.getFinancesView().pendingReputationChange, null);
+  assert.equal(savedStates.length, 1);
+  assert.equal(savedStates[0].globalReputation, 15);
+  assert.equal(savedStates[0].shopLevel, 2);
+  assert.match(messages[0], /Shop Level 2 reached/);
+  assert.match(messages[0], /Civilian Threads.*Contracts tab/);
+  assert.doesNotMatch(messages[0], /Staff unlocked|Employee tab/);
+});
+
+test("a shift that earns multiple levels announces each implemented unlock", () => {
+  const state = new PlayerState();
+  const scene = Object.create(GameScene.prototype);
+  const messages = [];
+  Object.assign(scene, {
+    playerState: state,
+    customersServedThisShift: 60,
+    shiftEnded: false,
+    shiftClock: { started: true, isPaused: false, notifyListeners() {} },
+    eventBus: { emit() {} },
+    clearEmployees() {},
+    showGameMessage: (message) => messages.push(message),
+  });
+  state.addReputation(60);
+  scene.endShift();
+  assert.equal(state.shopLevel, 4);
+  assert.match(messages[0], /Shop Level 4 reached/);
+  assert.match(messages[0], /Civilian Threads/);
+  assert.match(messages[0], /Expanded Fixture Supply/);
+  assert.match(messages[0], /Staff unlocked: Tavi.*Employee tab/);
+
+  state.endDay(2);
+  state.addReputation(30);
+  scene.endShift();
+  assert.equal(state.shopLevel, 5);
+  assert.match(messages[1], /Shop Level 5 reached/);
+  assert.doesNotMatch(messages[1], /Contracts unlocked|Staff unlocked/);
+  assert.match(messages[1], /Rewards for Shop Level 5 and above are not in the game yet/);
+});
+
+test("level-up messages do not reannounce contracts or staff already owned in older saves", () => {
+  const state = new PlayerState();
+  state.activeLicenses.add("lic_start_apparel");
+  state.hiredEmployees.push("tavi_stock_clerk");
+  const scene = Object.create(GameScene.prototype);
+  const messages = [];
+  Object.assign(scene, {
+    playerState: state,
+    customersServedThisShift: 60,
+    shiftClock: { started: true, isPaused: false, notifyListeners() {} },
+    eventBus: { emit() {} },
+    clearEmployees() {},
+    showGameMessage: (message) => messages.push(message),
+  });
+  state.addReputation(60);
+  scene.endShift();
+  assert.match(messages[0], /Expanded Fixture Supply/);
+  assert.doesNotMatch(messages[0], /Civilian Threads|Staff unlocked/);
+});
+
+test("the actual hire action explains the level lock and allows hiring after the unlock", () => {
+  const scene = Object.create(GameScene.prototype);
+  const state = new PlayerState();
+  const warnings = [];
+  let autosaves = 0;
+  Object.assign(scene, {
+    playerState: state,
+    canHireEmployees: () => true,
+    showShopMessage: (message) => warnings.push(message),
+    showGameMessage() {},
+    requestAutosave: () => { autosaves += 1; },
+  });
+  assert.equal(scene.hireEmployee("tavi_stock_clerk"), false);
+  assert.match(warnings[0], /Shop Level 4.*60 store reputation/);
+  assert.equal(state.credits, 1500);
+  assert.equal(autosaves, 0);
+
+  state.addReputation(60);
+  state.finishShift({ customersServed: 60, customersTurnedAway: 0 });
+  assert.equal(scene.hireEmployee("tavi_stock_clerk"), true);
+  assert.equal(state.credits, 1250);
+  assert.equal(autosaves, 1);
+});
 
 test("actual store price edits preserve cents and explain invalid prices", () => {
   const scene = Object.create(GameScene.prototype);
@@ -288,7 +424,7 @@ test("HUD Save button is wired, reflects availability, and removes its handler o
   assert.match(html, /id="hud-save-btn"/);
   const elements = new Map();
   for (const id of [
-    "hud-credits", "hud-rep", "hud-hovercart", "hud-shift-time", "hud-pause-btn",
+    "hud-credits", "hud-rep", "hud-shop-level", "hud-hovercart", "hud-shift-time", "hud-pause-btn",
     "hud-start-shift-btn", "hud-end-day-btn", "hud-save-btn", "persistent-hud",
   ]) {
     elements.set(id, {
@@ -311,7 +447,7 @@ test("HUD Save button is wired, reflects availability, and removes its handler o
   let saves = 0;
   const hud = new HUDController({
     subscribe(callback) {
-      callback({ credits: 436, globalReputation: 2, hovercart: { usedCapacity: () => 0, capacity: 10 } });
+      callback({ credits: 436, globalReputation: 2, shopLevel: 1, hovercart: { usedCapacity: () => 0, capacity: 10 } });
     },
   }, {
     subscribe(callback) { callback({ started: false, isPaused: true, softClosed: false }); },

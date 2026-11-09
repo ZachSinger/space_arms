@@ -157,6 +157,9 @@ test("unreadable, unsupported, or incomplete saves are rejected", async () => {
 test("invalid saved inventory and economy are rejected before restoration", () => {
   const corruptions = [
     (data) => { data.playerState.credits = NaN; },
+    (data) => { data.playerState.shopLevel = 0; },
+    (data) => { data.playerState.shopLevel = 31; },
+    (data) => { data.playerState.pendingReputation = { global: 1, factions: {} }; },
     (data) => { data.playerState.activeLicenses.push("unknown"); },
     (data) => { data.playerState.hovercart.stock[0].quantity = 999; },
     (data) => { data.playerState.storePrices.wpn_rif_01 = 0; },
@@ -199,6 +202,16 @@ test("saves from before employees existed still load", () => {
   const data = snapshot();
   delete data.playerState.hiredEmployees;
   delete data.playerState.employeeJobPriorities;
+  assert.doesNotThrow(() => validateShopSave(data, database));
+});
+
+test("saves accept earned shop levels and pending store and faction reputation", () => {
+  const data = snapshot();
+  data.playerState.shopLevel = 30;
+  data.playerState.pendingReputation = {
+    global: 3,
+    factions: { scavengers: 4, mercenaries: -1, explorers: 0 },
+  };
   assert.doesNotThrow(() => validateShopSave(data, database));
 });
 

@@ -14,7 +14,8 @@
     "description": "A supplier contract for bigger shop fixtures, including the large shelf.",
     "tier": 2,
     "baseCost": 750,
-    "reqReputation": 10,
+    "requiredShopLevel": 3,
+    "reqReputation": null,
     "unlocksFixtures": ["shelf_universal"]
   },
   {
@@ -51,7 +52,8 @@
     "description": "Mass-market civilian clothing. Zero armor value, but high impulse-buy potential for station locals.",
     "tier": 1,
     "baseCost": 100,
-    "reqReputation": 5
+    "requiredShopLevel": 2,
+    "reqReputation": null
   },
   {
     "id": "lic_start_tools",

@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "vite";
 import { summarizeSupplyOrder, DELIVERY_FEE } from "../js/logic/SupplyOrder.js";
 import { GAME_EVENTS } from "../js/logic/EventBus.js";
 import { isMoney } from "../js/logic/Money.js";
+import { SupplierLicense } from "../js/logic/Licenses.js";
 
 let server;
 let ManagerTablet;
@@ -40,7 +41,10 @@ before(async () => {
           return "export class FixtureHighlight { reset() {} destroy() {} }";
         }
         if (id === "\0inventory-test-database") {
-          return "export const database = { getAllLicenses: () => [] };";
+          return `export const database = {
+            getAllLicenses: () => [],
+            getLicense: (id) => globalThis.__inventoryTestLicenses?.get(id),
+          };`;
         }
         if (id === "\0inventory-test-window") {
           return "export class UIWindow { constructor() { this.element = globalThis.__inventoryTestWindow; } }";
@@ -56,6 +60,7 @@ after(async () => {
   else globalThis.document = originalDocument;
   delete globalThis.__inventoryTestWindow;
   delete globalThis.__supplyErrorBuzzes;
+  delete globalThis.__inventoryTestLicenses;
   if (server) await server.close();
   if (cacheDirectory) await rm(cacheDirectory, { recursive: true, force: true });
 });
@@ -255,6 +260,49 @@ test("price buttons update the displayed value and retain keyboard focus", () =>
   assert.equal(h.list.scrollTop, 37);
   h.focus(null);
   assert.equal(h.keyboard.enabled, true);
+});
+
+test("contract signing enforces each shop level without spending credits early", async () => {
+  const data = JSON.parse(await readFile(new URL("../data/Licenses.json", import.meta.url), "utf8"));
+  globalThis.__inventoryTestLicenses = new Map(
+    data.map((license) => [license.id, new SupplierLicense(license)]),
+  );
+  const warnings = [];
+  const entries = [];
+  const state = {
+    shopLevel: 1,
+    globalReputation: 1000,
+    factionReputation: { scavengers: 0, mercenaries: 0, explorers: 0 },
+    credits: 1500,
+    activeLicenses: new Set(),
+    spendCredits(amount, entry) { this.credits -= amount; entries.push(entry); },
+    signLicense(id) { this.activeLicenses.add(id); },
+  };
+  const tablet = Object.create(ManagerTablet.prototype);
+  tablet.playerState = state;
+  tablet.scene = {
+    showShopMessage: (message) => warnings.push(message),
+    recalculateActiveFactions() {},
+  };
+  tablet.handleSignContract("lic_start_apparel");
+  assert.equal(state.credits, 1500);
+  assert.equal(state.activeLicenses.has("lic_start_apparel"), false);
+  assert.match(warnings[0], /locked.*requirements/i);
+
+  state.shopLevel = 2;
+  state.globalReputation = -5;
+  tablet.handleSignContract("lic_start_apparel");
+  assert.equal(state.credits, 1400);
+  assert.equal(state.activeLicenses.has("lic_start_apparel"), true);
+  tablet.handleSignContract("lic_fixture_expanded");
+  assert.equal(state.credits, 1400);
+  assert.equal(state.activeLicenses.has("lic_fixture_expanded"), false);
+
+  state.shopLevel = 3;
+  tablet.handleSignContract("lic_fixture_expanded");
+  assert.equal(state.credits, 650);
+  assert.equal(state.activeLicenses.has("lic_fixture_expanded"), true);
+  assert.deepEqual(entries.map((entry) => entry.category), ["licenses", "licenses"]);
 });
 
 test("opening the tablet hides checkout and closing it resumes register work", () => {

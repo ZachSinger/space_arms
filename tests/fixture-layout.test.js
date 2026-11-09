@@ -1,9 +1,57 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { STARTING_FIXTURES, fixtureAccessCells, fixtureCells, fixtureFacing, fixtureFootprint, cellKey, getFixtureType, migrateFixtureEntry, validateFixtureLayout, fixtureInteractionDistance } from "../js/logic/FixtureLayout.js";
+import { FixturePlacement } from "../js/logic/FixturePlacement.js";
 import { TileRoom } from "../js/logic/TileRoom.js";
 import { findGridPath } from "../js/logic/Pathfinder.js";
 import { getZone, getStoreDoorCell, getBackroomLink, TILE_SIZE } from "../js/logic/RoomLayout.js";
+
+test("shelf crates cannot enter placement mode in the backroom", () => {
+  const messages = [];
+  const crate = { kind: "fixture", typeId: "shelf_starter_2x1" };
+  const placement = Object.create(FixturePlacement.prototype);
+  placement.scene = {
+    canRearrangeFixtures: () => true,
+    carriedCrate: crate,
+    playerInBackroom: true,
+    showShopMessage: (message) => messages.push(message),
+  };
+  placement.start = () => assert.fail("Shelf placement should not start in the backroom.");
+
+  assert.equal(placement.beginFromCrate(crate), false);
+  assert.equal(placement.scene.carriedCrate, crate);
+  assert.deepEqual(messages, ["Shelves can only be placed on the sales floor."]);
+});
+
+test("storage crates can still enter placement mode in the backroom", () => {
+  const crate = { kind: "fixture", typeId: "locker_single" };
+  const placement = Object.create(FixturePlacement.prototype);
+  placement.scene = {
+    canRearrangeFixtures: () => true,
+    carriedCrate: crate,
+    playerInBackroom: true,
+  };
+  let started = false;
+  placement.start = () => { started = true; return true; };
+
+  assert.equal(placement.beginFromCrate(crate), true);
+  assert.equal(started, true);
+});
+
+test("shelf crates can enter placement mode from the sales floor", () => {
+  const crate = { kind: "fixture", typeId: "shelf_starter_2x1" };
+  const placement = Object.create(FixturePlacement.prototype);
+  placement.scene = {
+    canRearrangeFixtures: () => true,
+    carriedCrate: crate,
+    playerInBackroom: false,
+  };
+  let started = false;
+  placement.start = () => { started = true; return true; };
+
+  assert.equal(placement.beginFromCrate(crate), true);
+  assert.equal(started, true);
+});
 
 test("fixture interaction covers its entire front but not its sides or back", () => {
   const shelf = { type: "shelf_universal", gx: 9, gy: 2 };

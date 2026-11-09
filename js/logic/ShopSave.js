@@ -12,6 +12,8 @@ import { THROW_ACCELERATION_MS } from "./Crate.js";
 import { isValidLedgerData } from "./DayLedger.js";
 import { isMoney, roundMoney } from "./Money.js";
 import { isValidHovercartCapacity } from "./Hovercart.js";
+import { isKnownShopLevel } from "./ShopProgression.js";
+import { CUSTOMER_FACTION_IDS } from "./CustomerBuyLists.js";
 
 // Older saves used "slot depth 12 ÷ stackSize". Stacks valid under that rule still load;
 // trimShelfOverflow() then moves anything over the current cap to the Go-Backs bin.
@@ -86,6 +88,15 @@ export function validateShopSave(data, database) {
   requireSave(isRecord(player), "missing player state.");
   requireSave(isMoney(player.credits) && integer(player.globalReputation) &&
     integer(player.customersTurnedAway, 0), "invalid credits or reputation.");
+  if (player.shopLevel !== undefined) {
+    requireSave(isKnownShopLevel(player.shopLevel), "invalid shop level.");
+  }
+  if (player.pendingReputation !== undefined) {
+    const pending = player.pendingReputation;
+    requireSave(isRecord(pending) && integer(pending.global) && isRecord(pending.factions) &&
+      CUSTOMER_FACTION_IDS.every((id) => integer(pending.factions[id])),
+    "invalid pending reputation.");
+  }
   if (player.hiredEmployees !== undefined) {
     const employeeIds = new Set(employeeRoster.map((employee) => employee.id));
     requireSave(Array.isArray(player.hiredEmployees) &&
@@ -104,7 +115,7 @@ export function validateShopSave(data, database) {
       }), "invalid employee job priorities.");
   }
   requireSave(isRecord(player.factionReputation) &&
-    ["scavengers", "mercenaries", "explorers"].every((id) => integer(player.factionReputation[id])),
+    CUSTOMER_FACTION_IDS.every((id) => integer(player.factionReputation[id])),
   "invalid faction reputation.");
   requireSave(Array.isArray(player.activeLicenses) &&
     new Set(player.activeLicenses).size === player.activeLicenses.length &&

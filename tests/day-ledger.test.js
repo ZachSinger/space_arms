@@ -47,6 +47,156 @@ after(async () => {
 const balanceOf = (state) => state.dayLedger.openingCredits +
   state.dayLedger.lines.reduce((sum, line) => sum + line.amount, 0);
 
+function unlockStaff(state) {
+  state.addReputation(60);
+  state.finishShift({ customersServed: 60, customersTurnedAway: 0 });
+  state.endDay(2);
+}
+
+test("new shops start at zero reputation and cannot hire Tavi at Shop Level 1", () => {
+  const state = new PlayerState();
+  assert.equal(state.globalReputation, 0);
+  assert.equal(state.shopLevel, 1);
+  assert.equal(state.hireEmployee("tavi_stock_clerk", 250), false);
+  assert.equal(state.credits, 1500);
+  assert.deepEqual(state.hiredEmployees, []);
+});
+
+test("store and faction reputation changes are applied together at the end of the shift", () => {
+  const state = new PlayerState();
+  state.addReputation(4, "scavengers");
+  state.subReputation(2, "mercenaries");
+  state.subReputation(1);
+
+  assert.equal(state.globalReputation, 0);
+  assert.deepEqual(state.factionReputation, { scavengers: 0, mercenaries: 0, explorers: 0 });
+  state.finishShift({ customersServed: 4, customersTurnedAway: 0 });
+  assert.equal(state.globalReputation, 1);
+  assert.deepEqual(state.factionReputation, { scavengers: 4, mercenaries: -2, explorers: 0 });
+  assert.equal(summarizeReceipt(state.dayLedger.serialize(), state.credits, state.globalReputation)
+    .reputationChange, 1);
+
+  state.endDay(2);
+  state.finishShift({ customersServed: 0, customersTurnedAway: 0 });
+  assert.equal(state.globalReputation, 1);
+  assert.deepEqual(state.factionReputation, { scavengers: 4, mercenaries: -2, explorers: 0 });
+});
+
+test("shop levels rise after a shift and Tavi unlocks at Level 4 with 60 reputation", () => {
+  const state = new PlayerState();
+  state.addReputation(16);
+  state.subReputation(2);
+  assert.equal(state.globalReputation, 0);
+  assert.equal(state.shopLevel, 1);
+  state.finishShift({ customersServed: 14, customersTurnedAway: 0 });
+  assert.equal(state.globalReputation, 14);
+  assert.equal(state.shopLevel, 1);
+  assert.equal(state.hireEmployee("tavi_stock_clerk", 250), false);
+
+  state.endDay(2);
+  state.addReputation(1);
+  assert.equal(state.globalReputation, 14);
+  assert.equal(state.shopLevel, 1);
+  state.finishShift({ customersServed: 1, customersTurnedAway: 0 });
+  assert.equal(state.globalReputation, 15);
+  assert.equal(state.shopLevel, 2);
+  assert.equal(state.hireEmployee("tavi_stock_clerk", 250), false);
+
+  state.endDay(3);
+  state.addReputation(20);
+  state.finishShift({ customersServed: 20, customersTurnedAway: 0 });
+  assert.equal(state.globalReputation, 35);
+  assert.equal(state.shopLevel, 3);
+  assert.equal(state.hireEmployee("tavi_stock_clerk", 250), false);
+
+  state.endDay(4);
+  state.addReputation(24);
+  state.finishShift({ customersServed: 24, customersTurnedAway: 0 });
+  assert.equal(state.globalReputation, 59);
+  assert.equal(state.shopLevel, 3);
+  assert.equal(state.hireEmployee("tavi_stock_clerk", 250), false);
+
+  state.endDay(5);
+  state.addReputation(1);
+  assert.equal(state.shopLevel, 3);
+  state.finishShift({ customersServed: 1, customersTurnedAway: 0 });
+  assert.equal(state.globalReputation, 60);
+  assert.equal(state.shopLevel, 4);
+
+  state.endDay(6);
+  state.subReputation(55);
+  state.finishShift({ customersServed: 0, customersTurnedAway: 0 });
+  assert.equal(state.globalReputation, 5);
+  assert.equal(state.shopLevel, 4);
+  const restored = PlayerState.deserialize(JSON.parse(JSON.stringify(state.serialize())));
+  assert.equal(restored.globalReputation, 5);
+  assert.equal(restored.shopLevel, 4);
+  assert.equal(restored.hireEmployee("tavi_stock_clerk", 250), true);
+});
+
+test("older saves keep reputation and hired staff and derive their initial shop level", () => {
+  const saved = new PlayerState().serialize();
+  delete saved.shopLevel;
+  delete saved.pendingReputation;
+  saved.globalReputation = 15;
+  assert.equal(PlayerState.deserialize(saved).shopLevel, 2);
+
+  saved.globalReputation = 2;
+  saved.hiredEmployees = ["tavi_stock_clerk"];
+  delete saved.employeeJobPriorities;
+  const restored = PlayerState.deserialize(saved);
+  assert.equal(restored.globalReputation, 2);
+  assert.equal(restored.shopLevel, 1);
+  assert.deepEqual(restored.hiredEmployees, ["tavi_stock_clerk"]);
+  assert.equal(restored.moveEmployeeJobPriority("tavi_stock_clerk", "stock_shelves", -1), true);
+});
+
+test("older level-capped saves catch up to earned reputation without reducing saved levels", () => {
+  const saved = new PlayerState().serialize();
+  saved.shopLevel = 2;
+  saved.globalReputation = 60;
+  assert.equal(PlayerState.deserialize(saved).shopLevel, 4);
+  saved.shopLevel = 4;
+  saved.globalReputation = -5;
+  assert.equal(PlayerState.deserialize(saved).shopLevel, 4);
+});
+
+test("previously signed contracts and hired staff remain owned below their new unlock levels", () => {
+  const saved = new PlayerState().serialize();
+  saved.globalReputation = 2;
+  saved.shopLevel = 2;
+  saved.activeLicenses.push("lic_start_apparel", "lic_fixture_expanded");
+  saved.hiredEmployees = ["tavi_stock_clerk"];
+  delete saved.employeeJobPriorities;
+  const restored = PlayerState.deserialize(saved);
+  assert.equal(restored.shopLevel, 2);
+  assert.equal(restored.activeLicenses.has("lic_start_apparel"), true);
+  assert.equal(restored.activeLicenses.has("lic_fixture_expanded"), true);
+  assert.deepEqual(restored.hiredEmployees, ["tavi_stock_clerk"]);
+  assert.equal(restored.moveEmployeeJobPriority("tavi_stock_clerk", "stock_shelves", -1), true);
+});
+
+test("one shift can earn multiple levels without applying reputation early", () => {
+  const state = new PlayerState();
+  state.addReputation(2465);
+  assert.equal(state.globalReputation, 0);
+  assert.equal(state.shopLevel, 1);
+  state.finishShift({ customersServed: 1, customersTurnedAway: 0 });
+  assert.equal(state.globalReputation, 2465);
+  assert.equal(state.shopLevel, 30);
+});
+
+test("pending reputation survives a player-state round trip without being applied early", () => {
+  const state = new PlayerState();
+  state.addReputation(3, "explorers");
+  const restored = PlayerState.deserialize(JSON.parse(JSON.stringify(state.serialize())));
+  assert.equal(restored.globalReputation, 0);
+  assert.equal(restored.factionReputation.explorers, 0);
+  restored.finishShift({ customersServed: 3, customersTurnedAway: 0 });
+  assert.equal(restored.globalReputation, 3);
+  assert.equal(restored.factionReputation.explorers, 3);
+});
+
 test("receipt lines merge by item and keep earned and spent apart", () => {
   const ledger = new DayLedger({ day: 3, openingCredits: 1000, openingReputation: 5 });
   ledger.record({ category: "sales", label: "Pulse Rifle", amount: 150, quantity: 1 });
@@ -77,6 +227,7 @@ test("receipt entries without a known category or cent-precision amount are reje
 
 test("every credit change is itemized, so the receipt always matches the balance", () => {
   const state = new PlayerState();
+  unlockStaff(state);
   state.addCredits(200, { category: "sales", label: "Pulse Rifle", quantity: 2 });
   state.spendCredits(75, { category: "licenses", label: "Aulin Arms" });
   assert.equal(state.hireEmployee("tavi_stock_clerk", 250), true);
@@ -143,6 +294,7 @@ test("receipts describe fixture resale and hovercart upgrades separately", () =>
 
 test("cent-priced sales, spending and receipts survive ending the day and saving", () => {
   const state = new PlayerState();
+  unlockStaff(state);
   state.addCredits(1.23, { category: "sales", label: "Ration" });
   state.addCredits(2.34, { category: "sales", label: "Ration" });
   state.spendCredits(25, { category: "delivery_fees", label: "Delivery fee" });
@@ -150,7 +302,7 @@ test("cent-priced sales, spending and receipts survive ending the day and saving
   assert.equal(state.credits, 1228.57);
   assert.equal(state.dayLedger.lines[0].amount, 3.57);
   state.finishShift({ customersServed: 2, customersTurnedAway: 0 });
-  state.endDay(2);
+  state.endDay(3);
   const restored = PlayerState.deserialize(JSON.parse(JSON.stringify(state.serialize())));
   assert.equal(restored.credits, 1228.57);
   assert.equal(restored.lastDayReceipt.closingCredits, 1228.57);
@@ -176,7 +328,7 @@ test("ending a day closes the receipt and starts the next day from the closing b
   assert.equal(state.lastDayReceipt, receipt);
   assert.equal(state.dayLedger.day, 2);
   assert.equal(state.dayLedger.openingCredits, 2000);
-  assert.equal(state.dayLedger.openingReputation, 5);
+  assert.equal(state.dayLedger.openingReputation, 3);
   assert.deepEqual(state.dayLedger.lines, []);
 });
 
@@ -220,6 +372,7 @@ function financesView(overrides = {}) {
   return {
     day: 2,
     shiftRunning: false,
+    pendingReputationChange: null,
     awaitingEndDay: true,
     canEndDay: true,
     today: summarizeReceipt(ledger.serialize(), 1105, 4),
@@ -246,9 +399,18 @@ test("the Finances tab spells out what every credit was for", () => {
 });
 
 test("the Finances tab offers End Day only after the shift, and Start Shift once the day is ended", () => {
-  const running = FinancesRenderer.generateHTML(financesView({ shiftRunning: true, awaitingEndDay: false }));
+  const running = FinancesRenderer.generateHTML(financesView({
+    shiftRunning: true, awaitingEndDay: false, pendingReputationChange: 3,
+  }));
   assert.doesNotMatch(running, /data-end-day|data-finances-start-shift/);
   assert.match(running, /SO FAR/);
+  assert.match(running, /Reputation change at shift end/);
+  assert.match(running, /\+3/);
+  const loss = FinancesRenderer.generateHTML(financesView({
+    shiftRunning: true, awaitingEndDay: false, pendingReputationChange: -2,
+  }));
+  assert.match(loss, /Reputation change at shift end/);
+  assert.match(loss, /-2/);
 
   const blocked = FinancesRenderer.generateHTML(financesView({ canEndDay: false }));
   assert.match(blocked, /data-end-day\s+disabled/);
@@ -269,7 +431,7 @@ test("the Finances tab offers End Day only after the shift, and Start Shift once
 
 test("the top bar shows PAUSE during a shift, END DAY after it, and START SHIFT before the next", (context) => {
   const elements = new Map();
-  const ids = ["hud-credits", "hud-rep", "hud-hovercart", "hud-shift-time", "hud-pause-btn",
+  const ids = ["hud-credits", "hud-rep", "hud-shop-level", "hud-hovercart", "hud-shift-time", "hud-pause-btn",
     "hud-start-shift-btn", "hud-end-day-btn", "hud-save-btn", "persistent-hud"];
   for (const id of ids) {
     const classes = new Set();
@@ -303,6 +465,8 @@ test("the top bar shows PAUSE during a shift, END DAY after it, and START SHIFT 
   };
   let opened = 0;
   new HUDController(state, clock, () => {}, () => {}, () => { opened += 1; });
+  assert.equal(elements.get("hud-rep").innerText, 0);
+  assert.equal(elements.get("hud-shop-level").innerText, 1);
   const visible = () => ["hud-pause-btn", "hud-start-shift-btn", "hud-end-day-btn"]
     .filter((id) => !elements.get(id).classList.contains("hidden"));
 
