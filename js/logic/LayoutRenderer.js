@@ -28,6 +28,64 @@ export class LayoutRenderer {
       .filter((crate) => crate.kind === "fixture" && crate.lockedToPad)
       .map((crate) => getFixtureType(crate.typeId).name);
     const freeSpots = scene.getLoadingPadSpawnPositions?.().length ?? LOADING_PAD_SPOTS;
+    const expansionHTML = !includePurchases ? `
+      <h3 class="fixture-section-title">STORE EXPANSIONS</h3>
+      <p class="fixture-stock-meta">Reach the listed Shop Level to unlock each expansion. Buy them
+        in order while the store is closed; each one costs credits.</p>
+      <div class="fixture-purchase-list">
+        ${scene.getExpansionPurchaseOptions().map(({ zone, isPurchased, isNext, levelMet, canAfford }) => {
+          const canBuy = scene.canRearrangeFixtures() && isNext && levelMet && canAfford;
+          const status = isPurchased
+            ? "OPEN"
+            : !isNext
+              ? "BUY PREVIOUS EXPANSION FIRST"
+              : !levelMet
+                ? `REACH SHOP LEVEL ${zone.requiredShopLevel}`
+                : !canAfford
+                  ? "INSUFFICIENT FUNDS"
+                  : !scene.canRearrangeFixtures()
+                    ? "AVAILABLE WHILE STORE IS CLOSED"
+                    : "BUY";
+          return `
+            <div class="layout-fixture-row">
+              <span>${zone.name}
+                <small>SHOP LEVEL ${zone.requiredShopLevel} | PRICE ${formatMoney(zone.cost)}</small>
+              </span>
+              <button type="button" class="action-btn" data-buy-expansion-id="${zone.id}"
+                ${canBuy ? "" : "disabled"}>${status}</button>
+            </div>
+          `;
+        }).join("")}
+      </div>
+      <h3 class="fixture-section-title">BACKROOM EXPANSIONS</h3>
+      <p class="fixture-stock-meta">Reach the listed Shop Level to unlock each expansion. Buy them
+        in order while the store is closed; each one costs credits.</p>
+      <div class="fixture-purchase-list">
+        ${scene.getBackroomPurchaseOptions().map(({ zone, isPurchased, isNext, levelMet, canAfford }) => {
+          const canBuy = scene.canRearrangeFixtures() && isNext && levelMet && canAfford;
+          const status = isPurchased
+            ? "OPEN"
+            : !isNext
+              ? "BUY PREVIOUS EXPANSION FIRST"
+              : !levelMet
+                ? `REACH SHOP LEVEL ${zone.requiredShopLevel}`
+                : !canAfford
+                  ? "INSUFFICIENT FUNDS"
+                  : !scene.canRearrangeFixtures()
+                    ? "AVAILABLE WHILE STORE IS CLOSED"
+                    : "BUY";
+          return `
+            <div class="layout-fixture-row">
+              <span>${zone.name}
+                <small>SHOP LEVEL ${zone.requiredShopLevel} | PRICE ${formatMoney(zone.cost)}</small>
+              </span>
+              <button type="button" class="action-btn" data-buy-backroom-id="${zone.id}"
+                ${canBuy ? "" : "disabled"}>${status}</button>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    ` : "";
     const fixtureCrates = (scene.restockCrates ?? [])
       .map((crate, index) => ({ crate, key: String(index) }))
       .filter(({ crate }) => crate.kind === "fixture");
@@ -67,6 +125,7 @@ export class LayoutRenderer {
       <h3 class="fixture-section-title">PLACED FIXTURES</h3>
     ` : "";
     return `
+      ${expansionHTML}
       ${includePurchases && purchaseNotice ? `<p class="layout-purchase-notice" role="status">${purchaseNotice}</p>` : ""}
       ${includePurchases && saleConfirmation ? `
         <div class="layout-sale-confirmation" role="status">

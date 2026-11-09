@@ -23,8 +23,8 @@ notice something that needs doing but isn't being done right now.
       coming in, customers already inside finish up, and the clock keeps running. This
       gives the player time to catch up on stocking without losing reputation to
       impatient customers.
-- [ ] Add normal purchases for sales-floor expansions and backroom upgrades. The U and B
-      debug keys currently unlock them for free; players need a way to buy them with credits.
+- [ ] Add normal purchases for backroom upgrades. The B debug key still unlocks them
+      for free; players need a way to buy them with credits.
 - [ ] Play at least three shifts from a new game without debug keys. Check whether sales
       cover stock orders and wages, customers are served through closing, and saving and
       continuing between shifts works.
@@ -38,13 +38,15 @@ notice something that needs doing but isn't being done right now.
       during the shift and applied once when it ends; Finances shows the pending change.
 - [x] Add provisional reputation thresholds for Shop Levels 1-30. Earned levels stay
       unlocked if reputation later falls; older level-capped saves catch up to earned reputation.
-- [x] Add the first roadmap unlocks: Level 2 opens the Civilian Threads supply contract,
-      Level 3 opens Expanded Fixture Supply, and Level 4 makes Tavi available to hire.
+- [x] Implement the planned rewards at Shop Levels 2-30, including supplier contracts,
+      fixture licenses, staff, and sales-floor and backroom expansions.
+- [x] Level 5, 9, 17, 24, and 30 unlock sales-floor expansions for purchase in order.
+      Each costs credits, requires the listed Shop Level, and can only be bought while
+      the store is closed.
+- [x] Level 13, 20, and 27 unlock paid backroom expansions for purchase in order while
+      the store is closed.
 - [ ] Playtest the [Store Level roadmap](documentation/StoreLevel.md) and adjust reputation
       thresholds, especially whether 15 is reasonable by the end of the first shift.
-- [ ] Implement the roadmap's Level 5-30 unlocks and assign the remaining licenses,
-      employees, and expansions. Unassigned licenses currently use their existing reputation
-      requirements; paid expansion purchases and additional employees are not built yet.
 
 ## Post-base-loop module concepts
 - [ ] Gunsmithing.

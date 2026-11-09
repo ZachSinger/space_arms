@@ -22,7 +22,7 @@ const BACKROOM_FLOOR_TILE = "floor_concrete_clean_01";
 const BACKROOM_WALL_TILE = "wall_dark_riveted_01";
 export const BACKROOM_DOOR_TILE = "door_blast_keypad_01";
 
-// cost (credits) is a placeholder: no purchase flow checks it yet.
+// Expansion costs are paid in credits; all expansions also require a shop level.
 export const ZONES = [
   {
     id: "storeroom",
@@ -62,6 +62,7 @@ export const ZONES = [
     floorTile: BACKROOM_FLOOR_TILE,
     wallTile: BACKROOM_WALL_TILE,
     cost: 4000,
+    requiredShopLevel: 13,
   },
   {
     id: "backroom_upgrade_b",
@@ -75,6 +76,21 @@ export const ZONES = [
     floorTile: BACKROOM_FLOOR_TILE,
     wallTile: BACKROOM_WALL_TILE,
     cost: 6000,
+    requiredShopLevel: 20,
+  },
+  {
+    id: "backroom_upgrade_c",
+    name: "Backroom Upgrade C",
+    gridX: 14,
+    gridY: BACKROOM_GRID_Y,
+    gridW: 4,
+    gridH: 12,
+    locked: true,
+    backroom: true,
+    floorTile: BACKROOM_FLOOR_TILE,
+    wallTile: BACKROOM_WALL_TILE,
+    cost: 9000,
+    requiredShopLevel: 27,
   },
   {
     id: "sales_floor",
@@ -101,6 +117,7 @@ export const ZONES = [
     floorTile: SALES_FLOOR_TILE,
     wallTile: SALES_WALL_TILE,
     cost: 5000,
+    requiredShopLevel: 9,
   },
   // Where the backroom used to stand, west of the starting Sales Floor.
   {
@@ -115,6 +132,7 @@ export const ZONES = [
     floorTile: SALES_FLOOR_TILE,
     wallTile: SALES_WALL_TILE,
     cost: 4000,
+    requiredShopLevel: 5,
   },
   {
     id: "expansion_b",
@@ -128,6 +146,7 @@ export const ZONES = [
     floorTile: SALES_FLOOR_TILE,
     wallTile: SALES_WALL_TILE,
     cost: 7500,
+    requiredShopLevel: 17,
   },
   {
     id: "expansion_c",
@@ -141,6 +160,7 @@ export const ZONES = [
     floorTile: SALES_FLOOR_TILE,
     wallTile: SALES_WALL_TILE,
     cost: 10000,
+    requiredShopLevel: 24,
   },
   {
     id: "expansion_d",
@@ -154,6 +174,7 @@ export const ZONES = [
     floorTile: SALES_FLOOR_TILE,
     wallTile: SALES_WALL_TILE,
     cost: 12500,
+    requiredShopLevel: 30,
   },
 ];
 
@@ -161,7 +182,9 @@ export const ZONES = [
 export const EXPANSION_ORDER = ["expansion_west", "expansion_a", "expansion_b", "expansion_c", "expansion_d"];
 
 // Backroom upgrades in the order the player buys them.
-export const BACKROOM_UPGRADE_ORDER = ["backroom_upgrade_a", "backroom_upgrade_b"];
+export const BACKROOM_UPGRADE_ORDER = [
+  "backroom_upgrade_a", "backroom_upgrade_b", "backroom_upgrade_c",
+];
 
 export function getZone(id) {
   return ZONES.find((zone) => zone.id === id);

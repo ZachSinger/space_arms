@@ -13,6 +13,7 @@
 * **Step 1: Platform & Tech Stack:** PC Desktop (Electron using Vite, vanilla HTML/CSS/JS frontend, and Phaser 3 canvas). The UI and Canvas are strictly decoupled.
 * **Step 2: Time Management:** Real-time simulation using Galactic Time Code (GTC) with a "Manual Toggle". Shifts reach soft close after 12 GTC hours at a **Static Speed**, or 5 minutes of unpaused play; time pauses entirely when closed, allowing infinite downtime for management.
 * **Step 3: The MVP Bridge:** Powered by a Master State (single source of truth) and an Event Bus to handle communication between the "dumb" UI and the Canvas.
+* **Player Dash & Stamina:** Hold Shift while moving with WASD/arrows to dash at 280 pixels per second instead of walking at 160. Only the player has this ability; employees are unchanged. The HUD shows a stamina bar below the status bar. Starting balance: 100 stamina, 25 used per second of dashing, and 25 recovered per second while walking or resting after a 0.75-second delay. At zero stamina the player walks until stamina recovers to 25, preventing rapid speed changes at an empty bar. Shift pause freezes stamina along with movement; management windows allow recovery while the player rests. Stamina starts full when a game is loaded and is not saved.
 
 ## Part 2: Spatial Organization & Stock
 * **Step 4: Item Data Contract:** Items possess `baseDimensions` (w, h), `isRotated` toggles, `supportedDisplayTypes`, and a `stack` value (how many units of stack depth on a display this item consumes). 

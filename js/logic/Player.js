@@ -7,6 +7,12 @@ import { pickPlayerCharacterTextures } from "./CustomerSprites.js";
 
 // px/s; faster than a customer's 120 so direct control doesn't feel sluggish.
 const MOVE_SPEED = 160;
+const DASH_SPEED = 280;
+const MAX_STAMINA = 100;
+const STAMINA_DRAIN_PER_SECOND = 25;
+const STAMINA_RECOVERY_PER_SECOND = 25;
+const STAMINA_RECOVERY_DELAY_MS = 750;
+const EXHAUSTION_RECOVERY_STAMINA = 25;
 
 // px; same as a customer, so the player reads as the same scale of person.
 export const PLAYER_DISPLAY_WIDTH = 46;
@@ -45,6 +51,11 @@ export class Player {
       left: "A",
       right: "D",
     });
+    this.dashKey = scene.input.keyboard.addKey("SHIFT");
+    this.maxStamina = MAX_STAMINA;
+    this.stamina = MAX_STAMINA;
+    this.exhausted = false;
+    this.staminaRecoveryDelay = 0;
 
     // False while an interaction owns positioning (e.g. operating the register). Velocity
     // is zeroed instead of disabling the body, so collisions still work.
@@ -58,12 +69,9 @@ export class Player {
     this.sprite.body.setSize(BODY_WIDTH / this.sprite.scaleX, BODY_HEIGHT / this.sprite.scaleY);
   }
 
-  update() {
-    if (!this.inputEnabled || !this.scene.controlMode.allows("move")) {
-      this.sprite.body.setVelocity(0, 0);
-      return;
-    }
-
+  update(delta) {
+    const canMove = this.inputEnabled && this.scene.input.keyboard.enabled &&
+      this.scene.controlMode.allows("move");
     const left = this.cursors.left.isDown || this.wasd.left.isDown;
     const right = this.cursors.right.isDown || this.wasd.right.isDown;
     const up = this.cursors.up.isDown || this.wasd.up.isDown;
@@ -75,6 +83,27 @@ export class Player {
     if (right) vx += 1;
     if (up) vy -= 1;
     if (down) vy += 1;
+    if (!canMove) {
+      vx = 0;
+      vy = 0;
+    }
+
+    let speed = MOVE_SPEED;
+    const wantsDash = (vx !== 0 || vy !== 0) && this.dashKey.isDown;
+    if (wantsDash && !this.exhausted && this.stamina > 0) {
+      const dashSeconds = Math.min(delta / 1000, this.stamina / STAMINA_DRAIN_PER_SECOND);
+      this.stamina = Math.max(0, this.stamina - dashSeconds * STAMINA_DRAIN_PER_SECOND);
+      if (delta > 0) speed += (DASH_SPEED - MOVE_SPEED) * dashSeconds / (delta / 1000);
+      this.staminaRecoveryDelay = STAMINA_RECOVERY_DELAY_MS;
+      this.exhausted = this.stamina === 0;
+    } else {
+      const recoveryMs = Math.max(0, delta - this.staminaRecoveryDelay);
+      this.staminaRecoveryDelay = Math.max(0, this.staminaRecoveryDelay - delta);
+      this.stamina = Math.min(MAX_STAMINA,
+        this.stamina + recoveryMs / 1000 * STAMINA_RECOVERY_PER_SECOND);
+      // Avoid alternating between walking and dashing every frame at an empty bar.
+      if (this.exhausted && this.stamina >= EXHAUSTION_RECOVERY_STAMINA) this.exhausted = false;
+    }
 
     // Keep diagonal speed equal to cardinal speed.
     if (vx !== 0 && vy !== 0) {
@@ -82,7 +111,7 @@ export class Player {
       vy *= INV_SQRT2;
     }
 
-    this.sprite.body.setVelocity(vx * MOVE_SPEED, vy * MOVE_SPEED);
+    this.sprite.body.setVelocity(vx * speed, vy * speed);
     this.updateFacing(vx, vy);
   }
 

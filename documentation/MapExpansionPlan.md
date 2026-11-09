@@ -31,8 +31,8 @@ inside; the shop stays visible, dimmed, and keeps running behind it.
   `teleportTo` waypoint) and start each shift inside the backroom.
 - Fixture layout checks treat the two door fronts as connected (`links`).
 - The window fits the whole owned backroom; each backroom upgrade in
-  `BACKROOM_UPGRADE_ORDER` widens the room and its window. Debug key `B` buys
-  the next one.
+  `BACKROOM_UPGRADE_ORDER` widens the room and its window. The Layout tab sells
+  the next upgrade once its Shop Level is reached.
 - Saves from before the move (no `layoutVersion`) have fixtures and crates from
   the old top-left backroom moved down into the new one (`ShopSave.js`).
 
@@ -54,7 +54,7 @@ exists" means "already authored in data," not "already rendered."
 
 - **`RoomLayout.js`** — the authored data: a flat list of zones, each with a
   grid position/size, a floor/wall tile key, and a `locked` flag. Currently
-  defines `storeroom` and `loading_pad` (the backroom), two locked backroom
+  defines `storeroom` and `loading_pad` (the backroom), three locked backroom
   upgrades (`BACKROOM_UPGRADE_ORDER`), `sales_floor`, and five locked sales-floor
   expansions (`EXPANSION_ORDER`), starting with `expansion_west` where the
   backroom used to stand. The sales floor zones occupy a 34-by-13 area inside
@@ -67,8 +67,10 @@ exists" means "already authored in data," not "already rendered."
   body. `unlockZone(id)` builds that zone's tiles for the first time, then
   tears down any now-unnecessary wall cells on its neighbors.
 - **`GameScene.js`** — builds one `TileRoom` and runs the zoomable camera
-  (see above). Each press of the debug-only `U` key unlocks the next expansion
-  in `EXPANSION_ORDER`.
+  (see above). The Manager Tablet's Layout tab lets the player buy the next
+  sales-floor or backroom expansion after reaching its required Shop Level and
+  having enough credits. Purchases are limited to when the store is closed and
+  must be made in order; the old free debug unlocks have been removed.
 - Tile art comes from `img/Icons_Extracted/Tileset/` (64 floor/wall tiles,
   fixed 256×256 grid-sliced from `Sheet1_A.jpg`) and
   `img/Icons_Extracted/Tileset/Fixtures/` (104 shop fixtures, chroma-key
@@ -88,21 +90,13 @@ exists" means "already authored in data," not "already rendered."
 - Floor/wall tiles render correctly; the backroom opens in its own window and
   the player, crates, and employees cross through its doors.
 - Fully zoomed out, the whole owned shop fits the window at every size.
-- Pressing `U` removes the dividing wall and reveals the expansion's floor in
-  its reserved space; the *true* outer map boundary (the far edge of
-  `expansion_a`) correctly stays walled.
+- Buying an expansion removes the dividing wall and reveals its floor in the
+  reserved space; the *true* outer map boundary (the far edge of `expansion_a`)
+  correctly stays walled.
 
 ## What's deliberately NOT built yet (next steps, roughly in order)
 
-1. **Replace the debug `U` key with a real purchase UI.** `unlockZone()` and
-   `zone.cost` already exist for this — a "Build Mode" / expansion-purchase
-   window just needs to call `room.unlockZone(id)` after deducting credits via
-   `PlayerState`, and respect the bible's existing rule that Build Mode is
-   locked to off-shift hours.
-2. **Loading Pad.** Not modeled as a zone yet. Should be an *unlocked-by-default,
-   exterior* zone adjacent to the Storeroom (matching the bible's
-   crate-hauling flow), using exterior/tarmac tiles instead of interior floor.
-3. **Multi-directional / multi-row expansion.** The current layout is a single
+1. **Multi-directional / multi-row expansion.** The current layout is a single
    horizontal row. `RoomLayout`'s zone model already supports arbitrary
    `gridX/gridY`, so adding e.g. a second row of Storeroom expansion or a
    taller Sales Floor is just more zone entries — `TileRoom`'s wall logic is

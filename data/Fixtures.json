@@ -21,6 +21,39 @@
     "price": 2000,
     "licenseId": "lic_fixture_expanded"
   },
+  "shelf_showcase": {
+    "id": "shelf_showcase",
+    "name": "MEDIUM SHELF",
+    "kind": "shelf",
+    "w": 2,
+    "h": 2,
+    "texture": "shelf_frame_02",
+    "stackDepth": 12,
+    "price": 800,
+    "licenseId": "lic_fixture_premium_shelf"
+  },
+  "shelf_bulk": {
+    "id": "shelf_bulk",
+    "name": "WIDE SHELF",
+    "kind": "shelf",
+    "w": 3,
+    "h": 2,
+    "texture": "shelf_universal_02",
+    "stackDepth": 15,
+    "price": 2200,
+    "licenseId": "lic_fixture_bulk_display"
+  },
+  "shelf_armory": {
+    "id": "shelf_armory",
+    "name": "ARMORY DISPLAY",
+    "kind": "shelf",
+    "w": 3,
+    "h": 3,
+    "texture": "shelf_universal_03",
+    "stackDepth": 20,
+    "price": 3500,
+    "licenseId": "lic_fixture_armory_display"
+  },
   "locker_single": {
     "id": "locker_single",
     "name": "LOCKER",
@@ -31,6 +64,28 @@
     "capacity": 20,
     "price": 180,
     "licenseId": "lic_fixture_basics"
+  },
+  "locker_double": {
+    "id": "locker_double",
+    "name": "DOUBLE LOCKER",
+    "kind": "storage",
+    "w": 2,
+    "h": 2,
+    "texture": "locker_storage",
+    "capacity": 60,
+    "price": 1200,
+    "licenseId": "lic_fixture_storage_bank"
+  },
+  "locker_secure": {
+    "id": "locker_secure",
+    "name": "SECURE STORAGE LOCKER",
+    "kind": "storage",
+    "w": 2,
+    "h": 2,
+    "texture": "locker_storage",
+    "capacity": 100,
+    "price": 2200,
+    "licenseId": "lic_fixture_secure_storage"
   },
   "register_basic": {
     "id": "register_basic",

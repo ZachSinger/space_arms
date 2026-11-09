@@ -10,6 +10,7 @@ import { SaveManager } from "../SaveManager.js";
 import { ControlMode } from "../js/logic/ControlMode.js";
 import { GAME_EVENTS } from "../js/logic/EventBus.js";
 import { SupplierLicense } from "../js/logic/Licenses.js";
+import { BACKROOM_UPGRADE_ORDER, EXPANSION_ORDER, ZONES } from "../js/logic/RoomLayout.js";
 
 let server;
 let cacheDirectory;
@@ -93,6 +94,113 @@ function createHarness(write = async () => true) {
   return { scene, messages, errors, writes, controls };
 }
 
+function createExpansionHarness({ shopLevel, credits }) {
+  const scene = Object.create(GameScene.prototype);
+  const playerState = new PlayerState();
+  playerState.shopLevel = shopLevel;
+  playerState.credits = credits;
+  const messages = [];
+  let cameraRefreshes = 0;
+  let autosaves = 0;
+  Object.assign(scene, {
+    playerState,
+    startingShift: false,
+    loadFailed: false,
+    shiftEnded: false,
+    shiftClock: { started: false },
+    customers: [],
+    room: {
+      zones: ZONES.map((zone) => ({ ...zone })),
+      unlockZone(id) {
+        const zone = this.zones.find((candidate) => candidate.id === id);
+        zone.locked = false;
+      },
+    },
+    refreshCamera() { cameraRefreshes++; },
+    requestAutosave() { autosaves++; },
+    showShopMessage(message) { messages.push(message); },
+  });
+  return {
+    scene,
+    messages,
+    get cameraRefreshes() { return cameraRefreshes; },
+    get autosaves() { return autosaves; },
+  };
+}
+
+test("store expansions require their level, credits, and previous purchases", () => {
+  const locked = createExpansionHarness({ shopLevel: 4, credits: 5000 });
+  assert.equal(locked.scene.getExpansionPurchaseOptions()[0].levelMet, false);
+  assert.equal(locked.scene.buyExpansion("expansion_west"), false);
+  assert.equal(locked.scene.playerState.credits, 5000);
+  assert.match(locked.messages[0], /Shop Level 5/);
+
+  const poor = createExpansionHarness({ shopLevel: 5, credits: 3999 });
+  assert.equal(poor.scene.buyExpansion("expansion_west"), false);
+  assert.equal(poor.scene.room.zones.find((zone) => zone.id === "expansion_west").locked, true);
+  assert.equal(poor.scene.playerState.credits, 3999);
+
+  const open = createExpansionHarness({ shopLevel: 5, credits: 4000 });
+  open.scene.shiftClock.started = true;
+  assert.equal(open.scene.buyExpansion("expansion_west"), false);
+  assert.equal(open.scene.playerState.credits, 4000);
+  assert.match(open.messages[0], /while the store is closed/);
+
+  const wrongOrder = createExpansionHarness({ shopLevel: 30, credits: 100000 });
+  assert.equal(wrongOrder.scene.buyExpansion("expansion_a"), false);
+  assert.equal(wrongOrder.scene.playerState.credits, 100000);
+  assert.match(wrongOrder.messages[0], /in order/);
+});
+
+test("buying the first store expansion deducts credits and records a receipt line", () => {
+  const harness = createExpansionHarness({ shopLevel: 5, credits: 4000 });
+  const { scene } = harness;
+  assert.equal(scene.getExpansionPurchaseOptions()[0].canAfford, true);
+  assert.equal(scene.buyExpansion("expansion_west"), true);
+  assert.equal(scene.playerState.credits, 0);
+  assert.equal(scene.room.zones.find((zone) => zone.id === EXPANSION_ORDER[0]).locked, false);
+  assert.deepEqual(scene.playerState.dayLedger.serialize().lines, [{
+    category: "expansions",
+    label: "Sales Floor Expansion West",
+    amount: -4000,
+    quantity: 1,
+  }]);
+  assert.equal(harness.cameraRefreshes, 1);
+  assert.equal(harness.autosaves, 1);
+});
+
+test("backroom expansions require their level, credits, and previous purchases", () => {
+  const locked = createExpansionHarness({ shopLevel: 12, credits: 20000 });
+  assert.equal(locked.scene.getBackroomPurchaseOptions()[0].levelMet, false);
+  assert.equal(locked.scene.buyBackroomUpgrade(BACKROOM_UPGRADE_ORDER[0]), false);
+  assert.match(locked.messages[0], /Shop Level 13/);
+
+  const poor = createExpansionHarness({ shopLevel: 13, credits: 3999 });
+  assert.equal(poor.scene.buyBackroomUpgrade(BACKROOM_UPGRADE_ORDER[0]), false);
+  assert.equal(poor.scene.playerState.credits, 3999);
+  assert.match(poor.messages[0], /costs 4,000 credits/);
+
+  const wrongOrder = createExpansionHarness({ shopLevel: 27, credits: 20000 });
+  assert.equal(wrongOrder.scene.buyBackroomUpgrade(BACKROOM_UPGRADE_ORDER[1]), false);
+  assert.match(wrongOrder.messages[0], /in order/);
+});
+
+test("buying all backroom expansions records costs and opens the wider room", () => {
+  const harness = createExpansionHarness({ shopLevel: 27, credits: 19000 });
+  const { scene } = harness;
+  for (const id of BACKROOM_UPGRADE_ORDER) {
+    assert.equal(scene.buyBackroomUpgrade(id), true);
+  }
+  assert.equal(scene.playerState.credits, 0);
+  assert.ok(BACKROOM_UPGRADE_ORDER.every((id) =>
+    !scene.room.zones.find((zone) => zone.id === id).locked));
+  assert.deepEqual(scene.playerState.dayLedger.serialize().lines.map((line) => line.amount), [
+    -4000, -6000, -9000,
+  ]);
+  assert.equal(harness.cameraRefreshes, 3);
+  assert.equal(harness.autosaves, 3);
+});
+
 function createRegisterHarness() {
   const scene = Object.create(GameScene.prototype);
   const checkout = Object.create(CheckoutWindow.prototype);
@@ -141,6 +249,7 @@ test("the shift-end event, receipt, and save observers see the applied reputatio
     startingShift: false,
     shiftEnded: false,
     shiftClock: { started: true, isPaused: false, notifyListeners() {} },
+    room: { zones: ZONES },
     market: { day: 1 },
     fixturePlacement: { active: false },
     eventBus: { emit: (name, details) => events.push({ name, details }) },
@@ -189,6 +298,7 @@ test("a shift that earns multiple levels announces each implemented unlock", () 
     customersServedThisShift: 60,
     shiftEnded: false,
     shiftClock: { started: true, isPaused: false, notifyListeners() {} },
+    room: { zones: ZONES },
     eventBus: { emit() {} },
     clearEmployees() {},
     showGameMessage: (message) => messages.push(message),
@@ -207,7 +317,44 @@ test("a shift that earns multiple levels announces each implemented unlock", () 
   assert.equal(state.shopLevel, 5);
   assert.match(messages[1], /Shop Level 5 reached/);
   assert.doesNotMatch(messages[1], /Contracts unlocked|Staff unlocked/);
-  assert.match(messages[1], /Rewards for Shop Level 5 and above are not in the game yet/);
+  assert.match(messages[1], /Sales-floor expansion available to buy in the Layout tab/);
+  assert.doesNotMatch(messages[1], /Some later level rewards are not in the game yet/);
+
+  state.endDay(3);
+  state.addReputation(35);
+  scene.endShift();
+  assert.equal(state.shopLevel, 6);
+  assert.match(messages[2], /Shop Level 6 reached/);
+  assert.match(messages[2], /Stellaris Civilian Defense.*Contracts tab/);
+  assert.doesNotMatch(messages[2], /Some later level rewards are not in the game yet/);
+});
+
+test("a shift from Shop Level 6 to 30 announces all remaining reward types", () => {
+  const state = new PlayerState();
+  state.shopLevel = 6;
+  state.globalReputation = 125;
+  const scene = Object.create(GameScene.prototype);
+  const messages = [];
+  Object.assign(scene, {
+    playerState: state,
+    customersServedThisShift: 60,
+    shiftClock: { started: true, isPaused: false, notifyListeners() {} },
+    room: { zones: ZONES.map((zone) => ({ ...zone })) },
+    eventBus: { emit() {} },
+    clearEmployees() {},
+    showGameMessage: (message) => messages.push(message),
+  });
+  state.addReputation(2340);
+  scene.endShift();
+
+  assert.equal(state.shopLevel, 30);
+  assert.match(messages[0], /Sera.*Dax.*Ivo.*Rhea.*Kel/);
+  assert.match(messages[0], /Premium Shelf Supply/);
+  assert.match(messages[0], /Hazard & Medical Supply/);
+  assert.match(messages[0], /Armory Display Supply/);
+  assert.match(messages[0], /Sales-floor expansions available to buy/);
+  assert.match(messages[0], /Backroom expansions available to buy/);
+  assert.doesNotMatch(messages[0], /Some later level rewards are not in the game yet/);
 });
 
 test("level-up messages do not reannounce contracts or staff already owned in older saves", () => {
@@ -220,6 +367,7 @@ test("level-up messages do not reannounce contracts or staff already owned in ol
     playerState: state,
     customersServedThisShift: 60,
     shiftClock: { started: true, isPaused: false, notifyListeners() {} },
+    room: { zones: ZONES },
     eventBus: { emit() {} },
     clearEmployees() {},
     showGameMessage: (message) => messages.push(message),

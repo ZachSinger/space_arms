@@ -49,6 +49,80 @@ test("the first level rewards unlock a supply contract at 2 and a fixture contra
   assert.doesNotMatch(html, />LOCKED</);
 });
 
+test("Stellaris Civilian Defense unlocks at Shop Level 6", () => {
+  const license = new SupplierLicense(licenseById.get("lic_corp_stellaris"));
+  const state = {
+    shopLevel: 5,
+    globalReputation: 1000,
+    factionReputation: { scavengers: 0, mercenaries: 0, explorers: 0 },
+    credits: 3000,
+    activeLicenses: new Set(),
+  };
+  assert.equal(license.isUnlocked(state), false);
+  assert.match(ContractRenderer.generateHTML([license], state), /Requires Shop Level 6/);
+
+  state.shopLevel = 6;
+  assert.equal(license.isUnlocked(state), true);
+  assert.match(
+    ContractRenderer.generateHTML([license], state),
+    /data-license-id="lic_corp_stellaris"/,
+  );
+});
+
+test("planned supplier contracts unlock at their assigned Shop Levels", () => {
+  const contracts = [
+    ["lic_corp_labor", 11],
+    ["lic_corp_hazard", 12],
+    ["lic_corp_aulin", 16],
+    ["lic_corp_omni", 19],
+    ["lic_corp_diagnostics", 22],
+    ["lic_corp_breach", 26],
+    ["lic_corp_vanguard", 29],
+  ];
+  const state = {
+    shopLevel: 1,
+    globalReputation: 10000,
+    factionReputation: { scavengers: 0, mercenaries: 0, explorers: 0 },
+    credits: 100000,
+    activeLicenses: new Set(),
+  };
+  for (const [id, level] of contracts) {
+    const license = new SupplierLicense(licenseById.get(id));
+    assert.equal(license.requiredShopLevel, level, id);
+    assert.equal(license.reqReputation, null, id);
+    state.shopLevel = level - 1;
+    assert.equal(license.isUnlocked(state), false, id);
+    state.shopLevel = level;
+    assert.equal(license.isUnlocked(state), true, id);
+  }
+});
+
+test("planned fixture licenses unlock functional display and storage fixtures", () => {
+  const licensesByLevel = [
+    [8, "lic_fixture_premium_shelf", "shelf_showcase"],
+    [14, "lic_fixture_storage_bank", "locker_double"],
+    [21, "lic_fixture_bulk_display", "shelf_bulk"],
+    [25, "lic_fixture_secure_storage", "locker_secure"],
+    [28, "lic_fixture_armory_display", "shelf_armory"],
+  ];
+  const state = {
+    shopLevel: 1,
+    globalReputation: 10000,
+    factionReputation: { scavengers: 0, mercenaries: 0, explorers: 0 },
+    credits: 100000,
+    activeLicenses: new Set(),
+  };
+  for (const [level, licenseId, fixtureId] of licensesByLevel) {
+    const license = new SupplierLicense(licenseById.get(licenseId));
+    assert.equal(license.requiredShopLevel, level, licenseId);
+    assert.deepEqual(license.unlocksFixtures, [fixtureId]);
+    assert.equal(license.isUnlocked({ ...state, shopLevel: level - 1 }), false, licenseId);
+    assert.equal(license.isUnlocked({ ...state, shopLevel: level }), true, licenseId);
+    assert.ok(FIXTURE_TYPES[fixtureId], fixtureId);
+    assert.equal(FIXTURE_TYPES[fixtureId].licenseId, licenseId);
+  }
+});
+
 test("starter contracts and existing faction reputation requirements remain available", () => {
   const state = {
     shopLevel: 1,
@@ -144,6 +218,45 @@ test("fixtures tab offers resale with a clear value and a confirmation", () => {
   const blocked = LayoutRenderer.generateHTML(scene, true);
   assert.match(blocked, /<small>Only empty fixtures can be sold\.<\/small>/);
   assert.match(blocked, /data-sell-fixture-id="locker_1"[\s\S]*?disabled>SELL/);
+});
+
+test("layout tab offers paid store expansions gated by shop level and purchase order", () => {
+  const scene = {
+    canRearrangeFixtures: () => true,
+    fixtures: { all: () => [] },
+    getExpansionPurchaseOptions: () => [
+      {
+        zone: { id: "expansion_west", name: "Sales Floor Expansion West", cost: 4000, requiredShopLevel: 5 },
+        isPurchased: false, isNext: true, levelMet: true, canAfford: true,
+      },
+      {
+        zone: { id: "expansion_a", name: "Sales Floor Expansion A", cost: 5000, requiredShopLevel: 9 },
+        isPurchased: false, isNext: false, levelMet: false, canAfford: false,
+      },
+    ],
+    getBackroomPurchaseOptions: () => [
+      {
+        zone: { id: "backroom_upgrade_a", name: "Backroom Upgrade A", cost: 4000, requiredShopLevel: 13 },
+        isPurchased: false, isNext: true, levelMet: true, canAfford: true,
+      },
+    ],
+  };
+  const html = LayoutRenderer.generateHTML(scene);
+  assert.match(html, /STORE EXPANSIONS/);
+  assert.match(html, /SHOP LEVEL 5 \| PRICE 4,000 credits/);
+  assert.match(html, /data-buy-expansion-id="expansion_west"[^>]*>BUY/);
+  assert.match(html, /BUY PREVIOUS EXPANSION FIRST/);
+  assert.match(html, /BACKROOM EXPANSIONS/);
+  assert.match(html, /SHOP LEVEL 13 \| PRICE 4,000 credits/);
+  assert.match(html, /data-buy-backroom-id="backroom_upgrade_a"[^>]*>BUY/);
+
+  const fixturesHTML = LayoutRenderer.generateHTML({
+    ...scene,
+    getFixturePurchaseOptions: () => [],
+    restockCrates: [],
+    getLoadingPadSpawnPositions: () => [],
+  }, true);
+  assert.doesNotMatch(fixturesHTML, /STORE EXPANSIONS/);
 });
 
 test("early supplier license prices reflect the value of their item catalogs", () => {

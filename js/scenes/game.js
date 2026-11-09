@@ -7,7 +7,9 @@
 import { WindowManager } from "../logic/WindowManager.js";
 import { ManagerTablet } from "../logic/ManagerTablet.js";
 import { PlayerState } from "../logic/PlayerState.js";
-import { getShopLevelRequirement, MAX_IMPLEMENTED_SHOP_REWARD_LEVEL } from "../logic/ShopProgression.js";
+import {
+  getShopLevelRequirement, hasUnimplementedShopRewardBetween,
+} from "../logic/ShopProgression.js";
 import { HUDController } from "../logic/HUDController.js";
 import { DebugInfo } from "../logic/DebugInfo.js";
 import { EventBus, GAME_EVENTS } from "../logic/EventBus.js";
@@ -462,10 +464,6 @@ export class GameScene extends Phaser.Scene {
     // The shop camera: PageUp zooms in, PageDown zooms out (never past the whole shop).
     this.bindControlKey("keydown-PAGE_UP", "cameraZoom", () => this.zoomCamera(1));
     this.bindControlKey("keydown-PAGE_DOWN", "cameraZoom", () => this.zoomCamera(-1));
-
-    // Debug-only: each press unlocks the next store expansion until a real purchase UI exists.
-    this.bindControlKey("keydown-U", "debug", () => this.debugUnlockExpansion());
-    this.bindControlKey("keydown-B", "debug", () => this.debugUnlockBackroomUpgrade());
 
     // Debug-only: tile-grid overlay that makes off-grid fixtures obvious.
     this.bindControlKey("keydown-G", "debug", () => this.toggleDebugGrid());
@@ -975,6 +973,118 @@ export class GameScene extends Phaser.Scene {
     return this.canSaveOffShift() && !this.startingShift;
   }
 
+  getExpansionPurchaseOptions() {
+    const nextId = EXPANSION_ORDER.find((id) =>
+      this.room.zones.find((zone) => zone.id === id)?.locked);
+    return EXPANSION_ORDER.map((id) => {
+      const zone = this.room.zones.find((candidate) => candidate.id === id);
+      if (!zone) throw new Error(`Unknown sales-floor expansion: ${id}`);
+      return {
+        zone,
+        isPurchased: !zone.locked,
+        isNext: id === nextId,
+        levelMet: this.playerState.shopLevel >= zone.requiredShopLevel,
+        canAfford: this.playerState.credits >= zone.cost,
+      };
+    });
+  }
+
+  getBackroomPurchaseOptions() {
+    const nextId = BACKROOM_UPGRADE_ORDER.find((id) =>
+      this.room.zones.find((zone) => zone.id === id)?.locked);
+    return BACKROOM_UPGRADE_ORDER.map((id) => {
+      const zone = this.room.zones.find((candidate) => candidate.id === id);
+      if (!zone) throw new Error(`Unknown backroom expansion: ${id}`);
+      return {
+        zone,
+        isPurchased: !zone.locked,
+        isNext: id === nextId,
+        levelMet: this.playerState.shopLevel >= zone.requiredShopLevel,
+        canAfford: this.playerState.credits >= zone.cost,
+      };
+    });
+  }
+
+  buyExpansion(zoneId) {
+    if (!EXPANSION_ORDER.includes(zoneId)) {
+      throw new Error(`Unknown sales-floor expansion: ${zoneId}`);
+    }
+    if (!this.canRearrangeFixtures()) {
+      this.showShopMessage("Store expansions can only be bought while the store is closed.");
+      return false;
+    }
+    const zone = this.room.zones.find((candidate) => candidate.id === zoneId);
+    if (!zone) throw new Error(`Unknown sales-floor expansion: ${zoneId}`);
+    if (!zone.locked) {
+      this.showShopMessage(`${zone.name} is already open.`);
+      return false;
+    }
+    const nextId = EXPANSION_ORDER.find((id) =>
+      this.room.zones.find((candidate) => candidate.id === id)?.locked);
+    if (zoneId !== nextId) {
+      this.showShopMessage("Buy sales-floor expansions in order.");
+      return false;
+    }
+    if (this.playerState.shopLevel < zone.requiredShopLevel) {
+      this.showShopMessage(
+        `Reach Shop Level ${zone.requiredShopLevel} to buy ${zone.name}.`,
+      );
+      return false;
+    }
+    if (this.playerState.credits < zone.cost) {
+      this.showShopMessage(`${zone.name} costs ${formatMoney(zone.cost)}.`);
+      return false;
+    }
+
+    this.playerState.spendCredits(zone.cost, { category: "expansions", label: zone.name });
+    this.room.unlockZone(zoneId);
+    this.refreshCamera();
+    this.playerState.notifyListeners();
+    this.requestAutosave();
+    this.showShopMessage(`${zone.name} is open.`);
+    return true;
+  }
+
+  buyBackroomUpgrade(zoneId) {
+    if (!BACKROOM_UPGRADE_ORDER.includes(zoneId)) {
+      throw new Error(`Unknown backroom expansion: ${zoneId}`);
+    }
+    if (!this.canRearrangeFixtures()) {
+      this.showShopMessage("Backroom expansions can only be bought while the store is closed.");
+      return false;
+    }
+    const zone = this.room.zones.find((candidate) => candidate.id === zoneId);
+    if (!zone) throw new Error(`Unknown backroom expansion: ${zoneId}`);
+    if (!zone.locked) {
+      this.showShopMessage(`${zone.name} is already open.`);
+      return false;
+    }
+    const nextId = BACKROOM_UPGRADE_ORDER.find((id) =>
+      this.room.zones.find((candidate) => candidate.id === id)?.locked);
+    if (zoneId !== nextId) {
+      this.showShopMessage("Buy backroom expansions in order.");
+      return false;
+    }
+    if (this.playerState.shopLevel < zone.requiredShopLevel) {
+      this.showShopMessage(
+        `Reach Shop Level ${zone.requiredShopLevel} to buy ${zone.name}.`,
+      );
+      return false;
+    }
+    if (this.playerState.credits < zone.cost) {
+      this.showShopMessage(`${zone.name} costs ${formatMoney(zone.cost)}.`);
+      return false;
+    }
+
+    this.playerState.spendCredits(zone.cost, { category: "expansions", label: zone.name });
+    this.room.unlockZone(zoneId);
+    this.refreshCamera();
+    this.playerState.notifyListeners();
+    this.requestAutosave();
+    this.showShopMessage(`${zone.name} is open.`);
+    return true;
+  }
+
   /**
    * The current layout with one fixture moved and turned; nothing is applied.
    * @param {string} id
@@ -1454,43 +1564,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   // --- Debug hooks ---
-
-  // U key: unlocks the store expansion until a real purchase UI exists.
-  debugUnlockExpansion() {
-    if (!this.canRearrangeFixtures()) {
-      this.showShopMessage("Expand the shop while the store is closed.");
-      return;
-    }
-    const nextId = EXPANSION_ORDER.find((id) => this.room.zones.find((zone) => zone.id === id)?.locked);
-    if (!nextId) {
-      this.showShopMessage("Every shop expansion is already bought.");
-      return;
-    }
-    this.room.unlockZone(nextId);
-    this.refreshCamera();
-    this.playerState.notifyListeners();
-    const bought = EXPANSION_ORDER.indexOf(nextId) + 1;
-    this.showShopMessage(`Shop expansion ${bought} of ${EXPANSION_ORDER.length} bought.`);
-  }
-
-  // B key: buys the next backroom upgrade until a real purchase UI exists.
-  debugUnlockBackroomUpgrade() {
-    if (!this.canRearrangeFixtures()) {
-      this.showShopMessage("Upgrade the backroom while the store is closed.");
-      return;
-    }
-    const nextId = BACKROOM_UPGRADE_ORDER.find((id) => this.room.zones.find((zone) => zone.id === id)?.locked);
-    if (!nextId) {
-      this.showShopMessage("Every backroom upgrade is already bought.");
-      return;
-    }
-    this.room.unlockZone(nextId);
-    this.refreshCamera();
-    this.playerState.notifyListeners();
-    const bought = BACKROOM_UPGRADE_ORDER.indexOf(nextId) + 1;
-    this.showShopMessage(`Backroom upgrade ${bought} of ${BACKROOM_UPGRADE_ORDER.length} bought.`);
-  }
-
   // T / H keys: step through the licensed tileset's floor or wall styles on the sales floor.
   debugCycleSalesTiles(part) {
     if (!this.textures.exists(floorTileKey(0))) {
@@ -2777,11 +2850,12 @@ export class GameScene extends Phaser.Scene {
       this.employees.forEach((employee) => employee.sprite.body.setVelocity(0, 0));
       for (const crate of this.restockCrates) if (crate.isPushed) crate.stopPush();
     } else {
-      this.player.update();
+      this.player.update(delta);
       this.updateCratePushing(delta);
       this.customers.forEach((customer) => customer.update(delta));
       this.employees.forEach((employee) => employee.update(delta));
     }
+    this.hud.renderStamina(this.player);
 
     this.shiftClock.update(delta);
     this.updateRegisterPrompt();
@@ -2834,6 +2908,14 @@ export class GameScene extends Phaser.Scene {
         employee.requiredShopLevel > previousLevel &&
         employee.requiredShopLevel <= this.playerState.shopLevel &&
         !this.playerState.hiredEmployees.includes(employee.id));
+      const newSalesExpansions = this.room.zones.filter((zone) =>
+        zone.requiredShopLevel > previousLevel &&
+        zone.requiredShopLevel <= this.playerState.shopLevel &&
+        zone.locked && zone.salesFloor);
+      const newBackroomExpansions = this.room.zones.filter((zone) =>
+        zone.requiredShopLevel > previousLevel &&
+        zone.requiredShopLevel <= this.playerState.shopLevel &&
+        zone.locked && zone.backroom);
       levelMessage = ` Shop Level ${this.playerState.shopLevel} reached!`;
       if (newContracts.length) {
         levelMessage += ` Contracts unlocked: ${newContracts.map((license) => license.name).join(", ")} (Contracts tab).`;
@@ -2841,8 +2923,14 @@ export class GameScene extends Phaser.Scene {
       if (newStaff.length) {
         levelMessage += ` Staff unlocked: ${newStaff.map((employee) => employee.name).join(", ")} (Employee tab).`;
       }
-      if (this.playerState.shopLevel > MAX_IMPLEMENTED_SHOP_REWARD_LEVEL) {
-        levelMessage += ` Rewards for Shop Level ${MAX_IMPLEMENTED_SHOP_REWARD_LEVEL + 1} and above are not in the game yet.`;
+      if (newSalesExpansions.length) {
+        levelMessage += ` Sales-floor expansion${newSalesExpansions.length > 1 ? "s" : ""} available to buy in the Layout tab.`;
+      }
+      if (newBackroomExpansions.length) {
+        levelMessage += ` Backroom expansion${newBackroomExpansions.length > 1 ? "s" : ""} available to buy in the Layout tab.`;
+      }
+      if (hasUnimplementedShopRewardBetween(previousLevel, this.playerState.shopLevel)) {
+        levelMessage += " Some later level rewards are not in the game yet.";
       }
     }
     this.showGameMessage(`Shift over.${levelMessage} Click END DAY at the top to see today's receipt.`, "#10b981");

@@ -19,6 +19,56 @@
     "unlocksFixtures": ["shelf_universal"]
   },
   {
+    "id": "lic_fixture_premium_shelf",
+    "name": "Premium Shelf Supply",
+    "description": "A contract for a larger display shelf with room for more merchandise.",
+    "tier": 2,
+    "baseCost": 600,
+    "requiredShopLevel": 8,
+    "reqReputation": null,
+    "unlocksFixtures": ["shelf_showcase"]
+  },
+  {
+    "id": "lic_fixture_storage_bank",
+    "name": "Expanded Storage Supply",
+    "description": "A contract for larger backroom lockers that hold more stock.",
+    "tier": 2,
+    "baseCost": 1000,
+    "requiredShopLevel": 14,
+    "reqReputation": null,
+    "unlocksFixtures": ["locker_double"]
+  },
+  {
+    "id": "lic_fixture_bulk_display",
+    "name": "Bulk Display Supply",
+    "description": "A contract for a wide shelf with more display space.",
+    "tier": 3,
+    "baseCost": 1500,
+    "requiredShopLevel": 21,
+    "reqReputation": null,
+    "unlocksFixtures": ["shelf_bulk"]
+  },
+  {
+    "id": "lic_fixture_secure_storage",
+    "name": "Secure Storage Supply",
+    "description": "A contract for a high-capacity backroom locker.",
+    "tier": 3,
+    "baseCost": 1800,
+    "requiredShopLevel": 25,
+    "reqReputation": null,
+    "unlocksFixtures": ["locker_secure"]
+  },
+  {
+    "id": "lic_fixture_armory_display",
+    "name": "Armory Display Supply",
+    "description": "A contract for the largest merchandise display shelf.",
+    "tier": 3,
+    "baseCost": 2400,
+    "requiredShopLevel": 28,
+    "reqReputation": null,
+    "unlocksFixtures": ["shelf_armory"]
+  },
+  {
     "id": "lic_start_surplus",
     "name": "Scrap-Yard Ballistics Contract",
     "description": "A handshake deal with local scavengers. Provides a steady stream of highly questionable, unregistered firearms.",
@@ -89,9 +139,8 @@
     "description": "Official vendor license for Aulin's mass-produced, highly reliable kinetic weaponry and fitted attachments.",
     "tier": 2,
     "baseCost": 1200,
-    "reqReputation": 15,
-    "reqFaction": "mercenaries",
-    "reqFactionRep": 5
+    "requiredShopLevel": 16,
+    "reqReputation": null
   },
   {
     "id": "lic_corp_omni",
@@ -99,9 +148,8 @@
     "description": "Access to standard-issue corporate security gear, including riot-control weapons and basic flak.",
     "tier": 2,
     "baseCost": 1500,
-    "reqReputation": 20,
-    "reqFaction": "mercenaries",
-    "reqFactionRep": 10
+    "requiredShopLevel": 19,
+    "reqReputation": null
   },
   {
     "id": "lic_corp_vanguard",
@@ -109,9 +157,8 @@
     "description": "Heavy-duty ballistic repeaters, rotary guns, and aggressive close-quarters weapon attachments.",
     "tier": 2,
     "baseCost": 2200,
-    "reqReputation": 25,
-    "reqFaction": "mercenaries",
-    "reqFactionRep": 15
+    "requiredShopLevel": 29,
+    "reqReputation": null
   },
   {
     "id": "lic_corp_stellaris",
@@ -119,7 +166,8 @@
     "description": "Sleek, civilian-market energy weapons, thermal batteries, and high-end aesthetic space suits.",
     "tier": 2,
     "baseCost": 2500,
-    "reqReputation": 30
+    "requiredShopLevel": 6,
+    "reqReputation": null
   },
   {
     "id": "lic_corp_labor",
@@ -127,7 +175,8 @@
     "description": "A combined contract for Aegis and Arx heavy-duty worker clothes, canvas gloves, and mag-boots.",
     "tier": 2,
     "baseCost": 1800,
-    "reqReputation": 15
+    "requiredShopLevel": 11,
+    "reqReputation": null
   },
   {
     "id": "lic_corp_hazard",
@@ -135,9 +184,8 @@
     "description": "Veles-brand bio-sealed hazard suits, basic Med-Tek trauma kits, and rebreather masks.",
     "tier": 2,
     "baseCost": 2800,
-    "reqReputation": 30,
-    "reqFaction": "explorers",
-    "reqFactionRep": 10
+    "requiredShopLevel": 12,
+    "reqReputation": null
   },
   {
     "id": "lic_corp_diagnostics",
@@ -145,9 +193,8 @@
     "description": "High-end electronic diagnostic tools, decrypters, and precision repair equipment.",
     "tier": 2,
     "baseCost": 2100,
-    "reqReputation": 25,
-    "reqFaction": "explorers",
-    "reqFactionRep": 15
+    "requiredShopLevel": 22,
+    "reqReputation": null
   },
   {
     "id": "lic_corp_breach",
@@ -155,9 +202,8 @@
     "description": "Industrial-grade plasma cutters, hydraulic spreaders, and heavy pneumatic rivet guns.",
     "tier": 2,
     "baseCost": 2400,
-    "reqReputation": 28,
-    "reqFaction": "scavengers",
-    "reqFactionRep": 15
+    "requiredShopLevel": 26,
+    "reqReputation": null
   },
   {
     "id": "lic_corp_scatter",

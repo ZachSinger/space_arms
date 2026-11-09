@@ -18,6 +18,9 @@ export class HUDController {
         this.repEl = document.getElementById('hud-rep');
         this.shopLevelEl = document.getElementById('hud-shop-level');
         this.hovercartEl = document.getElementById('hud-hovercart');
+        this.staminaEl = document.getElementById('hud-stamina');
+        this.staminaFillEl = document.getElementById('hud-stamina-fill');
+        this.staminaValueEl = document.getElementById('hud-stamina-value');
         this.shiftTimeEl = document.getElementById('hud-shift-time');
         this.pauseBtn = document.getElementById('hud-pause-btn');
         this.startShiftBtn = document.getElementById('hud-start-shift-btn');
@@ -68,6 +71,20 @@ export class HUDController {
         this.saveBtn.disabled = !canSave || saving;
         this.saveBtn.textContent = saving ? 'SAVING...' : 'SAVE';
         this.saveBtn.title = saving ? 'Saving game...' : canSave ? status : unavailableReason;
+    }
+
+    renderStamina({ stamina, maxStamina, exhausted }) {
+        const percent = Math.ceil(stamina / maxStamina * 100);
+        if (percent === this.staminaPercent && exhausted === this.staminaExhausted) return;
+        this.staminaPercent = percent;
+        this.staminaExhausted = exhausted;
+        this.staminaFillEl.style.width = `${percent}%`;
+        this.staminaValueEl.textContent = `${percent}%`;
+        this.staminaEl.setAttribute('aria-valuenow', String(percent));
+        this.staminaEl.setAttribute('aria-valuetext', exhausted
+            ? `${percent}% stamina. Recovering before you can dash again.`
+            : `${percent}% stamina`);
+        this.staminaEl.classList.toggle('exhausted', exhausted);
     }
 
     render(state) {

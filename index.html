@@ -28,6 +28,13 @@
               <span class="hud-label">HOVERCART</span>
               <span id="hud-hovercart" class="hud-value">0/15</span>
             </div>
+            <div id="hud-stamina" class="hud-stat hud-stamina" role="progressbar"
+              aria-label="Player stamina" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"
+              title="Hold Shift while moving to dash. Stamina recovers while walking or resting. When empty, recover to 25% before dashing again.">
+              <span class="hud-label">STAMINA</span>
+              <div class="hud-stamina-track"><div id="hud-stamina-fill" class="hud-stamina-fill"></div></div>
+              <span id="hud-stamina-value" class="hud-value time">100%</span>
+            </div>
           </div>
           <div class="hud-section">
             <button id="hud-save-btn" class="hud-pause-btn" type="button" disabled

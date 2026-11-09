@@ -5,7 +5,17 @@ const SHOP_LEVEL_REPUTATION = [
   1250, 1365, 1485, 1610, 1740, 1875, 2015, 2160, 2310, 2465,
 ];
 
-export const MAX_IMPLEMENTED_SHOP_REWARD_LEVEL = 4;
+export const IMPLEMENTED_SHOP_REWARD_LEVELS = Object.freeze(
+  Array.from({ length: 29 }, (_, index) => index + 2),
+);
+
+export function hasUnimplementedShopRewardBetween(previousLevel, currentLevel) {
+  return SHOP_LEVEL_TIERS.some(({ level }) =>
+    level > previousLevel &&
+    level <= currentLevel &&
+    level > 1 &&
+    !IMPLEMENTED_SHOP_REWARD_LEVELS.includes(level));
+}
 
 export const SHOP_LEVEL_TIERS = Object.freeze(
   SHOP_LEVEL_REPUTATION.map((reputation, index) =>

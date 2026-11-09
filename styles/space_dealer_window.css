@@ -1482,6 +1482,29 @@ button {
   align-items: center;
 }
 
+.hud-stamina-track {
+  width: 80px;
+  height: 8px;
+  flex-shrink: 0;
+  background: #0b1220;
+  border: 1px solid var(--color-border-active);
+}
+
+#hud-stamina-value {
+  min-width: 4ch;
+  text-align: right;
+}
+
+.hud-stamina-fill {
+  width: 100%;
+  height: 100%;
+  background: #38bdf8;
+}
+
+.hud-stamina.exhausted .hud-stamina-fill {
+  background: #fbbf24;
+}
+
 .hud-stat {
   display: flex;
   align-items: center;
@@ -1647,6 +1670,10 @@ button {
 
   .hud-stat {
     gap: 2px;
+  }
+
+  .hud-stamina-track {
+    width: 40px;
   }
 
   .hud-stat,

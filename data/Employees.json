@@ -8,5 +8,55 @@
     "wagePerShift": 50,
     "backpackCapacity": 10,
     "jobPriorities": ["register", "stock_shelves", "load_storage"]
+  },
+  {
+    "id": "sera_floor_assistant",
+    "name": "Sera",
+    "role": "Floor Assistant",
+    "requiredShopLevel": 7,
+    "hireCost": 500,
+    "wagePerShift": 75,
+    "backpackCapacity": 12,
+    "jobPriorities": ["register", "stock_shelves", "load_storage"]
+  },
+  {
+    "id": "dax_stock_clerk",
+    "name": "Dax",
+    "role": "Stock Clerk",
+    "requiredShopLevel": 10,
+    "hireCost": 750,
+    "wagePerShift": 100,
+    "backpackCapacity": 15,
+    "jobPriorities": ["stock_shelves", "load_storage", "register"]
+  },
+  {
+    "id": "ivo_shop_assistant",
+    "name": "Ivo",
+    "role": "Shop Assistant",
+    "requiredShopLevel": 15,
+    "hireCost": 1200,
+    "wagePerShift": 150,
+    "backpackCapacity": 20,
+    "jobPriorities": ["load_storage", "stock_shelves", "register"]
+  },
+  {
+    "id": "rhea_senior_clerk",
+    "name": "Rhea",
+    "role": "Senior Clerk",
+    "requiredShopLevel": 18,
+    "hireCost": 1800,
+    "wagePerShift": 200,
+    "backpackCapacity": 25,
+    "jobPriorities": ["register", "load_storage", "stock_shelves"]
+  },
+  {
+    "id": "kel_supply_runner",
+    "name": "Kel",
+    "role": "Supply Runner",
+    "requiredShopLevel": 23,
+    "hireCost": 2500,
+    "wagePerShift": 250,
+    "backpackCapacity": 30,
+    "jobPriorities": ["load_storage", "stock_shelves", "register"]
   }
 ]

@@ -142,6 +142,12 @@ export class ManagerTablet {
         }
       }
 
+      const buyExpansionButton = event.target.closest("[data-buy-expansion-id]");
+      if (buyExpansionButton) this.scene.buyExpansion(buyExpansionButton.dataset.buyExpansionId);
+
+      const buyBackroomButton = event.target.closest("[data-buy-backroom-id]");
+      if (buyBackroomButton) this.scene.buyBackroomUpgrade(buyBackroomButton.dataset.buyBackroomId);
+
       const crateFixtureButton = event.target.closest("[data-crate-fixture-id]");
       if (crateFixtureButton) this.scene.crateFixture(crateFixtureButton.dataset.crateFixtureId);
 

@@ -215,6 +215,8 @@ function createHarness() {
     getLoadingPadSpawnPositions: () => [],
     canRearrangeFixtures: () => false,
     getFixturePurchaseOptions: () => [],
+    getExpansionPurchaseOptions: () => [],
+    getBackroomPurchaseOptions: () => [],
     getFinancesView: () => ({
       day: 1,
       shiftRunning: false,

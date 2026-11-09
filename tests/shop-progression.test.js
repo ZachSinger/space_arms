@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 import {
+  IMPLEMENTED_SHOP_REWARD_LEVELS,
+  hasUnimplementedShopRewardBetween,
   getNextShopLevel,
   getShopLevelForReputation,
   getShopLevelRequirement,
@@ -30,6 +32,15 @@ test("all 30 shop levels use the planned cumulative reputation thresholds", () =
   assert.equal(isKnownShopLevel(0), false);
   assert.equal(isKnownShopLevel(31), false);
   assert.throws(() => getShopLevelRequirement(31), /Unknown Shop Level/);
+});
+
+test("the implemented reward levels and intervening planned rewards are reported accurately", () => {
+  assert.deepEqual(IMPLEMENTED_SHOP_REWARD_LEVELS, Array.from({ length: 29 }, (_, index) => index + 2));
+  assert.equal(hasUnimplementedShopRewardBetween(4, 5), false);
+  assert.equal(hasUnimplementedShopRewardBetween(5, 6), false);
+  assert.equal(hasUnimplementedShopRewardBetween(4, 9), false);
+  assert.equal(hasUnimplementedShopRewardBetween(8, 9), false);
+  assert.equal(hasUnimplementedShopRewardBetween(29, 30), false);
 });
 
 test("the store-level roadmap lists the same cumulative thresholds used by the game", async () => {

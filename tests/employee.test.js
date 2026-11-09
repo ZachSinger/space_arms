@@ -512,8 +512,30 @@ test("the employee panel explains the Shop Level 4 requirement before Tavi can b
   const almost = EmployeeRenderer.generateHTML({ ...options, shopLevel: 3 });
   assert.match(almost, /data-hire-employee-id="tavi_stock_clerk"[\s\S]*?disabled/);
   const unlocked = EmployeeRenderer.generateHTML({ ...options, shopLevel: 4 });
-  assert.doesNotMatch(unlocked, /data-hire-employee-id="tavi_stock_clerk"[\s\S]*?disabled/);
+  assert.doesNotMatch(unlocked, /data-hire-employee-id="tavi_stock_clerk"[^>]*disabled/);
   assert.match(unlocked, />\s*HIRE\s*<\/button>/);
+});
+
+test("the planned staff rewards become hireable at their assigned Shop Levels", () => {
+  const options = {
+    hiredEmployeeIds: [],
+    activeEmployeeIds: [],
+    employeeJobPriorities: {},
+    credits: 10000,
+    canHire: true,
+  };
+  for (const [id, level] of [
+    ["sera_floor_assistant", 7],
+    ["dax_stock_clerk", 10],
+    ["ivo_shop_assistant", 15],
+    ["rhea_senior_clerk", 18],
+    ["kel_supply_runner", 23],
+  ]) {
+    const locked = EmployeeRenderer.generateHTML({ ...options, shopLevel: level - 1 });
+    assert.match(locked, new RegExp(`data-hire-employee-id="${id}"[^>]*disabled`));
+    const unlocked = EmployeeRenderer.generateHTML({ ...options, shopLevel: level });
+    assert.doesNotMatch(unlocked, new RegExp(`data-hire-employee-id="${id}"[^>]*disabled`));
+  }
 });
 
 test("an employee reaching a door waypoint steps through to the other side", () => {
