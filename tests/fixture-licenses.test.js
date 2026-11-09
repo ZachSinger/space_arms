@@ -49,6 +49,25 @@ test("the first level rewards unlock a supply contract at 2 and a fixture contra
   assert.doesNotMatch(html, />LOCKED</);
 });
 
+test("contracts list signable ones first, locked next, and signed ones last", () => {
+  const ids = ["lic_start_apparel", "lic_fixture_expanded", "lic_corp_stellaris"];
+  const list = ids.map((id) => new SupplierLicense(licenseById.get(id)));
+  const state = {
+    shopLevel: 3,
+    globalReputation: 1000,
+    factionReputation: { scavengers: 0, mercenaries: 0, explorers: 0 },
+    credits: 3000,
+    activeLicenses: new Set(["lic_start_apparel"]),
+  };
+  assert.deepEqual(
+    ContractRenderer.sortLicenses(list, state).map((license) => license.id),
+    ["lic_fixture_expanded", "lic_corp_stellaris", "lic_start_apparel"],
+  );
+  const html = ContractRenderer.generateHTML(list, state);
+  assert.ok(html.indexOf(list[1].name) < html.indexOf(list[2].name));
+  assert.ok(html.indexOf(list[2].name) < html.indexOf(list[0].name));
+});
+
 test("Stellaris Civilian Defense unlocks at Shop Level 6", () => {
   const license = new SupplierLicense(licenseById.get("lic_corp_stellaris"));
   const state = {

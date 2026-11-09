@@ -10,6 +10,7 @@ import { BARGAIN_PRICE_RATIO, createCustomerBuyList } from "./CustomerBuyLists.j
 import { transferItems } from "./InventoryTransfer.js";
 import { sumMoney } from "./Money.js";
 import { BASE_PATIENCE_MS, getPatienceMs, planShelfRoute, rollCustomerTraits } from "./CustomerTraits.js";
+import { fixtureFacing } from "./FixtureLayout.js";
 
 const SPEED = 120; // px/s
 // Bible Step 52: each customer accepts up to this random markup over the market price.
@@ -22,6 +23,13 @@ const SEEKING_TIMEOUT_MS = 15000;
 const CUSTOMER_REACTION_MS = 1800;
 const CUSTOMER_REACTION_FADE_MS = 300;
 const BIG_PURCHASE_ITEM_COUNT = 3;
+// How long a customer stands looking at a shelf before taking anything from it.
+const BROWSE_SHELF_MS = Object.freeze([1500, 3500]);
+// Chance to look around another stocked shelf before heading to the next planned shelf.
+const WANDER_CHANCE = 0.3;
+const WANDER_LOOK_MS = Object.freeze([1000, 2500]);
+const LOOK_AROUND_FACINGS = Object.freeze(["left", "right", "up", "down"]);
+const FACING_TOWARD_FIXTURE = Object.freeze({ down: "up", up: "down", left: "right", right: "left" });
 
 // Bible Steps 53/12/51: how long a typical queued customer waits (ms, paused with the game).
 // Traits such as Impatient change it per customer (CustomerTraits.js).
@@ -98,6 +106,13 @@ export class Customer {
     this.destination = null;
     this.onArriveAtDestination = null;
     this.isDestroyed = false;
+    // Customers built without a constructor (tests) shop instantly instead of pausing.
+    this.browseShelfMs = BROWSE_SHELF_MS;
+    this.wanderChance = WANDER_CHANCE;
+    this.browseRemainingMs = 0;
+    this.browseLookTimerMs = 0;
+    this.browseFacing = null;
+    this.onBrowseDone = null;
 
     // World (not viewport) px: the camera may show only part of a larger room (RoomLayout.js).
     const bounds = spawnBounds || { xMin: 40, xMax: 120, yMin: 80, yMax: scene.scale.height - 80 };
@@ -141,6 +156,11 @@ export class Customer {
     switch (this.state) {
       case "SEEK_SHELF":
       case "SEEK_REGISTER":
+        if (this.state === "SEEK_SHELF" && this.fixture && !this.fixture.findAvailableSlot()) {
+          this.sprite.body.setVelocity(0, 0);
+          this.onArriveAtDestination();
+          break;
+        }
         this.seekingTimer += delta;
         if (this.seekingTimer > SEEKING_TIMEOUT_MS) {
           this.scene.debugInfo?.recordCustomer("customer-seeking-timeout", this);
@@ -152,6 +172,9 @@ export class Customer {
         }
         this.followPath();
         this.updateFacing();
+        break;
+      case "BROWSING":
+        this.updateBrowsing(delta);
         break;
       case "QUEUEING":
         this.followPath();
@@ -224,18 +247,101 @@ export class Customer {
     this.visitNextShelfStop();
   }
 
-  visitNextShelfStop() {
+  visitNextShelfStop(allowWander = true) {
+    while (this.shelfStopIndex < this.shelfStops.length &&
+      !this.shelfStops[this.shelfStopIndex].fixture.findAvailableSlot()) {
+      this.shelfStopIndex += 1;
+    }
     if (this.shelfStopIndex >= this.shelfStops.length) {
+      if (this.shoppingPhase === "bonus") {
+        for (const itemId of this.phaseItemIds) this.bonusAttempted.add(itemId);
+      }
       this.finishShoppingPhase();
       return;
     }
     const { fixture, standPoint } = this.shelfStops[this.shelfStopIndex];
+    if (allowWander && this.shoppingPhase === "primary" &&
+      this.maybeWander(() => this.visitNextShelfStop(false), fixture)) {
+      return;
+    }
     this.fixture = fixture;
     const target = this.onReserveShelfSlot
       ? this.onReserveShelfSlot(fixture, this)
       : standPoint;
     this.shelfStopIndex += 1;
-    this.setDestination(target.x, target.y, () => this.shopAtCurrentShelf());
+    this.setDestination(target.x, target.y, () => {
+      if (!fixture.findAvailableSlot()) {
+        this.visitNextShelfStop();
+        return;
+      }
+      const facing = this.browseShelfMs ? FACING_TOWARD_FIXTURE[fixtureFacing(fixture)] : null;
+      this.browse(this.browseShelfMs, facing || null, () => this.shopAtCurrentShelf());
+    });
+  }
+
+  /**
+   * Sometimes looks around another stocked shelf before going on.
+   * @param {() => void} then
+   * @param {object} nextShelf
+   * @returns {boolean} true if the customer is wandering and will call `then` afterward
+   */
+  maybeWander(then, nextShelf) {
+    if (!this.wanderChance || Math.random() >= this.wanderChance) return false;
+    const fixture = this.scene.getRandomBrowseShelf(nextShelf);
+    if (!fixture) return false;
+    this.fixture = fixture;
+    const spot = this.onReserveShelfSlot
+      ? this.onReserveShelfSlot(fixture, this)
+      : fixture.standPoint;
+    this.wanderChance /= 2; // fewer detours the longer they shop
+    this.setDestination(spot.x, spot.y, () => {
+      if (!fixture.findAvailableSlot()) {
+        then();
+        return;
+      }
+      this.browse(WANDER_LOOK_MS, null, then);
+    });
+    return true;
+  }
+
+  /**
+   * Stand still for a moment, either facing a shelf or glancing around, then continue.
+   * @param {readonly [number, number] | null} durationRange - ms; none means continue now
+   * @param {"up" | "down" | "left" | "right" | null} facing - null glances around
+   * @param {() => void} onDone
+   */
+  browse(durationRange, facing, onDone) {
+    if (!durationRange) {
+      onDone();
+      return;
+    }
+    const [min, max] = durationRange;
+    this.state = "BROWSING";
+    this.browseRemainingMs = min + Math.random() * (max - min);
+    this.browseFacing = facing;
+    this.browseLookTimerMs = 0;
+    this.onBrowseDone = onDone;
+    this.sprite.body?.setVelocity(0, 0);
+  }
+
+  updateBrowsing(delta) {
+    this.sprite.body?.setVelocity(0, 0);
+    if (this.browseFacing) {
+      this.updateFacing(this.browseFacing);
+    } else {
+      this.browseLookTimerMs -= delta;
+      if (this.browseLookTimerMs <= 0) {
+        this.browseLookTimerMs = 600 + Math.random() * 600;
+        const options = LOOK_AROUND_FACINGS.filter((facing) => facing !== this.currentFacing);
+        this.updateFacing(options[Math.floor(Math.random() * options.length)]);
+      }
+    }
+    this.browseRemainingMs -= delta;
+    if (this.browseRemainingMs > 0 && this.fixture.findAvailableSlot()) return;
+    const onDone = this.onBrowseDone;
+    this.onBrowseDone = null;
+    this.state = "SEEK_SHELF";
+    onDone?.();
   }
 
   // Buys one of each wanted item stocked here at an acceptable price, then moves on.
@@ -388,12 +494,12 @@ export class Customer {
   }
 
   /**
-   * Drains while waiting in line, except while the player is actively ringing them up.
+   * Drains while waiting in line, except while served or while the store is temporarily closed.
    * @param {number} delta - ms
    */
   updatePatience(delta) {
     if (this.patienceRemainingMs == null) return;
-    if (!this.scene.isServingCustomer?.(this)) {
+    if (!this.scene.storeTemporarilyClosed && !this.scene.isServingCustomer?.(this)) {
       this.patienceRemainingMs = Math.max(0, this.patienceRemainingMs - delta);
     }
     if (this.patienceRemainingMs <= 0) {

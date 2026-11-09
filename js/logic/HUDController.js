@@ -2,7 +2,7 @@
 // FILE: HUDController.js
 // ==========================================
 // The persistent DOM HUD: credits, reputation, hovercart capacity, shift clock, and the
-// pause / start-shift / end-day / save buttons. Re-renders from PlayerState and ShiftClock.
+// pause / temporary store closure / start-shift / end-day / save buttons.
 import { formatMoney } from "./Money.js";
 import { getNextShopLevel } from "./ShopProgression.js";
 export class HUDController {
@@ -12,8 +12,10 @@ export class HUDController {
      * @param {() => void} onStartShift
      * @param {() => void} onSave
      * @param {() => void} onEndDay - opens the Finances tab once a shift is over
+     * @param {() => void} onToggleStore - temporarily stops or resumes customer arrivals
+     * @param {() => void} onMainMenu - asks to leave the game for the title screen
      */
-    constructor(playerState, shiftClock, onStartShift, onSave, onEndDay) {
+    constructor(playerState, shiftClock, onStartShift, onSave, onEndDay, onToggleStore, onMainMenu) {
         this.creditsEl = document.getElementById('hud-credits');
         this.repEl = document.getElementById('hud-rep');
         this.shopLevelEl = document.getElementById('hud-shop-level');
@@ -23,6 +25,7 @@ export class HUDController {
         this.staminaValueEl = document.getElementById('hud-stamina-value');
         this.shiftTimeEl = document.getElementById('hud-shift-time');
         this.pauseBtn = document.getElementById('hud-pause-btn');
+        this.storeToggleBtn = document.getElementById('hud-store-toggle-btn');
         this.startShiftBtn = document.getElementById('hud-start-shift-btn');
         this.endDayBtn = document.getElementById('hud-end-day-btn');
         this.saveBtn = document.getElementById('hud-save-btn');
@@ -39,17 +42,23 @@ export class HUDController {
         this.saveBtn.textContent = 'SAVE';
         this.handleSave = () => onSave?.();
         this.saveBtn.addEventListener('click', this.handleSave);
+        this.mainMenuBtn = document.getElementById('hud-main-menu-btn');
+        this.handleMainMenu = () => onMainMenu?.();
+        this.mainMenuBtn.addEventListener('click', this.handleMainMenu);
         this.clock = null;
         this.awaitingEndDay = false;
+        this.storeTemporarilyClosed = false;
 
         playerState.subscribe((state) => this.render(state));
 
         if (shiftClock) {
             shiftClock.subscribe((clock) => this.renderShiftClock(clock));
             this.handlePause = () => shiftClock.togglePause();
+            this.handleStoreToggle = () => onToggleStore?.();
             this.handleStartShift = () => onStartShift?.();
             this.handleEndDay = () => onEndDay?.();
             this.pauseBtn.addEventListener('click', this.handlePause);
+            this.storeToggleBtn.addEventListener('click', this.handleStoreToggle);
             this.startShiftBtn.addEventListener('click', this.handleStartShift);
             this.endDayBtn.addEventListener('click', this.handleEndDay);
         }
@@ -59,9 +68,11 @@ export class HUDController {
         this.rootEl.classList.add('hidden');
         this.rootEl.removeEventListener('mousedown', this.preventButtonFocus);
         this.pauseBtn.removeEventListener('click', this.handlePause);
+        this.storeToggleBtn.removeEventListener('click', this.handleStoreToggle);
         this.startShiftBtn.removeEventListener('click', this.handleStartShift);
         this.endDayBtn.removeEventListener('click', this.handleEndDay);
         this.saveBtn.removeEventListener('click', this.handleSave);
+        this.mainMenuBtn.removeEventListener('click', this.handleMainMenu);
     }
 
     /**
@@ -124,12 +135,27 @@ export class HUDController {
         this.renderShiftButtons();
     }
 
-    // One shift button at a time: PAUSE during a shift, END DAY after it, START SHIFT before.
+    renderStoreStatus(temporarilyClosed) {
+        this.storeTemporarilyClosed = temporarilyClosed;
+        this.renderShiftButtons();
+    }
+
+    // Show shift controls only when their action is available; store admission can be toggled during a shift.
     renderShiftButtons() {
         if (!this.clock) return;
         const started = this.clock.started;
         this.pauseBtn.classList.toggle('hidden', !started);
         this.endDayBtn.classList.toggle('hidden', started || !this.awaitingEndDay);
         this.startShiftBtn.classList.toggle('hidden', started || this.awaitingEndDay);
+        const canToggleStore = started && !this.clock.softClosed;
+        this.storeToggleBtn.classList.toggle('hidden', !canToggleStore);
+        this.storeToggleBtn.disabled = !canToggleStore;
+        this.storeToggleBtn.textContent = this.storeTemporarilyClosed
+            ? 'REOPEN STORE'
+            : 'CLOSE STORE';
+        this.storeToggleBtn.setAttribute('aria-pressed', String(this.storeTemporarilyClosed));
+        this.storeToggleBtn.title = this.storeTemporarilyClosed
+            ? 'Reopen the store and resume scheduled customer arrivals.'
+            : 'Temporarily stop new customers. Customers already inside can finish shopping, and the shift clock keeps running.';
     }
 }

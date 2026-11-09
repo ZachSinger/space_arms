@@ -33,7 +33,9 @@ import {
 } from "../logic/CustomerPooling.js";
 import { Player } from "../logic/Player.js";
 import { Crate, INTERACT_RANGE } from "../logic/Crate.js";
-import { summarizeSupplyOrder } from "../logic/SupplyOrder.js";
+import { DELIVERY_FEE, summarizeSupplyOrder } from "../logic/SupplyOrder.js";
+import { getEmergencyLoanOffer } from "../logic/EmergencyLoan.js";
+import { HOVERCART_UPGRADES } from "../logic/Hovercart.js";
 import { solveCratePush } from "../logic/CratePushing.js";
 import { CheckoutWindow, customerPaysCash } from "../logic/CheckoutWindow.js";
 import { FixtureWindow } from "../logic/FixtureWindow.js";
@@ -105,6 +107,8 @@ const LOADING_PAD_HEIGHT = 128;
 const REGISTER_INTERACT_RANGE = 64;
 const REGISTER_WIDTH = 90;
 const REGISTER_HEIGHT = 75;
+// Share of the register art (from its top edge) that is monitor and printer, not counter.
+const REGISTER_PASSABLE_TOP_FRACTION = 60 / 169;
 // How far the operating player's feet sit past the register graphic's top edge (px).
 const REGISTER_BEHIND_OVERLAP = 10;
 // How far (px) the first customer in line may overlap the front of the register art.
@@ -193,12 +197,16 @@ export class GameScene extends Phaser.Scene {
     this.customerPool = null;
     this.customerPoolAtShiftStart = null;
     this.poolRefreshCooldownMs = 0;
+    this.storeTemporarilyClosed = false;
+    this.storeTemporarilyClosedSinceMs = null;
     this.hud = new HUDController(
       this.playerState,
       this.shiftClock,
       () => this.startNextShift(),
       () => this.saveManually(),
       () => this.openFinances(),
+      () => this.toggleTemporaryStoreClosure(),
+      () => this.confirmReturnToMainMenu(),
     );
 
     this.windowManager = new WindowManager();
@@ -843,16 +851,28 @@ export class GameScene extends Phaser.Scene {
     const rotation = fixtureRotation(fixture);
     sprite.setPosition(x, y).setAngle(rotation * 90);
     const sideways = rotation % 2 === 1;
-    const width = sideways ? sprite.displayHeight : sprite.displayWidth;
-    const height = sideways ? sprite.displayWidth : sprite.displayHeight;
+    let width = sideways ? sprite.displayHeight : sprite.displayWidth;
+    let height = sideways ? sprite.displayWidth : sprite.displayHeight;
+    let centerX = x;
+    let centerY = y;
+    // The register art's top part is the monitor and printer standing on the counter; only
+    // the counter itself blocks movement. That top part faces the rotated direction.
+    if (getFixtureType(fixture.type)?.kind === "register") {
+      const trim = (sideways ? width : height) * REGISTER_PASSABLE_TOP_FRACTION;
+      const [dx, dy] = [[0, 1], [-1, 0], [0, -1], [1, 0]][rotation];
+      if (sideways) width -= trim;
+      else height -= trim;
+      centerX += dx * trim / 2;
+      centerY += dy * trim / 2;
+    }
     const body = sprite.body;
     body.world.staticTree.remove(body);
-    body.position.set(x - width / 2, y - height / 2);
+    body.position.set(centerX - width / 2, centerY - height / 2);
     body.width = width;
     body.height = height;
     body.halfWidth = width / 2;
     body.halfHeight = height / 2;
-    body.center.set(x, y);
+    body.center.set(centerX, centerY);
     body.world.staticTree.insert(body);
   }
 
@@ -1448,6 +1468,27 @@ export class GameScene extends Phaser.Scene {
     element.classList.toggle("hidden", !this.crateHint);
   }
 
+  // Reloading the page (rather than switching scenes) guarantees a completely fresh start
+  // and also picks up code changes during development.
+  confirmReturnToMainMenu() {
+    if (!this.mainMenuWindow) {
+      this.mainMenuWindow = new UIWindow({
+        id: "main-menu-confirmation", title: "MAIN MENU", width: "400px", height: "auto",
+        x: 80, y: 120, shouldCloseOtherWindows: true,
+        contentHTML: `
+          <p>Go back to the title screen? Anything you haven't saved will be lost.</p>
+          <button class="action-btn" data-confirm-main-menu>GO TO TITLE SCREEN</button>
+          <button class="action-btn" data-cancel-main-menu>KEEP PLAYING</button>
+        `,
+      }, this.windowManager);
+      this.mainMenuWindow.element.querySelector("[data-confirm-main-menu]")
+        .addEventListener("click", () => window.location.reload());
+      this.mainMenuWindow.element.querySelector("[data-cancel-main-menu]")
+        .addEventListener("click", () => this.mainMenuWindow.close());
+    }
+    this.mainMenuWindow.openWindow();
+  }
+
   /**
    * Blocks autosave and shows the save/load error window. After a failed load the only way
    * out is back to the title, so the existing save is never overwritten.
@@ -1489,6 +1530,17 @@ export class GameScene extends Phaser.Scene {
   isCellWalkable(gx, gy) {
     if (!this.room.isWalkable(gx, gy)) return false;
     return !this.blockedCells.has(`${gx},${gy}`);
+  }
+
+  /**
+   * @param {ShelfFixture | null} [excludedShelf] - the customer's next planned stop
+   * @returns {ShelfFixture | null} a different currently stocked shelf to browse
+   */
+  getRandomBrowseShelf(excludedShelf = null) {
+    const shelves = this.fixtures.shelves().filter((shelf) =>
+      shelf !== excludedShelf && shelf.findAvailableSlot(),
+    );
+    return shelves.length ? shelves[Math.floor(Math.random() * shelves.length)] : null;
   }
 
   // Whether a customer can walk this segment without brushing a wall or a solid fixture.
@@ -2601,7 +2653,8 @@ export class GameScene extends Phaser.Scene {
    * @param {number} delta - ms since last frame
    */
   refreshCustomerPool(delta) {
-    if (!this.shiftClock.started || this.shiftClock.softClosed || !this.customerPool) return;
+    if (!this.shiftClock.started || this.shiftClock.softClosed ||
+      this.storeTemporarilyClosed || !this.customerPool) return;
     this.poolRefreshCooldownMs -= delta;
     if (this.poolRefreshCooldownMs > 0) return;
     this.poolRefreshCooldownMs = 1000;
@@ -2624,7 +2677,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   spawnScheduledCustomers() {
-    if (!this.shiftClock.started || !this.customerArrivalSchedule) return;
+    if (!this.shiftClock.started || this.shiftClock.softClosed ||
+      this.storeTemporarilyClosed || !this.customerArrivalSchedule) return;
 
     const elapsedMs = this.shiftClock.getElapsedMs();
     while (
@@ -2638,10 +2692,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Lets one customer in, or turns them away for good if the store is full.
+   * Lets one customer in unless arrivals are closed or the store is full.
    * @param {string | null} factionId
    */
   spawnCustomer(factionId = null) {
+    if (this.storeTemporarilyClosed || this.shiftClock.softClosed) return;
     if (this.customers.length >= MAX_CUSTOMERS_IN_STORE) {
       this.playerState.customersTurnedAway += 1;
       this.debugInfo?.record("customer-turned-away", { factionId, reason: "store-at-capacity" });
@@ -2683,6 +2738,34 @@ export class GameScene extends Phaser.Scene {
     this.debugInfo?.recordCustomer("customer-entered", customer);
   }
 
+  toggleTemporaryStoreClosure() {
+    if (!this.shiftClock.started || this.shiftClock.softClosed) return false;
+
+    if (this.storeTemporarilyClosed) {
+      const closedDuration = Math.max(
+        0,
+        this.shiftClock.getElapsedMs() - this.storeTemporarilyClosedSinceMs,
+      );
+      this.customerArrivalSchedule = this.customerArrivalSchedule.map((arrival, index) =>
+        index < this.nextScheduledArrival
+          ? arrival
+          : { ...arrival, atMs: arrival.atMs + closedDuration });
+      this.storeTemporarilyClosed = false;
+      this.storeTemporarilyClosedSinceMs = null;
+      this.hud.renderStoreStatus(false);
+      this.showGameMessage("Store reopened. Customer arrivals have resumed.", "#38bdf8");
+    } else {
+      this.storeTemporarilyClosed = true;
+      this.storeTemporarilyClosedSinceMs = this.shiftClock.getElapsedMs();
+      this.hud.renderStoreStatus(true);
+      this.showGameMessage(
+        "Store temporarily closed. Customers inside can finish shopping; new arrivals are paused.",
+        "#f59e0b",
+      );
+    }
+    return true;
+  }
+
   // What trait appearance conditions (CustomerTraits.js) can check about the store.
   getCustomerTraitConditions() {
     const shelves = this.fixtures.shelves();
@@ -2719,10 +2802,11 @@ export class GameScene extends Phaser.Scene {
       ...buyList.bonusItemIds,
       ...Object.values(buyList.matchingAmmoIdsByFirearm).flat(),
     ]);
-    const allShelfStops = shelves.map((fixture) => ({ fixture, standPoint: fixture.standPoint }));
-    const shelfStops = allShelfStops.filter(({ fixture }) =>
+    const shelfStops = shelves.map((fixture) => ({ fixture, standPoint: fixture.standPoint })).filter(({ fixture }) =>
       fixture.placements.some((placement) => targetIds.has(placement.itemId)),
     );
+    const allShelfStops = shelves.filter((fixture) => fixture.findAvailableSlot())
+      .map((fixture) => ({ fixture, standPoint: fixture.standPoint }));
     return { ...buyList, shelfStops, allShelfStops };
   }
 
@@ -2765,7 +2849,8 @@ export class GameScene extends Phaser.Scene {
    */
   reserveShelfSlot(shelf, arrivingCustomer = null) {
     const inFlight = this.customers.filter((c) =>
-      c !== arrivingCustomer && c.state === "SEEK_SHELF" && c.fixture === shelf,
+      c !== arrivingCustomer && (c.state === "SEEK_SHELF" || c.state === "BROWSING") &&
+      c.fixture === shelf,
     ).length;
     const cells = fixtureAccessCells(shelf);
     const cell = cells[inFlight % cells.length];
@@ -2887,6 +2972,9 @@ export class GameScene extends Phaser.Scene {
     this.shiftClock.started = false;
     this.shiftClock.isPaused = true;
     this.shiftClock.notifyListeners();
+    this.storeTemporarilyClosed = false;
+    this.storeTemporarilyClosedSinceMs = null;
+    this.hud.renderStoreStatus(false);
     this.playerState.finishShift({
       customersServed: this.customersServedThisShift,
       customersTurnedAway: this.playerState.customersTurnedAway,
@@ -2928,6 +3016,13 @@ export class GameScene extends Phaser.Scene {
       }
       if (newBackroomExpansions.length) {
         levelMessage += ` Backroom expansion${newBackroomExpansions.length > 1 ? "s" : ""} available to buy in the Layout tab.`;
+      }
+      const newHovercartUpgrades = HOVERCART_UPGRADES.filter((upgrade) =>
+        upgrade.requiredShopLevel > previousLevel &&
+        upgrade.requiredShopLevel <= this.playerState.shopLevel &&
+        upgrade.capacity > this.playerState.hovercart.capacity);
+      if (newHovercartUpgrades.length) {
+        levelMessage += ` Hovercart upgrade to ${newHovercartUpgrades.map((upgrade) => upgrade.capacity).join(", ")} spaces available in the Equipment tab.`;
       }
       if (hasUnimplementedShopRewardBetween(previousLevel, this.playerState.shopLevel)) {
         levelMessage += " Some later level rewards are not in the game yet.";
@@ -2973,7 +3068,51 @@ export class GameScene extends Phaser.Scene {
     if (!this.canEndDay()) return false;
     this.market.advanceDay();
     this.playerState.endDay(this.market.day);
+    if (this.getEmergencyLoanOffer().available) {
+      this.showGameMessage(
+        `Day ${this.market.day} begins. You have nothing left to sell and can't afford a supply order. Open Finances to take an emergency loan.`,
+        "#f59e0b",
+      );
+      return true;
+    }
     this.showGameMessage(`Day ${this.market.day} begins. Market prices have changed.`, "#10b981");
+    return true;
+  }
+
+  /**
+   * The loan is only offered when the shop is stuck: nothing left to sell anywhere and not
+   * enough credits for the cheapest one-crate supply order.
+   */
+  getEmergencyLoanOffer() {
+    const shiftRunning = this.shiftClock.started && !this.shiftEnded;
+    const ownsSellableStock = this.getInventoryItems()
+      .some(({ storage, stock, inCustomerCarts }) => storage + stock + inCustomerCarts > 0);
+    const crateCosts = this.getRestockableItems().map(({ cost }) => cost);
+    return getEmergencyLoanOffer({
+      credits: this.playerState.credits,
+      hasLoan: !!this.playerState.emergencyLoan,
+      shiftRunning,
+      ownsSellableStock,
+      cheapestOrderCost: crateCosts.length ? Math.min(...crateCosts) + DELIVERY_FEE : null,
+    });
+  }
+
+  takeEmergencyLoan() {
+    const offer = this.getEmergencyLoanOffer();
+    if (!offer.available) return false;
+    this.playerState.takeEmergencyLoan(offer.amount, offer.repayTotal);
+    this.showGameMessage(
+      `Emergency loan received: ${formatMoney(offer.amount)}. You owe ${formatMoney(offer.repayTotal)}, paid back from your sales.`,
+      "#f59e0b",
+    );
+    this.requestAutosave();
+    return true;
+  }
+
+  payOffEmergencyLoan() {
+    if (!this.playerState.payOffEmergencyLoan()) return false;
+    this.showGameMessage("Emergency loan paid off.", "#10b981");
+    this.requestAutosave();
     return true;
   }
 
@@ -2985,6 +3124,11 @@ export class GameScene extends Phaser.Scene {
     return {
       day: this.market.day,
       shiftRunning,
+      emergencyLoan: {
+        offer: this.getEmergencyLoanOffer(),
+        balance: state.emergencyLoan?.balance ?? 0,
+        canPayOff: !!state.emergencyLoan && state.credits >= state.emergencyLoan.balance,
+      },
       pendingReputationChange: shiftRunning ? state.pendingReputation.global : null,
       awaitingEndDay: state.awaitingEndDay,
       canEndDay: this.canEndDay(),
@@ -3016,6 +3160,9 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.prepareCustomerSchedule();
+    this.storeTemporarilyClosed = false;
+    this.storeTemporarilyClosedSinceMs = null;
+    this.hud.renderStoreStatus(false);
     const wages = this.payEmployeeWages();
     if (wages > 0) {
       this.showGameMessage(`Employee wages paid: ${wages} credits.`, "#f59e0b");

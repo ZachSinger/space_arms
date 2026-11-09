@@ -38,7 +38,8 @@ function createPlayer() {
   const shift = { isDown: false };
   const body = {
     velocity: { x: 0, y: 0 },
-    setSize() {},
+    setSize(width, height) { this.size = { width, height }; },
+    setOffset(x, y) { this.offset = { x, y }; },
     setVelocity(x, y) { this.velocity = { x, y }; },
   };
   const sprite = {
@@ -67,6 +68,12 @@ function createPlayer() {
   };
   return { player: new Player(scene, 0, 0), scene, cursors, wasd, shift, body };
 }
+
+test("only the player's lower body collides, so their head can overlap a shelf above them", () => {
+  const { body } = createPlayer();
+  assert.deepEqual(body.size, { width: 22, height: 20 });
+  assert.deepEqual(body.offset, { x: 12, y: 24 }, "centered, ending just above the sprite bottom");
+});
 
 test("Shift increases player speed only while moving and consumes stamina", () => {
   const { player, wasd, shift, body } = createPlayer();

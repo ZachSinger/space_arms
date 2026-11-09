@@ -157,6 +157,11 @@ export function validateShopSave(data, database) {
   if (player.awaitingEndDay !== undefined) {
     requireSave(typeof player.awaitingEndDay === "boolean", "invalid end-of-day state.");
   }
+  if (player.emergencyLoan !== undefined && player.emergencyLoan !== null) {
+    const loan = player.emergencyLoan;
+    requireSave(isRecord(loan) && isMoney(loan.balance) && loan.balance > 0 &&
+      integer(loan.takenOnDay, 1) && loan.takenOnDay <= market.day, "invalid emergency loan.");
+  }
 
   const fixtureIds = new Set();
   for (const entry of data.fixtures) {

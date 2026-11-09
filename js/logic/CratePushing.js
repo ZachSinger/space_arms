@@ -83,8 +83,20 @@ export function solveCratePush({ player, velocity, dt, crates, isBlocked }) {
       let out = mover ? slideAgainstStatic(rect, v) : { ...v };
       for (const crate of crates) {
         if (crate === mover || inChain.has(crate)) continue;
-        // Already overlapping (e.g. a crate dropped on top of the player): let them separate.
-        if (overlaps(rect, crate.rect)) continue;
+        if (overlaps(rect, crate.rect)) {
+          // Allow escape and sliding along an edge, but not movement through the crate.
+          const centerX = rect.left + rect.width / 2;
+          const centerY = rect.top + rect.height / 2;
+          const dx = centerX - (crate.rect.left + crate.rect.width / 2);
+          const dy = centerY - (crate.rect.top + crate.rect.height / 2);
+          const insideX = centerX > crate.rect.left && centerX < crate.rect.left + crate.rect.width;
+          const insideY = centerY > crate.rect.top && centerY < crate.rect.top + crate.rect.height;
+          out = {
+            x: insideY && dx * out.x < 0 ? 0 : out.x,
+            y: insideX && dy * out.y < 0 ? 0 : out.y,
+          };
+          continue;
+        }
         if (!overlaps(reach(rect, out, dt), crate.rect)) continue;
         const speed = Math.hypot(out.x, out.y);
         if (speed <= EPSILON) break;

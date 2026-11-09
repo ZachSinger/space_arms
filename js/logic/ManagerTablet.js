@@ -105,8 +105,10 @@ export class ManagerTablet {
         this.scene.hireEmployee(hireEmployeeButton.dataset.hireEmployeeId);
       }
 
-      if (event.target.closest("[data-end-day]")) this.scene.endDay();
+      if (event.target.closest("[data-end-day]") && this.scene.endDay()) this.uiWindow.close();
       if (event.target.closest("[data-finances-start-shift]")) this.scene.startNextShift();
+      if (event.target.closest("[data-take-emergency-loan]")) this.scene.takeEmergencyLoan();
+      if (event.target.closest("[data-pay-off-emergency-loan]")) this.scene.payOffEmergencyLoan();
 
       const priorityButton = event.target.closest("[data-employee-priority-id]");
       if (priorityButton) {
@@ -175,9 +177,11 @@ export class ManagerTablet {
           : "";
         if (!this.playerState.upgradeHovercart()) {
           this.equipmentPurchaseNotice = "";
-          this.scene.showShopMessage(upgrade
-            ? `Not enough credits. This upgrade costs ${formatMoney(upgrade.price)}.`
-            : "Your hovercart is already at its maximum capacity.");
+          this.scene.showShopMessage(!upgrade
+            ? "Your hovercart is already at its maximum capacity."
+            : this.playerState.shopLevel < upgrade.requiredShopLevel
+              ? `Reach Shop Level ${upgrade.requiredShopLevel} to buy the ${upgrade.capacity}-space hovercart upgrade.`
+              : `Not enough credits. This upgrade costs ${formatMoney(upgrade.price)}.`);
           this.refreshEquipmentPanel();
         }
       }

@@ -10,6 +10,7 @@
   --font-size-13: calc(13px * var(--text-scale));
   --font-size-14: calc(14px * var(--text-scale));
   --font-size-16: calc(16px * var(--text-scale));
+  --font-size-18: calc(18px * var(--text-scale));
   --font-size-24: calc(24px * var(--text-scale));
 
   /* Color Palette */
@@ -915,8 +916,8 @@ button {
 .cash-summary {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  justify-content: space-between;
+  gap: 8px 32px;
+  justify-content: flex-start;
 }
 
 .cash-summary > div {
@@ -954,13 +955,16 @@ button {
   gap: 8px;
 }
 
+/* Fixed-size pieces packed in the middle, so moving between them is a short mouse trip. */
 .cash-bills {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(4, 60px);
+  justify-content: center;
   margin-bottom: 12px;
 }
 
 .cash-coins {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(5, 60px);
+  justify-content: center;
 }
 
 .cash-denomination {
@@ -992,7 +996,10 @@ button {
   width: 100%;
 }
 
+/* Bills stand upright, the way they sit in a register drawer's slots. */
 .cash-bill .cash-art {
+  width: 46px;
+  height: 84px;
   outline: 1px dashed #86a899;
   outline-offset: -6px;
 }
@@ -1065,13 +1072,14 @@ button {
   font-family: inherit;
   font-size: var(--font-size-11);
   font-weight: bold;
+  text-align: center;
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.6);
   cursor: pointer;
 }
 
 .cash-loose.cash-bill {
-  width: 112px;
-  height: 52px;
+  width: 52px;
+  height: 96px;
   outline: 1px dashed #86a899;
   outline-offset: -6px;
 }
@@ -1825,12 +1833,12 @@ button {
 }
 
 .finances-section-title {
-  margin-top: 6px;
+  margin-top: 10px;
   color: var(--color-text-main);
-  font-size: var(--font-size-12);
+  font-size: var(--font-size-18);
   font-weight: bold;
   letter-spacing: 1px;
-  opacity: 0.7;
+  opacity: 0.85;
 }
 
 .finances-row {
@@ -1867,6 +1875,14 @@ button {
   margin-top: 6px;
   padding-top: 6px;
   border-top: 1px dashed var(--color-border-subtle);
+}
+
+.finances-totals .finances-row {
+  font-size: var(--font-size-18);
+}
+
+.finances-balance {
+  margin: 10px 0;
 }
 
 .finances-balance .finances-value {

@@ -79,6 +79,22 @@ test("saved receipts must belong to the saved day", () => {
   }
 });
 
+test("saved emergency loans need a positive balance and a day no later than today", () => {
+  const data = snapshot();
+  const day = data.market.day;
+  for (const loan of [undefined, null, { balance: 812.5, takenOnDay: day }]) {
+    const valid = structuredClone(data);
+    valid.playerState.emergencyLoan = loan;
+    assert.doesNotThrow(() => validateShopSave(valid, database));
+  }
+  for (const loan of [{ balance: 0, takenOnDay: day }, { balance: 10.001, takenOnDay: day },
+    { balance: 100, takenOnDay: day + 1 }, { balance: 100 }, "lots"]) {
+    const invalid = structuredClone(data);
+    invalid.playerState.emergencyLoan = loan;
+    assert.throws(() => validateShopSave(invalid, database), /invalid emergency loan/);
+  }
+});
+
 test("saved hovercarts accept legacy and upgrade capacities but reject invalid sizes", () => {
   for (const capacity of [10, 15, 20, 25, 30, 35, 40]) {
     const data = snapshot();

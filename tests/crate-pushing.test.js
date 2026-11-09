@@ -5,8 +5,8 @@ import { solveCratePush, PUSH_SPEED_BY_CRATE_COUNT } from "../js/logic/CratePush
 const PLAYER = { left: 89, top: 200, width: 22, height: 40 };
 const crateAt = (key, x, y, locked = false) => ({ key, rect: { left: x - 20, top: y - 20, width: 40, height: 40 }, locked });
 const UP = { x: 0, y: -160 };
-const solve = (crates, { velocity = UP, isBlocked = () => false } = {}) =>
-  solveCratePush({ player: PLAYER, velocity, dt: 1 / 60, crates, isBlocked });
+const solve = (crates, { player = PLAYER, velocity = UP, isBlocked = () => false } = {}) =>
+  solveCratePush({ player, velocity, dt: 1 / 60, crates, isBlocked });
 
 test("walking straight into a crate pushes it straight ahead and slows the player", () => {
   const { playerVelocity, crateVelocities } = solve([crateAt("a", 100, 179)]);
@@ -77,4 +77,80 @@ test("each crate in a row slows the player more, and four can't be pushed", () =
   const speeds = [1, 2, 3].map((n) => -solve(row(n)).playerVelocity.y);
   assert.ok(speeds[0] > speeds[1] && speeds[1] > speeds[2] && speeds[2] > 0);
   assert.ok(Math.abs(solve(row(4)).playerVelocity.y) < 0.01);
+});
+
+test("overlapping crates block movement farther inside, but allow escape in every direction", () => {
+  const cases = [
+    { player: { left: 89, top: 110, width: 22, height: 20 }, into: { x: 160, y: 0 } },
+    { player: { left: 129, top: 110, width: 22, height: 20 }, into: { x: -160, y: 0 } },
+    { player: { left: 109, top: 89, width: 22, height: 20 }, into: { x: 0, y: 160 } },
+    { player: { left: 109, top: 131, width: 22, height: 20 }, into: { x: 0, y: -160 } },
+  ];
+  for (const locked of [false, true]) {
+    for (const { player, into } of cases) {
+      const crates = [crateAt("a", 120, 120, locked)];
+      const blocked = solve(crates, { player, velocity: into });
+      assert.deepEqual(blocked.playerVelocity, { x: 0, y: 0 });
+      assert.equal(blocked.crateVelocities.size, 0);
+      const away = { x: -into.x || 0, y: -into.y || 0 };
+      assert.deepEqual(solve(crates, { player, velocity: away }).playerVelocity, away);
+    }
+  }
+});
+
+test("a player overlapping a crate can slide along it and can't walk through it", () => {
+  const player = { left: 89, top: 110, width: 22, height: 20 };
+  const crates = [crateAt("a", 120, 120, true)];
+  assert.deepEqual(
+    solve(crates, { player, velocity: { x: 160, y: -80 } }).playerVelocity,
+    { x: 0, y: -80 },
+  );
+  for (let frame = 0; frame < 120; frame += 1) {
+    const { playerVelocity } = solve(crates, { player, velocity: { x: 160, y: 0 } });
+    player.left += playerVelocity.x / 60;
+  }
+  assert.equal(player.left, 89);
+});
+
+test("an off-center overlap still lets the player slide along the crate's side", () => {
+  const crates = [crateAt("a", 120, 120, true)];
+  const leftEdge = { left: 89, top: 98, width: 22, height: 20 };
+  assert.deepEqual(
+    solve(crates, { player: leftEdge, velocity: { x: 160, y: 160 } }).playerVelocity,
+    { x: 0, y: 160 },
+  );
+  const topEdge = { left: 98, top: 89, width: 22, height: 20 };
+  assert.deepEqual(
+    solve(crates, { player: topEdge, velocity: { x: 160, y: 160 } }).playerVelocity,
+    { x: 160, y: 0 },
+  );
+});
+
+test("overlapping near a corner does not let the player pass through a crate", () => {
+  const crates = [crateAt("a", 120, 120, true)];
+  const cases = [
+    { player: { left: 93, top: 92, width: 22, height: 20 }, velocity: { x: 160, y: 0 } },
+    { player: { left: 91, top: 95, width: 22, height: 20 }, velocity: { x: 0, y: 160 } },
+  ];
+  for (const { player, velocity } of cases) {
+    const start = { ...player };
+    for (let frame = 0; frame < 120; frame += 1) {
+      const { playerVelocity } = solve(crates, { player, velocity });
+      player.left += playerVelocity.x / 60;
+      player.top += playerVelocity.y / 60;
+    }
+    assert.deepEqual(player, start);
+  }
+});
+
+test("a player overlapping crates on both sides can still move out between them", () => {
+  const player = { left: 100, top: 100, width: 22, height: 20 };
+  const crates = [
+    { key: "left", rect: { left: 60, top: 90, width: 42, height: 40 }, locked: true },
+    { key: "right", rect: { left: 120, top: 90, width: 42, height: 40 }, locked: true },
+  ];
+  assert.deepEqual(
+    solve(crates, { player, velocity: { x: 160, y: -160 } }).playerVelocity,
+    { x: 0, y: -160 },
+  );
 });

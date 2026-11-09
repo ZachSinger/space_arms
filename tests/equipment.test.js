@@ -3,9 +3,16 @@ import test from "node:test";
 import { EquipmentRenderer } from "../js/logic/EquipmentRenderer.js";
 import { getNextHovercartUpgrade, isValidHovercartCapacity } from "../js/logic/Hovercart.js";
 
-const state = (capacity, credits) => ({
+const state = (capacity, credits, shopLevel = 30) => ({
   credits,
+  shopLevel,
   hovercart: { capacity, usedCapacity: () => 4 },
+});
+
+test("equipment tab says which Shop Level unlocks the next hovercart upgrade", () => {
+  const html = EquipmentRenderer.generateHTML(state(15, 5000, 2));
+  assert.match(html, /Reach Shop Level 3 to buy this upgrade/);
+  assert.match(html, /data-upgrade-hovercart\s+disabled/);
 });
 
 test("equipment tab shows current capacity, the next capacity, and its cost", () => {

@@ -10,6 +10,8 @@
       <div id="ui-layer">
         <div id="persistent-hud" class="hidden">
           <div class="hud-section">
+            <button id="hud-main-menu-btn" class="hud-pause-btn" type="button"
+              title="Leave this game and go back to the title screen">MAIN MENU</button>
             <button id="hud-debug-info-btn" class="hud-pause-btn" type="button"
               title="Save a screenshot and state report to a local debug session">Debug Info</button>
             <div class="hud-stat">
@@ -45,6 +47,11 @@
             </div>
             <button id="hud-pause-btn" class="hud-pause-btn" aria-label="Pause/resume shift clock">
               PAUSE
+            </button>
+            <button id="hud-store-toggle-btn" class="hud-pause-btn hidden" type="button"
+              aria-pressed="false"
+              title="Temporarily stop new customers. Customers already inside can finish shopping, and the shift clock keeps running.">
+              CLOSE STORE
             </button>
             <button id="hud-start-shift-btn" class="hud-start-shift-btn hidden" aria-label="Start shift">
               START SHIFT

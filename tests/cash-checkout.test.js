@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
+import { readFile } from "node:fs/promises";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -205,4 +206,14 @@ test("the change drawer shows bare numbers on bills and coins, with no row headi
   assert.match(html, /HAND OVER CHANGE \(SPACE\)/);
   assert.match(html, /3\.77 credits/);
   assert.equal((html.match(/data-cash-cents=/g) ?? []).length, 9);
+});
+
+test("change counted appears first on the left, and the bills use a narrow upright layout", async () => {
+  const html = CheckoutRenderer.generateHTML([], {}, new CashPayment(1.23, 5));
+  assert.ok(html.indexOf("CURRENT CHANGE") < html.indexOf("CHANGE OWED"));
+  const css = await readFile(new URL("../styles/space_dealer_window.css", import.meta.url), "utf8");
+  assert.match(css, /\.cash-summary\s*\{[^}]*justify-content:\s*flex-start/s);
+  assert.match(css, /\.cash-bills\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*60px\)/s);
+  assert.match(css, /\.cash-bill \.cash-art\s*\{[^}]*width:\s*46px;[^}]*height:\s*84px/s);
+  assert.match(css, /\.cash-loose\.cash-bill\s*\{[^}]*width:\s*52px;[^}]*height:\s*96px/s);
 });

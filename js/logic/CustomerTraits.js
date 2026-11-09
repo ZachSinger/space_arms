@@ -55,7 +55,7 @@ export function getPatienceMs(traitIds) {
  * The shelves to visit while looking for wanted items. Wanderers add shelves they have no
  * reason to visit, scaling with how many the store has, and walk them in a random order.
  * @param {object[]} wantedStops - shelf stops holding wanted items
- * @param {object[]} allStops - every shelf stop in the store
+ * @param {object[]} allStops - the stocked shelf stops in the store
  * @param {string[]} traitIds
  * @param {() => number} [random]
  * @returns {object[]}

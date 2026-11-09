@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -243,6 +243,7 @@ test("every credit change is itemized, so the receipt always matches the balance
 
 test("hovercart upgrades cost more for each five-space increase and stop at 40", () => {
   const state = new PlayerState();
+  state.shopLevel = 30;
   assert.equal(state.hovercart.capacity, 15);
   assert.equal(state.hovercart.add("test_item", 3), 3);
   state.addCredits(1000, { category: "sales", label: "Test sale" });
@@ -262,6 +263,7 @@ test("hovercart upgrades cost more for each five-space increase and stop at 40",
 
 test("an unaffordable hovercart upgrade changes neither capacity nor credits", () => {
   const state = new PlayerState();
+  state.shopLevel = 3;
   state.spendCredits(1301, { category: "fixtures", label: "Test fixture" });
   assert.equal(state.upgradeHovercart(), false);
   assert.equal(state.hovercart.capacity, 15);
@@ -280,8 +282,23 @@ test("saved hovercart upgrades and older carts keep their capacity and contents"
   }
 });
 
+test("each hovercart upgrade waits for its Shop Level", () => {
+  const state = new PlayerState();
+  assert.equal(state.upgradeHovercart(), false, "Shop Level 1 cannot upgrade");
+  assert.equal(state.hovercart.capacity, 15);
+  assert.equal(state.credits, 1500);
+  state.shopLevel = 3;
+  assert.equal(state.upgradeHovercart(), true);
+  assert.equal(state.hovercart.capacity, 20);
+  assert.equal(state.upgradeHovercart(), false, "25 spaces needs Shop Level 8");
+  state.shopLevel = 8;
+  assert.equal(state.upgradeHovercart(), true);
+  assert.equal(state.hovercart.capacity, 25);
+});
+
 test("receipts describe fixture resale and hovercart upgrades separately", () => {
   const state = new PlayerState();
+  state.shopLevel = 3;
   state.addCredits(90, { category: "fixture_sales", label: "LOCKER" });
   assert.equal(state.upgradeHovercart(), true);
   const receipt = summarizeReceipt(state.dayLedger.serialize(), state.credits, state.globalReputation);
@@ -385,17 +402,50 @@ test("the Finances tab spells out what every credit was for", () => {
   const html = FinancesRenderer.generateHTML(financesView());
   for (const text of [
     "Sold Pulse Rifle (2 items)", "+300 credits",
-    "Ordered Pulse Rifle (1 crate)", "-120 credits",
+    "Supply: Pulse Rifle (1 crate)", "-120 credits",
     "Delivery fees (1 order)", "Wages paid to Tavi (Stock Clerk)",
     "Credits at the start of the day", "1,000 credits",
     "Total earned", "Total spent", "-195 credits",
-    "Credits right now", "1,105 credits",
+    "Credits", "1,105 credits",
     "Customers served", "Customers turned away (store was full)",
     "END DAY 2", "moves to Day 3",
   ]) {
     assert.ok(html.includes(text), `missing "${text}"`);
   }
   assert.doesNotMatch(html, /data-finances-start-shift/);
+});
+
+test("the receipt uses short supply and fixture labels and larger earned/spent headings", async () => {
+  const ledger = new DayLedger({ day: 1, openingCredits: 100, openingReputation: 0 });
+  ledger.record({ category: "fixtures", label: "Starter Shelf", amount: -50 });
+  ledger.record({ category: "stock_orders", label: "Rations", amount: -25 });
+  const html = FinancesRenderer.generateHTML({
+    ...financesView(),
+    today: summarizeReceipt(ledger.serialize(), 25, 0),
+  });
+  assert.match(html, /Fixture: Starter Shelf/);
+  assert.match(html, /Supply: Rations/);
+  assert.doesNotMatch(html, /Bought fixture:|Ordered Rations/);
+  const css = await readFile(new URL("../styles/space_dealer_window.css", import.meta.url), "utf8");
+  assert.match(css, /\.finances-section-title\s*\{[^}]*font-size:\s*var\(--font-size-18\)/s);
+  assert.match(css, /\.finances-balance\s*\{[^}]*margin:\s*10px 0/s);
+});
+
+test("all receipt totals, reputation, and customer counts use larger text", async () => {
+  const view = financesView();
+  const html = FinancesRenderer.generateHTML({ ...view, lastDay: view.today });
+  const sections = html.split('<div class="finances-totals">').slice(1);
+  assert.equal(sections.length, 2);
+  for (const section of sections) {
+    for (const label of [
+      "Total earned", "Total spent", "Credits", "Store reputation change",
+      "Customers served", "Customers turned away (store was full)",
+    ]) {
+      assert.ok(section.includes(label), `missing "${label}" from a totals section`);
+    }
+  }
+  const css = await readFile(new URL("../styles/space_dealer_window.css", import.meta.url), "utf8");
+  assert.match(css, /\.finances-totals\s+\.finances-row\s*\{[^}]*font-size:\s*var\(--font-size-18\)/s);
 });
 
 test("the Finances tab offers End Day only after the shift, and Start Shift once the day is ended", () => {
@@ -432,11 +482,14 @@ test("the Finances tab offers End Day only after the shift, and Start Shift once
 test("the top bar shows PAUSE during a shift, END DAY after it, and START SHIFT before the next", (context) => {
   const elements = new Map();
   const ids = ["hud-credits", "hud-rep", "hud-shop-level", "hud-hovercart", "hud-shift-time", "hud-pause-btn",
-    "hud-start-shift-btn", "hud-end-day-btn", "hud-save-btn", "persistent-hud"];
+    "hud-store-toggle-btn",
+    "hud-start-shift-btn", "hud-end-day-btn", "hud-save-btn", "hud-main-menu-btn", "persistent-hud"];
   for (const id of ids) {
     const classes = new Set();
     elements.set(id, {
       listeners: new Map(),
+      attributes: new Map(),
+      setAttribute(name, value) { this.attributes.set(name, value); },
       classList: {
         add: (name) => classes.add(name),
         remove: (name) => classes.delete(name),
@@ -464,14 +517,29 @@ test("the top bar shows PAUSE during a shift, END DAY after it, and START SHIFT 
     notify() { clockListeners.forEach((callback) => callback(this)); },
   };
   let opened = 0;
-  new HUDController(state, clock, () => {}, () => {}, () => { opened += 1; });
+  let storeToggles = 0;
+  const hud = new HUDController(
+    state, clock, () => {}, () => {}, () => { opened += 1; }, () => { storeToggles += 1; },
+  );
   assert.equal(elements.get("hud-rep").innerText, 0);
   assert.equal(elements.get("hud-shop-level").innerText, 1);
-  const visible = () => ["hud-pause-btn", "hud-start-shift-btn", "hud-end-day-btn"]
+  const visible = () => [
+    "hud-pause-btn", "hud-store-toggle-btn", "hud-start-shift-btn", "hud-end-day-btn",
+  ]
     .filter((id) => !elements.get(id).classList.contains("hidden"));
 
   assert.deepEqual(visible(), ["hud-start-shift-btn"]);
   clock.started = true;
+  clock.notify();
+  assert.deepEqual(visible(), ["hud-pause-btn", "hud-store-toggle-btn"]);
+  const storeButton = elements.get("hud-store-toggle-btn");
+  assert.equal(storeButton.textContent, "CLOSE STORE");
+  storeButton.listeners.get("click")();
+  assert.equal(storeToggles, 1);
+  hud.renderStoreStatus(true);
+  assert.equal(storeButton.textContent, "REOPEN STORE");
+  assert.equal(storeButton.attributes.get("aria-pressed"), "true");
+  clock.softClosed = true;
   clock.notify();
   assert.deepEqual(visible(), ["hud-pause-btn"]);
   clock.started = false;
@@ -482,4 +550,34 @@ test("the top bar shows PAUSE during a shift, END DAY after it, and START SHIFT 
   assert.equal(opened, 1);
   state.endDay(2);
   assert.deepEqual(visible(), ["hud-start-shift-btn"]);
+});
+
+test("a loan is received, saved, repaid from later days' sales, and paid off", () => {
+  const state = new PlayerState();
+  state.spendCredits(1700, { category: "wages", label: "Tavi" });
+  assert.equal(state.takeEmergencyLoan(1200, 1500), true);
+  assert.equal(state.takeEmergencyLoan(1200, 1500), false, "one loan at a time");
+  assert.equal(state.credits, 1000);
+  assert.deepEqual(state.emergencyLoan, { balance: 1500, takenOnDay: 1 });
+
+  // No repayment on the day the loan was taken, even with sales.
+  state.addCredits(400, { category: "sales", label: "Rations", quantity: 4 });
+  state.endDay(2);
+  assert.equal(state.emergencyLoan.balance, 1500);
+  assert.equal(state.credits, 1400);
+
+  state.addCredits(800, { category: "sales", label: "Rations", quantity: 8 });
+  state.endDay(3);
+  assert.equal(state.emergencyLoan.balance, 1300);
+  assert.equal(state.credits, 2000);
+  const repayment = state.lastDayReceipt.lines.find((line) => line.category === "loan_repayments");
+  assert.equal(repayment.amount, -200);
+
+  const restored = PlayerState.deserialize(JSON.parse(JSON.stringify(state.serialize())));
+  assert.deepEqual(restored.emergencyLoan, { balance: 1300, takenOnDay: 1 });
+
+  assert.equal(restored.payOffEmergencyLoan(), true);
+  assert.equal(restored.emergencyLoan, null);
+  assert.equal(restored.credits, 700);
+  assert.equal(restored.payOffEmergencyLoan(), false);
 });

@@ -6,12 +6,13 @@
 export const HOVERCART_CAPACITY = 15;
 export const LEGACY_HOVERCART_CAPACITY = 10;
 
+// Each upgrade unlocks at a Shop Level (see documentation/StoreLevel.md).
 export const HOVERCART_UPGRADES = Object.freeze([
-  Object.freeze({ capacity: 20, price: 200 }),
-  Object.freeze({ capacity: 25, price: 300 }),
-  Object.freeze({ capacity: 30, price: 400 }),
-  Object.freeze({ capacity: 35, price: 500 }),
-  Object.freeze({ capacity: 40, price: 600 }),
+  Object.freeze({ capacity: 20, price: 200, requiredShopLevel: 3 }),
+  Object.freeze({ capacity: 25, price: 300, requiredShopLevel: 8 }),
+  Object.freeze({ capacity: 30, price: 400, requiredShopLevel: 14 }),
+  Object.freeze({ capacity: 35, price: 500, requiredShopLevel: 21 }),
+  Object.freeze({ capacity: 40, price: 600, requiredShopLevel: 28 }),
 ]);
 
 export function isValidHovercartCapacity(capacity) {

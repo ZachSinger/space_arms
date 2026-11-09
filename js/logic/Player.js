@@ -18,10 +18,13 @@ const EXHAUSTION_RECOVERY_STAMINA = 25;
 export const PLAYER_DISPLAY_WIDTH = 46;
 export const PLAYER_DISPLAY_HEIGHT = 48;
 
-// px, on-screen collision box. The sprite canvas has lots of transparent padding, so the
-// body is trimmed to the narrowest facing's visible content.
+// px, on-screen collision box. Only the lower body collides, so the player's head can
+// overlap a shelf or counter drawn above them, as in most top-down games. The sprite
+// canvas has transparent padding, so the box is also trimmed to the narrowest facing.
 const BODY_WIDTH = 22;
-const BODY_HEIGHT = 40;
+const BODY_HEIGHT = 20;
+// px of transparent padding below the feet.
+const BODY_BOTTOM_GAP = 4;
 
 // Placeholder art is a customer sprite (see TODO.md), tinted the UI accent cyan so the
 // player stands out from the crowd.
@@ -66,7 +69,12 @@ export class Player {
   // width, so divide by the current scale to keep a constant on-screen box. Re-apply on
   // every texture change.
   applyBodySize() {
-    this.sprite.body.setSize(BODY_WIDTH / this.sprite.scaleX, BODY_HEIGHT / this.sprite.scaleY);
+    const { scaleX, scaleY } = this.sprite;
+    this.sprite.body.setSize(BODY_WIDTH / scaleX, BODY_HEIGHT / scaleY, false);
+    this.sprite.body.setOffset(
+      (PLAYER_DISPLAY_WIDTH - BODY_WIDTH) / 2 / scaleX,
+      (PLAYER_DISPLAY_HEIGHT - BODY_BOTTOM_GAP - BODY_HEIGHT) / scaleY,
+    );
   }
 
   update(delta) {

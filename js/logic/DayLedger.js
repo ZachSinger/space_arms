@@ -13,10 +13,12 @@ export const LEDGER_CATEGORIES = Object.freeze([
   "fixtures",
   "expansions",
   "fixture_sales",
+  "loans",
   "equipment",
   "licenses",
   "hiring",
   "wages",
+  "loan_repayments",
 ]);
 
 const isWholeNumber = (value, minimum = Number.MIN_SAFE_INTEGER) =>

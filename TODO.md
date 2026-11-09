@@ -19,19 +19,32 @@ notice something that needs doing but isn't being done right now.
       four 5-unit crates (20 units total) into an empty 20-slot locker in about 20
       seconds. No stall occurred while that storage had room.
 - [x] Lock Tavi's hiring until Shop Level 4. Existing hires remain employed.
-- [ ] Let the player close the store temporarily with no penalty. New customers stop
-      coming in, customers already inside finish up, and the clock keeps running. This
-      gives the player time to catch up on stocking without losing reputation to
-      impatient customers.
-- [ ] Add normal purchases for backroom upgrades. The B debug key still unlocks them
-      for free; players need a way to buy them with credits.
+- [x] Let the player temporarily close and reopen the store during a shift. New customer
+      arrivals pause and resume later, customers already inside keep shopping, their
+      patience pauses, and the shift clock keeps running.
+- [x] Add paid, ordered backroom expansion purchases at Shop Levels 13, 20, and 27.
+      They cost credits, can only be bought while the store is closed, and replace the
+      free B debug unlock.
 - [ ] Play at least three shifts from a new game without debug keys. Check whether sales
       cover stock orders and wages, customers are served through closing, and saving and
       continuing between shifts works.
-- [ ] Decide what happens if wages put the player in debt and they run out of sellable
-      stock. Currently this can leave the player unable to continue.
-- [ ] Expand the employee system beyond Tavi, the only available hire. The design also
-      describes training and shift scheduling; decide which parts belong in the base loop.
+- [x] Decide what happens if wages put the player in debt and they run out of sellable
+      stock. For now, an emergency loan in the Finances tab tops credits up to 1,000; the
+      player owes 25% extra, repaid from 25% of each later day's sales (provisional numbers).
+- [x] Expand the employee roster beyond Tavi with additional Shop Level unlocks.
+- [ ] Decide whether employee training and shift scheduling belong in the base loop.
+- [ ] Better shop closing sequence: anything from a fade-out to the player walking out of the
+      shop themselves.
+- [ ] Give the player more breathing room at the register. The playtest was fun and
+      profitable, but the player had to close the store once per day and rarely got time
+      away from checkout to restock or manage the shop. Investigate ways to ease front-counter
+      pressure without losing that engagement.
+- [x] Customers browse before buying: they pause at each shelf to look before taking items,
+      and sometimes wander to another stocked shelf first. They skip empty shelves.
+- [x] Hovercart upgrades are locked behind Shop Levels 3, 8, 14, 21, and 28.
+- [x] Contracts tab lists signable contracts first and already-signed ones last.
+- [x] Only the player's lower body collides, so their head can overlap a shelf or counter
+      drawn above them instead of snagging on it.
 
 ## Progression
 - [x] New shops start at 0 reputation. Store and faction reputation changes are tallied
@@ -91,7 +104,8 @@ notice something that needs doing but isn't being done right now.
       straight ahead; the further off to one side it is, the more it's pushed sideways, and
       one that only clips your path is pushed only sideways, out of the way. Each crate in the row
       slows you more (60%, 40%, 25% speed); 4 in a row can't be pushed. A crate that hits
-      a wall stops you too. Loading pad crates block you like walls.
+      a wall stops you too. Loading pad crates block you like walls. An overlapping player
+      can step out of a crate, but can't walk through it, including while carrying a crate.
 - [x] Improve first-shift pacing: shortened shifts from ten to five minutes,
       keeping the same customer pool and doubling arrival frequency.
 - [x] Start with a much smaller shelf: a two-tile 2x1 starter shelf. (Superseded: new games now start with no shelves; the compact shelf is bought from the Fixtures tab. Placement checks preserve customer access to the register and both sides of the backroom entrance.)

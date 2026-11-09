@@ -69,8 +69,8 @@ export class CheckoutRenderer {
         ${cashPayment ? `
           <div class="cash-checkout hidden" id="checkout-cash">
             <div class="cash-summary">
-              <div><span>CHANGE OWED</span><strong>${formatMoney(cashPayment.changeDueCents / 100)}</strong></div>
               <div><span>CURRENT CHANGE</span><strong id="checkout-change-selected">0 credits</strong></div>
+              <div><span>CHANGE OWED</span><strong>${formatMoney(cashPayment.changeDueCents / 100)}</strong></div>
             </div>
             <button type="button" class="action-btn cash-hand-over" id="cash-hand-over">HAND OVER CHANGE (SPACE)</button>
             <div class="cash-drawer">

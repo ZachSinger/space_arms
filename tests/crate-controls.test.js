@@ -133,6 +133,40 @@ function keyEvent({ inUi = false, repeat = false } = {}) {
   };
 }
 
+test("carrying a crate still blocks overlapping pad crates and pushes loose crates", () => {
+  const { scene } = createHarness({ carrying: true });
+  const body = {
+    x: 89, y: 210, width: 22, height: 20, velocity: { x: 160, y: 0 },
+    setVelocity(x, y) { this.velocity = { x, y }; },
+  };
+  const groundCrate = {
+    lockedToPad: true,
+    isPushed: false,
+    isStationary: () => true,
+    isSliding: () => false,
+    sprite: { body: { x: 100, y: 200, width: 40, height: 40 } },
+    push(velocity) { this.pushedVelocity = velocity; },
+  };
+  scene.player.sprite.body = body;
+  scene.restockCrates = [groundCrate];
+  scene.isCrateSpaceBlocked = () => false;
+
+  scene.updateCratePushing(16);
+  assert.deepEqual(body.velocity, { x: 0, y: 0 });
+  assert.equal(groundCrate.pushedVelocity, undefined);
+  body.velocity = { x: -160, y: 0 };
+  scene.updateCratePushing(16);
+  assert.deepEqual(body.velocity, { x: -160, y: 0 });
+
+  body.x = 77;
+  body.velocity = { x: 160, y: 0 };
+  groundCrate.lockedToPad = false;
+  scene.updateCratePushing(16);
+  assert.equal(body.velocity.x, 96);
+  assert.deepEqual(groundCrate.pushedVelocity, { x: 96, y: 0 });
+  assert.ok(scene.carriedCrate);
+});
+
 test("Space drops once per press and Q is no longer bound", () => {
   const h = createHarness({ carrying: true });
   assert.deepEqual([...h.handlers.keys()], ["keydown-SPACE"]);

@@ -6,6 +6,18 @@
 import { getFixtureType } from "./FixtureLayout.js";
 
 export class ContractRenderer {
+  /** Signable contracts first, locked ones next, already-signed ones last; original order within each group. */
+  static sortLicenses(licenses, playerState) {
+    const group = (license) => {
+      if (playerState.activeLicenses?.has(license.id)) return 2;
+      return license.isUnlocked(playerState) ? 0 : 1;
+    };
+    return licenses
+      .map((license, index) => ({ license, index, group: group(license) }))
+      .sort((a, b) => a.group - b.group || a.index - b.index)
+      .map((entry) => entry.license);
+  }
+
   /**
    * Build the tab's content only; the hosting window (ManagerTablet.js) owns the tab chrome.
    * @param {Array<SupplierLicense>} licenses
@@ -20,7 +32,7 @@ export class ContractRenderer {
     if (!licenses || licenses.length === 0) {
       html += `<div style="color: var(--color-text-muted); text-align: center; padding: 20px;">No contracts available in database.</div>`;
     } else {
-      licenses.forEach((license) => {
+      ContractRenderer.sortLicenses(licenses, playerState).forEach((license) => {
         const isShopLevelMet =
           playerState.shopLevel >= license.requiredShopLevel;
         const isGlobalRepMet =

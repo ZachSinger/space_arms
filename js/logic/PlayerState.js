@@ -9,6 +9,7 @@ import { DayLedger } from "./DayLedger.js";
 import { isMoney, sumMoney } from "./Money.js";
 import { getShopLevelForReputation, isKnownShopLevel } from "./ShopProgression.js";
 import { CUSTOMER_FACTION_IDS } from "./CustomerBuyLists.js";
+import { getDailyLoanRepayment } from "./EmergencyLoan.js";
 import employeeRoster from "../../data/Employees.json" with { type: "json" };
 
 // The starting capacity and upgrade rules for the player's hovercart.
@@ -67,8 +68,45 @@ export class PlayerState {
     this.lastDayReceipt = null;
     // True from the end of a shift until the player clicks End Day.
     this.awaitingEndDay = false;
+    // Outstanding emergency loan: { balance, takenOnDay }, or null when nothing is owed.
+    this.emergencyLoan = null;
 
     this.listeners = [];
+  }
+
+  /**
+   * @param {number} amount - credits received now
+   * @param {number} repayTotal - credits owed back, fee included
+   */
+  takeEmergencyLoan(amount, repayTotal) {
+    if (this.emergencyLoan) return false;
+    this.emergencyLoan = { balance: repayTotal, takenOnDay: this.dayLedger.day };
+    this.addCredits(amount, { category: "loans", label: "Emergency loan" });
+    return true;
+  }
+
+  // Pay the whole remaining balance at once.
+  payOffEmergencyLoan() {
+    if (!this.emergencyLoan || this.credits < this.emergencyLoan.balance) return false;
+    const { balance } = this.emergencyLoan;
+    this.emergencyLoan = null;
+    this.spendCredits(balance, { category: "loan_repayments", label: "Emergency loan" });
+    return true;
+  }
+
+  // At End Day, a share of today's sales goes toward the loan (not on the day it was taken).
+  collectEmergencyLoanRepayment() {
+    const loan = this.emergencyLoan;
+    if (!loan || loan.takenOnDay === this.dayLedger.day) return 0;
+    const salesToday = sumMoney(this.dayLedger.lines
+      .filter((line) => line.category === "sales")
+      .map((line) => line.amount));
+    const payment = getDailyLoanRepayment(loan.balance, salesToday);
+    if (payment <= 0) return 0;
+    const balance = sumMoney([loan.balance, -payment]);
+    this.emergencyLoan = balance > 0 ? { ...loan, balance } : null;
+    this.spendCredits(payment, { category: "loan_repayments", label: "Emergency loan" });
+    return payment;
   }
 
   /**
@@ -102,7 +140,8 @@ export class PlayerState {
 
   upgradeHovercart() {
     const upgrade = getNextHovercartUpgrade(this.hovercart.capacity);
-    if (!upgrade || this.credits < upgrade.price) return false;
+    if (!upgrade || this.shopLevel < upgrade.requiredShopLevel ||
+      this.credits < upgrade.price) return false;
     this.hovercart.capacity = upgrade.capacity;
     this.spendCredits(upgrade.price, {
       category: "equipment",
@@ -141,6 +180,7 @@ export class PlayerState {
    * @returns {object} the finished day's receipt
    */
   endDay(nextDay) {
+    this.collectEmergencyLoanRepayment();
     const receipt = this.dayLedger.close(this.credits, this.globalReputation);
     this.lastDayReceipt = receipt;
     this.dayLedger = new DayLedger({
@@ -321,6 +361,7 @@ export class PlayerState {
         ? { ...this.lastDayReceipt, lines: this.lastDayReceipt.lines.map((line) => ({ ...line })) }
         : null,
       awaitingEndDay: this.awaitingEndDay,
+      emergencyLoan: this.emergencyLoan ? { ...this.emergencyLoan } : null,
     };
   }
 
@@ -377,6 +418,7 @@ export class PlayerState {
         ? { ...data.lastDayReceipt, lines: data.lastDayReceipt.lines.map((line) => ({ ...line })) }
         : null,
       awaitingEndDay: data.awaitingEndDay ?? false,
+      emergencyLoan: data.emergencyLoan ? { ...data.emergencyLoan } : null,
     });
     this.notifyListeners();
   }

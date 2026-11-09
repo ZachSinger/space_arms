@@ -47,7 +47,7 @@ after(async () => {
   if (cacheDirectory) await rm(cacheDirectory, { recursive: true, force: true });
 });
 
-function queuedCustomer({ serving = () => false } = {}) {
+function queuedCustomer({ serving = () => false, storeTemporarilyClosed = false } = {}) {
   const bubble = { list: [{ setFillStyle() {} }, { setText() {} }], setPosition() {}, destroyed: false };
   bubble.destroy = () => { bubble.destroyed = true; };
   const customer = Object.create(Customer.prototype);
@@ -65,6 +65,7 @@ function queuedCustomer({ serving = () => false } = {}) {
   customer.reactionBubble = null;
   customer.reactionRemainingMs = 0;
   customer.scene = {
+    storeTemporarilyClosed,
     isServingCustomer: serving,
     showFloatingText: (...args) => floating.push(args),
     add: {
@@ -126,6 +127,19 @@ test("queued customers drain patience, hold while served, and leave angry at zer
   assert.equal(customer.playerState.factionReputation.mercenaries, 0);
   assert.deepEqual(floating, []);
   assert.equal(bubble.destroyed, true);
+});
+
+test("queued customers do not lose patience while the store is temporarily closed", () => {
+  const { customer, angry } = queuedCustomer({ storeTemporarilyClosed: true });
+  customer.update(PATIENCE_MS);
+  assert.equal(customer.state, "QUEUEING");
+  assert.equal(customer.patienceRemainingMs, PATIENCE_MS);
+  assert.equal(angry.length, 0);
+
+  customer.scene.storeTemporarilyClosed = false;
+  customer.update(PATIENCE_MS);
+  assert.equal(customer.state, "LEAVING");
+  assert.equal(angry.length, 1);
 });
 
 test("the Go-Backs bin only empties into the hovercart, within its capacity", () => {

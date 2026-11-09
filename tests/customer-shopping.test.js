@@ -10,8 +10,11 @@ import { createServer } from "vite";
 let server;
 let cacheDirectory;
 let Customer;
+let GameScene;
+const originalPhaser = globalThis.Phaser;
 
 before(async () => {
+  globalThis.Phaser = { Scene: class {} };
   cacheDirectory = await mkdtemp(join(tmpdir(), "space-arms-customer-shopping-test-"));
   server = await createServer({
     root: fileURLToPath(new URL("..", import.meta.url)),
@@ -25,26 +28,38 @@ before(async () => {
       enforce: "pre",
       resolveId(source) {
         if (source === "./CustomerSprites.js") return "\0customer-shopping-test-sprites";
+        if (source === "./boot.js" || source === "../scenes/boot.js") {
+          return "\0customer-shopping-test-database";
+        }
       },
       load(id) {
         if (id === "\0customer-shopping-test-sprites") {
-          return "export const pickRandomCustomerCharacter = () => ({ factionId: null, facingTextures: {} });";
+          return "export const pickRandomCustomerCharacter = () => ({ factionId: null, facingTextures: {} }); export const pickPlayerCharacterTextures = () => ({});";
+        }
+        if (id === "\0customer-shopping-test-database") {
+          return "export const database = { getItem: (id) => ({ id, name: id, tags: [] }) };";
         }
       },
     }],
   });
   ({ Customer } = await server.ssrLoadModule("/js/logic/Customer.js"));
+  ({ GameScene } = await server.ssrLoadModule("/js/scenes/game.js"));
 });
 
 after(async () => {
   if (server) await server.close();
   if (cacheDirectory) await rm(cacheDirectory, { recursive: true, force: true });
+  if (originalPhaser === undefined) delete globalThis.Phaser;
+  else globalThis.Phaser = originalPhaser;
 });
 
 function fixture(standPoint, placements) {
   return {
     standPoint,
     placements,
+    findAvailableSlot() {
+      return this.placements.find((placement) => placement.quantity > 0) || null;
+    },
     getAvailableUnitsFor(itemId, placement) {
       return this.placements.includes(placement) && placement.itemId === itemId
         ? placement.quantity
@@ -66,6 +81,14 @@ function fixture(standPoint, placements) {
       return quantity;
     },
   };
+}
+
+function makeShelfScene(shelves) {
+  const scene = Object.create(GameScene.prototype);
+  scene.fixtures = { shelves: () => shelves };
+  scene.getStorePrice = () => 10;
+  scene.market = { getPrice: () => 10 };
+  return scene;
 }
 
 function makeCustomer({ factionId = "scavengers", plan }) {
@@ -151,6 +174,37 @@ function makeCustomer({ factionId = "scavengers", plan }) {
   };
 }
 
+test("random browsing chooses only stocked shelves other than the next stop", () => {
+  const empty = fixture({ x: 100, y: 100 }, []);
+  const soldOut = fixture({ x: 200, y: 100 }, [{ itemId: "missing", quantity: 0 }]);
+  const first = fixture({ x: 300, y: 100 }, [{ itemId: "first", quantity: 1 }]);
+  const second = fixture({ x: 400, y: 100 }, [{ itemId: "second", quantity: 2 }]);
+  const scene = makeShelfScene([empty, soldOut, first, second]);
+
+  for (let i = 0; i < 20; i += 1) {
+    assert.ok([first, second].includes(scene.getRandomBrowseShelf()));
+  }
+  assert.equal(scene.getRandomBrowseShelf(first), second);
+  first.placements[0].quantity = 0;
+  assert.equal(scene.getRandomBrowseShelf(), second);
+  assert.equal(scene.getRandomBrowseShelf(second), null);
+  second.placements[0].quantity = 0;
+  assert.equal(scene.getRandomBrowseShelf(), null);
+});
+
+test("wanderer routes include stocked shelves while keeping sold-out wants for reporting", (t) => {
+  t.mock.method(Math, "random", () => 0);
+  const soldOut = fixture({ x: 100, y: 100 }, [{ itemId: "missing", quantity: 0 }]);
+  const stocked = fixture({ x: 200, y: 100 }, [{ itemId: "available", quantity: 2 }]);
+  const empty = fixture({ x: 300, y: 100 }, []);
+  const plan = makeShelfScene([soldOut, stocked, empty])
+    .createCustomerShoppingPlan(null, ["wanderer"]);
+
+  assert.deepEqual(plan.primaryItemIds, ["missing"]);
+  assert.deepEqual(plan.shelfStops.map((stop) => stop.fixture), [soldOut]);
+  assert.deepEqual(plan.allShelfStops.map((stop) => stop.fixture), [stocked]);
+});
+
 test("customer emoticons appear only for a new event and fade while following the customer", () => {
   const { customer, reactionGraphics } = makeCustomer({ plan: {} });
 
@@ -191,9 +245,16 @@ test("customers report missing primary stock while continuing to buy remaining i
     missingPrimaryEvents,
     inventoryTransfers,
   } = makeCustomer({ plan });
+  const destinations = [];
+  const setDestination = customer.setDestination;
+  customer.setDestination = (x, y, onArrive) => {
+    destinations.push({ x, y });
+    setDestination(x, y, onArrive);
+  };
   customer.visitNextShelf("primary");
 
   assert.deepEqual(customer.cart.map((entry) => entry.itemId), ["wanted", "bonus"]);
+  assert.deepEqual(destinations, [inStock.standPoint, bonusShelf.standPoint, { x: 900, y: 900 }]);
   assert.deepEqual(inventoryTransfers, [
     {
       itemId: "wanted",
@@ -212,6 +273,147 @@ test("customers report missing primary stock while continuing to buy remaining i
   assert.deepEqual(repChanges, []);
   assert.deepEqual(floatingText, []);
   assert.equal(customer.state, "SEEK_REGISTER");
+});
+
+test("a shelf that sells out while a customer approaches is skipped and reported missing", () => {
+  const shelf = fixture({ x: 100, y: 100 }, [{ itemId: "wanted", quantity: 1 }]);
+  const plan = {
+    primaryItemIds: ["wanted"],
+    bonusItemIds: [],
+    matchingAmmoIdsByFirearm: {},
+    shelfStops: [{ fixture: shelf, standPoint: shelf.standPoint }],
+  };
+  const { customer, missingPrimaryEvents } = makeCustomer({ factionId: null, plan });
+  let arrive;
+  customer.setDestination = (_x, _y, callback) => { arrive = callback; };
+  customer.browseShelfMs = [1000, 1000];
+  customer.visitNextShelf("primary");
+  shelf.placements[0].quantity = 0;
+  arrive();
+
+  assert.equal(customer.state, "LEAVING");
+  assert.deepEqual(missingPrimaryEvents, [{ customer, itemIds: ["wanted"] }]);
+  assert.deepEqual(customer.cart, []);
+});
+
+test("a browsing detour reserves a stocked shelf and skips it if it sells out on the way", (t) => {
+  t.mock.method(Math, "random", () => 0);
+  const wanted = fixture({ x: 100, y: 100 }, [{ itemId: "wanted", quantity: 1 }]);
+  const detour = fixture({ x: 200, y: 100 }, [{ itemId: "other", quantity: 1 }]);
+  const plan = {
+    primaryItemIds: ["wanted"],
+    bonusItemIds: [],
+    matchingAmmoIdsByFirearm: {},
+    shelfStops: [{ fixture: wanted, standPoint: wanted.standPoint }],
+  };
+  const { customer } = makeCustomer({ factionId: null, plan });
+  const reservations = [];
+  const destinations = [];
+  const arrivals = [];
+  customer.wanderChance = 1;
+  customer.scene.getRandomBrowseShelf = (excluded) => {
+    assert.equal(excluded, wanted);
+    return detour;
+  };
+  customer.onReserveShelfSlot = (shelf, shopper) => {
+    assert.equal(shopper, customer);
+    reservations.push(shelf);
+    return shelf.standPoint;
+  };
+  customer.setDestination = (x, y, callback) => {
+    destinations.push({ x, y });
+    arrivals.push(callback);
+  };
+  customer.visitNextShelf("primary");
+
+  assert.deepEqual(reservations, [detour]);
+  assert.deepEqual(destinations, [detour.standPoint]);
+  detour.placements[0].quantity = 0;
+  arrivals.shift()();
+  assert.deepEqual(reservations, [detour, wanted]);
+  assert.deepEqual(destinations, [detour.standPoint, wanted.standPoint]);
+  arrivals.shift()();
+  assert.deepEqual(customer.cart.map((entry) => entry.itemId), ["wanted"]);
+  assert.equal(customer.state, "SEEK_REGISTER");
+});
+
+test("a customer changes course as soon as a browsing destination sells out", (t) => {
+  t.mock.method(Math, "random", () => 0);
+  const wanted = fixture({ x: 100, y: 100 }, [{ itemId: "wanted", quantity: 1 }]);
+  const detour = fixture({ x: 200, y: 100 }, [{ itemId: "other", quantity: 1 }]);
+  const plan = {
+    primaryItemIds: ["wanted"],
+    bonusItemIds: [],
+    matchingAmmoIdsByFirearm: {},
+    shelfStops: [{ fixture: wanted, standPoint: wanted.standPoint }],
+  };
+  const { customer } = makeCustomer({ factionId: null, plan });
+  const destinations = [];
+  customer.sprite.body = { setVelocity() {} };
+  customer.wanderChance = 1;
+  customer.scene.getRandomBrowseShelf = () => detour;
+  customer.setDestination = (x, y, callback) => {
+    destinations.push({ x, y });
+    customer.onArriveAtDestination = callback;
+    customer.seekingTimer = 0;
+  };
+  customer.followPath = () => { throw new Error("Should not continue toward the empty shelf"); };
+  customer.updateReaction = () => {};
+  customer.visitNextShelf("primary");
+  detour.placements[0].quantity = 0;
+  customer.update(16);
+
+  assert.deepEqual(destinations, [detour.standPoint, wanted.standPoint]);
+  assert.equal(customer.fixture, wanted);
+  assert.equal(customer.state, "SEEK_SHELF");
+});
+
+test("customers stand looking at a shelf for a moment before taking anything", () => {
+  const shelf = fixture({ x: 100, y: 100 }, [{ itemId: "wanted", quantity: 1 }]);
+  const plan = {
+    primaryItemIds: ["wanted"],
+    bonusItemIds: [],
+    matchingAmmoIdsByFirearm: {},
+    shelfStops: [{ fixture: shelf, standPoint: shelf.standPoint }],
+  };
+  const { customer } = makeCustomer({ factionId: null, plan });
+  const facings = [];
+  customer.sprite.body = { setVelocity() {} };
+  customer.updateFacing = (facing) => facings.push(facing);
+  customer.browseShelfMs = [1000, 1000];
+  customer.wanderChance = 0;
+  customer.updateReaction = () => {};
+  customer.visitNextShelf("primary");
+
+  assert.equal(customer.state, "BROWSING");
+  assert.deepEqual(customer.cart, []);
+  customer.update(600);
+  assert.deepEqual(customer.cart, []);
+  assert.equal(facings.at(-1), "up", "faces the shelf front");
+  customer.update(500);
+  assert.deepEqual(customer.cart.map((entry) => entry.itemId), ["wanted"]);
+  assert.equal(customer.state, "SEEK_REGISTER");
+});
+
+test("a customer stops looking at a shelf if it sells out during the pause", () => {
+  const shelf = fixture({ x: 100, y: 100 }, [{ itemId: "wanted", quantity: 1 }]);
+  const plan = {
+    primaryItemIds: ["wanted"],
+    bonusItemIds: [],
+    matchingAmmoIdsByFirearm: {},
+    shelfStops: [{ fixture: shelf, standPoint: shelf.standPoint }],
+  };
+  const { customer, missingPrimaryEvents } = makeCustomer({ factionId: null, plan });
+  customer.sprite.body = { setVelocity() {} };
+  customer.updateFacing = () => {};
+  customer.browseShelfMs = [1000, 1000];
+  customer.visitNextShelf("primary");
+  assert.equal(customer.state, "BROWSING");
+  shelf.placements[0].quantity = 0;
+  customer.update(16);
+
+  assert.equal(customer.state, "LEAVING");
+  assert.deepEqual(missingPrimaryEvents, [{ customer, itemIds: ["wanted"] }]);
 });
 
 test("customers react happily when they pick up an item priced at least 10% below market", () => {
@@ -275,6 +477,41 @@ test("missing bonus items are not reported as primary stockouts", () => {
   assert.deepEqual(repChanges, []);
   assert.deepEqual(missingPrimaryEvents, []);
   assert.deepEqual(customer.cart.map((entry) => entry.itemId), ["wanted"]);
+  assert.equal(customer.bonusAttempted.has("bonus"), true);
+  assert.equal(customer.state, "SEEK_REGISTER");
+});
+
+test("bonus shopping finishes when matching ammunition has no shelf to visit", () => {
+  const shelf = fixture({ x: 100, y: 100 }, [{ itemId: "gun", quantity: 1 }]);
+  const plan = {
+    primaryItemIds: ["gun"],
+    bonusItemIds: [],
+    matchingAmmoIdsByFirearm: { gun: ["ammo"] },
+    shelfStops: [{ fixture: shelf, standPoint: shelf.standPoint }],
+  };
+  const { customer } = makeCustomer({ factionId: "mercenaries", plan });
+  customer.visitNextShelf("primary");
+
+  assert.deepEqual(customer.cart.map((entry) => entry.itemId), ["gun"]);
+  assert.equal(customer.bonusAttempted.has("ammo"), true);
+  assert.equal(customer.state, "SEEK_REGISTER");
+});
+
+test("a bonus firearm still prompts another pass for matching ammunition", () => {
+  const primary = fixture({ x: 100, y: 100 }, [{ itemId: "wanted", quantity: 1 }]);
+  const firearm = fixture({ x: 200, y: 100 }, [{ itemId: "gun", quantity: 1 }]);
+  const ammo = fixture({ x: 300, y: 100 }, [{ itemId: "ammo", quantity: 1 }]);
+  const plan = {
+    primaryItemIds: ["wanted"],
+    bonusItemIds: ["gun"],
+    matchingAmmoIdsByFirearm: { gun: ["ammo"] },
+    shelfStops: [primary, firearm, ammo].map((shelf) =>
+      ({ fixture: shelf, standPoint: shelf.standPoint })),
+  };
+  const { customer } = makeCustomer({ factionId: "mercenaries", plan });
+  customer.visitNextShelf("primary");
+
+  assert.deepEqual(customer.cart.map((entry) => entry.itemId), ["wanted", "gun", "ammo"]);
   assert.equal(customer.state, "SEEK_REGISTER");
 });
 

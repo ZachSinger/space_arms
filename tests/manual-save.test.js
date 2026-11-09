@@ -201,6 +201,50 @@ test("buying all backroom expansions records costs and opens the wider room", ()
   assert.equal(harness.autosaves, 3);
 });
 
+test("temporarily closing the store pauses arrivals and reschedules them on reopening", () => {
+  let elapsedMs = 0;
+  const spawned = [];
+  const storeStates = [];
+  const messages = [];
+  const scene = Object.create(GameScene.prototype);
+  Object.assign(scene, {
+    storeTemporarilyClosed: false,
+    storeTemporarilyClosedSinceMs: null,
+    shiftClock: {
+      started: true,
+      softClosed: false,
+      isPaused: false,
+      getElapsedMs: () => elapsedMs,
+    },
+    customerArrivalSchedule: [
+      { factionId: "mercenaries", atMs: 1000 },
+      { factionId: "explorers", atMs: 5000 },
+    ],
+    nextScheduledArrival: 0,
+    spawnCustomer: (factionId) => spawned.push(factionId),
+    hud: { renderStoreStatus: (closed) => storeStates.push(closed) },
+    showGameMessage: (message) => messages.push(message),
+  });
+
+  assert.equal(scene.toggleTemporaryStoreClosure(), true);
+  elapsedMs = 3000;
+  scene.spawnScheduledCustomers();
+  assert.deepEqual(spawned, []);
+  assert.equal(scene.nextScheduledArrival, 0);
+  assert.equal(scene.shiftClock.isPaused, false);
+
+  assert.equal(scene.toggleTemporaryStoreClosure(), true);
+  assert.deepEqual(scene.customerArrivalSchedule.map(({ atMs }) => atMs), [4000, 8000]);
+  assert.deepEqual(storeStates, [true, false]);
+  assert.match(messages[0], /Customers inside can finish shopping/);
+
+  elapsedMs = 4000;
+  scene.spawnScheduledCustomers();
+  elapsedMs = 8000;
+  scene.spawnScheduledCustomers();
+  assert.deepEqual(spawned, ["mercenaries", "explorers"]);
+});
+
 function createRegisterHarness() {
   const scene = Object.create(GameScene.prototype);
   const checkout = Object.create(CheckoutWindow.prototype);
@@ -249,11 +293,13 @@ test("the shift-end event, receipt, and save observers see the applied reputatio
     startingShift: false,
     shiftEnded: false,
     shiftClock: { started: true, isPaused: false, notifyListeners() {} },
+    hud: { renderStoreStatus() {} },
     room: { zones: ZONES },
     market: { day: 1 },
     fixturePlacement: { active: false },
     eventBus: { emit: (name, details) => events.push({ name, details }) },
     clearEmployees() {},
+    getEmergencyLoanOffer: () => ({ available: false, amount: 0, repayTotal: 0 }),
     showGameMessage: (message) => messages.push(message),
   });
   state.subscribe((current) => {
@@ -298,6 +344,7 @@ test("a shift that earns multiple levels announces each implemented unlock", () 
     customersServedThisShift: 60,
     shiftEnded: false,
     shiftClock: { started: true, isPaused: false, notifyListeners() {} },
+    hud: { renderStoreStatus() {} },
     room: { zones: ZONES },
     eventBus: { emit() {} },
     clearEmployees() {},
@@ -339,6 +386,7 @@ test("a shift from Shop Level 6 to 30 announces all remaining reward types", () 
     playerState: state,
     customersServedThisShift: 60,
     shiftClock: { started: true, isPaused: false, notifyListeners() {} },
+    hud: { renderStoreStatus() {} },
     room: { zones: ZONES.map((zone) => ({ ...zone })) },
     eventBus: { emit() {} },
     clearEmployees() {},
@@ -367,6 +415,7 @@ test("level-up messages do not reannounce contracts or staff already owned in ol
     playerState: state,
     customersServedThisShift: 60,
     shiftClock: { started: true, isPaused: false, notifyListeners() {} },
+    hud: { renderStoreStatus() {} },
     room: { zones: ZONES },
     eventBus: { emit() {} },
     clearEmployees() {},
@@ -570,19 +619,25 @@ test("manual saving stays blocked mid-shift, while starting a shift, and after a
 test("HUD Save button is wired, reflects availability, and removes its handler on destroy", async (context) => {
   const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
   assert.match(html, /id="hud-save-btn"/);
+  assert.match(html, /id="hud-store-toggle-btn"/);
+  assert.match(html, /id="hud-main-menu-btn"/);
   const elements = new Map();
   for (const id of [
     "hud-credits", "hud-rep", "hud-shop-level", "hud-hovercart", "hud-shift-time", "hud-pause-btn",
-    "hud-start-shift-btn", "hud-end-day-btn", "hud-save-btn", "persistent-hud",
+    "hud-store-toggle-btn", "hud-start-shift-btn", "hud-end-day-btn", "hud-save-btn", "hud-main-menu-btn",
+    "persistent-hud",
   ]) {
     elements.set(id, {
       listeners: new Map(),
       classList: { add() {}, remove() {}, toggle() {} },
+      setAttribute() {},
       addEventListener(event, handler) { this.listeners.set(event, handler); },
       removeEventListener(event) { this.listeners.delete(event); },
     });
   }
-  const hudButtons = ["hud-pause-btn", "hud-start-shift-btn", "hud-end-day-btn", "hud-save-btn"]
+  const hudButtons = [
+    "hud-pause-btn", "hud-store-toggle-btn", "hud-start-shift-btn", "hud-end-day-btn", "hud-save-btn",
+  ]
     .map((id) => elements.get(id));
   const hudRoot = elements.get("persistent-hud");
   hudRoot.querySelectorAll = (selector) => (selector === "button" ? hudButtons : []);
@@ -593,13 +648,17 @@ test("HUD Save button is wired, reflects availability, and removes its handler o
     else globalThis.document = originalDocument;
   });
   let saves = 0;
+  let mainMenuRequests = 0;
   const hud = new HUDController({
     subscribe(callback) {
       callback({ credits: 436, globalReputation: 2, shopLevel: 1, hovercart: { usedCapacity: () => 0, capacity: 10 } });
     },
   }, {
     subscribe(callback) { callback({ started: false, isPaused: true, softClosed: false }); },
-  }, () => {}, () => { saves += 1; });
+  }, () => {}, () => { saves += 1; }, () => {}, () => {}, () => { mainMenuRequests += 1; });
+  const mainMenuButton = elements.get("hud-main-menu-btn");
+  mainMenuButton.listeners.get("click")();
+  assert.equal(mainMenuRequests, 1);
   const button = elements.get("hud-save-btn");
   assert.equal(button.disabled, true);
   // Top bar buttons never hold keyboard focus, so Space stays with the game.
@@ -626,5 +685,24 @@ test("HUD Save button is wired, reflects availability, and removes its handler o
   assert.match(button.title, /Finish the shift/);
   hud.destroy();
   assert.equal(button.listeners.size, 0);
+  assert.equal(mainMenuButton.listeners.size, 0);
   assert.equal(hudRoot.listeners.size, 0);
+});
+
+test("the register blocks only its counter, so the player can walk over its monitor and printer", () => {
+  const scene = Object.create(GameScene.prototype);
+  const tree = { remove() {}, insert() {} };
+  const body = { world: { staticTree: tree }, position: { set(x, y) { this.x = x; this.y = y; } },
+    center: { set(x, y) { this.x = x; this.y = y; } } };
+  const sprite = { displayWidth: 90, displayHeight: 75, body,
+    setPosition() { return this; }, setAngle() { return this; } };
+  // Where the register sat in the playtest debug capture.
+  scene.orientFixtureSprite({ type: "register_basic", x: 832, y: 192, rotation: 0, sprite });
+  const top = body.position.y;
+  assert.ok(top > 180 && top < 183, `counter top is below the monitor (${top})`);
+  assert.equal(body.position.y + body.height, 229.5, "bottom edge unchanged");
+  assert.equal(body.width, 90);
+  // The player stood just above the register's top-left corner: feet at 154.5, the old
+  // solid top edge. Their feet now have room to walk down past the monitor.
+  assert.ok(top - 154.5 > 25);
 });
