@@ -28,6 +28,7 @@ img/Uncut_Sheets/
 img/Icons_Extracted/
 # Keep the third-party tileset package and its accompanying files local.
 img/Tilesets/scifi/
+img/Tilesets/Research_Station_FULL_v0.6.0/
 
 # Keep image files local, regardless of folder or filename capitalization.
 *.[pP][nN][gG]

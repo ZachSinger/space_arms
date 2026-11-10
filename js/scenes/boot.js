@@ -7,7 +7,8 @@ import Phaser from "phaser";
 import { DatabaseManager } from "../logic/DatabaseManager.js";
 import tilesetManifest from "../../data/TilesetManifest.json";
 import customerSpriteManifest from "../../data/CustomerSpriteManifest.json";
-import { SCIFI_SHEETS, registerShopTiles } from "../logic/ShopTiles.js";
+import { SHOP_ATLAS, registerShopTiles } from "../logic/ShopTiles.js";
+import { SLIDING_DOOR_ASSETS } from "../logic/SlidingDoor.js";
 
 // The game-wide static data lookup, imported by logic modules as `database`.
 export const database = new DatabaseManager();
@@ -26,7 +27,8 @@ export class BootScene extends Phaser.Scene {
     // Every floor/wall/fixture tile; RoomLayout.js and TileRoom.js build the map from these keys.
     tilesetManifest.forEach(({ key, path }) => this.load.image(key, path));
     this.load.image("fixture_crate_01", "img/Generated/fixture_crate_01.png");
-    SCIFI_SHEETS.forEach(({ key, path }) => this.load.image(key, path));
+    this.load.image(SHOP_ATLAS.key, SHOP_ATLAS.path);
+    SLIDING_DOOR_ASSETS.forEach(({ key, path }) => this.load.image(key, path));
 
     // Every customer sprite (4 facings per character); see CustomerSprites.js.
     customerSpriteManifest.forEach(({ key, path }) => this.load.image(key, path));
@@ -39,7 +41,7 @@ export class BootScene extends Phaser.Scene {
 
     database.loadItemsJSON(rawItems);
     database.loadLicensesJSON(rawLicenses);
-    if (!registerShopTiles(this.textures)) console.warn("Sci-fi tileset missing from img/Tilesets/scifi/");
+    if (!registerShopTiles(this.textures)) console.warn(`Shop tile art missing: ${SHOP_ATLAS.path}`);
 
     this.scene.start("scene-title");
   }

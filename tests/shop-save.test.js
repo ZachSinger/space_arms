@@ -23,7 +23,7 @@ function snapshot() {
     },
     market: new Market(database.getAllItems(), () => 0.5).serialize(),
     fixtures: [
-      { id: "fixture_demo_01", type: "shelf_starter_2x1", gx: 11, gy: 5 },
+      { id: "fixture_demo_01", type: "shelf_starter_2x1", gx: 16, gy: 6 },
       ...STARTING_FIXTURES,
     ].map(({ id, type, gx, gy }) => ({
       id, type, gx, gy,
@@ -257,15 +257,31 @@ test("older saves keep the third starting locker and its contents", () => {
 test("saves from before the backroom window move backroom fixtures and crates into it", () => {
   const legacy = snapshot();
   delete legacy.layoutVersion;
-  for (const entry of legacy.fixtures) if (entry.gy >= 100) entry.gy -= 100;
+  for (const entry of legacy.fixtures) {
+    if (entry.gy >= 100) entry.gy -= 100;
+    else Object.assign(entry, { gx: entry.gx - 7, gy: entry.gy - 1 });
+  }
   legacy.crates[0].y = 640;
-  const sales = legacy.fixtures[0];
   const migrated = validateShopSave(legacy, database);
   assert.equal(migrated.layoutVersion, SHOP_LAYOUT_VERSION);
   assert.deepEqual(migrated.fixtures, snapshot().fixtures);
-  assert.deepEqual(migrated.fixtures[0], sales, "sales floor fixtures stay put");
   assert.equal(migrated.crates[0].y, 7040);
   assert.equal(legacy.crates[0].y, 640, "the save being loaded is not changed");
+});
+
+test("saves from before the ShopA map move everything on the shop floor with the starting area", () => {
+  const old = snapshot();
+  old.layoutVersion = 2;
+  for (const entry of old.fixtures) {
+    if (entry.gy < 100) Object.assign(entry, { gx: entry.gx - 7, gy: entry.gy - 1 });
+  }
+  old.crates[0].x = 400;
+  old.crates[0].y = 300;
+  const migrated = validateShopSave(old, database);
+  assert.equal(migrated.layoutVersion, SHOP_LAYOUT_VERSION);
+  assert.deepEqual(migrated.fixtures, snapshot().fixtures, "backroom fixtures stay put");
+  assert.deepEqual([migrated.crates[0].x, migrated.crates[0].y], [400 + 7 * 64, 300 + 64]);
+  assert.equal(old.crates[0].x, 400, "the save being loaded is not changed");
 });
 
 test("fixture rotation is saved, and older saves without it still load", () => {

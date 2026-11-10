@@ -32,3 +32,21 @@ test("the backroom sits apart from the shop, and only its upgrades grow it", () 
   assert.equal(isBackroomRow(link.shop.gy), false);
   assert.equal(isBackroomRow(link.backroom.gy), true);
 });
+
+test("the sales floor fills the 34 by 13 ShopA map and stays a rectangle after every purchase", () => {
+  const owned = [getZone("sales_floor")];
+  const isRectangle = (zones) => {
+    const minX = Math.min(...zones.map((z) => z.gridX));
+    const minY = Math.min(...zones.map((z) => z.gridY));
+    const maxX = Math.max(...zones.map((z) => z.gridX + z.gridW));
+    const maxY = Math.max(...zones.map((z) => z.gridY + z.gridH));
+    const area = zones.reduce((sum, z) => sum + z.gridW * z.gridH, 0);
+    return { area, box: (maxX - minX) * (maxY - minY), maxX, maxY, minX, minY };
+  };
+  for (const id of EXPANSION_ORDER) {
+    owned.push(getZone(id));
+    const { area, box } = isRectangle(owned);
+    assert.equal(area, box, `after ${id}`);
+  }
+  assert.deepEqual(isRectangle(owned), { area: 442, box: 442, minX: 0, minY: 0, maxX: 34, maxY: 13 });
+});

@@ -4,15 +4,11 @@
 // World-cell size used by shop geometry, independent of the licensed art's source pixels.
 // The full map reserves room for every planned expansion, even before those zones are built.
 // See also: TileRoom.js (unlockZone).
-import { floorTileKey, wallTileKey } from "./ShopTiles.js";
+import { SHOP_FLOOR_TILE } from "./ShopTiles.js";
 
 export const TILE_SIZE = 64; // px
 export const MAX_MAP_GRID_WIDTH = 39;
 export const MAX_MAP_GRID_HEIGHT = 21;
-
-// Licensed sci-fi tiles for customer-facing zones; debug keys T/H cycle these in-game.
-export const SALES_FLOOR_TILE = floorTileKey(0);
-export const SALES_WALL_TILE = wallTileKey(0);
 
 // The backroom (Storeroom + Loading Pad) is its own little map, shown in a window over the
 // shop while the player is inside it. It sits far below the shop so the shop camera never
@@ -23,6 +19,8 @@ const BACKROOM_WALL_TILE = "wall_dark_riveted_01";
 export const BACKROOM_DOOR_TILE = "door_blast_keypad_01";
 
 // Expansion costs are paid in credits; all expansions also require a shop level.
+// Sales-floor zones together fill the 34x13 ShopA map. Bought in order, each one keeps the
+// shop a rectangle, and their walls use ShopA's art (see ShopTiles.js), not wallTile.
 export const ZONES = [
   {
     id: "storeroom",
@@ -92,87 +90,81 @@ export const ZONES = [
     cost: 9000,
     requiredShopLevel: 27,
   },
+  // The top center of the ShopA map: the store entrance and the backroom passage are both in its back wall.
   {
     id: "sales_floor",
     name: "Sales Floor",
-    // Its west column is the wall facing the West expansion, where the backroom's wall stood.
-    gridX: 5,
+    gridX: 12,
     gridY: 0,
     gridW: 11,
-    gridH: 8,
+    gridH: 9,
     locked: false,
     salesFloor: true, // customer-facing: registers and shelves may only go in these zones
-    floorTile: SALES_FLOOR_TILE,
-    wallTile: SALES_WALL_TILE,
+    floorTile: SHOP_FLOOR_TILE,
   },
-  {
-    id: "expansion_a",
-    name: "Sales Floor Expansion A",
-    gridX: 16,
-    gridY: 0,
-    gridW: 6,
-    gridH: 8,
-    locked: true,
-    salesFloor: true,
-    floorTile: SALES_FLOOR_TILE,
-    wallTile: SALES_WALL_TILE,
-    cost: 5000,
-    requiredShopLevel: 9,
-  },
-  // Where the backroom used to stand, west of the starting Sales Floor.
   {
     id: "expansion_west",
     name: "Sales Floor Expansion West",
-    gridX: 0,
+    gridX: 6,
     gridY: 0,
-    gridW: 5,
-    gridH: 8,
+    gridW: 6,
+    gridH: 9,
     locked: true,
     salesFloor: true,
-    floorTile: SALES_FLOOR_TILE,
-    wallTile: SALES_WALL_TILE,
+    floorTile: SHOP_FLOOR_TILE,
     cost: 4000,
     requiredShopLevel: 5,
   },
   {
-    id: "expansion_b",
-    name: "Sales Floor Expansion B",
-    gridX: 22,
+    id: "expansion_a",
+    name: "Sales Floor Expansion A",
+    gridX: 23,
     gridY: 0,
     gridW: 6,
-    gridH: 8,
+    gridH: 9,
     locked: true,
     salesFloor: true,
-    floorTile: SALES_FLOOR_TILE,
-    wallTile: SALES_WALL_TILE,
+    floorTile: SHOP_FLOOR_TILE,
+    cost: 5000,
+    requiredShopLevel: 9,
+  },
+  // Runs under the West expansion, the Sales Floor, and Expansion A.
+  {
+    id: "expansion_b",
+    name: "Sales Floor Expansion B",
+    gridX: 6,
+    gridY: 9,
+    gridW: 23,
+    gridH: 4,
+    locked: true,
+    salesFloor: true,
+    floorTile: SHOP_FLOOR_TILE,
     cost: 7500,
     requiredShopLevel: 17,
   },
   {
     id: "expansion_c",
     name: "Sales Floor Expansion C",
-    gridX: 16,
-    gridY: 8,
-    gridW: 12,
-    gridH: 5,
+    gridX: 0,
+    gridY: 0,
+    gridW: 6,
+    gridH: 13,
     locked: true,
     salesFloor: true,
-    floorTile: SALES_FLOOR_TILE,
-    wallTile: SALES_WALL_TILE,
+    floorTile: SHOP_FLOOR_TILE,
     cost: 10000,
     requiredShopLevel: 24,
   },
   {
     id: "expansion_d",
     name: "Sales Floor Expansion D",
-    gridX: 28,
+    gridX: 29,
     gridY: 0,
-    gridW: 6,
+    gridW: 5,
     gridH: 13,
     locked: true,
     salesFloor: true,
-    floorTile: SALES_FLOOR_TILE,
-    wallTile: SALES_WALL_TILE,
+    floorTile: SHOP_FLOOR_TILE,
     cost: 12500,
     requiredShopLevel: 30,
   },
@@ -190,14 +182,17 @@ export function getZone(id) {
   return ZONES.find((zone) => zone.id === id);
 }
 
+// The shop's back wall is two tiles tall; doors sit in its lower row, next to the floor.
+export const SHOP_BACK_WALL_HEIGHT = 2;
+
 /**
- * The Sales Floor's door to the backroom: in its north wall, near the right, clear of the
- * public door. Pressing E in front of it moves the player to the backroom's exit.
+ * The Sales Floor's door to the backroom: the gap in ShopA's back wall, near the right of
+ * the Sales Floor. Pressing E in front of it moves the player to the backroom's exit.
  * @returns {{ gx: number, gy: number }}
  */
 export function getBackroomDoorCell() {
   const salesFloor = getZone("sales_floor");
-  return { gx: salesFloor.gridX + salesFloor.gridW - 2, gy: salesFloor.gridY };
+  return { gx: salesFloor.gridX + salesFloor.gridW - 2, gy: salesFloor.gridY + SHOP_BACK_WALL_HEIGHT - 1 };
 }
 
 /**
@@ -230,14 +225,19 @@ export function isBackroomRow(gridY) {
 }
 
 /**
- * The shop's public door: in the Sales Floor's north wall, near the left, so the south
- * and east sides stay free for expansion and foot traffic avoids the register line.
- * Customers spawn on the cell just inside (one row south) and leave through it.
+ * The left of the two cells of the shop's public door, between the close pair of columns
+ * in ShopA's back wall. Customers spawn just inside (one row south) and leave through it.
  * @returns {{ gx: number, gy: number }}
  */
 export function getStoreDoorCell() {
   const salesFloor = getZone("sales_floor");
-  return { gx: salesFloor.gridX + 2, gy: salesFloor.gridY };
+  return { gx: salesFloor.gridX + 4, gy: salesFloor.gridY + SHOP_BACK_WALL_HEIGHT - 1 };
+}
+
+/** The store door is two cells wide; these are both of them. */
+export function getStoreDoorCells() {
+  const door = getStoreDoorCell();
+  return [door, { gx: door.gx + 1, gy: door.gy }];
 }
 
 export function getTotalGridSize() {

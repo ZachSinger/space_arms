@@ -41,9 +41,10 @@ import { CheckoutWindow, customerPaysCash } from "../logic/CheckoutWindow.js";
 import { FixtureWindow } from "../logic/FixtureWindow.js";
 import { GoBacksWindow } from "../logic/GoBacksWindow.js";
 import { TileRoom } from "../logic/TileRoom.js";
-import { FLOOR_COUNT, WALL_COUNT, floorTileKey, wallTileKey } from "../logic/ShopTiles.js";
+import { SlidingDoor } from "../logic/SlidingDoor.js";
+import { SHOP_BACK_WALL_FACE } from "../logic/ShopTiles.js";
 import {
-  TILE_SIZE, getZone, getTotalGridSize, getAuthoredGridSize, getStoreDoorCell, EXPANSION_ORDER,
+  TILE_SIZE, getZone, getTotalGridSize, getAuthoredGridSize, getStoreDoorCell, getStoreDoorCells, SHOP_BACK_WALL_HEIGHT, EXPANSION_ORDER,
   BACKROOM_UPGRADE_ORDER, getBackroomDoorCell, getBackroomExitCell, getBackroomLink, isBackroomRow,
 } from "../logic/RoomLayout.js";
 import { ShiftClock, SHIFT_DURATION_MS } from "../logic/ShiftClock.js";
@@ -229,10 +230,21 @@ export class GameScene extends Phaser.Scene {
     const zonePixelH = salesFloor.gridH * TILE_SIZE;
 
     // The shop's one public entrance/exit (see getStoreDoorCell). Customers spawn just
-    // inside it and walk back to it to leave.
+    // inside it and walk back to it to leave. The back wall stays drawn behind the door.
     const { gx: doorGX, gy: doorGY } = getStoreDoorCell();
-    this.room.openDoorway(doorGX, doorGY, "door_light_blank_wide");
-    this.storeDoor = { x: this.room.worldX(doorGX), y: this.room.worldY(doorGY) };
+    for (const { gx, gy } of getStoreDoorCells()) this.room.openDoorway(gx, gy, this.room.wallArtAt(gx, gy));
+    this.storeDoor = {
+      x: this.room.worldX(doorGX) + TILE_SIZE / 2,
+      y: this.room.worldY(doorGY),
+    };
+    // The door is sized so its top and bottom line up with the back wall's visible face.
+    const backWallTop = this.room.worldY(doorGY + 1 - SHOP_BACK_WALL_HEIGHT) - TILE_SIZE / 2;
+    this.storeDoorAnimation = new SlidingDoor(this, {
+      x: this.storeDoor.x,
+      y: backWallTop + SHOP_BACK_WALL_FACE.bottom * TILE_SIZE,
+      top: backWallTop + SHOP_BACK_WALL_FACE.top * TILE_SIZE,
+      wallGroup: this.room.wallGroup,
+    });
 
     // The Sales Floor's door to the backroom, and the backroom's exit back out. Both are
     // solid; pressing E in front of one moves the player to the floor just inside the other.
@@ -479,12 +491,6 @@ export class GameScene extends Phaser.Scene {
     // Debug-only: lets one random customer in right away.
     this.bindControlKey("keydown-Y", "debug", () => this.spawnCustomer(null));
 
-    // Debug-only: cycle the sales floor's floor (T) and wall (H) art to pick favorites.
-    this.debugFloorStyle = 0;
-    this.debugWallStyle = 0;
-    this.bindControlKey("keydown-T", "debug", () => this.debugCycleSalesTiles("floor"));
-    this.bindControlKey("keydown-H", "debug", () => this.debugCycleSalesTiles("wall"));
-
     // The shift clock's manual pause: freezes time entirely so the player can think.
     this.bindControlKey("keydown-P", "pause", () => this.shiftClock.togglePause());
 
@@ -496,6 +502,7 @@ export class GameScene extends Phaser.Scene {
       this.managerTablet.disableInventoryNavigation();
       this.managerTablet.fixtureHighlight.destroy();
       this.autosaveTimer.remove();
+      this.storeDoorAnimation.destroy();
       this.hud.destroy();
       this.fixtureWindow.destroy();
       this.checkoutWindow.destroy();
@@ -890,12 +897,10 @@ export class GameScene extends Phaser.Scene {
    * @param {Array<{ left: number, right: number, top: number, bottom: number }>} occupiedRectangles - bodies a fixture must not land on (px)
    */
   getLayoutOptions(occupiedRectangles = []) {
-    const cellAt = (point) => ({ gx: Math.floor(point.x / TILE_SIZE), gy: Math.floor(point.y / TILE_SIZE) });
-    const entrance = cellAt(this.storeDoor);
+    const entrance = getStoreDoorCell();
     const link = getBackroomLink();
     const doorwayCells = new Set([
-      `${entrance.gx},${entrance.gy}`,
-      `${entrance.gx},${entrance.gy + 1}`,
+      ...getStoreDoorCells().flatMap(({ gx, gy }) => [`${gx},${gy}`, `${gx},${gy + 1}`]),
       `${link.shop.gx},${link.shop.gy}`,
       `${link.backroom.gx},${link.backroom.gy}`,
     ]);
@@ -1616,23 +1621,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   // --- Debug hooks ---
-  // T / H keys: step through the licensed tileset's floor or wall styles on the sales floor.
-  debugCycleSalesTiles(part) {
-    if (!this.textures.exists(floorTileKey(0))) {
-      this.showShopMessage("The sci-fi tileset isn't installed on this PC.");
-      return;
-    }
-    if (part === "floor") {
-      this.debugFloorStyle = (this.debugFloorStyle + 1) % FLOOR_COUNT;
-      this.room.setSalesFloorTiles({ floorTile: floorTileKey(this.debugFloorStyle) });
-      this.showShopMessage(`Sales floor: floor style ${this.debugFloorStyle} (of 0-${FLOOR_COUNT - 1})`);
-    } else {
-      this.debugWallStyle = (this.debugWallStyle + 1) % WALL_COUNT;
-      this.room.setSalesFloorTiles({ wallTile: wallTileKey(this.debugWallStyle) });
-      this.showShopMessage(`Sales floor: wall style ${this.debugWallStyle} (of 0-${WALL_COUNT - 1})`);
-    }
-  }
-
   // G key: tile-grid overlay over the whole map, locked zones included. Depth 9998 sits
   // just under the player (9999) so it draws over every fixture, making off-grid ones obvious.
   toggleDebugGrid() {
@@ -2922,6 +2910,10 @@ export class GameScene extends Phaser.Scene {
   update(time, delta) {
     this.fixturePlacement.update();
     for (const crate of this.restockCrates) crate.updateThrow(delta);
+    this.storeDoorAnimation.update(delta, [
+      this.player?.sprite,
+      ...this.customers.map((customer) => customer.isDestroyed ? null : customer.sprite),
+    ]);
     // Pausing a started shift freezes time entirely: customers and arrivals included.
     // Before the shift starts the clock also reads as paused, but the player moves freely.
     const mode = this.controlMode.getMode();

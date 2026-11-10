@@ -5,14 +5,15 @@
 // Locked zones render nothing until unlocked; unlocking builds their tiles and tears
 // down boundary walls that are no longer needed.
 import {
-  BACKROOM_DOOR_TILE, TILE_SIZE, ZONES, getBackroomDoorCell, getBackroomExitCell, zoneAt,
+  BACKROOM_DOOR_TILE, SHOP_BACK_WALL_HEIGHT, TILE_SIZE, ZONES, getBackroomDoorCell, getBackroomExitCell, zoneAt,
 } from "./RoomLayout.js";
+import { BACKROOM_PASSAGE_LOWER, BACKROOM_PASSAGE_UPPER, shopWallStack } from "./ShopTiles.js";
 
 export class TileRoom {
   constructor(scene) {
     this.scene = scene;
     this.zones = ZONES.map((zone) => ({ ...zone }));
-    this.wallCells = new Map(); // `${gx},${gy}` -> { image }
+    this.wallCells = new Map(); // `${gx},${gy}` -> { image (solid), layers (art on top), permanent, door }
     this.floorCells = new Map(); // `${gx},${gy}` -> image
     // One static group so walls built later by unlockZone() join existing colliders.
     this.wallGroup = scene.physics.add.staticGroup();
@@ -44,16 +45,25 @@ export class TileRoom {
 
   /**
    * A perimeter cell needs a wall if any outward edge faces the map edge or a locked zone.
+   * Along the top of the map, sales-floor walls are two tiles tall.
    * @param {object} zone
    * @param {number} gx
    * @param {number} gy
    */
   needsWallAt(zone, gx, gy) {
+    if (zone.salesFloor && gy === zone.gridY + SHOP_BACK_WALL_HEIGHT - 1 && !zoneAt(gx, zone.gridY - 1, this.zones)) {
+      return true;
+    }
     return this.edgesOf(zone, gx, gy).some((edge) => {
       const neighbor = this.neighborZone(gx, gy, edge);
       if (!neighbor) return true;
       return neighbor.id !== zone.id && neighbor.locked;
     });
+  }
+
+  isOpen(gx, gy) {
+    const zone = zoneAt(gx, gy, this.zones);
+    return Boolean(zone && !zone.locked);
   }
 
   /**
@@ -62,9 +72,18 @@ export class TileRoom {
    * @param {number} gy
    */
   isWalkable(gx, gy) {
+    return this.isOpen(gx, gy) && !this.wallCells.has(`${gx},${gy}`);
+  }
+
+  /**
+   * The art for a wall at this cell, bottom layer first: ShopA's walls on the sales floor,
+   * the zone's single wall tile elsewhere.
+   * @returns {string[]}
+   */
+  wallArtAt(gx, gy) {
     const zone = zoneAt(gx, gy, this.zones);
-    if (!zone || zone.locked) return false;
-    return !this.wallCells.has(`${gx},${gy}`);
+    if (zone?.salesFloor) return shopWallStack(gx, gy, (x, y) => this.isOpen(x, y));
+    return [zone.wallTile];
   }
 
   build() {
@@ -72,6 +91,7 @@ export class TileRoom {
       if (zone.locked) continue;
       this.buildZone(zone);
     }
+    this.refreshWallArt();
   }
 
   buildZone(zone) {
@@ -84,78 +104,75 @@ export class TileRoom {
         this.floorCells.set(`${gx},${gy}`, image);
 
         if (this.needsWallAt(zone, gx, gy)) {
-          this.addWall(gx, gy, zone.wallTile);
+          this.addWall(gx, gy, this.wallArtAt(gx, gy));
         }
       }
     }
+  }
+
+  // Draws a stack of tile images over a cell, bottom layer first.
+  drawStack(gx, gy, keys) {
+    return keys.map((key) => this.scene.add
+      .image(this.worldX(gx), this.worldY(gy), key)
+      .setDisplaySize(TILE_SIZE, TILE_SIZE)
+      .setDepth(1));
+  }
+
+  removeWall(key) {
+    const entry = this.wallCells.get(key);
+    if (!entry) return;
+    this.wallGroup.remove(entry.image, true, true);
+    for (const image of entry.layers) image.destroy();
+    this.wallCells.delete(key);
   }
 
   /**
    * Place a solid wall over a cell.
    * @param {number} gx
    * @param {number} gy
-   * @param {string} wallTileKey
+   * @param {string | string[]} art - texture key(s), bottom layer first
    * @param {boolean} [permanent] - survives the wall teardown in unlockZone()
-   * @param {boolean} [door] - solid door art, kept when the wall style changes
+   * @param {boolean} [door] - door art, kept when the walls around it are redrawn
    */
-  addWall(gx, gy, wallTileKey, permanent = false, door = false) {
-    const previous = this.wallCells.get(`${gx},${gy}`);
-    if (previous) this.wallGroup.remove(previous.image, true, true);
-    const image = this.scene.add
-      .image(this.worldX(gx), this.worldY(gy), wallTileKey)
-      .setDisplaySize(TILE_SIZE, TILE_SIZE)
-      .setDepth(1);
+  addWall(gx, gy, art, permanent = false, door = false) {
+    const key = `${gx},${gy}`;
+    this.removeWall(key);
+    // The bottom layer is the solid body; the rest is decoration on top of it.
+    const [image, ...layers] = this.drawStack(gx, gy, [art].flat());
     this.wallGroup.add(image);
-    this.wallCells.set(`${gx},${gy}`, { image, permanent, door });
+    this.wallCells.set(key, { image, layers, permanent, door });
   }
 
-  // The backroom door and exit stay solid, with door art: walking into one moves the player
-  // through to the other (see GameScene.updateBackroomDoors).
-  addBackroomDoors() {
-    for (const cell of [getBackroomDoorCell(), getBackroomExitCell()]) {
-      this.addWall(cell.gx, cell.gy, BACKROOM_DOOR_TILE, true, true);
+  // Redraws every wall that isn't a door, since a wall's art depends on which side faces
+  // out of the shop, and that changes as zones unlock.
+  refreshWallArt() {
+    for (const [key, { permanent, door }] of [...this.wallCells]) {
+      if (door) continue;
+      const [gx, gy] = key.split(",").map(Number);
+      this.addWall(gx, gy, this.wallArtAt(gx, gy), permanent, door);
     }
+  }
+
+  // The backroom door and exit stay solid: walking into one moves the player through to
+  // the other (see GameScene.updateBackroomDoors). On the shop side the door is ShopA's
+  // open gap in the back wall; the backroom side has door art.
+  addBackroomDoors() {
+    const door = getBackroomDoorCell();
+    this.addWall(door.gx, door.gy - 1, BACKROOM_PASSAGE_UPPER, true, true);
+    this.addWall(door.gx, door.gy, BACKROOM_PASSAGE_LOWER, true, true);
+    const exit = getBackroomExitCell();
+    this.addWall(exit.gx, exit.gy, BACKROOM_DOOR_TILE, true, true);
   }
 
   /**
-   * Swap the floor or wall art of every customer-facing zone, built or not yet unlocked.
-   * Only changes appearance; walls and walkable cells stay exactly where they are.
-   * @param {{ floorTile?: string, wallTile?: string }} tiles
+   * Make a wall cell walkable, optionally drawing art there that isn't solid.
+   * @param {number} gx
+   * @param {number} gy
+   * @param {string | string[] | null} [art] - texture key(s), bottom layer first
    */
-  setSalesFloorTiles({ floorTile, wallTile }) {
-    for (const zone of this.zones) {
-      if (!zone.salesFloor) continue;
-      if (floorTile) zone.floorTile = floorTile;
-      if (wallTile) zone.wallTile = wallTile;
-    }
-    const isSales = (key) => {
-      const [gx, gy] = key.split(",").map(Number);
-      return zoneAt(gx, gy, this.zones)?.salesFloor;
-    };
-    if (floorTile) {
-      for (const [key, image] of this.floorCells) {
-        if (isSales(key)) image.setTexture(floorTile).setDisplaySize(TILE_SIZE, TILE_SIZE);
-      }
-    }
-    if (wallTile) {
-      for (const [key, { image, door }] of this.wallCells) {
-        if (!door && isSales(key)) image.setTexture(wallTile).setDisplaySize(TILE_SIZE, TILE_SIZE);
-      }
-    }
-  }
-
-  openDoorway(gx, gy, doorTileKey) {
-    const key = `${gx},${gy}`;
-    const existingWall = this.wallCells.get(key);
-    if (existingWall) {
-      this.wallGroup.remove(existingWall.image, true, true);
-      this.wallCells.delete(key);
-    }
-
-    this.scene.add
-      .image(this.worldX(gx), this.worldY(gy), doorTileKey)
-      .setDisplaySize(TILE_SIZE, TILE_SIZE)
-      .setDepth(1);
+  openDoorway(gx, gy, art = null) {
+    this.removeWall(`${gx},${gy}`);
+    if (art) this.drawStack(gx, gy, [art].flat());
   }
 
   /**
@@ -174,10 +191,10 @@ export class TileRoom {
       const [gx, gy] = key.split(",").map(Number);
       const cellZone = zoneAt(gx, gy, this.zones);
       if (!entry.permanent && cellZone && !cellZone.locked && !this.needsWallAt(cellZone, gx, gy)) {
-        this.wallGroup.remove(entry.image, true, true);
-        this.wallCells.delete(key);
+        this.removeWall(key);
       }
     }
+    this.refreshWallArt();
 
     return this.getCameraBounds();
   }
