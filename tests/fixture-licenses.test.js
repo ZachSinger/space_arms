@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
-import { FIXTURE_TYPES } from "../js/logic/FixtureLayout.js";
+import { FIXTURE_TYPES, getShelfDisplayGrid } from "../js/logic/FixtureLayout.js";
 import { LayoutRenderer } from "../js/logic/LayoutRenderer.js";
 import { SupplierLicense } from "../js/logic/Licenses.js";
 import { ContractRenderer } from "../js/logic/ContractRenderer.js";
@@ -167,6 +167,16 @@ test("the large shelf costs 2000 credits while the compact shelf remains 300", (
   assert.equal(FIXTURE_TYPES.shelf_starter_2x1.price, 300);
   assert.equal(FIXTURE_TYPES.shelf_universal.price, 2000);
   assert.equal(FIXTURE_TYPES.shelf_universal.name, "LARGE SHELF");
+});
+
+test("the budget shelf has 2x2 slots, is a starter shelf, and is the cheapest fixture", () => {
+  const budget = FIXTURE_TYPES.shelf_budget_2x2;
+  assert.equal(budget.kind, "shelf");
+  assert.deepEqual(getShelfDisplayGrid(budget), { w: 2, h: 2 });
+  assert.equal(budget.licenseId, "lic_fixture_basics");
+  for (const spec of Object.values(FIXTURE_TYPES)) {
+    if (spec !== budget) assert.ok(budget.price < spec.price, `${spec.id} costs more`);
+  }
 });
 
 test("the starter contract allows the compact shelf but not the large shelf", () => {

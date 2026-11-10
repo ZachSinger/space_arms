@@ -68,7 +68,7 @@ export class CheckoutWindow {
 
     // Global, so a drag-scan works even if it doesn't start on a card.
     this.handleMouseDown = (event) => {
-      this.isScanning = event.button === 0;
+      this.isScanning = event.button === 0 && !this.paused;
     };
     this.handleMouseUp = () => {
       this.isScanning = false;
@@ -98,6 +98,7 @@ export class CheckoutWindow {
    * @param {KeyboardEvent} event
    */
   handleNumpadKeydown(event) {
+    if (this.paused) return;
     if (this.windowManager?.isConsumed(event)) return;
     if (this.uiWindow.element.classList.contains("hidden")) return;
     const panel = this.bodyElement.querySelector("#checkout-payment");
@@ -136,6 +137,24 @@ export class CheckoutWindow {
     this.isScanning = false;
     this.tenderOverlay?.classList.add("hidden");
     this.uiWindow.close();
+  }
+
+  /**
+   * While the shift is paused, a cover blocks scanning, typing, and handling cash.
+   * @param {boolean} paused
+   */
+  setPaused(paused) {
+    if (this.paused === paused) return;
+    this.paused = paused;
+    this.isScanning = false;
+    this.uiWindow.element.classList.toggle("checkout-paused", paused);
+    this.tenderOverlay?.classList.toggle("checkout-paused", paused);
+    if (paused && !this.pauseCover) {
+      this.pauseCover = document.createElement("div");
+      this.pauseCover.className = "checkout-pause-cover";
+      this.pauseCover.textContent = "PAUSED: resume the shift to keep ringing up";
+      this.uiWindow.element.appendChild(this.pauseCover);
+    }
   }
 
   resume() {
@@ -411,6 +430,7 @@ export class CheckoutWindow {
     });
     // The Manager's Tablet may have been opened while the last item was scanning.
     if (this.uiWindow.element.classList.contains("hidden")) overlay.classList.add("hidden");
+    overlay.classList.toggle("checkout-paused", Boolean(this.paused));
     document.body.appendChild(overlay);
     this.tenderOverlay = overlay;
   }

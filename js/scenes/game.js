@@ -37,6 +37,7 @@ import { DELIVERY_FEE, summarizeSupplyOrder } from "../logic/SupplyOrder.js";
 import { getEmergencyLoanOffer } from "../logic/EmergencyLoan.js";
 import { HOVERCART_UPGRADES } from "../logic/Hovercart.js";
 import { solveCratePush } from "../logic/CratePushing.js";
+import { separateOverlappingCrates } from "../logic/CrateSeparation.js";
 import { CheckoutWindow, customerPaysCash } from "../logic/CheckoutWindow.js";
 import { FixtureWindow } from "../logic/FixtureWindow.js";
 import { GoBacksWindow } from "../logic/GoBacksWindow.js";
@@ -65,6 +66,14 @@ import employeeRoster from "../../data/Employees.json" with { type: "json" };
 // Most customers inside the store at once. When full, the next arrival is lost for good,
 // so a backed-up dealer really does lose that sale.
 const MAX_CUSTOMERS_IN_STORE = 6;
+const CUSTOMER_EXIT_SLOT_OFFSETS = Object.freeze([
+  [-36, -8],
+  [0, -8],
+  [36, -8],
+  [-36, 8],
+  [0, 8],
+  [36, 8],
+].map(([dx, dy]) => Object.freeze({ dx, dy })));
 
 function reputationPenaltyText(penalty, factionId) {
   const faction = factionId ? CUSTOMER_TRAITS[factionId] : null;
@@ -186,6 +195,8 @@ export class GameScene extends Phaser.Scene {
       clearTimeout(this.gameMessageTimeout);
       this.gameMessageTimeout = null;
       this.gameMessageElement.classList.add("hidden");
+      this.shiftClosingOverlay?.remove();
+      this.shiftClosingOverlay = null;
     });
     // Sync after Arcade Physics finalizes the player's position for this frame.
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.syncCarriedCrate, this);
@@ -374,6 +385,8 @@ export class GameScene extends Phaser.Scene {
     this.crateMotionPaused = false;
     this.shiftClock.subscribe(({ started, isPaused }) => {
       const paused = started && isPaused;
+      // Paused time must freeze the register too, or the player could ring up for free.
+      this.checkoutWindow.setPaused(paused);
       if (paused === this.crateMotionPaused) return;
       this.crateMotionPaused = paused;
       for (const crate of this.restockCrates) crate.setPaused(paused);
@@ -429,13 +442,13 @@ export class GameScene extends Phaser.Scene {
       );
       this.handleAngryLeave(customer, cart);
     });
-    this.eventBus.on(GAME_EVENTS.CUSTOMER_MISSING_PRIMARY, ({ customer, itemIds }) => {
+    this.eventBus.on(GAME_EVENTS.CUSTOMER_MISSING_PRIMARY, ({ customer, itemIds, itemNames }) => {
       const penalty = MISSING_PRIMARY_REPUTATION_PENALTY;
       customer.playerState.subReputation(penalty, customer.factionId);
       this.showFloatingText(
         customer.sprite.x,
         customer.sprite.y - 40,
-        `Out of stock!\n${reputationPenaltyText(penalty, customer.factionId)}`,
+        `Out of stock:\n${itemNames.join("\n")}\n${reputationPenaltyText(penalty, customer.factionId)}`,
         "#ef4444",
       );
       this.debugInfo?.record("customer-missing-primary", {
@@ -1564,8 +1577,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * A grid path between two world points, routed around walls and fixtures. On null,
-   * callers should walk directly instead (see Customer.followPath).
+   * A grid path between two world points, routed around walls and fixtures. Null means
+   * no safe route exists and must not be treated as a direct path.
    * @param {number} fromX - px
    * @param {number} fromY - px
    * @param {number} toX - px
@@ -2214,6 +2227,21 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * Pull apart loose crates that sank into each other (fast throws can push them past
+   * Arcade's collision), so crates never end up stacked on top of one another.
+   */
+  separateStuckCrates() {
+    const crates = this.restockCrates
+      .filter((crate) => crate.sprite.body?.enable)
+      .map((crate) => {
+        const b = crate.sprite.body;
+        return { key: crate, rect: { left: b.x, top: b.y, width: b.width, height: b.height }, locked: crate.lockedToPad };
+      });
+    const offsets = separateOverlappingCrates(crates, (_crate, rect) => this.isCrateSpaceBlocked(rect));
+    for (const [crate, offset] of offsets) crate.nudge(offset.x, offset.y);
+  }
+
+  /**
    * Whether a pushed crate would leave the map or overlap a static body.
    * @param {{ left: number, top: number, width: number, height: number }} rect - px
    */
@@ -2711,8 +2739,8 @@ export class GameScene extends Phaser.Scene {
           cart,
         });
       },
-      onMissingPrimary: (customer, itemIds) => {
-        this.eventBus.emit(GAME_EVENTS.CUSTOMER_MISSING_PRIMARY, { customer, itemIds });
+      onMissingPrimary: (customer, itemIds, itemNames) => {
+        this.eventBus.emit(GAME_EVENTS.CUSTOMER_MISSING_PRIMARY, { customer, itemIds, itemNames });
       },
       onComplete: (completedCustomer) => {
         this.debugInfo?.recordCustomer("customer-exited", completedCustomer);
@@ -2846,7 +2874,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   reserveExitSlot() {
-    return { ...this.exitPoint };
+    const occupied = new Set(this.customers
+      .filter((customer) => customer.state === "LEAVING" && customer.destination)
+      .map((customer) => `${customer.destination.x},${customer.destination.y}`));
+    const offset = CUSTOMER_EXIT_SLOT_OFFSETS.find(({ dx, dy }) =>
+      !occupied.has(`${this.exitPoint.x + dx},${this.exitPoint.y + dy}`),
+    );
+    if (!offset) throw new Error("No unoccupied customer exit slot is available.");
+    return { x: this.exitPoint.x + offset.dx, y: this.exitPoint.y + offset.dy };
   }
 
   // Queue cells remain reachable even when the register is moved near other fixtures.
@@ -2910,6 +2945,7 @@ export class GameScene extends Phaser.Scene {
   update(time, delta) {
     this.fixturePlacement.update();
     for (const crate of this.restockCrates) crate.updateThrow(delta);
+    this.separateStuckCrates();
     this.storeDoorAnimation.update(delta, [
       this.player?.sprite,
       ...this.customers.map((customer) => customer.isDestroyed ? null : customer.sprite),
@@ -3020,7 +3056,39 @@ export class GameScene extends Phaser.Scene {
         levelMessage += " Some later level rewards are not in the game yet.";
       }
     }
-    this.showGameMessage(`Shift over.${levelMessage} Click END DAY at the top to see today's receipt.`, "#10b981");
+    this.showShiftClosingSequence();
+    if (levelMessage) this.showGameMessage(levelMessage, "#10b981");
+  }
+
+  showShiftClosingSequence() {
+    if (typeof document === "undefined") return;
+    this.shiftClosingOverlay?.remove();
+    const overlay = document.createElement("div");
+    overlay.className = "shift-closing-overlay";
+    overlay.setAttribute("role", "status");
+    overlay.setAttribute("aria-live", "polite");
+
+    const panel = document.createElement("div");
+    panel.className = "shift-closing-panel";
+    const title = document.createElement("div");
+    title.className = "shift-closing-title";
+    title.textContent = "SHOP CLOSED";
+    const summary = document.createElement("div");
+    summary.className = "shift-closing-summary";
+    summary.textContent = `Customers served: ${this.customersServedThisShift} · Turned away: ${this.playerState.customersTurnedAway}`;
+    const hint = document.createElement("div");
+    hint.className = "shift-closing-hint";
+    hint.textContent = "Select END DAY to review today's receipt.";
+
+    panel.append(title, summary, hint);
+    overlay.append(panel);
+    overlay.addEventListener("animationend", (event) => {
+      if (event.target !== overlay) return;
+      overlay.remove();
+      if (this.shiftClosingOverlay === overlay) this.shiftClosingOverlay = null;
+    }, { once: true });
+    document.getElementById("game-container").append(overlay);
+    this.shiftClosingOverlay = overlay;
   }
 
   /**

@@ -1041,8 +1041,30 @@ button {
   user-select: none;
 }
 
-.cash-tender-overlay.hidden {
+.cash-tender-overlay.hidden,
+.cash-tender-overlay.checkout-paused {
   display: none;
+}
+
+/* Blocks the register while the shift is paused (CheckoutWindow.setPaused). */
+.checkout-pause-cover {
+  display: none;
+}
+
+.checkout-paused > .checkout-pause-cover {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  background: rgba(5, 8, 15, 0.85);
+  color: var(--color-text-main);
+  font-weight: bold;
+  font-size: var(--font-size-14);
+  letter-spacing: 1px;
 }
 
 .cash-tender-panel {
@@ -1289,9 +1311,9 @@ button {
   color: var(--color-text-main);
 }
 
-.fixture-placement-toolbar .action-btn {
-  padding: 4px 10px;
+.fixture-placement-keys {
   font-size: var(--font-size-10);
+  color: var(--color-text-muted);
 }
 
 .fixture-placement-grid {
@@ -1786,6 +1808,57 @@ button {
   padding: 8px 14px;
   font-size: var(--font-size-16);
   white-space: pre-line;
+}
+
+.shift-closing-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 550;
+  display: grid;
+  place-items: center;
+  background: rgba(4, 8, 16, 0.78);
+  pointer-events: none;
+  animation: shift-closing 3.2s ease both;
+}
+
+.shift-closing-panel {
+  width: min(560px, calc(100vw - 32px));
+  padding: 24px;
+  background: rgba(9, 13, 22, 0.96);
+  border: 2px solid var(--color-border-active);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+  text-align: center;
+}
+
+.shift-closing-title {
+  margin-bottom: 14px;
+  color: #10b981;
+  font-size: clamp(24px, 4vw, 36px);
+  font-weight: bold;
+  letter-spacing: 3px;
+}
+
+.shift-closing-summary {
+  color: var(--color-text-main);
+  font-size: var(--font-size-14);
+}
+
+.shift-closing-hint {
+  margin-top: 16px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+}
+
+@keyframes shift-closing {
+  0%, 12% { opacity: 0; }
+  24%, 72% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shift-closing-overlay {
+    animation-duration: 1ms;
+  }
 }
 
 /* ================================================================= /

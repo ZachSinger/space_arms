@@ -31,6 +31,14 @@ const WANDER_LOOK_MS = Object.freeze([1000, 2500]);
 const LOOK_AROUND_FACINGS = Object.freeze(["left", "right", "up", "down"]);
 const FACING_TOWARD_FIXTURE = Object.freeze({ down: "up", up: "down", left: "right", right: "left" });
 
+function getCustomerItemNames(scene, itemIds) {
+  return itemIds.map((itemId) => {
+    const item = scene.getItem(itemId);
+    if (!item?.name) throw new Error(`Unknown customer item: ${itemId}`);
+    return item.name;
+  });
+}
+
 // Bible Steps 53/12/51: how long a typical queued customer waits (ms, paused with the game).
 // Traits such as Impatient change it per customer (CustomerTraits.js).
 export const PATIENCE_MS = BASE_PATIENCE_MS;
@@ -105,6 +113,7 @@ export class Customer {
     this.path = [];
     this.destination = null;
     this.onArriveAtDestination = null;
+    this.onPathUnavailable = null;
     this.isDestroyed = false;
     // Customers built without a constructor (tests) shop instantly instead of pausing.
     this.browseShelfMs = BROWSE_SHELF_MS;
@@ -132,6 +141,7 @@ export class Customer {
     this.phaseItemIds = [];
     this.primaryBought = new Set();
     this.primaryMissing = new Set();
+    this.priceRejectedItemIds = new Set();
     this.bonusBought = new Set();
     this.bonusAttempted = new Set();
     this.purchasedFirearms = new Set();
@@ -152,6 +162,22 @@ export class Customer {
    */
   update(delta = 0) {
     if (this.isDestroyed) return; // guards against being updated the same frame it self-destructed
+
+    if (this.path === null) {
+      this.sprite.body?.setVelocity(0, 0);
+      this.scene.debugInfo?.recordCustomer("customer-path-unavailable", this);
+      const onPathUnavailable = this.onPathUnavailable;
+      this.path = [];
+      this.onPathUnavailable = null;
+      if (onPathUnavailable) {
+        onPathUnavailable();
+      } else if (this.state === "LEAVING") {
+        this.destroy();
+      } else {
+        this.enterLeaving();
+      }
+      return;
+    }
 
     switch (this.state) {
       case "SEEK_SHELF":
@@ -276,6 +302,21 @@ export class Customer {
       }
       const facing = this.browseShelfMs ? FACING_TOWARD_FIXTURE[fixtureFacing(fixture)] : null;
       this.browse(this.browseShelfMs, facing || null, () => this.shopAtCurrentShelf());
+    }, () => {
+      const unreachableItemIds = this.phaseItemIds.filter((itemId) =>
+        fixture.placements.some((placement) =>
+          placement.itemId === itemId && placement.quantity > 0,
+        ),
+      );
+      if (unreachableItemIds.length > 0) {
+        this.scene.showFloatingText(
+          this.sprite.x,
+          this.sprite.y - 40,
+          `Can't reach:\n${getCustomerItemNames(this.scene, unreachableItemIds).join(", ")}`,
+          "#f59e0b",
+        );
+      }
+      this.visitNextShelfStop();
     });
   }
 
@@ -300,7 +341,7 @@ export class Customer {
         return;
       }
       this.browse(WANDER_LOOK_MS, null, then);
-    });
+    }, then);
     return true;
   }
 
@@ -362,12 +403,7 @@ export class Customer {
       const placement = placements.find((candidate) => this.acceptsPrice(itemId));
       if (!placement) {
         this.showReaction("price-too-high", "disappointed");
-        this.scene.showFloatingText(
-          this.sprite.x,
-          this.sprite.y - 40,
-          "Too expensive!",
-          "#f59e0b",
-        );
+        this.priceRejectedItemIds.add(itemId);
         continue;
       }
 
@@ -411,19 +447,19 @@ export class Customer {
   finishShoppingPhase() {
     if (this.shoppingPhase === "primary") {
       if (this.shoppingPlan.primaryItemIds.length === 0) {
-        if (this.factionId) {
-          const hints = {
-            scavengers: "Looking for surplus gear!",
-            mercenaries: "Looking for weapons, ammo, or armor!",
-            explorers: "Looking for tools or survival gear!",
-          };
-          this.scene.showFloatingText(
-            this.sprite.x,
-            this.sprite.y - 40,
-            hints[this.factionId],
-            "#38bdf8",
-          );
-        }
+        const hints = {
+          scavengers: "No matching stock. Scavengers want older gear.",
+          mercenaries: "No matching stock. Mercenaries want weapons, ammo, or armor.",
+          explorers: "No matching stock. Explorers want tools or survival gear.",
+        };
+        const hint = this.factionId ? hints[this.factionId] : "No products are on the shelves yet.";
+        if (this.factionId && !hint) throw new Error(`Unknown customer faction: ${this.factionId}`);
+        this.scene.showFloatingText(
+          this.sprite.x,
+          this.sprite.y - 40,
+          hint,
+          "#38bdf8",
+        );
         this.enterLeaving();
         return;
       }
@@ -441,6 +477,7 @@ export class Customer {
       );
       if (this.primaryMissing.size > 0) this.reportMissingPrimary();
       if (this.primaryBought.size === 0) {
+        this.reportPriceIssues();
         this.enterLeaving();
         return;
       }
@@ -462,6 +499,7 @@ export class Customer {
       return;
     }
 
+    this.reportPriceIssues();
     if (this.cart.length === 0) {
       this.enterLeaving();
       return;
@@ -470,14 +508,41 @@ export class Customer {
     this.reservedTarget = this.onReserveQueueSlot
       ? this.onReserveQueueSlot()
       : this.registerPoint;
-    this.setDestination(this.reservedTarget.x, this.reservedTarget.y, () => this.joinQueue());
+    this.setDestination(
+      this.reservedTarget.x,
+      this.reservedTarget.y,
+      () => this.joinQueue(),
+      () => {
+        this.scene.showFloatingText(
+          this.sprite.x,
+          this.sprite.y - 100,
+          "Can't reach the checkout!",
+          "#f59e0b",
+        );
+        this.leaveAngry();
+      },
+    );
     this.state = "SEEK_REGISTER";
+  }
+
+  reportPriceIssues() {
+    if (this.priceRejectedItemIds.size === 0) return;
+    const names = getCustomerItemNames(this.scene, [...this.priceRejectedItemIds]);
+    const offset = this.primaryMissing.size > 0 ? 100 : 40;
+    this.scene.showFloatingText(
+      this.sprite.x,
+      this.sprite.y - offset,
+      `Too expensive:\n${names.join("\n")}`,
+      "#f59e0b",
+    );
+    this.priceRejectedItemIds.clear();
   }
 
   // The scene applies reputation and feedback when this customer misses primary stock.
   reportMissingPrimary() {
     this.showReaction("primary-item-out-of-stock", "disappointed");
-    this.onMissingPrimary?.(this, [...this.primaryMissing]);
+    const itemIds = [...this.primaryMissing];
+    this.onMissingPrimary?.(this, itemIds, getCustomerItemNames(this.scene, itemIds));
   }
 
   // --- Queue and patience ---
@@ -626,7 +691,7 @@ export class Customer {
    */
   setQueueTarget(x, y) {
     this.queueTarget = { x, y };
-    this.setDestination(x, y, () => {});
+    this.setDestination(x, y, () => {}, () => this.leaveAngry());
   }
 
   // Finish the customer's sale state and return proceeds for the scene's sale event.
@@ -645,24 +710,34 @@ export class Customer {
     const exitTarget = this.onReserveExitSlot ? this.onReserveExitSlot() : this.exitPoint;
     this.state = "LEAVING";
     this.leavingTimer = 0;
-    this.setDestination(exitTarget.x, exitTarget.y, () => this.destroy());
+    this.setDestination(exitTarget.x, exitTarget.y, () => this.destroy(), () => {
+      this.scene.showFloatingText(
+        this.sprite.x,
+        this.sprite.y - 100,
+        "Can't reach the exit!",
+        "#ef4444",
+      );
+      this.destroy();
+    });
   }
 
   // --- Movement ---
 
   /**
-   * Path to a new target via the scene's pathfinder; with no path found, walks straight there.
+   * Path to a new target via the scene's pathfinder.
    * @param {number} targetX
    * @param {number} targetY
    * @param {() => void} onArrive
+   * @param {() => void} [onPathUnavailable]
    */
-  setDestination(targetX, targetY, onArrive) {
+  setDestination(targetX, targetY, onArrive, onPathUnavailable) {
     this.destination = { x: targetX, y: targetY };
     this.onArriveAtDestination = onArrive;
     this.seekingTimer = 0;
 
     const path = this.scene.findPath?.(this.sprite.x, this.sprite.y, targetX, targetY);
-    this.path = path || [];
+    this.path = path === null ? null : path || [];
+    this.onPathUnavailable = path === null ? onPathUnavailable : null;
   }
 
   // Walks the path waypoint by waypoint, then directly to the exact destination (which may

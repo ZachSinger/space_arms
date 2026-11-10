@@ -2,11 +2,11 @@
   {
     "id": "lic_fixture_basics",
     "name": "Basic Fixture Supply",
-    "description": "A starter contract for compact shelves, lockers, and checkout registers.",
+    "description": "A starter contract for budget and compact shelves, lockers, and checkout registers.",
     "tier": 1,
     "baseCost": 0,
     "reqReputation": 0,
-    "unlocksFixtures": ["shelf_starter_2x1", "locker_single", "register_basic"]
+    "unlocksFixtures": ["shelf_budget_2x2", "shelf_starter_2x1", "locker_single", "register_basic"]
   },
   {
     "id": "lic_fixture_expanded",

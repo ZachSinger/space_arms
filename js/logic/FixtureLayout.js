@@ -21,7 +21,7 @@ export const FIXTURE_TYPES = fixtureTypes;
 export const STARTING_FIXTURES = [
   { id: "storage_demo_01", type: "locker_single", gx: 1, gy: BACKROOM_GRID_Y + 1 },
   { id: "storage_demo_02", type: "locker_single", gx: 2, gy: BACKROOM_GRID_Y + 1 },
-  { id: "register", type: "register_basic", gx: 19, gy: 3 },
+  { id: "register", type: "register_basic", gx: 13, gy: 3 },
 ];
 
 // Saves made before fixture types existed (entries without a `type`) are migrated by id.

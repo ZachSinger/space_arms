@@ -126,6 +126,7 @@ function makeCustomer({ factionId = "scavengers", plan }) {
     eventBus,
     getItem: (id) => ({
       id,
+      name: id,
       tags: id === "gun" ? ["Firearm", "Rifle"] : [],
     }),
     getStorePrice: () => 10,
@@ -147,14 +148,15 @@ function makeCustomer({ factionId = "scavengers", plan }) {
   customer.onReserveShelfSlot = (_shelf) => _shelf.standPoint;
   customer.onReserveQueueSlot = () => ({ x: 900, y: 900 });
   customer.onJoinQueue = () => {};
-  customer.onMissingPrimary = (who, itemIds) =>
-    missingPrimaryEvents.push({ customer: who, itemIds });
+  customer.onMissingPrimary = (who, itemIds, itemNames) =>
+    missingPrimaryEvents.push({ customer: who, itemIds, itemNames });
   customer.setDestination = (x, y, onArrive) => {
     if (x < 900 && y < 900) onArrive();
   };
   customer.enterLeaving = () => { customer.state = "LEAVING"; };
   customer.primaryBought = new Set();
   customer.primaryMissing = new Set();
+  customer.priceRejectedItemIds = new Set();
   customer.bonusBought = new Set();
   customer.bonusAttempted = new Set();
   customer.purchasedFirearms = new Set();
@@ -173,6 +175,24 @@ function makeCustomer({ factionId = "scavengers", plan }) {
     reactionGraphics,
   };
 }
+
+test("departing customers use distinct spots across the entrance", () => {
+  const scene = Object.create(GameScene.prototype);
+  scene.exitPoint = { x: 1000, y: 96 };
+  scene.customers = [];
+
+  const slots = Array.from({ length: 6 }, () => {
+    const slot = scene.reserveExitSlot();
+    scene.customers.push({ state: "LEAVING", destination: slot });
+    return slot;
+  });
+
+  assert.equal(new Set(slots.map(({ x, y }) => `${x},${y}`)).size, 6);
+  assert.ok(slots.every(({ x, y }) =>
+    Math.abs(x - scene.exitPoint.x) <= 36 && Math.abs(y - scene.exitPoint.y) <= 8,
+  ));
+  assert.throws(() => scene.reserveExitSlot(), /No unoccupied customer exit slot/);
+});
 
 test("random browsing chooses only stocked shelves other than the next stop", () => {
   const empty = fixture({ x: 100, y: 100 }, []);
@@ -269,10 +289,57 @@ test("customers report missing primary stock while continuing to buy remaining i
       destination: "customer-cart",
     },
   ]);
-  assert.deepEqual(missingPrimaryEvents, [{ customer, itemIds: ["missing"] }]);
+  assert.deepEqual(missingPrimaryEvents, [{
+    customer, itemIds: ["missing"], itemNames: ["missing"],
+  }]);
   assert.deepEqual(repChanges, []);
   assert.deepEqual(floatingText, []);
   assert.equal(customer.state, "SEEK_REGISTER");
+});
+
+test("customers name items they cannot afford after shopping", () => {
+  const shelf = fixture({ x: 100, y: 100 }, [{ itemId: "wanted", quantity: 1 }]);
+  const plan = {
+    primaryItemIds: ["wanted"],
+    bonusItemIds: [],
+    matchingAmmoIdsByFirearm: {},
+    shelfStops: [{ fixture: shelf, standPoint: shelf.standPoint }],
+  };
+  const { customer, floatingText } = makeCustomer({ plan });
+  customer.scene.getStorePrice = () => 200;
+  customer.scene.market.getPrice = () => 100;
+
+  customer.visitNextShelf("primary");
+
+  assert.equal(customer.state, "LEAVING");
+  assert.equal(floatingText.length, 1);
+  assert.match(floatingText[0][2], /too expensive:\s*wanted/i);
+});
+
+test("customers do not walk through obstacles when a shelf has no route", () => {
+  const shelf = fixture({ x: 100, y: 100 }, [{ itemId: "wanted", quantity: 1 }]);
+  const plan = {
+    primaryItemIds: ["wanted"],
+    bonusItemIds: [],
+    matchingAmmoIdsByFirearm: {},
+    shelfStops: [{ fixture: shelf, standPoint: shelf.standPoint }],
+  };
+  const { customer, floatingText } = makeCustomer({ plan });
+  let moved = false;
+  customer.setDestination = Customer.prototype.setDestination;
+  customer.scene.findPath = (_fromX, _fromY, toX) => toX === 100 ? null : [];
+  customer.exitPoint = { x: 900, y: 900 };
+  customer.onReserveExitSlot = () => customer.exitPoint;
+  customer.sprite.body = { setVelocity() {} };
+  customer.moveToward = () => { moved = true; };
+
+  customer.visitNextShelf("primary");
+  assert.equal(customer.path, null);
+  customer.update(16);
+
+  assert.equal(moved, false);
+  assert.equal(customer.state, "LEAVING");
+  assert.match(floatingText[0][2], /can't reach:\s*wanted/i);
 });
 
 test("a shelf that sells out while a customer approaches is skipped and reported missing", () => {
@@ -292,7 +359,9 @@ test("a shelf that sells out while a customer approaches is skipped and reported
   arrive();
 
   assert.equal(customer.state, "LEAVING");
-  assert.deepEqual(missingPrimaryEvents, [{ customer, itemIds: ["wanted"] }]);
+  assert.deepEqual(missingPrimaryEvents, [{
+    customer, itemIds: ["wanted"], itemNames: ["wanted"],
+  }]);
   assert.deepEqual(customer.cart, []);
 });
 
@@ -413,7 +482,9 @@ test("a customer stops looking at a shelf if it sells out during the pause", () 
   customer.update(16);
 
   assert.equal(customer.state, "LEAVING");
-  assert.deepEqual(missingPrimaryEvents, [{ customer, itemIds: ["wanted"] }]);
+  assert.deepEqual(missingPrimaryEvents, [{
+    customer, itemIds: ["wanted"], itemNames: ["wanted"],
+  }]);
 });
 
 test("customers react happily when they pick up an item priced at least 10% below market", () => {
@@ -452,7 +523,11 @@ test("customers report all missing primary items once and skip bonuses when none
   const { customer, repChanges, missingPrimaryEvents } = makeCustomer({ factionId: null, plan });
   customer.visitNextShelf("primary");
 
-  assert.deepEqual(missingPrimaryEvents, [{ customer, itemIds: ["wanted", "missing"] }]);
+  assert.deepEqual(missingPrimaryEvents, [{
+    customer,
+    itemIds: ["wanted", "missing"],
+    itemNames: ["wanted", "missing"],
+  }]);
   assert.deepEqual(repChanges, []);
   assert.equal(customer.state, "LEAVING");
   assert.deepEqual(customer.cart, []);
@@ -550,5 +625,17 @@ test("factions with no eligible shelf assignments leave with a hint and no penal
 
   assert.deepEqual(repChanges, []);
   assert.equal(customer.state, "LEAVING");
+  assert.match(floatingText[0][2], /no matching stock/i);
   assert.match(floatingText[0][2], /tools or survival gear/i);
+});
+
+test("neutral customers explain when there are no products to browse", () => {
+  const { customer, floatingText } = makeCustomer({
+    factionId: null,
+    plan: { primaryItemIds: [], bonusItemIds: [], shelfStops: [] },
+  });
+  customer.shoppingPhase = "primary";
+  customer.finishShoppingPhase();
+
+  assert.match(floatingText[0][2], /no products are on the shelves/i);
 });

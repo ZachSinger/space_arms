@@ -81,6 +81,9 @@ export class FixtureWindow {
     // On document so releasing a drag outside the window still ends it cleanly.
     this.handleDocumentMouseUp = (event) => this.handleMouseUp(event);
     document.addEventListener("mouseup", this.handleDocumentMouseUp);
+    // Capture phase on window, so Esc cancels placement before WindowManager closes the window.
+    this.handlePlacementKey = (event) => this.handlePlacementKeyDown(event);
+    window.addEventListener("keydown", this.handlePlacementKey, true);
     this.dragStart = null;
     this.isDragging = false;
     this.suppressClick = false;
@@ -95,7 +98,38 @@ export class FixtureWindow {
   destroy() {
     this.cancelPendingPlacement();
     document.removeEventListener("mouseup", this.handleDocumentMouseUp);
+    window.removeEventListener("keydown", this.handlePlacementKey, true);
     this.tooltip.remove();
+  }
+
+  /**
+   * While placing on a shelf: R turns the item, Esc cancels placing (the window stays open).
+   * @param {KeyboardEvent} event
+   */
+  handlePlacementKeyDown(event) {
+    if (!this.pendingPlacement || !this.uiWindow.isOpen) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.cancelPendingPlacement();
+      this.render();
+    } else if (event.key === "r" || event.key === "R") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (event.repeat) return;
+      this.rotatePendingPlacement();
+    }
+  }
+
+  rotatePendingPlacement() {
+    this.pendingPlacement.rotated = !this.pendingPlacement.rotated;
+    const hovered = this.hoveredCell;
+    this.render();
+    // Keep the preview under the cursor, now turned.
+    if (hovered) {
+      this.hoveredCell = hovered;
+      this.showPlacementPreview(hovered.gx, hovered.gy);
+    }
   }
 
   // --- Item tooltip ---
@@ -202,7 +236,7 @@ export class FixtureWindow {
   /**
    * Phaser listens for mousedown at the window level, so clicking a button in this window
    * re-calls this for the already-open fixture. That must be a true no-op: re-rendering
-   * mid-click replaces the clicked node and the browser drops the click (e.g. ROTATE).
+   * mid-click replaces the clicked node and the browser drops the click.
    * @param {object} fixture - a ShelfFixture or Storage Fixture
    * @param {string} title
    */
@@ -321,20 +355,7 @@ export class FixtureWindow {
       return;
     }
 
-    // --- Shelf-only: choosing where to place it ---
-    const rotateBtn = event.target.closest("[data-rotate-placement]");
-    if (rotateBtn) {
-      this.pendingPlacement.rotated = !this.pendingPlacement.rotated;
-      this.hoveredCell = null; // the old anchor may no longer fit at all once rotated
-      this.render();
-      return;
-    }
-    const cancelBtn = event.target.closest("[data-cancel-placement]");
-    if (cancelBtn) {
-      this.cancelPendingPlacement();
-      this.render();
-      return;
-    }
+    // --- Shelf-only: choosing where to place it (R turns it, Esc cancels) ---
     // Confirms at the hover anchor, not the literal cell under the cursor (the preview
     // can span several cells).
     const gridCell = event.target.closest("[data-grid-cell]");

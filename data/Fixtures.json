@@ -1,4 +1,15 @@
 {
+  "shelf_budget_2x2": {
+    "id": "shelf_budget_2x2",
+    "name": "BUDGET SHELF",
+    "kind": "shelf",
+    "w": 1,
+    "h": 1,
+    "texture": "shelf_frame_01",
+    "stackDepth": 10,
+    "price": 150,
+    "licenseId": "lic_fixture_basics"
+  },
   "shelf_starter_2x1": {
     "id": "shelf_starter_2x1",
     "name": "COMPACT SHELF",

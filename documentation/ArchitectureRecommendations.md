@@ -146,7 +146,8 @@ interface TransferContainer {
 - **Done:** fixture definitions live in `data/Fixtures.json`, alongside items and licenses.
   Prices, sizes, textures, capacities, and license requirements are data; `FixtureLayout`
   continues to provide the same lookup and placement rules.
-- The compact shelf costs 300 credits; the large shelf costs 2,000 credits. The Fixtures
+- The budget shelf (1 tile, 2x2 slots, 10 units per slot) costs 150 credits, the cheapest fixture; the
+  compact shelf costs 300 credits; the large shelf costs 2,000 credits. The Fixtures
   menu identifies shelving, storage, and checkout equipment and shows each floor footprint.
   Shelf and locker interaction covers the full front width, within 110 pixels of the front
   edge; side/back positions cannot select a neighboring fixture. Clicking and crate

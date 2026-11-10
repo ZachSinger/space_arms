@@ -174,8 +174,7 @@ export class FixtureRenderer {
     return `
       <div class="fixture-placement-toolbar">
         <span class="fixture-placement-label">${pendingPlacement.moving ? "Moving" : "Placing"}: ${item.name}${pendingPlacement.rotated ? " (rotated)" : ""}</span>
-        <button class="action-btn" data-rotate-placement>ROTATE</button>
-        <button class="action-btn danger" data-cancel-placement>CANCEL</button>
+        <span class="fixture-placement-keys">R to turn it. Esc to cancel.</span>
       </div>
     `;
   }

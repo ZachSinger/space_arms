@@ -366,6 +366,23 @@ export class Crate {
     this.sprite.body.stop();
   }
 
+  /**
+   * Shift the crate without touching its velocity (used to pull apart stuck crates).
+   * Body history moves too, so Arcade doesn't treat the shift as motion this frame.
+   * @param {number} dx - px
+   * @param {number} dy - px
+   */
+  nudge(dx, dy) {
+    const body = this.sprite.body;
+    this.sprite.x += dx;
+    this.sprite.y += dy;
+    for (const point of [body.position, body.prev, body.prevFrame]) {
+      point.x += dx;
+      point.y += dy;
+    }
+    body.updateCenter();
+  }
+
   setPaused(paused) {
     this.sprite.body.moves = !paused && !this.lockedToPad;
   }

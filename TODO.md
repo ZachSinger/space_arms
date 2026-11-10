@@ -33,8 +33,8 @@ notice something that needs doing but isn't being done right now.
       player owes 25% extra, repaid from 25% of each later day's sales (provisional numbers).
 - [x] Expand the employee roster beyond Tavi with additional Shop Level unlocks.
 - [ ] Decide whether employee training and shift scheduling belong in the base loop.
-- [ ] Better shop closing sequence: anything from a fade-out to the player walking out of the
-      shop themselves.
+- [x] Add a brief closing beat when the last customer leaves, with the shift's customer
+      totals and a reminder that END DAY opens the receipt.
 - [ ] Give the player more breathing room at the register. The playtest was fun and
       profitable, but the player had to close the store once per day and rarely got time
       away from checkout to restock or manage the shop. Investigate ways to ease front-counter

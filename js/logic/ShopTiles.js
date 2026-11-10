@@ -3,7 +3,9 @@
 // ==========================================
 // Floor and wall art for the sales floor, copied from the ShopA map painted in Tiled
 // (img/Tilesets/TiledProject/Tilesets/ShopA.tmx). Each wall cell is a stack of 32px tiles
-// from the Research Station "Base" atlas, some flipped or rotated, drawn at 2x.
+// from the Research Station "Base" atlas, some flipped or rotated, drawn at 2x. Walls are
+// trimmed to their visible art and evenly stretched so they meet the floor grid (see
+// BACK_WALL and EDGE_WALLS).
 // The atlas is licensed for local game use only and is never committed (see .gitignore).
 // See also: TileRoom.js (which wall cells exist and drawing them).
 
@@ -32,10 +34,35 @@ const STACKS = {
 };
 const COLUMN_UPPER = "42";
 const COLUMN_LOWER = "38";
+// The back wall's lower tiles end in eight rows of floor, which left a strip of floor
+// between the wall's trim and the first row fixtures can be placed on. The back wall's two
+// tiles of art are joined without that floor (56 rows) and split evenly across its two
+// cells, so the trim meets the floor grid with no uneven stretching.
+const BACK_WALL_LOWER_ROWS = 24;
+const BACK_WALL_CELL_ROWS = (SOURCE_TILE + BACK_WALL_LOWER_ROWS) / 2;
+const BACK_WALL = {
+  upper: { half: 0, upper: STACKS.topUpper, lower: STACKS.topLower },
+  lower: { half: 1, upper: STACKS.topUpper, lower: STACKS.topLower },
+  columnUpper: { half: 0, upper: [...STACKS.topUpper, COLUMN_UPPER], lower: [...STACKS.topLower, COLUMN_LOWER] },
+  columnLower: { half: 1, upper: [...STACKS.topUpper, COLUMN_UPPER], lower: [...STACKS.topLower, COLUMN_LOWER] },
+};
+export const shopBackWallKey = (name) => `shop_back_wall_${name}`;
 
-// The back wall's visible face, in tiles measured down from the top of its upper half.
-// Above it is a dark band (atlas rows 0-2) and below it is floor (atlas rows 56-63).
-export const SHOP_BACK_WALL_FACE = { top: 3 / SOURCE_TILE, bottom: 56 / SOURCE_TILE };
+// The side and front walls are 26px thick, centered in their 32px tiles with a 3px strip of
+// floor or shadow on each side, which left a gap between the wall and anything placed
+// against it. They're cut down to the wall itself and evenly stretched to fill the cell.
+const EDGE_WALL_INSET = 3;
+const EDGE_WALL_THICKNESS = SOURCE_TILE - EDGE_WALL_INSET * 2;
+const EDGE_WALLS = {
+  west: { codes: STACKS.west, horizontal: true },
+  east: { codes: STACKS.east, horizontal: true },
+  bottom: { codes: STACKS.bottom, horizontal: false },
+};
+export const shopEdgeWallKey = (name) => `shop_edge_wall_${name}`;
+
+// The back wall's visible face, in tiles measured down from the top of its upper half:
+// below a dark band (the atlas's first three rows) down to the floor.
+export const SHOP_BACK_WALL_FACE = { top: 3 / BACK_WALL_CELL_ROWS, bottom: 2 };
 
 // Map columns where ShopA has a support column standing in the back wall.
 export const SHOP_COLUMN_GX = [2, 8, 15, 18, 25, 30];
@@ -94,11 +121,11 @@ export function sourcePixel(x, y, { flipH, flipV, diagonal }, size = SOURCE_TILE
  */
 export function shopWallStack(gx, gy, isOpen) {
   const column = SHOP_COLUMN_GX.includes(gx);
-  if (!isOpen(gx - 1, gy)) return keys(STACKS.west);
-  if (!isOpen(gx + 1, gy)) return keys(STACKS.east);
-  if (!isOpen(gx, gy - 1)) return keys(column ? [...STACKS.topUpper, COLUMN_UPPER] : STACKS.topUpper);
-  if (!isOpen(gx, gy - 2)) return keys(column ? [...STACKS.topLower, COLUMN_LOWER] : STACKS.topLower);
-  return keys(STACKS.bottom);
+  if (!isOpen(gx - 1, gy)) return [shopEdgeWallKey("west")];
+  if (!isOpen(gx + 1, gy)) return [shopEdgeWallKey("east")];
+  if (!isOpen(gx, gy - 1)) return [shopBackWallKey(column ? "columnUpper" : "upper")];
+  if (!isOpen(gx, gy - 2)) return [shopBackWallKey(column ? "columnLower" : "lower")];
+  return [shopEdgeWallKey("bottom")];
 }
 
 /**
@@ -133,5 +160,55 @@ export function registerShopTiles(textures) {
     canvas.refresh();
     canvas.setFilter(1); // Phaser.Textures.FilterMode.NEAREST: keep pixel art crisp at 64px
   }
+  for (const [name, wall] of Object.entries(BACK_WALL)) registerBackWallCell(textures, name, wall);
+  for (const [name, wall] of Object.entries(EDGE_WALLS)) registerEdgeWallCell(textures, name, wall);
   return true;
+}
+
+/**
+ * One side or front wall cell: its tiles' wall pixels only, without the 3px strips on each
+ * side. Copies are 1:1; the cell is stretched to the 64px grid when drawn.
+ */
+function registerEdgeWallCell(textures, name, { codes, horizontal }) {
+  const key = shopEdgeWallKey(name);
+  if (textures.exists(key)) return;
+  const width = horizontal ? EDGE_WALL_THICKNESS : SOURCE_TILE;
+  const height = horizontal ? SOURCE_TILE : EDGE_WALL_THICKNESS;
+  const canvas = textures.createCanvas(key, width, height);
+  const context = canvas.context;
+  context.imageSmoothingEnabled = false;
+  const sx = horizontal ? EDGE_WALL_INSET : 0;
+  const sy = horizontal ? 0 : EDGE_WALL_INSET;
+  for (const code of codes) {
+    const tile = textures.get(shopTileKey(code)).getSourceImage();
+    context.drawImage(tile, sx, sy, width, height, 0, 0, width, height);
+  }
+  canvas.refresh();
+  canvas.setFilter(1); // Phaser.Textures.FilterMode.NEAREST
+}
+
+/**
+ * One back wall cell: its half of the upper tiles stacked above the lower tiles' wall rows.
+ * Copies are 1:1; the cell is stretched to the 64px grid when drawn.
+ */
+function registerBackWallCell(textures, name, { half, upper, lower }) {
+  const key = shopBackWallKey(name);
+  if (textures.exists(key)) return;
+  const canvas = textures.createCanvas(key, SOURCE_TILE, BACK_WALL_CELL_ROWS);
+  const context = canvas.context;
+  context.imageSmoothingEnabled = false;
+  const cellTop = half * BACK_WALL_CELL_ROWS;
+  const layers = [
+    ...upper.map((code) => ({ code, top: 0, rows: SOURCE_TILE })),
+    ...lower.map((code) => ({ code, top: SOURCE_TILE, rows: BACK_WALL_LOWER_ROWS })),
+  ];
+  for (const { code, top, rows } of layers) {
+    const from = Math.max(cellTop, top);
+    const to = Math.min(cellTop + BACK_WALL_CELL_ROWS, top + rows);
+    if (to <= from) continue;
+    const tile = textures.get(shopTileKey(code)).getSourceImage();
+    context.drawImage(tile, 0, from - top, SOURCE_TILE, to - from, 0, from - cellTop, SOURCE_TILE, to - from);
+  }
+  canvas.refresh();
+  canvas.setFilter(1); // Phaser.Textures.FilterMode.NEAREST
 }
