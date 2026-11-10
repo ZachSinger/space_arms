@@ -1,7 +1,7 @@
 // ==========================================
 // FILE: Player.js
 // ==========================================
-// The directly controlled shopkeeper: WASD/arrow movement, facing textures, and a trimmed
+// The directly controlled shopkeeper: WASD/arrow or controller movement, facing textures, and a trimmed
 // collision body. Collides with walls and fixtures but passes through customers.
 import { pickPlayerCharacterTextures } from "./CustomerSprites.js";
 
@@ -29,8 +29,6 @@ const BODY_BOTTOM_GAP = 4;
 // Placeholder art is a customer sprite (see TODO.md), tinted the UI accent cyan so the
 // player stands out from the crowd.
 const PLAYER_TINT = 0x38bdf8;
-
-const INV_SQRT2 = 0.7071067811865476; // 1/sqrt(2)
 
 export class Player {
   constructor(scene, spawnX, spawnY) {
@@ -91,13 +89,19 @@ export class Player {
     if (right) vx += 1;
     if (up) vy -= 1;
     if (down) vy += 1;
+    // Null while a menu has the controller.
+    const pad = this.scene.getPadMovement?.() ?? null;
+    if (vx === 0 && vy === 0 && pad) {
+      vx = pad.x;
+      vy = pad.y;
+    }
     if (!canMove) {
       vx = 0;
       vy = 0;
     }
 
     let speed = MOVE_SPEED;
-    const wantsDash = (vx !== 0 || vy !== 0) && this.dashKey.isDown;
+    const wantsDash = (vx !== 0 || vy !== 0) && (this.dashKey.isDown || Boolean(pad?.dash));
     if (wantsDash && !this.exhausted && this.stamina > 0) {
       const dashSeconds = Math.min(delta / 1000, this.stamina / STAMINA_DRAIN_PER_SECOND);
       this.stamina = Math.max(0, this.stamina - dashSeconds * STAMINA_DRAIN_PER_SECOND);
@@ -113,10 +117,11 @@ export class Player {
       if (this.exhausted && this.stamina >= EXHAUSTION_RECOVERY_STAMINA) this.exhausted = false;
     }
 
-    // Keep diagonal speed equal to cardinal speed.
-    if (vx !== 0 && vy !== 0) {
-      vx *= INV_SQRT2;
-      vy *= INV_SQRT2;
+    // Same top speed in every direction; a half-tilted stick walks slower.
+    const magnitude = Math.hypot(vx, vy);
+    if (magnitude > 1) {
+      vx /= magnitude;
+      vy /= magnitude;
     }
 
     this.sprite.body.setVelocity(vx * speed, vy * speed);

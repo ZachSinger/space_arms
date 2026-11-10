@@ -17,6 +17,7 @@ export const LEDGER_CATEGORIES = Object.freeze([
   "equipment",
   "licenses",
   "hiring",
+  "training",
   "wages",
   "loan_repayments",
 ]);

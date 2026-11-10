@@ -221,6 +221,26 @@ test("saves from before employees existed still load", () => {
   assert.doesNotThrow(() => validateShopSave(data, database));
 });
 
+test("employee skills remain valid after firing, while booked training requires hired non-maxed staff", () => {
+  const data = snapshot();
+  data.playerState.employeeSkills = {
+    tavi_stock_clerk: { register: 2, stock_shelves: 1, load_storage: 1 },
+  };
+  assert.doesNotThrow(() => validateShopSave(data, database));
+  data.playerState.employeeTraining = { tavi_stock_clerk: "register" };
+  assert.throws(() => validateShopSave(data, database), /invalid employee training/);
+  data.playerState.hiredEmployees = ["tavi_stock_clerk"];
+  assert.doesNotThrow(() => validateShopSave(data, database));
+  for (const invalid of [0, 6, 1.5, "2", null]) {
+    data.playerState.employeeSkills.tavi_stock_clerk.register = invalid;
+    assert.throws(() => validateShopSave(data, database), /invalid employee skills/);
+  }
+  data.playerState.employeeSkills.tavi_stock_clerk.register = 5;
+  assert.throws(() => validateShopSave(data, database), /invalid employee training/);
+  data.playerState.employeeTraining = { tavi_stock_clerk: "unknown" };
+  assert.throws(() => validateShopSave(data, database), /invalid employee training/);
+});
+
 test("saves accept earned shop levels and pending store and faction reputation", () => {
   const data = snapshot();
   data.playerState.shopLevel = 30;

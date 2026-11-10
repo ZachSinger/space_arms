@@ -11,6 +11,7 @@ import { getShopLevelForReputation, isKnownShopLevel } from "./ShopProgression.j
 import { CUSTOMER_FACTION_IDS } from "./CustomerBuyLists.js";
 import { getDailyLoanRepayment } from "./EmergencyLoan.js";
 import employeeRoster from "../../data/Employees.json" with { type: "json" };
+import { getEmployeeProfile, getEmployeeTrainingOffer } from "./EmployeeTraining.js";
 
 // The starting capacity and upgrade rules for the player's hovercart.
 import { getNextHovercartUpgrade, HOVERCART_CAPACITY } from "./Hovercart.js";
@@ -58,6 +59,8 @@ export class PlayerState {
     this.goBacks = new InventoryPool({ capacity: Infinity, stock: [] });
     this.hiredEmployees = [];
     this.employeeJobPriorities = {};
+    this.employeeSkills = {};
+    this.employeeTraining = {};
 
     // Every credit earned or spent today is itemized here for the End Day receipt.
     this.dayLedger = new DayLedger({
@@ -166,6 +169,18 @@ export class PlayerState {
       throw new RangeError("Shift reputation exceeds the supported range.");
     }
     this.dayLedger.recordShift(results);
+    for (const [employeeId, jobId] of Object.entries(this.employeeTraining)) {
+      const employee = this.getEmployeeProfile(employeeId);
+      const offer = getEmployeeTrainingOffer(employeeId, employee.skillLevels, jobId);
+      if (!offer || !this.hiredEmployees.includes(employeeId)) {
+        throw new Error(`Invalid booked training for ${employeeId}.`);
+      }
+      this.employeeSkills[employeeId] = {
+        ...employee.skillLevels,
+        [jobId]: offer.targetLevel,
+      };
+    }
+    this.employeeTraining = {};
     this.globalReputation = globalReputation;
     this.factionReputation = factionReputation;
     this.pendingReputation = emptyReputationTally();
@@ -231,13 +246,17 @@ export class PlayerState {
     this.notifyListeners();
   }
 
-  hireEmployee(employeeId, hireCost) {
-    if (typeof employeeId !== "string" || !employeeId ||
-      !Number.isSafeInteger(hireCost) || hireCost < 0) {
-      throw new TypeError("Hiring requires an employee id and a non-negative whole-credit cost.");
+  getEmployeeProfile(employeeId) {
+    return getEmployeeProfile(employeeId, this.employeeSkills[employeeId]);
+  }
+
+  hireEmployee(employeeId) {
+    if (typeof employeeId !== "string" || !employeeId) {
+      throw new TypeError("Hiring requires an employee id.");
     }
     const jobPriorities = defaultEmployeeJobPriorities(employeeId);
-    const employee = employeeRoster.find((candidate) => candidate.id === employeeId);
+    const employee = this.getEmployeeProfile(employeeId);
+    const hireCost = employee.hireCost;
     if (!isKnownShopLevel(employee.requiredShopLevel)) {
       throw new Error(`Unknown required Shop Level for ${employeeId}.`);
     }
@@ -251,6 +270,33 @@ export class PlayerState {
     this.credits = sumMoney([this.credits, -hireCost]);
     this.hiredEmployees.push(employeeId);
     this.employeeJobPriorities[employeeId] = jobPriorities;
+    this.notifyListeners();
+    return true;
+  }
+
+  trainEmployee(employeeId, jobId) {
+    const offer = getEmployeeTrainingOffer(employeeId, this.employeeSkills[employeeId], jobId);
+    if (!offer || !this.hiredEmployees.includes(employeeId) ||
+      this.employeeTraining[employeeId] || this.credits < offer.cost) return false;
+    this.employeeTraining[employeeId] = jobId;
+    this.spendCredits(offer.cost, {
+      category: "training",
+      label: `${this.getEmployeeProfile(employeeId).name}: ${offer.label} Level ${offer.targetLevel}`,
+    });
+    return true;
+  }
+
+  fireEmployee(employeeId) {
+    if (typeof employeeId !== "string" || !employeeId) {
+      throw new TypeError("Firing requires an employee id.");
+    }
+    if (!employeeRoster.some((employee) => employee.id === employeeId)) {
+      throw new Error(`Unknown employee: ${employeeId}`);
+    }
+    const index = this.hiredEmployees.indexOf(employeeId);
+    if (index < 0 || this.employeeTraining[employeeId]) return false;
+    this.hiredEmployees.splice(index, 1);
+    delete this.employeeJobPriorities[employeeId];
     this.notifyListeners();
     return true;
   }
@@ -348,6 +394,10 @@ export class PlayerState {
           [...this.employeeJobPriorities[employeeId]],
         ]),
       ),
+      employeeSkills: Object.fromEntries(
+        Object.entries(this.employeeSkills).map(([id, levels]) => [id, { ...levels }]),
+      ),
+      employeeTraining: { ...this.employeeTraining },
       activeLicenses: [...this.activeLicenses],
       storePrices: { ...this.storePrices },
       customersTurnedAway: this.customersTurnedAway,
@@ -393,6 +443,10 @@ export class PlayerState {
             defaultEmployeeJobPriorities(employeeId))],
         ]),
       ),
+      employeeSkills: Object.fromEntries(
+        Object.entries(data.employeeSkills ?? {}).map(([id, levels]) => [id, { ...levels }]),
+      ),
+      employeeTraining: { ...(data.employeeTraining ?? {}) },
       customersTurnedAway: data.customersTurnedAway,
       activeFactions: new Set(),
       activeLicenses: new Set([...data.activeLicenses, "lic_fixture_basics"]),

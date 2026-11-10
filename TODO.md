@@ -32,19 +32,31 @@ notice something that needs doing but isn't being done right now.
       stock. For now, an emergency loan in the Finances tab tops credits up to 1,000; the
       player owes 25% extra, repaid from 25% of each later day's sales (provisional numbers).
 - [x] Expand the employee roster beyond Tavi with additional Shop Level unlocks.
-- [ ] Decide whether employee training and shift scheduling belong in the base loop.
+- [x] Employee training: three job skills, Levels 1-5, paid courses that take one paid shift
+      away. Skills permanently raise wages and rehiring prices, even after firing.
+- [ ] Decide whether employee shift scheduling belongs in the base loop.
 - [x] Add a brief closing beat when the last customer leaves, with the shift's customer
-      totals and a reminder that END DAY opens the receipt.
-- [ ] Give the player more breathing room at the register. The playtest was fun and
+      totals and a reminder that END DAY opens the receipt. Stays up for five seconds.
+- [x] Customers can buy 1-3 units of the same item, filling their wanted quantity across
+      stocked shelf placements without exceeding available stock.
+- [x] Cash collection requires a new mouse press after scanning; a held scan gesture
+      cannot sweep up the customer's bills and coins when the screen changes.
+- [x] Give the player more breathing room at the register. The playtest was fun and
       profitable, but the player had to close the store once per day and rarely got time
-      away from checkout to restock or manage the shop. Investigate ways to ease front-counter
-      pressure without losing that engagement.
+      away from checkout to restock or manage the shop. Customers now loiter in the store
+            a bit, which helped a lot; revisit if it comes back.
 - [x] Customers browse before buying: they pause at each shelf to look before taking items,
       and sometimes wander to another stocked shelf first. They skip empty shelves.
 - [x] Hovercart upgrades are locked behind Shop Levels 3, 8, 14, 21, and 28.
 - [x] Contracts tab lists signable contracts first and already-signed ones last.
 - [x] Only the player's lower body collides, so their head can overlap a shelf or counter
       drawn above them instead of snagging on it.
+- [x] Controller support: walking, dashing, every action, and a menu highlight for every
+      window, with on-screen prompts that switch to controller buttons.
+- [ ] Try the controller on a real Xbox/PlayStation pad (so far only tested with a
+      simulated one), including the Steam Deck.
+- [ ] Fine-tune the controller after real-pad playtesting: stick feel, dash timing, menu
+      highlight movement, and button prompts.
 
 ## Progression
 - [x] New shops start at 0 reputation. Store and faction reputation changes are tallied
@@ -486,9 +498,7 @@ notice something that needs doing but isn't being done right now.
       +1 reputation with the customer's faction. Gains and losses apply at shift end.
 - [x] Manager's Tablet UI: unified tabbed window shell built (`js/logic/ManagerTablet.js`),
       Inventory + Employee + Contracts + Supply + Fixtures + Equipment + Layout +
-      Finances tabs have real content.
-      Remaining tab (Handbook) still shows a "COMING SOON" placeholder
-      until each one's own system exists -- see below.
+      Finances + Handbook tabs have real content.
 - [x] Employee tab: hiring, wages, and per-employee job priority ordering (see the
       Employees entry above).
 - [x] Fixtures tab: purchase licensed fixtures, place/crate fixtures, move existing fixtures,
@@ -503,5 +513,10 @@ notice something that needs doing but isn't being done right now.
       the next shift can't start until the day is ended. Wages are still paid at shift start
       (Step 32), not at End Day. Money changes must go through `PlayerState.addCredits` /
       `spendCredits` with a receipt entry (`js/logic/DayLedger.js`).
-- [ ] Handbook tab: needs actual handbook/reference content written (Step 36)
+- [x] Handbook tab (Step 36): topic pages for running the store, ordering, stocking,
+      customers & register, prices & money, licenses, employees, level rewards, and controls
+      (`js/logic/HandbookRenderer.js`). Level rewards are read from the game's own unlock data.
+      Update the Handbook text whenever a rule it describes changes.
+- [x] Letting staff go: available between shifts from the Employee tab. The one-time hiring
+      cost is not refunded; future shift wages stop.
 - [x] `npm run package` builds a stand-alone Windows exe (`release\win-unpacked`); verified title, Continue into the shop, and all item images load without the dev server

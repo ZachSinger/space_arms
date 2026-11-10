@@ -72,13 +72,14 @@ export class CheckoutRenderer {
               <div><span>CURRENT CHANGE</span><strong id="checkout-change-selected">0 credits</strong></div>
               <div><span>CHANGE OWED</span><strong>${formatMoney(cashPayment.changeDueCents / 100)}</strong></div>
             </div>
-            <button type="button" class="action-btn cash-hand-over" id="cash-hand-over">HAND OVER CHANGE (SPACE)</button>
+            <button type="button" class="action-btn cash-hand-over" id="cash-hand-over">HAND OVER CHANGE<span class="kbd-only"> (SPACE)</span></button>
             <div class="cash-drawer">
               <div class="cash-bills">${renderDrawer("bill")}</div>
               <div class="cash-coins">${renderDrawer("coin")}</div>
             </div>
             <div class="cash-change-pile" id="checkout-change-pile">No change selected.</div>
-            <div class="cash-instructions">Click a bill or coin to add it. Right-click to remove one.</div>
+            <div class="cash-instructions kbd-only">Click a bill or coin to add it. Right-click to remove one.</div>
+            <div class="cash-instructions pad-only">Press A on a bill or coin to add it. Press X to remove one.</div>
           </div>` : ""}
       </div>
     `;

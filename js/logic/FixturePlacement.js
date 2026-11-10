@@ -2,12 +2,16 @@
 // FILE: FixturePlacement.js
 // ==========================================
 // Placement mode for moving an existing fixture or unpacking a fixture crate: a ghost
-// follows the cursor with valid/invalid and access-cell highlights, the camera pans with
-// WASD/arrows, and left-click commits. Only allowed while the store is closed.
+// follows the cursor (or, on a controller, steps tile by tile) with valid/invalid and
+// access-cell highlights, and left-click or A commits. Only allowed while the store is closed.
 import { UIWindow } from "./UIWindow.js";
 import { TILE_SIZE } from "./RoomLayout.js";
 import { getFixtureType, fixtureAccessCells, fixtureFootprint } from "./FixtureLayout.js";
 import { getFixtureTexture } from "./FixtureTexture.js";
+import { PAD } from "./GamepadInput.js";
+import { getInputDevice } from "./InputDevice.js";
+
+const PAD_STEPS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 
 export class FixturePlacement {
   constructor(scene) {
@@ -22,12 +26,16 @@ export class FixturePlacement {
       y: 80,
       contentHTML: `
         <p data-placement-name></p>
-        <p class="fixture-stock-meta">Left-click to place. R to turn it. Right-click or Esc to cancel.
+        <p class="fixture-stock-meta kbd-only">Left-click to place. R to turn it. Right-click or Esc to cancel.
           WASD / arrow keys pan the camera. The blue squares in front must stay clear.</p>
+        <p class="fixture-stock-meta pad-only">Move it with the left stick or D-pad. A to place. Y to turn it.
+          B to cancel. The blue squares in front must stay clear.</p>
         <p data-placement-status role="status"></p>
         <button type="button" class="action-btn" data-cancel-fixture-move>CANCEL</button>
       `,
     }, scene.windowManager);
+    // The controller moves the fixture, not a menu cursor, while this window is up.
+    this.uiWindow.element.setAttribute("data-pad-world", "");
     this.bodyElement = this.uiWindow.element.querySelector(".retro-window-body");
     this.nameElement = this.bodyElement.querySelector("[data-placement-name]");
     this.statusElement = this.bodyElement.querySelector("[data-placement-status]");
@@ -42,31 +50,67 @@ export class FixturePlacement {
         return;
       }
       if (!pointer.leftButtonDown()) return;
+      this.padCell = null;
       this.updatePreview(pointer);
-      const { id, gx, gy, rotation } = this.placement;
-      const placed = this.original
-        ? scene.moveFixture(id, gx, gy, rotation)
-        : scene.placeFixtureFromCrate(this.fixtureCrate, gx, gy, rotation);
-      if (placed) {
-        const movedFromLayoutMenu = Boolean(this.original);
-        this.cancel();
-        // Back to the shop floor, not the Layout tab the move started from.
-        if (movedFromLayoutMenu) scene.managerTablet.uiWindow.close();
-      }
+      this.confirm();
     };
     scene.input.on("pointerdown", this.handlePointerDown);
     this.handleRotateKey = () => {
       if (!this.active || !scene.controlMode.allows("rotateFixture")) return;
-      this.rotation = (this.rotation + 1) % 4;
-      this.updatePreview(scene.input.activePointer);
+      this.rotate();
     };
     scene.input.keyboard.on("keydown-R", this.handleRotateKey);
     this.handleDocumentMouseMove = (event) => {
       if (!this.active) return;
       this.mouseClient = { x: event.clientX, y: event.clientY };
+      // Real mouse movement takes over from the controller.
+      if (event.isTrusted) this.padCell = null;
       this.updateWindowTransparency();
     };
     document.addEventListener("mousemove", this.handleDocumentMouseMove, true);
+  }
+
+  // Place the fixture at the current preview; leaves placement mode if it fit.
+  confirm() {
+    const { id, gx, gy, rotation } = this.placement;
+    const placed = this.original
+      ? this.scene.moveFixture(id, gx, gy, rotation)
+      : this.scene.placeFixtureFromCrate(this.fixtureCrate, gx, gy, rotation);
+    if (placed) {
+      const movedFromLayoutMenu = Boolean(this.original);
+      this.cancel();
+      // Back to the shop floor, not the Layout tab the move started from.
+      if (movedFromLayoutMenu) this.scene.managerTablet.uiWindow.close();
+    }
+  }
+
+  rotate() {
+    this.rotation = (this.rotation + 1) % 4;
+    this.refreshPreview();
+  }
+
+  /**
+   * Controller: D-pad or left stick steps the fixture a tile, A places, Y turns, B cancels.
+   * @param {import("./GamepadInput.js").GamepadInput} pad
+   */
+  handlePad(pad) {
+    if (!this.active) return;
+    if (pad.navDirection || pad.justPressed(PAD.A) || pad.justPressed(PAD.Y)) this.usePadCell();
+    if (pad.navDirection) {
+      const [dx, dy] = PAD_STEPS[pad.navDirection];
+      this.padCell = { gx: this.padCell.gx + dx, gy: this.padCell.gy + dy };
+      this.refreshPreview();
+    }
+    if (pad.justPressed(PAD.Y)) this.rotate();
+    if (pad.justPressed(PAD.A)) this.confirm();
+    else if (pad.justPressed(PAD.B)) this.cancel();
+  }
+
+  // Switch from the mouse to tile stepping, starting where the preview already is.
+  usePadCell() {
+    if (this.padCell) return;
+    const { w, h } = fixtureFootprint({ type: this.spec.id, rotation: this.rotation });
+    this.padCell = { gx: this.placement.gx + Math.floor(w / 2), gy: this.placement.gy + Math.floor(h / 2) };
   }
 
   // Faded windows ignore the pointer, so hover is tested against their bounds instead.
@@ -147,8 +191,21 @@ export class FixturePlacement {
     this.graphics.setVisible(true);
     this.uiWindow.openWindow();
     this.mouseClient = null;
-    this.updatePreview(this.scene.input.activePointer);
+    // On a controller the fixture starts where it stands (or where its crate is).
+    this.padCell = getInputDevice() === "gamepad"
+      ? { gx: Math.floor(x / TILE_SIZE), gy: Math.floor(y / TILE_SIZE) }
+      : null;
+    this.refreshPreview();
     return true;
+  }
+
+  // Follow the controller's tile if it's in use, else the mouse pointer.
+  refreshPreview() {
+    if (this.padCell) {
+      this.updatePreviewAt((this.padCell.gx + 0.5) * TILE_SIZE, (this.padCell.gy + 0.5) * TILE_SIZE);
+    } else {
+      this.updatePreview(this.scene.input.activePointer);
+    }
   }
 
   /**
@@ -158,19 +215,29 @@ export class FixturePlacement {
    */
   updatePreview(pointer) {
     const world = this.scene.screenToWorld?.(pointer.x, pointer.y) ?? this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    this.updatePreviewAt(world.x, world.y);
+  }
+
+  /**
+   * @param {number} worldX
+   * @param {number} worldY
+   */
+  updatePreviewAt(worldX, worldY) {
     const { w, h } = fixtureFootprint({ type: this.spec.id, rotation: this.rotation });
     this.placement = {
       id: this.original?.id ?? this.scene.fixtures.nextId(this.spec.id),
       type: this.spec.id,
-      gx: Math.floor(world.x / TILE_SIZE) - Math.floor(w / 2),
-      gy: Math.floor(world.y / TILE_SIZE) - Math.floor(h / 2),
+      gx: Math.floor(worldX / TILE_SIZE) - Math.floor(w / 2),
+      gy: Math.floor(worldY / TILE_SIZE) - Math.floor(h / 2),
       rotation: this.rotation,
     };
     const { id, gx, gy, rotation } = this.placement;
     const result = this.original
       ? this.scene.checkFixtureMove(id, gx, gy, rotation)
       : this.scene.checkFixturePlacement(this.spec.id, gx, gy, rotation);
-    this.statusElement.textContent = result.reason;
+    this.statusElement.textContent = result.valid && getInputDevice() === "gamepad"
+      ? result.reason.replace(/^Click to place\./, "Press A to place.")
+      : result.reason;
     const color = result.valid ? 0x10b981 : 0xef4444;
     const x = gx * TILE_SIZE;
     const y = gy * TILE_SIZE;
@@ -189,12 +256,11 @@ export class FixturePlacement {
   }
 
   /**
-   * Keep the preview under the pointer each frame. The whole map is always on screen,
-   * so the camera never pans.
+   * Keep the preview under the pointer (or the controller's tile) each frame.
    */
   update() {
     if (!this.active) return;
-    this.updatePreview(this.scene.input.activePointer);
+    this.refreshPreview();
   }
 
   // Leave placement mode and restore the player and crates. Doesn't close the

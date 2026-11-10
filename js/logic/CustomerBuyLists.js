@@ -22,6 +22,14 @@ export const CUSTOMER_BUY_LIST_TUNING = Object.freeze({
 export const BARGAIN_PRICE_RATIO = 0.9;
 export const DISCOUNT_BONUS_CHANCE = 0.5;
 
+// Most wants are one unit; larger purchases give identical stock a reason to be stacked.
+export function createCustomerItemQuantities(itemIds, random = Math.random) {
+  return Object.fromEntries([...new Set(itemIds)].map((itemId) => {
+    const roll = random();
+    return [itemId, roll < 0.5 ? 1 : roll < 0.85 ? 2 : 3];
+  }));
+}
+
 export const CUSTOMER_FACTION_IDS = Object.freeze([
   "scavengers",
   "mercenaries",

@@ -325,6 +325,23 @@ test("opening the tablet hides checkout and closing it resumes register work", (
   assert.equal(tablet.equipmentPurchaseNotice, "");
 });
 
+test("reopening the tablet refreshes cleared employee confirmations", () => {
+  const { scene, tablet } = createHarness();
+  scene.checkoutWindow = { suspend() {} };
+  scene.resumeRegisterCheckout = () => {};
+  tablet.uiWindow.openWindow = () => {};
+  tablet.employeeTrainingConfirmation = { employeeId: "tavi_stock_clerk", jobId: "register" };
+  tablet.employeeFireConfirmationId = "tavi_stock_clerk";
+  tablet.uiWindow.onClose();
+  const refreshed = [];
+  tablet.refreshEmployeePanel = () => refreshed.push({
+    training: tablet.employeeTrainingConfirmation,
+    firing: tablet.employeeFireConfirmationId,
+  });
+  tablet.openWindow();
+  assert.deepEqual(refreshed, [{ training: null, firing: null }]);
+});
+
 test("inventory refreshes when customers shop and finish checkout", () => {
   const h = createHarness();
   h.scene.customerCartCount = 2;

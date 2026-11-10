@@ -241,6 +241,83 @@ test("every credit change is itemized, so the receipt always matches the balance
   assert.equal(state.credits, 1325);
 });
 
+test("training takes a paid shift, survives saves, and permanently raises wages and rehiring costs", () => {
+  const state = new PlayerState();
+  unlockStaff(state);
+  assert.equal(state.hireEmployee("tavi_stock_clerk"), true);
+  assert.equal(state.trainEmployee("tavi_stock_clerk", "register"), true);
+  assert.equal(state.credits, 1000);
+  assert.equal(balanceOf(state), 1000);
+  assert.deepEqual(state.employeeTraining, { tavi_stock_clerk: "register" });
+  assert.equal(state.getEmployeeProfile("tavi_stock_clerk").skillLevels.register, 1);
+  assert.equal(state.getEmployeeProfile("tavi_stock_clerk").wagePerShift, 50);
+  assert.equal(state.trainEmployee("tavi_stock_clerk", "stock_shelves"), false);
+  assert.equal(state.fireEmployee("tavi_stock_clerk"), false);
+  assert.deepEqual(state.dayLedger.lines.find(({ category }) => category === "training"), {
+    category: "training", label: "Tavi: Run register Level 2", quantity: 1, amount: -250,
+  });
+
+  const restored = PlayerState.deserialize(state.serialize());
+  assert.deepEqual(restored.employeeTraining, state.employeeTraining);
+  restored.finishShift({ customersServed: 0, customersTurnedAway: 0 });
+  const trained = restored.getEmployeeProfile("tavi_stock_clerk");
+  assert.equal(trained.skillLevels.register, 2);
+  assert.equal(trained.skillLevels.stock_shelves, 1);
+  assert.equal(trained.wagePerShift, 55);
+  assert.equal(trained.hireCost, 313);
+  assert.deepEqual(restored.employeeTraining, {});
+  assert.equal(restored.fireEmployee("tavi_stock_clerk"), true);
+
+  const rehired = PlayerState.deserialize(restored.serialize());
+  assert.equal(rehired.getEmployeeProfile("tavi_stock_clerk").wagePerShift, 55);
+  assert.equal(rehired.hireEmployee("tavi_stock_clerk"), true);
+  assert.equal(rehired.credits, 687);
+  assert.equal(rehired.getEmployeeProfile("tavi_stock_clerk").skillLevels.register, 2);
+  assert.equal(state.getEmployeeProfile("tavi_stock_clerk").skillLevels.register, 1);
+});
+
+test("each employee skill trains separately to Level 5 at increasingly higher prices", () => {
+  const state = new PlayerState();
+  unlockStaff(state);
+  state.addCredits(10000, { category: "sales", label: "Training test" });
+  state.hireEmployee("tavi_stock_clerk");
+  for (const jobId of ["register", "stock_shelves", "load_storage"]) {
+    let previousCost = 0;
+    for (let level = 2; level <= 5; level += 1) {
+      const before = state.credits;
+      assert.equal(state.trainEmployee("tavi_stock_clerk", jobId), true);
+      assert.ok(before - state.credits > previousCost);
+      previousCost = before - state.credits;
+      state.finishShift({ customersServed: 0, customersTurnedAway: 0 });
+      assert.equal(state.getEmployeeProfile("tavi_stock_clerk").skillLevels[jobId], level);
+      state.endDay(state.dayLedger.day + 1);
+    }
+    const before = state.credits;
+    assert.equal(state.trainEmployee("tavi_stock_clerk", jobId), false);
+    assert.equal(state.credits, before);
+  }
+  assert.equal(state.getEmployeeProfile("tavi_stock_clerk").wagePerShift, 110);
+  assert.equal(state.getEmployeeProfile("tavi_stock_clerk").hireCost, 1000);
+});
+
+test("training rejects unaffordable and unhired staff and older saves start with Level 1 skills", () => {
+  const state = new PlayerState();
+  unlockStaff(state);
+  assert.equal(state.trainEmployee("tavi_stock_clerk", "register"), false);
+  state.hireEmployee("tavi_stock_clerk");
+  state.spendCredits(1250, { category: "stock_orders", label: "Supplies" });
+  assert.equal(state.trainEmployee("tavi_stock_clerk", "register"), false);
+  assert.deepEqual(state.employeeTraining, {});
+  const oldSave = state.serialize();
+  delete oldSave.employeeSkills;
+  delete oldSave.employeeTraining;
+  const restored = PlayerState.deserialize(oldSave);
+  assert.deepEqual(restored.getEmployeeProfile("tavi_stock_clerk").skillLevels, {
+    register: 1, stock_shelves: 1, load_storage: 1,
+  });
+  assert.deepEqual(restored.employeeTraining, {});
+});
+
 test("hovercart upgrades cost more for each five-space increase and stop at 40", () => {
   const state = new PlayerState();
   state.shopLevel = 30;

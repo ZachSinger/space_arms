@@ -259,6 +259,7 @@ function createRegisterHarness() {
   checkout.openedCarts = [];
   checkout.openForCustomer = (cart, onComplete) => {
     checkout.mode = "checkout";
+    checkout.cart = cart;
     checkout.onComplete = onComplete;
     checkout.openedCarts.push(cart);
     checkout.uiWindow.openWindow();
@@ -451,6 +452,71 @@ test("the actual hire action explains the level lock and allows hiring after the
   assert.equal(autosaves, 1);
 });
 
+test("letting an employee go is off-shift only and stops future wages without a refund", () => {
+  const state = new PlayerState();
+  state.shopLevel = 4;
+  assert.equal(state.hireEmployee("tavi_stock_clerk", 250), true);
+  const creditsAfterHire = state.credits;
+  const scene = Object.create(GameScene.prototype);
+  const warnings = [];
+  const messages = [];
+  let autosaves = 0;
+  Object.assign(scene, {
+    playerState: state,
+    canHireEmployees: () => false,
+    showShopMessage: (message) => warnings.push(message),
+    showGameMessage: (message) => messages.push(message),
+    requestAutosave: () => { autosaves += 1; },
+  });
+
+  assert.equal(scene.fireEmployee("tavi_stock_clerk"), false);
+  assert.match(warnings[0], /between shifts/);
+  assert.deepEqual(state.hiredEmployees, ["tavi_stock_clerk"]);
+
+  scene.canHireEmployees = () => true;
+  assert.equal(scene.fireEmployee("tavi_stock_clerk"), true);
+  assert.deepEqual(state.hiredEmployees, []);
+  assert.deepEqual(state.employeeJobPriorities, {});
+  assert.equal(state.credits, creditsAfterHire);
+  assert.match(messages[0], /hiring cost is not refunded.*future shift wages stop/i);
+  assert.equal(autosaves, 1);
+  const restored = new PlayerState();
+  restored.applySave(state.serialize());
+  assert.deepEqual(restored.hiredEmployees, []);
+  assert.deepEqual(restored.employeeJobPriorities, {});
+});
+
+test("training can only be booked between shifts and trainees are paid without spawning for work", () => {
+  const state = new PlayerState();
+  state.shopLevel = 4;
+  state.hireEmployee("tavi_stock_clerk");
+  const scene = Object.create(GameScene.prototype);
+  const warnings = [];
+  let autosaves = 0;
+  Object.assign(scene, {
+    playerState: state,
+    canHireEmployees: () => false,
+    showShopMessage: (message) => warnings.push(message),
+    showGameMessage() {},
+    requestAutosave: () => { autosaves += 1; },
+  });
+  assert.equal(scene.trainEmployee("tavi_stock_clerk", "register"), false);
+  assert.match(warnings[0], /between shifts/);
+  assert.equal(state.credits, 1250);
+  scene.canHireEmployees = () => true;
+  assert.equal(scene.trainEmployee("tavi_stock_clerk", "register"), true);
+  assert.equal(autosaves, 1);
+  assert.equal(scene.fireEmployee("tavi_stock_clerk"), false);
+  assert.match(warnings.at(-1), /returns.*training/);
+  assert.equal(scene.payEmployeeWages(), 50);
+  assert.equal(state.credits, 950);
+  scene.spawnHiredEmployees();
+  assert.deepEqual(scene.employees, []);
+  state.finishShift({ customersServed: 0, customersTurnedAway: 0 });
+  assert.equal(state.getEmployeeProfile("tavi_stock_clerk").skillLevels.register, 2);
+  assert.equal(scene.payEmployeeWages(), 55);
+});
+
 test("actual store price edits preserve cents and explain invalid prices", () => {
   const scene = Object.create(GameScene.prototype);
   const prices = new Map([["ration", 10]]);
@@ -507,6 +573,35 @@ test("hiding checkout for the tablet preserves scanned items and payment progres
   assert.equal(checkout.onComplete, onComplete);
   assert.equal(checkout.paymentBuffer, "10");
   assert.equal(checkout.openedCarts.length, 1);
+});
+
+test("stepping away from the register mid-sale and coming back resumes the same sale", () => {
+  const { scene, checkout } = createRegisterHarness();
+  const customer = { cart: [{ itemId: "rifle", price: 100 }] };
+  scene.handleJoinQueue(customer);
+  checkout.paymentBuffer = "10";
+  checkout.suspend(); // what leaving the register does mid-sale
+  scene.startCheckout(customer);
+  assert.equal(checkout.uiWindow.isOpen, true);
+  assert.equal(checkout.paymentBuffer, "10");
+  assert.equal(checkout.openedCarts.length, 1, "not started over");
+});
+
+test("a customer's way of paying is picked once, even if their sale is started over", () => {
+  const { scene, checkout } = createRegisterHarness();
+  const options = [];
+  const open = checkout.openForCustomer;
+  checkout.openForCustomer = (cart, onComplete, opts) => {
+    options.push(opts);
+    open(cart, onComplete);
+  };
+  const customer = { cart: [{ itemId: "rifle", price: 100 }] };
+  scene.handleJoinQueue(customer);
+  checkout.mode = null; // the sale was thrown away
+  scene.startCheckout(customer);
+  assert.equal(options.length, 2);
+  assert.equal(options[1].cash, options[0].cash);
+  assert.equal(options[1].exact, options[0].exact);
 });
 
 test("a customer leaving while the tablet is open cannot leave a stale checkout to resume", () => {

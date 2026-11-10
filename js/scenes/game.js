@@ -20,8 +20,9 @@ import { StorageFixture } from "../logic/ShopInventory.js";
 import { ShelfFixture } from "../logic/ShelfFixture.js";
 import { Customer, SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT } from "../logic/Customer.js";
 import { Employee } from "../logic/Employee.js";
+import { getEmployeeTrainingOffer } from "../logic/EmployeeTraining.js";
 import {
-  addDiscountBonusItem, BARGAIN_PRICE_RATIO, createCustomerBuyList,
+  addDiscountBonusItem, BARGAIN_PRICE_RATIO, createCustomerBuyList, createCustomerItemQuantities,
 } from "../logic/CustomerBuyLists.js";
 import { formatMoney, isMoney, sumMoney } from "../logic/Money.js";
 import { addTraitBonusItems, CUSTOMER_TRAITS } from "../logic/CustomerTraits.js";
@@ -38,7 +39,7 @@ import { getEmergencyLoanOffer } from "../logic/EmergencyLoan.js";
 import { HOVERCART_UPGRADES } from "../logic/Hovercart.js";
 import { solveCratePush } from "../logic/CratePushing.js";
 import { separateOverlappingCrates } from "../logic/CrateSeparation.js";
-import { CheckoutWindow, customerPaysCash } from "../logic/CheckoutWindow.js";
+import { CheckoutWindow, customerPaysCash, EXACT_PAYMENT_CHANCE } from "../logic/CheckoutWindow.js";
 import { FixtureWindow } from "../logic/FixtureWindow.js";
 import { GoBacksWindow } from "../logic/GoBacksWindow.js";
 import { TileRoom } from "../logic/TileRoom.js";
@@ -59,6 +60,9 @@ import { STARTING_FIXTURES, FIXTURE_TYPES, getFixtureType, getFixtureResaleValue
 import { FixtureRegistry } from "../logic/FixtureRegistry.js";
 import { SHOP_LAYOUT_VERSION, validateShopSave } from "../logic/ShopSave.js";
 import { UIWindow } from "../logic/UIWindow.js";
+import { GamepadInput, PAD } from "../logic/GamepadInput.js";
+import { UINavigator } from "../logic/UINavigator.js";
+import { controlLabel, setInputDevice } from "../logic/InputDevice.js";
 import { SaveManager } from "../../SaveManager.js";
 import { database } from "./boot.js"; // the exported DatabaseManager singleton
 import employeeRoster from "../../data/Employees.json" with { type: "json" };
@@ -507,7 +511,15 @@ export class GameScene extends Phaser.Scene {
     // The shift clock's manual pause: freezes time entirely so the player can think.
     this.bindControlKey("keydown-P", "pause", () => this.shiftClock.togglePause());
 
+    // Controller: the same actions as the keys above (see handleGamepad), plus a menu cursor
+    // for every window.
+    this.padInput = new GamepadInput();
+    this.uiNavigator = new UINavigator({
+      onUnhandled: (button) => this.handleUnusedMenuButton(button),
+    });
+
     this.events.once("shutdown", () => {
+      this.uiNavigator.destroy();
       this.eventBus.clear();
       this.debugInfo.destroy();
       this.fixturePlacement.destroy();
@@ -550,6 +562,59 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard.on(eventName, (...args) => {
       if (this.controlMode.allows(action)) callback(...args);
     });
+  }
+
+  /**
+   * One frame of controller input. A screen on top gets it through the menu cursor;
+   * otherwise each button runs the same action as its keyboard key:
+   *   A = E (interact)   X = Space (crate)   Y = Q (go-backs)   Back = I (tablet)
+   *   LB/RB = PageDown/PageUp (zoom)   Start = top bar (pause, start shift, save, ...)
+   *   B = leave the register   left stick / D-pad = walk   triggers = dash
+   * @param {number} time
+   * @param {number} delta
+   */
+  handleGamepad(time, delta) {
+    const pad = this.padInput;
+    pad.poll(time);
+    if (pad.hadInput) setInputDevice("gamepad");
+    const mode = this.controlMode.getMode();
+    if (mode === CONTROL_MODES.LOADING && !this.loadFailed) return;
+
+    if (pad.justPressed(PAD.START)) this.uiNavigator.toggleHud();
+    if (pad.justPressed(PAD.BACK)) {
+      if (this.managerTablet.uiWindow.isOpen) this.managerTablet.uiWindow.close();
+      else if (this.controlMode.allows("tablet")) this.managerTablet.openWindow();
+    }
+    if (this.uiNavigator.handle(pad, delta)) return;
+
+    if (mode === CONTROL_MODES.PLACING) {
+      this.fixturePlacement.handlePad(pad);
+    } else {
+      if (pad.justPressed(PAD.A)) this.handleInteract();
+      if (pad.justPressed(PAD.X) && !this.checkoutWindow.usesSpaceKey()) this.handleCrateInteract();
+      if (pad.justPressed(PAD.Y)) this.openGoBacksBin();
+      if (pad.justPressed(PAD.B) && this.operatingRegister) this.endRegisterSession();
+    }
+    if (pad.justPressed(PAD.LB)) this.handleUnusedMenuButton(PAD.LB);
+    if (pad.justPressed(PAD.RB)) this.handleUnusedMenuButton(PAD.RB);
+  }
+
+  // Buttons the open screen had no use for, e.g. B or Y while ringing up a customer.
+  handleUnusedMenuButton(button) {
+    if (button === PAD.B && this.operatingRegister) this.endRegisterSession();
+    if (button === PAD.Y) this.openGoBacksBin();
+    if ((button === PAD.LB || button === PAD.RB) && this.controlMode.allows("cameraZoom")) {
+      this.zoomCamera(button === PAD.RB ? 1 : -1);
+    }
+  }
+
+  /**
+   * Controller walking for Player.update, or null while a screen has the controller.
+   * @returns {{x: number, y: number, dash: boolean} | null}
+   */
+  getPadMovement() {
+    if (!this.padInput?.connected || this.uiNavigator?.hasScope()) return null;
+    return { ...this.padInput.moveVector(), dash: this.padInput.wantsDash() };
   }
 
   // The camera starts zoomed so the shop the player owns fills the screen. PageUp/PageDown
@@ -782,7 +847,7 @@ export class GameScene extends Phaser.Scene {
         actions: ["register", "goBacks", "interact"],
         range: REGISTER_INTERACT_RANGE,
         priority: 1,
-        hint: "E: Activate Register\nQ: Go-Backs",
+        hint: `${controlLabel("interact")}: Activate Register\n${controlLabel("goBacks")}: Go-Backs`,
         distanceFrom: ({ x, y }) => {
           const bounds = fixture.sprite.getBounds();
           const dx = Math.max(bounds.left - x, 0, x - bounds.right);
@@ -800,8 +865,8 @@ export class GameScene extends Phaser.Scene {
         range: INTERACT_RANGE,
         priority: 1,
         hint: crate.kind === "fixture"
-          ? `${getFixtureType(crate.typeId).name} fixture | Space: Pick up`
-          : `${database.getItem(crate.itemId).name} x${crate.quantity} | Space: Pick up`,
+          ? `${getFixtureType(crate.typeId).name} fixture | ${controlLabel("crate")}: Pick up`
+          : `${database.getItem(crate.itemId).name} x${crate.quantity} | ${controlLabel("crate")}: Pick up`,
         distanceFrom: ({ x, y }) => crate.distanceTo(x, y),
       })));
   }
@@ -942,8 +1007,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   hireEmployee(employeeId) {
-    const employee = employeeRoster.find((candidate) => candidate.id === employeeId);
-    if (!employee) throw new Error(`Unknown employee: ${employeeId}`);
+    const employee = this.playerState.getEmployeeProfile(employeeId);
     if (!this.canHireEmployees()) {
       this.showShopMessage("Staff can only be hired between shifts.");
       return false;
@@ -956,12 +1020,63 @@ export class GameScene extends Phaser.Scene {
       );
       return false;
     }
-    if (!this.playerState.hireEmployee(employeeId, employee.hireCost)) {
+    if (!this.playerState.hireEmployee(employeeId)) {
       this.showShopMessage(`Not enough credits. ${employee.hireCost} credits are required.`);
       return false;
     }
     this.showGameMessage(
       `${employee.name} hired. ${employee.wagePerShift} credits in wages are due at each shift start.`,
+      "#10b981",
+    );
+    this.requestAutosave();
+    return true;
+  }
+
+  fireEmployee(employeeId) {
+    const employee = employeeRoster.find((candidate) => candidate.id === employeeId);
+    if (!employee) throw new Error(`Unknown employee: ${employeeId}`);
+    if (!this.canHireEmployees()) {
+      this.showShopMessage("Staff can only be let go between shifts.");
+      return false;
+    }
+    if (this.playerState.employeeTraining[employeeId]) {
+      this.showShopMessage("Wait until this employee returns from their booked training before letting them go.");
+      return false;
+    }
+    if (!this.playerState.fireEmployee(employeeId)) return false;
+    this.showGameMessage(
+      `${employee.name} has been let go. The hiring cost is not refunded; future shift wages stop.`,
+      "#f59e0b",
+    );
+    this.requestAutosave();
+    return true;
+  }
+
+  getEmployeeTrainingBlockReason(employeeId, jobId) {
+    const offer = getEmployeeTrainingOffer(
+      employeeId, this.playerState.employeeSkills[employeeId], jobId,
+    );
+    if (!this.canHireEmployees()) return "Book employee training between shifts.";
+    if (!this.playerState.hiredEmployees.includes(employeeId)) return "Hire this employee before booking training.";
+    if (this.playerState.employeeTraining[employeeId]) return "This employee already has training booked.";
+    if (!offer) return "This skill is already at Level 5.";
+    if (this.playerState.credits < offer.cost) return `Training costs ${offer.cost} credits.`;
+    return null;
+  }
+
+  trainEmployee(employeeId, jobId) {
+    const reason = this.getEmployeeTrainingBlockReason(employeeId, jobId);
+    if (reason) {
+      this.showShopMessage(reason);
+      return false;
+    }
+    if (!this.playerState.trainEmployee(employeeId, jobId)) {
+      this.showShopMessage("Training is no longer available. Check the employee's skill and your credits.");
+      return false;
+    }
+    const employee = this.playerState.getEmployeeProfile(employeeId);
+    this.showGameMessage(
+      `${employee.name} will be away training next shift. Their ${employee.wagePerShift}-credit wage is still due.`,
       "#10b981",
     );
     this.requestAutosave();
@@ -982,8 +1097,7 @@ export class GameScene extends Phaser.Scene {
   payEmployeeWages() {
     let total = 0;
     for (const employeeId of this.playerState.hiredEmployees) {
-      const employee = employeeRoster.find((candidate) => candidate.id === employeeId);
-      if (!employee) throw new Error(`Unknown hired employee: ${employeeId}`);
+      const employee = this.playerState.getEmployeeProfile(employeeId);
       if (employee.wagePerShift <= 0) continue;
       this.playerState.spendCredits(employee.wagePerShift, {
         category: "wages",
@@ -995,11 +1109,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   spawnHiredEmployees() {
-    this.employees = this.playerState.hiredEmployees.map((employeeId) => {
-      const employee = employeeRoster.find((candidate) => candidate.id === employeeId);
-      if (!employee) throw new Error(`Unknown hired employee: ${employeeId}`);
-      return new Employee(this, employee);
-    });
+    this.employees = this.playerState.hiredEmployees
+      .filter((employeeId) => !this.playerState.employeeTraining[employeeId])
+      .map((employeeId) => new Employee(this, this.playerState.getEmployeeProfile(employeeId)));
   }
 
   clearEmployees() {
@@ -2519,8 +2631,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.operatingRegister || !this.controlMode.allows("interact")) return;
     const customer = this.registerLine[0];
     if (!customer) return;
-    if (this.checkoutWindow.mode === "checkout") this.checkoutWindow.resume();
-    else this.startCheckout(customer);
+    this.startCheckout(customer); // resumes the sale if it's this customer's
   }
 
   // Q at the register. The bin belongs to the register, so you have to be standing there.
@@ -2535,7 +2646,8 @@ export class GameScene extends Phaser.Scene {
     const mode = this.controlMode.getMode();
     const door = (mode === CONTROL_MODES.WALKING || mode === CONTROL_MODES.CARRYING) && this.getNearbyBackroomDoor();
     if (door) {
-      const text = this.playerInBackroom ? "Press E to return to the shop" : "Press E to enter the Backroom";
+      const key = controlLabel("interact");
+      const text = this.playerInBackroom ? `Press ${key} to return to the shop` : `Press ${key} to enter the Backroom`;
       if (this.registerPrompt.text !== text) this.registerPrompt.setText(text);
       this.registerPrompt.setVisible(true).setScale(this.getPopupScale(door.x, door.y));
       // Keep the hint fully inside whatever view the player is in (the backroom window is narrow).
@@ -2583,9 +2695,10 @@ export class GameScene extends Phaser.Scene {
     const wasFront = this.registerLine[0] === customer;
     this.registerLine = this.registerLine.filter((candidate) => candidate !== customer);
     this.layoutRegisterLine();
-    if (!wasFront || !this.operatingRegister) return;
+    if (!wasFront) return;
+    // Also drops a sale the player stepped away from, so it can't be resumed later.
     this.checkoutWindow.close();
-    if (this.registerLine[0]) this.startCheckout(this.registerLine[0]);
+    if (this.operatingRegister && this.registerLine[0]) this.startCheckout(this.registerLine[0]);
   }
 
   // Measured to the nearest edge of the register graphic, so it works from any side and
@@ -2619,8 +2732,9 @@ export class GameScene extends Phaser.Scene {
     if (!this.operatingRegister) return;
 
     this.operatingRegister = false;
-    // The scan UI can't be operated from wherever the player is teleported back to.
-    if (this.checkoutWindow.uiWindow.isOpen) this.checkoutWindow.close();
+    // The scan UI can't be operated from wherever the player is teleported back to. The
+    // sale is set aside, not thrown away, so coming back can't re-roll it.
+    if (this.checkoutWindow.mode === "checkout") this.checkoutWindow.suspend();
     this.goBacksWindow.uiWindow.close();
     this.player.sprite.body.enable = true;
     this.player.inputEnabled = true;
@@ -2823,7 +2937,12 @@ export class GameScene extends Phaser.Scene {
     );
     const allShelfStops = shelves.filter((fixture) => fixture.findAvailableSlot())
       .map((fixture) => ({ fixture, standPoint: fixture.standPoint }));
-    return { ...buyList, shelfStops, allShelfStops };
+    return {
+      ...buyList,
+      itemQuantities: createCustomerItemQuantities([...targetIds]),
+      shelfStops,
+      allShelfStops,
+    };
   }
 
   getItem(itemId) {
@@ -2903,6 +3022,17 @@ export class GameScene extends Phaser.Scene {
     if (!this.isPlayerNearRegister()) return;
     this.beginRegisterSession();
 
+    // Stepping away mid-sale and coming back picks up exactly where it was left.
+    if (this.checkoutWindow.isCheckingOut(customer.cart)) {
+      this.checkoutWindow.resume();
+      return;
+    }
+    // Decided once per customer, so restarting the sale can't change how they pay.
+    customer.checkoutPayment ??= {
+      cash: customerPaysCash(),
+      exact: Math.random() < EXACT_PAYMENT_CHANCE,
+    };
+
     this.checkoutWindow.openForCustomer(customer.cart, () => {
       const total = customer.completeSale();
       this.eventBus.emit(GAME_EVENTS.CUSTOMER_SALE_COMPLETED, { customer, total });
@@ -2918,7 +3048,8 @@ export class GameScene extends Phaser.Scene {
         this.checkoutWindow.close();
       }
     }, {
-      cash: customerPaysCash(),
+      cash: customer.checkoutPayment.cash,
+      exact: customer.checkoutPayment.exact,
       onWrongChange: () => this.playerState.subReputation(1),
     });
   }
@@ -2926,6 +3057,7 @@ export class GameScene extends Phaser.Scene {
   completeEmployeeCheckout(employee, customer) {
     if (this.operatingRegister || this.registerLine[0] !== customer ||
       employee.currentJob?.customer !== customer) return false;
+    if (this.checkoutWindow.isCheckingOut(customer.cart)) this.checkoutWindow.close();
     const total = customer.completeSale();
     this.eventBus.emit(GAME_EVENTS.CUSTOMER_SALE_COMPLETED, { customer, total });
     this.showFloatingText(
@@ -2943,6 +3075,7 @@ export class GameScene extends Phaser.Scene {
   // --- Frame update and shift flow ---
 
   update(time, delta) {
+    this.handleGamepad(time, delta);
     this.fixturePlacement.update();
     for (const crate of this.restockCrates) crate.updateThrow(delta);
     this.separateStuckCrates();

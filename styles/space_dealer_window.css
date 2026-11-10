@@ -255,14 +255,109 @@ main {
   display: none;
 }
 
-.tablet-placeholder {
+.handbook {
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-muted);
+  min-height: 0;
+  overflow-y: auto;
+  color: var(--color-text-main);
   font-size: var(--font-size-13);
-  letter-spacing: 2px;
+  line-height: 1.5;
+}
+
+.handbook-topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--color-panel);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.handbook-topic-btn {
+  font-size: var(--font-size-11);
+}
+
+.handbook-page {
+  padding: 12px 16px 24px;
+  max-width: 70ch;
+}
+
+.handbook-page h2 {
+  margin-bottom: 4px;
+  color: var(--color-border-active);
+  font-size: var(--font-size-18);
+  letter-spacing: 1px;
+}
+
+.handbook-back-btn {
+  margin-top: 20px;
+  font-size: var(--font-size-11);
+}
+
+.handbook-scroll-hint {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-11);
+}
+
+.handbook-section {
+  margin-top: 18px;
+}
+
+.handbook-section h3 {
+  margin-bottom: 6px;
+  padding-bottom: 3px;
+  border-bottom: 1px dashed var(--color-border-subtle);
+  color: #facc15;
+  font-size: var(--font-size-14);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.handbook-section p {
+  margin: 6px 0;
+}
+
+.handbook-section ul {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+
+.handbook-section li {
+  margin: 4px 0;
+}
+
+.handbook-section strong {
+  color: #f8fafc;
+}
+
+.handbook-callout {
+  padding: 8px 10px;
+  border-left: 3px solid var(--color-border-active);
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.handbook-table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+  font-size: var(--font-size-12);
+}
+
+.handbook-table th,
+.handbook-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  text-align: left;
+  vertical-align: top;
+}
+
+.handbook-table th {
+  color: var(--color-text-muted);
+  letter-spacing: 1px;
+}
+
+.handbook-level-reached td {
+  color: #4ade80;
 }
 
 .retro-slot {
@@ -1121,9 +1216,31 @@ button {
   box-shadow: 0 0 10px var(--color-border-active);
 }
 
-.cash-piece {
-  padding: 10px;
-  margin: 3px;
+.cash-pile-item {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: 3px 4px;
+  vertical-align: top;
+}
+
+.cash-piece.cash-bill {
+  width: 40px;
+  height: 70px;
+  outline: 1px dashed #86a899;
+  outline-offset: -5px;
+}
+
+.cash-piece.cash-coin {
+  width: 44px;
+  height: 44px;
+}
+
+.cash-pile-count {
+  color: var(--color-text-main);
+  font-size: var(--font-size-12);
+  font-weight: bold;
 }
 
 .cash-hand-over {
@@ -1225,6 +1342,40 @@ button {
   list-style: none;
 }
 
+.employee-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.employee-staff-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.employee-staff-row > button {
+  align-self: flex-end;
+}
+
+.employee-training-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px dashed var(--color-border-subtle);
+  font-size: var(--font-size-11);
+}
+
+.employee-training-confirmation,
+.employee-fire-confirmation {
+  padding: 8px;
+  border: 1px dashed var(--color-border-active);
+  font-size: var(--font-size-11);
+}
+
 .employee-job-priority {
   display: flex;
   align-items: center;
@@ -1245,7 +1396,9 @@ button {
   font-size: var(--font-size-10);
 }
 
-[data-hire-employee-id]:disabled {
+[data-hire-employee-id]:disabled,
+[data-fire-employee-id]:disabled,
+[data-train-employee-id]:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
@@ -1818,7 +1971,7 @@ button {
   place-items: center;
   background: rgba(4, 8, 16, 0.78);
   pointer-events: none;
-  animation: shift-closing 3.2s ease both;
+  animation: shift-closing 5s ease both;
 }
 
 .shift-closing-panel {
@@ -1850,14 +2003,18 @@ button {
 }
 
 @keyframes shift-closing {
-  0%, 12% { opacity: 0; }
-  24%, 72% { opacity: 1; }
+  0% { opacity: 0; }
+  8%, 84% { opacity: 1; }
   100% { opacity: 0; }
+}
+
+@keyframes shift-closing-still {
+  from, to { opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .shift-closing-overlay {
-    animation-duration: 1ms;
+    animation-name: shift-closing-still;
   }
 }
 
@@ -2100,4 +2257,26 @@ button {
   padding: 14px 22px;
   border-top: 1px solid var(--color-border-subtle);
   background: var(--color-panel);
+}
+
+/* ---- Controller ---- */
+/* Prompts that only make sense on one input device; body[data-input-device] follows whichever was used last. */
+body:not([data-input-device="gamepad"]) .pad-only {
+  display: none !important;
+}
+
+body[data-input-device="gamepad"] .kbd-only {
+  display: none !important;
+}
+
+/* The controller's menu cursor. Drawn inside the edge, so a neighbouring button can't cover it. */
+.pad-focus {
+  outline: 3px solid #facc15 !important;
+  outline-offset: -3px;
+  box-shadow: inset 0 0 10px rgba(250, 204, 21, 0.7) !important;
+}
+
+/* Start opened the top bar for the controller. */
+#persistent-hud.pad-hud-open {
+  box-shadow: 0 0 0 2px #facc15, 0 0 14px rgba(250, 204, 21, 0.5);
 }

@@ -19,7 +19,7 @@ These are the facts that drive every recommendation below:
   shelf slots, storage lockers, the Go-Backs bin, customer carts, and employee backpacks.
 - **The game is UI-heavy.** The Manager's Tablet already has 5 working tabs, with
   the Employee tab now supporting hiring and staff information. Finances and Handbook
-  remain to come. Add checkout, Go-Backs, fixtures, dialogue, settings, and "God Window"
+  are built. Add checkout, Go-Backs, fixtures, dialogue, settings, and "God Window"
   tutorials.
 - **Many systems react to the same moments.** A sale or an angry customer touches
   reputation, money, sound, floating text, debug logs, the shift summary, and (soon)
@@ -233,6 +233,18 @@ Doors and employees can use the same system when those interactions are added.
 
 **Key rebinding.** Map actions (`Interact`, `PickUp`, `OpenTablet`) to keys in one table.
 Steam players expect rebinding, and it's nearly free with an action map.
+
+**Controller input (implemented).** `GamepadInput` polls the browser Gamepad API once per
+frame (all pads merged, deadzone, menu-direction repeat). In the world, `game.js
+handleGamepad` maps buttons onto the same actions as the keys (A = interact, X = crate,
+Y = Go-Backs, B = leave register, Back = tablet, Start = top bar). Every DOM screen uses
+`UINavigator`, a menu cursor that fakes the mouse events a real click sends, so windows
+need no controller-specific code. Screens can opt in with `data-pad-autofocus`,
+`data-pad-world` (the controller drives the world, as in fixture placement),
+`data-pad-back="world"`, and the cancelable `pad-alt` event (Y). `InputDevice` tracks the
+last-used device: `controlLabel()` names the right key or button in prompts, and CSS hides
+`.kbd-only` / `.pad-only` text for the other device. A future rebinding table should cover
+both key and button maps.
 
 ---
 

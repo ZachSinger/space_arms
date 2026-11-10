@@ -464,6 +464,42 @@ test("customers stand looking at a shelf for a moment before taking anything", (
   assert.equal(customer.state, "SEEK_REGISTER");
 });
 
+test("customers fill multiple identical wants across shelf placements and shelves without overbuying", () => {
+  const first = fixture({ x: 100, y: 100 }, [
+    { itemId: "wanted", quantity: 1 }, { itemId: "wanted", quantity: 1 },
+  ]);
+  const second = fixture({ x: 200, y: 100 }, [{ itemId: "wanted", quantity: 5 }]);
+  const plan = {
+    primaryItemIds: ["wanted"], bonusItemIds: [], matchingAmmoIdsByFirearm: {},
+    itemQuantities: { wanted: 3 },
+    shelfStops: [first, second].map((shelf) => ({ fixture: shelf, standPoint: shelf.standPoint })),
+  };
+  const { customer, inventoryTransfers } = makeCustomer({ factionId: null, plan });
+  customer.visitNextShelf("primary");
+  assert.deepEqual(customer.cart, Array.from({ length: 3 }, () => ({ itemId: "wanted", price: 10 })));
+  assert.deepEqual(first.placements.map(({ quantity }) => quantity), [0, 0]);
+  assert.equal(second.placements[0].quantity, 4);
+  assert.equal(customer.getRemainingUnitsFor("wanted"), 0);
+  assert.equal(inventoryTransfers.reduce((sum, { quantity }) => sum + quantity, 0), 3);
+  assert.equal(customer.cart.reduce((sum, { price }) => sum + price, 0), 30);
+});
+
+test("multiple-item shopping takes only available stock and does not buy overpriced multiples", () => {
+  for (const price of [10, 200]) {
+    const shelf = fixture({ x: 100, y: 100 }, [{ itemId: "wanted", quantity: 2 }]);
+    const plan = {
+      primaryItemIds: ["wanted"], bonusItemIds: [], matchingAmmoIdsByFirearm: {},
+      itemQuantities: { wanted: 3 },
+      shelfStops: [{ fixture: shelf, standPoint: shelf.standPoint }],
+    };
+    const { customer } = makeCustomer({ factionId: null, plan });
+    customer.scene.getStorePrice = () => price;
+    customer.visitNextShelf("primary");
+    assert.equal(customer.cart.length, price === 10 ? 2 : 0);
+    assert.equal(shelf.placements[0].quantity, price === 10 ? 0 : 2);
+  }
+});
+
 test("a customer stops looking at a shelf if it sells out during the pause", () => {
   const shelf = fixture({ x: 100, y: 100 }, [{ itemId: "wanted", quantity: 1 }]);
   const plan = {

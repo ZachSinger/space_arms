@@ -79,7 +79,8 @@ export class GoBacksWindow {
     );
 
     this.bodyElement.innerHTML = `
-      <div class="fixture-empty-hint">Click an item to load 1 into your hovercart.</div>
+      <div class="fixture-empty-hint kbd-only">Click an item to load 1 into your hovercart.</div>
+      <div class="fixture-empty-hint pad-only">Press A on an item to load 1 into your hovercart.</div>
       <div class="retro-slot custom-scrollbar fixture-stock-list" style="padding: 10px; display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow-y: auto;">
         ${binRows || `<div class="fixture-empty-hint">The bin is empty.</div>`}
       </div>

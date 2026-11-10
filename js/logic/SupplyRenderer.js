@@ -48,6 +48,7 @@ export class SupplyRenderer {
     if (entries.length === 0) {
       html += `<div style="color: var(--color-text-muted); text-align: center; padding: 20px;">No Supplier Licenses signed yet -- sign one in the Contracts tab first.</div>`;
     } else {
+      html += `<div class="pad-only" style="color: var(--color-text-muted); font-size: 0.85em;">Press A on an item to add a crate of it to the order. Press X to take one off.</div>`;
       entries.forEach(({ item, quantity, shelf, cost }) => {
         const count = order.get(item.id) || 0;
         const status = getShelfStatus(shelf);
@@ -56,7 +57,7 @@ export class SupplyRenderer {
           : `<div class="item-icon"></div>`;
 
         html += `
-          <div class="item-card${count > 0 ? " supply-card-ordered" : ""}${status ? ` supply-card-shelf-${status.level}` : ""}">
+          <div class="item-card${count > 0 ? " supply-card-ordered" : ""}${status ? ` supply-card-shelf-${status.level}` : ""}" data-pad-row="${item.id}">
             ${iconHTML}
             <div class="item-details">
               ${status ? `<div class="supply-shelf-badge supply-shelf-${status.level}">${status.label}</div>` : ""}
@@ -67,9 +68,9 @@ export class SupplyRenderer {
               <div class="supply-card-row">
                 <span class="supply-crate-price">${cost} credits per crate of 5</span>
                 <div class="supply-crate-stepper">
-                  <button class="action-btn" data-supply-remove="${item.id}" aria-label="Remove one ${item.name} crate"${count > 0 ? "" : " disabled"}>-</button>
+                  <button class="action-btn" data-supply-remove="${item.id}" data-pad-x aria-label="Remove one ${item.name} crate"${count > 0 ? "" : " disabled"}>-</button>
                   <span class="supply-crate-count" aria-label="${item.name} crates in order">${count}</span>
-                  <button class="action-btn" data-supply-add="${item.id}" aria-label="Add one ${item.name} crate"${orderFull ? " disabled" : ""}>+</button>
+                  <button class="action-btn" data-supply-add="${item.id}" data-pad-a aria-label="Add one ${item.name} crate"${orderFull ? " disabled" : ""}>+</button>
                 </div>
               </div>
             </div>

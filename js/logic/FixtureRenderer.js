@@ -129,7 +129,7 @@ export class FixtureRenderer {
       ${pendingPlacement ? "" : this.hovercartSectionHTML(
         hovercart,
         this.shelfHovercartRowsHTML(hovercart, shelfFixture, databaseManager),
-        "Click an item to place it on this shelf",
+        `<span class="kbd-only">Click an item to place it on this shelf</span><span class="pad-only">Press A on an item to place it on this shelf</span>`,
       )}
     `;
   }
@@ -174,7 +174,8 @@ export class FixtureRenderer {
     return `
       <div class="fixture-placement-toolbar">
         <span class="fixture-placement-label">${pendingPlacement.moving ? "Moving" : "Placing"}: ${item.name}${pendingPlacement.rotated ? " (rotated)" : ""}</span>
-        <span class="fixture-placement-keys">R to turn it. Esc to cancel.</span>
+        <span class="fixture-placement-keys kbd-only">R to turn it. Esc to cancel.</span>
+        <span class="fixture-placement-keys pad-only">Y to turn it. B to cancel.</span>
       </div>
     `;
   }
@@ -189,6 +190,10 @@ export class FixtureRenderer {
    */
   static placementGridHTML(shelfFixture, pendingPlacement, databaseManager) {
     const { w, h } = shelfFixture.displayGrid;
+    // Controller cursor starts on the stack's old spot when moving, else the first free cell.
+    let autofocusCell = pendingPlacement?.moving
+      ? `${pendingPlacement.origin.gx},${pendingPlacement.origin.gy}`
+      : null;
 
     const cells = [];
     for (let gy = 0; gy < h; gy += 1) {
@@ -205,7 +210,11 @@ export class FixtureRenderer {
           continue;
         }
 
-        const hoverAttr = pendingPlacement ? `data-grid-cell="${gx},${gy}"` : "";
+        const cellKey = `${gx},${gy}`;
+        if (pendingPlacement && !autofocusCell) autofocusCell = cellKey;
+        const hoverAttr = pendingPlacement
+          ? `data-grid-cell="${cellKey}"${autofocusCell === cellKey ? " data-pad-autofocus" : ""}`
+          : "";
         cells.push(`
           <div class="fixture-cell fixture-cell-empty" style="grid-column: ${gx + 1} / span 1; grid-row: ${gy + 1} / span 1;"
             ${hoverAttr}></div>

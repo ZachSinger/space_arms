@@ -121,6 +121,18 @@ test("cash customers hand over money once scanning ends, with no total to key in
     '1.23 - <span class="checkout-paid">5.00</span>');
 });
 
+test("the held scan gesture is released before customer cash can be swept up", (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const h = harness();
+  h.checkout.isScanning = true;
+  h.checkout.beginPayment();
+  assert.equal(h.checkout.paymentStage, "total");
+  context.mock.timers.tick(1000);
+  assert.equal(h.checkout.paymentStage, "take");
+  assert.equal(h.checkout.isScanning, false);
+  assert.ok(h.checkout.cashPayment.tenderPieces.every(({ taken }) => !taken));
+});
+
 test("exact payment skips counting change once every bill and coin is taken", () => {
   const h = harness({ tender: 1.23 });
   h.checkout.startTakingPayment();
@@ -203,7 +215,7 @@ test("the change drawer shows bare numbers on bills and coins, with no row headi
   assert.match(html, /CURRENT CHANGE/);
   const faces = [...html.matchAll(/class="cash-art"><span>([^<]*)</g)].map((match) => match[1]);
   assert.deepEqual(faces, ["1", "5", "10", "20", "1", "5", "10", "25", "50"]);
-  assert.match(html, /HAND OVER CHANGE \(SPACE\)/);
+  assert.match(html, /HAND OVER CHANGE<span class="kbd-only"> \(SPACE\)<\/span>/);
   assert.match(html, /3\.77 credits/);
   assert.equal((html.match(/data-cash-cents=/g) ?? []).length, 9);
 });

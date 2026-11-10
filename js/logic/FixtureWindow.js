@@ -10,6 +10,7 @@ import { FixtureRenderer } from "./FixtureRenderer.js";
 import { ShelfFixture } from "./ShelfFixture.js";
 import { transferItems } from "./InventoryTransfer.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
+import { getInputDevice } from "./InputDevice.js";
 
 // Mouse travel (px) while held on a shelf placement before it's a drag (move the stack)
 // rather than a click (stock 1 into it).
@@ -84,6 +85,21 @@ export class FixtureWindow {
     // Capture phase on window, so Esc cancels placement before WindowManager closes the window.
     this.handlePlacementKey = (event) => this.handlePlacementKeyDown(event);
     window.addEventListener("keydown", this.handlePlacementKey, true);
+    // Controller Y: turn the item being placed, or pick up the highlighted stack to move it.
+    this.bodyElement.addEventListener("pad-alt", (event) => {
+      if (!this.isShelf()) return;
+      if (this.pendingPlacement) {
+        event.preventDefault();
+        this.rotatePendingPlacement();
+        return;
+      }
+      const cell = event.target.closest?.("[data-placement-index]");
+      const placement = cell && this.fixture.placements[Number(cell.dataset.placementIndex)];
+      if (!placement) return;
+      event.preventDefault();
+      this.hideItemTooltip();
+      this.beginMove(placement);
+    });
     this.dragStart = null;
     this.isDragging = false;
     this.suppressClick = false;
@@ -152,12 +168,15 @@ export class FixtureWindow {
 
     const capacity = this.fixture.getPlacementCapacity(placement);
     const rightClick = placement.quantity <= 0 ? "remove empty slot" : "take 1";
+    const hint = getInputDevice() === "gamepad"
+      ? `A: stock 1 · Y: move · X: ${rightClick}`
+      : `Click: stock 1 · Drag: move · Right-click: ${rightClick}`;
     this.tooltip.replaceChildren(
       Object.assign(document.createElement("div"), { className: "fixture-item-tooltip-name", textContent: item.name }),
       Object.assign(document.createElement("div"), { textContent: `On shelf: ${placement.quantity} / ${capacity}` }),
       Object.assign(document.createElement("div"), {
         className: "fixture-item-tooltip-hint",
-        textContent: `Click: stock 1 · Drag: move · Right-click: ${rightClick}`,
+        textContent: hint,
       }),
     );
     this.tooltip.hidden = false;

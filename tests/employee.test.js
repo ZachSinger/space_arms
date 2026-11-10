@@ -412,6 +412,26 @@ test("the register is the first job when Tavi's priority order puts it first", (
   assert.deepEqual(completedSales, [{ employee, customer }]);
 });
 
+test("trained skills speed up only their own stocking trips, delivery trips, and register service", () => {
+  const { employee } = makeEmployee({ hasRegister: true });
+  employee.data.skillLevels = { stock_shelves: 2, load_storage: 3, register: 5 };
+  employee.destination = { x: 120, y: 20 };
+  for (const [state, expectedSpeed] of [
+    ["TO_STORAGE", 144], ["TO_SHELF", 144], ["TO_RETURN", 144],
+    ["TO_CRATE", 168], ["TO_STORAGE_CRATE", 168], ["TO_BREAKROOM", 120],
+  ]) {
+    employee.state = state;
+    employee.followPath();
+    assert.equal(employee.sprite.body.velocity.x, expectedSpeed);
+    assert.equal(employee.sprite.body.velocity.y, 0);
+  }
+  const customer = { cart: [{ itemId: "amo_01", price: 4 }, { itemId: "amo_01", price: 4 }] };
+  employee.scene.registerLine = [customer];
+  employee.currentJob = { jobId: "register", customer };
+  employee.beginRegisterService();
+  assert.equal(employee.registerServiceRemainingMs, 2000 / 1.8);
+});
+
 test("loading storage moves a delivered crate into a locker and removes an empty crate", () => {
   const { employee, locker } = makeEmployee({
     jobPriorities: ["load_storage", "stock_shelves", "register"],
@@ -491,6 +511,57 @@ test("the employee panel lists all three jobs in the saved priority order", () =
   assert.ok(html.indexOf("2. Run register") < html.indexOf("3. Stock shelves"));
   assert.match(html, /data-employee-priority-job="load_storage"/);
   assert.match(html, /data-employee-priority-job="load_storage" data-employee-priority-direction="1"\s+aria-label/);
+});
+
+test("the employee panel confirms letting staff go and disables it during a shift", () => {
+  const options = {
+    hiredEmployeeIds: ["tavi_stock_clerk"],
+    activeEmployeeIds: [],
+    employeeJobPriorities: { tavi_stock_clerk: ["register", "stock_shelves", "load_storage"] },
+    credits: 1000,
+    canHire: true,
+    shopLevel: 4,
+  };
+  const ready = EmployeeRenderer.generateHTML(options);
+  assert.match(ready, /data-fire-employee-id="tavi_stock_clerk"/);
+  assert.match(ready, />\s*LET GO\s*<\/button>/);
+  const duringShift = EmployeeRenderer.generateHTML({ ...options, canFire: false });
+  assert.match(duringShift, /data-fire-employee-id="tavi_stock_clerk"[\s\S]*?disabled/);
+  assert.match(duringShift, /Let staff go between shifts/);
+
+  const confirming = EmployeeRenderer.generateHTML({
+    ...options,
+    fireConfirmationEmployeeId: "tavi_stock_clerk",
+  });
+  assert.match(confirming, /data-confirm-fire-employee="tavi_stock_clerk"/);
+  assert.match(confirming, /data-cancel-fire-employee/);
+  assert.match(confirming, /hiring cost is not refunded/i);
+});
+
+test("the employee panel shows skill levels, training commitments, and permanent rehiring terms", () => {
+  const options = {
+    hiredEmployeeIds: ["tavi_stock_clerk"], activeEmployeeIds: [],
+    employeeJobPriorities: {}, credits: 1000, canHire: true, shopLevel: 4,
+    employeeSkills: { tavi_stock_clerk: { register: 2, stock_shelves: 1, load_storage: 1 } },
+  };
+  const html = EmployeeRenderer.generateHTML({
+    ...options, trainingConfirmation: { employeeId: "tavi_stock_clerk", jobId: "register" },
+  });
+  assert.match(html, /Run register: Level 2\/5/);
+  assert.match(html, /20% faster register service/);
+  assert.match(html, /375 credits now/);
+  assert.match(html, /After training, wages become 60 credits/);
+  assert.match(html, /Rehiring will cost 375 credits/);
+  assert.match(html, /data-confirm-employee-training/);
+  const booked = EmployeeRenderer.generateHTML({
+    ...options, employeeTraining: { tavi_stock_clerk: "register" },
+  });
+  assert.match(booked, /Away next shift; wages are still paid/);
+  assert.match(booked, /data-fire-employee-id="tavi_stock_clerk"\s+disabled/);
+  assert.match(booked, /data-train-employee-job="register" disabled/);
+  const hireAgain = EmployeeRenderer.generateHTML({ ...options, hiredEmployeeIds: [] });
+  assert.match(hireAgain, /Hiring cost: 313 credits/);
+  assert.match(hireAgain, /Wages: 55 credits per shift/);
 });
 
 test("the employee panel explains the Shop Level 4 requirement before Tavi can be hired", () => {

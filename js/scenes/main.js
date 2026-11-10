@@ -7,6 +7,10 @@ import Phaser from "phaser";
 import { TitleScene } from "./title.js";
 import { GameScene } from "./game.js";
 import { BootScene } from "./boot.js";
+import { watchKeyboardAndMouse } from "../logic/InputDevice.js";
+
+// Touching the keyboard or mouse switches on-screen prompts back from controller buttons.
+watchKeyboardAndMouse();
 
 const config = {
   type: Phaser.AUTO,

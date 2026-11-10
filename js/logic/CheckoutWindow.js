@@ -60,6 +60,8 @@ export class CheckoutWindow {
     this.bodyElement = this.uiWindow.element.querySelector(
       ".retro-window-body",
     );
+    // Controller B steps away from the register instead of clearing the keypad.
+    this.uiWindow.element.dataset.padBack = "world";
     this.onComplete = null;
     this.mode = null; // "checkout" while ringing up a cart
     this.isScanning = false;
@@ -126,6 +128,7 @@ export class CheckoutWindow {
 
   close() {
     this.mode = null;
+    this.cart = null;
     this.onComplete = null;
     this.onWrongChange = null;
     this.cashPayment = null;
@@ -164,21 +167,31 @@ export class CheckoutWindow {
   }
 
   /**
+   * True while this cart's sale is underway, open or set aside.
+   * @param {object[]} cart
+   */
+  isCheckingOut(cart) {
+    return this.mode === "checkout" && this.cart === cart;
+  }
+
+  /**
    * Render and open the register for one customer's cart (also used to switch customers).
    * @param {{ itemId: string, price: number }[]} cart - prices in credits
    * @param {() => void} onComplete - fired when payment and change are correct
-   * @param {{ cash?: boolean, onWrongChange?: () => void }} [options]
+   * @param {{ cash?: boolean, exact?: boolean, onWrongChange?: () => void }} [options]
+   *   exact: the customer pays the exact amount in cash; rolled here if not given
    */
-  openForCustomer(cart, onComplete, { cash = true, onWrongChange = null } = {}) {
+  openForCustomer(cart, onComplete, { cash = true, exact = null, onWrongChange = null } = {}) {
     this.mode = "checkout";
+    this.cart = cart;
     this.onComplete = onComplete;
     this.onWrongChange = onWrongChange;
     this.paymentBuffer = "";
     this.paymentStage = "total";
     this.total = sumMoney(cart.map((entry) => entry.price));
     // Some customers count out the exact amount, coins included, so no change is owed.
-    const exact = cash && Math.random() < EXACT_PAYMENT_CHANCE;
-    this.cashPayment = cash ? new CashPayment(this.total, exact ? this.total : undefined) : null;
+    const isExact = cash && (exact ?? Math.random() < EXACT_PAYMENT_CHANCE);
+    this.cashPayment = cash ? new CashPayment(this.total, isExact ? this.total : undefined) : null;
     this.removeTenderOverlay();
 
     this.bodyElement.innerHTML = CheckoutRenderer.generateHTML(
@@ -393,6 +406,7 @@ export class CheckoutWindow {
   // The customer holds out their cash over a blurred screen. Each piece is taken by clicking
   // it or by holding the mouse button and sweeping over it, like scanning items.
   startTakingPayment() {
+    this.isScanning = false;
     this.paymentStage = "take";
     this.renderTenderOverlay();
   }
@@ -405,7 +419,8 @@ export class CheckoutWindow {
       <div class="cash-tender-panel">
         <div class="cash-tender-title">THE CUSTOMER HANDS YOU ${formatMoney(this.cashPayment.tender).toUpperCase()}</div>
         <div class="cash-tender-area"></div>
-        <div class="cash-tender-hint">Click each bill and coin to take it, or hold the mouse button and sweep across them.</div>
+        <div class="cash-tender-hint kbd-only">Release the mouse button, then click each bill and coin or click and hold to sweep across them.</div>
+        <div class="cash-tender-hint pad-only">Press A on each bill and coin to take it.</div>
       </div>`;
     const area = overlay.querySelector(".cash-tender-area");
     this.cashPayment.tenderPieces.forEach((piece, index) => {
@@ -477,7 +492,10 @@ export class CheckoutWindow {
       element.textContent = `${cash.change.get(Number(element.dataset.cashCount)) ?? 0} in change`;
     });
     const piecesHTML = (pieces) => pieces.map(({ kind, cents, count }) => `
-      <span class="cash-piece cash-${kind}"><span>${count} x ${cashFaceValue({ kind, cents })}</span></span>`).join("");
+      <span class="cash-pile-item">
+        <span class="cash-piece cash-${kind}">${cashFaceValue({ kind, cents })}</span>
+        <span class="cash-pile-count">x${count}</span>
+      </span>`).join("");
     const selected = [...cash.change].map(([cents, count]) => ({
       ...splitCash(cents)[0], count,
     }));

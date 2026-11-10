@@ -22,6 +22,7 @@ function describeLine({ category, label, quantity }) {
     case "equipment": return `Equipment upgrade: ${label}`;
     case "licenses": return `Signed supplier license: ${label}`;
     case "hiring": return `Hired ${label}`;
+    case "training": return `Training: ${label}`;
     case "wages": return `Wages paid to ${label}${quantity > 1 ? ` (${plural(quantity, "shift", "shifts")})` : ""}`;
     case "loans": return "Emergency loan received";
     case "loan_repayments": return `Emergency loan repayment${quantity > 1 ? ` (${plural(quantity, "payment", "payments")})` : ""}`;

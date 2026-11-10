@@ -12,6 +12,7 @@ import { LayoutRenderer } from "./LayoutRenderer.js";
 import { EquipmentRenderer } from "./EquipmentRenderer.js";
 import { EmployeeRenderer } from "./EmployeeRenderer.js";
 import { FinancesRenderer } from "./FinancesRenderer.js";
+import { HandbookRenderer } from "./HandbookRenderer.js";
 import { FixtureHighlight } from "./FixtureHighlight.js";
 import { playErrorBuzz } from "./Sfx.js";
 import { GAME_EVENTS } from "./EventBus.js";
@@ -20,8 +21,7 @@ import { getNextHovercartUpgrade } from "./Hovercart.js";
 import { getFixtureResaleValue, getFixtureType } from "./FixtureLayout.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
-// The bible's full Step 40 tab list (Part 8). Tabs with no system yet render a
-// "COMING SOON" placeholder so the Tablet already has its final shape.
+// The bible's full Step 40 tab list (Part 8).
 const TAB_DEFS = [
   { id: "inventory", label: "Inventory" },
   { id: "employee", label: "Employee" },
@@ -50,6 +50,9 @@ export class ManagerTablet {
     this.fixturePurchaseNotice = "";
     this.fixtureSaleConfirmation = null;
     this.equipmentPurchaseNotice = "";
+    this.handbookTopic = "store";
+    this.employeeFireConfirmationId = null;
+    this.employeeTrainingConfirmation = null;
 
     const tabBarHTML = TAB_DEFS.map(
       ({ id, label }, index) =>
@@ -83,6 +86,8 @@ export class ManagerTablet {
       this.fixturePurchaseNotice = "";
       this.fixtureSaleConfirmation = null;
       this.equipmentPurchaseNotice = "";
+      this.employeeFireConfirmationId = null;
+      this.employeeTrainingConfirmation = null;
       this.fixtureHighlight.reset();
       this.scene.resumeRegisterCheckout();
     };
@@ -97,12 +102,60 @@ export class ManagerTablet {
 
     // Delegated, since panel innerHTML is fully replaced on every playerState change.
     this.bodyElement.addEventListener("click", (event) => {
+      const handbookTopicButton = event.target.closest("[data-handbook-topic]");
+      if (handbookTopicButton) {
+        this.handbookTopic = handbookTopicButton.dataset.handbookTopic;
+        this.refreshHandbookPanel();
+      }
+
       const signButton = event.target.closest("[data-license-id]");
       if (signButton) this.handleSignContract(signButton.dataset.licenseId);
 
       const hireEmployeeButton = event.target.closest("[data-hire-employee-id]");
       if (hireEmployeeButton) {
         this.scene.hireEmployee(hireEmployeeButton.dataset.hireEmployeeId);
+      }
+
+      const fireEmployeeButton = event.target.closest("[data-fire-employee-id]");
+      if (fireEmployeeButton) {
+        this.employeeFireConfirmationId = fireEmployeeButton.dataset.fireEmployeeId;
+        this.employeeTrainingConfirmation = null;
+        this.refreshEmployeePanel();
+      }
+      const confirmFireEmployeeButton = event.target.closest("[data-confirm-fire-employee]");
+      if (confirmFireEmployeeButton) {
+        this.scene.fireEmployee(confirmFireEmployeeButton.dataset.confirmFireEmployee);
+        this.employeeFireConfirmationId = null;
+        this.refreshEmployeePanel();
+      }
+      if (event.target.closest("[data-cancel-fire-employee]")) {
+        this.employeeFireConfirmationId = null;
+        this.refreshEmployeePanel();
+      }
+
+      const trainEmployeeButton = event.target.closest("[data-train-employee-id]");
+      if (trainEmployeeButton) {
+        const employeeId = trainEmployeeButton.dataset.trainEmployeeId;
+        const jobId = trainEmployeeButton.dataset.trainEmployeeJob;
+        const reason = this.scene.getEmployeeTrainingBlockReason(employeeId, jobId);
+        if (reason) this.scene.showShopMessage(reason);
+        else {
+          this.employeeFireConfirmationId = null;
+          this.employeeTrainingConfirmation = { employeeId, jobId };
+          this.refreshEmployeePanel();
+          this.bodyElement.querySelector(".employee-training-confirmation")?.scrollIntoView({ block: "nearest" });
+        }
+      }
+      if (event.target.closest("[data-confirm-employee-training]")) {
+        const training = this.employeeTrainingConfirmation;
+        this.employeeTrainingConfirmation = null;
+        if (training) this.scene.trainEmployee(training.employeeId, training.jobId);
+        else this.scene.showShopMessage("Choose an employee skill to train first.");
+        this.refreshEmployeePanel();
+      }
+      if (event.target.closest("[data-cancel-employee-training]")) {
+        this.employeeTrainingConfirmation = null;
+        this.refreshEmployeePanel();
       }
 
       if (event.target.closest("[data-end-day]") && this.scene.endDay()) this.uiWindow.close();
@@ -262,6 +315,11 @@ export class ManagerTablet {
         employeeJobPriorities: this.playerState.employeeJobPriorities,
         credits: this.playerState.credits,
         canHire: this.scene.canHireEmployees(),
+        canFire: this.scene.canHireEmployees(),
+        fireConfirmationEmployeeId: this.employeeFireConfirmationId,
+        employeeSkills: this.playerState.employeeSkills,
+        employeeTraining: this.playerState.employeeTraining,
+        trainingConfirmation: this.employeeTrainingConfirmation,
         shopLevel: this.playerState.shopLevel,
       });
     }
@@ -277,7 +335,15 @@ export class ManagerTablet {
     if (tabId === "equipment") return EquipmentRenderer.generateHTML(this.playerState, this.equipmentPurchaseNotice);
     if (tabId === "layout") return LayoutRenderer.generateHTML(this.scene);
     if (tabId === "finances") return FinancesRenderer.generateHTML(this.scene.getFinancesView());
-    return `<div class="tablet-placeholder">COMING SOON</div>`;
+    if (tabId === "handbook") {
+      return HandbookRenderer.generateHTML({
+        topic: this.handbookTopic,
+        shopLevel: this.playerState.shopLevel,
+        reputation: this.playerState.globalReputation,
+        licenses: database.getAllLicenses(),
+      });
+    }
+    throw new Error(`Unknown tablet tab: ${tabId}`);
   }
 
   switchTab(tabId) {
@@ -286,12 +352,15 @@ export class ManagerTablet {
     this.fixturePurchaseNotice = "";
     this.fixtureSaleConfirmation = null;
     this.equipmentPurchaseNotice = "";
+    this.employeeFireConfirmationId = null;
+    this.employeeTrainingConfirmation = null;
     if (tabId === "inventory") this.refreshInventoryPanel();
     if (tabId === "employee") this.refreshEmployeePanel();
     if (tabId === "supply") this.refreshSupplyPanel();
     if (tabId === "layout" || tabId === "fixtures") this.refreshLayoutPanels();
     if (tabId === "equipment") this.refreshEquipmentPanel();
     if (tabId === "finances") this.refreshFinancesPanel();
+    if (tabId === "handbook") this.refreshHandbookPanel();
     this.bodyElement.querySelectorAll(".tablet-tab-btn").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.tab === tabId);
     });
@@ -340,7 +409,10 @@ export class ManagerTablet {
 
   refreshEmployeePanel() {
     const panel = this.bodyElement.querySelector('[data-tab-panel="employee"]');
-    if (panel) panel.innerHTML = this.renderPanelContent("employee");
+    if (!panel) return;
+    const scrollTop = panel.querySelector(".employee-panel")?.scrollTop ?? 0;
+    panel.innerHTML = this.renderPanelContent("employee");
+    panel.querySelector(".employee-panel").scrollTop = scrollTop;
   }
 
   refreshEquipmentPanel() {
@@ -351,6 +423,11 @@ export class ManagerTablet {
   refreshFinancesPanel() {
     const panel = this.bodyElement.querySelector('[data-tab-panel="finances"]');
     if (panel) panel.innerHTML = this.renderPanelContent("finances");
+  }
+
+  refreshHandbookPanel() {
+    const panel = this.bodyElement.querySelector('[data-tab-panel="handbook"]');
+    if (panel) panel.innerHTML = this.renderPanelContent("handbook");
   }
 
   refreshSupplyPanel() {
@@ -500,6 +577,7 @@ export class ManagerTablet {
   openWindow() {
     if (this.scene.startingShift || this.scene.fixturePlacement?.active || this.scene.loadFailed) return;
     this.refreshInventoryPanel();
+    this.refreshEmployeePanel();
     this.refreshSupplyPanel(); // loading pad spots free up without any playerState change
     this.refreshLayoutPanels();
     this.refreshEquipmentPanel();

@@ -7,6 +7,7 @@ import { transferItems } from "./InventoryTransfer.js";
 import { getFixtureType } from "./FixtureLayout.js";
 import { pickRandomCustomerCharacter } from "./CustomerSprites.js";
 import { EMPLOYEE_JOB_IDS } from "./EmployeeJobs.js";
+import { getEmployeeJobSpeed } from "./EmployeeTraining.js";
 
 const WALK_SPEED = 120;
 const DISPLAY_WIDTH = 46;
@@ -249,7 +250,11 @@ export class Employee {
       this.arriveAtDestination();
       return;
     }
-    this.sprite.body.setVelocity((dx / distance) * WALK_SPEED, (dy / distance) * WALK_SPEED);
+    const jobId = ["TO_STORAGE", "TO_SHELF", "TO_RETURN"].includes(this.state)
+      ? "stock_shelves"
+      : ["TO_CRATE", "TO_STORAGE_CRATE"].includes(this.state) ? "load_storage" : null;
+    const speed = WALK_SPEED * (jobId ? getEmployeeJobSpeed(this.data.skillLevels, jobId) : 1);
+    this.sprite.body.setVelocity((dx / distance) * speed, (dy / distance) * speed);
   }
 
   arriveAtDestination() {
@@ -395,7 +400,7 @@ export class Employee {
     this.registerServiceRemainingMs = Math.max(
       REGISTER_SERVICE_MS_PER_ITEM,
       customer.cart.length * REGISTER_SERVICE_MS_PER_ITEM,
-    );
+    ) / getEmployeeJobSpeed(this.data.skillLevels, "register");
     this.state = "SERVING_REGISTER";
   }
 

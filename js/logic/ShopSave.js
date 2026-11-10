@@ -6,6 +6,7 @@
 import { getFixtureType, getShelfDisplayGrid, getShelfSlotCapacity, isValidFixtureRotation, migrateFixtureEntry } from "./FixtureLayout.js";
 import employeeRoster from "../../data/Employees.json" with { type: "json" };
 import { EMPLOYEE_JOB_IDS } from "./EmployeeJobs.js";
+import { MAX_EMPLOYEE_SKILL_LEVEL } from "./EmployeeTraining.js";
 import { BACKROOM_GRID_Y, TILE_SIZE, ZONES, getAuthoredGridSize, isBackroomRow } from "./RoomLayout.js";
 import { MIN_BASE_RATIO, MAX_BASE_RATIO, MIN_SUPPLY_RATIO, MAX_SUPPLY_RATIO } from "./Market.js";
 import { THROW_ACCELERATION_MS } from "./Crate.js";
@@ -138,6 +139,22 @@ export function validateShopSave(data, database) {
           new Set(priorities).size === EMPLOYEE_JOB_IDS.length &&
           priorities.every((jobId) => EMPLOYEE_JOB_IDS.includes(jobId));
       }), "invalid employee job priorities.");
+  }
+  if (player.employeeSkills !== undefined) {
+    requireSave(isRecord(player.employeeSkills) &&
+      Object.entries(player.employeeSkills).every(([employeeId, levels]) =>
+        employeeRoster.some(({ id }) => id === employeeId) && isRecord(levels) &&
+        Object.keys(levels).length === EMPLOYEE_JOB_IDS.length &&
+        EMPLOYEE_JOB_IDS.every((jobId) =>
+          integer(levels[jobId], 1) && levels[jobId] <= MAX_EMPLOYEE_SKILL_LEVEL)),
+    "invalid employee skills.");
+  }
+  if (player.employeeTraining !== undefined) {
+    requireSave(isRecord(player.employeeTraining) &&
+      Object.entries(player.employeeTraining).every(([employeeId, jobId]) =>
+        (player.hiredEmployees ?? []).includes(employeeId) && EMPLOYEE_JOB_IDS.includes(jobId) &&
+        (player.employeeSkills?.[employeeId]?.[jobId] ?? 1) < MAX_EMPLOYEE_SKILL_LEVEL),
+    "invalid employee training.");
   }
   requireSave(isRecord(player.factionReputation) &&
     CUSTOMER_FACTION_IDS.every((id) => integer(player.factionReputation[id])),

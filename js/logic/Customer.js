@@ -234,12 +234,14 @@ export class Customer {
   }
 
   getRemainingUnitsFor(itemId) {
-    return this.cart.some((entry) => entry.itemId === itemId) ? 0 : 1;
+    const wanted = this.shoppingPlan.itemQuantities?.[itemId] ?? 1;
+    const pickedUp = this.cart.filter((entry) => entry.itemId === itemId).length;
+    return Math.max(0, wanted - pickedUp);
   }
 
   add(itemId, quantity) {
     const accepted = Math.min(quantity, this.getRemainingUnitsFor(itemId));
-    if (accepted > 0) {
+    for (let index = 0; index < accepted; index += 1) {
       this.cart.push({ itemId, price: this.scene.getStorePrice(itemId) });
     }
     return accepted;
@@ -385,7 +387,7 @@ export class Customer {
     onDone?.();
   }
 
-  // Buys one of each wanted item stocked here at an acceptable price, then moves on.
+  // Fill each wanted quantity from this shelf before trying the next shelf.
   shopAtCurrentShelf() {
     for (const itemId of this.phaseItemIds) {
       if (this.shoppingPhase === "bonus") this.bonusAttempted.add(itemId);
@@ -393,27 +395,33 @@ export class Customer {
         placement.itemId === itemId && placement.quantity > 0,
       );
       if (placements.length === 0) continue;
-      if (this.cart.some((entry) => entry.itemId === itemId)) continue;
-      // Mercenaries won't buy a second firearm of a type they already picked up.
+      if (this.getRemainingUnitsFor(itemId) === 0) continue;
+      // Mercenaries can buy multiples, but not a different firearm of the same type.
       if (this.shoppingPhase === "bonus" && this.factionId === "mercenaries" &&
+        !this.cart.some((entry) => entry.itemId === itemId) &&
         this.purchasedFirearms.has(this.scene.getItem(itemId)?.tags.find((tag) =>
           ["Pistol", "Rifle", "Heavy"].includes(tag),
         ))) continue;
 
-      const placement = placements.find((candidate) => this.acceptsPrice(itemId));
-      if (!placement) {
+      if (!this.acceptsPrice(itemId)) {
         this.showReaction("price-too-high", "disappointed");
         this.priceRejectedItemIds.add(itemId);
         continue;
       }
 
-      const transfer = transferItems(this.fixture, this, itemId, 1, {
-        sourceEntry: placement,
-        eventBus: this.scene.eventBus,
-        sourceName: "shelf",
-        destinationName: "customer-cart",
-      });
-      if (transfer.moved === 0) continue;
+      let moved = 0;
+      for (const placement of placements) {
+        const remaining = this.getRemainingUnitsFor(itemId);
+        if (remaining === 0) break;
+        const transfer = transferItems(this.fixture, this, itemId, remaining, {
+          sourceEntry: placement,
+          eventBus: this.scene.eventBus,
+          sourceName: "shelf",
+          destinationName: "customer-cart",
+        });
+        moved += transfer.moved;
+      }
+      if (moved === 0) continue;
       this.scene.refreshShelfStockDisplay?.(this.fixture);
       if (this.scene.getStorePrice(itemId) <=
         this.scene.market.getPrice(itemId) * BARGAIN_PRICE_RATIO) {
@@ -439,7 +447,7 @@ export class Customer {
       ids.push(...(this.shoppingPlan.matchingAmmoIdsByFirearm?.[firearmId] || []));
     }
     return [...new Set(ids)].filter((id) =>
-      !this.cart.some((entry) => entry.itemId === id),
+      this.getRemainingUnitsFor(id) > 0,
     );
   }
 

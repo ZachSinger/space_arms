@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   addDiscountBonusItem, createCustomerBuyList, CUSTOMER_BUY_LIST_TUNING,
   BARGAIN_PRICE_RATIO, DISCOUNT_BONUS_CHANCE,
+  createCustomerItemQuantities,
 } from "../js/logic/CustomerBuyLists.js";
 
 const catalog = [
@@ -19,6 +20,17 @@ const catalog = [
   { id: "new_rifle", name: "New Rifle", tags: ["Firearm", "New", "Rifle"] },
 ];
 const getItem = (itemId) => catalog.find((item) => item.id === itemId);
+
+test("customers can want one, two, or three of each item without rerolling duplicate item ids", () => {
+  for (const [roll, quantity] of [[0, 1], [0.49, 1], [0.5, 2], [0.84, 2], [0.85, 3], [1, 3]]) {
+    let rolls = 0;
+    assert.deepEqual(createCustomerItemQuantities(["tool", "tool", "survival"], () => {
+      rolls += 1;
+      return roll;
+    }), { tool: quantity, survival: quantity });
+    assert.equal(rolls, 2);
+  }
+});
 
 test("reputation thresholds stay unset and neutral customers want a shelf-assigned item", () => {
   assert.deepEqual(CUSTOMER_BUY_LIST_TUNING.reputationPrimaryThresholds, []);
