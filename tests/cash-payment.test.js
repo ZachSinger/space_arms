@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CashPayment, CASH_DENOMINATIONS, splitCash } from "../js/logic/CashPayment.js";
+import {
+  CashPayment, CASH_DENOMINATIONS, M_SCRIP_DENOMINATIONS, creditCentsToScrips,
+  formatCashAmount, splitCash,
+} from "../js/logic/CashPayment.js";
 import { formatMoney, fromCents, isMoney, roundMoney, sumMoney, toCents } from "../js/logic/Money.js";
 
 test("money arithmetic and formatting preserve cents without floating-point drift", () => {
@@ -18,16 +21,39 @@ test("money arithmetic and formatting preserve cents without floating-point drif
 });
 
 test("the drawer has the requested bills and coins", () => {
-  assert.deepEqual(CASH_DENOMINATIONS.filter(({ kind }) => kind === "bill").map(({ cents }) => cents),
+  assert.deepEqual(CASH_DENOMINATIONS.filter(({ kind }) => kind === "bill").map(({ units }) => units),
     [100, 500, 1000, 2000]);
-  assert.deepEqual(CASH_DENOMINATIONS.filter(({ kind }) => kind === "coin").map(({ cents }) => cents),
+  assert.deepEqual(CASH_DENOMINATIONS.filter(({ kind }) => kind === "coin").map(({ units }) => units),
     [1, 5, 10, 25, 50]);
+});
+
+test("Scavenger M-Scrip amounts convert at 120 per credit and use bills only", () => {
+  assert.equal(creditCentsToScrips(10000), 12000);
+  assert.equal(creditCentsToScrips(1), 2);
+  assert.equal(formatCashAmount(12000, "m-scrips"), "12,000 M-Scrips");
+  assert.deepEqual(M_SCRIP_DENOMINATIONS.map(({ units }) => units),
+    [1, 5, 10, 25, 50, 100, 500, 1000]);
+  assert.ok(M_SCRIP_DENOMINATIONS.every(({ kind }) => kind === "bill"));
+
+  const payment = new CashPayment(12.34, undefined, "m-scrips");
+  assert.equal(payment.totalUnits, 1481);
+  assert.equal(payment.tenderUnits, 1500);
+  assert.equal(payment.changeDueUnits, 19);
+  assert.ok(payment.tenderPieces.every(({ kind }) => kind === "bill"));
+  for (const { units, count } of splitCash(payment.changeDueUnits, "m-scrips")) {
+    for (let index = 0; index < count; index += 1) payment.adjustChange(units, 1);
+  }
+  assert.equal(payment.changeUnits, 19);
+  assert.equal(payment.handOver().accepted, true);
+  const exact = new CashPayment(100, 12000, "m-scrips");
+  assert.equal(exact.changeDueUnits, 0);
+  assert.equal(exact.handOver().accepted, true);
 });
 
 test("every cent amount can be made from drawer denominations", () => {
   for (let cents = 0; cents <= 5000; cents += 1) {
     const pieces = splitCash(cents);
-    assert.equal(pieces.reduce((sum, piece) => sum + piece.cents * piece.count, 0), cents);
+    assert.equal(pieces.reduce((sum, piece) => sum + piece.units * piece.count, 0), cents);
   }
 });
 
@@ -35,8 +61,8 @@ test("customer cash uses bills and covers cent-priced and large purchases", () =
   for (const total of [0, 1, 1.01, 4.99, 10, 19.99, 20, 20.01, 89.73, 10000.99]) {
     const cash = new CashPayment(total);
     assert.ok(cash.tender >= total);
-    assert.ok(cash.changeDueCents < 2000);
-    assert.ok(splitCash(cash.tenderCents).every(({ kind }) => kind === "bill"));
+    assert.ok(cash.changeDueUnits < 2000);
+    assert.ok(splitCash(cash.tenderUnits).every(({ kind }) => kind === "bill"));
   }
   assert.throws(() => new CashPayment(-1), /negative/);
   assert.throws(() => new CashPayment(10, 5), /cover/);
@@ -45,11 +71,11 @@ test("customer cash uses bills and covers cent-priced and large purchases", () =
 test("click adds, right-click removes, and the drawer never runs out", () => {
   const cash = new CashPayment(12.34, 20);
   cash.adjustChange(100, -1);
-  assert.equal(cash.changeCents, 0);
+  assert.equal(cash.changeUnits, 0);
   for (let i = 0; i < 100; i += 1) cash.adjustChange(100, 1);
   cash.adjustChange(100, -1);
   assert.equal(cash.change.get(100), 99);
-  assert.equal(cash.changeCents, 9900);
+  assert.equal(cash.changeUnits, 9900);
   assert.throws(() => cash.adjustChange(2, 1), /Invalid drawer/);
 });
 
@@ -58,13 +84,13 @@ test("wrong change is refused, first mistake warns, later mistakes penalize", ()
   assert.deepEqual(cash.handOver(), { accepted: false, penalty: false });
   assert.deepEqual(cash.handOver(), { accepted: false, penalty: true });
   assert.deepEqual(cash.handOver(), { accepted: false, penalty: true });
-  for (const { cents, count } of splitCash(cash.changeDueCents)) {
-    for (let i = 0; i < count; i += 1) cash.adjustChange(cents, 1);
+  for (const { units, count } of splitCash(cash.changeDueUnits)) {
+    for (let i = 0; i < count; i += 1) cash.adjustChange(units, 1);
   }
-  assert.equal(cash.changeCents, 766);
+  assert.equal(cash.changeUnits, 766);
   assert.deepEqual(cash.handOver(), { accepted: true, penalty: false });
   assert.deepEqual(cash.handOver(), { accepted: false, penalty: false });
   cash.adjustChange(1, 1);
-  assert.equal(cash.changeCents, 766);
+  assert.equal(cash.changeUnits, 766);
   assert.equal(new CashPayment(20, 20).handOver().accepted, true);
 });

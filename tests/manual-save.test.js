@@ -591,7 +591,7 @@ test("stepping away from the register mid-sale and coming back resumes the same 
   assert.equal(checkout.openedCarts.length, 1, "not started over");
 });
 
-test("a customer's way of paying is picked once, even if their sale is started over", () => {
+test("a customer's payment type is picked once, even if their sale is started over", () => {
   const { scene, checkout } = createRegisterHarness();
   const options = [];
   const open = checkout.openForCustomer;
@@ -604,8 +604,9 @@ test("a customer's way of paying is picked once, even if their sale is started o
   checkout.mode = null; // the sale was thrown away
   scene.startCheckout(customer);
   assert.equal(options.length, 2);
-  assert.equal(options[1].cash, options[0].cash);
+  assert.equal(options[1].paymentType, options[0].paymentType);
   assert.equal(options[1].exact, options[0].exact);
+  assert.equal(options[1].chitCode, options[0].chitCode);
 });
 
 test("a customer leaving while the tablet is open cannot leave a stale checkout to resume", () => {

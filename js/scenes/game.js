@@ -39,7 +39,8 @@ import { getEmergencyLoanOffer } from "../logic/EmergencyLoan.js";
 import { HOVERCART_UPGRADES } from "../logic/Hovercart.js";
 import { solveCratePush } from "../logic/CratePushing.js";
 import { separateOverlappingCrates } from "../logic/CrateSeparation.js";
-import { CheckoutWindow, customerPaysCash, EXACT_PAYMENT_CHANCE } from "../logic/CheckoutWindow.js";
+import { CheckoutWindow } from "../logic/CheckoutWindow.js";
+import { chooseCustomerPayment } from "../logic/CustomerPayment.js";
 import { FixtureWindow } from "../logic/FixtureWindow.js";
 import { GoBacksWindow } from "../logic/GoBacksWindow.js";
 import { TileRoom } from "../logic/TileRoom.js";
@@ -507,6 +508,9 @@ export class GameScene extends Phaser.Scene {
     // Debug-only: lets one random customer in right away.
     this.bindControlKey("keydown-Y", "debug", () => this.spawnCustomer(null));
 
+    // Debug-only: skip the opening setup with a stocked shelf and a third locker.
+    this.bindControlKey("keydown-K", "debug", () => this.debugQuickstart());
+
     // The shift clock's manual pause: freezes time entirely so the player can think.
     this.bindControlKey("keydown-P", "pause", () => this.shiftClock.togglePause());
 
@@ -583,6 +587,19 @@ export class GameScene extends Phaser.Scene {
     if (pad.justPressed(PAD.BACK)) {
       if (this.managerTablet.uiWindow.isOpen) this.managerTablet.uiWindow.close();
       else if (this.controlMode.allows("tablet")) this.managerTablet.openWindow();
+    }
+    if (this.checkoutWindow.usesChitInput()) {
+      const chitKeys = [
+        [PAD.UP, "up"],
+        [PAD.DOWN, "down"],
+        [PAD.LEFT, "left"],
+        [PAD.RIGHT, "right"],
+      ];
+      const pressedKey = chitKeys.find(([button]) => pad.justPressed(button));
+      if (pressedKey) {
+        this.checkoutWindow.enterChitDirection(pressedKey[1]);
+        return;
+      }
     }
     if (this.uiNavigator.handle(pad, delta)) return;
 
@@ -1765,6 +1782,98 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.debugGridGraphics.setVisible(!this.debugGridGraphics.visible);
+  }
+
+  // K key: skips the opening setup for testing. Signs whatever contracts the four cheapest
+  // one-spot items need, puts a Budget Shelf near the door stocked full of them, drops the
+  // leftover crate units in lockers, adds a third locker, and charges for all of it.
+  debugQuickstart() {
+    if (this.fixtures.shelves().length > 0) {
+      this.showShopMessage("Quickstart only works before you place a shelf.");
+      return false;
+    }
+    const shelfType = "shelf_budget_2x2";
+    const shelfSpec = getFixtureType(shelfType);
+    const lockerSpec = getFixtureType("locker_single");
+    const items = database.getAllItems()
+      .filter((item) => item.dimensions.w === 1 && item.dimensions.h === 1)
+      .filter((item) => {
+        const license = database.getLicense(item.license);
+        return this.playerState.activeLicenses.has(item.license) || license?.isUnlocked(this.playerState);
+      })
+      .sort((a, b) => a.baseCost - b.baseCost ||
+        (database.getLicense(a.license)?.baseCost ?? 0) - (database.getLicense(b.license)?.baseCost ?? 0))
+      .slice(0, 4);
+
+    const door = getStoreDoorCell();
+    const lockers = this.fixtures.ofKind("storage");
+    const lastLocker = lockers[lockers.length - 1];
+    const shelfCell = this.findNearestFixtureCell(shelfType, door);
+    const lockerCell = this.findNearestFixtureCell("locker_single", lastLocker ?? door);
+    if (!shelfCell || !lockerCell) {
+      this.showShopMessage("Quickstart couldn't find room for the shelf and locker.");
+      return false;
+    }
+
+    for (const licenseId of new Set(items.map((item) => item.license))) {
+      if (this.playerState.activeLicenses.has(licenseId)) continue;
+      const license = database.getLicense(licenseId);
+      this.playerState.spendCredits(license.baseCost, { category: "licenses", label: license.name });
+      this.playerState.signLicense(licenseId);
+    }
+    this.recalculateActiveFactions();
+    this.playerState.spendCredits(shelfSpec.price, { category: "fixtures", label: shelfSpec.name });
+    this.playerState.spendCredits(lockerSpec.price, { category: "fixtures", label: lockerSpec.name });
+
+    const shelf = this.spawnFixture({ id: this.fixtures.nextId(shelfType), type: shelfType, ...shelfCell });
+    this.spawnFixture({ id: this.fixtures.nextId("locker_single"), type: "locker_single", ...lockerCell });
+    const result = validateFixtureLayout(this.fixtures.layout(), this.getLayoutOptions());
+    this.applyFixtureLayout(this.fixtures.layout(), result);
+
+    // One item per shelf spot, in the 2x2 grid's reading order.
+    const spots = [[0, 0], [1, 0], [0, 1], [1, 1]];
+    items.forEach((item, index) => {
+      const [gx, gy] = spots[index];
+      const placement = shelf.placeItem(item.id, gx, gy, false, 0);
+      const capacity = shelf.getPlacementCapacity(placement);
+      const crates = Math.ceil(capacity / RESTOCK_QUANTITY);
+      this.playerState.spendCredits(this.restockCost(item) * crates, {
+        category: "stock_orders", label: item.name, quantity: crates,
+      });
+      placement.quantity = capacity;
+      let leftover = crates * RESTOCK_QUANTITY - capacity;
+      for (const locker of this.fixtures.ofKind("storage")) {
+        if (leftover <= 0) break;
+        leftover -= locker.add(item.id, leftover);
+      }
+      if (this.playerState.storePrices[item.id] === undefined) {
+        this.playerState.storePrices[item.id] = this.market.getPrice(item.id);
+      }
+    });
+    this.playerState.spendCredits(DELIVERY_FEE, { category: "delivery_fees", label: "Delivery fee" });
+
+    shelf.stockDisplay.sync();
+    for (const locker of this.fixtures.ofKind("storage")) this.refreshLockerCapacityDisplay(locker);
+    this.playerState.notifyListeners();
+    this.showShopMessage("Quickstart: shelf stocked, third locker added.");
+    return true;
+  }
+
+  /**
+   * The closest cell to `origin` where a new fixture of this type would be valid.
+   * @param {string} typeId
+   * @param {{ gx: number, gy: number }} origin
+   * @returns {{ gx: number, gy: number } | null}
+   */
+  findNearestFixtureCell(typeId, origin) {
+    const { gridW, gridH } = getAuthoredGridSize();
+    const cells = [];
+    for (let gy = 0; gy < gridH; gy += 1) {
+      for (let gx = 0; gx < gridW; gx += 1) cells.push({ gx, gy });
+    }
+    cells.sort((a, b) => Math.hypot(a.gx - origin.gx, a.gy - origin.gy) -
+      Math.hypot(b.gx - origin.gx, b.gy - origin.gy));
+    return cells.find(({ gx, gy }) => this.checkFixturePlacement(typeId, gx, gy).valid) ?? null;
   }
 
   // --- Supply, pricing, and the Loading Pad ---
@@ -3027,10 +3136,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     // Decided once per customer, so restarting the sale can't change how they pay.
-    customer.checkoutPayment ??= {
-      cash: customerPaysCash(),
-      exact: Math.random() < EXACT_PAYMENT_CHANCE,
-    };
+    customer.checkoutPayment ??= chooseCustomerPayment(customer.factionId);
 
     this.checkoutWindow.openForCustomer(customer.cart, () => {
       const total = customer.completeSale();
@@ -3047,8 +3153,11 @@ export class GameScene extends Phaser.Scene {
         this.checkoutWindow.close();
       }
     }, {
-      cash: customer.checkoutPayment.cash,
+      cash: ["cash", "m-scrips"].includes(customer.checkoutPayment.type),
       exact: customer.checkoutPayment.exact,
+      currency: customer.checkoutPayment.type === "m-scrips" ? "m-scrips" : "credits",
+      paymentType: customer.checkoutPayment.type,
+      chitCode: customer.checkoutPayment.code,
       onWrongChange: () => this.playerState.subReputation(1),
     });
   }

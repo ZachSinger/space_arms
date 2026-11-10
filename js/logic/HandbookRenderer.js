@@ -214,9 +214,11 @@ function customersTopic() {
     section("Running the Register", `
       ${list([
         `Walk behind the register and press ${key("interact")}.`,
-        "Scan each item by moving it across the red scanner bar.",
+        "Click each item to scan it, or hold the mouse button and move over several items. Only the scanned item slides across the red bar; the others keep moving at normal belt speed.",
         "<strong>Card:</strong> type the total on the keypad and press CONFIRM TOTAL.",
         "<strong>Cash:</strong> take the customer's cash, then give back their change from the drawer. Some customers pay the exact amount, so there's no change to give.",
+        "<strong>Scavengers:</strong> most pay in M-Scrips. 120 M-Scrips equal 1 credit; if the price doesn't convert to a whole M-Scrip, round the amount up. Their bills come in 1, 5, 10, 25, 50, 100, 500, and 1,000 M-Scrips. The sale still earns its listed price in credits, and any change is in M-Scrips.",
+        "<strong>Explorers:</strong> most pay with a travel Chit. The Chit shows its value and a code made of 2 to 4 digits, each from 1 to 4. Enter the code with the arrow keys or the on-screen buttons (up = 1, down = 2, left = 3, right = 4); on a controller, use the D-pad. A wrong direction resets the code. The sale completes when you enter the last digit correctly, and the Explorer takes the Chit back. No change is given.",
         "Release the mouse button after scanning. Start a new click or click-and-hold to collect the customer's cash.",
         `To step away, press ${key("interact")} again<span class="pad-only"> or B</span>. The sale waits for you exactly as you left it.`,
       ])}

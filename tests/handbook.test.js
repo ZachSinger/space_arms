@@ -69,4 +69,10 @@ test("the handbook describes duplicate purchases and the new cash collection ges
   const html = render("customers");
   assert.match(html, /1, 2, or 3 of the same item/);
   assert.match(html, /Start a new click or click-and-hold/);
+  assert.match(html, /the others keep moving at normal belt speed/);
+  assert.match(html, /120 M-Scrips equal 1 credit/);
+  assert.match(html, /1,000 M-Scrips/);
+  assert.match(html, /travel Chit/);
+  assert.match(html, /2 to 4 digits/);
+  assert.match(html, /The sale completes when you enter the last digit correctly/);
 });

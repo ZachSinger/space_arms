@@ -932,7 +932,8 @@ button {
 .checkout-numpad.hidden,
 .checkout-payment-display.hidden,
 .checkout-belt.hidden,
-.cash-checkout.hidden {
+.cash-checkout.hidden,
+.checkout-chit.hidden {
   display: none;
 }
 
@@ -1245,6 +1246,85 @@ button {
 
 .cash-hand-over {
   width: 100%;
+}
+
+.checkout-chit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.chit-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(100%, 340px);
+  padding: 14px;
+  border: 2px solid #7dd3fc;
+  background: linear-gradient(135deg, #12314a, #0d1828);
+  color: var(--color-text-main);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.18);
+}
+
+.chit-title {
+  color: #7dd3fc;
+  font-size: var(--font-size-12);
+  letter-spacing: 1px;
+}
+
+.chit-code {
+  margin-left: 6px;
+  color: #facc15;
+  font-size: var(--font-size-18);
+  letter-spacing: 4px;
+}
+
+.chit-input-help,
+.chit-progress {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-11);
+  text-align: center;
+}
+
+.chit-progress {
+  min-height: 1.4em;
+  color: var(--color-border-active);
+  font-size: var(--font-size-14);
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+
+.chit-keypad {
+  display: grid;
+  grid-template-columns: repeat(2, 74px);
+  gap: 8px;
+}
+
+.chit-keypad button {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  min-height: 48px;
+  border: 1px solid var(--color-border-subtle);
+  background: var(--scanline-pattern), #1e293b;
+  color: var(--color-text-main);
+  font: inherit;
+  font-size: var(--font-size-18);
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.chit-keypad button span {
+  color: #7dd3fc;
+  font-size: var(--font-size-12);
+}
+
+.chit-keypad button:hover,
+.chit-keypad button:focus-visible {
+  border-color: var(--color-border-active);
+  box-shadow: 0 0 8px var(--color-border-active);
 }
 
 .checkout-payment-feedback {
