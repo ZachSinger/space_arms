@@ -357,14 +357,14 @@ test("a shift that earns multiple levels announces each implemented unlock", () 
   assert.match(messages[0], /Shop Level 4 reached/);
   assert.match(messages[0], /Civilian Threads/);
   assert.match(messages[0], /Expanded Fixture Supply/);
-  assert.match(messages[0], /Staff unlocked: Tavi.*Employee tab/);
+  assert.match(messages[0], /You can now have 1 employee hired at once \(Employee tab\)/);
 
   state.endDay(2);
   state.addReputation(30);
   scene.endShift();
   assert.equal(state.shopLevel, 5);
   assert.match(messages[1], /Shop Level 5 reached/);
-  assert.doesNotMatch(messages[1], /Contracts unlocked|Staff unlocked/);
+  assert.doesNotMatch(messages[1], /Contracts unlocked|employees? hired at once/);
   assert.match(messages[1], /Sales-floor expansion available to buy in the Layout tab/);
   assert.doesNotMatch(messages[1], /Some later level rewards are not in the game yet/);
 
@@ -397,7 +397,7 @@ test("a shift from Shop Level 6 to 30 announces all remaining reward types", () 
   scene.endShift();
 
   assert.equal(state.shopLevel, 30);
-  assert.match(messages[0], /Sera.*Dax.*Ivo.*Rhea.*Kel/);
+  assert.match(messages[0], /You can now have 6 employees hired at once/);
   assert.match(messages[0], /Premium Shelf Supply/);
   assert.match(messages[0], /Hazard & Medical Supply/);
   assert.match(messages[0], /Armory Display Supply/);
@@ -452,10 +452,10 @@ test("the actual hire action explains the level lock and allows hiring after the
   assert.equal(autosaves, 1);
 });
 
-test("letting an employee go is off-shift only and stops future wages without a refund", () => {
+test("taking an employee off shift is between shifts only, stops wages, and keeps them hired", () => {
   const state = new PlayerState();
   state.shopLevel = 4;
-  assert.equal(state.hireEmployee("tavi_stock_clerk", 250), true);
+  assert.equal(state.hireEmployee("tavi_stock_clerk"), true);
   const creditsAfterHire = state.credits;
   const scene = Object.create(GameScene.prototype);
   const warnings = [];
@@ -469,21 +469,25 @@ test("letting an employee go is off-shift only and stops future wages without a 
     requestAutosave: () => { autosaves += 1; },
   });
 
-  assert.equal(scene.fireEmployee("tavi_stock_clerk"), false);
+  assert.equal(scene.setEmployeeOnShift("tavi_stock_clerk", false), false);
   assert.match(warnings[0], /between shifts/);
-  assert.deepEqual(state.hiredEmployees, ["tavi_stock_clerk"]);
+  assert.deepEqual(state.offShiftEmployees, []);
 
   scene.canHireEmployees = () => true;
-  assert.equal(scene.fireEmployee("tavi_stock_clerk"), true);
-  assert.deepEqual(state.hiredEmployees, []);
-  assert.deepEqual(state.employeeJobPriorities, {});
+  assert.equal(scene.setEmployeeOnShift("tavi_stock_clerk", false), true);
+  assert.deepEqual(state.hiredEmployees, ["tavi_stock_clerk"]);
+  assert.match(messages[0], /Off Shift.*won't be paid/i);
+  assert.equal(scene.payEmployeeWages(), 0);
   assert.equal(state.credits, creditsAfterHire);
-  assert.match(messages[0], /hiring cost is not refunded.*future shift wages stop/i);
+  scene.spawnHiredEmployees();
+  assert.deepEqual(scene.employees, []);
   assert.equal(autosaves, 1);
+
   const restored = new PlayerState();
   restored.applySave(state.serialize());
-  assert.deepEqual(restored.hiredEmployees, []);
-  assert.deepEqual(restored.employeeJobPriorities, {});
+  assert.deepEqual(restored.offShiftEmployees, ["tavi_stock_clerk"]);
+  assert.equal(scene.setEmployeeOnShift("tavi_stock_clerk", true), true);
+  assert.equal(scene.payEmployeeWages(), 50);
 });
 
 test("training can only be booked between shifts and trainees are paid without spawning for work", () => {
@@ -506,8 +510,8 @@ test("training can only be booked between shifts and trainees are paid without s
   scene.canHireEmployees = () => true;
   assert.equal(scene.trainEmployee("tavi_stock_clerk", "register"), true);
   assert.equal(autosaves, 1);
-  assert.equal(scene.fireEmployee("tavi_stock_clerk"), false);
-  assert.match(warnings.at(-1), /returns.*training/);
+  assert.equal(scene.setEmployeeOnShift("tavi_stock_clerk", false), false);
+  assert.match(warnings.at(-1), /away training/);
   assert.equal(scene.payEmployeeWages(), 50);
   assert.equal(state.credits, 950);
   scene.spawnHiredEmployees();

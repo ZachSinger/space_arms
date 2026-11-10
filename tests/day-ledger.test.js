@@ -53,7 +53,7 @@ function unlockStaff(state) {
   state.endDay(2);
 }
 
-test("new shops start at zero reputation and cannot hire Tavi at Shop Level 1", () => {
+test("new shops start at zero reputation and cannot hire anyone at Shop Level 1", () => {
   const state = new PlayerState();
   assert.equal(state.globalReputation, 0);
   assert.equal(state.shopLevel, 1);
@@ -82,7 +82,7 @@ test("store and faction reputation changes are applied together at the end of th
   assert.deepEqual(state.factionReputation, { scavengers: 4, mercenaries: -2, explorers: 0 });
 });
 
-test("shop levels rise after a shift and Tavi unlocks at Level 4 with 60 reputation", () => {
+test("shop levels rise after a shift and the first staff spot opens at Level 4 with 60 reputation", () => {
   const state = new PlayerState();
   state.addReputation(16);
   state.subReputation(2);
@@ -231,17 +231,17 @@ test("every credit change is itemized, so the receipt always matches the balance
   state.addCredits(200, { category: "sales", label: "Pulse Rifle", quantity: 2 });
   state.spendCredits(75, { category: "licenses", label: "Aulin Arms" });
   assert.equal(state.hireEmployee("tavi_stock_clerk", 250), true);
-  state.spendCredits(50, { category: "wages", label: "Tavi (Stock Clerk)" });
+  state.spendCredits(50, { category: "wages", label: "Tavi" });
   assert.equal(state.credits, 1325);
   assert.equal(balanceOf(state), state.credits);
   assert.deepEqual(state.dayLedger.lines.find((line) => line.category === "hiring"),
-    { category: "hiring", label: "Tavi (Stock Clerk)", amount: -250, quantity: 1 });
+    { category: "hiring", label: "Tavi", amount: -250, quantity: 1 });
   assert.throws(() => state.spendCredits(10), /Invalid receipt entry/);
   assert.throws(() => state.addCredits(-5, { category: "sales", label: "x" }), /non-negative money/);
   assert.equal(state.credits, 1325);
 });
 
-test("training takes a paid shift, survives saves, and permanently raises wages and rehiring costs", () => {
+test("training takes a paid shift, survives saves, and permanently raises wages", () => {
   const state = new PlayerState();
   unlockStaff(state);
   assert.equal(state.hireEmployee("tavi_stock_clerk"), true);
@@ -252,7 +252,7 @@ test("training takes a paid shift, survives saves, and permanently raises wages 
   assert.equal(state.getEmployeeProfile("tavi_stock_clerk").skillLevels.register, 1);
   assert.equal(state.getEmployeeProfile("tavi_stock_clerk").wagePerShift, 50);
   assert.equal(state.trainEmployee("tavi_stock_clerk", "stock_shelves"), false);
-  assert.equal(state.fireEmployee("tavi_stock_clerk"), false);
+  assert.equal(state.setEmployeeOnShift("tavi_stock_clerk", false), false);
   assert.deepEqual(state.dayLedger.lines.find(({ category }) => category === "training"), {
     category: "training", label: "Tavi: Run register Level 2", quantity: 1, amount: -250,
   });
@@ -264,30 +264,23 @@ test("training takes a paid shift, survives saves, and permanently raises wages 
   assert.equal(trained.skillLevels.register, 2);
   assert.equal(trained.skillLevels.stock_shelves, 1);
   assert.equal(trained.wagePerShift, 55);
-  assert.equal(trained.hireCost, 313);
   assert.deepEqual(restored.employeeTraining, {});
-  assert.equal(restored.fireEmployee("tavi_stock_clerk"), true);
-
-  const rehired = PlayerState.deserialize(restored.serialize());
-  assert.equal(rehired.getEmployeeProfile("tavi_stock_clerk").wagePerShift, 55);
-  assert.equal(rehired.hireEmployee("tavi_stock_clerk"), true);
-  assert.equal(rehired.credits, 687);
-  assert.equal(rehired.getEmployeeProfile("tavi_stock_clerk").skillLevels.register, 2);
+  assert.equal(restored.setEmployeeOnShift("tavi_stock_clerk", false), true);
+  assert.equal(restored.trainEmployee("tavi_stock_clerk", "register"), true);
   assert.equal(state.getEmployeeProfile("tavi_stock_clerk").skillLevels.register, 1);
 });
 
-test("each employee skill trains separately to Level 5 at increasingly higher prices", () => {
+test("each course costs more than that employee's last, whichever skill it trains", () => {
   const state = new PlayerState();
   unlockStaff(state);
-  state.addCredits(10000, { category: "sales", label: "Training test" });
+  state.addCredits(20000, { category: "sales", label: "Training test" });
   state.hireEmployee("tavi_stock_clerk");
+  const costs = [];
   for (const jobId of ["register", "stock_shelves", "load_storage"]) {
-    let previousCost = 0;
     for (let level = 2; level <= 5; level += 1) {
       const before = state.credits;
       assert.equal(state.trainEmployee("tavi_stock_clerk", jobId), true);
-      assert.ok(before - state.credits > previousCost);
-      previousCost = before - state.credits;
+      costs.push(before - state.credits);
       state.finishShift({ customersServed: 0, customersTurnedAway: 0 });
       assert.equal(state.getEmployeeProfile("tavi_stock_clerk").skillLevels[jobId], level);
       state.endDay(state.dayLedger.day + 1);
@@ -296,8 +289,51 @@ test("each employee skill trains separately to Level 5 at increasingly higher pr
     assert.equal(state.trainEmployee("tavi_stock_clerk", jobId), false);
     assert.equal(state.credits, before);
   }
+  assert.deepEqual(costs, Array.from({ length: 12 }, (_, index) => 250 + 125 * index));
   assert.equal(state.getEmployeeProfile("tavi_stock_clerk").wagePerShift, 110);
-  assert.equal(state.getEmployeeProfile("tavi_stock_clerk").hireCost, 1000);
+  assert.equal(state.getEmployeeProfile("tavi_stock_clerk").hireCost, 250);
+  assert.equal(state.getEmployeeProfile("tavi_stock_clerk").backpackCapacity, 35);
+});
+
+test("every employee starts identical, and Store Level caps how many are hired at once", () => {
+  const state = new PlayerState();
+  state.addCredits(5000, { category: "sales", label: "Hiring test" });
+  const fresh = ["tavi_stock_clerk", "kel_supply_runner"].map((id) => state.getEmployeeProfile(id));
+  for (const employee of fresh) {
+    assert.deepEqual(
+      [employee.hireCost, employee.wagePerShift, employee.backpackCapacity],
+      [250, 50, 10],
+    );
+  }
+  assert.equal(state.hireEmployee("kel_supply_runner"), false);
+  unlockStaff(state);
+  assert.equal(state.hireEmployee("kel_supply_runner"), true);
+  assert.equal(state.hireEmployee("tavi_stock_clerk"), false);
+  assert.equal(state.setEmployeeOnShift("kel_supply_runner", false), true);
+  assert.equal(state.hireEmployee("tavi_stock_clerk"), false);
+  assert.deepEqual(state.getOnShiftEmployees(), []);
+  assert.deepEqual(state.getPaidEmployees(), []);
+  assert.equal(state.setEmployeeOnShift("kel_supply_runner", true), true);
+  assert.deepEqual(state.getWorkingEmployees(), ["kel_supply_runner"]);
+  state.setEmployeeOnShift("kel_supply_runner", false);
+
+  const restored = PlayerState.deserialize(state.serialize());
+  assert.deepEqual(restored.offShiftEmployees, ["kel_supply_runner"]);
+  assert.deepEqual(restored.hiredEmployees, ["kel_supply_runner"]);
+});
+
+test("a trainee is unavailable but paid whatever their setting, and keeps it afterwards", () => {
+  const state = new PlayerState();
+  unlockStaff(state);
+  state.hireEmployee("tavi_stock_clerk");
+  assert.equal(state.setEmployeeOnShift("tavi_stock_clerk", false), true);
+  assert.equal(state.trainEmployee("tavi_stock_clerk", "register"), true);
+  assert.equal(state.setEmployeeOnShift("tavi_stock_clerk", true), false);
+  assert.deepEqual(state.getPaidEmployees(), ["tavi_stock_clerk"]);
+  assert.deepEqual(state.getWorkingEmployees(), []);
+  state.finishShift({ customersServed: 0, customersTurnedAway: 0 });
+  assert.deepEqual(state.getPaidEmployees(), []);
+  assert.deepEqual(state.offShiftEmployees, ["tavi_stock_clerk"]);
 });
 
 test("training rejects unaffordable and unhired staff and older saves start with Level 1 skills", () => {

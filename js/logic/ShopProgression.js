@@ -45,3 +45,32 @@ export function getShopLevelRequirement(level) {
 export function getNextShopLevel(level) {
   return SHOP_LEVEL_TIERS.find((tier) => tier.level > level) ?? null;
 }
+
+// Each listed Store Level adds one more employee the shop can have hired at once.
+export const STAFF_LIMIT_LEVELS = Object.freeze([4, 7, 10, 15, 18, 23]);
+
+export function getStaffLimit(shopLevel) {
+  return STAFF_LIMIT_LEVELS.filter((level) => level <= shopLevel).length;
+}
+
+export function getNextStaffLimitLevel(shopLevel) {
+  return STAFF_LIMIT_LEVELS.find((level) => level > shopLevel) ?? null;
+}
+
+/**
+ * Player-facing reason no one else can be hired, or null when a staff spot is open.
+ * @param {number} shopLevel
+ * @param {number} hiredCount
+ */
+export function getStaffLimitReason(shopLevel, hiredCount) {
+  const limit = getStaffLimit(shopLevel);
+  if (hiredCount < limit) return null;
+  const nextLevel = getNextStaffLimitLevel(shopLevel);
+  const howToGrow = nextLevel
+    ? `Reach Shop Level ${nextLevel} by finishing a shift with at least ${getShopLevelRequirement(nextLevel)} store reputation to hire ${limit ? "one more" : "your first employee"}.`
+    : "Your shop can't hire more staff.";
+  const current = limit
+    ? `Your shop can have ${limit} employee${limit === 1 ? "" : "s"} hired at once, and you have hired ${hiredCount}.`
+    : "Your shop can't have employees yet.";
+  return `${current} ${howToGrow}`;
+}

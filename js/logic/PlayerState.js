@@ -7,7 +7,7 @@ import { InventoryPool } from "./InventoryPool.js";
 import { transferItems } from "./InventoryTransfer.js";
 import { DayLedger } from "./DayLedger.js";
 import { isMoney, sumMoney } from "./Money.js";
-import { getShopLevelForReputation, isKnownShopLevel } from "./ShopProgression.js";
+import { getShopLevelForReputation, getStaffLimit } from "./ShopProgression.js";
 import { CUSTOMER_FACTION_IDS } from "./CustomerBuyLists.js";
 import { getDailyLoanRepayment } from "./EmergencyLoan.js";
 import employeeRoster from "../../data/Employees.json" with { type: "json" };
@@ -58,6 +58,8 @@ export class PlayerState {
     // Carts abandoned by angry customers (unlimited room); emptied only into the hovercart.
     this.goBacks = new InventoryPool({ capacity: Infinity, stock: [] });
     this.hiredEmployees = [];
+    // Hired staff who skip shifts: they don't work and aren't paid.
+    this.offShiftEmployees = [];
     this.employeeJobPriorities = {};
     this.employeeSkills = {};
     this.employeeTraining = {};
@@ -250,6 +252,21 @@ export class PlayerState {
     return getEmployeeProfile(employeeId, this.employeeSkills[employeeId]);
   }
 
+  getOnShiftEmployees() {
+    return this.hiredEmployees.filter((employeeId) => !this.offShiftEmployees.includes(employeeId));
+  }
+
+  // Paid at shift start: On Shift staff plus anyone away training (training is a paid shift).
+  getPaidEmployees() {
+    return this.hiredEmployees.filter((employeeId) =>
+      this.employeeTraining[employeeId] || !this.offShiftEmployees.includes(employeeId));
+  }
+
+  // Working this shift: On Shift and not away training.
+  getWorkingEmployees() {
+    return this.getOnShiftEmployees().filter((employeeId) => !this.employeeTraining[employeeId]);
+  }
+
   hireEmployee(employeeId) {
     if (typeof employeeId !== "string" || !employeeId) {
       throw new TypeError("Hiring requires an employee id.");
@@ -257,14 +274,11 @@ export class PlayerState {
     const jobPriorities = defaultEmployeeJobPriorities(employeeId);
     const employee = this.getEmployeeProfile(employeeId);
     const hireCost = employee.hireCost;
-    if (!isKnownShopLevel(employee.requiredShopLevel)) {
-      throw new Error(`Unknown required Shop Level for ${employeeId}.`);
-    }
-    if (this.shopLevel < employee.requiredShopLevel ||
+    if (this.hiredEmployees.length >= getStaffLimit(this.shopLevel) ||
       this.hiredEmployees.includes(employeeId) || this.credits < hireCost) return false;
     this.dayLedger.record({
       category: "hiring",
-      label: `${employee.name} (${employee.role})`,
+      label: employee.name,
       amount: -hireCost,
     });
     this.credits = sumMoney([this.credits, -hireCost]);
@@ -286,17 +300,14 @@ export class PlayerState {
     return true;
   }
 
-  fireEmployee(employeeId) {
-    if (typeof employeeId !== "string" || !employeeId) {
-      throw new TypeError("Firing requires an employee id.");
-    }
-    if (!employeeRoster.some((employee) => employee.id === employeeId)) {
-      throw new Error(`Unknown employee: ${employeeId}`);
-    }
-    const index = this.hiredEmployees.indexOf(employeeId);
-    if (index < 0 || this.employeeTraining[employeeId]) return false;
-    this.hiredEmployees.splice(index, 1);
-    delete this.employeeJobPriorities[employeeId];
+  // Trainees are simply away, so their setting can't change until they return.
+  setEmployeeOnShift(employeeId, onShift) {
+    if (!this.hiredEmployees.includes(employeeId) || this.employeeTraining[employeeId]) return false;
+    const isOnShift = !this.offShiftEmployees.includes(employeeId);
+    if (isOnShift === onShift) return false;
+    this.offShiftEmployees = onShift
+      ? this.offShiftEmployees.filter((id) => id !== employeeId)
+      : [...this.offShiftEmployees, employeeId];
     this.notifyListeners();
     return true;
   }
@@ -388,6 +399,7 @@ export class PlayerState {
         factions: { ...this.pendingReputation.factions },
       },
       hiredEmployees: [...this.hiredEmployees],
+      offShiftEmployees: [...this.offShiftEmployees],
       employeeJobPriorities: Object.fromEntries(
         this.hiredEmployees.map((employeeId) => [
           employeeId,
@@ -436,6 +448,7 @@ export class PlayerState {
         ? { global: data.pendingReputation.global, factions: { ...data.pendingReputation.factions } }
         : emptyReputationTally(),
       hiredEmployees: [...(data.hiredEmployees || [])],
+      offShiftEmployees: [...(data.offShiftEmployees ?? [])],
       employeeJobPriorities: Object.fromEntries(
         (data.hiredEmployees || []).map((employeeId) => [
           employeeId,

@@ -51,7 +51,6 @@ export class ManagerTablet {
     this.fixtureSaleConfirmation = null;
     this.equipmentPurchaseNotice = "";
     this.handbookTopic = "store";
-    this.employeeFireConfirmationId = null;
     this.employeeTrainingConfirmation = null;
 
     const tabBarHTML = TAB_DEFS.map(
@@ -86,7 +85,6 @@ export class ManagerTablet {
       this.fixturePurchaseNotice = "";
       this.fixtureSaleConfirmation = null;
       this.equipmentPurchaseNotice = "";
-      this.employeeFireConfirmationId = null;
       this.employeeTrainingConfirmation = null;
       this.fixtureHighlight.reset();
       this.scene.resumeRegisterCheckout();
@@ -116,20 +114,11 @@ export class ManagerTablet {
         this.scene.hireEmployee(hireEmployeeButton.dataset.hireEmployeeId);
       }
 
-      const fireEmployeeButton = event.target.closest("[data-fire-employee-id]");
-      if (fireEmployeeButton) {
-        this.employeeFireConfirmationId = fireEmployeeButton.dataset.fireEmployeeId;
-        this.employeeTrainingConfirmation = null;
-        this.refreshEmployeePanel();
-      }
-      const confirmFireEmployeeButton = event.target.closest("[data-confirm-fire-employee]");
-      if (confirmFireEmployeeButton) {
-        this.scene.fireEmployee(confirmFireEmployeeButton.dataset.confirmFireEmployee);
-        this.employeeFireConfirmationId = null;
-        this.refreshEmployeePanel();
-      }
-      if (event.target.closest("[data-cancel-fire-employee]")) {
-        this.employeeFireConfirmationId = null;
+      const shiftButton = event.target.closest("[data-employee-shift-id]");
+      if (shiftButton) {
+        this.scene.setEmployeeOnShift(
+          shiftButton.dataset.employeeShiftId, shiftButton.dataset.employeeShiftOn === "true",
+        );
         this.refreshEmployeePanel();
       }
 
@@ -140,7 +129,6 @@ export class ManagerTablet {
         const reason = this.scene.getEmployeeTrainingBlockReason(employeeId, jobId);
         if (reason) this.scene.showShopMessage(reason);
         else {
-          this.employeeFireConfirmationId = null;
           this.employeeTrainingConfirmation = { employeeId, jobId };
           this.refreshEmployeePanel();
           this.bodyElement.querySelector(".employee-training-confirmation")?.scrollIntoView({ block: "nearest" });
@@ -311,12 +299,11 @@ export class ManagerTablet {
     if (tabId === "employee") {
       return EmployeeRenderer.generateHTML({
         hiredEmployeeIds: this.playerState.hiredEmployees,
+        offShiftEmployeeIds: this.playerState.offShiftEmployees,
         activeEmployeeIds: this.scene.employees.map((employee) => employee.data.id),
         employeeJobPriorities: this.playerState.employeeJobPriorities,
         credits: this.playerState.credits,
         canHire: this.scene.canHireEmployees(),
-        canFire: this.scene.canHireEmployees(),
-        fireConfirmationEmployeeId: this.employeeFireConfirmationId,
         employeeSkills: this.playerState.employeeSkills,
         employeeTraining: this.playerState.employeeTraining,
         trainingConfirmation: this.employeeTrainingConfirmation,
@@ -352,7 +339,6 @@ export class ManagerTablet {
     this.fixturePurchaseNotice = "";
     this.fixtureSaleConfirmation = null;
     this.equipmentPurchaseNotice = "";
-    this.employeeFireConfirmationId = null;
     this.employeeTrainingConfirmation = null;
     if (tabId === "inventory") this.refreshInventoryPanel();
     if (tabId === "employee") this.refreshEmployeePanel();
@@ -508,7 +494,7 @@ export class ManagerTablet {
   // --- Prices, contracts, and supply orders ---
 
   /**
-   * Step a store price: roughly ±10% (at least 1 credit), or reset to market.
+   * Step a store price: roughly Â±10% (at least 1 credit), or reset to market.
    * @param {string} itemId
    * @param {"decrease" | "increase" | "market"} action
    */

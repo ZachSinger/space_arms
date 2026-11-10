@@ -33,8 +33,15 @@ notice something that needs doing but isn't being done right now.
       player owes 25% extra, repaid from 25% of each later day's sales (provisional numbers).
 - [x] Expand the employee roster beyond Tavi with additional Shop Level unlocks.
 - [x] Employee training: three job skills, Levels 1-5, paid courses that take one paid shift
-      away. Skills permanently raise wages and rehiring prices, even after firing.
-- [ ] Decide whether employee shift scheduling belongs in the base loop.
+      away. Skills permanently raise wages.
+- [x] All employees start identical (same price, wage, skills, and carry amount); Shop Levels
+      raise how many can be hired at once. Each course costs more than that employee's last,
+      whichever skill it trains. Stock shelves training also raises carry amount.
+- [x] Add employee skill milestones: Run register and Load storage reach 1.5x normal speed
+      at Level 3 and 2x at Level 5; Stock shelves carries 25 items at Level 3 and 35 at Level 5.
+- [x] Employee shift scheduling: each hired employee is On Shift (works, paid) or Off Shift
+      (stays home, unpaid, keeps skills). Firing is removed. Trainees are unavailable for
+      their training shift (still paid) whatever their setting.
 - [x] Add a brief closing beat when the last customer leaves, with the shift's customer
       totals and a reminder that END DAY opens the receipt. Stays up for five seconds.
 - [x] Customers can buy 1-3 units of the same item, filling their wanted quantity across
@@ -78,7 +85,8 @@ notice something that needs doing but isn't being done right now.
 - [ ] Repair for gear and weapons.
 - [ ] Vehicle sales.
 - [ ] Vehicle repair.
-- [ ] Security: introduce thieves and a minigame to stop them.
+- [ ] Security: introduce thieves and a minigame to stop them. **Postponed until the player
+      can leave the shop** (until then, there's little for a thief to exploit).
 - [ ] Ways to customize the shop.
 
 ## Playtest follow-ups

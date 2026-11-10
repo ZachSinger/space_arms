@@ -33,7 +33,8 @@ test("level rewards come from the game's own unlock data", () => {
   const rewards = getLevelRewards(licenses);
   assert.ok(rewards.get(2).some((text) => text.startsWith("Supply license: Civilian Threads")));
   assert.ok(rewards.get(3).includes("Fixture license: Expanded Fixture Supply"));
-  assert.ok(rewards.get(4).some((text) => text.includes("Tavi")));
+  assert.ok(rewards.get(4).includes("Staff limit: up to 1 employee hired at once"));
+  assert.ok(rewards.get(23).includes("Staff limit: up to 6 employees hired at once"));
   assert.ok(rewards.get(5).some((text) => text.includes("Sales Floor Expansion West")));
   assert.ok(rewards.get(13).some((text) => text.includes("Backroom Upgrade A")));
   assert.ok(rewards.get(8).some((text) => text.includes("25 spaces")));
@@ -49,13 +50,19 @@ test("handbook key names match the device in use", () => {
   assert.match(html, /<span class="kbd-only">Space<\/span><span class="pad-only">X<\/span>/);
 });
 
-test("the handbook explains paid training absences and permanent skills, wages, and rehiring costs", () => {
+test("the handbook explains paid training absences, permanent skills, and on/off shift", () => {
   const html = render("employees");
   assert.match(html, /Level 1 and can reach Level 5/);
   assert.match(html, /entire next shift/);
   assert.match(html, /still pay their current wage/);
+  assert.match(html, /work\s+50% faster\s+at Level 3/);
+  assert.match(html, /2 times normal speed at Level 5/);
+  assert.match(html, /25 at Level 3, and 35 at Level 5/);
   assert.match(html, /Skills and higher wages are permanent/);
-  assert.match(html, /hiring cost is higher/);
+  assert.match(html, /On Shift &amp; Off Shift/);
+  assert.match(html, /stay home and aren't paid/);
+  assert.match(html, /not available/);
+  assert.doesNotMatch(html, /fire|let go|LET GO|rehir|TAKE OFF|PUT ON/i);
 });
 
 test("the handbook describes duplicate purchases and the new cash collection gesture", () => {

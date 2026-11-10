@@ -1369,8 +1369,7 @@ button {
   font-size: var(--font-size-11);
 }
 
-.employee-training-confirmation,
-.employee-fire-confirmation {
+.employee-training-confirmation {
   padding: 8px;
   border: 1px dashed var(--color-border-active);
   font-size: var(--font-size-11);
@@ -1397,10 +1396,53 @@ button {
 }
 
 [data-hire-employee-id]:disabled,
-[data-fire-employee-id]:disabled,
 [data-train-employee-id]:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.employee-staff-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.employee-shift-toggle {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.employee-shift-toggle .action-btn {
+  padding: 4px 8px;
+  font-size: var(--font-size-10);
+}
+
+.employee-shift-toggle .action-btn[aria-pressed="false"] {
+  --bg-color: #1f2937;
+  border-color: #374151;
+  color: #9ca3af;
+}
+
+.employee-shift-toggle .action-btn[aria-pressed="false"]:hover:not(:disabled) {
+  --bg-color: #374151;
+  color: #e5e7eb;
+}
+
+.employee-shift-toggle .action-btn:disabled {
+  cursor: not-allowed;
+}
+
+.employee-shift-toggle .action-btn[aria-pressed="false"]:disabled {
+  opacity: 0.4;
+}
+
+.employee-shift-training {
+  flex-shrink: 0;
+  font-size: var(--font-size-10);
+  text-align: right;
+  color: #facc15;
 }
 
 .go-backs-row {

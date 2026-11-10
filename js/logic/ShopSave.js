@@ -129,6 +129,12 @@ export function validateShopSave(data, database) {
       new Set(player.hiredEmployees).size === player.hiredEmployees.length &&
       player.hiredEmployees.every((id) => employeeIds.has(id)), "invalid hired employees.");
   }
+  if (player.offShiftEmployees !== undefined) {
+    requireSave(Array.isArray(player.offShiftEmployees) &&
+      new Set(player.offShiftEmployees).size === player.offShiftEmployees.length &&
+      player.offShiftEmployees.every((id) => (player.hiredEmployees ?? []).includes(id)),
+    "invalid off-shift employees.");
+  }
   if (player.employeeJobPriorities !== undefined) {
     const hiredEmployees = player.hiredEmployees || [];
     requireSave(isRecord(player.employeeJobPriorities) &&

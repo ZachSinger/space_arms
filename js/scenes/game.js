@@ -8,7 +8,7 @@ import { WindowManager } from "../logic/WindowManager.js";
 import { ManagerTablet } from "../logic/ManagerTablet.js";
 import { PlayerState } from "../logic/PlayerState.js";
 import {
-  getShopLevelRequirement, hasUnimplementedShopRewardBetween,
+  getStaffLimit, getStaffLimitReason, hasUnimplementedShopRewardBetween, STAFF_LIMIT_LEVELS,
 } from "../logic/ShopProgression.js";
 import { HUDController } from "../logic/HUDController.js";
 import { DebugInfo } from "../logic/DebugInfo.js";
@@ -65,7 +65,6 @@ import { UINavigator } from "../logic/UINavigator.js";
 import { controlLabel, setInputDevice } from "../logic/InputDevice.js";
 import { SaveManager } from "../../SaveManager.js";
 import { database } from "./boot.js"; // the exported DatabaseManager singleton
-import employeeRoster from "../../data/Employees.json" with { type: "json" };
 
 // Most customers inside the store at once. When full, the next arrival is lost for good,
 // so a backed-up dealer really does lose that sale.
@@ -1013,11 +1012,11 @@ export class GameScene extends Phaser.Scene {
       return false;
     }
     if (this.playerState.hiredEmployees.includes(employeeId)) return false;
-    if (this.playerState.shopLevel < employee.requiredShopLevel) {
-      const reputation = getShopLevelRequirement(employee.requiredShopLevel);
-      this.showShopMessage(
-        `To hire ${employee.name}, reach Shop Level ${employee.requiredShopLevel}: finish a shift with at least ${reputation} store reputation.`,
-      );
+    const staffLimitReason = getStaffLimitReason(
+      this.playerState.shopLevel, this.playerState.hiredEmployees.length,
+    );
+    if (staffLimitReason) {
+      this.showShopMessage(staffLimitReason);
       return false;
     }
     if (!this.playerState.hireEmployee(employeeId)) {
@@ -1025,28 +1024,29 @@ export class GameScene extends Phaser.Scene {
       return false;
     }
     this.showGameMessage(
-      `${employee.name} hired. ${employee.wagePerShift} credits in wages are due at each shift start.`,
+      `${employee.name} hired and On Shift. ${employee.wagePerShift} credits in wages are due at each shift start.`,
       "#10b981",
     );
     this.requestAutosave();
     return true;
   }
 
-  fireEmployee(employeeId) {
-    const employee = employeeRoster.find((candidate) => candidate.id === employeeId);
-    if (!employee) throw new Error(`Unknown employee: ${employeeId}`);
+  setEmployeeOnShift(employeeId, onShift) {
+    const employee = this.playerState.getEmployeeProfile(employeeId);
     if (!this.canHireEmployees()) {
-      this.showShopMessage("Staff can only be let go between shifts.");
+      this.showShopMessage("Staff can only be set On Shift or Off Shift between shifts.");
       return false;
     }
     if (this.playerState.employeeTraining[employeeId]) {
-      this.showShopMessage("Wait until this employee returns from their booked training before letting them go.");
+      this.showShopMessage(`${employee.name} is away training next shift. They're available again once they return.`);
       return false;
     }
-    if (!this.playerState.fireEmployee(employeeId)) return false;
+    if (!this.playerState.setEmployeeOnShift(employeeId, onShift)) return false;
     this.showGameMessage(
-      `${employee.name} has been let go. The hiring cost is not refunded; future shift wages stop.`,
-      "#f59e0b",
+      onShift
+        ? `${employee.name} is On Shift. They'll work and be paid ${employee.wagePerShift} credits each shift.`
+        : `${employee.name} is Off Shift. They'll stay home and won't be paid until you set them On Shift.`,
+      "#10b981",
     );
     this.requestAutosave();
     return true;
@@ -1096,12 +1096,12 @@ export class GameScene extends Phaser.Scene {
   // Wages are paid up front, even into the red (bible Step 32), one receipt line each.
   payEmployeeWages() {
     let total = 0;
-    for (const employeeId of this.playerState.hiredEmployees) {
+    for (const employeeId of this.playerState.getPaidEmployees()) {
       const employee = this.playerState.getEmployeeProfile(employeeId);
       if (employee.wagePerShift <= 0) continue;
       this.playerState.spendCredits(employee.wagePerShift, {
         category: "wages",
-        label: `${employee.name} (${employee.role})`,
+        label: employee.name,
       });
       total += employee.wagePerShift;
     }
@@ -1109,8 +1109,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   spawnHiredEmployees() {
-    this.employees = this.playerState.hiredEmployees
-      .filter((employeeId) => !this.playerState.employeeTraining[employeeId])
+    this.employees = this.playerState.getWorkingEmployees()
       .map((employeeId) => new Employee(this, this.playerState.getEmployeeProfile(employeeId)));
   }
 
@@ -2772,7 +2771,7 @@ export class GameScene extends Phaser.Scene {
       activeFactions: this.playerState.activeFactions,
       shelfPlacements,
       getItem: (itemId) => database.getItem(itemId),
-      employeeCount: this.playerState.hiredEmployees.length,
+      employeeCount: this.playerState.getWorkingEmployees().length,
       tieBreakOffset: this.market.day,
     });
   }
@@ -3153,10 +3152,8 @@ export class GameScene extends Phaser.Scene {
         license.requiredShopLevel <= this.playerState.shopLevel &&
         !this.playerState.activeLicenses.has(license.id) &&
         license.isUnlocked(this.playerState));
-      const newStaff = employeeRoster.filter((employee) =>
-        employee.requiredShopLevel > previousLevel &&
-        employee.requiredShopLevel <= this.playerState.shopLevel &&
-        !this.playerState.hiredEmployees.includes(employee.id));
+      const staffLimitRaised = STAFF_LIMIT_LEVELS.some((level) =>
+        level > previousLevel && level <= this.playerState.shopLevel);
       const newSalesExpansions = this.room.zones.filter((zone) =>
         zone.requiredShopLevel > previousLevel &&
         zone.requiredShopLevel <= this.playerState.shopLevel &&
@@ -3169,8 +3166,9 @@ export class GameScene extends Phaser.Scene {
       if (newContracts.length) {
         levelMessage += ` Contracts unlocked: ${newContracts.map((license) => license.name).join(", ")} (Contracts tab).`;
       }
-      if (newStaff.length) {
-        levelMessage += ` Staff unlocked: ${newStaff.map((employee) => employee.name).join(", ")} (Employee tab).`;
+      if (staffLimitRaised) {
+        const limit = getStaffLimit(this.playerState.shopLevel);
+        levelMessage += ` You can now have ${limit} employee${limit === 1 ? "" : "s"} hired at once (Employee tab).`;
       }
       if (newSalesExpansions.length) {
         levelMessage += ` Sales-floor expansion${newSalesExpansions.length > 1 ? "s" : ""} available to buy in the Layout tab.`;

@@ -3,8 +3,9 @@
 // ==========================================
 // The Manager's Tablet Handbook tab: a player-facing guide, one topic at a time. Numbers
 // that live in game data (levels, fees, rewards) are read from it so the text stays true.
-import employeeRoster from "../../data/Employees.json" with { type: "json" };
-import { SHOP_LEVEL_TIERS, getNextShopLevel } from "./ShopProgression.js";
+import {
+  SHOP_LEVEL_TIERS, getNextShopLevel, getStaffLimit, STAFF_LIMIT_LEVELS,
+} from "./ShopProgression.js";
 import { DELIVERY_FEE, LOADING_PAD_SPOTS } from "./SupplyOrder.js";
 import { HOVERCART_UPGRADES } from "./Hovercart.js";
 import { ZONES } from "./RoomLayout.js";
@@ -15,7 +16,10 @@ import {
 } from "./EmergencyLoan.js";
 import { controlLabel } from "./InputDevice.js";
 import { formatMoney } from "./Money.js";
-import { MAX_EMPLOYEE_SKILL_LEVEL, EMPLOYEE_SPEED_BONUS_PER_LEVEL } from "./EmployeeTraining.js";
+import {
+  MAX_EMPLOYEE_SKILL_LEVEL, EMPLOYEE_BASE_CARRY, EMPLOYEE_MILESTONE_LEVELS,
+  getEmployeeCarryCapacity, getEmployeeJobSpeed,
+} from "./EmployeeTraining.js";
 
 export const HANDBOOK_TOPICS = Object.freeze([
   { id: "store", label: "Running the Store" },
@@ -56,8 +60,9 @@ export function getLevelRewards(licenses) {
     const kind = license.unlocksFixtures.length ? "Fixture license" : "Supply license";
     add(license.requiredShopLevel, `${kind}: ${license.name}`);
   }
-  for (const employee of employeeRoster) {
-    add(employee.requiredShopLevel, `Staff to hire: ${employee.name} (${employee.role})`);
+  for (const level of STAFF_LIMIT_LEVELS) {
+    const limit = getStaffLimit(level);
+    add(level, `Staff limit: up to ${limit} employee${limit === 1 ? "" : "s"} hired at once`);
   }
   for (const upgrade of HOVERCART_UPGRADES) {
     add(upgrade.requiredShopLevel,
@@ -286,29 +291,36 @@ function employeesTopic() {
     section("How to Hire", `
       ${list([
         "Open the <strong>Employee</strong> tab and look under <strong>STAFF TO HIRE</strong>.",
-        "Each person unlocks at a certain Store Level. Locked staff show which level they need.",
-        "Hiring costs credits once. After that, their wages are paid at the start of every shift.",
+        "Everyone starts with the same skills, hiring cost, and wages. Pick whoever you like.",
+        `Your Store Level sets how many employees you can have hired at once: one at Level
+          ${STAFF_LIMIT_LEVELS[0]}, then one more at Levels ${STAFF_LIMIT_LEVELS.slice(1).join(", ")}.`,
+        "Hiring costs credits once. New hires start On Shift.",
         "You can only hire between shifts. New staff start working on the next shift.",
+      ])}`),
+    section("On Shift &amp; Off Shift", `
+      ${list([
+        "Each person under <strong>YOUR STAFF</strong> has an <strong>ON SHIFT</strong> and an <strong>OFF SHIFT</strong> button. The lit one is their current setting.",
+        "<strong>On Shift:</strong> they come to work, and you pay their wages when each shift starts.",
+        "<strong>Off Shift:</strong> they stay home and aren't paid. They keep all their skills.",
+        "You can change the setting between shifts. Everyone you've hired can be On Shift at the same time.",
+        "An employee away training is <strong>not available</strong> for that shift, whatever their setting. Their wage for that shift is still paid. After training, they go back to their usual setting.",
       ])}`),
     section("Job Levels &amp; Training", `
       ${list([
         `Each employee has three separate skills: <strong>Run register</strong>, <strong>Stock shelves</strong>,
           and <strong>Load storage</strong>. Each starts at Level 1 and can reach Level ${MAX_EMPLOYEE_SKILL_LEVEL}.`,
         "Between shifts, open the Employee tab, find the person under YOUR STAFF, and select TRAIN beside the skill you want to improve.",
-        "Review the price and the new wage, then select CONFIRM TRAINING. Higher levels cost more to train.",
+        "Review the price and the new wage, then select CONFIRM TRAINING.",
+        "Each course costs more than that employee's previous course, no matter which skill it trains. Ten courses cost the same whether you focus them on one skill or spread them out.",
         "Training takes the entire next shift. That employee will not work in the shop, but you still pay their current wage when the shift starts.",
         "The skill improves when that shift ends. The higher wage starts with the following shift.",
-        `Each gained level adds ${EMPLOYEE_SPEED_BONUS_PER_LEVEL}% of normal speed to that job:
-          faster service at the register, faster trips carrying stock from lockers to shelves,
-          or faster trips moving delivered crates into lockers.`,
-        "Skills and higher wages are permanent. If you fire someone and hire them again, they keep their skills and wage, and their hiring cost is higher too.",
-        "Once training is booked, wait until the employee returns before booking another course or letting them go.",
-      ])}`),
-    section("How to Fire", `
-      ${list([
-        "Open the <strong>Employee</strong> tab between shifts and find the person under <strong>YOUR STAFF</strong>.",
-        "Select <strong>LET GO</strong>, then confirm. You won't get their hiring cost back.",
-        "They won't work or receive wages in future shifts.",
+        `Run register and Load storage gain a larger speed boost at Levels ${EMPLOYEE_MILESTONE_LEVELS.join(" and ")}:
+          employees work ${Math.round((getEmployeeJobSpeed({ register: 3 }, "register") - 1) * 100)}% faster
+          at Level 3 and ${getEmployeeJobSpeed({ register: 5 }, "register")} times normal speed at Level 5.`,
+        `Stock shelves makes restocking trips faster with each level. Employees carry ${EMPLOYEE_BASE_CARRY} items
+          at Level 1, ${getEmployeeCarryCapacity(3)} at Level 3, and ${getEmployeeCarryCapacity(5)} at Level 5.`,
+        "Skills and higher wages are permanent.",
+        "Once training is booked, wait until the employee returns before booking another course or changing On Shift / Off Shift.",
       ])}`),
   ].join("");
 }
