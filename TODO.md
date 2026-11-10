@@ -171,6 +171,9 @@ notice something that needs doing but isn't being done right now.
       live-state reports in local playtest sessions, with recent events/errors and
       customer-pool calculations. See `documentation/DebugPlaytesting.md`.
 - [x] Spawn-customer debug key (Y key): lets one random customer in right away.
+- [x] Quickstart debug key (K key, before any shelf is placed): signs Basic Rations, places
+      a Budget Shelf near the door full of the four cheapest items, adds a third locker,
+      and charges for all of it.
 - [x] Tile-grid overlay (G key, `GameScene.toggleDebugGrid`): draws a 1px line every
       TILE_SIZE across the whole authored map (including locked/not-yet-built zones), on
       top of everything else. Added after discovering the Storage Fixture's lockers (and,
@@ -501,7 +504,8 @@ notice something that needs doing but isn't being done right now.
 - [x] Reputation-driven customer pooling (Steps 24/49): customer counts and faction
       mix are calculated once at shift start, with licensed factions represented and
       arrivals scheduled across the shift. Tune traffic/reputation curves after playtesting.
-- [ ] Remaining faction systems: faction-specific currencies (Steps 25-28).
+- [x] Faction currencies (Steps 25-28): most Scavengers pay in M-Scrips (120 per credit,
+      bills only) and most Explorers unlock a Chit by entering its arrow code.
 - [x] Faction sale reputation (Step 51): a completed sale tallies +1 store reputation and
       +1 reputation with the customer's faction. Gains and losses apply at shift end.
 - [x] Manager's Tablet UI: unified tabbed window shell built (`js/logic/ManagerTablet.js`),
