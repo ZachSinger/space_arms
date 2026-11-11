@@ -177,6 +177,7 @@ function stockingTopic() {
       ${list([
         "Crates wait on the Loading Pad until someone picks them up.",
         `Press ${key("crate")} to pick up a crate. Walk up to a locker or shelf and press ${key("interact")} to unload it there.`,
+        `While carrying a stock crate, press ${key("unpack")} to move as much as fits into your hovercart. Anything that doesn't fit stays in the box.`,
         `Press ${key("crate")} again to put it down. If you're walking, you'll throw it instead. Thrown crates that hit a customer cost reputation.`,
         "Walk into a crate on the floor to push it out of the way.",
       ])}`),
@@ -186,6 +187,7 @@ function stockingTopic() {
         `Each shelf has a grid of spots. Press ${key("interact")} at a shelf to open it, then pick an item from your hovercart to give it a spot. ${key("rotate")} turns the item and ${key("cancel")} stops placing.`,
         "Once an item has a spot on a shelf, you can unload crates of it straight onto that shelf.",
         "Some items are too big for some shelves.",
+        "Shelf symbols show item categories and counts. Open the shelf to see the item names. A count of 0 means that item's spot is kept for restocking.",
       ])}`),
     section("Lockers and the Hovercart", `
       ${list([
@@ -195,8 +197,9 @@ function stockingTopic() {
       ])}`),
     section("Go-Backs", `
       <p>When a customer gives up and leaves, the items they were holding go into the Go-Backs
-        bin at the register. Press ${key("goBacks")} at the register to load them into your
-        hovercart, then put them back on a shelf.</p>`),
+        bin at the register. A yellow "!" above your character means something is waiting in it.
+        Press ${key("goBacks")} at the register and use TAKE to move them into your hovercart,
+        then put them back on a shelf. Nothing can be put into the bin.</p>`),
   ].join("");
 }
 

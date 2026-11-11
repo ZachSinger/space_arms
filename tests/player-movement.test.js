@@ -10,6 +10,8 @@ import { HUDController } from "../js/logic/HUDController.js";
 let server;
 let cacheDirectory;
 let Player;
+let PLAYER_SPRITE;
+let registerPlayerAnimations;
 
 before(async () => {
   cacheDirectory = await mkdtemp(join(tmpdir(), "space-arms-movement-test-"));
@@ -21,7 +23,7 @@ before(async () => {
     optimizeDeps: { noDiscovery: true, include: [] },
     server: { middlewareMode: true },
   });
-  ({ Player } = await server.ssrLoadModule("/js/logic/Player.js"));
+  ({ Player, PLAYER_SPRITE, registerPlayerAnimations } = await server.ssrLoadModule("/js/logic/Player.js"));
 });
 
 after(async () => {
@@ -41,17 +43,40 @@ function createPlayer() {
     setSize(width, height) { this.size = { width, height }; },
     setOffset(x, y) { this.offset = { x, y }; },
     setVelocity(x, y) { this.velocity = { x, y }; },
+    reset(x, y) { sprite.x = x; sprite.y = y; this.setVelocity(0, 0); },
   };
   const sprite = {
     body, scaleX: 1, scaleY: 1,
-    setDisplaySize() { return this; },
-    setTint() { return this; },
+    anims: {
+      isPlaying: false, timeScale: 1, starts: 0,
+      stop() { this.isPlaying = false; },
+    },
+    setDisplaySize(width, height) {
+      this.displayWidth = width;
+      this.displayHeight = height;
+      this.scaleX = width / PLAYER_SPRITE.frameWidth;
+      this.scaleY = height / PLAYER_SPRITE.frameHeight;
+      return this;
+    },
+    setOrigin(x, y) { this.originX = x; this.originY = y; return this; },
     setDepth() { return this; },
-    setTexture() { return this; },
+    setFrame(frame) { this.frame = frame; return this; },
+    play(key, ignoreIfPlaying) {
+      if (ignoreIfPlaying && this.anims.isPlaying && this.anims.key === key) return this;
+      this.anims.key = key;
+      this.anims.isPlaying = true;
+      this.anims.starts += 1;
+      return this;
+    },
   };
   const scene = {
     movementAllowed: true,
-    add: { image: () => sprite },
+    add: {
+      sprite(x, y, texture, frame) {
+        Object.assign(sprite, { x, y, texture, frame });
+        return sprite;
+      },
+    },
     physics: { add: { existing() {} } },
     input: {
       keyboard: {
@@ -66,25 +91,85 @@ function createPlayer() {
     },
     controlMode: { allows: () => scene.movementAllowed },
   };
-  return { player: new Player(scene, 0, 0), scene, cursors, wasd, shift, body };
+  return { player: new Player(scene, 0, 0), scene, cursors, wasd, shift, body, sprite };
 }
 
 test("only the player's lower body collides, so their head can overlap a shelf above them", () => {
-  const { body } = createPlayer();
-  assert.deepEqual(body.size, { width: 22, height: 20 });
-  assert.deepEqual(body.offset, { x: 12, y: 24 }, "centered, ending just above the sprite bottom");
+  const { body, sprite } = createPlayer();
+  assert.equal(body.size.width * sprite.scaleX, 22);
+  assert.equal(body.size.height * sprite.scaleY, 20);
+  assert.equal(body.offset.x * sprite.scaleX - sprite.displayWidth * sprite.originX, -11);
+  assert.equal(body.offset.y * sprite.scaleY - sprite.displayHeight * sprite.originY, 0);
+});
+
+test("the mechanic sheet has a looping walk cycle for each direction without duplicate registration", () => {
+  const animations = new Map();
+  const manager = {
+    exists: (key) => animations.has(key),
+    create(config) {
+      assert.equal(animations.has(config.key), false);
+      animations.set(config.key, config);
+    },
+  };
+  registerPlayerAnimations(manager);
+  registerPlayerAnimations(manager);
+  assert.equal(animations.size, 4);
+  for (const [facing, row] of [["down", 0], ["left", 1], ["right", 2], ["up", 3]]) {
+    const config = animations.get(`player_walk_${facing}`);
+    assert.deepEqual(config.frames, [0, 1, 2, 1].map((column) =>
+      ({ key: PLAYER_SPRITE.key, frame: row * 3 + column })));
+    assert.equal(config.frameRate, 8);
+    assert.equal(config.repeat, -1);
+  }
+});
+
+test("walking animates all four directions and stops on the matching standing frame", () => {
+  const { player, wasd, sprite } = createPlayer();
+  assert.equal(sprite.texture, PLAYER_SPRITE.key);
+  assert.equal(sprite.frame, 1);
+  for (const [facing, idleFrame] of [["down", 1], ["left", 4], ["right", 7], ["up", 10]]) {
+    wasd[facing].isDown = true;
+    player.update(16);
+    assert.equal(sprite.anims.key, `player_walk_${facing}`);
+    assert.equal(sprite.anims.isPlaying, true);
+    const starts = sprite.anims.starts;
+    player.update(16);
+    assert.equal(sprite.anims.starts, starts, "holding a direction does not restart the cycle");
+    wasd[facing].isDown = false;
+    player.update(16);
+    assert.equal(sprite.anims.isPlaying, false);
+    assert.equal(sprite.frame, idleFrame);
+  }
+});
+
+test("forcing a facing or teleporting stops the walk cycle immediately", () => {
+  const { player, wasd, sprite, body } = createPlayer();
+  wasd.left.isDown = true;
+  player.update(16);
+  player.forceFacing("left");
+  assert.equal(sprite.anims.isPlaying, false);
+  assert.equal(sprite.frame, 4, "even an unchanged facing returns to standing");
+  player.update(16);
+  player.teleportTo(100, 200);
+  assert.deepEqual(body.velocity, { x: 0, y: 0 });
+  assert.equal(sprite.x, 100);
+  assert.equal(sprite.y, 200);
+  assert.equal(sprite.anims.isPlaying, false);
+  assert.equal(sprite.frame, 4);
 });
 
 test("Shift increases player speed only while moving and consumes stamina", () => {
-  const { player, wasd, shift, body } = createPlayer();
+  const { player, wasd, shift, body, sprite } = createPlayer();
   assert.equal(player.stamina, 100);
   wasd.right.isDown = true;
   player.update(1000);
   assert.equal(body.velocity.x, 160);
+  assert.equal(sprite.anims.timeScale, 1);
   assert.equal(player.stamina, 100);
   shift.isDown = true;
   player.update(1000);
   assert.equal(body.velocity.x, 280);
+  assert.equal(sprite.anims.timeScale, 1.75);
   assert.equal(player.stamina, 75);
   wasd.right.isDown = false;
   player.update(1000);
@@ -150,11 +235,14 @@ test("register, window, and keyboard input locks prevent both movement and stami
   ]) {
     const harness = createPlayer();
     harness.wasd.right.isDown = true;
+    harness.player.update(16);
+    assert.equal(harness.sprite.anims.isPlaying, true);
     harness.shift.isDown = true;
     lock(harness);
     harness.player.update(1000);
     assert.deepEqual(harness.body.velocity, { x: 0, y: 0 });
     assert.equal(harness.player.stamina, 100);
+    assert.equal(harness.sprite.anims.isPlaying, false);
   }
 });
 

@@ -14,14 +14,24 @@ test("shelf display grid scales at two visual slots per floor tile", () => {
   assert.deepEqual(getShelfDisplayGrid({ w: 2, h: 1 }), { w: 4, h: 2 });
 });
 
-test("world display blocks use the shared half-tile cell size and item footprint", () => {
+test("world display blocks form a smaller, centered grid following item footprints", () => {
   assert.deepEqual(
     getShelfStackBounds(
       { w: 3, h: 2 },
       { gx: 2, gy: 1, w: 2, h: 1 },
     ),
-    { x: -32, y: -32, width: 64, height: 32 },
+    { x: -20, y: -20, width: 40, height: 20 },
   );
+});
+
+test("adjacent stock boxes touch without gaps", () => {
+  const grid = { w: 1, h: 1 };
+  const topLeft = getShelfStackBounds(grid, { gx: 0, gy: 0, w: 1, h: 1 });
+  const topRight = getShelfStackBounds(grid, { gx: 1, gy: 0, w: 1, h: 1 });
+  const bottomLeft = getShelfStackBounds(grid, { gx: 0, gy: 1, w: 1, h: 1 });
+  assert.deepEqual(topLeft, { x: -20, y: -20, width: 20, height: 20 });
+  assert.equal(topRight.x, topLeft.x + topLeft.width);
+  assert.equal(bottomLeft.y, topLeft.y + topLeft.height);
 });
 
 test("shelf display uses a stable category color", () => {
@@ -32,27 +42,31 @@ test("shelf display uses a stable category color", () => {
   assert.equal(getShelfCategoryColor({ tags: ["Unknown"] }), 0x8090a0);
 });
 
-test("shelf display batches blocks and reuses one quantity label per placement, including sold-out x0", () => {
+test("shelf display reuses numeric count labels and stays eight pixels lower in every direction", () => {
   const fills = [];
+  const strokes = [];
   const texts = [];
   const graphics = {
     clear() {},
     fillStyle(color, alpha) { this.color = color; this.alpha = alpha; return this; },
     fillRect(x, y, width, height) { fills.push({ color: this.color, alpha: this.alpha, x, y, width, height }); return this; },
-    lineStyle() { return this; },
-    strokeRect() { return this; },
+    lineStyle(lineWidth, color, alpha) { this.lineWidth = lineWidth; this.lineColor = color; this.lineAlpha = alpha; return this; },
+    strokeRect(x, y, width, height) {
+      strokes.push({ lineWidth: this.lineWidth, color: this.lineColor, alpha: this.lineAlpha, x, y, width, height });
+      return this;
+    },
   };
   const container = {
     angle: 0,
     add() {},
     setDepth() { return this; },
-    setPosition() { return this; },
+    setPosition(x, y) { this.x = x; this.y = y; return this; },
     setAngle(angle) { this.angle = angle; return this; },
     destroy() {},
   };
   const scene = {
     add: {
-      container: () => container,
+      container: (x, y) => container.setPosition(x, y),
       graphics: () => graphics,
       text: (x, y, text, style) => {
         const label = {
@@ -63,7 +77,7 @@ test("shelf display batches blocks and reuses one quantity label per placement, 
           setAngle(angle) { this.angle = angle; return this; },
           setText(value) { this.text = value; return this; },
           setColor(value) { this.color = value; return this; },
-          setPosition() { return this; },
+          setPosition(x, y) { this.x = x; this.y = y; return this; },
           setVisible(value) { this.visible = value; return this; },
           destroy() {},
         };
@@ -80,44 +94,56 @@ test("shelf display batches blocks and reuses one quantity label per placement, 
     placements: [placement],
   };
   const display = new ShelfStockDisplay(scene, fixture, () => ({ tags: ["Firearm"] }));
+  assert.deepEqual({ x: container.x, y: container.y }, { x: 100, y: 208 });
 
   display.sync();
-  assert.equal(fills.length, 2);
-  assert.deepEqual(
-    { x: fills[0].x, y: fills[0].y, width: fills[0].width, height: fills[0].height },
-    { x: -30, y: -30, width: 60, height: 28 },
-  );
-  assert.equal(fills[0].color, getShelfCategoryColor({ tags: ["Firearm"] }));
-  assert.deepEqual(fills[1], {
-    color: 0x111827, alpha: 0.95, x: -28, y: -28, width: 56, height: 24,
+  assert.deepEqual(fills[0], {
+    color: 0x111827, alpha: 0.5, x: -20, y: -20, width: 40, height: 20,
+  });
+  assert.deepEqual(strokes[0], {
+    lineWidth: 1, color: getShelfCategoryColor({ tags: ["Firearm"] }), alpha: 0.9,
+    x: -19.5, y: -19.5, width: 39, height: 19,
   });
   assert.equal(texts.length, 1);
-  assert.equal(texts[0].text, "x3");
-  assert.equal(texts[0].style.fontSize, "13px");
+  assert.equal(texts[0].text, "3");
+  assert.equal(texts[0].style.fontSize, "10px");
   assert.equal(texts[0].style.backgroundColor, undefined);
-  assert.deepEqual(texts[0].style.padding, { x: 2, y: 2 });
+  assert.equal(texts[0].style.padding, undefined);
+  assert.deepEqual({ x: texts[0].x, y: texts[0].y }, { x: 0, y: -10 });
 
   display.sync();
-  assert.equal(fills.length, 2);
+  assert.equal(fills.length, 1);
+  assert.equal(strokes.length, 1);
   assert.equal(texts.length, 1);
 
   placement.quantity = 4;
   display.sync();
-  assert.equal(fills.length, 4);
+  assert.equal(fills.length, 2);
+  assert.equal(strokes.length, 2);
   assert.equal(texts.length, 1);
-  assert.equal(texts[0].text, "x4");
+  assert.equal(texts[0].text, "4");
 
   placement.quantity = 0;
   display.sync();
-  assert.equal(fills.length, 6);
+  assert.equal(fills.length, 3);
+  assert.equal(strokes.length, 3);
   assert.equal(texts.length, 1);
   assert.equal(texts[0].visible, true);
-  assert.equal(texts[0].text, "x0");
+  assert.equal(texts[0].text, "0");
   assert.equal(texts[0].color, "#ffffff");
 
+  placement.quantity = 10;
+  display.sync();
+  assert.equal(texts.length, 1);
+  assert.equal(texts[0].text, "10");
+
   // A turned shelf turns its stock boxes but keeps the quantity labels upright.
-  display.setAngle(90);
-  assert.equal(container.angle, 90);
-  assert.equal(texts[0].angle, -90);
+  for (const angle of [0, 90, 180, 270]) {
+    display.setAngle(angle);
+    display.setPosition(300, 400);
+    assert.equal(container.angle, angle);
+    assert.equal(texts[0].angle, -angle);
+    assert.deepEqual({ x: container.x, y: container.y }, { x: 300, y: 408 });
+  }
   display.destroy();
 });

@@ -14,7 +14,7 @@ const CONTROL_PROFILES = Object.freeze({
   [CONTROL_MODES.PLACING]: new Set(["rotateFixture", "cameraZoom"]),
   [CONTROL_MODES.MODAL]: new Set(),
   [CONTROL_MODES.REGISTER]: new Set(["interact", "crate", "goBacks", "tablet", "debug", "pause", "cameraZoom"]),
-  [CONTROL_MODES.CARRYING]: new Set(["move", "interact", "crate", "goBacks", "tablet", "debug", "pause", "cameraZoom"]),
+  [CONTROL_MODES.CARRYING]: new Set(["move", "interact", "crate", "unpack", "goBacks", "tablet", "debug", "pause", "cameraZoom"]),
   [CONTROL_MODES.WALKING]: new Set(["move", "interact", "crate", "goBacks", "tablet", "debug", "pause", "cameraZoom"]),
 });
 

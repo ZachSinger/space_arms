@@ -32,7 +32,7 @@ import {
   createCustomerPool,
   getLicensedFactionIds,
 } from "../logic/CustomerPooling.js";
-import { Player } from "../logic/Player.js";
+import { Player, PLAYER_CHARACTER_HEIGHT } from "../logic/Player.js";
 import { Crate, INTERACT_RANGE } from "../logic/Crate.js";
 import { DELIVERY_FEE, summarizeSupplyOrder } from "../logic/SupplyOrder.js";
 import { getEmergencyLoanOffer } from "../logic/EmergencyLoan.js";
@@ -55,8 +55,8 @@ import { summarizeReceipt } from "../logic/DayLedger.js";
 import { Market } from "../logic/Market.js";
 import { findGridPath } from "../logic/Pathfinder.js";
 import { FixturePlacement } from "../logic/FixturePlacement.js";
-import { ShelfStockDisplay } from "../logic/ShelfStockDisplay.js";
-import { getFixtureTexture } from "../logic/FixtureTexture.js";
+import { ShelfIconDisplay } from "../logic/ShelfIconDisplay.js";
+import { getFixtureTexture, hasFacingTextures } from "../logic/FixtureTexture.js";
 import { STARTING_FIXTURES, FIXTURE_TYPES, getFixtureType, getFixtureResaleValue, getShelfDisplayGrid, fixtureAccessCells, fixtureFacing, fixtureFacingStep, fixtureFootprint, fixtureInteractionDistance, fixtureRotation, validateFixtureLayout } from "../logic/FixtureLayout.js";
 import { FixtureRegistry } from "../logic/FixtureRegistry.js";
 import { SHOP_LAYOUT_VERSION, validateShopSave } from "../logic/ShopSave.js";
@@ -70,13 +70,14 @@ import { database } from "./boot.js"; // the exported DatabaseManager singleton
 // Most customers inside the store at once. When full, the next arrival is lost for good,
 // so a backed-up dealer really does lose that sale.
 const MAX_CUSTOMERS_IN_STORE = 6;
+// Spread around the exit door's center; kept within that door's half of the doorway.
 const CUSTOMER_EXIT_SLOT_OFFSETS = Object.freeze([
-  [-36, -8],
+  [-8, -8],
   [0, -8],
-  [36, -8],
-  [-36, 8],
+  [8, -8],
+  [-8, 8],
   [0, 8],
-  [36, 8],
+  [8, 8],
 ].map(([dx, dy]) => Object.freeze({ dx, dy })));
 
 function reputationPenaltyText(penalty, factionId) {
@@ -121,10 +122,17 @@ const LOADING_PAD_HEIGHT = 128;
 const REGISTER_INTERACT_RANGE = 64;
 const REGISTER_WIDTH = 90;
 const REGISTER_HEIGHT = 75;
+// On-screen width of the register's front view; its other views use the same scale.
+const REGISTER_FACING_ART_WIDTH = 45;
 // Share of the register art (from its top edge) that is monitor and printer, not counter.
 const REGISTER_PASSABLE_TOP_FRACTION = 60 / 169;
+// The same share for each facing of the register's per-facing art.
+const REGISTER_PASSABLE_TOP_BY_FACING = Object.freeze({ down: 0.19, left: 0.14, up: 0.05, right: 0.14 });
 // How far the operating player's feet sit past the register graphic's top edge (px).
 const REGISTER_BEHIND_OVERLAP = 10;
+// Extra drop (share of the player's height) when standing behind a register from above.
+const REGISTER_ABOVE_LOWER_FRACTION = 0.3;
+const REGISTER_BELOW_RAISE_FRACTION = 0.65;
 // How far (px) the first customer in line may overlap the front of the register art.
 const REGISTER_FRONT_OVERLAP = 10;
 // Distance between customers waiting in the register line; just over a customer's height.
@@ -244,20 +252,20 @@ export class GameScene extends Phaser.Scene {
     const zonePixelW = salesFloor.gridW * TILE_SIZE;
     const zonePixelH = salesFloor.gridH * TILE_SIZE;
 
-    // The shop's one public entrance/exit (see getStoreDoorCell). Customers spawn just
-    // inside it and walk back to it to leave. The back wall stays drawn behind the door.
+    // The shop's public doorway (see getStoreDoorCell): customers spawn just inside its
+    // left (entrance) door and leave through its right (exit) door. The back wall stays
+    // drawn behind the doors.
     const { gx: doorGX, gy: doorGY } = getStoreDoorCell();
     for (const { gx, gy } of getStoreDoorCells()) this.room.openDoorway(gx, gy, this.room.wallArtAt(gx, gy));
     this.storeDoor = {
       x: this.room.worldX(doorGX) + TILE_SIZE / 2,
       y: this.room.worldY(doorGY),
     };
-    // The door is sized so its top and bottom line up with the back wall's visible face.
+    // The doors stand on the bottom edge of the back wall's visible face.
     const backWallTop = this.room.worldY(doorGY + 1 - SHOP_BACK_WALL_HEIGHT) - TILE_SIZE / 2;
     this.storeDoorAnimation = new SlidingDoor(this, {
       x: this.storeDoor.x,
       y: backWallTop + SHOP_BACK_WALL_FACE.bottom * TILE_SIZE,
-      top: backWallTop + SHOP_BACK_WALL_FACE.top * TILE_SIZE,
       wallGroup: this.room.wallGroup,
     });
 
@@ -286,18 +294,20 @@ export class GameScene extends Phaser.Scene {
     this.operatingRegister = false;
     this.playerPositionBeforeRegister = null;
 
-    // Customers spawn just inside the store door. The small jitter box keeps several quick
-    // arrivals from stacking on one pixel.
+    // Customers spawn just inside the entrance (left) door. The small jitter box keeps
+    // several quick arrivals from stacking on one pixel.
+    const { entrancePoint, exitPoint } = this.storeDoorAnimation;
     this.customerSpawnBounds = {
-      xMin: this.storeDoor.x - 24,
-      xMax: this.storeDoor.x + 24,
+      xMin: entrancePoint.x - 8,
+      xMax: entrancePoint.x + 8,
       yMin: this.storeDoor.y + 8,
       yMax: this.storeDoor.y + TILE_SIZE,
     };
-    // Customers leave by walking out through the store door.
-    this.exitPoint = { x: this.storeDoor.x, y: this.storeDoor.y };
+    // Customers leave by walking out through the exit (right) door.
+    this.exitPoint = { x: exitPoint.x, y: this.storeDoor.y };
 
     this.checkoutWindow = new CheckoutWindow(this.windowManager);
+    this.checkoutWindow.onFirstScan = () => this.registerLine[0]?.resetPatience();
     this.goBacksWindow = new GoBacksWindow(this.windowManager, this.playerState);
     this.fixtureWindow = new FixtureWindow(this.windowManager, this.playerState, this.eventBus);
     // Customers waiting at the register; index 0 is being checked out. Re-laid-out by
@@ -407,9 +417,9 @@ export class GameScene extends Phaser.Scene {
     this.registerInteractableSources();
     this.controlMode = new ControlMode(this);
 
-    // E opens fixtures or delivers/places carried crates; Space handles pickup/drop/throw.
+    // E opens fixtures or delivers/places crates; Q unpacks stock or opens Go-Backs.
     this.bindControlKey("keydown-E", "interact", () => this.handleInteract());
-    this.bindControlKey("keydown-Q", "goBacks", () => this.openGoBacksBin());
+    this.bindSecondaryInteractKey();
     this.bindCrateKey();
     this.registerPrompt = this.add.text(0, 0, "", {
       fontFamily: "monospace",
@@ -553,10 +563,20 @@ export class GameScene extends Phaser.Scene {
       loop: true,
       callback: () => this.requestAutosave(),
     });
+    // A "!" floats over the player while abandoned items wait in the Go-Backs bin.
+    this.goBacksBadge = this.add.text(0, 0, "!", {
+      fontFamily: "Courier New, monospace",
+      fontSize: "20px",
+      fontStyle: "bold",
+      color: "#fbbf24",
+      stroke: "#111827",
+      strokeThickness: 4,
+    }).setOrigin(0.5, 1).setDepth(9000).setVisible(false);
     this.playerState.subscribe(() => {
       this.requestAutosave();
       this.refreshShelfStockDisplays();
       this.updateSaveControls();
+      this.refreshGoBacksBadge();
     });
     this.shiftClock.subscribe(() => this.updateSaveControls());
   }
@@ -567,10 +587,24 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  bindSecondaryInteractKey() {
+    this.bindControlKey("keydown-Q", "goBacks", (event) => {
+      if (!event.repeat) this.handleSecondaryInteract();
+    });
+  }
+
+  handleSecondaryInteract() {
+    if (this.carriedCrate?.kind === "item" && this.controlMode.allows("unpack")) {
+      this.unpackCarriedCrate();
+    } else {
+      this.openGoBacksBin();
+    }
+  }
+
   /**
    * One frame of controller input. A screen on top gets it through the menu cursor;
    * otherwise each button runs the same action as its keyboard key:
-   *   A = E (interact)   X = Space (crate)   Y = Q (go-backs)   Back = I (tablet)
+   *   A = E (interact)   X = Space (crate)   Y = Q (go-backs; unpack a stock crate)   Back = I (tablet)
    *   LB/RB = PageDown/PageUp (zoom)   Start = top bar (pause, start shift, save, ...)
    *   B = leave the register   left stick / D-pad = walk   triggers = dash
    * @param {number} time
@@ -608,7 +642,7 @@ export class GameScene extends Phaser.Scene {
     } else {
       if (pad.justPressed(PAD.A)) this.handleInteract();
       if (pad.justPressed(PAD.X) && !this.checkoutWindow.usesSpaceKey()) this.handleCrateInteract();
-      if (pad.justPressed(PAD.Y)) this.openGoBacksBin();
+      if (pad.justPressed(PAD.Y)) this.handleSecondaryInteract();
       if (pad.justPressed(PAD.B) && this.operatingRegister) this.endRegisterSession();
     }
     if (pad.justPressed(PAD.LB)) this.handleUnusedMenuButton(PAD.LB);
@@ -930,7 +964,7 @@ export class GameScene extends Phaser.Scene {
     else this.drawFixture(fixture, getFixtureTexture(this, spec));
     this.orientFixtureSprite(fixture);
     if (fixture instanceof ShelfFixture) {
-      fixture.stockDisplay = new ShelfStockDisplay(
+      fixture.stockDisplay = new ShelfIconDisplay(
         this,
         fixture,
         (itemId) => database.getItem(itemId),
@@ -950,15 +984,31 @@ export class GameScene extends Phaser.Scene {
   orientFixtureSprite(fixture) {
     const { sprite, x, y } = fixture;
     const rotation = fixtureRotation(fixture);
-    sprite.setPosition(x, y).setAngle(rotation * 90);
-    const sideways = rotation % 2 === 1;
+    const spec = getFixtureType(fixture.type);
+    // Art drawn for each facing is swapped in upright; other art is spun to face its way.
+    const facingArt = hasFacingTextures(spec);
+    if (facingArt) {
+      sprite.setTexture(getFixtureTexture(this, spec, rotation));
+      this.sizeFacingArt(sprite, spec, rotation);
+    }
+    sprite.setPosition(x, y).setAngle(facingArt ? 0 : rotation * 90);
+    const sideways = !facingArt && rotation % 2 === 1;
     let width = sideways ? sprite.displayHeight : sprite.displayWidth;
     let height = sideways ? sprite.displayWidth : sprite.displayHeight;
     let centerX = x;
     let centerY = y;
     // The register art's top part is the monitor and printer standing on the counter; only
-    // the counter itself blocks movement. That top part faces the rotated direction.
-    if (getFixtureType(fixture.type)?.kind === "register") {
+    // the counter itself blocks movement.
+    if (facingArt && spec.kind === "register") {
+      const trim = height * REGISTER_PASSABLE_TOP_BY_FACING[fixtureFacing(fixture)];
+      height -= trim;
+      centerY += trim / 2;
+    } else if (facingArt && spec.kind === "shelf") {
+      const footprint = fixtureFootprint(fixture);
+      width = footprint.w * TILE_SIZE;
+      height = footprint.h * TILE_SIZE;
+    } else if (spec?.kind === "register") {
+      // Older spun art: that top part faces the rotated direction.
       const trim = (sideways ? width : height) * REGISTER_PASSABLE_TOP_FRACTION;
       const [dx, dy] = [[0, 1], [-1, 0], [0, -1], [1, 0]][rotation];
       if (sideways) width -= trim;
@@ -975,6 +1025,25 @@ export class GameScene extends Phaser.Scene {
     body.halfHeight = height / 2;
     body.center.set(centerX, centerY);
     body.world.staticTree.insert(body);
+  }
+
+  sizeFacingArt(sprite, spec, rotation = 0) {
+    if (spec.kind === "shelf") {
+      const footprint = fixtureFootprint({ type: spec.id, rotation });
+      sprite.setDisplaySize(footprint.w * TILE_SIZE, footprint.h * TILE_SIZE);
+    } else {
+      sprite.setScale(this.getFacingArtScale(spec));
+    }
+  }
+
+  /**
+   * Scale the register's facing art against its front view.
+   * @param {object} spec
+   */
+  getFacingArtScale(spec) {
+    const source = this.textures?.get(spec.facingTextures.down)?.getSourceImage?.();
+    const targetWidth = spec.kind === "register" ? REGISTER_FACING_ART_WIDTH : spec.w * TILE_SIZE;
+    return source?.width ? targetWidth / source.width : 1;
   }
 
   despawnAllFixtures() {
@@ -1331,6 +1400,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.registerQueuePoints = this.placeRegisterQueue(result.queueCells.map(toWorld));
     this.registerQueueAnchor = this.registerQueuePoints[0];
+    if (this.goBacksBadge) this.refreshGoBacksBadge();
   }
 
   // The register art is smaller than its floor footprint, so tile centers leave the first
@@ -2389,7 +2459,12 @@ export class GameScene extends Phaser.Scene {
   updateCrateHint() {
     this.crateHint = "";
     const mode = this.controlMode.getMode();
-    if (mode === CONTROL_MODES.WALKING) {
+    if (mode === CONTROL_MODES.CARRYING && this.carriedCrate?.kind === "item") {
+      this.crateHint =
+        `${controlLabel("unpack")}: Unpack into your hovercart | ` +
+        `${controlLabel("interact")}: Deliver to a shelf or locker | ` +
+        `${controlLabel("crate")}: Drop`;
+    } else if (mode === CONTROL_MODES.WALKING) {
       this.crateHint = this.interactables.findTarget(
         "cratePickup",
         this.getInteractionOrigin(),
@@ -2597,6 +2672,39 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  unpackCarriedCrate() {
+    if (!this.controlMode.allows("unpack")) return false;
+    const crate = this.carriedCrate;
+    if (!crate || crate.kind !== "item") return false;
+
+    const quantityBefore = crate.quantity;
+    const transfer = transferItems(crate, this.playerState.hovercart, crate.itemId, quantityBefore, {
+      eventBus: this.eventBus,
+      sourceName: "crate",
+      destinationName: "hovercart",
+    });
+
+    if (transfer.moved === 0) {
+      this.showGameMessage(`Hovercart full; ${quantityBefore} items remain in the box`, "#f59e0b");
+      return false;
+    }
+
+    if (crate.quantity === 0) {
+      crate.destroy();
+      this.carriedCrate = null;
+    }
+    this.playerState.notifyListeners();
+    if (crate.quantity > 0) {
+      this.showGameMessage(
+        `Added ${transfer.moved} items to your hovercart; ${crate.quantity} remain in the box`,
+        "#f59e0b",
+      );
+    } else {
+      this.showGameMessage(`Added ${transfer.moved} items to your hovercart`, "#10b981");
+    }
+    return true;
+  }
+
   /**
    * Brief world-space confirmation text. It holds still for 900 ms before floating up and
    * fading over 900 ms, since it spawns where the player is least likely to be looking.
@@ -2695,6 +2803,18 @@ export class GameScene extends Phaser.Scene {
     label.setPosition(x, bounds.top - 2).setDepth(crate.sprite.depth + 1).setVisible(true);
   }
 
+  refreshGoBacksBadge() {
+    const count = this.playerState.goBacks.stock.reduce((sum, entry) => sum + entry.quantity, 0);
+    this.goBacksBadge.setVisible(count > 0);
+    this.positionGoBacksBadge();
+  }
+
+  positionGoBacksBadge() {
+    if (!this.goBacksBadge?.visible || !this.player?.sprite) return;
+    const bounds = this.player.sprite.getBounds();
+    this.goBacksBadge.setScale(this.getPopupScale()).setPosition(bounds.centerX, bounds.top - 2);
+  }
+
   refreshLockerCapacityDisplay(fixture) {
     const text = `${fixture.usedCapacity()}/${fixture.capacity}`;
     if (fixture.capacityLabel.text !== text) fixture.capacityLabel.setText(text);
@@ -2777,13 +2897,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * The front customer's patience holds while the player is actually ringing them up.
+   * An employee ringing up the front customer holds their patience. The player's own
+   * checkout doesn't: the first scan resets patience once (see CheckoutWindow.onFirstScan).
    * @param {Customer} customer
    */
   isServingCustomer(customer) {
-    return (this.operatingRegister && this.registerLine[0] === customer &&
-      this.checkoutWindow.mode === "checkout" && this.checkoutWindow.uiWindow.isOpen) ||
-      this.employees.some((employee) =>
+    return this.employees.some((employee) =>
         employee.state === "SERVING_REGISTER" &&
         employee.currentJob?.customer === customer &&
         this.registerLine[0] === customer,
@@ -2823,9 +2942,19 @@ export class GameScene extends Phaser.Scene {
     this.employees.forEach((employee) => employee.cancelRegisterJob());
     this.operatingRegister = true;
     this.playerPositionBeforeRegister = { x: this.player.sprite.x, y: this.player.sprite.y };
+    const register = this.fixtures.register();
     const behind = this.getBehindRegisterPoint();
+    // From above, the player stands tucked behind the counter, partly hidden by it.
+    if (fixtureFacingStep(register, true).dy < 0) {
+      behind.y += PLAYER_CHARACTER_HEIGHT * REGISTER_ABOVE_LOWER_FRACTION;
+      this.playerDepthBeforeRegister = this.player.sprite.depth;
+      this.player.sprite.setDepth(register.sprite.depth - 0.01);
+    } else if (fixtureFacingStep(register, true).dy > 0) {
+      // From below, the player stands slightly over the front of the counter.
+      behind.y -= PLAYER_CHARACTER_HEIGHT * REGISTER_BELOW_RAISE_FRACTION;
+    }
     this.player.teleportTo(behind.x, behind.y);
-    this.player.forceFacing(fixtureFacing(this.fixtures.register()));
+    this.player.forceFacing(fixtureFacing(register));
     this.player.inputEnabled = false;
     this.player.sprite.body.enable = false;
     this.eventBus.emit(GAME_EVENTS.REGISTER_SESSION_STARTED, {
@@ -2846,6 +2975,10 @@ export class GameScene extends Phaser.Scene {
     this.goBacksWindow.uiWindow.close();
     this.player.sprite.body.enable = true;
     this.player.inputEnabled = true;
+    if (this.playerDepthBeforeRegister != null) {
+      this.player.sprite.setDepth(this.playerDepthBeforeRegister);
+      this.playerDepthBeforeRegister = null;
+    }
     this.player.teleportTo(
       this.playerPositionBeforeRegister.x,
       this.playerPositionBeforeRegister.y,
@@ -2973,6 +3106,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.customerGroup.add(customer.sprite);
     this.customers.push(customer);
+    this.storeDoorAnimation.letIn(customer.sprite);
     this.debugInfo?.recordCustomer("customer-entered", customer);
   }
 
@@ -3187,9 +3321,11 @@ export class GameScene extends Phaser.Scene {
     this.fixturePlacement.update();
     for (const crate of this.restockCrates) crate.updateThrow(delta);
     this.separateStuckCrates();
+    // The exit door opens for the player and for customers on their way out.
     this.storeDoorAnimation.update(delta, [
       this.player?.sprite,
-      ...this.customers.map((customer) => customer.isDestroyed ? null : customer.sprite),
+      ...this.customers.map((customer) =>
+        !customer.isDestroyed && customer.state === "LEAVING" ? customer.sprite : null),
     ]);
     // Pausing a started shift freezes time entirely: customers and arrivals included.
     // Before the shift starts the clock also reads as paused, but the player moves freely.
@@ -3200,8 +3336,9 @@ export class GameScene extends Phaser.Scene {
     if (movementFrozen) {
       // Skipping customer update() also freezes their state-machine timers, not just movement.
       this.player.sprite.body.setVelocity(0, 0);
-      this.customers.forEach((customer) => customer.sprite.body.setVelocity(0, 0));
-      this.employees.forEach((employee) => employee.sprite.body.setVelocity(0, 0));
+      this.player.forceFacing(this.player.currentFacing);
+      this.customers.forEach((customer) => customer.standStill());
+      this.employees.forEach((employee) => employee.standStill());
       for (const crate of this.restockCrates) if (crate.isPushed) crate.stopPush();
     } else {
       this.player.update(delta);
@@ -3213,6 +3350,7 @@ export class GameScene extends Phaser.Scene {
 
     this.shiftClock.update(delta);
     this.updateRegisterPrompt();
+    this.positionGoBacksBadge();
     this.updateCrateHint();
     for (const fixture of this.fixtures.stockHolders()) {
       if (fixture.capacityLabel) this.refreshLockerCapacityDisplay(fixture);

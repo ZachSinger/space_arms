@@ -6,6 +6,9 @@
 import { TILE_SIZE } from "./RoomLayout.js";
 import { SHELF_VISUAL_SLOTS_PER_TILE } from "./FixtureLayout.js";
 
+const STOCK_DISPLAY_SCALE = 0.625;
+const STOCK_DISPLAY_OFFSET_Y = 8;
+
 // Keyed by an item's first tag.
 const CATEGORY_COLORS = Object.freeze({
   Ammunition: 0xd99b38,
@@ -28,21 +31,22 @@ export function getShelfCategoryColor(item) {
  * @param {{ gx: number, gy: number, w: number, h: number }} placement - in display slots
  */
 export function getShelfStackBounds(gridDimensions, placement) {
-  const cellSize = TILE_SIZE / SHELF_VISUAL_SLOTS_PER_TILE;
+  const cellSize = TILE_SIZE * STOCK_DISPLAY_SCALE / SHELF_VISUAL_SLOTS_PER_TILE;
   return {
-    x: -(gridDimensions.w * TILE_SIZE) / 2 + placement.gx * cellSize,
-    y: -(gridDimensions.h * TILE_SIZE) / 2 + placement.gy * cellSize,
+    x: -(gridDimensions.w * TILE_SIZE * STOCK_DISPLAY_SCALE) / 2 + placement.gx * cellSize,
+    y: -(gridDimensions.h * TILE_SIZE * STOCK_DISPLAY_SCALE) / 2 + placement.gy * cellSize,
     width: placement.w * cellSize,
     height: placement.h * cellSize,
   };
 }
 
+/** @deprecated Benched stock-box display; active shelves use ShelfIconDisplay. */
 export class ShelfStockDisplay {
   constructor(scene, fixture, getItem) {
     this.scene = scene;
     this.fixture = fixture;
     this.getItem = getItem;
-    this.container = scene.add.container(fixture.x, fixture.y).setDepth(3);
+    this.container = scene.add.container(fixture.x, fixture.y + STOCK_DISPLAY_OFFSET_Y).setDepth(3);
     this.graphics = scene.add.graphics();
     this.container.add(this.graphics);
     this.labels = new Map();
@@ -50,7 +54,7 @@ export class ShelfStockDisplay {
   }
 
   setPosition(x, y) {
-    this.container.setPosition(x, y);
+    this.container.setPosition(x, y + STOCK_DISPLAY_OFFSET_Y);
   }
 
   // Turns the stock boxes with the shelf, but keeps quantity labels upright and readable.
@@ -74,32 +78,27 @@ export class ShelfStockDisplay {
       const item = this.getItem(placement.itemId);
       if (!item) continue;
       const bounds = getShelfStackBounds(this.fixture.gridDimensions, placement);
-      const inset = 2; // px gap between neighboring stacks
-      const x = bounds.x + inset;
-      const y = bounds.y + inset;
-      const width = Math.max(1, bounds.width - inset * 2);
-      const height = Math.max(1, bounds.height - inset * 2);
+      const { x, y, width, height } = bounds;
 
       this.graphics
-        .fillStyle(getShelfCategoryColor(item), 0.9)
+        .fillStyle(0x111827, 0.5)
         .fillRect(x, y, width, height)
-        .fillStyle(0x111827, 0.95)
-        .fillRect(x + 2, y + 2, width - 4, height - 4);
+        .lineStyle(1, getShelfCategoryColor(item), 0.9)
+        .strokeRect(x + 0.5, y + 0.5, width - 1, height - 1);
 
       let label = this.labels.get(placement);
       if (!label) {
         label = this.scene.add.text(0, 0, "", {
           fontFamily: "Courier New, monospace",
-          fontSize: "13px",
+          fontSize: "10px",
           fontStyle: "bold",
           color: "#ffffff",
-          padding: { x: 2, y: 2 },
         }).setOrigin(0.5);
         this.labels.set(placement, label);
         this.container.add(label);
       }
       label.setAngle(-this.container.angle);
-      label.setText(`x${Math.max(0, placement.quantity)}`);
+      label.setText(String(Math.max(0, placement.quantity)));
       label.setColor("#ffffff");
       label.setPosition(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
       label.setVisible(true);

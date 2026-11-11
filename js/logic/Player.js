@@ -1,9 +1,30 @@
 // ==========================================
 // FILE: Player.js
 // ==========================================
-// The directly controlled shopkeeper: WASD/arrow or controller movement, facing textures, and a trimmed
+// The directly controlled shopkeeper: WASD/arrow or controller movement, walking animations, and a trimmed
 // collision body. Collides with walls and fixtures but passes through customers.
-import { pickPlayerCharacterTextures } from "./CustomerSprites.js";
+
+export const PLAYER_SPRITE = Object.freeze({
+  key: "player_mechanic",
+  path: "img/Icons_Extracted/Tileset/Characters/player_mechanic.png",
+  frameWidth: 96,
+  frameHeight: 96,
+});
+
+const FACING_ROWS = Object.freeze({ down: 0, left: 1, right: 2, up: 3 });
+
+export function registerPlayerAnimations(anims) {
+  for (const [facing, row] of Object.entries(FACING_ROWS)) {
+    const key = `player_walk_${facing}`;
+    if (anims.exists(key)) continue;
+    anims.create({
+      key,
+      frames: [0, 1, 2, 1].map((column) => ({ key: PLAYER_SPRITE.key, frame: row * 3 + column })),
+      frameRate: 8,
+      repeat: -1,
+    });
+  }
+}
 
 // px/s; faster than a customer's 120 so direct control doesn't feel sluggish.
 const MOVE_SPEED = 160;
@@ -14,32 +35,30 @@ const STAMINA_RECOVERY_PER_SECOND = 25;
 const STAMINA_RECOVERY_DELAY_MS = 750;
 const EXHAUSTION_RECOVERY_STAMINA = 25;
 
-// px; same as a customer, so the player reads as the same scale of person.
-export const PLAYER_DISPLAY_WIDTH = 46;
-export const PLAYER_DISPLAY_HEIGHT = 48;
+// The sheet's original pixel blocks become two world pixels each.
+export const PLAYER_DISPLAY_WIDTH = 64;
+export const PLAYER_DISPLAY_HEIGHT = 64;
+// Standing character height, excluding the sheet's transparent padding.
+export const PLAYER_CHARACTER_HEIGHT = 48;
 
 // px, on-screen collision box. Only the lower body collides, so the player's head can
 // overlap a shelf or counter drawn above them, as in most top-down games. The sprite
 // canvas has transparent padding, so the box is also trimmed to the narrowest facing.
 const BODY_WIDTH = 22;
 const BODY_HEIGHT = 20;
-// px of transparent padding below the feet.
+// px between the collision box and the bottom of the sprite canvas.
 const BODY_BOTTOM_GAP = 4;
-
-// Placeholder art is a customer sprite (see TODO.md), tinted the UI accent cyan so the
-// player stands out from the crowd.
-const PLAYER_TINT = 0x38bdf8;
 
 export class Player {
   constructor(scene, spawnX, spawnY) {
     this.scene = scene;
-    this.facingTextures = pickPlayerCharacterTextures();
     this.currentFacing = "down";
 
     this.sprite = scene.add
-      .image(spawnX, spawnY, this.facingTextures.down)
+      .sprite(spawnX, spawnY, PLAYER_SPRITE.key, 1)
       .setDisplaySize(PLAYER_DISPLAY_WIDTH, PLAYER_DISPLAY_HEIGHT)
-      .setTint(PLAYER_TINT)
+      // Keep the collision box at its old world position despite the taller art canvas.
+      .setOrigin(0.5, 0.625)
       // Always drawn above everything on the floor.
       .setDepth(9999);
     scene.physics.add.existing(this.sprite);
@@ -63,9 +82,7 @@ export class Player {
     this.inputEnabled = true;
   }
 
-  // body.setSize() works in unscaled frame pixels, and each facing has a different frame
-  // width, so divide by the current scale to keep a constant on-screen box. Re-apply on
-  // every texture change.
+  // Arcade Physics sizes and offsets use unscaled frame pixels.
   applyBodySize() {
     const { scaleX, scaleY } = this.sprite;
     this.sprite.body.setSize(BODY_WIDTH / scaleX, BODY_HEIGHT / scaleY, false);
@@ -125,14 +142,19 @@ export class Player {
     }
 
     this.sprite.body.setVelocity(vx * speed, vy * speed);
+    this.sprite.anims.timeScale = speed / MOVE_SPEED;
     this.updateFacing(vx, vy);
   }
 
   updateFacing(vx, vy) {
-    if (vx === 0 && vy === 0) return;
+    if (vx === 0 && vy === 0) {
+      this.forceFacing(this.currentFacing);
+      return;
+    }
 
     const facing = Math.abs(vx) > Math.abs(vy) ? (vx < 0 ? "left" : "right") : vy < 0 ? "up" : "down";
-    this.forceFacing(facing);
+    this.currentFacing = facing;
+    this.sprite.play(`player_walk_${facing}`, true);
   }
 
   /**
@@ -142,16 +164,13 @@ export class Player {
    */
   teleportTo(x, y) {
     this.sprite.body.reset(x, y);
+    this.forceFacing(this.currentFacing);
   }
 
   forceFacing(facing) {
-    if (facing === this.currentFacing) return;
-
+    if (facing === this.currentFacing && !this.sprite.anims.isPlaying) return;
     this.currentFacing = facing;
-    this.sprite
-      .setTexture(this.facingTextures[facing])
-      .setDisplaySize(PLAYER_DISPLAY_WIDTH, PLAYER_DISPLAY_HEIGHT)
-      .setTint(PLAYER_TINT);
-    this.applyBodySize();
+    this.sprite.anims.stop();
+    this.sprite.setFrame(FACING_ROWS[facing] * 3 + 1);
   }
 }

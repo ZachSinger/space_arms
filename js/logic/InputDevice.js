@@ -10,6 +10,7 @@ let currentDevice = "keyboard";
 const KEYBOARD_LABELS = Object.freeze({
   interact: "E",
   crate: "Space",
+  unpack: "Q",
   goBacks: "Q",
   tablet: "I",
   rotate: "R",
@@ -19,6 +20,7 @@ const KEYBOARD_LABELS = Object.freeze({
 const GAMEPAD_LABELS = Object.freeze({
   interact: "A",
   crate: "X",
+  unpack: "Y",
   goBacks: "Y",
   tablet: "Back",
   rotate: "Y",

@@ -36,9 +36,11 @@ function renderChit(chitPayment) {
   return `
     <div class="checkout-chit hidden" id="checkout-chit">
       <div class="chit-card">
-        <span class="chit-title">EXPLORER TRAVEL CHIT</span>
-        <span>VALUE: <strong>${formatMoney(chitPayment.total)}</strong></span>
-        <span>ACCESS CODE: <strong class="chit-code">${chitPayment.code.split("").join(" ")}</strong></span>
+        <div class="chit-screen">
+          <span class="chit-title">EXPLORER TRAVEL CHIT</span>
+          <span>VALUE: <strong>${formatMoney(chitPayment.total)}</strong></span>
+          <span>ACCESS CODE: <strong class="chit-code">${chitPayment.code.split("").join(" ")}</strong></span>
+        </div>
       </div>
       <div class="chit-input-help kbd-only">Enter the code with the arrow keys or click a key.</div>
       <div class="chit-input-help pad-only">Enter the code with the D-pad.</div>

@@ -1,0 +1,452 @@
+[
+  {
+    "key": "customer_mercenary_securityexo1",
+    "faction": "mercenary",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/mercenary/securityexo1.png"
+  },
+  {
+    "key": "customer_mercenary_securityfem1",
+    "faction": "mercenary",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/mercenary/securityfem1.png"
+  },
+  {
+    "key": "customer_mercenary_securityheavy1",
+    "faction": "mercenary",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/mercenary/securityheavy1.png"
+  },
+  {
+    "key": "customer_mercenary_securitymasc1",
+    "faction": "mercenary",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/mercenary/securitymasc1.png"
+  },
+  {
+    "key": "customer_mercenary_specopsfem1",
+    "faction": "mercenary",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/mercenary/specopsfem1.png"
+  },
+  {
+    "key": "customer_mercenary_specopsmasc1",
+    "faction": "mercenary",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/mercenary/specopsmasc1.png"
+  },
+  {
+    "key": "customer_mercenary_femstreetsamurai1",
+    "faction": "mercenary",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/mercenary/femstreetsamurai1.png"
+  },
+  {
+    "key": "customer_mercenary_mascstreetsamurai1",
+    "faction": "mercenary",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/mercenary/mascstreetsamurai1.png"
+  },
+  {
+    "key": "customer_mercenary_femninja1",
+    "faction": "mercenary",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/mercenary/femninja1.png"
+  },
+  {
+    "key": "customer_mercenary_mascninja1",
+    "faction": "mercenary",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/mercenary/mascninja1.png"
+  },
+  {
+    "key": "customer_mercenary_corponinja1",
+    "faction": "mercenary",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/mercenary/corponinja1.png"
+  },
+  {
+    "key": "customer_mercenary_rambov3",
+    "faction": "mercenary",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/mercenary/rambov3.png"
+  },
+  {
+    "key": "customer_mercenary_bladev3",
+    "faction": "mercenary",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/mercenary/bladev3.png"
+  },
+  {
+    "key": "customer_mercenary_kagev3",
+    "faction": "mercenary",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/mercenary/kagev3.png"
+  },
+  {
+    "key": "customer_mercenary_ogremillyv3",
+    "faction": "mercenary",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/mercenary/ogremillyv3.png"
+  },
+  {
+    "key": "customer_mercenary_oyabunv3",
+    "faction": "mercenary",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/mercenary/oyabunv3.png"
+  },
+  {
+    "key": "customer_mercenary_ladyredv3",
+    "faction": "mercenary",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/mercenary/ladyredv3.png"
+  },
+  {
+    "key": "customer_mercenary_bigmasc1",
+    "faction": "mercenary",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/mercenary/bigmasc1.png"
+  },
+  {
+    "key": "customer_mercenary_redarmv3",
+    "faction": "mercenary",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/mercenary/redarmv3.png"
+  },
+  {
+    "key": "customer_explorer_herofem1a",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/herofem1a.png"
+  },
+  {
+    "key": "customer_explorer_herofem1b",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/herofem1b.png"
+  },
+  {
+    "key": "customer_explorer_herofem2a",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/herofem2a.png"
+  },
+  {
+    "key": "customer_explorer_herofem2b",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/herofem2b.png"
+  },
+  {
+    "key": "customer_explorer_herofem2c",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/herofem2c.png"
+  },
+  {
+    "key": "customer_explorer_herofem3a",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/herofem3a.png"
+  },
+  {
+    "key": "customer_explorer_herofem3b",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/herofem3b.png"
+  },
+  {
+    "key": "customer_explorer_heromasc1a",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/heromasc1a.png"
+  },
+  {
+    "key": "customer_explorer_heromasc1b",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/heromasc1b.png"
+  },
+  {
+    "key": "customer_explorer_heromasc1c",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/heromasc1c.png"
+  },
+  {
+    "key": "customer_explorer_heromasc2a",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/heromasc2a.png"
+  },
+  {
+    "key": "customer_explorer_heromasc2b",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/heromasc2b.png"
+  },
+  {
+    "key": "customer_explorer_heromasc2c",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/heromasc2c.png"
+  },
+  {
+    "key": "customer_explorer_heromasc3a",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/heromasc3a.png"
+  },
+  {
+    "key": "customer_explorer_heromasc3b",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/heromasc3b.png"
+  },
+  {
+    "key": "customer_explorer_diverv3",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/diverv3.png"
+  },
+  {
+    "key": "customer_explorer_boosterjanev3",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/boosterjanev3.png"
+  },
+  {
+    "key": "customer_explorer_freyav3",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/freyav3.png"
+  },
+  {
+    "key": "customer_explorer_goldiev3",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/goldiev3.png"
+  },
+  {
+    "key": "customer_explorer_sunv3",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/sunv3.png"
+  },
+  {
+    "key": "customer_explorer_racersnakev3",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/racersnakev3.png"
+  },
+  {
+    "key": "customer_explorer_vincethesurferv3",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/vincethesurferv3.png"
+  },
+  {
+    "key": "customer_explorer_hirov3",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/hirov3.png"
+  },
+  {
+    "key": "customer_explorer_nguyenv3",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/nguyenv3.png"
+  },
+  {
+    "key": "customer_explorer_femmechanic1",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/femmechanic1.png"
+  },
+  {
+    "key": "customer_explorer_femyouth1",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/femyouth1.png"
+  },
+  {
+    "key": "customer_explorer_mascyouth1",
+    "faction": "explorer",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/mascyouth1.png"
+  },
+  {
+    "key": "customer_scavenger_amputeefem1",
+    "faction": "scavenger",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/scavenger/amputeefem1.png"
+  },
+  {
+    "key": "customer_scavenger_spidereyesv3",
+    "faction": "scavenger",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/scavenger/spidereyesv3.png"
+  },
+  {
+    "key": "customer_scavenger_razorfeetv3",
+    "faction": "scavenger",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/scavenger/razorfeetv3.png"
+  },
+  {
+    "key": "customer_scavenger_yelloweyev3",
+    "faction": "scavenger",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/scavenger/yelloweyev3.png"
+  },
+  {
+    "key": "customer_scavenger_redfinv3",
+    "faction": "scavenger",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/scavenger/redfinv3.png"
+  },
+  {
+    "key": "customer_scavenger_rabbitv3",
+    "faction": "scavenger",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/scavenger/rabbitv3.png"
+  },
+  {
+    "key": "customer_scavenger_bunnyv3",
+    "faction": "scavenger",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/scavenger/bunnyv3.png"
+  },
+  {
+    "key": "customer_scavenger_mittsv3",
+    "faction": "scavenger",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/scavenger/mittsv3.png"
+  },
+  {
+    "key": "customer_scavenger_metrov3",
+    "faction": "scavenger",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/scavenger/metrov3.png"
+  },
+  {
+    "key": "customer_scavenger_pompomv3",
+    "faction": "scavenger",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/scavenger/pompomv3.png"
+  },
+  {
+    "key": "customer_scavenger_mrchromev3",
+    "faction": "scavenger",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/scavenger/mrchromev3.png"
+  },
+  {
+    "key": "customer_civilian_corpofem1",
+    "faction": "civilian",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/civilian/corpofem1.png"
+  },
+  {
+    "key": "customer_civilian_corpofem2",
+    "faction": "civilian",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/civilian/corpofem2.png"
+  },
+  {
+    "key": "customer_civilian_corpofem3",
+    "faction": "civilian",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/civilian/corpofem3.png"
+  },
+  {
+    "key": "customer_civilian_corpofem4",
+    "faction": "civilian",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/civilian/corpofem4.png"
+  },
+  {
+    "key": "customer_civilian_corpomasc1",
+    "faction": "civilian",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/civilian/corpomasc1.png"
+  },
+  {
+    "key": "customer_civilian_corpomasc2",
+    "faction": "civilian",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/civilian/corpomasc2.png"
+  },
+  {
+    "key": "customer_civilian_corpomasc3",
+    "faction": "civilian",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/civilian/corpomasc3.png"
+  },
+  {
+    "key": "customer_civilian_corpomasc4",
+    "faction": "civilian",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/civilian/corpomasc4.png"
+  },
+  {
+    "key": "customer_civilian_corpohacker1",
+    "faction": "civilian",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/civilian/corpohacker1.png"
+  },
+  {
+    "key": "customer_civilian_elderlyfem1",
+    "faction": "civilian",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/civilian/elderlyfem1.png"
+  },
+  {
+    "key": "customer_civilian_elderlymasc1",
+    "faction": "civilian",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/civilian/elderlymasc1.png"
+  },
+  {
+    "key": "customer_civilian_oldkathv3",
+    "faction": "civilian",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/civilian/oldkathv3.png"
+  },
+  {
+    "key": "customer_civilian_wheelchairmasc1",
+    "faction": "civilian",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/civilian/wheelchairmasc1.png"
+  },
+  {
+    "key": "customer_civilian_bigfem1",
+    "faction": "civilian",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/civilian/bigfem1.png"
+  },
+  {
+    "key": "customer_civilian_tiptopv3",
+    "faction": "civilian",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/civilian/tiptopv3.png"
+  },
+  {
+    "key": "customer_android_femandroid1",
+    "faction": "android",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/android/femandroid1.png"
+  },
+  {
+    "key": "customer_android_femandroid2",
+    "faction": "android",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/android/femandroid2.png"
+  },
+  {
+    "key": "customer_android_mascandroid1",
+    "faction": "android",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/android/mascandroid1.png"
+  },
+  {
+    "key": "customer_android_mascandroid2",
+    "faction": "android",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/android/mascandroid2.png"
+  },
+  {
+    "key": "customer_android_corpoandroidfem1",
+    "faction": "android",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/android/corpoandroidfem1.png"
+  },
+  {
+    "key": "customer_android_corpoandroidmasc1",
+    "faction": "android",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/android/corpoandroidmasc1.png"
+  },
+  {
+    "key": "customer_android_herofemandroid1a",
+    "faction": "android",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/android/herofemandroid1a.png"
+  },
+  {
+    "key": "customer_android_herofemandroid1b",
+    "faction": "android",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/android/herofemandroid1b.png"
+  },
+  {
+    "key": "customer_android_herofemandroid2a",
+    "faction": "android",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/android/herofemandroid2a.png"
+  },
+  {
+    "key": "customer_android_herofemandroid2b",
+    "faction": "android",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/android/herofemandroid2b.png"
+  },
+  {
+    "key": "customer_android_herofemandroid3a",
+    "faction": "android",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/android/herofemandroid3a.png"
+  },
+  {
+    "key": "customer_android_herofemandroid3b",
+    "faction": "android",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/android/herofemandroid3b.png"
+  },
+  {
+    "key": "customer_android_heromascandroid1a",
+    "faction": "android",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/android/heromascandroid1a.png"
+  },
+  {
+    "key": "customer_android_heromascandroid1b",
+    "faction": "android",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/android/heromascandroid1b.png"
+  },
+  {
+    "key": "customer_android_heromascandroid2a",
+    "faction": "android",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/android/heromascandroid2a.png"
+  },
+  {
+    "key": "customer_android_heromascandroid2b",
+    "faction": "android",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/android/heromascandroid2b.png"
+  },
+  {
+    "key": "customer_android_heromascandroid3a",
+    "faction": "android",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/android/heromascandroid3a.png"
+  },
+  {
+    "key": "customer_android_heromascandroid3b",
+    "faction": "android",
+    "path": "img/Icons_Extracted/Tileset/Characters/Customers/android/heromascandroid3b.png"
+  }
+]

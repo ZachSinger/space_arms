@@ -358,8 +358,12 @@ test("Scavenger cash shows only M-Scrip bills and prices the sale in M-Scrips", 
   assert.equal((html.match(/data-cash-units=/g) ?? []).length, 8);
 });
 
-test("Explorer Chit display shows its value, visible code, and four direction keys", () => {
+test("Explorer Chit display shows its art, value, visible code, and four direction keys", async () => {
   const html = CheckoutRenderer.generateHTML([], {}, null, new ChitPayment(100, "314"));
+  const css = await readFile(new URL("../styles/space_dealer_window.css", import.meta.url), "utf8");
+  assert.match(css, /\.chit-card\s*\{[^}]*background-image:\s*url\("\.\.\/img\/Generated\/explorer_travel_chit\.png"\)/s);
+  assert.match(css, /\.chit-card\s*\{[^}]*min-height:\s*calc\(240px \* var\(--text-scale\)\)/s);
+  assert.match(html, /class="chit-screen"/);
   assert.match(html, /EXPLORER TRAVEL CHIT/);
   assert.match(html, /VALUE: <strong>100 credits/);
   assert.match(html, /ACCESS CODE: <strong class="chit-code">3 1 4/);
@@ -376,4 +380,6 @@ test("change counted appears first on the left, and the bills use a narrow uprig
   assert.match(css, /\.cash-bills\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*60px\)/s);
   assert.match(css, /\.cash-bill \.cash-art\s*\{[^}]*width:\s*46px;[^}]*height:\s*84px/s);
   assert.match(css, /\.cash-loose\.cash-bill\s*\{[^}]*width:\s*52px;[^}]*height:\s*96px/s);
+  assert.match(css, /background-image:\s*url\("\.\.\/img\/Generated\/currency_bill\.png"\)/);
+  assert.match(css, /background-image:\s*url\("\.\.\/img\/Generated\/currency_coin\.png"\)/);
 });

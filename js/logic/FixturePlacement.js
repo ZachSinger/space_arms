@@ -7,7 +7,7 @@
 import { UIWindow } from "./UIWindow.js";
 import { TILE_SIZE } from "./RoomLayout.js";
 import { getFixtureType, fixtureAccessCells, fixtureFootprint } from "./FixtureLayout.js";
-import { getFixtureTexture } from "./FixtureTexture.js";
+import { getFixtureTexture, hasFacingTextures } from "./FixtureTexture.js";
 import { PAD } from "./GamepadInput.js";
 import { getInputDevice } from "./InputDevice.js";
 
@@ -252,7 +252,14 @@ export class FixturePlacement {
     for (const cell of accessCells) {
       this.graphics.strokeRect(cell.gx * TILE_SIZE + 3, cell.gy * TILE_SIZE + 3, TILE_SIZE - 6, TILE_SIZE - 6);
     }
-    this.ghost.setPosition(x + w * TILE_SIZE / 2, y + h * TILE_SIZE / 2).setAngle(rotation * 90);
+    this.ghost.setPosition(x + w * TILE_SIZE / 2, y + h * TILE_SIZE / 2);
+    if (hasFacingTextures(this.spec)) {
+      // Upright art for the chosen facing, at the same size as the placed fixture.
+      this.ghost.setTexture(getFixtureTexture(this.scene, this.spec, rotation)).setAngle(0);
+      this.scene.sizeFacingArt(this.ghost, this.spec, rotation);
+    } else {
+      this.ghost.setAngle(rotation * 90);
+    }
   }
 
   /**

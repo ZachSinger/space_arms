@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { FIXTURE_TYPES, SHELF_VISUAL_SLOTS_PER_TILE } from "../js/logic/FixtureLayout.js";
+import { FIXTURE_FACINGS, FIXTURE_TYPES, SHELF_VISUAL_SLOTS_PER_TILE } from "../js/logic/FixtureLayout.js";
 import { getFixtureTexture, TEST_SHELF_SURFACE_COLOR } from "../js/logic/FixtureTexture.js";
 import { TILE_SIZE } from "../js/logic/RoomLayout.js";
 import { getShelfCategoryColor } from "../js/logic/ShelfStockDisplay.js";
@@ -33,7 +33,7 @@ function makeScene() {
   };
 }
 
-for (const spec of Object.values(FIXTURE_TYPES).filter((entry) => entry.kind === "shelf")) {
+for (const spec of Object.values(FIXTURE_TYPES).filter((entry) => entry.kind === "shelf" && !entry.facingTextures)) {
   test(`${spec.name} texture fits its tile footprint and leaves a visible front rim`, () => {
     const scene = makeScene();
     const key = getFixtureTexture(scene, spec);
@@ -57,6 +57,21 @@ for (const spec of Object.values(FIXTURE_TYPES).filter((entry) => entry.kind ===
     assert.deepEqual(scene.counts(), { created: 1, destroyed: 1 });
   });
 }
+
+test("the budget shelf uses a facing-specific image while keeping a one-tile footprint", () => {
+  const spec = FIXTURE_TYPES.shelf_budget_2x2;
+  const scene = makeScene();
+  assert.deepEqual({ w: spec.w, h: spec.h }, { w: 1, h: 1 });
+  assert.deepEqual(FIXTURE_FACINGS.map((facing) => spec.facingTextures[facing]), [
+    "shelf_budget_down",
+    "shelf_budget_left",
+    "shelf_budget_up",
+    "shelf_budget_right",
+  ]);
+  for (let rotation = 0; rotation < FIXTURE_FACINGS.length; rotation++) {
+    assert.equal(getFixtureTexture(scene, spec, rotation), spec.facingTextures[FIXTURE_FACINGS[rotation]]);
+  }
+});
 
 test("lockers and registers keep their original graphics without generating textures", () => {
   const scene = makeScene();

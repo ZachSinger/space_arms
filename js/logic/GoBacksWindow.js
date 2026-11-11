@@ -1,8 +1,8 @@
 // ==========================================
 // FILE: GoBacksWindow.js
 // ==========================================
-// Window for the register's Go-Backs bin, where abandoned carts pile up. The only way out
-// is clicking an item to load 1 unit into the hovercart, then stocking it elsewhere.
+// Window for the register's Go-Backs bin, where abandoned carts pile up. It works like a
+// locker you can only take from: TAKE moves 1 unit into the hovercart.
 import { UIWindow } from "./UIWindow.js";
 import { FixtureRenderer } from "./FixtureRenderer.js";
 import { showPopupText } from "./FixtureWindow.js";
@@ -25,7 +25,6 @@ export class GoBacksWindow {
     );
     this.bodyElement = this.uiWindow.element.querySelector(".retro-window-body");
     this.bodyElement.addEventListener("click", (event) => this.handleLoad(event));
-    this.bodyElement.addEventListener("contextmenu", (event) => this.handleLoad(event));
     playerState.subscribe(() => {
       if (this.uiWindow.isOpen) this.render();
     });
@@ -37,54 +36,37 @@ export class GoBacksWindow {
   }
 
   /**
-   * Load 1 unit of the clicked bin row into the hovercart (left or right click).
+   * TAKE moves 1 unit of that item into the hovercart.
    * @param {MouseEvent} event
    */
   handleLoad(event) {
-    const row = event.target.closest("[data-go-backs-item-id]");
-    if (!row) return;
-    event.preventDefault();
-    if (!this.playerState.loadGoBacksItem(row.dataset.goBacksItemId)) {
+    const button = event.target.closest("[data-go-backs-item-id]");
+    if (!button || button.disabled) return;
+    if (!this.playerState.loadGoBacksItem(button.dataset.goBacksItemId)) {
       showPopupText(event.clientX, event.clientY, "No Space In Hovercart");
     }
   }
 
   render() {
+    const hovercart = this.playerState.hovercart;
     const binRows = this.playerState.goBacks.stock
       .filter((entry) => entry.quantity > 0)
       .map((entry) => {
         const item = database.getItem(entry.itemId);
-        const iconHTML = item.image
-          ? `<img class="item-icon" src="${item.image}" alt="" />`
-          : `<div class="item-icon"></div>`;
-        return `
-          <div class="item-card fixture-stock-row go-backs-row" data-go-backs-item-id="${item.id}" title="Load 1 into your hovercart">
-            ${iconHTML}
-            <div class="item-details">
-              <div class="item-card-header">
-                <span class="item-card-title">${item.name}</span>
-                <span class="item-card-cost">x${entry.quantity}</span>
-              </div>
-              <div class="fixture-stock-meta">${item.slots} hovercart slot${item.slots === 1 ? "" : "s"} each</div>
-            </div>
-          </div>
-        `;
+        const meta = `${item.slots} hovercart slot${item.slots === 1 ? "" : "s"} each`;
+        return FixtureRenderer.transferRowHTML(item, entry.quantity, meta, hovercart, "data-take-item-id")
+          .replace("data-take-item-id=", "data-go-backs-item-id=");
       })
       .join("");
-    const hovercartRows = FixtureRenderer.poolStockRowsHTML(
-      this.playerState.hovercart.stock,
-      null,
-      database,
-      null,
-    );
+    // Nothing goes back into the bin, so the hovercart list has no STOCK buttons.
+    const hovercartRows = FixtureRenderer.poolStockRowsHTML(hovercart.stock, null, database, null);
 
     this.bodyElement.innerHTML = `
-      <div class="fixture-empty-hint kbd-only">Click an item to load 1 into your hovercart.</div>
-      <div class="fixture-empty-hint pad-only">Press A on an item to load 1 into your hovercart.</div>
+      <div class="fixture-section-title">ITEMS LEFT BY CUSTOMERS<span class="fixture-section-hint">Take them out to put back on shelves</span></div>
       <div class="retro-slot custom-scrollbar fixture-stock-list" style="padding: 10px; display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow-y: auto;">
         ${binRows || `<div class="fixture-empty-hint">The bin is empty.</div>`}
       </div>
-      ${FixtureRenderer.hovercartSectionHTML(this.playerState.hovercart, hovercartRows)}
+      ${FixtureRenderer.hovercartSectionHTML(hovercart, hovercartRows)}
     `;
   }
 }

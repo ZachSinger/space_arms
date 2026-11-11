@@ -553,7 +553,7 @@ test("customers queue without opening the register or freezing patience while th
   scene.resumeRegisterCheckout();
   assert.equal(checkout.uiWindow.isOpen, true);
   assert.deepEqual(checkout.openedCarts, [first.cart]);
-  assert.equal(scene.isServingCustomer(first), true);
+  assert.equal(scene.isServingCustomer(first), false, "the player's checkout never freezes patience");
 });
 
 test("hiding checkout for the tablet preserves scanned items and payment progress on return", () => {
@@ -794,15 +794,45 @@ test("the register blocks only its counter, so the player can walk over its moni
   const tree = { remove() {}, insert() {} };
   const body = { world: { staticTree: tree }, position: { set(x, y) { this.x = x; this.y = y; } },
     center: { set(x, y) { this.x = x; this.y = y; } } };
-  const sprite = { displayWidth: 90, displayHeight: 75, body,
-    setPosition() { return this; }, setAngle() { return this; } };
-  // Where the register sat in the playtest debug capture.
+  const textures = [];
+  const sprite = { displayWidth: 90, displayHeight: 90, body,
+    setTexture(key) { textures.push(key); return this; }, setScale() { return this; },
+    setPosition() { return this; }, setAngle(angle) { this.angle = angle; return this; } };
   scene.orientFixtureSprite({ type: "register_basic", x: 832, y: 192, rotation: 0, sprite });
+  assert.equal(textures.at(-1), "register_basic_down");
+  assert.equal(sprite.angle, 0, "facing art is shown upright, not spun");
   const top = body.position.y;
-  assert.ok(top > 180 && top < 183, `counter top is below the monitor (${top})`);
-  assert.equal(body.position.y + body.height, 229.5, "bottom edge unchanged");
+  assert.ok(Math.abs(top - (147 + 90 * 0.19)) < 0.01, `counter top is below the monitor (${top})`);
+  assert.ok(Math.abs(body.position.y + body.height - 237) < 0.01, "bottom edge unchanged");
   assert.equal(body.width, 90);
-  // The player stood just above the register's top-left corner: feet at 154.5, the old
-  // solid top edge. Their feet now have room to walk down past the monitor.
-  assert.ok(top - 154.5 > 25);
+
+  scene.orientFixtureSprite({ type: "register_basic", x: 832, y: 192, rotation: 1, sprite });
+  assert.equal(textures.at(-1), "register_basic_left");
+  assert.equal(sprite.angle, 0);
+});
+
+test("the budget shelf art fills its floor tile in every direction", () => {
+  const scene = Object.create(GameScene.prototype);
+  const tree = { remove() {}, insert() {} };
+  const body = { world: { staticTree: tree }, position: { set() {} }, center: { set() {} } };
+  const sprite = {
+    displayWidth: 0, displayHeight: 0, body,
+    setTexture(key) {
+      this.texture = key;
+      this.displayWidth = 256;
+      this.displayHeight = key.endsWith("_left") || key.endsWith("_right") ? 375 : 256;
+      return this;
+    },
+    setDisplaySize(width, height) { this.displayWidth = width; this.displayHeight = height; return this; },
+    setPosition() { return this; },
+    setAngle(angle) { this.angle = angle; return this; },
+  };
+  for (let rotation = 0; rotation < 4; rotation++) {
+    scene.orientFixtureSprite({ type: "shelf_budget_2x2", x: 100, y: 200, rotation, sprite });
+    assert.equal(sprite.displayWidth, 64);
+    assert.equal(sprite.displayHeight, 64);
+    assert.equal(sprite.angle, 0);
+    assert.equal(body.width, 64);
+    assert.equal(body.height, 64);
+  }
 });

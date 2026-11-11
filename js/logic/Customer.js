@@ -5,7 +5,12 @@
 // acceptable prices, then queues for player-driven checkout (or leaves angry).
 // See also: CustomerBuyLists.js (what they want), Pathfinder.js (how they route).
 
-import { pickRandomCustomerCharacter } from "./CustomerSprites.js";
+import {
+  addCharacterSprite,
+  CHARACTER_HEAD_HEIGHT,
+  pickRandomCustomerCharacter,
+  showCharacterFacing,
+} from "./CustomerSprites.js";
 import { BARGAIN_PRICE_RATIO, createCustomerBuyList } from "./CustomerBuyLists.js";
 import { transferItems } from "./InventoryTransfer.js";
 import { sumMoney } from "./Money.js";
@@ -57,8 +62,8 @@ export function getPatienceLevel(fraction) {
   return PATIENCE_LEVELS.findIndex(([minimum]) => fraction > minimum || minimum === 0);
 }
 
-// Fixed display size (px) for every facing, since each facing's source crop differs in size;
-// keeps a character from visibly resizing as it turns.
+// px, a customer's footprint: their collision box, and the size the register and line spacing
+// plan around. The walking art is drawn larger around it (CustomerSprites.js).
 export const SPRITE_DISPLAY_WIDTH = 46;
 export const SPRITE_DISPLAY_HEIGHT = 48;
 
@@ -129,7 +134,6 @@ export class Customer {
     const spawnY = Phaser.Math.Between(bounds.yMin, bounds.yMax);
 
     const character = pickRandomCustomerCharacter(factionId);
-    this.facingTextures = character.facingTextures;
     this.factionId = character.factionId;
     this.traits = rollCustomerTraits(this.factionId, Math.random, getStoreConditions?.());
     this.maxPatienceMs = getPatienceMs(this.traits);
@@ -146,11 +150,9 @@ export class Customer {
     this.bonusAttempted = new Set();
     this.purchasedFirearms = new Set();
     this.currentFacing = "down";
-    this.sprite = scene.add
-      .image(spawnX, spawnY, this.facingTextures.down)
-      .setDisplaySize(SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT)
-      .setDepth(2);
-    scene.physics.add.existing(this.sprite);
+    this.sprite = addCharacterSprite(
+      scene, spawnX, spawnY, character.textureKey, SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT,
+    ).setDepth(2);
 
     this.visitNextShelf("primary");
   }
@@ -584,7 +586,7 @@ export class Customer {
 
   drawPatienceBubble() {
     const x = this.sprite.x;
-    const y = this.sprite.y - SPRITE_DISPLAY_HEIGHT / 2 - 14;
+    const y = this.sprite.y - CHARACTER_HEAD_HEIGHT - 14;
     if (!this.patienceBubble) {
       const background = this.scene.add.circle(0, 0, 12, 0xffffff).setStrokeStyle(2, 0x000000);
       const glyph = this.scene.add
@@ -664,7 +666,7 @@ export class Customer {
     if (!this.reactionBubble) return;
     this.reactionBubble.setPosition(
       this.sprite.x + SPRITE_DISPLAY_WIDTH / 2,
-      this.sprite.y - SPRITE_DISPLAY_HEIGHT / 2 - 12,
+      this.sprite.y - CHARACTER_HEAD_HEIGHT - 12,
     );
     this.reactionBubble.setScale?.(this.scene.getPopupScale?.() ?? 1);
   }
@@ -779,26 +781,28 @@ export class Customer {
   }
 
   /**
-   * Swap texture to the forced facing, or the one matching current velocity. An idle
-   * customer keeps its last facing instead of flickering back to a default.
+   * Walk toward the forced facing, or the one matching current velocity; stand still when not
+   * moving. An idle customer keeps its last facing instead of flickering back to a default.
    * @param {"up" | "down" | "left" | "right"} [forcedFacing]
    */
   updateFacing(forcedFacing) {
+    const { x: vx, y: vy } = this.sprite.body.velocity;
+    const moving = Math.abs(vx) >= 1 || Math.abs(vy) >= 1;
     let facing = forcedFacing;
-
     if (!facing) {
-      const { x: vx, y: vy } = this.sprite.body.velocity;
-      if (Math.abs(vx) < 1 && Math.abs(vy) < 1) return;
-      facing =
-        Math.abs(vx) > Math.abs(vy) ? (vx < 0 ? "left" : "right") : vy < 0 ? "up" : "down";
+      facing = !moving
+        ? this.currentFacing
+        : Math.abs(vx) > Math.abs(vy) ? (vx < 0 ? "left" : "right") : vy < 0 ? "up" : "down";
     }
-
-    if (facing === this.currentFacing) return;
     this.currentFacing = facing;
-    // Each facing's crop has a different native size; re-force the display size.
-    this.sprite
-      .setTexture(this.facingTextures[facing])
-      .setDisplaySize(SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT);
+    showCharacterFacing(this.sprite, facing, moving);
+  }
+
+  // Holds the standing pose, e.g. while the game is paused.
+  standStill() {
+    if (this.isDestroyed) return;
+    this.sprite.body.setVelocity(0, 0);
+    showCharacterFacing(this.sprite, this.currentFacing, false);
   }
 
   destroy() {

@@ -11,6 +11,7 @@ import { InteractableRegistry } from "../js/logic/InteractableRegistry.js";
 import { Crate } from "../js/logic/Crate.js";
 import { getFixtureType } from "../js/logic/FixtureLayout.js";
 import { FixtureRegistry } from "../js/logic/FixtureRegistry.js";
+import { PAD } from "../js/logic/GamepadInput.js";
 import { TILE_SIZE } from "../js/logic/RoomLayout.js";
 
 let server;
@@ -167,7 +168,7 @@ test("carrying a crate still blocks overlapping pad crates and pushes loose crat
   assert.ok(scene.carriedCrate);
 });
 
-test("Space drops once per press and Q is no longer bound", () => {
+test("Space drops once per press and its handler binds no other keys", () => {
   const h = createHarness({ carrying: true });
   assert.deepEqual([...h.handlers.keys()], ["keydown-SPACE"]);
   assert.deepEqual(h.removedCaptures, ["SPACE"]);
@@ -287,7 +288,13 @@ for (const kind of ["item", "fixture"]) {
     assert.equal(h.scene.carriedCrate, target);
     assert.deepEqual(h.messages, []);
     h.scene.updateCrateHint();
-    assert.equal(h.scene.gameMessageElement.classList.contains("hidden"), true);
+    if (kind === "item") {
+      assert.equal(h.scene.gameMessageElement.classList.contains("hidden"), false);
+      assert.equal(h.scene.gameMessageElement.textContent,
+        "Q: Unpack into your hovercart | E: Deliver to a shelf or locker | Space: Drop");
+    } else {
+      assert.equal(h.scene.gameMessageElement.classList.contains("hidden"), true);
+    }
   });
 }
 
@@ -337,7 +344,7 @@ test("warnings take priority over crate hints and restore the current hint after
   assert.equal(element.classList.contains("hidden"), true);
 });
 
-for (const state of ["outOfRange", "moving", "carrying", "operatingRegister", "placement", "startingShift", "loadFailed"]) {
+for (const state of ["outOfRange", "moving", "operatingRegister", "placement", "startingShift", "loadFailed"]) {
   test(`crate hint is hidden during ${state}`, () => {
     const h = createHarness();
     h.scene.restockCrates = [crate()];
@@ -352,10 +359,24 @@ for (const state of ["outOfRange", "moving", "carrying", "operatingRegister", "p
   });
 }
 
-test("carrying a crate does not show the old information card, even with a menu open", () => {
+test("carrying a stock crate shows its controls unless a menu is open", () => {
   const h = createHarness({ carrying: true });
   h.scene.carriedCrate = crate();
+  h.scene.updateCrateHint();
+  assert.equal(h.scene.gameMessageElement.textContent,
+    "Q: Unpack into your hovercart | E: Deliver to a shelf or locker | Space: Drop");
+  assert.equal(h.scene.gameMessageElement.classList.contains("hidden"), false);
+
+  h.scene.gameMessageElement.textContent = "";
   h.scene.windowManager.windows.set("inventory", { id: "inventory", isOpen: true });
+  h.scene.updateCrateHint();
+  assert.equal(h.scene.gameMessageElement.textContent, "");
+  assert.equal(h.scene.gameMessageElement.classList.contains("hidden"), true);
+});
+
+test("carrying a fixture crate does not show stock-unpacking controls", () => {
+  const h = createHarness({ carrying: true });
+  h.scene.carriedCrate = crate({ kind: "fixture" });
   h.scene.updateCrateHint();
   assert.equal(h.scene.gameMessageElement.textContent, "");
   assert.equal(h.scene.gameMessageElement.classList.contains("hidden"), true);
@@ -698,6 +719,178 @@ test("crate deliveries use the shared transfer and report the remaining stock", 
     { itemId: "item", quantity: 3, source: "crate", destination: "shelf" },
     { itemId: "item", accepted: 3, remaining: 2 },
   ]);
+});
+
+function makeHovercart(capacity) {
+  let quantity = 0;
+  return {
+    stock: [],
+    getRemainingUnitsFor() { return Math.floor((capacity - quantity * 2) / 2); },
+    getAvailableUnitsFor(itemId) {
+      return this.stock.find((entry) => entry.itemId === itemId)?.quantity ?? 0;
+    },
+    add(itemId, amount) {
+      const accepted = Math.min(amount, this.getRemainingUnitsFor(itemId));
+      if (accepted <= 0) return 0;
+      quantity += accepted;
+      const entry = this.stock.find((stock) => stock.itemId === itemId);
+      if (entry) entry.quantity += accepted;
+      else this.stock.push({ itemId, quantity: accepted });
+      return accepted;
+    },
+    remove(itemId, amount) {
+      const entry = this.stock.find((stock) => stock.itemId === itemId);
+      if (!entry) return 0;
+      const removed = Math.min(entry.quantity, amount);
+      entry.quantity -= removed;
+      quantity -= removed;
+      return removed;
+    },
+  };
+}
+
+function makeCarriedStockCrate(quantity) {
+  return {
+    kind: "item",
+    itemId: "heavy",
+    quantity,
+    getAvailableUnitsFor(itemId) { return itemId === this.itemId ? this.quantity : 0; },
+    remove(itemId, amount) {
+      if (itemId !== this.itemId) return 0;
+      const removed = Math.min(this.quantity, amount);
+      this.quantity -= removed;
+      return removed;
+    },
+    add(itemId, amount) {
+      if (itemId !== this.itemId) return 0;
+      this.quantity += amount;
+      return amount;
+    },
+    destroy() { this.destroyed = true; },
+  };
+}
+
+function addNearbyRegister(scene) {
+  let goBacksOpens = 0;
+  scene.fixtures.register = () => ({
+    sprite: { getBounds: () => ({ left: 80, right: 120, top: 80, bottom: 120 }) },
+  });
+  scene.goBacksWindow = { open: () => { goBacksOpens += 1; } };
+  return () => goBacksOpens;
+}
+
+test("Q unpacks a carried stock crate, then opens Go-Backs on the next press", () => {
+  const h = createHarness({ carrying: true });
+  const goBacksOpens = addNearbyRegister(h.scene);
+  const carried = makeCarriedStockCrate(2);
+  h.scene.carriedCrate = carried;
+  h.scene.playerState.hovercart = makeHovercart(4);
+  h.scene.bindSecondaryInteractKey();
+  assert.equal(h.handlers.has("keydown-U"), false);
+  const pressQ = h.handlers.get("keydown-Q");
+
+  pressQ(keyEvent());
+  assert.equal(h.scene.carriedCrate, null);
+  assert.equal(carried.destroyed, true);
+  assert.deepEqual(h.scene.playerState.hovercart.stock, [{ itemId: "heavy", quantity: 2 }]);
+  assert.equal(goBacksOpens(), 0);
+
+  pressQ(keyEvent({ repeat: true }));
+  assert.equal(goBacksOpens(), 0);
+  pressQ(keyEvent());
+  assert.equal(goBacksOpens(), 1);
+});
+
+test("Q leaves a full stock crate carried and still opens Go-Backs for fixture crates", () => {
+  const h = createHarness({ carrying: true });
+  const goBacksOpens = addNearbyRegister(h.scene);
+  const carried = makeCarriedStockCrate(2);
+  h.scene.carriedCrate = carried;
+  h.scene.playerState.hovercart = makeHovercart(0);
+  h.scene.bindSecondaryInteractKey();
+  const pressQ = h.handlers.get("keydown-Q");
+
+  h.scene.windowManager.windows.set("tablet", { id: "tablet", isOpen: true });
+  pressQ(keyEvent());
+  assert.deepEqual(h.messages, []);
+  assert.equal(goBacksOpens(), 0);
+  h.scene.windowManager.windows.delete("tablet");
+
+  pressQ(keyEvent());
+  assert.equal(h.scene.carriedCrate, carried);
+  assert.equal(carried.quantity, 2);
+  assert.equal(h.messages.at(-1), "Hovercart full; 2 items remain in the box");
+  assert.equal(goBacksOpens(), 0);
+
+  h.scene.carriedCrate = crate({ kind: "fixture" });
+  pressQ(keyEvent());
+  assert.equal(goBacksOpens(), 1);
+});
+
+test("controller Y uses the same stock-crate and Go-Backs choices as Q", () => {
+  const h = createHarness({ carrying: true });
+  const goBacksOpens = addNearbyRegister(h.scene);
+  const carried = makeCarriedStockCrate(5);
+  h.scene.carriedCrate = carried;
+  h.scene.playerState.hovercart = makeHovercart(4);
+  h.scene.padInput = { poll() {}, hadInput: false, justPressed: (button) => button === PAD.Y };
+  h.scene.checkoutWindow = { usesChitInput: () => false, usesSpaceKey: () => false };
+  h.scene.uiNavigator = { handle: () => false };
+
+  h.scene.handleGamepad(0, 16);
+  assert.equal(carried.quantity, 3);
+  assert.deepEqual(h.scene.playerState.hovercart.stock, [{ itemId: "heavy", quantity: 2 }]);
+  assert.equal(goBacksOpens(), 0);
+
+  h.scene.carriedCrate = crate({ kind: "fixture" });
+  h.scene.handleGamepad(16, 16);
+  assert.equal(goBacksOpens(), 1);
+});
+
+test("unpacking puts what fits into the hovercart and leaves the rest in the carried box", () => {
+  const h = createHarness({ carrying: true });
+  const carried = makeCarriedStockCrate(5);
+  const hovercart = makeHovercart(4);
+  let notifications = 0;
+  h.scene.carriedCrate = carried;
+  h.scene.playerState.hovercart = hovercart;
+  h.scene.playerState.notifyListeners = () => { notifications += 1; };
+  const transfers = [];
+  h.scene.eventBus.on(GAME_EVENTS.INVENTORY_TRANSFERRED, (event) => transfers.push(event));
+
+  assert.equal(GameScene.prototype.unpackCarriedCrate.call(h.scene), true);
+
+  assert.deepEqual(hovercart.stock, [{ itemId: "heavy", quantity: 2 }]);
+  assert.equal(carried.quantity, 3);
+  assert.equal(h.scene.carriedCrate, carried);
+  assert.equal(carried.destroyed, undefined);
+  assert.equal(notifications, 1);
+  assert.deepEqual(transfers, [{
+    itemId: "heavy", quantity: 2, source: "crate", destination: "hovercart",
+  }]);
+  assert.deepEqual(h.messages, ["Added 2 items to your hovercart; 3 remain in the box"]);
+});
+
+test("unpacking an entire crate clears it, and a full hovercart leaves it untouched", () => {
+  const h = createHarness({ carrying: true });
+  const carried = makeCarriedStockCrate(2);
+  h.scene.carriedCrate = carried;
+  h.scene.playerState.hovercart = makeHovercart(8);
+
+  assert.equal(GameScene.prototype.unpackCarriedCrate.call(h.scene), true);
+  assert.equal(carried.quantity, 0);
+  assert.equal(carried.destroyed, true);
+  assert.equal(h.scene.carriedCrate, null);
+  assert.deepEqual(h.messages, ["Added 2 items to your hovercart"]);
+
+  const full = makeCarriedStockCrate(2);
+  h.scene.carriedCrate = full;
+  h.scene.playerState.hovercart = makeHovercart(0);
+  assert.equal(GameScene.prototype.unpackCarriedCrate.call(h.scene), false);
+  assert.equal(full.quantity, 2);
+  assert.equal(full.destroyed, undefined);
+  assert.equal(h.scene.carriedCrate, full);
+  assert.equal(h.messages.at(-1), "Hovercart full; 2 items remain in the box");
 });
 
 test("inventory totals include active customer carts but not sold customers", () => {

@@ -64,6 +64,8 @@ notice something that needs doing but isn't being done right now.
       simulated one), including the Steam Deck.
 - [ ] Fine-tune the controller after real-pad playtesting: stick feel, dash timing, menu
       highlight movement, and button prompts.
+- [ ] Add controller configuration and button-remapping options.
+- [ ] Test the settings available from the main menu.
 
 ## Progression
 - [x] New shops start at 0 reputation. Store and faction reputation changes are tallied
@@ -184,6 +186,12 @@ notice something that needs doing but isn't being done right now.
       `gridAlignedCenter()` in game.js for the correct way to position one instead.
 
 ## Art / Assets
+- [ ] Replace the shelves' placeholder shapes with proper shelf artwork. The Budget Shelf is
+      done (purple rack style, with front, side, and back views); the other shelves still
+      use placeholder shapes.
+- [x] Create artwork for the cash bills and coins used at checkout.
+- [x] Create artwork for the Explorer Travel Chit: a programmable plasteel device
+      with a screen, textured housing, and an octagonal shape.
 - [ ] Map art is placeholder and looks bad. Replace the floor, wall, and room art; Tiled
       map-making is intentionally deferred until the end of the project.
 - [ ] Sound effects for hitting customers with boxes.
@@ -193,8 +201,8 @@ notice something that needs doing but isn't being done right now.
 - [ ] `att_stk_08` (Blackwood Ordnance Counter-Weight Stock) is using a placeholder image
       (`_Bonus_Variety/attachments_stocks/stock-tech-black-blue-orb.png`), not real art made
       for this specific item. Replace with a proper generated icon.
-- [ ] No dedicated player sprite exists yet -- `Player.js` reuses one customer character's
-      art (tinted cyan to stand out). Replace with real player-specific art eventually.
+      - [x] Replace the cyan-tinted customer placeholder with the blue-jacket mechanic from the
+      local character sheets, including four-direction walking and standing frames.
 - [x] Checkout scan cards simplified to just the item's own image -- no name/price text,
       no separate small "icon" box/border (`CheckoutRenderer.js`/`.checkout-item-image`).
 - [x] ~~Crop/bleed artifact in `mercenary_01_right.png`~~ -- moot, Sixth Generation customer
@@ -211,6 +219,18 @@ notice something that needs doing but isn't being done right now.
       explorer-skewed (+22 of the 32) -- this also affects visual faction membership for
       thrown-crate reputation penalties. See
       `scripts/extract_eighth_gen_sprites.py`.
+- [x] Customer art replaced with animated walking characters: 90 one-character sheets from
+      the local 48px pack, each checked for a full walk cycle in all four directions.
+      Sorted by look: 19 Mercenaries, 27 Explorers, 11 Scavengers, plus 15 civilians and
+      18 androids with no faction. Employees use the same characters (still green-tinted).
+      Left out: robots/drones, unfinished gray sketches, zombies, kids, and the player's
+      mechanic. The old 256 still images (`CustomerSpriteManifest.json`) are retired; see
+      `data/CustomerCharacterManifest.json` and `js/logic/CustomerSprites.js`.
+- [x] Shop entrance art replaced: two glass doors from the local 48px pack sit side
+      by side across the two-tile doorway, drawn at the characters' pixel scale. The left
+      door is the way in: it opens only to let an arriving customer through. The right door
+      is the way out: it opens when the player or a departing customer walks up to it.
+      Customers appear at the left door and leave through the right (`js/logic/SlidingDoor.js`).
 
 ## Known Issues
 - [x] Supply orders no longer jump the list to the top: refreshing prices, availability,
@@ -364,20 +384,18 @@ notice something that needs doing but isn't being done right now.
         Pad to the sales-floor shelf, skipping Storage Fixtures / the Storeroom entirely~~
         -- see the new Storage Shelving entry below; crates can now be delivered to either
         fixture depending on which one the player is standing near.
-  - [ ] Decide whether ordering a new product and assigning it a shelf spot should be one
-        flow. Any product covered by a signed supplier contract can already be ordered
-        before it has a shelf spot; ordering and shelf assignment are separate actions.
-  - [ ] Supplier prices are shown per crate, but use a fixed per-item percentage of a
-        hidden base price rather than a full Supplier Contract pricing model (Step 45/48).
+  - [x] Decided: ordering a new product and giving it shelf space stay separate actions.
+        Any product covered by a signed supplier contract can be ordered before it has
+        a shelf spot.
+  - [x] Decided: supplier prices stay as they are (a fixed per-item percentage of a hidden
+        base price, shown per crate). No contract-based pricing model is planned.
   - [x] ~~No employee auto-hauling (bible Step 14/15)~~ -- hired employees with the
         "Load storage" job now carry delivered crates from the Loading Pad into lockers
         on their own (`Employee.js`, `EmployeeJobs.js`).
   - [x] ~~No Hovercart/backpack capacity model at all~~ -- see the new Hovercart entry
         below. Crates themselves still carry a flat RESTOCK_QUANTITY (5) with no
-        carrying-capacity limit when hauled from the Loading Pad -- the Hovercart only
-        governs transfers between fixtures (shelf <-> storage) via FixtureWindow, not the
-        Loading-Pad-to-fixture crate flow, which is a separate, not-yet-unified path (see
-        below).
+        carrying-capacity limit when hauled from the Loading Pad. The player can now choose
+        to unpack a carried crate into the Hovercart, so the crate's contents use its capacity.
 - [x] Storage Shelving + real capacity-pool storage (bible Step 42): the Storeroom is
       now a proper walled-off backroom (a `door_blast_keypad_01` door in its own east
       wall, sealed via the new `TileRoom.addWall`, since two already-unlocked zones never
@@ -407,13 +425,12 @@ notice something that needs doing but isn't being done right now.
       open fixture's stock AND the hovercart's own stock side by side, each row with a
       TAKE (fixture -> hovercart) or STOCK (hovercart -> fixture) button that moves 1 unit
       at a time, disabled the instant the receiving side has no room left for that item.
-      This is what actually gives the Storage Fixture a purpose: haul a crate to Storage
-      (or the shelf, whichever's closer/has room), then separately walk between the two
-      moving units via the hovercart as needed. The HUD gained a live `HOVERCART x/y`
+      The player can deliver a crate directly to a shelf or locker, or unpack it into the
+      Hovercart and stock a fixture later. The HUD gained a live `HOVERCART x/y`
       readout next to Credits/Reputation. Employees now carry stock in their own backpacks.
-      Known simplifications: only 1 unit moves per click (no bulk-transfer input); crates
-      from the Loading Pad still deliver straight into a fixture rather than routing
-      through the hovercart first.
+      Moving 1 unit per click is intended (decided; no bulk-transfer input planned).
+  - [x] While carrying a stock crate, press Q (or Y on a controller) to unpack as much as
+        fits into the hovercart. Any remainder stays in the box.
 - [x] Sales Shelf: manual grid placement (bible Steps 4/5/22) -- NOT the same model as a
       Storage Fixture above. Originally built as a shared capacity pool (same as Storage),
       but that's wrong for a real storefront shelf: items need actual physical placement
@@ -461,8 +478,8 @@ notice something that needs doing but isn't being done right now.
       opened from the register UI's GO-BACKS BIN button (the register now shows an idle view
       when nobody's in line). Clicking a bin item loads 1 into the hovercart -- the only way
       out of the bin.
-- [ ] Consider a separate Go-Backs minigame: scan go-backs items before they can be loaded
-      into the hovercart.
+- [x] Go-Backs bin works like a take-only locker (TAKE moves 1 unit into the hovercart; nothing
+      can be put back in). A yellow "!" above the player shows while anything is in the bin.
 - [x] Inventory tab shows how many items are in active customers' carts, updating when they
       shop or finish checkout; abandoned carts move to Go-Backs as before.
 - [x] Item pricing (Step 52): `Market.js` keeps each item's hidden base (`baseCost`) and a

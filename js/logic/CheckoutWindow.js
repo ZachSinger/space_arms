@@ -72,6 +72,7 @@ export class CheckoutWindow {
     this.uiWindow.element.dataset.padBack = "world";
     this.onComplete = null;
     this.mode = null; // "checkout" while ringing up a cart
+    this.onFirstScan = null; // the game resets the customer's patience when scanning starts
     this.isScanning = false;
     this.paymentBuffer = "";
     this.total = 0;
@@ -379,6 +380,7 @@ export class CheckoutWindow {
       if (card.dataset.scanned === "true") return;
       card.dataset.scanned = "true";
       scannedCount += 1;
+      if (scannedCount === 1) this.onFirstScan?.();
 
       const index = Number(card.dataset.index);
       runningTotal = sumMoney([runningTotal, cart[index].price]);
@@ -585,7 +587,7 @@ export class CheckoutWindow {
       element.type = "button";
       element.className = `cash-loose cash-${piece.kind}`;
       element.setAttribute("aria-label", `Take ${piece.label}`);
-      element.innerHTML = `<span>${piece.label}</span>`;
+      element.innerHTML = `<span class="cash-value">${piece.label}</span>`;
       // Random spot and tilt inside the area, kept clear of its edges.
       element.style.left = `${8 + Math.random() * 64}%`;
       element.style.top = `${10 + Math.random() * 60}%`;
@@ -649,7 +651,7 @@ export class CheckoutWindow {
     });
     const piecesHTML = (pieces) => pieces.map(({ kind, units, count }) => `
       <span class="cash-pile-item">
-        <span class="cash-piece cash-${kind}">${cashFaceValue({ kind, units }, cash.currency)}</span>
+        <span class="cash-piece cash-${kind}"><span class="cash-value">${cashFaceValue({ kind, units }, cash.currency)}</span></span>
         <span class="cash-pile-count">x${count}</span>
       </span>`).join("");
     const selected = [...cash.change].map(([units, count]) => ({

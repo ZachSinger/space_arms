@@ -1,76 +1,48 @@
-const DOOR_TEXTURE_PREFIX = "research_sliding_door";
-const DOOR_FRAME_COUNT = 6;
-const DOOR_FRAME_DURATION_MS = 80;
+﻿// ==========================================
+// FILE: SlidingDoor.js
+// ==========================================
+// The shop's front entrance: two glass doors side by side. The left one is the way in and
+// only opens to let an arriving customer through. The right one is the way out and opens
+// for anyone who comes near it. Each door is solid while closed.
+
+export const STORE_DOOR_SPRITE = Object.freeze({
+  key: "store_glass_door",
+  path: "img/Icons_Extracted/Tileset/Doors/store_glass_door.png",
+  frameWidth: 96,
+  frameHeight: 96,
+});
+
+// Sheet frames in order: closed, opening, nearly open, open.
+const CLOSED_FRAME = 0;
+const OPEN_FRAME = 3;
+const DOOR_FRAME_DURATION_MS = 90;
 const DOOR_CLOSE_DELAY_MS = 500;
-const DOOR_PROXIMITY_RADIUS = 128;
-const DOOR_SOURCE_SIZE = 64;
-// The door art's visible rows run from the top of row 3 to the bottom of row 62
-// (every frame shares them).
-const DOOR_VISIBLE_TOP = 3;
-const DOOR_VISIBLE_BOTTOM = 63;
-const DOOR_COLLISION = { width: 104, height: 36 };
+const DOOR_PROXIMITY_RADIUS = 96;
+// Drawn at the same pixel scale as the characters (96 sheet px -> 64 world px).
+const DOOR_DISPLAY_SIZE = 64;
+// Together the two doors span the shop's two-tile doorway.
+const ENTRANCE_OFFSET_X = -DOOR_DISPLAY_SIZE / 2;
+const EXIT_OFFSET_X = DOOR_DISPLAY_SIZE / 2;
+const DOOR_COLLISION = { width: 52, height: 36 };
 
-export const SLIDING_DOOR_ASSETS = [
-  {
-    key: `${DOOR_TEXTURE_PREFIX}_opening_00`,
-    path: "img/Tilesets/Research_Station_FULL_v0.6.0/Art/PNG/Interactives/sliding_door/opening_00.png",
-  },
-  {
-    key: `${DOOR_TEXTURE_PREFIX}_opening_01`,
-    path: "img/Tilesets/Research_Station_FULL_v0.6.0/Art/PNG/Interactives/sliding_door/opening_01.png",
-  },
-  {
-    key: `${DOOR_TEXTURE_PREFIX}_opening_02`,
-    path: "img/Tilesets/Research_Station_FULL_v0.6.0/Art/PNG/Interactives/sliding_door/opening_02.png",
-  },
-  {
-    key: `${DOOR_TEXTURE_PREFIX}_opening_03`,
-    path: "img/Tilesets/Research_Station_FULL_v0.6.0/Art/PNG/Interactives/sliding_door/opening_03.png",
-  },
-  {
-    key: `${DOOR_TEXTURE_PREFIX}_opening_04`,
-    path: "img/Tilesets/Research_Station_FULL_v0.6.0/Art/PNG/Interactives/sliding_door/opening_04.png",
-  },
-  {
-    key: `${DOOR_TEXTURE_PREFIX}_opening_05`,
-    path: "img/Tilesets/Research_Station_FULL_v0.6.0/Art/PNG/Interactives/sliding_door/opening_05.png",
-  },
-  {
-    key: `${DOOR_TEXTURE_PREFIX}_state_closed`,
-    path: "img/Tilesets/Research_Station_FULL_v0.6.0/Art/PNG/Interactives/sliding_door/state_closed.png",
-  },
-  {
-    key: `${DOOR_TEXTURE_PREFIX}_state_open`,
-    path: "img/Tilesets/Research_Station_FULL_v0.6.0/Art/PNG/Interactives/sliding_door/state_open.png",
-  },
-];
-
-const openingTexture = (index) =>
-  `${DOOR_TEXTURE_PREFIX}_opening_${String(index).padStart(2, "0")}`;
-
-const closedTexture = `${DOOR_TEXTURE_PREFIX}_state_closed`;
-const openTexture = `${DOOR_TEXTURE_PREFIX}_state_open`;
-
-export class SlidingDoor {
-  // `y` is where the bottom of the door's art lands; `top` is where its top lands.
-  constructor(scene, { x, y, top = y - 120, wallGroup }) {
-    const scale = (y - top) / (DOOR_VISIBLE_BOTTOM - DOOR_VISIBLE_TOP);
-    this.scene = scene;
-    this.x = x;
-    this.y = y;
+class DoorLeaf {
+  constructor(scene, { x, y, offsetX, wallGroup }) {
+    this.x = x + offsetX;
+    this.sensorY = y - 32;
     this.state = "closed";
-    this.frameIndex = 0;
+    this.frameIndex = CLOSED_FRAME;
     this.frameTimer = 0;
     this.closeTimer = 0;
 
     this.sprite = scene.add
-      .image(x, y, closedTexture)
-      .setOrigin(0.5, DOOR_VISIBLE_BOTTOM / DOOR_SOURCE_SIZE)
-      .setDisplaySize(DOOR_SOURCE_SIZE * scale, DOOR_SOURCE_SIZE * scale)
+      .sprite(this.x, y, STORE_DOOR_SPRITE.key, CLOSED_FRAME)
+      .setOrigin(0.5, 1)
+      .setDisplaySize(DOOR_DISPLAY_SIZE, DOOR_DISPLAY_SIZE)
       .setDepth(1.5);
 
+    // Each blocker covers its half of the doorway, from the center line outward.
     this.blocker = scene.add.rectangle(
-      x,
+      x + Math.sign(offsetX) * DOOR_COLLISION.width / 2,
       y - DOOR_COLLISION.height / 2,
       DOOR_COLLISION.width,
       DOOR_COLLISION.height,
@@ -79,15 +51,14 @@ export class SlidingDoor {
     );
     wallGroup.add(this.blocker);
     this.blocker.setVisible(false);
-    this.sensorY = y - 32;
   }
 
-  update(delta, actors) {
-    const nearby = actors.some((actor) =>
-      actor && Math.hypot(this.x - actor.x, this.sensorY - actor.y) <= DOOR_PROXIMITY_RADIUS,
-    );
+  isNear(actor) {
+    return Math.hypot(this.x - actor.x, this.sensorY - actor.y) <= DOOR_PROXIMITY_RADIUS;
+  }
 
-    if (nearby) {
+  update(delta, someoneNear) {
+    if (someoneNear) {
       this.closeTimer = 0;
       if (this.state === "closed" || this.state === "closing") this.beginOpening();
     } else if (this.state === "open") {
@@ -95,56 +66,66 @@ export class SlidingDoor {
       if (this.closeTimer >= DOOR_CLOSE_DELAY_MS) this.beginClosing();
     }
 
-    if (this.state === "opening") this.advanceOpening(delta);
-    else if (this.state === "closing") this.advanceClosing(delta);
+    if (this.state === "opening") this.advance(delta, 1, OPEN_FRAME, "open");
+    else if (this.state === "closing") this.advance(delta, -1, CLOSED_FRAME, "closed");
   }
 
   beginOpening() {
     this.state = "opening";
     this.frameTimer = 0;
     this.blocker.body.enable = false;
-    if (this.frameIndex === 0) this.sprite.setTexture(openingTexture(0));
   }
 
   beginClosing() {
     this.state = "closing";
-    this.frameIndex = DOOR_FRAME_COUNT - 1;
     this.frameTimer = 0;
-    this.sprite.setTexture(openingTexture(this.frameIndex));
   }
 
-  advanceOpening(delta) {
+  advance(delta, step, lastFrame, finalState) {
     this.frameTimer += delta;
-    while (this.frameTimer >= DOOR_FRAME_DURATION_MS && this.state === "opening") {
+    while (this.frameTimer >= DOOR_FRAME_DURATION_MS && this.frameIndex !== lastFrame) {
       this.frameTimer -= DOOR_FRAME_DURATION_MS;
-      if (this.frameIndex < DOOR_FRAME_COUNT - 1) {
-        this.frameIndex += 1;
-        this.sprite.setTexture(openingTexture(this.frameIndex));
-      } else {
-        this.state = "open";
-        this.closeTimer = 0;
-        this.sprite.setTexture(openTexture);
-      }
+      this.frameIndex += step;
+      this.sprite.setFrame(this.frameIndex);
     }
-  }
-
-  advanceClosing(delta) {
-    this.frameTimer += delta;
-    while (this.frameTimer >= DOOR_FRAME_DURATION_MS && this.state === "closing") {
-      this.frameTimer -= DOOR_FRAME_DURATION_MS;
-      if (this.frameIndex > 0) {
-        this.frameIndex -= 1;
-        this.sprite.setTexture(openingTexture(this.frameIndex));
-      } else {
-        this.state = "closed";
-        this.sprite.setTexture(closedTexture);
-        this.blocker.body.enable = true;
-      }
-    }
+    if (this.frameIndex !== lastFrame) return;
+    this.state = finalState;
+    this.closeTimer = 0;
+    if (finalState === "closed") this.blocker.body.enable = true;
   }
 
   destroy() {
     this.sprite.destroy();
     this.blocker.destroy();
+  }
+}
+
+export class SlidingDoor {
+  // `x` is the doorway's center; `y` is where the bottom of the doors lands.
+  constructor(scene, { x, y, wallGroup }) {
+    this.entrance = new DoorLeaf(scene, { x, y, offsetX: ENTRANCE_OFFSET_X, wallGroup });
+    this.exit = new DoorLeaf(scene, { x, y, offsetX: EXIT_OFFSET_X, wallGroup });
+    this.entrancePoint = { x: this.entrance.x, y };
+    this.exitPoint = { x: this.exit.x, y };
+    // Arriving customers hold the entrance open until they've walked clear of it.
+    this.arrivals = new Set();
+  }
+
+  letIn(actor) {
+    this.arrivals.add(actor);
+  }
+
+  // `exitActors` are everyone who opens the exit door by walking up to it.
+  update(delta, exitActors) {
+    for (const actor of this.arrivals) {
+      if (actor.active === false || !this.entrance.isNear(actor)) this.arrivals.delete(actor);
+    }
+    this.entrance.update(delta, this.arrivals.size > 0);
+    this.exit.update(delta, exitActors.some((actor) => actor && this.exit.isNear(actor)));
+  }
+
+  destroy() {
+    this.entrance.destroy();
+    this.exit.destroy();
   }
 }

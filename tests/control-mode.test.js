@@ -20,9 +20,11 @@ test("selects the active control mode by state priority", () => {
 
   scene.carriedCrate = {};
   assert.equal(controls.getMode(), CONTROL_MODES.CARRYING);
+  assert.equal(controls.allows("unpack"), true);
 
   scene.operatingRegister = true;
   assert.equal(controls.getMode(), CONTROL_MODES.REGISTER);
+  assert.equal(controls.allows("unpack"), false);
 
   scene.windowManager.windows.set("manager-tablet", { id: "manager-tablet", isOpen: true });
   assert.equal(controls.getMode(), CONTROL_MODES.MODAL);

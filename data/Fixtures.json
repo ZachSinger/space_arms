@@ -5,7 +5,13 @@
     "kind": "shelf",
     "w": 1,
     "h": 1,
-    "texture": "shelf_frame_01",
+    "texture": "shelf_budget_down",
+    "facingTextures": {
+      "down": "shelf_budget_down",
+      "left": "shelf_budget_left",
+      "up": "shelf_budget_up",
+      "right": "shelf_budget_right"
+    },
     "stackDepth": 10,
     "price": 150,
     "licenseId": "lic_fixture_basics"
@@ -102,9 +108,15 @@
     "id": "register_basic",
     "name": "REGISTER",
     "kind": "register",
-    "w": 2,
-    "h": 2,
-    "texture": "register_01",
+    "w": 1,
+    "h": 1,
+    "texture": "register_basic_down",
+    "facingTextures": {
+      "down": "register_basic_down",
+      "left": "register_basic_left",
+      "up": "register_basic_up",
+      "right": "register_basic_right"
+    },
     "price": 500,
     "licenseId": "lic_fixture_basics"
   }

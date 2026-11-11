@@ -34,7 +34,7 @@ before(async () => {
         if (id === "\0patience-test-database") {
           return `export const database = { getItem: (id) => ({ id, slots: id === "big" ? 4 : 1 }) };`;
         }
-        if (id === "\0patience-test-sprites") return "export const pickRandomCustomerCharacter = () => ({});";
+        if (id === "\0patience-test-sprites") return "export const pickRandomCustomerCharacter = () => ({}); export const addCharacterSprite = () => ({}); export const showCharacterFacing = () => {}; export const CHARACTER_HEAD_HEIGHT = 32;";
       },
     }],
   });

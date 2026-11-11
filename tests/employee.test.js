@@ -34,7 +34,15 @@ before(async () => {
           return "export const database = { getItem: (id) => ({ id, slots: 1 }) };";
         }
         if (id === "\0employee-test-sprites") {
-          return "export const pickRandomCustomerCharacter = () => ({ facingTextures: { down: 'down', up: 'up', left: 'left', right: 'right' } });";
+          return `export const pickRandomCustomerCharacter = () => ({ textureKey: "customer_test" });
+            export const showCharacterFacing = (sprite, facing, moving) => {
+              sprite.shown = { facing, moving };
+            };
+            export const addCharacterSprite = (scene, x, y, textureKey) => {
+              const sprite = scene.add.sprite(x, y, textureKey);
+              scene.physics.add.existing(sprite);
+              return sprite;
+            };`;
         }
       },
     }],
@@ -142,13 +150,12 @@ function makeEmployee({
     refreshLockerCapacityDisplay() {},
     refreshShelfStockDisplay() {},
     add: {
-      image: (x, y) => ({
+      sprite: (x, y) => ({
         x,
         y,
-        setDisplaySize() { return this; },
+        anims: {},
         setTint() { return this; },
         setDepth() { return this; },
-        setTexture() { return this; },
         setVisible(visible) { this.visible = visible; return this; },
         destroy() {},
       }),

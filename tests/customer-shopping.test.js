@@ -34,7 +34,7 @@ before(async () => {
       },
       load(id) {
         if (id === "\0customer-shopping-test-sprites") {
-          return "export const pickRandomCustomerCharacter = () => ({ factionId: null, facingTextures: {} }); export const pickPlayerCharacterTextures = () => ({});";
+          return "export const pickRandomCustomerCharacter = () => ({ factionId: null, textureKey: 'customer_test' }); export const addCharacterSprite = () => ({}); export const showCharacterFacing = () => {}; export const CHARACTER_HEAD_HEIGHT = 32;";
         }
         if (id === "\0customer-shopping-test-database") {
           return "export const database = { getItem: (id) => ({ id, name: id, tags: [] }) };";
@@ -231,7 +231,8 @@ test("customer emoticons appear only for a new event and fade while following th
   assert.equal(customer.showReaction("price-too-high", "disappointed"), true);
   assert.equal(customer.showReaction("price-too-high", "disappointed"), false);
   assert.equal(customer.showReaction("left-angry", "angry"), false);
-  assert.deepEqual([reactionGraphics[0].x, reactionGraphics[0].y], [123, 64]);
+  // Above the character's head: 100 - 32 head height - 12.
+  assert.deepEqual([reactionGraphics[0].x, reactionGraphics[0].y], [123, 56]);
 
   customer.sprite.x = 130;
   customer.updateReaction(1500);

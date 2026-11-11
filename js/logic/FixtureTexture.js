@@ -1,10 +1,20 @@
-// Temporary overhead shelf art, shared by placed fixtures and placement previews.
+// Shelf art shared by placed fixtures and placement previews. Shelves without drawn art get
+// a temporary overhead placeholder.
 import { TILE_SIZE } from "./RoomLayout.js";
-import { SHELF_VISUAL_SLOTS_PER_TILE } from "./FixtureLayout.js";
+import { FIXTURE_FACINGS, SHELF_VISUAL_SLOTS_PER_TILE } from "./FixtureLayout.js";
 
 export const TEST_SHELF_SURFACE_COLOR = 0x18212c;
 
-export function getFixtureTexture(scene, spec) {
+/**
+ * Fixtures with art drawn for each facing show that art upright instead of a spun image.
+ * @param {object} spec
+ */
+export function hasFacingTextures(spec) {
+  return Boolean(spec?.facingTextures);
+}
+
+export function getFixtureTexture(scene, spec, rotation = 0) {
+  if (hasFacingTextures(spec)) return spec.facingTextures[FIXTURE_FACINGS[rotation % 4]];
   if (spec.kind !== "shelf") return spec.texture;
   const key = `test-shelf:${spec.id}`;
   if (scene.textures.exists(key)) return key;

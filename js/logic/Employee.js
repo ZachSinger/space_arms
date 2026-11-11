@@ -5,13 +5,14 @@
 import { InventoryPool } from "./InventoryPool.js";
 import { transferItems } from "./InventoryTransfer.js";
 import { getFixtureType } from "./FixtureLayout.js";
-import { pickRandomCustomerCharacter } from "./CustomerSprites.js";
+import { addCharacterSprite, pickRandomCustomerCharacter, showCharacterFacing } from "./CustomerSprites.js";
 import { EMPLOYEE_JOB_IDS } from "./EmployeeJobs.js";
 import { getEmployeeJobSpeed } from "./EmployeeTraining.js";
 
 const WALK_SPEED = 120;
-const DISPLAY_WIDTH = 46;
-const DISPLAY_HEIGHT = 48;
+// px, collision box; the walking art is drawn larger around it (CustomerSprites.js).
+const BODY_WIDTH = 46;
+const BODY_HEIGHT = 48;
 const JOB_RETRY_MS = 1000;
 const BREAK_CHECK_MS = 100;
 const REGISTER_SERVICE_MS_PER_ITEM = 1000;
@@ -36,14 +37,13 @@ export class Employee {
     this.isDestroyed = false;
 
     const character = pickRandomCustomerCharacter();
-    this.facingTextures = character.facingTextures;
     this.currentFacing = "down";
     const spawn = scene.backroomExitFront ?? scene.backroomDoor;
-    this.sprite = scene.add.image(spawn.x, spawn.y, this.facingTextures.down)
-      .setDisplaySize(DISPLAY_WIDTH, DISPLAY_HEIGHT)
+    this.sprite = addCharacterSprite(
+      scene, spawn.x, spawn.y, character.textureKey, BODY_WIDTH, BODY_HEIGHT,
+    )
       .setTint(0x4ade80)
       .setDepth(3);
-    scene.physics.add.existing(this.sprite);
     scene.employeeGroup.add(this.sprite);
   }
 
@@ -58,6 +58,7 @@ export class Employee {
           this.scene.registerLine.length > 0 && this.retryInMs <= 0) {
           this.startRegisterJob();
         }
+        this.updateFacing();
         return;
       }
       if (this.retryInMs <= 0) this.startNextTask();
@@ -83,8 +84,8 @@ export class Employee {
       if (this.state === "TO_STORAGE_CRATE") {
         this.currentJob.crate.followCarrier(this.sprite);
       }
-      this.updateFacing();
     }
+    if (!this.isDestroyed) this.updateFacing();
   }
 
   startNextTask() {
@@ -480,15 +481,23 @@ export class Employee {
     return (this.state === "IDLE" || this.state === "ON_BREAK") && this.backpack.usedCapacity() === 0;
   }
 
+  // Walks in the direction of travel, or holds the standing pose in the last facing.
   updateFacing() {
     const { x, y } = this.sprite.body.velocity;
-    if (Math.abs(x) < 1 && Math.abs(y) < 1) return;
-    const facing = Math.abs(x) > Math.abs(y)
-      ? (x < 0 ? "left" : "right")
-      : (y < 0 ? "up" : "down");
-    if (facing === this.currentFacing) return;
-    this.currentFacing = facing;
-    this.sprite.setTexture(this.facingTextures[facing]).setDisplaySize(DISPLAY_WIDTH, DISPLAY_HEIGHT);
+    const moving = Math.abs(x) >= 1 || Math.abs(y) >= 1;
+    if (moving) {
+      this.currentFacing = Math.abs(x) > Math.abs(y)
+        ? (x < 0 ? "left" : "right")
+        : (y < 0 ? "up" : "down");
+      this.sprite.anims.timeScale = Math.hypot(x, y) / WALK_SPEED;
+    }
+    showCharacterFacing(this.sprite, this.currentFacing, moving);
+  }
+
+  standStill() {
+    if (this.isDestroyed) return;
+    this.sprite.body.setVelocity(0, 0);
+    showCharacterFacing(this.sprite, this.currentFacing, false);
   }
 
   destroy() {

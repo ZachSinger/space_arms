@@ -53,6 +53,46 @@ test("shelf crates can enter placement mode from the sales floor", () => {
   assert.equal(started, true);
 });
 
+test("the fixture placement preview uses the size for its current facing", () => {
+  const placement = Object.create(FixturePlacement.prototype);
+  const spec = getFixtureType("shelf_budget_2x2");
+  const rotations = [];
+  placement.spec = spec;
+  placement.original = null;
+  placement.statusElement = {};
+  placement.scene = {
+    fixtures: { nextId: () => "preview" },
+    checkFixturePlacement: () => ({ valid: true, reason: "Click to place." }),
+    sizeFacingArt: (ghost, receivedSpec, rotation) => {
+      assert.equal(receivedSpec, spec);
+      rotations.push(rotation);
+      ghost.setDisplaySize(TILE_SIZE, TILE_SIZE);
+    },
+  };
+  placement.graphics = {
+    clear() { return this; },
+    fillStyle() { return this; },
+    lineStyle() { return this; },
+    fillRect() { return this; },
+    strokeRect() { return this; },
+  };
+  placement.ghost = {
+    setPosition() { return this; },
+    setTexture(key) { this.texture = key; return this; },
+    setAngle(angle) { this.angle = angle; return this; },
+    setDisplaySize(width, height) { this.width = width; this.height = height; return this; },
+  };
+  for (let rotation = 0; rotation < 4; rotation++) {
+    placement.rotation = rotation;
+    placement.updatePreviewAt(5 * TILE_SIZE, 5 * TILE_SIZE);
+    assert.equal(placement.ghost.texture, spec.facingTextures[fixtureFacing({ rotation })]);
+    assert.equal(placement.ghost.angle, 0);
+    assert.equal(placement.ghost.width, TILE_SIZE);
+    assert.equal(placement.ghost.height, TILE_SIZE);
+  }
+  assert.deepEqual(rotations, [0, 1, 2, 3]);
+});
+
 test("fixture interaction covers its entire front but not its sides or back", () => {
   const shelf = { type: "shelf_universal", gx: 9, gy: 2 };
   const left = 9 * TILE_SIZE;
@@ -164,9 +204,9 @@ test("a boxed-in line still bends around obstacles one step at a time", () => {
 // Shelves wall off the register's right side, so customers have to go around the bottom
 // of the shop to reach it.
 const gauntletLayout = () => [...STARTING_FIXTURES.map((entry) => ({ ...entry })),
-  { id: "gauntlet_top_left", type: "shelf_starter_2x1", gx: 15, gy: 3, rotation: 3 },
-  { id: "gauntlet_left", type: "shelf_starter_2x1", gx: 15, gy: 5, rotation: 3 },
-  { id: "gauntlet_right", type: "shelf_starter_2x1", gx: 18, gy: 5, rotation: 1 },
+  { id: "gauntlet_top_left", type: "shelf_starter_2x1", gx: 14, gy: 3, rotation: 3 },
+  { id: "gauntlet_left", type: "shelf_starter_2x1", gx: 14, gy: 5, rotation: 3 },
+  { id: "gauntlet_right", type: "shelf_starter_2x1", gx: 17, gy: 5, rotation: 1 },
 ];
 
 test("a shelf-lined checkout aisle is allowed and the line forms single file through it", () => {
@@ -174,7 +214,7 @@ test("a shelf-lined checkout aisle is allowed and the line forms single file thr
   const result = validateFixtureLayout(gauntletLayout(), options);
   assert.equal(result.valid, true, result.reason);
   const cells = result.queueCells;
-  assert.deepEqual(cells.slice(0, 3), [{ gx: 14, gy: 5 }, { gx: 14, gy: 6 }, { gx: 14, gy: 7 }]);
+  assert.deepEqual(cells.slice(0, 3), [{ gx: 13, gy: 4 }, { gx: 13, gy: 5 }, { gx: 13, gy: 6 }]);
   cells.slice(1).forEach((cell, index) => assert.ok(touches(cell, cells[index])));
   assert.ok(cells.every((cell) => !result.blockedCells.has(cellKey(cell))));
 });
@@ -394,10 +434,10 @@ test("a turned register needs both its new front and back clear, and its line fo
   const result = validateFixtureLayout(turned("register", 19, 4, 1), createRoom());
   assert.equal(result.valid, true, result.reason);
   assert.equal(result.queueCells.length, 6);
-  assert.deepEqual(result.queueCells[0], { gx: 18, gy: 5 });
+  assert.deepEqual(result.queueCells[0], { gx: 18, gy: 4 });
   assert.ok(result.queueCells.every((cell) => cell.gx <= 18));
   // Against the right wall there's nowhere behind it for the cashier.
-  const blocked = validateFixtureLayout(turned("register", 20, 4, 1), createRoom());
+  const blocked = validateFixtureLayout(turned("register", 21, 4, 1), createRoom());
   assert.equal(blocked.valid, false);
   assert.match(blocked.reason, /front and back/);
 });

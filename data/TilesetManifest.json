@@ -316,8 +316,72 @@
     "path": "img/Icons_Extracted/Tileset/Fixtures/rail_bench_05.png"
   },
   {
+    "key": "shelf_category_ammunition",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/ShelfCategoryIcons/native/category_ammunition.png"
+  },
+  {
+    "key": "shelf_category_apparel",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/ShelfCategoryIcons/native/category_apparel.png"
+  },
+  {
+    "key": "shelf_category_armor",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/ShelfCategoryIcons/native/category_armor.png"
+  },
+  {
+    "key": "shelf_category_attachment",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/ShelfCategoryIcons/native/category_attachment.png"
+  },
+  {
+    "key": "shelf_category_firearm",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/ShelfCategoryIcons/native/category_firearm.png"
+  },
+  {
+    "key": "shelf_category_melee",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/ShelfCategoryIcons/native/category_melee.png"
+  },
+  {
+    "key": "shelf_category_survival",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/ShelfCategoryIcons/native/category_survival.png"
+  },
+  {
+    "key": "shelf_category_tool",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/ShelfCategoryIcons/native/category_tool.png"
+  },
+  {
+    "key": "shelf_budget_down",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_down.png"
+  },
+  {
+    "key": "shelf_budget_left",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_left.png"
+  },
+  {
+    "key": "shelf_budget_up",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_up.png"
+  },
+  {
+    "key": "shelf_budget_right",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_right.png"
+  },
+  {
     "key": "register_01",
     "path": "img/Icons_Extracted/Tileset/Fixtures/register_01.png"
+  },
+  {
+    "key": "register_basic_down",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/register_basic_down.png"
+  },
+  {
+    "key": "register_basic_left",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/register_basic_left.png"
+  },
+  {
+    "key": "register_basic_up",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/register_basic_up.png"
+  },
+  {
+    "key": "register_basic_right",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/register_basic_right.png"
   },
   {
     "key": "register_02",
