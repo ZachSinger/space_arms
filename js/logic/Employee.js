@@ -8,11 +8,9 @@ import { getFixtureType } from "./FixtureLayout.js";
 import { addCharacterSprite, pickRandomCustomerCharacter, showCharacterFacing } from "./CustomerSprites.js";
 import { EMPLOYEE_JOB_IDS } from "./EmployeeJobs.js";
 import { getEmployeeJobSpeed } from "./EmployeeTraining.js";
+import { PLAYER_BODY_HEIGHT, PLAYER_BODY_WIDTH } from "./Player.js";
 
 const WALK_SPEED = 120;
-// px, collision box; the walking art is drawn larger around it (CustomerSprites.js).
-const BODY_WIDTH = 46;
-const BODY_HEIGHT = 48;
 const JOB_RETRY_MS = 1000;
 const BREAK_CHECK_MS = 100;
 const REGISTER_SERVICE_MS_PER_ITEM = 1000;
@@ -40,7 +38,7 @@ export class Employee {
     this.currentFacing = "down";
     const spawn = scene.backroomExitFront ?? scene.backroomDoor;
     this.sprite = addCharacterSprite(
-      scene, spawn.x, spawn.y, character.textureKey, BODY_WIDTH, BODY_HEIGHT,
+      scene, spawn.x, spawn.y, character.textureKey, PLAYER_BODY_WIDTH, PLAYER_BODY_HEIGHT,
     )
       .setTint(0x4ade80)
       .setDepth(3);

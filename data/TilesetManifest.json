@@ -152,6 +152,18 @@
     "path": "img/Icons_Extracted/Tileset/Fixtures/locker_single.png"
   },
   {
+    "key": "locker_single_left",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/locker_single_left.png"
+  },
+  {
+    "key": "locker_single_up",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/locker_single_up.png"
+  },
+  {
+    "key": "locker_single_right",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/locker_single_right.png"
+  },
+  {
     "key": "locker_storage",
     "path": "img/Icons_Extracted/Tileset/Fixtures/locker_storage.png"
   },

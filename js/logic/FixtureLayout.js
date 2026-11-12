@@ -7,6 +7,7 @@
 import fixtureTypes from "../../data/Fixtures.json" with { type: "json" };
 import { roundMoney } from "./Money.js";
 import { getReachableGridCells } from "./Pathfinder.js";
+import { PLAYER_BODY_HEIGHT, PLAYER_BODY_WIDTH, PLAYER_CHARACTER_HEIGHT, PLAYER_CHARACTER_WIDTH } from "./Player.js";
 import {
   BACKROOM_GRID_Y, TILE_SIZE, getAuthoredGridSize, zoneAt,
 } from "./RoomLayout.js";
@@ -14,13 +15,29 @@ import {
 // Shelf display slots per tile along each axis.
 export const SHELF_VISUAL_SLOTS_PER_TILE = 2;
 
+// Two world pixels per art pixel, so narrow fixtures can meet without a gap.
+export const FIXTURE_POSITION_STEP = 1 / 32;
+// Tiles of a floor square a fixture may cover and still leave it walkable. Customers walk
+// square centers, and their collision box clears a square's edge by this much.
+const FLOOR_EDGE_ALLOWANCE = 1 / 8;
+// Tiles a down-facing fixture may push its back into the wall behind it.
+export const BACK_WALL_TUCK = 1 / 2;
+
+export function isFixturePosition(value) {
+  return Number.isFinite(value) && Number.isInteger(value / FIXTURE_POSITION_STEP);
+}
+
+export function snapFixturePosition(value) {
+  return Math.round(value / FIXTURE_POSITION_STEP) * FIXTURE_POSITION_STEP;
+}
+
 // Placed fixtures are instances ({ id, type, gx, gy }) owned by FixtureRegistry.
 export const FIXTURE_TYPES = fixtureTypes;
 
 // A new game's layout: no shelves, so the player buys their first one from the Fixtures tab.
 export const STARTING_FIXTURES = [
   { id: "storage_demo_01", type: "locker_single", gx: 1, gy: BACKROOM_GRID_Y + 1 },
-  { id: "storage_demo_02", type: "locker_single", gx: 2, gy: BACKROOM_GRID_Y + 1 },
+  { id: "storage_demo_02", type: "locker_single", gx: 1.5625, gy: BACKROOM_GRID_Y + 1 },
   { id: "register", type: "register_basic", gx: 13, gy: 3 },
 ];
 
@@ -105,34 +122,149 @@ export function fixtureFacing(placement, behind = false) {
  */
 export function fixtureFootprint(placement) {
   const spec = getFixtureType(placement.type);
+  if (spec.facingFootprints) return { ...spec.facingFootprints[fixtureFacing(placement)] };
   return fixtureRotation(placement) % 2 === 0 ? { w: spec.w, h: spec.h } : { w: spec.h, h: spec.w };
 }
 
-export function fixtureCells(placement) {
+/**
+ * The fixture's edges in tiles (fractions allowed).
+ * @returns {{ left: number, top: number, right: number, bottom: number }}
+ */
+export function fixtureBounds(placement) {
   const { w, h } = fixtureFootprint(placement);
+  return { left: placement.gx, top: placement.gy, right: placement.gx + w, bottom: placement.gy + h };
+}
+
+export function fixtureFrontClearance(placement) {
+  if (placement.type !== "locker_single") return null;
+  const bounds = fixtureBounds(placement);
+  switch (fixtureFacing(placement)) {
+    case "down": return { ...bounds, top: bounds.bottom, bottom: bounds.bottom + PLAYER_CHARACTER_HEIGHT / TILE_SIZE };
+    case "up": return { ...bounds, bottom: bounds.top, top: bounds.top - PLAYER_CHARACTER_HEIGHT / TILE_SIZE };
+    case "left": return { ...bounds, right: bounds.left, left: bounds.left - PLAYER_CHARACTER_WIDTH / TILE_SIZE };
+    default: return { ...bounds, left: bounds.right, right: bounds.right + PLAYER_CHARACTER_WIDTH / TILE_SIZE };
+  }
+}
+
+export function rectanglesOverlap(a, b) {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
+export function fixturesOverlap(a, b) {
+  const first = fixtureBounds(a);
+  const second = fixtureBounds(b);
+  const firstFront = fixtureFrontClearance(a);
+  const secondFront = fixtureFrontClearance(b);
+  return rectanglesOverlap(first, second) ||
+    Boolean(firstFront && rectanglesOverlap(firstFront, second)) ||
+    Boolean(secondFront && rectanglesOverlap(first, secondFront));
+}
+
+// The range of floor squares the fixture covers by more than a sliver.
+function coveredCellRange(placement) {
+  const { left, top, right, bottom } = fixtureBounds(placement);
+  return {
+    x0: Math.floor(left + FLOOR_EDGE_ALLOWANCE),
+    x1: Math.ceil(right - FLOOR_EDGE_ALLOWANCE),
+    y0: Math.floor(top + FLOOR_EDGE_ALLOWANCE),
+    y1: Math.ceil(bottom - FLOOR_EDGE_ALLOWANCE),
+  };
+}
+
+/**
+ * Floor squares covered by more than the permitted edge overlap.
+ * @param {object} placement
+ * @returns {{ gx: number, gy: number }[]}
+ */
+function fixtureCoveredCells(placement) {
+  const { x0, x1, y0, y1 } = coveredCellRange(placement);
   const cells = [];
-  for (let y = 0; y < h; y += 1) {
-    for (let x = 0; x < w; x += 1) {
-      cells.push({ gx: placement.gx + x, gy: placement.gy + y });
+  for (let gy = y0; gy < y1; gy += 1) {
+    for (let gx = x0; gx < x1; gx += 1) cells.push({ gx, gy });
+  }
+  return cells;
+}
+
+// Shared paths clear centered staff bodies and the player's lower-body collision.
+export function fixtureCells(placement) {
+  if (placement.type !== "locker_single") return fixtureCoveredCells(placement);
+  const bounds = fixtureBounds(placement);
+  const cells = [];
+  for (let gy = Math.floor(bounds.top); gy < Math.ceil(bounds.bottom); gy++) {
+    for (let gx = Math.floor(bounds.left); gx < Math.ceil(bounds.right); gx++) {
+      const x = gx + 0.5;
+      const y = gy + 0.5;
+      if (rectanglesOverlap(bounds, {
+        left: x - PLAYER_BODY_WIDTH / TILE_SIZE / 2, right: x + PLAYER_BODY_WIDTH / TILE_SIZE / 2,
+        top: y - PLAYER_BODY_HEIGHT / TILE_SIZE / 2, bottom: y + PLAYER_BODY_HEIGHT / TILE_SIZE,
+      })) cells.push({ gx, gy });
     }
   }
   return cells;
 }
 
 /**
- * The line of cells a customer or the player stands on to use the fixture.
+ * The line of cells a customer or the player stands on to use the fixture: the first clear
+ * row in front, one square for each square of the fixture's width.
  * @param {object} placement
  * @param {boolean} [behind] - the line behind instead (the register needs both)
  * @returns {{ gx: number, gy: number }[]}
  */
 export function fixtureAccessCells(placement, behind = false) {
-  const { w, h } = fixtureFootprint(placement);
-  const { gx, gy } = placement;
+  if (placement.type === "locker_single") {
+    const spot = fixtureStandingSpot(placement, null);
+    const cell = { gx: Math.floor(spot.x / TILE_SIZE), gy: Math.floor(spot.y / TILE_SIZE) };
+    const step = fixtureFacingStep(placement);
+    const blocked = new Set(fixtureCells(placement).map(cellKey));
+    while (blocked.has(cellKey(cell))) {
+      cell.gx += step.dx;
+      cell.gy += step.dy;
+    }
+    return [cell];
+  }
+  const { left, top, right, bottom } = fixtureBounds(placement);
+  const { x0, x1, y0, y1 } = coveredCellRange(placement);
+  // Squares whose centers lie along the fixture's edge.
+  const along = (from, to) => {
+    const first = Math.ceil(from - 0.5);
+    const cells = Array.from({ length: Math.ceil(to - 0.5) - first }, (_, index) => first + index);
+    return cells.length ? cells : [Math.floor((from + to) / 2)];
+  };
   switch (fixtureFacing(placement, behind)) {
-    case "down": return Array.from({ length: w }, (_, x) => ({ gx: gx + x, gy: gy + h }));
-    case "up": return Array.from({ length: w }, (_, x) => ({ gx: gx + x, gy: gy - 1 }));
-    case "left": return Array.from({ length: h }, (_, y) => ({ gx: gx - 1, gy: gy + y }));
-    default: return Array.from({ length: h }, (_, y) => ({ gx: gx + w, gy: gy + y }));
+    case "down": return along(left, right).map((gx) => ({ gx, gy: y1 }));
+    case "up": return along(left, right).map((gx) => ({ gx, gy: y0 - 1 }));
+    case "left": return along(top, bottom).map((gy) => ({ gx: x0 - 1, gy }));
+    default: return along(top, bottom).map((gy) => ({ gx: x1, gy }));
+  }
+}
+
+/**
+ * Where someone using the fixture from this access cell stands (px): half a tile out from
+ * the front edge and lined up with the fixture, so a fixture between floor squares doesn't
+ * leave shoppers standing back or off to one side.
+ * @param {object} placement
+ * @param {{ gx: number, gy: number }} cell - one of fixtureAccessCells(placement)
+ */
+export function fixtureStandingSpot(placement, cell) {
+  const { left, top, right, bottom } = fixtureBounds(placement);
+  if (placement.type === "locker_single") {
+    const x = (left + right) * TILE_SIZE / 2;
+    const y = (top + bottom) * TILE_SIZE / 2;
+    switch (fixtureFacing(placement)) {
+      case "down": return { x, y: bottom * TILE_SIZE + PLAYER_CHARACTER_HEIGHT / 2 };
+      case "up": return { x, y: top * TILE_SIZE - PLAYER_CHARACTER_HEIGHT / 2 };
+      case "left": return { x: left * TILE_SIZE - PLAYER_CHARACTER_WIDTH / 2, y };
+      default: return { x: right * TILE_SIZE + PLAYER_CHARACTER_WIDTH / 2, y };
+    }
+  }
+  const index = fixtureAccessCells(placement).findIndex(({ gx, gy }) => gx === cell.gx && gy === cell.gy);
+  const x = (index >= 0 ? left + index + 0.5 : cell.gx + 0.5) * TILE_SIZE;
+  const y = (index >= 0 ? top + index + 0.5 : cell.gy + 0.5) * TILE_SIZE;
+  switch (fixtureFacing(placement)) {
+    case "down": return { x, y: (bottom + 0.5) * TILE_SIZE };
+    case "up": return { x, y: (top - 0.5) * TILE_SIZE };
+    case "left": return { x: (left - 0.5) * TILE_SIZE, y };
+    default: return { x: (right + 0.5) * TILE_SIZE, y };
   }
 }
 
@@ -178,37 +310,75 @@ export function cellKey({ gx, gy }) {
  * @returns {{ valid: boolean, reason: string, blockedCells?: Set<string>, access?: Map, queueCells?: object[] }}
  */
 export function validateFixtureLayout(placements, {
-  isWalkable, entrance, reservedCells = new Set(), doorwayCells = new Set(), occupiedRectangles = [],
-  gridSize = getAuthoredGridSize(), queueSize = 6, requireSalesFloor = true, links = [],
+  isWalkable, isWall = () => false, entrance, reservedCells = new Set(), doorwayCells = new Set(),
+  occupiedRectangles = [], gridSize = getAuthoredGridSize(), queueSize = 6, requireSalesFloor = true,
+  links = [], backroomBounds = null, reservedRectangles = [],
 }) {
   const invalid = (reason) => ({ valid: false, reason });
   if (!Array.isArray(placements)) return invalid("The fixture layout is invalid.");
   const ids = new Set();
   const blockedCells = new Set();
+  const placed = [];
   for (const placement of placements) {
     const spec = getFixtureType(placement?.type);
     if (!spec || typeof placement.id !== "string" || ids.has(placement.id) ||
-      !Number.isInteger(placement.gx) || !Number.isInteger(placement.gy) ||
+      !isFixturePosition(placement.gx) || !isFixturePosition(placement.gy) ||
       !isValidFixtureRotation(placement.rotation)) {
       return invalid("The fixture layout is invalid.");
     }
     ids.add(placement.id);
-    for (const cell of fixtureCells(placement)) {
+    const bounds = fixtureBounds(placement);
+    const front = fixtureFrontClearance(placement);
+    const rectangles = front ? [bounds, front] : [bounds];
+    const facesDown = fixtureFacing(placement) === "down";
+    // Like the wall-cell check below, a down-facing fixture may tuck into the top wall.
+    const backroomTop = backroomBounds && backroomBounds.top - (facesDown ? BACK_WALL_TUCK * TILE_SIZE : 0);
+    if (backroomBounds && placement.gy >= BACKROOM_GRID_Y &&
+      rectangles.some((rect) => rect.left * TILE_SIZE < backroomBounds.left ||
+        rect.right * TILE_SIZE > backroomBounds.right || rect.top * TILE_SIZE < backroomTop ||
+        rect.bottom * TILE_SIZE > backroomBounds.bottom)) {
+      return invalid(facesDown && bounds.top * TILE_SIZE < backroomTop && bounds.left * TILE_SIZE >= backroomBounds.left &&
+        bounds.right * TILE_SIZE <= backroomBounds.right
+        ? "Too far into the wall. Move it down a little."
+        : "Keep the fixture and its standing space inside the backroom.");
+    }
+    if (rectangles.some((rect) => reservedRectangles.some((reserved) => rectanglesOverlap({
+      left: rect.left * TILE_SIZE, right: rect.right * TILE_SIZE,
+      top: rect.top * TILE_SIZE, bottom: rect.bottom * TILE_SIZE,
+    }, reserved)))) {
+      return invalid("Keep entrances and the loading area clear.");
+    }
+    for (const cell of fixtureCoveredCells(placement)) {
       const key = cellKey(cell);
-      if (!isWalkable(cell.gx, cell.gy)) return invalid("Place fixtures on unlocked floor, away from walls.");
-      if (requireSalesFloor && spec.kind !== "storage" && !zoneAt(cell.gx, cell.gy)?.salesFloor) {
+      const intoWall = facesDown && isWall(cell.gx, cell.gy);
+      // A down-facing fixture's back may tuck partway into the wall behind it.
+      const tucked = intoWall && cell.gy + 1 <= bounds.top + BACK_WALL_TUCK;
+      if (!tucked && !isWalkable(cell.gx, cell.gy)) {
+        return invalid(intoWall && cell.gy < bounds.top + 1
+          ? "Too far into the wall. Move it down a little."
+          : "Place fixtures on unlocked floor, away from walls.");
+      }
+      if (!tucked && requireSalesFloor && spec.kind !== "storage" && !zoneAt(cell.gx, cell.gy)?.salesFloor) {
         return invalid(`The ${spec.name} must go on the sales floor. Only storage goes in the back.`);
       }
       if (reservedCells.has(key)) return invalid("Keep entrances and the loading area clear.");
-      if (blockedCells.has(key)) return invalid("Fixtures cannot overlap.");
-      blockedCells.add(key);
+      if (!tucked && placement.type !== "locker_single") blockedCells.add(key);
     }
-    const left = placement.gx * TILE_SIZE;
-    const top = placement.gy * TILE_SIZE;
-    const footprint = fixtureFootprint(placement);
+    if (placement.type === "locker_single") {
+      for (const cell of fixtureCells(placement)) blockedCells.add(cellKey(cell));
+    }
+    if (placed.some((other) => fixturesOverlap(placement, other))) {
+      return invalid(placed.some((other) => rectanglesOverlap(bounds, fixtureBounds(other)))
+        ? "Fixtures cannot overlap."
+        : "Keep room to stand in front of the locker.");
+    }
+    placed.push(placement);
+    const left = bounds.left * TILE_SIZE;
+    const top = bounds.top * TILE_SIZE;
+    const right = bounds.right * TILE_SIZE;
+    const bottom = bounds.bottom * TILE_SIZE;
     if (occupiedRectangles.some((rect) =>
-      left < rect.right && left + footprint.w * TILE_SIZE > rect.left &&
-      top < rect.bottom && top + footprint.h * TILE_SIZE > rect.top,
+      left < rect.right && right > rect.left && top < rect.bottom && bottom > rect.top,
     )) {
       return invalid("Move the player or crate out of the way first.");
     }

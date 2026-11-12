@@ -132,6 +132,8 @@ notice something that needs doing but isn't being done right now.
       keeping the same customer pool and doubling arrival frequency.
 - [x] Start with a much smaller shelf: a two-tile 2x1 starter shelf. (Superseded: new games now start with no shelves; the compact shelf is bought from the Fixtures tab. Placement checks preserve customer access to the register and both sides of the backroom entrance.)
 - [x] Let players turn fixtures: press R while placing or moving any fixture, including the register. Its front, keep-clear squares, customer line, and cashier spot turn with it, so shelves can line the bottom and side walls. Shelves use temporary, tile-sized overhead graphics with dark stock surfaces and a light front edge, including in placement previews. Lockers and registers still reuse rotated art until direction-specific art exists.
+- [x] Freer fixture placement, stage 1: fixtures move in eighth-of-a-tile (8px) steps with the mouse and quarter-tile steps on a controller, and saves keep those positions. A fixture facing down can tuck its back up to half a tile into the wall behind it. Walking is still square by square: a square a fixture covers by more than an eighth of a tile is blocked, and shoppers stand half a tile from the fixture's front, lined up with it.
+- [ ] Freer placement, stage 2: customers and staff walk freely around fixtures (RimWorld-style) instead of square to square, so in-between fixtures don't block whole extra squares and the register line can follow any counter position.
 - [x] Redo player-facing game messages: show a large, readable banner below the HUD for
       2.5 seconds instead of tiny text above the player. Keep customer reactions anchored
       to the customer.
@@ -231,6 +233,25 @@ notice something that needs doing but isn't being done right now.
       door is the way in: it opens only to let an arriving customer through. The right door
       is the way out: it opens when the player or a departing customer walks up to it.
       Customers appear at the left door and leave through the right (`js/logic/SlidingDoor.js`).
+- [x] Sales floor re-skinned from the TileSetB map (`TileSetB.tmx`), at the characters'
+      pixel size: riveted border around whatever part of the shop is unlocked (it moves
+      outward as expansions are bought), a lit back wall, and a doormat. The two front
+      doors became one animated double door that customers both enter and leave through;
+      the backroom door is an animated glass door that slides open when the player walks up.
+- [x] Register art replaced with a purple checkout desk (computer, card keypad, card reader)
+      from the corporate interior props, at the characters' pixel size. The pack only drew
+      its front, so the back and both side views were drawn to match. With customers lining
+      up below it, they see the back of the screen; the cashier side shows the screen.
+- [x] Redo the backroom's art to match the new sales floor: the backroom uses the BackroomA
+  look (lavender back wall, floor with edges and a bottom lip), a black border boxes in the
+  unlocked part and follows upgrades, and the exit is the animated glass door at the top right.
+- [x] Replace the single locker's oversized art with a narrow purple locker at the player's
+  scale, with upright art and four-frame opening/closing animations for all four facings.
+  Its solid collision matches the cabinet, while a walkable character-sized standing area
+  follows its front. Two-pixel placement lets lockers touch side by side.
+- [x] Compact the starting backroom to the loading pad's exact floor width and half its
+  previous height. The pad fills the bottom floor; the outside black border follows each
+  width upgrade without moving the pad or animated exit.
 
 ## Known Issues
 - [x] Supply orders no longer jump the list to the top: refreshing prices, availability,

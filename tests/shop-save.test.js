@@ -33,7 +33,7 @@ function snapshot() {
       ...(getFixtureType(type).kind === "storage" ? { stock: [{ itemId: "srv_01", quantity: 5 }] } : {}),
     })),
     unlockedZones: ["storeroom", "sales_floor", "loading_pad"],
-    crates: [{ itemId: "wpn_rif_01", quantity: 5, x: 192, y: 7040, velocityX: 120, velocityY: 0 }],
+    crates: [{ itemId: "wpn_rif_01", quantity: 5, x: 132, y: 6656, velocityX: 120, velocityY: 0 }],
     carriedCrate: { itemId: "srv_01", quantity: 2 },
     layoutVersion: SHOP_LAYOUT_VERSION,
   };
@@ -45,6 +45,7 @@ test("shop saves preserve layout, all inventory locations, prices, factions, and
     getItem: (key) => entries.get(key) ?? null,
     setItem: (key, value) => entries.set(key, value),
   } });
+
   const data = snapshot();
   const manager = new SaveManager({ shop: { serialize: () => data } }, storage);
   assert.equal(await manager.read(), null);
@@ -56,6 +57,37 @@ test("shop saves preserve layout, all inventory locations, prices, factions, and
   const loader = new SaveManager({ shop: { applySave: (value) => { applied = value; } } }, storage);
   assert.equal(await loader.load(), true);
   assert.deepEqual(applied, data);
+});
+
+test("shop saves preserve three carried crates in order and reject stacks over the limit", async () => {
+  const data = snapshot();
+  const lower = { kind: "item", itemId: "amo_01", quantity: 2 };
+  const middle = { kind: "item", itemId: "srv_01", quantity: 1 };
+  const top = { kind: "item", itemId: "wpn_rif_01", quantity: 1 };
+  data.carriedCrates = [lower, middle];
+  data.carriedCrate = middle;
+  assert.deepEqual(validateShopSave(data, database), data);
+
+  data.carriedCrates.push(top);
+  data.carriedCrate = top;
+  assert.deepEqual(validateShopSave(data, database), data);
+  const entries = new Map();
+  const storage = createSaveStorage({ localStorage: {
+    getItem: (key) => entries.get(key) ?? null,
+    setItem: (key, value) => entries.set(key, value),
+  } });
+  const manager = new SaveManager({ shop: { serialize: () => data } }, storage);
+  await manager.save();
+  let applied;
+  const loader = new SaveManager({ shop: { applySave: (value) => { applied = value; } } }, storage);
+  assert.equal(await loader.load(), true);
+  assert.deepEqual(validateShopSave(applied, database).carriedCrates, [lower, middle, top]);
+  assert.deepEqual(applied.carriedCrate, top);
+
+  const fourth = { kind: "item", itemId: "amo_01", quantity: 1 };
+  data.carriedCrates.push(fourth);
+  data.carriedCrate = fourth;
+  assert.throws(() => validateShopSave(data, database), /invalid carried crate stack/);
 });
 
 test("saved receipts must belong to the saved day", () => {
@@ -185,7 +217,7 @@ test("invalid saved inventory and economy are rejected before restoration", () =
     (data) => { data.fixtures[0].placements[0].quantity = 99; },
     (data) => { data.fixtures[0].placements.push({ ...data.fixtures[0].placements[0] }); },
     (data) => { data.fixtures[1].stock[0].itemId = "unknown"; },
-    (data) => { data.fixtures[1].gx = 1.5; },
+    (data) => { data.fixtures[1].gx = 1.3; },
     (data) => { data.fixtures[1].type = "unknown"; },
     (data) => { data.fixtures[1].id = data.fixtures[0].id; },
     (data) => { data.unlockedZones = []; },
@@ -274,7 +306,7 @@ test("older saves keep the third starting locker and its contents", () => {
   });
 });
 
-test("saves from before the backroom window move backroom fixtures and crates into it", () => {
+test("saves using the old detached backroom explain that a new game is required", () => {
   const legacy = snapshot();
   delete legacy.layoutVersion;
   for (const entry of legacy.fixtures) {
@@ -282,14 +314,11 @@ test("saves from before the backroom window move backroom fixtures and crates in
     else Object.assign(entry, { gx: entry.gx - 7, gy: entry.gy - 1 });
   }
   legacy.crates[0].y = 640;
-  const migrated = validateShopSave(legacy, database);
-  assert.equal(migrated.layoutVersion, SHOP_LAYOUT_VERSION);
-  assert.deepEqual(migrated.fixtures, snapshot().fixtures);
-  assert.equal(migrated.crates[0].y, 7040);
+  assert.throws(() => validateShopSave(legacy, database), /old backroom size.*Start a new game/);
   assert.equal(legacy.crates[0].y, 640, "the save being loaded is not changed");
 });
 
-test("saves from before the ShopA map move everything on the shop floor with the starting area", () => {
+test("older room layout versions explain that a new game is required", () => {
   const old = snapshot();
   old.layoutVersion = 2;
   for (const entry of old.fixtures) {
@@ -297,10 +326,11 @@ test("saves from before the ShopA map move everything on the shop floor with the
   }
   old.crates[0].x = 400;
   old.crates[0].y = 300;
-  const migrated = validateShopSave(old, database);
-  assert.equal(migrated.layoutVersion, SHOP_LAYOUT_VERSION);
-  assert.deepEqual(migrated.fixtures, snapshot().fixtures, "backroom fixtures stay put");
-  assert.deepEqual([migrated.crates[0].x, migrated.crates[0].y], [400 + 7 * 64, 300 + 64]);
+  assert.throws(() => validateShopSave(old, database), /old backroom size.*Start a new game/);
+  old.layoutVersion = 3;
+  assert.throws(() => validateShopSave(old, database), /old backroom size.*Start a new game/);
+  old.layoutVersion = 4;
+  assert.throws(() => validateShopSave(old, database), /old backroom size.*Start a new game/);
   assert.equal(old.crates[0].x, 400, "the save being loaded is not changed");
 });
 
@@ -312,6 +342,18 @@ test("fixture rotation is saved, and older saves without it still load", () => {
 
   for (const rotation of [4, -1, 1.5, "1"]) {
     data.fixtures[0].rotation = rotation;
+    assert.throws(() => validateShopSave(data, database), /invalid fixture position/);
+  }
+});
+
+test("fixtures between floor squares save, including two-pixel locker positions", () => {
+  const data = snapshot();
+  data.fixtures[0].gx += 0.5;
+  data.fixtures[0].gy += 0.125;
+  data.fixtures.find((fixture) => fixture.type === "locker_single").gx += 1 / 32;
+  assert.deepEqual(validateShopSave(data, database), data);
+  for (const gx of [0.1, -0.5]) {
+    data.fixtures[0].gx = gx;
     assert.throws(() => validateShopSave(data, database), /invalid fixture position/);
   }
 });

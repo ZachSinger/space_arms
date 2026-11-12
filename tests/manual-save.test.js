@@ -802,7 +802,7 @@ test("the register blocks only its counter, so the player can walk over its moni
   assert.equal(textures.at(-1), "register_basic_down");
   assert.equal(sprite.angle, 0, "facing art is shown upright, not spun");
   const top = body.position.y;
-  assert.ok(Math.abs(top - (147 + 90 * 0.19)) < 0.01, `counter top is below the monitor (${top})`);
+  assert.ok(Math.abs(top - (147 + 90 * 0.14)) < 0.01, `counter top is below the monitor (${top})`);
   assert.ok(Math.abs(body.position.y + body.height - 237) < 0.01, "bottom edge unchanged");
   assert.equal(body.width, 90);
 

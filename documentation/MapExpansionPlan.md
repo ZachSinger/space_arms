@@ -23,6 +23,11 @@ never sees it. A second camera draws it inside a framed "BACKROOM" window
 (`#backroom-window`, under the HUD and pop-up windows) while the player is
 inside; the shop stays visible, dimmed, and keeps running behind it.
 
+- The starting usable floor is **128 by 256 world pixels** (2 by 4 game squares):
+  its width exactly matches the loading pad, and its bottom half is entirely the
+  pad. The black border sits outside the floor; total room size is 256 by 384
+  world pixels. The pad holds a 3 by 3 grid of 32-pixel crate spots, sized to
+  the pixel-art crates (one 48px art tile, drawn at the floor art's scale).
 - The Sales Floor's backroom door (`getBackroomDoorCell()`) and the backroom's exit
   (`getBackroomExitCell()`) are solid doors in north walls. Pressing E while
   standing in front of one moves the player (and a carried crate) to the floor
@@ -31,10 +36,12 @@ inside; the shop stays visible, dimmed, and keeps running behind it.
   `teleportTo` waypoint) and start each shift inside the backroom.
 - Fixture layout checks treat the two door fronts as connected (`links`).
 - The window fits the whole owned backroom; each backroom upgrade in
-  `BACKROOM_UPGRADE_ORDER` widens the room and its window. The Layout tab sells
+  `BACKROOM_UPGRADE_ORDER` adds 128 world pixels of width without changing its
+  height or moving the loading pad or exit. The Layout tab sells
   the next upgrade once its Shop Level is reached.
-- Saves from before the move (no `layoutVersion`) have fixtures and crates from
-  the old top-left backroom moved down into the new one (`ShopSave.js`).
+- Layout version 4 saves use the compact backroom. Older room layouts are
+  rejected with a message to start a new game rather than relocating furniture
+  or stock automatically.
 
 ## Core idea: author the max size, don't resize at runtime
 
@@ -60,7 +67,9 @@ exists" means "already authored in data," not "already rendered."
   backroom used to stand. The sales floor zones occupy a 34-by-13 area inside
   the reserved 39-by-21 map.
 - **`TileRoom.js`** — the renderer. On construction, builds tiles only for
-  zones that start unlocked. For each built zone, draws a floor tile per cell
+  zones that start unlocked. The backroom is drawn to its exact pixel bounds
+  and rebuilt as a whole on upgrade, preserving its exit. For each sales-floor
+  zone, draws a floor tile per cell
   and a full wall tile on any perimeter cell whose edge faces the outer map
   boundary or a *locked* neighboring zone (a locked zone renders nothing, so
   its neighbor must seal that side). Wall cells get a static Arcade Physics

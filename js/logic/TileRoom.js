@@ -5,9 +5,11 @@
 // Locked zones render nothing until unlocked; unlocking builds their tiles and tears
 // down boundary walls that are no longer needed.
 import {
-  BACKROOM_DOOR_TILE, SHOP_BACK_WALL_HEIGHT, TILE_SIZE, ZONES, getBackroomDoorCell, getBackroomExitCell, zoneAt,
+  SHOP_BACK_WALL_HEIGHT, TILE_SIZE, ZONES, getBackroomDoorCell, getBackroomExitCell,
+  getBackroomBounds, getBackroomInteriorBounds, getStoreDoorCell, zoneAt,
 } from "./RoomLayout.js";
-import { BACKROOM_PASSAGE_LOWER, BACKROOM_PASSAGE_UPPER, shopWallStack } from "./ShopTiles.js";
+import { SHOP_TILES, shopWallStack } from "./ShopTiles.js";
+import { BACKROOM_TILES, backroomFloorArt, backroomWallStack } from "./BackroomTiles.js";
 
 export class TileRoom {
   constructor(scene) {
@@ -51,6 +53,11 @@ export class TileRoom {
    * @param {number} gy
    */
   needsWallAt(zone, gx, gy) {
+    if (zone.backroom) {
+      const bounds = getBackroomInteriorBounds(this.zones);
+      return this.worldX(gx) < bounds.left || this.worldX(gx) >= bounds.right ||
+        this.worldY(gy) < bounds.top || this.worldY(gy) >= bounds.bottom;
+    }
     if (zone.salesFloor && gy === zone.gridY + SHOP_BACK_WALL_HEIGHT - 1 && !zoneAt(gx, zone.gridY - 1, this.zones)) {
       return true;
     }
@@ -63,6 +70,10 @@ export class TileRoom {
 
   isOpen(gx, gy) {
     const zone = zoneAt(gx, gy, this.zones);
+    if (zone?.backroom) {
+      const bounds = getBackroomBounds(this.zones);
+      if (this.worldX(gx) >= bounds.x + bounds.width || this.worldY(gy) >= bounds.y + bounds.height) return false;
+    }
     return Boolean(zone && !zone.locked);
   }
 
@@ -76,29 +87,105 @@ export class TileRoom {
   }
 
   /**
-   * The art for a wall at this cell, bottom layer first: ShopA's walls on the sales floor,
-   * the zone's single wall tile elsewhere.
+   * True if the cell is unlocked floor that no room wall covers (doors count as walls).
+   * Unlike isWalkable, this works while walls are still being built.
+   */
+  isFloor(gx, gy) {
+    const zone = zoneAt(gx, gy, this.zones);
+    return Boolean(zone && !zone.locked && !this.needsWallAt(zone, gx, gy));
+  }
+
+  /**
+   * The art for a wall at this cell, bottom layer first: TileSetB's walls on the sales
+   * floor, BackroomA's in the backroom.
    * @returns {string[]}
    */
   wallArtAt(gx, gy) {
     const zone = zoneAt(gx, gy, this.zones);
-    if (zone?.salesFloor) return shopWallStack(gx, gy, (x, y) => this.isOpen(x, y));
-    return [zone.wallTile];
+    const isOpen = (x, y) => this.isOpen(x, y);
+    if (zone?.salesFloor) return shopWallStack(gx, gy, isOpen, getStoreDoorCell().gx);
+    return backroomWallStack(gx, gy, isOpen);
+  }
+
+  // The doormat lies on the floor square just inside the front door; backroom floor is
+  // edged where it meets a wall.
+  floorArtAt(zone, gx, gy) {
+    if (zone.backroom) return backroomFloorArt(gx, gy, (x, y) => this.isFloor(x, y));
+    const door = getStoreDoorCell();
+    return zone.salesFloor && gx === door.gx && gy === door.gy + 1 ? SHOP_TILES.doormat : zone.floorTile;
   }
 
   build() {
     for (const zone of this.zones) {
-      if (zone.locked) continue;
+      if (zone.locked || zone.backroom) continue;
       this.buildZone(zone);
     }
+    this.buildBackroom();
     this.refreshWallArt();
+  }
+
+  buildBackroom() {
+    for (const [key] of [...this.wallCells]) {
+      if (Number(key.split(",")[1]) >= getBackroomBounds(this.zones).y / TILE_SIZE) this.removeWall(key);
+    }
+    for (const [key, image] of [...this.floorCells]) {
+      if (Number(key.split(",")[1]) < getBackroomBounds(this.zones).y / TILE_SIZE) continue;
+      image.destroy();
+      this.floorCells.delete(key);
+    }
+    const room = getBackroomBounds(this.zones);
+    const floor = getBackroomInteriorBounds(this.zones);
+    const rightColumn = Math.floor(floor.right / TILE_SIZE);
+    for (let y = room.y; y < room.y + room.height; y += TILE_SIZE) {
+      const gy = y / TILE_SIZE;
+      const endRow = y === room.y || y === floor.bottom;
+      this.addWall(0, gy, BACKROOM_TILES.border, false, false, {
+        x: room.x, y, width: TILE_SIZE, height: TILE_SIZE,
+      });
+      const wallLeft = endRow ? rightColumn * TILE_SIZE : floor.right;
+      this.addWall(rightColumn, gy, BACKROOM_TILES.border, false, false, {
+        x: wallLeft, y, width: room.x + room.width - wallLeft, height: TILE_SIZE,
+      });
+      for (let x = floor.left; x < floor.right; x += TILE_SIZE) {
+        const gx = x / TILE_SIZE;
+        const width = Math.min(TILE_SIZE, floor.right - x);
+        if (endRow) {
+          const art = y === room.y ? BACKROOM_TILES.wall : BACKROOM_TILES.border;
+          if (width === TILE_SIZE) {
+            this.addWall(gx, gy, art);
+          } else {
+            this.wallCells.get(`${rightColumn},${gy}`).layers.push(
+              this.scene.add.image(x + width / 2, y + TILE_SIZE / 2, art)
+                .setDisplaySize(width, TILE_SIZE).setDepth(1),
+            );
+          }
+          continue;
+        }
+        const atLeft = x === floor.left;
+        const atRight = x + width === floor.right;
+        const atBottom = y + TILE_SIZE === floor.bottom;
+        const art = atBottom
+          ? atLeft ? BACKROOM_TILES.floorBottomLeft : atRight ? BACKROOM_TILES.floorBottomRight : BACKROOM_TILES.floorBottom
+          : atLeft ? BACKROOM_TILES.floorLeft : atRight ? BACKROOM_TILES.floorRight : BACKROOM_TILES.floor;
+        const sourceWidth = width * 96 / TILE_SIZE;
+        const cropX = atRight ? 96 - sourceWidth : 0;
+        const image = this.scene.add.image(x - cropX * TILE_SIZE / 96, y, art)
+          .setOrigin(0, 0).setDisplaySize(TILE_SIZE, TILE_SIZE)
+          .setCrop(cropX, 0, sourceWidth, 96).setDepth(0);
+        this.floorCells.set(`${gx},${gy}`, image);
+      }
+    }
+    if (this.backroomDoorsAdded) {
+      const exit = getBackroomExitCell();
+      this.addWall(exit.gx, exit.gy, BACKROOM_TILES.wall, true, true);
+    }
   }
 
   buildZone(zone) {
     for (let gy = zone.gridY; gy < zone.gridY + zone.gridH; gy++) {
       for (let gx = zone.gridX; gx < zone.gridX + zone.gridW; gx++) {
         const image = this.scene.add
-          .image(this.worldX(gx), this.worldY(gy), zone.floorTile)
+          .image(this.worldX(gx), this.worldY(gy), this.floorArtAt(zone, gx, gy))
           .setDisplaySize(TILE_SIZE, TILE_SIZE)
           .setDepth(0);
         this.floorCells.set(`${gx},${gy}`, image);
@@ -111,10 +198,11 @@ export class TileRoom {
   }
 
   // Draws a stack of tile images over a cell, bottom layer first.
-  drawStack(gx, gy, keys) {
+  drawStack(gx, gy, keys, bounds = null) {
     return keys.map((key) => this.scene.add
-      .image(this.worldX(gx), this.worldY(gy), key)
-      .setDisplaySize(TILE_SIZE, TILE_SIZE)
+      .image(bounds ? bounds.x + bounds.width / 2 : this.worldX(gx),
+        bounds ? bounds.y + bounds.height / 2 : this.worldY(gy), key)
+      .setDisplaySize(bounds?.width ?? TILE_SIZE, bounds?.height ?? TILE_SIZE)
       .setDepth(1));
   }
 
@@ -134,34 +222,35 @@ export class TileRoom {
    * @param {boolean} [permanent] - survives the wall teardown in unlockZone()
    * @param {boolean} [door] - door art, kept when the walls around it are redrawn
    */
-  addWall(gx, gy, art, permanent = false, door = false) {
+  addWall(gx, gy, art, permanent = false, door = false, bounds = null) {
     const key = `${gx},${gy}`;
     this.removeWall(key);
     // The bottom layer is the solid body; the rest is decoration on top of it.
-    const [image, ...layers] = this.drawStack(gx, gy, [art].flat());
+    const [image, ...layers] = this.drawStack(gx, gy, [art].flat(), bounds);
     this.wallGroup.add(image);
     this.wallCells.set(key, { image, layers, permanent, door });
   }
 
   // Redraws every wall that isn't a door, since a wall's art depends on which side faces
-  // out of the shop, and that changes as zones unlock.
+  // out of the shop, and that changes as zones unlock. Backroom floor edges follow the walls.
   refreshWallArt() {
     for (const [key, { permanent, door }] of [...this.wallCells]) {
       if (door) continue;
       const [gx, gy] = key.split(",").map(Number);
+      if (zoneAt(gx, gy, this.zones)?.backroom) continue;
       this.addWall(gx, gy, this.wallArtAt(gx, gy), permanent, door);
     }
   }
 
-  // The backroom door and exit stay solid: walking into one moves the player through to
-  // the other (see GameScene.updateBackroomDoors). On the shop side the door is ShopA's
-  // open gap in the back wall; the backroom side has door art.
+  // The backroom door and exit stay solid: pressing E in front of one moves the player
+  // through to the other. The wall's face is drawn on both, and the scene stands an
+  // animated glass door on each.
   addBackroomDoors() {
+    this.backroomDoorsAdded = true;
     const door = getBackroomDoorCell();
-    this.addWall(door.gx, door.gy - 1, BACKROOM_PASSAGE_UPPER, true, true);
-    this.addWall(door.gx, door.gy, BACKROOM_PASSAGE_LOWER, true, true);
+    this.addWall(door.gx, door.gy, SHOP_TILES.backWall, true, true);
     const exit = getBackroomExitCell();
-    this.addWall(exit.gx, exit.gy, BACKROOM_DOOR_TILE, true, true);
+    this.addWall(exit.gx, exit.gy, BACKROOM_TILES.wall, true, true);
   }
 
   /**
@@ -185,6 +274,10 @@ export class TileRoom {
     if (!zone || !zone.locked) return this.getCameraBounds();
 
     zone.locked = false;
+    if (zone.backroom) {
+      this.buildBackroom();
+      return this.getCameraBounds();
+    }
     this.buildZone(zone);
 
     for (const [key, entry] of [...this.wallCells.entries()]) {
@@ -204,6 +297,7 @@ export class TileRoom {
   // empty tile row above the map so the top wall isn't flush with the screen edge. No zone
   // exists there, so it can never be built on or expanded into.
   getCameraBounds(area = "shop") {
+    if (area === "backroom") return getBackroomBounds(this.zones);
     const inBackroom = area === "backroom";
     const unlocked = this.zones.filter((zone) => !zone.locked && Boolean(zone.backroom) === inBackroom);
     const minX = Math.min(...unlocked.map((z) => z.gridX)) * TILE_SIZE;

@@ -8,7 +8,7 @@ import { createServer } from "vite";
 import { ControlMode } from "../js/logic/ControlMode.js";
 import { EventBus, GAME_EVENTS } from "../js/logic/EventBus.js";
 import { InteractableRegistry } from "../js/logic/InteractableRegistry.js";
-import { Crate } from "../js/logic/Crate.js";
+import { Crate, INTERACT_RANGE } from "../js/logic/Crate.js";
 import { getFixtureType } from "../js/logic/FixtureLayout.js";
 import { FixtureRegistry } from "../js/logic/FixtureRegistry.js";
 import { PAD } from "../js/logic/GamepadInput.js";
@@ -291,7 +291,7 @@ for (const kind of ["item", "fixture"]) {
     if (kind === "item") {
       assert.equal(h.scene.gameMessageElement.classList.contains("hidden"), false);
       assert.equal(h.scene.gameMessageElement.textContent,
-        "Q: Unpack into your hovercart | E: Deliver to a shelf or locker | Space: Drop");
+        "Q: Unpack top crate | E: Deliver top crate | Space: Stack nearby crate or drop/throw");
     } else {
       assert.equal(h.scene.gameMessageElement.classList.contains("hidden"), true);
     }
@@ -364,8 +364,19 @@ test("carrying a stock crate shows its controls unless a menu is open", () => {
   h.scene.carriedCrate = crate();
   h.scene.updateCrateHint();
   assert.equal(h.scene.gameMessageElement.textContent,
-    "Q: Unpack into your hovercart | E: Deliver to a shelf or locker | Space: Drop");
+    "Q: Unpack top crate | E: Deliver top crate | Space: Stack nearby crate or drop/throw");
   assert.equal(h.scene.gameMessageElement.classList.contains("hidden"), false);
+
+  h.scene.carriedCrates = [h.scene.carriedCrate, crate()];
+  h.scene.carriedCrate = h.scene.carriedCrates.at(-1);
+  h.scene.updateCrateHint();
+  assert.equal(h.scene.gameMessageElement.textContent,
+    "Q: Unpack top crate | E: Deliver top crate | Space: Stack nearby crate or drop stack");
+  h.scene.carriedCrates.push(crate());
+  h.scene.carriedCrate = h.scene.carriedCrates.at(-1);
+  h.scene.updateCrateHint();
+  assert.equal(h.scene.gameMessageElement.textContent,
+    "Q: Unpack top crate | E: Deliver top crate | Space: Drop stack (cannot throw)");
 
   h.scene.gameMessageElement.textContent = "";
   h.scene.windowManager.windows.set("inventory", { id: "inventory", isOpen: true });
@@ -385,8 +396,11 @@ test("carrying a fixture crate does not show stock-unpacking controls", () => {
 function drawLocker(scene) {
   const image = {
     x: 96, y: 128,
+    setOrigin(x, y) { this.origin = [x, y]; return this; },
     setDisplaySize(w, h) { this.width = w; this.height = h; return this; },
     setDepth() { return this; },
+    setFrame(frame) { this.frame = frame; return this; },
+    setTexture(texture, frame) { Object.assign(this, { texture, frame }); return this; },
     setInteractive() {},
     on() {},
     setPosition(x, y) { this.x = x; this.y = y; return this; },
@@ -409,7 +423,14 @@ function drawLocker(scene) {
     setPosition(x, y) { this.x = x; this.y = y; return this; },
     destroy() { this.destroyed = true; },
   };
-  scene.add = { image: () => image, text: () => label };
+  scene.add = {
+    image: () => image,
+    sprite(x, y, texture, frame) {
+      Object.assign(image, { x, y, texture, frame });
+      return image;
+    },
+    text: () => label,
+  };
   scene.obstacleGroup = { add() {} };
   const locker = new StorageFixture({
     id: "locker", x: 96, y: 128, gridDimensions: { w: 1, h: 2 }, capacity: 20,
@@ -424,8 +445,8 @@ test("locker labels show occupied capacity, not the number of items", () => {
   const locker = drawLocker(h.scene);
   const label = locker.capacityLabel;
   assert.equal(label.text, "0/20");
-  assert.deepEqual([label.x, label.y], [96, 68]);
-  assert.deepEqual(label.origin, [0.5, 0]);
+  assert.deepEqual([label.x, label.y], [96, 92]);
+  assert.deepEqual(label.origin, [0.5, 1]);
   assert.equal(label.depth, 3);
   assert.equal(locker.add("item", 3), 3); // Each unit uses two spaces.
   assert.equal(locker.add("single", 1), 1);
@@ -440,6 +461,81 @@ test("locker labels show occupied capacity, not the number of items", () => {
   locker.add("single", 15);
   h.scene.refreshLockerCapacityDisplay(locker);
   assert.equal(label.text, "20/20");
+});
+
+test("single lockers open independently for their window and close when it closes", () => {
+  const { scene } = createHarness();
+  const first = drawLocker(scene);
+  const second = drawLocker(scene);
+  scene.fixtureWindow = { fixture: first, uiWindow: { isOpen: true } };
+
+  assert.equal(first.sprite.texture, "locker_single_animated");
+  assert.deepEqual([first.sprite.width, first.sprite.height], [36, 68]);
+  scene.updateLockerAnimation(first, 90);
+  scene.updateLockerAnimation(second, 90);
+  assert.equal(first.sprite.frame, 1);
+  assert.equal(second.sprite.frame, 0);
+  scene.updateLockerAnimation(first, 180);
+  assert.equal(first.sprite.frame, 3);
+
+  scene.fixtureWindow.fixture = second;
+  scene.updateLockerAnimation(first, 499);
+  scene.updateLockerAnimation(first, 1);
+  scene.updateLockerAnimation(second, 270);
+  assert.equal(first.lockerAnimation.state, "closing");
+  assert.equal(second.sprite.frame, 3);
+  scene.updateLockerAnimation(first, 270);
+  assert.equal(first.sprite.frame, 0);
+
+  scene.fixtureWindow.uiWindow.isOpen = false;
+  scene.updateLockerAnimation(second, 499);
+  scene.updateLockerAnimation(second, 1);
+  scene.updateLockerAnimation(second, 270);
+  assert.equal(second.sprite.frame, 0);
+});
+
+test("E at a locker beside the backroom exit opens the locker, not the door", () => {
+  const { scene } = createHarness();
+  const locker = { type: "locker_single", x: 118, y: 6498 };
+  scene.playerInBackroom = true;
+  scene.backroomDoor = { x: 900, y: 100 };
+  scene.backroomExit = { x: 160, y: 6432 };
+  scene.getInteractionOrigin = () => scene.player.sprite;
+  scene.interactables = { findTarget: () => ({ kind: "fixture", target: locker }) };
+  for (const [x, door] of [[118, null], [135, null], [141, scene.backroomExit]]) {
+    scene.player.sprite = { x, y: 6500 };
+    assert.equal(scene.getNearbyBackroomDoor(), door, `player at x ${x}`);
+  }
+  scene.interactables = { findTarget: () => null };
+  scene.player.sprite = { x: 135, y: 6500 };
+  assert.equal(scene.getNearbyBackroomDoor(), scene.backroomExit);
+});
+
+test("fixtures only move from, and into, the room the player is standing in", () => {
+  const { scene } = createHarness();
+  const locker = { id: "locker", type: "locker_single", gx: 1, gy: 101 };
+  const shelf = { id: "shelf", type: "shelf_universal", gx: 10, gy: 5 };
+  scene.fixtures.get = (id) => ({ locker, shelf })[id];
+  scene.playerInBackroom = false;
+  assert.equal(scene.checkFixtureMove("locker", 1, 102).reason, "Go into the backroom to move the LOCKER.");
+  assert.equal(scene.checkFixtureMove("shelf", 1, 102).reason, "Keep it on the sales floor.");
+  scene.playerInBackroom = true;
+  assert.equal(scene.checkFixtureMove("shelf", 10, 6).reason, "Go out to the sales floor to move the SHELF.");
+  assert.equal(scene.checkFixtureMove("locker", 10, 6).reason, "Keep it in the backroom.");
+  assert.equal(scene.getFixtureMoveAreaBlockReason(locker), null);
+});
+
+test("locker art and solid collision stay upright and narrow in every facing", () => {
+  const { scene } = createHarness();
+  const locker = drawLocker(scene);
+  for (let rotation = 0; rotation < 4; rotation++) {
+    locker.rotation = rotation;
+    scene.orientFixtureSprite(locker);
+    const expected = rotation % 2 === 0 ? [36, 68] : [24, 68];
+    assert.deepEqual([locker.sprite.body.width, locker.sprite.body.height], expected);
+    assert.equal(locker.sprite.angle, 0);
+    assert.match(locker.sprite.texture, /locker_single.*animated/);
+  }
 });
 
 test("a carried crate shows what is inside and, for items, the locker spaces it needs", () => {
@@ -505,7 +601,7 @@ test("locker labels follow layout changes and are destroyed with the fixture", (
   h.scene.applyFixtureLayout([{ id: "locker", gx: 3, gy: 4 }], {
     access: new Map([["locker", { gx: 3, gy: 6 }]]), blockedCells: [], queueCells: [],
   });
-  assert.deepEqual([label.x, label.y], [224, 260]);
+  assert.deepEqual([label.x, label.y], [210, 254]);
   h.scene.despawnAllFixtures();
   assert.equal(label.destroyed, true);
   assert.equal(locker.sprite.destroyed, true);
@@ -539,6 +635,143 @@ for (const kind of ["item", "fixture"]) {
     assert.equal(h.drops(), 1);
   });
 }
+
+test("Space stacks three item crates, caps the stack, and sets all three down without throwing", () => {
+  const h = createHarness();
+  const poseCounts = [];
+  h.scene.player.updateCarryPose = () => poseCounts.push(h.scene.getCarriedCrates().length);
+  const bottom = crate({ distance: 10 });
+  const middle = crate({ distance: 20 });
+  const top = crate({ distance: 30 });
+  const extra = crate({ distance: 40 });
+  h.scene.player.sprite.x = 250;
+  h.scene.player.sprite.y = 250;
+  h.scene.player.sprite.getBounds = () => ({ left: 218, right: 282, top: 210, bottom: 274 });
+  h.scene.crateBounds = { left: 0, top: 0, right: 500, bottom: 500 };
+  h.scene.physics = { overlapRect: () => [] };
+  for (const carried of [bottom, middle, top]) {
+    carried.scene = h.scene;
+    carried.sprite = {
+      body: { width: 40, height: 40, enable: false },
+      getBounds: () => ({ width: 40, height: 40 }),
+    };
+    carried.isDropPositionClear = Crate.prototype.isDropPositionClear;
+    carried.findDropPosition = Crate.prototype.findDropPosition;
+    carried.drop = (x, y, velocityX, velocityY) => {
+      carried.dropped = { x, y, velocityX, velocityY };
+    };
+  }
+  h.scene.restockCrates = [bottom, middle, top, extra];
+
+  h.scene.handleCrateInteract();
+  h.scene.handleCrateInteract();
+  assert.deepEqual(h.scene.carriedCrates, [bottom, middle]);
+  assert.equal(h.scene.carriedCrate, middle);
+  h.scene.handleCrateInteract();
+  assert.deepEqual(h.scene.carriedCrates, [bottom, middle, top]);
+  assert.equal(h.scene.carriedCrate, top);
+
+  h.scene.handleCrateInteract();
+  assert.deepEqual(h.scene.carriedCrates, [bottom, middle, top]);
+  assert.deepEqual(h.messages, ["You can only carry three crates"]);
+
+  h.scene.restockCrates = [];
+  const dropped = [];
+  h.scene.eventBus.on(GAME_EVENTS.CRATE_DROPPED, (event) => dropped.push(event));
+  assert.equal(GameScene.prototype.dropCarriedCrate.call(h.scene), true);
+  assert.deepEqual(h.scene.carriedCrates, []);
+  assert.equal(h.scene.carriedCrate, null);
+  assert.deepEqual(h.scene.restockCrates, [bottom, middle, top]);
+  assert.deepEqual(poseCounts, [1, 2, 3, 0]);
+  assert.deepEqual(dropped.map(({ thrown }) => thrown), [false, false, false]);
+  const positions = [bottom, middle, top].map((carried) => carried.dropped);
+  for (const position of positions) {
+    assert.equal(position.velocityX, 0);
+    assert.equal(position.velocityY, 0);
+    assert.ok(Math.hypot(position.x - 250, position.y - 250) <= INTERACT_RANGE);
+  }
+  for (let i = 0; i < positions.length; i++) {
+    for (let j = i + 1; j < positions.length; j++) {
+      assert.ok(Math.abs(positions[i].x - positions[j].x) >= 40 ||
+        Math.abs(positions[i].y - positions[j].y) >= 40, "dropped crates must not overlap");
+    }
+  }
+});
+
+test("three crates remain carried when there is not enough room to set down the whole stack", () => {
+  const h = createHarness();
+  const bottom = crate();
+  const middle = crate();
+  const top = crate();
+  middle.findDropPosition = () => ({ x: 140, y: 100 });
+  top.findDropPosition = () => null;
+  h.scene.carriedCrates = [bottom, middle, top];
+  h.scene.carriedCrate = top;
+  const dropped = [];
+  h.scene.eventBus.on(GAME_EVENTS.CRATE_DROPPED, (event) => dropped.push(event));
+
+  assert.equal(GameScene.prototype.dropCarriedCrate.call(h.scene), false);
+  assert.deepEqual(h.scene.carriedCrates, [bottom, middle, top]);
+  assert.equal(h.scene.carriedCrate, top);
+  assert.deepEqual(h.scene.restockCrates, []);
+  assert.deepEqual(dropped, []);
+  assert.deepEqual(h.messages, ["No room to drop the stack"]);
+});
+
+test("three crates stay straight while the player moves and reverses direction", () => {
+  const h = createHarness();
+  const stack = [crate(), crate(), crate()];
+  const playerSprite = h.scene.player.sprite;
+  playerSprite.depth = 8;
+  for (const carried of stack) {
+    carried.sprite = {
+      setPosition(x, y) { this.x = x; this.y = y; return this; },
+      setAngle(angle) { this.angle = angle; return this; },
+      setDepth(depth) { this.depth = depth; return this; },
+    };
+    carried.followCarrier = Crate.prototype.followCarrier;
+  }
+  h.scene.carriedCrates = stack;
+  h.scene.carriedCrate = stack.at(-1);
+  h.scene.player.update = () => {
+    playerSprite.x += playerSprite.body.velocity.x;
+    playerSprite.y += playerSprite.body.velocity.y;
+  };
+  Object.assign(h.scene, {
+    handleGamepad() {},
+    fixturePlacement: { active: false, update() {} },
+    separateStuckCrates() {},
+    storeDoorAnimation: { update() {} },
+    backroomDoorAnimation: { update() {} },
+    backroomExitAnimation: { update() {} },
+    getNearbyBackroomDoor: () => null,
+    shiftClock: { isPaused: false, started: false, softClosed: false, update() {} },
+    updateCratePushing() {},
+    hud: { renderStamina() {} },
+    updateRegisterPrompt() {},
+    positionGoBacksBadge() {},
+    updateCrateHint() {},
+    refreshCarriedCrateLabel() {},
+    refreshCustomerPool() {},
+    spawnScheduledCustomers() {},
+    customers: [],
+    employees: [],
+  });
+
+  for (const velocity of [{ x: 160, y: 0 }, { x: -160, y: 0 }, { x: 0, y: -160 }, { x: 0, y: 160 }]) {
+    playerSprite.body.velocity = velocity;
+    h.scene.update(0, 1000);
+    for (const [index, carried] of stack.entries()) {
+      assert.equal(carried.sprite.x, playerSprite.x);
+      assert.equal(carried.sprite.y, playerSprite.y - 42 - index * 18);
+      assert.equal(carried.sprite.angle, 0);
+    }
+  }
+  assert.deepEqual(h.scene.carriedCrates, stack);
+  assert.equal(h.scene.carriedCrate, stack.at(-1));
+  assert.deepEqual(h.scene.restockCrates, []);
+  assert.deepEqual(h.messages, []);
+});
 
 test("Space reports moving or missing crates without opening other interactions", () => {
   const h = createHarness();
@@ -893,7 +1126,7 @@ test("unpacking an entire crate clears it, and a full hovercart leaves it untouc
   assert.equal(h.messages.at(-1), "Hovercart full; 2 items remain in the box");
 });
 
-test("inventory totals include active customer carts but not sold customers", () => {
+test("inventory totals include all carried crates and active customer carts but not sold customers", () => {
   const scene = Object.create(GameScene.prototype);
   scene.fixtures = { stockHolders: () => [] };
   scene.fixtureWindow = { pendingPlacement: null };
@@ -902,7 +1135,11 @@ test("inventory totals include active customer carts but not sold customers", ()
     goBacks: { stock: [] },
   };
   scene.restockCrates = [];
-  scene.carriedCrate = null;
+  const lowerCrate = { itemId: "rifle", quantity: 2, kind: "item" };
+  const middleCrate = { itemId: "pistol", quantity: 5, kind: "item" };
+  const topCrate = { itemId: "rifle", quantity: 3, kind: "item" };
+  scene.carriedCrates = [lowerCrate, middleCrate, topCrate];
+  scene.carriedCrate = topCrate;
   scene.customers = [
     { state: "SEEK_REGISTER", cart: [{ itemId: "rifle" }, { itemId: "pistol" }] },
     { state: "SEEK_SHELF", cart: [{ itemId: "rifle" }] },
@@ -915,6 +1152,8 @@ test("inventory totals include active customer carts but not sold customers", ()
   const inventory = scene.getInventoryItems();
   assert.equal(inventory.find(({ item }) => item.id === "rifle").inCustomerCarts, 2);
   assert.equal(inventory.find(({ item }) => item.id === "pistol").inCustomerCarts, 1);
+  assert.equal(inventory.find(({ item }) => item.id === "rifle").storage, 5);
+  assert.equal(inventory.find(({ item }) => item.id === "pistol").storage, 5);
 });
 
 test("selling an empty placed fixture pays half, updates walkable space, and preserves the register", () => {

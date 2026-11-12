@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { EventBus, GAME_EVENTS } from "../js/logic/EventBus.js";
 import { createServer } from "vite";
+import { fixtureBounds, fixtureStandingSpot, rectanglesOverlap } from "../js/logic/FixtureLayout.js";
+import { TILE_SIZE } from "../js/logic/RoomLayout.js";
 
 let server;
 let cacheDirectory;
@@ -38,9 +40,11 @@ before(async () => {
             export const showCharacterFacing = (sprite, facing, moving) => {
               sprite.shown = { facing, moving };
             };
-            export const addCharacterSprite = (scene, x, y, textureKey) => {
+            export const addCharacterSprite = (scene, x, y, textureKey, bodyWidth, bodyHeight) => {
               const sprite = scene.add.sprite(x, y, textureKey);
               scene.physics.add.existing(sprite);
+              sprite.body.width = bodyWidth;
+              sprite.body.height = bodyHeight;
               return sprite;
             };`;
         }
@@ -181,6 +185,20 @@ function makeEmployee({
   scene.employees = [employee];
   return { employee, shelf, locker, transfers, completedSales };
 }
+
+test("staff can stand at a narrow locker's front without colliding in every facing", () => {
+  const { employee } = makeEmployee();
+  for (let rotation = 0; rotation < 4; rotation++) {
+    const locker = { type: "locker_single", gx: 1, gy: 101.875, rotation };
+    const spot = fixtureStandingSpot(locker, null);
+    const cabinet = Object.fromEntries(Object.entries(fixtureBounds(locker)).map(([edge, value]) => [edge, value * TILE_SIZE]));
+    const { width, height } = employee.sprite.body;
+    assert.equal(rectanglesOverlap(cabinet, {
+      left: spot.x - width / 2, right: spot.x + width / 2,
+      top: spot.y - height / 2, bottom: spot.y + height / 2,
+    }), false, `rotation ${rotation}`);
+  }
+});
 
 test("a stock clerk takes only the shelf's free quantity from a locker and fills that slot", () => {
   const { employee, shelf, locker, transfers } = makeEmployee();

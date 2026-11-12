@@ -5,6 +5,7 @@
 // The full map reserves room for every planned expansion, even before those zones are built.
 // See also: TileRoom.js (unlockZone).
 import { SHOP_FLOOR_TILE } from "./ShopTiles.js";
+import { BACKROOM_TILES } from "./BackroomTiles.js";
 
 export const TILE_SIZE = 64; // px
 export const MAX_MAP_GRID_WIDTH = 39;
@@ -13,84 +14,81 @@ export const MAX_MAP_GRID_HEIGHT = 21;
 // The backroom (Storeroom + Loading Pad) is its own little map, shown in a window over the
 // shop while the player is inside it. It sits far below the shop so the shop camera never
 // sees it; the two areas connect only through their doors (see getBackroomDoorCell).
+// Its floor and walls use the BackroomA map's art (see BackroomTiles.js).
 export const BACKROOM_GRID_Y = 100;
-const BACKROOM_FLOOR_TILE = "floor_concrete_clean_01";
-const BACKROOM_WALL_TILE = "wall_dark_riveted_01";
-export const BACKROOM_DOOR_TILE = "door_blast_keypad_01";
+const BACKROOM_FLOOR_TILE = BACKROOM_TILES.floor;
+export const LOADING_PAD_WIDTH = 128;
+export const LOADING_PAD_HEIGHT = 128;
+const BACKROOM_GRID_WIDTH = LOADING_PAD_WIDTH / TILE_SIZE + 2;
 
 // Expansion costs are paid in credits; all expansions also require a shop level.
 // Sales-floor zones together fill the 34x13 ShopA map. Bought in order, each one keeps the
-// shop a rectangle, and their walls use ShopA's art (see ShopTiles.js), not wallTile.
+// shop a rectangle, and their walls use TileSetB's art (see ShopTiles.js).
 export const ZONES = [
   {
     id: "storeroom",
     name: "Storeroom",
     gridX: 0,
     gridY: BACKROOM_GRID_Y,
-    gridW: 6,
-    gridH: 8,
+    gridW: BACKROOM_GRID_WIDTH,
+    gridH: 3,
     locked: false,
     backroom: true,
     floorTile: BACKROOM_FLOOR_TILE,
-    wallTile: BACKROOM_WALL_TILE,
   },
   {
     id: "loading_pad",
     name: "Loading Pad",
     // Directly below the Storeroom, open to it on the north. Ordered crates spawn here.
     gridX: 0,
-    gridY: BACKROOM_GRID_Y + 8,
-    gridW: 6,
-    gridH: 4,
+    gridY: BACKROOM_GRID_Y + 3,
+    gridW: BACKROOM_GRID_WIDTH,
+    gridH: 3,
     locked: false,
     backroom: true,
-    floorTile: "floor_grate_01",
-    wallTile: BACKROOM_WALL_TILE,
+    floorTile: BACKROOM_FLOOR_TILE,
   },
   // Backroom upgrades, bought in this order. Each widens the backroom (and its window).
   {
     id: "backroom_upgrade_a",
     name: "Backroom Upgrade A",
-    gridX: 6,
+    gridX: BACKROOM_GRID_WIDTH,
     gridY: BACKROOM_GRID_Y,
-    gridW: 4,
-    gridH: 12,
+    gridW: 2,
+    gridH: 6,
     locked: true,
     backroom: true,
     floorTile: BACKROOM_FLOOR_TILE,
-    wallTile: BACKROOM_WALL_TILE,
     cost: 4000,
     requiredShopLevel: 13,
   },
   {
     id: "backroom_upgrade_b",
     name: "Backroom Upgrade B",
-    gridX: 10,
+    gridX: BACKROOM_GRID_WIDTH + 2,
     gridY: BACKROOM_GRID_Y,
-    gridW: 4,
-    gridH: 12,
+    gridW: 2,
+    gridH: 6,
     locked: true,
     backroom: true,
     floorTile: BACKROOM_FLOOR_TILE,
-    wallTile: BACKROOM_WALL_TILE,
     cost: 6000,
     requiredShopLevel: 20,
   },
   {
     id: "backroom_upgrade_c",
     name: "Backroom Upgrade C",
-    gridX: 14,
+    gridX: BACKROOM_GRID_WIDTH + 4,
     gridY: BACKROOM_GRID_Y,
-    gridW: 4,
-    gridH: 12,
+    gridW: 2,
+    gridH: 6,
     locked: true,
     backroom: true,
     floorTile: BACKROOM_FLOOR_TILE,
-    wallTile: BACKROOM_WALL_TILE,
     cost: 9000,
     requiredShopLevel: 27,
   },
-  // The top center of the ShopA map: the store entrance and the backroom passage are both in its back wall.
+  // The top center of the ShopA map: the store's front door and the backroom door are both in its back wall.
   {
     id: "sales_floor",
     name: "Sales Floor",
@@ -186,7 +184,7 @@ export function getZone(id) {
 export const SHOP_BACK_WALL_HEIGHT = 2;
 
 /**
- * The Sales Floor's door to the backroom: the gap in ShopA's back wall, near the right of
+ * The Sales Floor's door to the backroom: a glass door in the back wall, near the right of
  * the Sales Floor. Pressing E in front of it moves the player to the backroom's exit.
  * @returns {{ gx: number, gy: number }}
  */
@@ -196,13 +194,38 @@ export function getBackroomDoorCell() {
 }
 
 /**
- * The backroom's way back out: in the Storeroom's north wall. Pressing E in front of it returns the
+ * The backroom's way back out: a glass door at the right end of the Storeroom's back wall
+ * (the backroom's top-right when it's its starting size). Pressing E in front of it returns the
  * player to the Sales Floor, just inside the backroom door.
  * @returns {{ gx: number, gy: number }}
  */
 export function getBackroomExitCell() {
   const storeroom = getZone("storeroom");
-  return { gx: storeroom.gridX + 4, gy: storeroom.gridY };
+  return { gx: storeroom.gridX + 2, gy: storeroom.gridY };
+}
+
+export function getBackroomBounds(zones = ZONES) {
+  const unlocked = zones.filter((zone) => zone.backroom && !zone.locked);
+  const x = Math.min(...unlocked.map((zone) => zone.gridX)) * TILE_SIZE;
+  const y = Math.min(...unlocked.map((zone) => zone.gridY)) * TILE_SIZE;
+  const right = Math.max(...unlocked.map((zone) => zone.gridX + zone.gridW)) * TILE_SIZE;
+  const bottom = Math.max(...unlocked.map((zone) => zone.gridY + zone.gridH)) * TILE_SIZE;
+  return { x, y, width: right - x, height: bottom - y };
+}
+
+export function getBackroomInteriorBounds(zones = ZONES) {
+  const bounds = getBackroomBounds(zones);
+  return {
+    left: bounds.x + TILE_SIZE, top: bounds.y + TILE_SIZE,
+    right: bounds.x + bounds.width - TILE_SIZE, bottom: bounds.y + bounds.height - TILE_SIZE,
+  };
+}
+
+export function getLoadingPadBounds() {
+  const storeroom = getZone("storeroom");
+  const left = (storeroom.gridX + 1) * TILE_SIZE;
+  const bottom = (BACKROOM_GRID_Y + 5) * TILE_SIZE;
+  return { left, right: left + LOADING_PAD_WIDTH, top: bottom - LOADING_PAD_HEIGHT, bottom };
 }
 
 /**
@@ -225,8 +248,8 @@ export function isBackroomRow(gridY) {
 }
 
 /**
- * The left of the two cells of the shop's public door, between the close pair of columns
- * in ShopA's back wall. Customers spawn just inside (one row south) and leave through it.
+ * The shop's public door: one double door in the back wall that customers both arrive and
+ * leave through. Customers spawn just inside it (one row south).
  * @returns {{ gx: number, gy: number }}
  */
 export function getStoreDoorCell() {
@@ -234,10 +257,9 @@ export function getStoreDoorCell() {
   return { gx: salesFloor.gridX + 4, gy: salesFloor.gridY + SHOP_BACK_WALL_HEIGHT - 1 };
 }
 
-/** The store door is two cells wide; these are both of them. */
+/** Every cell of the store's doorway (it's one cell wide). */
 export function getStoreDoorCells() {
-  const door = getStoreDoorCell();
-  return [door, { gx: door.gx + 1, gy: door.gy }];
+  return [getStoreDoorCell()];
 }
 
 export function getTotalGridSize() {

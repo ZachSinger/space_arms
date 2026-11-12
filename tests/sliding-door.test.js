@@ -1,8 +1,8 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import test from "node:test";
-import { STORE_DOOR_SPRITE, SlidingDoor } from "../js/logic/SlidingDoor.js";
+import { AnimatedDoor, BACKROOM_DOOR_SPRITE, STORE_DOOR_SPRITE, SlidingDoor } from "../js/logic/SlidingDoor.js";
 
-function createDoor() {
+function createScene() {
   const sprites = [];
   const blockers = [];
   const scene = {
@@ -31,96 +31,105 @@ function createDoor() {
       },
     },
   };
+  return { scene, sprites, blockers };
+}
+
+function createDoor() {
+  const { scene, sprites, blockers } = createScene();
   const group = { add: () => {} };
   return { door: new SlidingDoor(scene, { x: 100, y: 64, wallGroup: group }), sprites, blockers };
 }
 
 const frames = (sprites) => sprites.map((sprite) => sprite.frame);
-const atExit = [{ x: 132, y: 64 }];
+const atDoor = [{ x: 100, y: 64 }];
 
-test("the doorway is an entrance door on the left and an exit door on the right", () => {
+test("the front doorway is one double door that blocks the doorway while closed", () => {
   assert.deepEqual(STORE_DOOR_SPRITE, {
-    key: "store_glass_door",
-    path: "img/Icons_Extracted/Tileset/Doors/store_glass_door.png",
+    key: "store_double_door",
+    path: "img/Icons_Extracted/Tileset/Doors/store_double_door.png",
     frameWidth: 96,
     frameHeight: 96,
   });
   const { door, sprites, blockers } = createDoor();
-  assert.deepEqual(sprites.map(({ x, y, width, height }) => [x, y, width, height]),
-    [[68, 64, 64, 64], [132, 64, 64, 64]]);
-  assert.deepEqual(blockers.map(({ x, width }) => [x, width]), [[74, 52], [126, 52]]);
-  assert.deepEqual(door.entrancePoint, { x: 68, y: 64 });
-  assert.deepEqual(door.exitPoint, { x: 132, y: 64 });
-  assert.deepEqual(frames(sprites), [0, 0]);
+  assert.deepEqual(sprites.map(({ x, y, width, height }) => [x, y, width, height]), [[100, 64, 64, 64]]);
+  assert.deepEqual(blockers.map(({ x, width }) => [x, width]), [[100, 64]]);
+  assert.deepEqual(door.doorwayPoint, { x: 100, y: 64 });
+  assert.deepEqual(frames(sprites), [0]);
 });
 
-test("only the exit door opens when someone walks up, then closes after they leave", () => {
+test("the door opens when someone walks up, then closes after they leave", () => {
   const { door, blockers, sprites } = createDoor();
-  door.update(16, atExit);
-  assert.equal(door.exit.state, "opening");
-  assert.equal(door.entrance.state, "closed");
-  assert.deepEqual(blockers.map((b) => b.body.enable), [true, false]);
-  door.update(90, atExit);
-  assert.deepEqual(frames(sprites), [0, 1]);
+  door.update(16, atDoor);
+  assert.equal(door.state, "opening");
+  assert.equal(blockers[0].body.enable, false);
+  door.update(90, atDoor);
+  assert.deepEqual(frames(sprites), [1]);
 
-  door.update(180, atExit);
-  assert.equal(door.exit.state, "open");
-  assert.deepEqual(frames(sprites), [0, 3]);
+  door.update(180, atDoor);
+  assert.equal(door.state, "open");
+  assert.deepEqual(frames(sprites), [3]);
 
   door.update(499, []);
-  assert.equal(door.exit.state, "open");
+  assert.equal(door.state, "open");
   door.update(1, []);
-  assert.equal(door.exit.state, "closing");
+  assert.equal(door.state, "closing");
 
   door.update(270, []);
-  assert.equal(door.exit.state, "closed");
-  assert.deepEqual(frames(sprites), [0, 0]);
-  assert.deepEqual(blockers.map((b) => b.body.enable), [true, true]);
+  assert.equal(door.state, "closed");
+  assert.deepEqual(frames(sprites), [0]);
+  assert.equal(blockers[0].body.enable, true);
 });
 
-test("standing at the entrance door does not open it", () => {
+test("the door stays shut for someone who isn't near it", () => {
   const { door } = createDoor();
-  door.update(500, [{ x: 40, y: 64 }]);
-  assert.equal(door.entrance.state, "closed");
-  assert.equal(door.exit.state, "closed");
+  door.update(500, [{ x: 400, y: 300 }, null]);
+  assert.equal(door.state, "closed");
 });
 
-test("the entrance door opens for an arriving customer until they walk clear", () => {
+test("the door opens for an arriving customer until they walk clear", () => {
   const { door, sprites, blockers } = createDoor();
-  const arrival = { x: 68, y: 90, active: true };
+  const arrival = { x: 100, y: 90, active: true };
   door.letIn(arrival);
   door.update(270, []);
-  assert.equal(door.entrance.state, "open");
-  assert.deepEqual(frames(sprites), [3, 0]);
-  assert.deepEqual(blockers.map((b) => b.body.enable), [false, true]);
+  assert.equal(door.state, "open");
+  assert.deepEqual(frames(sprites), [3]);
+  assert.equal(blockers[0].body.enable, false);
 
   door.update(1000, []);
-  assert.equal(door.entrance.state, "open");
+  assert.equal(door.state, "open");
 
   arrival.y = 400;
   door.update(16, []);
-  assert.equal(door.entrance.state, "open");
+  assert.equal(door.state, "open");
   door.update(484, []);
   door.update(270, []);
-  assert.equal(door.entrance.state, "closed");
-
-  // Walking back past the entrance later doesn't reopen it.
-  arrival.y = 90;
-  door.update(500, []);
-  assert.equal(door.entrance.state, "closed");
+  assert.equal(door.state, "closed");
 });
 
-test("a door reverses its closing animation if someone approaches", () => {
+test("the door reverses its closing animation if someone approaches", () => {
   const { door, sprites } = createDoor();
-  door.update(270, atExit);
+  door.update(270, atDoor);
   door.update(499, []);
   door.update(1, []);
   door.update(90, []);
-  assert.equal(door.exit.state, "closing");
-  assert.deepEqual(frames(sprites), [0, 2]);
+  assert.equal(door.state, "closing");
+  assert.deepEqual(frames(sprites), [2]);
 
-  door.update(16, atExit);
-  assert.equal(door.exit.state, "opening");
-  door.update(90, atExit);
-  assert.equal(door.exit.state, "open");
+  door.update(16, atDoor);
+  assert.equal(door.state, "opening");
+  door.update(90, atDoor);
+  assert.equal(door.state, "open");
+});
+
+test("the backroom's glass door only animates; it adds nothing solid", () => {
+  const { scene, sprites, blockers } = createScene();
+  const door = new AnimatedDoor(scene, { x: 50, y: 128, sprite: BACKROOM_DOOR_SPRITE });
+  assert.equal(sprites[0].texture, "backroom_glass_door");
+  assert.equal(blockers.length, 0);
+  door.update(270, true);
+  assert.equal(door.state, "open");
+  door.update(500, false);
+  door.update(270, false);
+  assert.equal(door.state, "closed");
+  door.destroy();
 });

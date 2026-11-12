@@ -113,7 +113,9 @@ export class LayoutRenderer {
           return `
             <div class="layout-fixture-row">
               <span>${spec.name}
-                <small>${FIXTURE_PURPOSES[spec.kind]} | ${spec.w} x ${spec.h} floor tiles</small>
+                <small>${FIXTURE_PURPOSES[spec.kind]} | ${spec.id === "locker_single"
+                  ? "Narrow locker; keep room to stand in front"
+                  : `${spec.w} x ${spec.h} floor tiles`}</small>
                 <small>PRICE ${spec.price} credits | ${licensed ? "LICENSED" : `NEEDS CONTRACT: ${license.name} (Contracts tab)`}</small>
               </span>
               <button type="button" class="action-btn" data-buy-fixture-id="${spec.id}"
@@ -147,18 +149,22 @@ export class LayoutRenderer {
       <div class="retro-slot custom-scrollbar layout-fixture-list">
         ${fixtures.all().map((fixture) => {
           const saleBlockReason = includePurchases ? scene.getFixtureSaleBlockReason(fixture) : null;
+          const moveBlockReason = scene.getFixtureMoveAreaBlockReason?.(fixture) ?? null;
+          const canMove = enabled && !moveBlockReason;
           return `
           <div class="layout-fixture-row" data-fixture-row-id="${fixture.id}">
             <span>${fixtures.displayName(fixture)}
               <small>${FIXTURE_PURPOSES[getFixtureType(fixture.type).kind]}</small>
               <small>(${fixture.gx}, ${fixture.gy})</small>
               ${includePurchases ? `<small>Resale value: ${formatMoney(getFixtureResaleValue(fixture.type))}</small>` : ""}
+              ${enabled && moveBlockReason ? `<small>${moveBlockReason}</small>` : ""}
               ${enabled && saleBlockReason ? `<small>${saleBlockReason}</small>` : ""}
             </span>
             ${includePurchases ? `
               <span class="layout-fixture-actions">
                 <button type="button" class="action-btn" data-move-fixture-id="${fixture.id}"
-                  ${enabled ? "" : "disabled"}>MOVE</button>
+                  title="${moveBlockReason || "Move this fixture"}"
+                  ${canMove ? "" : "disabled"}>MOVE</button>
                 <button type="button" class="action-btn danger" data-crate-fixture-id="${fixture.id}"
                   title="${scene.getFixtureCrateBlockReason(fixture) || "Create a fixture crate"}"
                   ${scene.canCrateFixture(fixture) ? "" : "disabled"}>CRATE UP</button>
@@ -168,7 +174,8 @@ export class LayoutRenderer {
               </span>
             ` : `
               <button type="button" class="action-btn" data-move-fixture-id="${fixture.id}"
-                ${enabled ? "" : "disabled"}>MOVE</button>
+                title="${moveBlockReason || "Move this fixture"}"
+                ${canMove ? "" : "disabled"}>MOVE</button>
             `}
           </div>
         `;

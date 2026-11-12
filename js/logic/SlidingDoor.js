@@ -1,13 +1,23 @@
-﻿// ==========================================
+// ==========================================
 // FILE: SlidingDoor.js
 // ==========================================
-// The shop's front entrance: two glass doors side by side. The left one is the way in and
-// only opens to let an arriving customer through. The right one is the way out and opens
-// for anyone who comes near it. Each door is solid while closed.
+// Animated doors set into the shop's back wall, drawn at the characters' pixel size
+// (96 sheet px -> 64 world px). The front door is a single double door that customers
+// both arrive and leave through: it opens for an arriving customer, a leaving customer,
+// or the player when they come near, and is solid while closed. The backroom's glass
+// door only animates; the wall behind it stays solid (E moves the player through).
 
+// Full paths written out so the production build finds and copies them (see vite.config.js).
 export const STORE_DOOR_SPRITE = Object.freeze({
-  key: "store_glass_door",
-  path: "img/Icons_Extracted/Tileset/Doors/store_glass_door.png",
+  key: "store_double_door",
+  path: "img/Icons_Extracted/Tileset/Doors/store_double_door.png",
+  frameWidth: 96,
+  frameHeight: 96,
+});
+
+export const BACKROOM_DOOR_SPRITE = Object.freeze({
+  key: "backroom_glass_door",
+  path: "img/Icons_Extracted/Tileset/Doors/backroom_glass_door.png",
   frameWidth: 96,
   frameHeight: 96,
 });
@@ -18,47 +28,50 @@ const OPEN_FRAME = 3;
 const DOOR_FRAME_DURATION_MS = 90;
 const DOOR_CLOSE_DELAY_MS = 500;
 const DOOR_PROXIMITY_RADIUS = 96;
-// Drawn at the same pixel scale as the characters (96 sheet px -> 64 world px).
 const DOOR_DISPLAY_SIZE = 64;
-// Together the two doors span the shop's two-tile doorway.
-const ENTRANCE_OFFSET_X = -DOOR_DISPLAY_SIZE / 2;
-const EXIT_OFFSET_X = DOOR_DISPLAY_SIZE / 2;
-const DOOR_COLLISION = { width: 52, height: 36 };
+// Fills the one-cell doorway along the bottom of the door.
+const DOOR_COLLISION = { width: 64, height: 36 };
 
-class DoorLeaf {
-  constructor(scene, { x, y, offsetX, wallGroup }) {
-    this.x = x + offsetX;
-    this.sensorY = y - 32;
+export class AnimatedDoor {
+  /**
+   * `x` is the door's center; `y` is where its bottom lands. With a `wallGroup`, the door
+   * is solid while closed.
+   */
+  constructor(scene, { x, y, sprite, wallGroup = null }) {
+    this.x = x;
+    this.sensorY = y - DOOR_DISPLAY_SIZE / 2;
     this.state = "closed";
     this.frameIndex = CLOSED_FRAME;
     this.frameTimer = 0;
     this.closeTimer = 0;
 
     this.sprite = scene.add
-      .sprite(this.x, y, STORE_DOOR_SPRITE.key, CLOSED_FRAME)
+      .sprite(x, y, sprite.key, CLOSED_FRAME)
       .setOrigin(0.5, 1)
       .setDisplaySize(DOOR_DISPLAY_SIZE, DOOR_DISPLAY_SIZE)
       .setDepth(1.5);
 
-    // Each blocker covers its half of the doorway, from the center line outward.
-    this.blocker = scene.add.rectangle(
-      x + Math.sign(offsetX) * DOOR_COLLISION.width / 2,
-      y - DOOR_COLLISION.height / 2,
-      DOOR_COLLISION.width,
-      DOOR_COLLISION.height,
-      0x000000,
-      0,
-    );
-    wallGroup.add(this.blocker);
-    this.blocker.setVisible(false);
+    this.blocker = null;
+    if (wallGroup) {
+      this.blocker = scene.add.rectangle(
+        x,
+        y - DOOR_COLLISION.height / 2,
+        DOOR_COLLISION.width,
+        DOOR_COLLISION.height,
+        0x000000,
+        0,
+      );
+      wallGroup.add(this.blocker);
+      this.blocker.setVisible(false);
+    }
   }
 
   isNear(actor) {
     return Math.hypot(this.x - actor.x, this.sensorY - actor.y) <= DOOR_PROXIMITY_RADIUS;
   }
 
-  update(delta, someoneNear) {
-    if (someoneNear) {
+  update(delta, shouldOpen) {
+    if (shouldOpen) {
       this.closeTimer = 0;
       if (this.state === "closed" || this.state === "closing") this.beginOpening();
     } else if (this.state === "open") {
@@ -73,7 +86,7 @@ class DoorLeaf {
   beginOpening() {
     this.state = "opening";
     this.frameTimer = 0;
-    this.blocker.body.enable = false;
+    if (this.blocker) this.blocker.body.enable = false;
   }
 
   beginClosing() {
@@ -91,41 +104,43 @@ class DoorLeaf {
     if (this.frameIndex !== lastFrame) return;
     this.state = finalState;
     this.closeTimer = 0;
-    if (finalState === "closed") this.blocker.body.enable = true;
+    if (finalState === "closed" && this.blocker) this.blocker.body.enable = true;
   }
 
   destroy() {
     this.sprite.destroy();
-    this.blocker.destroy();
+    this.blocker?.destroy();
   }
 }
 
 export class SlidingDoor {
-  // `x` is the doorway's center; `y` is where the bottom of the doors lands.
+  // `x` is the doorway's center; `y` is where the bottom of the door lands.
   constructor(scene, { x, y, wallGroup }) {
-    this.entrance = new DoorLeaf(scene, { x, y, offsetX: ENTRANCE_OFFSET_X, wallGroup });
-    this.exit = new DoorLeaf(scene, { x, y, offsetX: EXIT_OFFSET_X, wallGroup });
-    this.entrancePoint = { x: this.entrance.x, y };
-    this.exitPoint = { x: this.exit.x, y };
-    // Arriving customers hold the entrance open until they've walked clear of it.
+    this.door = new AnimatedDoor(scene, { x, y, sprite: STORE_DOOR_SPRITE, wallGroup });
+    // Where customers walk in from and back out to.
+    this.doorwayPoint = { x, y };
+    // Arriving customers hold the door open until they've walked clear of it.
     this.arrivals = new Set();
+  }
+
+  get state() {
+    return this.door.state;
   }
 
   letIn(actor) {
     this.arrivals.add(actor);
   }
 
-  // `exitActors` are everyone who opens the exit door by walking up to it.
-  update(delta, exitActors) {
+  // `nearbyActors` are everyone who opens the door by walking up to it.
+  update(delta, nearbyActors) {
     for (const actor of this.arrivals) {
-      if (actor.active === false || !this.entrance.isNear(actor)) this.arrivals.delete(actor);
+      if (actor.active === false || !this.door.isNear(actor)) this.arrivals.delete(actor);
     }
-    this.entrance.update(delta, this.arrivals.size > 0);
-    this.exit.update(delta, exitActors.some((actor) => actor && this.exit.isNear(actor)));
+    const someoneNear = nearbyActors.some((actor) => actor && this.door.isNear(actor));
+    this.door.update(delta, this.arrivals.size > 0 || someoneNear);
   }
 
   destroy() {
-    this.entrance.destroy();
-    this.exit.destroy();
+    this.door.destroy();
   }
 }

@@ -3,13 +3,14 @@
 // ==========================================
 // Validates a loaded shop save against the item database and layout rules, throwing a
 // readable error on anything malformed and migrating older fixture entries.
-import { getFixtureType, getShelfDisplayGrid, getShelfSlotCapacity, isValidFixtureRotation, migrateFixtureEntry } from "./FixtureLayout.js";
+import { getFixtureType, getShelfDisplayGrid, getShelfSlotCapacity, isFixturePosition, isValidFixtureRotation, migrateFixtureEntry } from "./FixtureLayout.js";
 import employeeRoster from "../../data/Employees.json" with { type: "json" };
 import { EMPLOYEE_JOB_IDS } from "./EmployeeJobs.js";
 import { MAX_EMPLOYEE_SKILL_LEVEL } from "./EmployeeTraining.js";
-import { BACKROOM_GRID_Y, TILE_SIZE, ZONES, getAuthoredGridSize, isBackroomRow } from "./RoomLayout.js";
+import { TILE_SIZE, ZONES, getAuthoredGridSize } from "./RoomLayout.js";
 import { MIN_BASE_RATIO, MAX_BASE_RATIO, MIN_SUPPLY_RATIO, MAX_SUPPLY_RATIO } from "./Market.js";
 import { THROW_ACCELERATION_MS } from "./Crate.js";
+import { MAX_CARRIED_CRATES } from "./CrateStack.js";
 import { isValidLedgerData } from "./DayLedger.js";
 import { isMoney, roundMoney } from "./Money.js";
 import { isValidHovercartCapacity } from "./Hovercart.js";
@@ -32,55 +33,8 @@ function integer(value, minimum = Number.MIN_SAFE_INTEGER) {
   return Number.isSafeInteger(value) && value >= minimum;
 }
 
-// 2: the backroom became its own map (see BACKROOM_GRID_Y).
-// 3: the sales floor follows the ShopA map: the starting area moved right and down a cell.
-export const SHOP_LAYOUT_VERSION = 3;
-
-// Saves from before then kept the Storeroom and Loading Pad as a 6-by-12 block at the shop's
-// top-left corner. Anything placed there moves down into the backroom, which has the same
-// shape at the same columns.
-function migrateDetachedBackroom(data) {
-  const inOldBackroom = (gx, gy) => gx >= 0 && gx < 6 && gy >= 0 && gy < 12;
-  const cellOf = (pixels) => Math.floor(pixels / TILE_SIZE);
-  return {
-    ...data,
-    layoutVersion: 2,
-    fixtures: data.fixtures.map((fixture) =>
-      isRecord(fixture) && inOldBackroom(fixture.gx, fixture.gy)
-        ? { ...fixture, gy: fixture.gy + BACKROOM_GRID_Y }
-        : fixture),
-    crates: Array.isArray(data.crates)
-      ? data.crates.map((crate) =>
-        isRecord(crate) && Number.isFinite(crate.x) && Number.isFinite(crate.y) &&
-          inOldBackroom(cellOf(crate.x), cellOf(crate.y))
-          ? { ...crate, y: crate.y + BACKROOM_GRID_Y * TILE_SIZE }
-          : crate)
-      : data.crates,
-  };
-}
-
-// Version 2's starting Sales Floor began at column 5 with a one-tile back wall; ShopA's
-// begins at column 12 with a two-tile back wall. Everything on the shop floor moves with it.
-const SHOP_FLOOR_SHIFT = { gx: 7, gy: 1 };
-
-function migrateShopAFloor(data) {
-  const inShop = (gy) => !isBackroomRow(gy);
-  return {
-    ...data,
-    layoutVersion: 3,
-    fixtures: data.fixtures.map((fixture) =>
-      isRecord(fixture) && integer(fixture.gy) && inShop(fixture.gy)
-        ? { ...fixture, gx: fixture.gx + SHOP_FLOOR_SHIFT.gx, gy: fixture.gy + SHOP_FLOOR_SHIFT.gy }
-        : fixture),
-    crates: Array.isArray(data.crates)
-      ? data.crates.map((crate) =>
-        isRecord(crate) && Number.isFinite(crate.x) && Number.isFinite(crate.y) &&
-          inShop(Math.floor(crate.y / TILE_SIZE))
-          ? { ...crate, x: crate.x + SHOP_FLOOR_SHIFT.gx * TILE_SIZE, y: crate.y + SHOP_FLOOR_SHIFT.gy * TILE_SIZE }
-          : crate)
-      : data.crates,
-  };
-}
+// The backroom snaps to whole squares now that crates and the Loading Pad match the tile art.
+export const SHOP_LAYOUT_VERSION = 5;
 
 /**
  * Validate a shop save and return it, with pre-fixture-type entries migrated.
@@ -93,9 +47,10 @@ export function validateShopSave(data, database) {
   requireSave(isRecord(data), "missing shop state.");
   requireSave(Array.isArray(data.fixtures) && data.fixtures.length > 0, "missing fixture layout.");
   data = { ...data, fixtures: data.fixtures.map(migrateFixtureEntry) };
-  if (data.layoutVersion === undefined) data = migrateDetachedBackroom(data);
-  if (data.layoutVersion === 2) data = migrateShopAFloor(data);
-  requireSave(data.layoutVersion === SHOP_LAYOUT_VERSION, "unknown shop layout version.");
+  requireSave(data.layoutVersion === SHOP_LAYOUT_VERSION,
+    data.layoutVersion === undefined || [2, 3, 4].includes(data.layoutVersion)
+      ? "this save uses the old backroom size. Start a new game."
+      : "unknown shop layout version.");
   const items = database.getAllItems();
   const itemById = new Map(items.map((item) => [item.id, item]));
   const stockCapacity = (stock, capacity) => {
@@ -215,7 +170,8 @@ export function validateShopSave(data, database) {
   for (const entry of data.fixtures) {
     const spec = getFixtureType(entry?.type);
     requireSave(spec && typeof entry.id === "string" && !fixtureIds.has(entry.id) &&
-      integer(entry.gx, 0) && integer(entry.gy, 0) && isValidFixtureRotation(entry.rotation),
+      isFixturePosition(entry.gx) && entry.gx >= 0 && isFixturePosition(entry.gy) && entry.gy >= 0 &&
+      isValidFixtureRotation(entry.rotation),
     "invalid fixture position.");
     fixtureIds.add(entry.id);
     if (spec.kind === "storage") stockCapacity(entry.stock, spec.capacity);
@@ -283,5 +239,23 @@ export function validateShopSave(data, database) {
   }
   requireSave(data.carriedCrate === null || isRecord(data.carriedCrate), "invalid carried crate.");
   if (data.carriedCrate) validateCrateContents(data.carriedCrate);
+  if (data.carriedCrates !== undefined) {
+    requireSave(Array.isArray(data.carriedCrates) && data.carriedCrates.length <= MAX_CARRIED_CRATES,
+      "invalid carried crate stack.");
+    data.carriedCrates.forEach(validateCrateContents);
+    requireSave((data.carriedCrates.length === 0) === (data.carriedCrate === null),
+      "carried crate stack does not match the carried crate.");
+    if (data.carriedCrates.length > 1) {
+      requireSave(data.carriedCrates.every((crate) => (crate.kind ?? "item") === "item"),
+        "only item crates can be stacked.");
+    }
+    if (data.carriedCrates.length) {
+      const top = data.carriedCrates.at(-1);
+      const single = data.carriedCrate;
+      requireSave((top.kind ?? "item") === (single.kind ?? "item") &&
+        top.itemId === single.itemId && top.typeId === single.typeId && top.quantity === single.quantity,
+      "carried crate stack does not match its top crate.");
+    }
+  }
   return data;
 }

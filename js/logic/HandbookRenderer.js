@@ -176,9 +176,11 @@ function stockingTopic() {
     section("Crates", `
       ${list([
         "Crates wait on the Loading Pad until someone picks them up.",
-        `Press ${key("crate")} to pick up a crate. Walk up to a locker or shelf and press ${key("interact")} to unload it there.`,
-        `While carrying a stock crate, press ${key("unpack")} to move as much as fits into your hovercart. Anything that doesn't fit stays in the box.`,
-        `Press ${key("crate")} again to put it down. If you're walking, you'll throw it instead. Thrown crates that hit a customer cost reputation.`,
+        "Crate colors show the item group: gray for weapons, red for ammunition, blue for attachments, purple for clothing, green for armor, yellow for tools, and teal for survival supplies.",
+        `Press ${key("crate")} to pick up a crate. While carrying an item crate, press it again near another item crate to stack it on top. You can carry up to three; the newest crate is on top.`,
+        "Carrying two crates slows you down; a third slows you down further. Your character faces the direction you move, and the crates stay straight.",
+        `Press ${key("interact")} at a locker or shelf to unload the top crate. Press ${key("unpack")} to move as much of the top crate as fits into your hovercart. Anything that doesn't fit stays in that crate.`,
+        `Press ${key("crate")} away from other crates to put down what you're carrying. A single crate is thrown if you're walking, but a stack is only set down. Thrown crates that hit a customer cost reputation.`,
         "Walk into a crate on the floor to push it out of the way.",
       ])}`),
     section("Shelves", `

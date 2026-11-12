@@ -5,8 +5,18 @@
 // stock holders; fixture crates are carried and placed through FixturePlacement.
 // See also: CratePushing.js (player pushing).
 
-// Sizes and drop-search spacing in px; drag in px/s².
-const CRATE_DISPLAY_SIZE = 40;
+// Pixel-art crates from the 48px art pack, drawn at the same scale as the floor and walls
+// (each 64px game square shows 2x2 of the pack's 48px tiles). Sizes in px; drag in px/s².
+export const ITEM_CRATE_SPRITE = Object.freeze({
+  key: "crate_item_box", path: "img/Icons_Extracted/Tileset/Fixtures/crate_item_box.png", width: 32, height: 28,
+});
+export const FIXTURE_CRATE_SPRITE = Object.freeze({
+  key: "crate_fixture_slatted", path: "img/Icons_Extracted/Tileset/Fixtures/crate_fixture_slatted.png",
+  width: 28, height: 28,
+});
+// The box's lid is its top 10px; each crate above sits on it so only the front of the one
+// below shows.
+const CRATE_STACK_SPACING = 18;
 const CRATE_THROW_MULTIPLIER = 1.5;
 const CRATE_DRAG = 480;
 const CRATE_BOUNCE = 0.6;
@@ -19,14 +29,13 @@ const THROW_PEAK_MULTIPLIER = 2.5;
 // Player-to-crate/fixture interaction distance (px): forgiving, but not across the room.
 export const INTERACT_RANGE = 56;
 const DROP_SEARCH_RADIUS = INTERACT_RANGE - DROP_SEARCH_STEP;
-const FIXTURE_CRATE_DISPLAY_SIZE = 48;
 
 /**
  * One crate in the world: its contents, sprite, and physics body.
  * Created by deliveries and fixture crating; destroyed when emptied or unpacked.
  */
 export class Crate {
-  constructor(scene, itemId, quantity, x, y, { kind = "item", typeId = null } = {}) {
+  constructor(scene, itemId, quantity, x, y, { kind = "item", typeId = null, tint = null } = {}) {
     this.scene = scene;
     this.kind = kind;
     this.typeId = kind === "fixture" ? typeId : null;
@@ -40,13 +49,12 @@ export class Crate {
     this.throwCarrier = null;
     this.hitCustomers = new Set();
 
+    const art = kind === "fixture" ? FIXTURE_CRATE_SPRITE : ITEM_CRATE_SPRITE;
     this.sprite = scene.add
-      .image(x, y, kind === "fixture" ? "fixture_crate_01" : "crate_closed_01")
-      .setDisplaySize(
-        kind === "fixture" ? FIXTURE_CRATE_DISPLAY_SIZE : CRATE_DISPLAY_SIZE,
-        kind === "fixture" ? FIXTURE_CRATE_DISPLAY_SIZE : CRATE_DISPLAY_SIZE,
-      )
+      .image(x, y, art.key)
+      .setDisplaySize(art.width, art.height)
       .setDepth(2);
+    if (tint !== null) this.sprite.setTint?.(tint);
 
     scene.crateGroup.add(this.sprite);
     this.sprite.body
@@ -153,14 +161,16 @@ export class Crate {
    * @param {number} x
    * @param {number} y
    * @param {Phaser.GameObjects.Sprite | null} [carrierSprite]
+   * @param {object[]} [reservedRectangles]
+   * @param {number} [searchRadius]
    * @returns {{ x: number, y: number } | null}
    */
-  findDropPosition(x, y, carrierSprite = null) {
+  findDropPosition(x, y, carrierSprite = null, reservedRectangles = [], searchRadius = DROP_SEARCH_RADIUS) {
     const offsets = [];
-    for (let dx = -DROP_SEARCH_RADIUS; dx <= DROP_SEARCH_RADIUS; dx += DROP_SEARCH_STEP) {
-      for (let dy = -DROP_SEARCH_RADIUS; dy <= DROP_SEARCH_RADIUS; dy += DROP_SEARCH_STEP) {
+    for (let dx = -searchRadius; dx <= searchRadius; dx += DROP_SEARCH_STEP) {
+      for (let dy = -searchRadius; dy <= searchRadius; dy += DROP_SEARCH_STEP) {
         const distanceSquared = dx * dx + dy * dy;
-        if (distanceSquared <= DROP_SEARCH_RADIUS * DROP_SEARCH_RADIUS) {
+        if (distanceSquared <= searchRadius * searchRadius) {
           offsets.push({ dx, dy, distanceSquared });
         }
       }
@@ -170,6 +180,15 @@ export class Crate {
     for (const { dx, dy } of offsets) {
       const dropX = x + dx;
       const dropY = y + dy;
+      const rect = {
+        left: dropX - this.sprite.body.width / 2,
+        right: dropX + this.sprite.body.width / 2,
+        top: dropY - this.sprite.body.height / 2,
+        bottom: dropY + this.sprite.body.height / 2,
+      };
+      if (reservedRectangles.some((reserved) =>
+        rect.left < reserved.right && rect.right > reserved.left &&
+        rect.top < reserved.bottom && rect.bottom > reserved.top)) continue;
       if (this.isDropPositionClear(dropX, dropY, carrierSprite)) return { x: dropX, y: dropY };
     }
     return null;
@@ -282,6 +301,7 @@ export class Crate {
     this.isCarried = false;
     this.isPushed = false;
     this.throwCarrier = null;
+    this.sprite.setAngle?.(0);
     this.sprite.setDepth(2);
     const body = this.sprite.body;
     body.reset(x, y);
@@ -418,9 +438,13 @@ export class Crate {
    * Per-frame while carried: held slightly above the player and drawn over them.
    * @param {Phaser.GameObjects.Sprite} carrierSprite
    */
-  followCarrier(carrierSprite) {
-    this.sprite.setPosition(carrierSprite.x, carrierSprite.y - 28);
-    this.sprite.setDepth(carrierSprite.depth + 1);
+  followCarrier(carrierSprite, stackIndex = 0, holdOffset = 22) {
+    this.sprite.setPosition(
+      carrierSprite.x,
+      carrierSprite.y - holdOffset - stackIndex * CRATE_STACK_SPACING,
+    );
+    this.sprite.setAngle?.(0);
+    this.sprite.setDepth(carrierSprite.depth + 1 + stackIndex);
   }
 
   distanceTo(x, y) {

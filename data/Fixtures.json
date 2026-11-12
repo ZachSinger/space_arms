@@ -75,9 +75,21 @@
     "id": "locker_single",
     "name": "LOCKER",
     "kind": "storage",
-    "w": 1,
-    "h": 2,
+    "w": 0.5625,
+    "h": 1.0625,
     "texture": "locker_single",
+    "facingTextures": {
+      "down": "locker_single",
+      "left": "locker_single_left",
+      "up": "locker_single_up",
+      "right": "locker_single_right"
+    },
+    "facingFootprints": {
+      "down": { "w": 0.5625, "h": 1.0625 },
+      "left": { "w": 0.375, "h": 1.0625 },
+      "up": { "w": 0.5625, "h": 1.0625 },
+      "right": { "w": 0.375, "h": 1.0625 }
+    },
     "capacity": 20,
     "price": 180,
     "licenseId": "lic_fixture_basics"

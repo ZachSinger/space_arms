@@ -89,6 +89,10 @@ function createScene(obstacles = []) {
             this.y = newY;
             return this;
           },
+          setAngle(angle) {
+            this.angle = angle;
+            return this;
+          },
           getBounds() {
             return {
               left: this.x - this.width / 2, right: this.x + this.width / 2,
@@ -101,6 +105,30 @@ function createScene(obstacles = []) {
   };
   return scene;
 }
+
+test("three carried crates stay straight, cover the lids below, and draw newest in front", () => {
+  const scene = createScene();
+  const lower = new Crate(scene, "item", 5, 100, 100);
+  const middle = new Crate(scene, "item", 5, 100, 100);
+  const upper = new Crate(scene, "item", 5, 100, 100);
+  const carrier = { x: 200, y: 160, depth: 8 };
+
+  upper.followCarrier(carrier, 2);
+  lower.followCarrier(carrier, 0);
+  middle.followCarrier(carrier, 1);
+
+  assert.ok(lower.sprite.depth > carrier.depth);
+  assert.ok(middle.sprite.depth > lower.sprite.depth);
+  assert.ok(upper.sprite.depth > middle.sprite.depth);
+  for (const [below, above] of [[lower, middle], [middle, upper]]) {
+    assert.equal(above.sprite.x, below.sprite.x);
+    assert.equal(above.sprite.angle, 0);
+    assert.ok(above.sprite.y < below.sprite.y);
+    const overlapHeight = above.sprite.y + above.sprite.height / 2 -
+      (below.sprite.y - below.sprite.height / 2);
+    assert.equal(overlapHeight, 10, "upper crate covers exactly the lower crate's 10px lid");
+  }
+});
 
 test("crate saving restores its contents, position, and in-flight velocity", () => {
   const original = new Crate(createScene(), "item", 5, 100, 100);
@@ -146,7 +174,7 @@ test("picking up a stationary crate and dropping it preserves contents", () => {
   assert.equal(crate.isCarried, true);
   assert.equal(body.enable, false);
   assert.deepEqual(body.velocity, { x: 0, y: 0 });
-  assert.deepEqual([crate.sprite.x, crate.sprite.y, crate.sprite.depth], [200, 132, 9]);
+  assert.deepEqual([crate.sprite.x, crate.sprite.y, crate.sprite.depth], [200, 138, 9]);
 
   crate.drop(200, 160, 160, 0, false);
   assert.equal(crate.isCarried, false);
@@ -482,12 +510,13 @@ test("drop position avoids corners and world bounds, or reports no room", () => 
   const crate = new Crate(createScene(walls), "item", 1, 200, 200);
   const corner = crate.findDropPosition(111, 111);
   assert.ok(corner);
-  assert.ok(corner.x >= 120 && corner.y >= 120);
+  // The 32x28 crate's edges stay clear of both walls.
+  assert.ok(corner.x >= 116 && corner.y >= 114);
   assert.ok(Math.hypot(corner.x - 111, corner.y - 111) <= INTERACT_RANGE);
 
   const clearCrate = new Crate(createScene(), "item", 1, 200, 200);
   assert.deepEqual(clearCrate.findDropPosition(200, 200), { x: 200, y: 200 });
-  assert.ok(clearCrate.findDropPosition(10, 200).x >= 20);
+  assert.ok(clearCrate.findDropPosition(10, 200).x >= 16);
   const enclosed = { enable: true, left: 0, right: 500, top: 0, bottom: 500 };
   const blockedCrate = new Crate(createScene([enclosed]), "item", 1, 200, 200);
   assert.equal(blockedCrate.findDropPosition(200, 200), null);

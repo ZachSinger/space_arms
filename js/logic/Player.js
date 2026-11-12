@@ -3,6 +3,7 @@
 // ==========================================
 // The directly controlled shopkeeper: WASD/arrow or controller movement, walking animations, and a trimmed
 // collision body. Collides with walls and fixtures but passes through customers.
+import { STACKED_CARRY_SPEED_MULTIPLIER, THREE_CRATE_CARRY_SPEED_MULTIPLIER } from "./CrateStack.js";
 
 export const PLAYER_SPRITE = Object.freeze({
   key: "player_mechanic",
@@ -11,18 +12,30 @@ export const PLAYER_SPRITE = Object.freeze({
   frameHeight: 96,
 });
 
+export const PLAYER_CARRY_SPRITE = Object.freeze({
+  key: "player_mechanic_carry",
+  path: "img/Icons_Extracted/Tileset/Characters/player_mechanic_carry.png",
+  frameWidth: PLAYER_SPRITE.frameWidth,
+  frameHeight: PLAYER_SPRITE.frameHeight,
+});
+
+// The bottom crate rests on the raised hands above the player's head.
+export const PLAYER_CRATE_HOLD_OFFSET = 42;
+
 const FACING_ROWS = Object.freeze({ down: 0, left: 1, right: 2, up: 3 });
 
 export function registerPlayerAnimations(anims) {
-  for (const [facing, row] of Object.entries(FACING_ROWS)) {
-    const key = `player_walk_${facing}`;
-    if (anims.exists(key)) continue;
-    anims.create({
-      key,
-      frames: [0, 1, 2, 1].map((column) => ({ key: PLAYER_SPRITE.key, frame: row * 3 + column })),
-      frameRate: 8,
-      repeat: -1,
-    });
+  for (const [sheet, prefix] of [[PLAYER_SPRITE, "player_walk"], [PLAYER_CARRY_SPRITE, "player_carry_walk"]]) {
+    for (const [facing, row] of Object.entries(FACING_ROWS)) {
+      const key = `${prefix}_${facing}`;
+      if (anims.exists(key)) continue;
+      anims.create({
+        key,
+        frames: [0, 1, 2, 1].map((column) => ({ key: sheet.key, frame: row * 3 + column })),
+        frameRate: 8,
+        repeat: -1,
+      });
+    }
   }
 }
 
@@ -40,12 +53,13 @@ export const PLAYER_DISPLAY_WIDTH = 64;
 export const PLAYER_DISPLAY_HEIGHT = 64;
 // Standing character height, excluding the sheet's transparent padding.
 export const PLAYER_CHARACTER_HEIGHT = 48;
+export const PLAYER_CHARACTER_WIDTH = 28;
 
 // px, on-screen collision box. Only the lower body collides, so the player's head can
 // overlap a shelf or counter drawn above them, as in most top-down games. The sprite
 // canvas has transparent padding, so the box is also trimmed to the narrowest facing.
-const BODY_WIDTH = 22;
-const BODY_HEIGHT = 20;
+export const PLAYER_BODY_WIDTH = 22;
+export const PLAYER_BODY_HEIGHT = 20;
 // px between the collision box and the bottom of the sprite canvas.
 const BODY_BOTTOM_GAP = 4;
 
@@ -53,6 +67,7 @@ export class Player {
   constructor(scene, spawnX, spawnY) {
     this.scene = scene;
     this.currentFacing = "down";
+    this.carryingPose = false;
 
     this.sprite = scene.add
       .sprite(spawnX, spawnY, PLAYER_SPRITE.key, 1)
@@ -85,10 +100,10 @@ export class Player {
   // Arcade Physics sizes and offsets use unscaled frame pixels.
   applyBodySize() {
     const { scaleX, scaleY } = this.sprite;
-    this.sprite.body.setSize(BODY_WIDTH / scaleX, BODY_HEIGHT / scaleY, false);
+    this.sprite.body.setSize(PLAYER_BODY_WIDTH / scaleX, PLAYER_BODY_HEIGHT / scaleY, false);
     this.sprite.body.setOffset(
-      (PLAYER_DISPLAY_WIDTH - BODY_WIDTH) / 2 / scaleX,
-      (PLAYER_DISPLAY_HEIGHT - BODY_BOTTOM_GAP - BODY_HEIGHT) / scaleY,
+      (PLAYER_DISPLAY_WIDTH - PLAYER_BODY_WIDTH) / 2 / scaleX,
+      (PLAYER_DISPLAY_HEIGHT - BODY_BOTTOM_GAP - PLAYER_BODY_HEIGHT) / scaleY,
     );
   }
 
@@ -141,6 +156,9 @@ export class Player {
       vy /= magnitude;
     }
 
+    const carriedCount = this.scene.carriedCrates?.length ?? Number(Boolean(this.scene.carriedCrate));
+    if (carriedCount >= 3) speed *= THREE_CRATE_CARRY_SPEED_MULTIPLIER;
+    else if (carriedCount > 1) speed *= STACKED_CARRY_SPEED_MULTIPLIER;
     this.sprite.body.setVelocity(vx * speed, vy * speed);
     this.sprite.anims.timeScale = speed / MOVE_SPEED;
     this.updateFacing(vx, vy);
@@ -152,9 +170,21 @@ export class Player {
       return;
     }
 
+    this.updateCarryPose();
     const facing = Math.abs(vx) > Math.abs(vy) ? (vx < 0 ? "left" : "right") : vy < 0 ? "up" : "down";
     this.currentFacing = facing;
-    this.sprite.play(`player_walk_${facing}`, true);
+    this.sprite.play(`${this.carryingPose ? "player_carry_walk" : "player_walk"}_${facing}`, true);
+  }
+
+  updateCarryPose() {
+    const carrying = Boolean(this.scene.carriedCrates?.length || this.scene.carriedCrate);
+    if (carrying === this.carryingPose) return;
+    this.carryingPose = carrying;
+    this.sprite.anims.stop();
+    this.sprite.setTexture(
+      carrying ? PLAYER_CARRY_SPRITE.key : PLAYER_SPRITE.key,
+      FACING_ROWS[this.currentFacing] * 3 + 1,
+    );
   }
 
   /**
@@ -168,6 +198,7 @@ export class Player {
   }
 
   forceFacing(facing) {
+    this.updateCarryPose();
     if (facing === this.currentFacing && !this.sprite.anims.isPlaying) return;
     this.currentFacing = facing;
     this.sprite.anims.stop();

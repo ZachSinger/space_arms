@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { STARTING_FIXTURES, fixtureAccessCells, fixtureCells, fixtureFacing, fixtureFootprint, cellKey, getFixtureType, migrateFixtureEntry, validateFixtureLayout, fixtureInteractionDistance } from "../js/logic/FixtureLayout.js";
+import { STARTING_FIXTURES, fixtureAccessCells, fixtureBounds, fixtureCells, fixtureFacing, fixtureFootprint, fixtureFrontClearance, fixturesOverlap, fixtureStandingSpot, cellKey, getFixtureType, migrateFixtureEntry, validateFixtureLayout, fixtureInteractionDistance } from "../js/logic/FixtureLayout.js";
 import { FixturePlacement } from "../js/logic/FixturePlacement.js";
 import { TileRoom } from "../js/logic/TileRoom.js";
 import { findGridPath } from "../js/logic/Pathfinder.js";
-import { getZone, getStoreDoorCell, getStoreDoorCells, getBackroomLink, TILE_SIZE } from "../js/logic/RoomLayout.js";
+import { getZone, getStoreDoorCell, getStoreDoorCells, getBackroomLink, getBackroomInteriorBounds, getLoadingPadBounds, TILE_SIZE } from "../js/logic/RoomLayout.js";
 
 test("shelf crates cannot enter placement mode in the backroom", () => {
   const messages = [];
@@ -93,6 +93,33 @@ test("the fixture placement preview uses the size for its current facing", () =>
   assert.deepEqual(rotations, [0, 1, 2, 3]);
 });
 
+test("the single-locker placement preview matches the smaller in-game art", () => {
+  const placement = Object.create(FixturePlacement.prototype);
+  const ghost = {
+    setDisplaySize(width, height) { this.width = width; this.height = height; return this; },
+    setAlpha() { return this; },
+    setDepth() { return this; },
+  };
+  const original = {
+    type: "locker_single", x: 96, y: 128, sprite: { setAlpha() {} },
+  };
+  placement.scene = {
+    endRegisterSession() {},
+    fixtures: { displayName: () => "LOCKER" },
+    player: { sprite: { body: { stop() {} } } },
+    restockCrates: [],
+    add: { image: () => ghost },
+  };
+  placement.cancel = () => {};
+  placement.refreshPreview = () => {};
+  placement.nameElement = {};
+  placement.graphics = { setVisible() {} };
+  placement.uiWindow = { openWindow() {} };
+
+  placement.start("locker_single", original, null);
+  assert.deepEqual([ghost.width, ghost.height], [36, 68]);
+});
+
 test("fixture interaction covers its entire front but not its sides or back", () => {
   const shelf = { type: "shelf_universal", gx: 9, gy: 2 };
   const left = 9 * TILE_SIZE;
@@ -108,9 +135,13 @@ test("fixture interaction covers its entire front but not its sides or back", ()
 
 function createRoom() {
   const scene = {
-    add: { image: () => ({
-      setDisplaySize() { return this; },
+    add: { image: (x, y) => ({
+      x, y,
+      setDisplaySize(width, height) { this.width = width; this.height = height; return this; },
+      setOrigin() { return this; },
+      setCrop() { return this; },
       setDepth() { return this; },
+      setTexture() { return this; },
       destroy() {},
     }) },
     physics: { add: { staticGroup: () => ({ add() {}, remove() {} }) } },
@@ -126,15 +157,15 @@ function createRoom() {
     cellKey(link.backroom),
   ]);
   const reservedCells = new Set(doorwayCells);
-  const pad = getZone("loading_pad");
-  for (let gy = pad.gridY + 1; gy < pad.gridY + pad.gridH - 1; gy += 1) {
-    for (let gx = pad.gridX + 1; gx < pad.gridX + pad.gridW - 1; gx += 1) {
-      reservedCells.add(`${gx},${gy}`);
-    }
-  }
   return {
     room, entrance, reservedCells, doorwayCells, links: [[link.shop, link.backroom]],
+    get backroomBounds() { return getBackroomInteriorBounds(room.zones); },
+    reservedRectangles: [getLoadingPadBounds()],
     isWalkable: (gx, gy) => room.isWalkable(gx, gy),
+    isWall: (gx, gy) => {
+      const wall = room.wallCells.get(`${gx},${gy}`);
+      return Boolean(wall && !wall.door);
+    },
   };
 }
 
@@ -150,6 +181,74 @@ test("a new game starts with lockers and a register but no shelves", () => {
   assert.equal(STARTING_FIXTURES.filter((entry) => getFixtureType(entry.type).kind === "register").length, 1);
   const result = validateFixtureLayout(STARTING_FIXTURES, createRoom());
   assert.equal(result.valid, true, result.reason);
+});
+
+test("starting lockers touch side by side without blocking their standing space", () => {
+  const lockers = STARTING_FIXTURES.filter((entry) => entry.type === "locker_single");
+  assert.equal(fixtureBounds(lockers[0]).right, fixtureBounds(lockers[1]).left);
+  assert.equal(fixturesOverlap(lockers[0], lockers[1]), false);
+  const result = validateFixtureLayout(STARTING_FIXTURES, createRoom());
+  assert.equal(result.valid, true, result.reason);
+  assert.equal(result.blockedCells.has("1,102"), false);
+  assert.equal(fixtureAccessCells(lockers[1]).length, 1, "a narrow front between cell centers still has access");
+});
+
+test("locker standing space follows its facing and cannot be covered by another locker", () => {
+  for (let rotation = 0; rotation < 4; rotation++) {
+    const locker = { type: "locker_single", gx: 10, gy: 10, rotation };
+    const bounds = fixtureBounds(locker);
+    const front = fixtureFrontClearance(locker);
+    const sideways = rotation % 2 === 1;
+    assert.equal((sideways ? front.right - front.left : front.bottom - front.top) * TILE_SIZE,
+      sideways ? 28 : 48);
+    const spot = fixtureStandingSpot(locker, fixtureAccessCells(locker)[0]);
+    assert.equal(fixtureInteractionDistance(locker, spot), sideways ? 14 : 24);
+    const intruder = {
+      type: "locker_single",
+      gx: front.left,
+      gy: front.top,
+    };
+    if (rotation === 1) intruder.gx = bounds.left - fixtureFootprint(intruder).w;
+    if (rotation === 2) intruder.gy = bounds.top - fixtureFootprint(intruder).h;
+    assert.equal(fixturesOverlap(locker, intruder), true);
+    assert.equal((bounds.right - bounds.left) * TILE_SIZE, sideways ? 24 : 36);
+  }
+});
+
+test("lockers tuck into the backroom's top wall as far as shelves do, and no farther", () => {
+  const register = STARTING_FIXTURES.at(-1);
+  const layout = (gy, rotation = 0) => [{ id: "locker", type: "locker_single", gx: 1, gy, rotation }, register];
+  assert.equal(validateFixtureLayout(layout(100.5), createRoom()).valid, true);
+  assert.match(validateFixtureLayout(layout(100.375), createRoom()).reason, /Too far into the wall/);
+  assert.equal(validateFixtureLayout(layout(100.5, 2), createRoom()).valid, false, "only a locker facing out of the wall may tuck");
+});
+
+test("all locker facings have reachable standing space in the compact backroom", () => {
+  for (const [rotation, gx, gy] of [[0, 1, 101], [1, 2.625, 101.875], [2, 1, 101.875], [3, 1, 101.875]]) {
+    const locker = { id: "locker", type: "locker_single", gx, gy, rotation };
+    const result = validateFixtureLayout([locker, STARTING_FIXTURES.at(-1)], createRoom());
+    assert.equal(result.valid, true, `${fixtureFacing(locker)}: ${result.reason}`);
+    const access = fixtureAccessCells(locker)[0];
+    assert.equal(result.blockedCells.has(cellKey(access)), false);
+  }
+});
+
+test("backroom walls follow the pad's edge and upgrades keep the exit", () => {
+  const { room } = createRoom();
+  const assertRightWall = (gx, left) => {
+    const wall = room.wallCells.get(`${gx},102`).image;
+    assert.equal(wall.x - wall.width / 2, left);
+    assert.equal(wall.width, TILE_SIZE);
+  };
+  assertRightWall(3, 192);
+  const exit = "2,100";
+  const pad = getLoadingPadBounds();
+  for (const [id, gx, left] of [["backroom_upgrade_a", 5, 320], ["backroom_upgrade_b", 7, 448], ["backroom_upgrade_c", 9, 576]]) {
+    room.unlockZone(id);
+    assertRightWall(gx, left);
+    assert.equal(room.wallCells.get(exit).door, true);
+    assert.deepEqual(getLoadingPadBounds(), pad);
+  }
 });
 
 test("the starting layout has accessible fronts, a register back, and six queue positions", () => {
@@ -242,7 +341,7 @@ test("fixtures can move without mutating the old layout", () => {
   assert.deepEqual(original[0], TEST_SHELF);
   assert.equal(validateFixtureLayout(moved("register", 19, 4), createRoom()).valid, true);
   assert.equal(validateFixtureLayout(moved("storage_demo_01", 18, 5), createRoom()).valid, true);
-  assert.equal(validateFixtureLayout(moved("storage_demo_01", 3, 104), createRoom()).valid, true);
+  assert.equal(validateFixtureLayout(moved("storage_demo_01", 1, 101.03125), createRoom()).valid, true);
 });
 
 test("placement rejects walls, locked rooms, overlaps, blocked fronts, and obstructed register backs", () => {
@@ -305,7 +404,7 @@ test("shelves can be placed near the front door if they preserve the route to th
 
 test("otherwise valid layouts cannot leave an isolated floor pocket", () => {
   const options = createRoom();
-  for (const [gx, gy] of [[2, 106], [1, 105], [1, 107]]) options.room.addWall(gx, gy, "wall", true);
+  for (const [gx, gy] of [[20, 6], [21, 5], [21, 7]]) options.room.addWall(gx, gy, "wall", true);
   const result = validateFixtureLayout(initialLayout(), options);
   assert.equal(result.valid, false);
   assert.match(result.reason, /cuts off/);
@@ -325,7 +424,7 @@ test("expansion unlock preserves authored walls and does not unlock a new game's
 
 test("malformed layouts cannot bypass placement validation", () => {
   assert.equal(validateFixtureLayout([], createRoom()).valid, false);
-  assert.equal(validateFixtureLayout(moved("fixture_demo_01", 14.5, 3), createRoom()).valid, false);
+  assert.equal(validateFixtureLayout(moved("fixture_demo_01", 14.3, 3), createRoom()).valid, false);
   const duplicate = initialLayout();
   duplicate[1] = { ...duplicate[0] };
   assert.equal(validateFixtureLayout(duplicate, createRoom()).valid, false);
@@ -448,18 +547,64 @@ test("invalid rotations are rejected", () => {
   }
 });
 
+test("fixtures can sit between floor squares in eighth-of-a-tile steps", () => {
+  const between = { ...TEST_SHELF, gx: 16.5, gy: 5.25 };
+  // Every square it covers by more than a sliver is blocked; its front is the next clear row.
+  assert.deepEqual(fixtureCells(between).map(cellKey), ["16,5", "17,5", "18,5", "16,6", "17,6", "18,6"]);
+  assert.deepEqual(fixtureAccessCells(between), [{ gx: 16, gy: 7 }, { gx: 17, gy: 7 }]);
+  // Shoppers still stand half a tile from its front edge, lined up with the shelf itself.
+  assert.deepEqual(fixtureStandingSpot(between, { gx: 16, gy: 7 }),
+    { x: 17 * TILE_SIZE, y: 6.75 * TILE_SIZE });
+  assert.deepEqual(fixtureStandingSpot(between, { gx: 17, gy: 7 }),
+    { x: 18 * TILE_SIZE, y: 6.75 * TILE_SIZE });
+  assert.deepEqual(fixtureStandingSpot(TEST_SHELF, { gx: 16, gy: 7 }),
+    { x: 16.5 * TILE_SIZE, y: 7.5 * TILE_SIZE }, "on whole squares, nothing changes");
+  // An eighth of a tile over a square leaves it walkable.
+  assert.deepEqual(fixtureCells({ ...TEST_SHELF, gx: 15.875, gy: 5.125 }).map(cellKey), ["16,5", "17,5"]);
+
+  const layout = initialLayout().map((entry) => entry.id === TEST_SHELF.id ? between : entry);
+  const result = validateFixtureLayout(layout, createRoom());
+  assert.equal(result.valid, true, result.reason);
+  assert.deepEqual(result.access.get(TEST_SHELF.id), { gx: 17, gy: 7 });
+  for (const gx of [16.1, Number.NaN]) {
+    const bad = initialLayout().map((entry) => entry.id === TEST_SHELF.id ? { ...entry, gx } : entry);
+    assert.equal(validateFixtureLayout(bad, createRoom()).valid, false);
+  }
+  // Fixtures may not overlap even by part of a square.
+  const overlapping = [...layout, { id: "shelf_2", type: "shelf_starter_2x1", gx: 18.375, gy: 5.25 }];
+  assert.match(validateFixtureLayout(overlapping, createRoom()).reason, /cannot overlap/);
+  const touching = [...layout, { id: "shelf_2", type: "shelf_starter_2x1", gx: 18.5, gy: 5.25 }];
+  assert.equal(validateFixtureLayout(touching, createRoom()).valid, true);
+});
+
+test("a shelf facing down can tuck its back halfway into the wall behind it", () => {
+  const options = createRoom();
+  const floorTop = getZone("sales_floor").gridY + 2;
+  const gx = 18;
+  assert.equal(options.isWall(gx, floorTop - 1), true);
+  const at = (gy, rotation = 0) => validateFixtureLayout(
+    initialLayout().map((entry) => entry.id === TEST_SHELF.id ? { ...entry, gx, gy, rotation } : entry),
+    options,
+  );
+  const tucked = at(floorTop - 0.5);
+  assert.equal(tucked.valid, true, tucked.reason);
+  assert.equal(tucked.blockedCells.has(`${gx},${floorTop - 1}`), false, "the wall square isn't floor");
+  assert.equal(tucked.blockedCells.has(`${gx},${floorTop}`), true);
+  assert.deepEqual(tucked.access.get(TEST_SHELF.id), { gx: gx + 1, gy: floorTop + 1 });
+  assert.match(at(floorTop - 0.625).reason, /Too far into the wall/);
+  // Only a fixture's back goes against the wall.
+  assert.equal(at(floorTop - 0.5, 1).valid, false);
+});
+
 test("registers and shelves stay on the sales floor; storage can go anywhere", () => {
-  for (const [id, gx, gy] of [["register", 1, 104], ["fixture_demo_01", 1, 104]]) {
+  for (const [id, gx, gy] of [["register", 1, 101], ["fixture_demo_01", 1, 101]]) {
     const result = validateFixtureLayout(moved(id, gx, gy), createRoom());
     assert.equal(result.valid, false, `${id} at ${gx},${gy}`);
     assert.match(result.reason, /sales floor/);
   }
-  assert.equal(validateFixtureLayout(moved("storage_demo_01", 1, 104), createRoom()).valid, true);
+  assert.equal(validateFixtureLayout(moved("storage_demo_01", 1, 101.03125), createRoom()).valid, true);
   assert.equal(validateFixtureLayout(moved("storage_demo_01", 18, 5), createRoom()).valid, true);
 
-  // Older saves with a register in the back still load so it can be moved out.
-  const legacy = validateFixtureLayout(moved("register", 1, 104), { ...createRoom(), requireSalesFloor: false });
-  assert.equal(legacy.valid, true, legacy.reason);
 });
 
 test("the backroom only connects to the shop through its door pair", () => {
@@ -468,7 +613,7 @@ test("the backroom only connects to the shop through its door pair", () => {
   const walkable = (gx, gy) => options.room.isWalkable(gx, gy);
   assert.equal(findGridPath(options.entrance, link.backroom, walkable), null);
   assert.ok(findGridPath(options.entrance, link.shop, walkable));
-  assert.ok(findGridPath(link.backroom, { gx: 2, gy: 109 }, walkable));
+  assert.ok(findGridPath(link.backroom, { gx: 2, gy: 104 }, walkable));
   const unlinked = validateFixtureLayout(initialLayout(), { ...options, links: [] });
   assert.equal(unlinked.valid, false);
   assert.match(unlinked.reason, /LOCKER accessible/);

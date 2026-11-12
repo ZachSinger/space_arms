@@ -1,95 +1,55 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  SHOP_ATLAS, SHOP_BACK_WALL_FACE, atlasSourceRect, parseTileCode, registerShopTiles,
-  shopBackWallKey, shopEdgeWallKey, shopTileKey, shopWallStack, sourcePixel,
-} from "../js/logic/ShopTiles.js";
-import { SHOP_BACK_WALL_HEIGHT } from "../js/logic/RoomLayout.js";
+import { SHOP_TILES, SHOP_TILE_ASSETS, shopWallStack } from "../js/logic/ShopTiles.js";
+import { BACKROOM_TILES, backroomFloorArt, backroomWallStack } from "../js/logic/BackroomTiles.js";
 
-test("tiles are cut from the 32px atlas with its 4px margin and 8px spacing", () => {
-  assert.deepEqual(atlasSourceRect(1), { x: 4, y: 4, size: 32 });
-  assert.deepEqual(atlasSourceRect(21), { x: 4, y: 84, size: 32 });
-  assert.deepEqual(atlasSourceRect(86), { x: 204, y: 324, size: 32 });
+// Open area: columns 12-22, rows 0-8 (the starting Sales Floor).
+const isOpen = (gx, gy) => gx >= 12 && gx <= 22 && gy >= 0 && gy <= 8;
+
+test("every outside wall is the riveted border", () => {
+  assert.deepEqual(shopWallStack(12, 4, isOpen), [SHOP_TILES.border], "left side");
+  assert.deepEqual(shopWallStack(22, 4, isOpen), [SHOP_TILES.border], "right side");
+  assert.deepEqual(shopWallStack(14, 0, isOpen), [SHOP_TILES.border], "top");
+  assert.deepEqual(shopWallStack(14, 8, isOpen), [SHOP_TILES.border], "bottom");
+  assert.deepEqual(shopWallStack(12, 1, isOpen), [SHOP_TILES.border], "corners stay border");
 });
 
-test("tile codes read Tiled's flips, and flipped pixels come from the right source pixel", () => {
-  assert.deepEqual(parseTileCode("86HVD"), { tileId: 86, flipH: true, flipV: true, diagonal: true });
-  assert.deepEqual(parseTileCode("3"), { tileId: 3, flipH: false, flipV: false, diagonal: false });
-  assert.throws(() => parseTileCode("x"));
-  const none = { flipH: false, flipV: false, diagonal: false };
-  assert.deepEqual(sourcePixel(1, 2, none), [1, 2]);
-  assert.deepEqual(sourcePixel(0, 0, { ...none, flipH: true }), [31, 0]);
-  assert.deepEqual(sourcePixel(0, 0, { ...none, flipV: true }), [0, 31]);
-  // Diagonal plus left-right is a quarter turn clockwise: the top-left corner moves to the top right.
-  assert.deepEqual(sourcePixel(31, 0, { flipH: true, flipV: false, diagonal: true }), [0, 0]);
+test("the back wall's lower row shows the wall's face, with lights either side of the front door", () => {
+  assert.deepEqual(shopWallStack(14, 1, isOpen), [SHOP_TILES.backWall]);
+  assert.deepEqual(shopWallStack(15, 1, isOpen, 16), [SHOP_TILES.lightsLeftOfDoor]);
+  assert.deepEqual(shopWallStack(17, 1, isOpen, 16), [SHOP_TILES.lightsRightOfDoor]);
+  assert.deepEqual(shopWallStack(18, 1, isOpen, 16), [SHOP_TILES.backWall]);
 });
 
-test("wall art hugs the open area: sides, a two-tile back wall with columns, and a front wall", () => {
-  // Open area: columns 12-22, rows 0-8 (the starting Sales Floor).
-  const isOpen = (gx, gy) => gx >= 12 && gx <= 22 && gy >= 0 && gy <= 8;
-  assert.deepEqual(shopWallStack(12, 4, isOpen), [shopEdgeWallKey("west")]);
-  assert.deepEqual(shopWallStack(12, 0, isOpen), [shopEdgeWallKey("west")], "corners use the left wall");
-  assert.deepEqual(shopWallStack(22, 4, isOpen), [shopEdgeWallKey("east")]);
-  assert.deepEqual(shopWallStack(14, 0, isOpen), [shopBackWallKey("upper")]);
-  assert.deepEqual(shopWallStack(14, 1, isOpen), [shopBackWallKey("lower")]);
-  assert.deepEqual(shopWallStack(15, 0, isOpen), [shopBackWallKey("columnUpper")], "ShopA's column");
-  assert.deepEqual(shopWallStack(15, 1, isOpen), [shopBackWallKey("columnLower")]);
-  assert.deepEqual(shopWallStack(14, 8, isOpen), [shopEdgeWallKey("bottom")]);
+test("unlocking a side zone turns the old side wall's face cell into back wall", () => {
+  const withWest = (gx, gy) => isOpen(gx, gy) || (gx >= 6 && gx <= 11 && gy >= 0 && gy <= 8);
+  assert.deepEqual(shopWallStack(12, 1, withWest), [SHOP_TILES.backWall]);
+  assert.deepEqual(shopWallStack(6, 1, withWest), [SHOP_TILES.border]);
 });
 
-function registerWithFakeTextures() {
-  const canvases = new Map();
-  const textures = {
-    exists: (key) => key === SHOP_ATLAS.key || canvases.has(key),
-    get: (key) => ({ getSourceImage: () => (key === SHOP_ATLAS.key ? {} : { key }) }),
-    createCanvas(key, width, height) {
-      const canvas = {
-        width,
-        height,
-        draws: [],
-        context: {
-          drawImage(image, ...rect) { canvas.draws.push({ key: image.key, rect }); },
-          getImageData: () => ({ data: new Uint8ClampedArray(width * height * 4) }),
-          createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
-          putImageData() {},
-        },
-        refresh() {},
-        setFilter() {},
-      };
-      canvases.set(key, canvas);
-      return canvas;
-    },
-  };
-
-  assert.equal(registerShopTiles(textures), true);
-  return canvases;
-}
-
-// drawImage(source x, y, w, h, dest x, y, w, h): rows are copied 1:1, never resized.
-const draw = (canvas, code) => canvas.draws.find((entry) => entry.key === shopTileKey(code))?.rect;
-
-test("the back wall's two cells split its wall art evenly, leaving out the tiles' floor rows", () => {
-  const canvases = registerWithFakeTextures();
-  const upper = canvases.get(shopBackWallKey("upper"));
-  const lower = canvases.get(shopBackWallKey("lower"));
-  assert.deepEqual([upper.width, upper.height, lower.width, lower.height], [32, 28, 32, 28]);  assert.deepEqual(draw(upper, "21"), [0, 0, 32, 28, 0, 0, 32, 28]);
-  assert.equal(draw(upper, "21V"), undefined);
-  assert.deepEqual(draw(lower, "21"), [0, 28, 32, 4, 0, 0, 32, 4]);
-  assert.deepEqual(draw(lower, "21V"), [0, 0, 32, 24, 0, 4, 32, 24], "the lower tile's floor rows are left out");
-  assert.deepEqual(draw(canvases.get(shopBackWallKey("columnLower")), "38"), [0, 0, 32, 24, 0, 4, 32, 24]);
-  assert.equal(draw(lower, "38"), undefined);
-  assert.equal(SHOP_BACK_WALL_FACE.bottom, SHOP_BACK_WALL_HEIGHT,
-    "the wall and door reach the first row fixtures can be placed on");
+test("each shop tile loads from the extracted art folder", () => {
+  assert.deepEqual(SHOP_TILE_ASSETS.find((asset) => asset.key === SHOP_TILES.border),
+    { key: "shop_border", path: "img/Icons_Extracted/Tileset/Shop/shop_border.png" });
+  assert.equal(SHOP_TILE_ASSETS.length, Object.keys(SHOP_TILES).length);
 });
 
-test("side and front walls leave out the 3px strips beside the wall, so fixtures sit flush", () => {
-  const canvases = registerWithFakeTextures();
-  const west = canvases.get(shopEdgeWallKey("west"));
-  const east = canvases.get(shopEdgeWallKey("east"));
-  const bottom = canvases.get(shopEdgeWallKey("bottom"));
-  assert.deepEqual([west.width, west.height, east.width, east.height], [26, 32, 26, 32]);
-  assert.deepEqual([bottom.width, bottom.height], [32, 26]);
-  assert.deepEqual(draw(west, "86HV"), [3, 0, 26, 32, 0, 0, 26, 32]);
-  assert.deepEqual(draw(east, "3D"), [3, 0, 26, 32, 0, 0, 26, 32]);
-  assert.deepEqual(draw(bottom, "86VD"), [0, 3, 32, 26, 0, 0, 32, 26]);
+// Backroom at its starting size: columns 0-5, rows 100-111; walls ring the outside.
+const backroomOpen = (gx, gy) => gx >= 0 && gx <= 5 && gy >= 100 && gy <= 111;
+const backroomFloor = (gx, gy) => gx >= 1 && gx <= 4 && gy >= 101 && gy <= 110;
+
+test("the backroom's top wall shows its face; every other wall is the black border", () => {
+  assert.deepEqual(backroomWallStack(2, 100, backroomOpen), [BACKROOM_TILES.wall]);
+  assert.deepEqual(backroomWallStack(0, 100, backroomOpen), [BACKROOM_TILES.border], "corner");
+  assert.deepEqual(backroomWallStack(5, 104, backroomOpen), [BACKROOM_TILES.border], "side");
+  assert.deepEqual(backroomWallStack(2, 111, backroomOpen), [BACKROOM_TILES.border], "bottom");
+});
+
+test("backroom floor is edged where it meets a side or bottom wall", () => {
+  assert.equal(backroomFloorArt(2, 104, backroomFloor), BACKROOM_TILES.floor);
+  assert.equal(backroomFloorArt(1, 104, backroomFloor), BACKROOM_TILES.floorLeft);
+  assert.equal(backroomFloorArt(4, 104, backroomFloor), BACKROOM_TILES.floorRight);
+  assert.equal(backroomFloorArt(2, 110, backroomFloor), BACKROOM_TILES.floorBottom);
+  assert.equal(backroomFloorArt(1, 110, backroomFloor), BACKROOM_TILES.floorBottomLeft);
+  assert.equal(backroomFloorArt(4, 110, backroomFloor), BACKROOM_TILES.floorBottomRight);
+  assert.equal(backroomFloorArt(2, 101, backroomFloor), BACKROOM_TILES.floor, "no edge under the top wall");
 });

@@ -2,16 +2,21 @@
 // FILE: FixturePlacement.js
 // ==========================================
 // Placement mode for moving an existing fixture or unpacking a fixture crate: a ghost
-// follows the cursor (or, on a controller, steps tile by tile) with valid/invalid and
-// access-cell highlights, and left-click or A commits. Only allowed while the store is closed.
+// follows the cursor in small steps (on a controller, a quarter tile at a time) with
+// valid/invalid and access-cell highlights, and left-click or A commits. Only allowed while
+// the store is closed.
 import { UIWindow } from "./UIWindow.js";
 import { TILE_SIZE } from "./RoomLayout.js";
-import { getFixtureType, fixtureAccessCells, fixtureFootprint } from "./FixtureLayout.js";
+import {
+  getFixtureType, fixtureAccessCells, fixtureFootprint, fixtureFrontClearance, FIXTURE_POSITION_STEP, snapFixturePosition,
+} from "./FixtureLayout.js";
 import { getFixtureTexture, hasFacingTextures } from "./FixtureTexture.js";
 import { PAD } from "./GamepadInput.js";
 import { getInputDevice } from "./InputDevice.js";
 
 const PAD_STEPS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+// Tiles the fixture moves per controller step.
+const PAD_STEP = 1 / 4;
 
 export class FixturePlacement {
   constructor(scene) {
@@ -27,9 +32,9 @@ export class FixturePlacement {
       contentHTML: `
         <p data-placement-name></p>
         <p class="fixture-stock-meta kbd-only">Left-click to place. R to turn it. Right-click or Esc to cancel.
-          WASD / arrow keys pan the camera. The blue squares in front must stay clear.</p>
+          WASD / arrow keys pan the camera. Keep the blue area in front clear for someone to stand.</p>
         <p class="fixture-stock-meta pad-only">Move it with the left stick or D-pad. A to place. Y to turn it.
-          B to cancel. The blue squares in front must stay clear.</p>
+          B to cancel. Keep the blue area in front clear for someone to stand.</p>
         <p data-placement-status role="status"></p>
         <button type="button" class="action-btn" data-cancel-fixture-move>CANCEL</button>
       `,
@@ -50,7 +55,7 @@ export class FixturePlacement {
         return;
       }
       if (!pointer.leftButtonDown()) return;
-      this.padCell = null;
+      this.padPoint = null;
       this.updatePreview(pointer);
       this.confirm();
     };
@@ -64,7 +69,7 @@ export class FixturePlacement {
       if (!this.active) return;
       this.mouseClient = { x: event.clientX, y: event.clientY };
       // Real mouse movement takes over from the controller.
-      if (event.isTrusted) this.padCell = null;
+      if (event.isTrusted) this.padPoint = null;
       this.updateWindowTransparency();
     };
     document.addEventListener("mousemove", this.handleDocumentMouseMove, true);
@@ -90,15 +95,16 @@ export class FixturePlacement {
   }
 
   /**
-   * Controller: D-pad or left stick steps the fixture a tile, A places, Y turns, B cancels.
+   * Controller: D-pad or left stick moves lockers two pixels, other fixtures a quarter tile.
    * @param {import("./GamepadInput.js").GamepadInput} pad
    */
   handlePad(pad) {
     if (!this.active) return;
-    if (pad.navDirection || pad.justPressed(PAD.A) || pad.justPressed(PAD.Y)) this.usePadCell();
+    if (pad.navDirection || pad.justPressed(PAD.A) || pad.justPressed(PAD.Y)) this.usePadPoint();
     if (pad.navDirection) {
       const [dx, dy] = PAD_STEPS[pad.navDirection];
-      this.padCell = { gx: this.padCell.gx + dx, gy: this.padCell.gy + dy };
+      const step = this.spec.id === "locker_single" ? FIXTURE_POSITION_STEP : PAD_STEP;
+      this.padPoint = { x: this.padPoint.x + dx * step, y: this.padPoint.y + dy * step };
       this.refreshPreview();
     }
     if (pad.justPressed(PAD.Y)) this.rotate();
@@ -106,11 +112,11 @@ export class FixturePlacement {
     else if (pad.justPressed(PAD.B)) this.cancel();
   }
 
-  // Switch from the mouse to tile stepping, starting where the preview already is.
-  usePadCell() {
-    if (this.padCell) return;
+  // Switch from the mouse to controller steps, starting where the preview already is.
+  usePadPoint() {
+    if (this.padPoint) return;
     const { w, h } = fixtureFootprint({ type: this.spec.id, rotation: this.rotation });
-    this.padCell = { gx: this.placement.gx + Math.floor(w / 2), gy: this.placement.gy + Math.floor(h / 2) };
+    this.padPoint = { x: this.placement.gx + w / 2, y: this.placement.gy + h / 2 };
   }
 
   // Faded windows ignore the pointer, so hover is tested against their bounds instead.
@@ -138,6 +144,11 @@ export class FixturePlacement {
     }
     const original = this.scene.fixtures.get(id);
     if (!original) throw new Error(`Unknown fixture: ${id}`);
+    const areaBlock = this.scene.getFixtureMoveAreaBlockReason(original);
+    if (areaBlock) {
+      this.scene.showShopMessage(areaBlock);
+      return false;
+    }
     return this.start(original.type, original, null);
   }
 
@@ -192,17 +203,17 @@ export class FixturePlacement {
     this.uiWindow.openWindow();
     this.mouseClient = null;
     // On a controller the fixture starts where it stands (or where its crate is).
-    this.padCell = getInputDevice() === "gamepad"
-      ? { gx: Math.floor(x / TILE_SIZE), gy: Math.floor(y / TILE_SIZE) }
+    this.padPoint = getInputDevice() === "gamepad"
+      ? { x: snapFixturePosition(x / TILE_SIZE), y: snapFixturePosition(y / TILE_SIZE) }
       : null;
     this.refreshPreview();
     return true;
   }
 
-  // Follow the controller's tile if it's in use, else the mouse pointer.
+  // Follow the controller's point if it's in use, else the mouse pointer.
   refreshPreview() {
-    if (this.padCell) {
-      this.updatePreviewAt((this.padCell.gx + 0.5) * TILE_SIZE, (this.padCell.gy + 0.5) * TILE_SIZE);
+    if (this.padPoint) {
+      this.updatePreviewAt(this.padPoint.x * TILE_SIZE, this.padPoint.y * TILE_SIZE);
     } else {
       this.updatePreview(this.scene.input.activePointer);
     }
@@ -227,8 +238,8 @@ export class FixturePlacement {
     this.placement = {
       id: this.original?.id ?? this.scene.fixtures.nextId(this.spec.id),
       type: this.spec.id,
-      gx: Math.floor(worldX / TILE_SIZE) - Math.floor(w / 2),
-      gy: Math.floor(worldY / TILE_SIZE) - Math.floor(h / 2),
+      gx: snapFixturePosition(worldX / TILE_SIZE - w / 2),
+      gy: snapFixturePosition(worldY / TILE_SIZE - h / 2),
       rotation: this.rotation,
     };
     const { id, gx, gy, rotation } = this.placement;
@@ -249,8 +260,14 @@ export class FixturePlacement {
     const accessCells = this.spec.kind === "register"
       ? [...fixtureAccessCells(this.placement), ...fixtureAccessCells(this.placement, true)]
       : fixtureAccessCells(this.placement);
-    for (const cell of accessCells) {
-      this.graphics.strokeRect(cell.gx * TILE_SIZE + 3, cell.gy * TILE_SIZE + 3, TILE_SIZE - 6, TILE_SIZE - 6);
+    const clearance = fixtureFrontClearance(this.placement);
+    if (clearance) {
+      this.graphics.strokeRect(clearance.left * TILE_SIZE, clearance.top * TILE_SIZE,
+        (clearance.right - clearance.left) * TILE_SIZE, (clearance.bottom - clearance.top) * TILE_SIZE);
+    } else {
+      for (const cell of accessCells) {
+        this.graphics.strokeRect(cell.gx * TILE_SIZE + 3, cell.gy * TILE_SIZE + 3, TILE_SIZE - 6, TILE_SIZE - 6);
+      }
     }
     this.ghost.setPosition(x + w * TILE_SIZE / 2, y + h * TILE_SIZE / 2);
     if (hasFacingTextures(this.spec)) {
