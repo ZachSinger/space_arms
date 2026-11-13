@@ -248,9 +248,10 @@ test("missing items and icon textures report explicit errors", () => {
   assert.equal(state.images.length, 0);
 });
 
-test("the game instantiates icons while the deprecated box display remains available", () => {
+test("the game draws stock highlights, not the retired icon or box displays", () => {
   const scene = readFileSync(new URL("../js/scenes/game.js", import.meta.url), "utf8");
-  assert.match(scene, /fixture\.stockDisplay = new ShelfIconDisplay\(/);
+  assert.match(scene, /fixture\.stockDisplay = new ShelfAttentionHighlight\(/);
+  assert.doesNotMatch(scene, /\bShelfIconDisplay\b/);
   assert.doesNotMatch(scene, /\bShelfStockDisplay\b/);
   const legacy = readFileSync(new URL("../js/logic/ShelfStockDisplay.js", import.meta.url), "utf8");
   assert.match(legacy, /@deprecated/);

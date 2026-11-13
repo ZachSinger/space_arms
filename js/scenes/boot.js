@@ -57,7 +57,7 @@ export class BootScene extends Phaser.Scene {
     registerPlayerAnimations(this.anims);
     registerCustomerAnimations(this.textures, this.anims);
     for (const { key } of tilesetManifest) {
-      if (key.startsWith("shelf_category_") || key.startsWith("shelf_budget_") ||
+      if (key.startsWith("shelf_") ||
         key.startsWith("register_basic_") || key.startsWith("locker_single")) {
         this.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);
       }

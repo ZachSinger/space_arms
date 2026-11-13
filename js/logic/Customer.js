@@ -11,6 +11,7 @@ import {
   pickRandomCustomerCharacter,
   showCharacterFacing,
 } from "./CustomerSprites.js";
+import { CUSTOMER_COLLISION_HEIGHT, CUSTOMER_COLLISION_WIDTH } from "./CharacterDimensions.js";
 import { BARGAIN_PRICE_RATIO, createCustomerBuyList } from "./CustomerBuyLists.js";
 import { transferItems } from "./InventoryTransfer.js";
 import { sumMoney } from "./Money.js";
@@ -64,8 +65,8 @@ export function getPatienceLevel(fraction) {
 
 // px, a customer's footprint: their collision box, and the size the register and line spacing
 // plan around. The walking art is drawn larger around it (CustomerSprites.js).
-export const SPRITE_DISPLAY_WIDTH = 46;
-export const SPRITE_DISPLAY_HEIGHT = 48;
+export const SPRITE_DISPLAY_WIDTH = CUSTOMER_COLLISION_WIDTH;
+export const SPRITE_DISPLAY_HEIGHT = CUSTOMER_COLLISION_HEIGHT;
 
 /**
  * One customer's sprite, shopping state machine, and patience bubble.

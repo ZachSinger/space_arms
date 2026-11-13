@@ -62,13 +62,27 @@ the game window, so review them before sharing.
 
 ## Working with the assistant
 
-Lockers show occupied/total storage capacity on the top edge of their front (for example,
-`7/20`). This counts the space used by the items, not the number of items. The count
+Press `\` to enable or disable the translucent solid green placement overlay. It appears only
+while moving or placing a fixture and shows the floor that the fixture's body can
+cover in at least one valid position. Other fixtures show their solid footprints
+without blue standing-area outlines; the fixture being placed still shows its own blue outline.
+The checks include its size, facing, standing space, other fixtures, walls,
+locked areas, player/crate bodies, and checkout access. The grid fills in as
+checks finish and updates when the fixture is turned or the available space changes.
+Access checks use the character-sized standing area and its route, rather than treating
+every touched floor tile as completely blocked.
+Placement snaps to an 8-pixel grid. The overlay shows which of those positions
+are valid without changing collision rules.
+The existing `G` shortcut independently toggles the larger cyan floor-tile grid.
+
+When you stand close enough to open a locker, a small gauge appears near the top of its front; it
+disappears when you walk away. Green shows how much of its
+storage space is used; red shows the free space left. This counts the space used by the items, not the number of items. The gauge
 updates as stock changes and stays with the locker when it is moved. Carrying an
 item crate no longer shows the large information card at the top of the screen;
 instead a small two-row label just above the carried crate shows the item name, then
-the crate quantity and the locker spaces it fills, for example "x5 (10)" (same units
-as the locker count). A fixture crate shows, for example, "SHELF fixture".
+the crate quantity and the locker spaces it fills, for example "x5 (10)" (the locker
+window shows used and total spaces in the same units). A fixture crate shows, for example, "SHELF fixture".
 
 Pressing Space can pick up a crate while you are pushing it by walking into it.
 A thrown crate keeps its launch speed until it is clear of the player, then slides

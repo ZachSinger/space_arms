@@ -216,7 +216,10 @@ export class Employee {
   }
 
   walkTo(point, nextState) {
-    const path = this.scene.findPath(this.sprite.x, this.sprite.y, point.x, point.y);
+    const path = this.scene.findPath(this.sprite.x, this.sprite.y, point.x, point.y, {
+      width: PLAYER_BODY_WIDTH,
+      height: PLAYER_BODY_HEIGHT,
+    });
     if (path === null) {
       this.currentJob = null;
       this.state = this.state === "ON_BREAK" ? "ON_BREAK" : "IDLE";

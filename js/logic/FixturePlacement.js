@@ -2,21 +2,53 @@
 // FILE: FixturePlacement.js
 // ==========================================
 // Placement mode for moving an existing fixture or unpacking a fixture crate: a ghost
-// follows the cursor in small steps (on a controller, a quarter tile at a time) with
-// valid/invalid and access-cell highlights, and left-click or A commits. Only allowed while
-// the store is closed.
+// follows the cursor on the 8-pixel grid, with valid/invalid and standing-space outlines.
+// Left-click or A commits. Only allowed while the store is closed.
 import { UIWindow } from "./UIWindow.js";
 import { TILE_SIZE } from "./RoomLayout.js";
 import {
-  getFixtureType, fixtureAccessCells, fixtureFootprint, fixtureFrontClearance, FIXTURE_POSITION_STEP, snapFixturePosition,
+  getFixtureType, fixtureAccessCells, fixtureAtWorldPoint, fixtureFootprint, fixtureFrontClearance, FIXTURE_SNAP_STEP, snapFixturePosition,
 } from "./FixtureLayout.js";
 import { getFixtureTexture, hasFacingTextures } from "./FixtureTexture.js";
 import { PAD } from "./GamepadInput.js";
 import { getInputDevice } from "./InputDevice.js";
 
 const PAD_STEPS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
-// Tiles the fixture moves per controller step.
-const PAD_STEP = 1 / 4;
+const PAD_STEP = FIXTURE_SNAP_STEP;
+const VALID_COLOR = 0x10b981;
+const INVALID_COLOR = 0xef4444;
+const STANDING_COLOR = 0x38bdf8;
+
+/**
+ * Outline a fixture's footprint and the standing space in front of it that must stay clear.
+ * @param {Phaser.GameObjects.Graphics} graphics
+ * @param {{ type: string, gx: number, gy: number, rotation: number }} placement
+ * @param {number} color - footprint color
+ * @param {number} alpha - line opacity; the footprint fill is fainter
+ */
+function drawFixtureOutline(graphics, placement, color, alpha, showStandingSpace = true) {
+  const { w, h } = fixtureFootprint(placement);
+  const x = placement.gx * TILE_SIZE;
+  const y = placement.gy * TILE_SIZE;
+  graphics.fillStyle(color, 0.22 * alpha).lineStyle(2, color, alpha)
+    .fillRect(x, y, w * TILE_SIZE, h * TILE_SIZE)
+    .strokeRect(x, y, w * TILE_SIZE, h * TILE_SIZE);
+  if (!showStandingSpace) return;
+  graphics.lineStyle(2, STANDING_COLOR, alpha);
+  const clearance = fixtureFrontClearance(placement);
+  if (clearance) {
+    graphics.strokeRect(clearance.left * TILE_SIZE, clearance.top * TILE_SIZE,
+      (clearance.right - clearance.left) * TILE_SIZE, (clearance.bottom - clearance.top) * TILE_SIZE);
+    return;
+  }
+  // Registers also need the side behind them clear -- that's where the player stands.
+  const accessCells = getFixtureType(placement.type).kind === "register"
+    ? [...fixtureAccessCells(placement), ...fixtureAccessCells(placement, true)]
+    : fixtureAccessCells(placement);
+  for (const cell of accessCells) {
+    graphics.strokeRect(cell.gx * TILE_SIZE + 3, cell.gy * TILE_SIZE + 3, TILE_SIZE - 6, TILE_SIZE - 6);
+  }
+}
 
 export class FixturePlacement {
   constructor(scene) {
@@ -35,6 +67,8 @@ export class FixturePlacement {
           WASD / arrow keys pan the camera. Keep the blue area in front clear for someone to stand.</p>
         <p class="fixture-stock-meta pad-only">Move it with the left stick or D-pad. A to place. Y to turn it.
           B to cancel. Keep the blue area in front clear for someone to stand.</p>
+        <p class="fixture-stock-meta hidden" data-placement-grid-hint>The fixture snaps to an 8-pixel grid.
+          Green shows where its body can be placed.</p>
         <p data-placement-status role="status"></p>
         <button type="button" class="action-btn" data-cancel-fixture-move>CANCEL</button>
       `,
@@ -44,9 +78,12 @@ export class FixturePlacement {
     this.bodyElement = this.uiWindow.element.querySelector(".retro-window-body");
     this.nameElement = this.bodyElement.querySelector("[data-placement-name]");
     this.statusElement = this.bodyElement.querySelector("[data-placement-status]");
+    this.gridHintElement = this.bodyElement.querySelector("[data-placement-grid-hint]");
     this.bodyElement.querySelector("[data-cancel-fixture-move]").addEventListener("click", () => this.cancel());
     this.uiWindow.onClose = () => this.finish();
     this.graphics = scene.add.graphics().setDepth(9997).setVisible(false);
+    // Every other fixture's outline, so you can see what's in the way before moving there.
+    this.placedGraphics = scene.add.graphics().setDepth(9995).setVisible(false);
     this.handlePointerDown = (pointer) => {
       // Ignore clicks that land on DOM windows over the canvas.
       if (!this.active || pointer.event?.target !== scene.game.canvas) return;
@@ -95,7 +132,7 @@ export class FixturePlacement {
   }
 
   /**
-   * Controller: D-pad or left stick moves lockers two pixels, other fixtures a quarter tile.
+   * Controller: D-pad or left stick moves fixtures by one snap-grid step.
    * @param {import("./GamepadInput.js").GamepadInput} pad
    */
   handlePad(pad) {
@@ -103,8 +140,7 @@ export class FixturePlacement {
     if (pad.navDirection || pad.justPressed(PAD.A) || pad.justPressed(PAD.Y)) this.usePadPoint();
     if (pad.navDirection) {
       const [dx, dy] = PAD_STEPS[pad.navDirection];
-      const step = this.spec.id === "locker_single" ? FIXTURE_POSITION_STEP : PAD_STEP;
-      this.padPoint = { x: this.padPoint.x + dx * step, y: this.padPoint.y + dy * step };
+      this.padPoint = { x: this.padPoint.x + dx * PAD_STEP, y: this.padPoint.y + dy * PAD_STEP };
       this.refreshPreview();
     }
     if (pad.justPressed(PAD.Y)) this.rotate();
@@ -196,10 +232,11 @@ export class FixturePlacement {
     this.scene.restockCrates.forEach((crate) => crate.setPaused(true));
     const x = original?.x ?? fixtureCrate.sprite.x;
     const y = original?.y ?? fixtureCrate.sprite.y;
-    this.ghost = this.scene.add.image(x, y, getFixtureTexture(this.scene, this.spec))
+    this.ghost = this.scene.add.image(x, y, getFixtureTexture(this.spec))
       .setDisplaySize(this.spec.w * TILE_SIZE, this.spec.h * TILE_SIZE)
       .setAlpha(0.5).setDepth(9996);
     this.graphics.setVisible(true);
+    this.drawPlacedFixtures();
     this.uiWindow.openWindow();
     this.mouseClient = null;
     // On a controller the fixture starts where it stands (or where its crate is).
@@ -208,6 +245,15 @@ export class FixturePlacement {
       : null;
     this.refreshPreview();
     return true;
+  }
+
+  // Fixtures can't move while one is being placed, so these are drawn once per placement.
+  drawPlacedFixtures() {
+    this.placedGraphics.clear().setVisible(true);
+    for (const fixture of this.scene.fixtures.layout()) {
+      if (fixture.id === this.original?.id) continue;
+      drawFixtureOutline(this.placedGraphics, fixture, VALID_COLOR, 0.6, false);
+    }
   }
 
   // Follow the controller's point if it's in use, else the mouse pointer.
@@ -221,7 +267,7 @@ export class FixturePlacement {
 
   /**
    * Center the candidate footprint on the pointer and redraw validity (green/red) and the
-   * access cells that must stay clear (blue).
+   * standing space that must stay clear (blue).
    * @param {Phaser.Input.Pointer} pointer
    */
   updatePreview(pointer) {
@@ -235,13 +281,11 @@ export class FixturePlacement {
    */
   updatePreviewAt(worldX, worldY) {
     const { w, h } = fixtureFootprint({ type: this.spec.id, rotation: this.rotation });
-    this.placement = {
+    this.placement = fixtureAtWorldPoint({
       id: this.original?.id ?? this.scene.fixtures.nextId(this.spec.id),
       type: this.spec.id,
-      gx: snapFixturePosition(worldX / TILE_SIZE - w / 2),
-      gy: snapFixturePosition(worldY / TILE_SIZE - h / 2),
       rotation: this.rotation,
-    };
+    }, worldX, worldY);
     const { id, gx, gy, rotation } = this.placement;
     const result = this.original
       ? this.scene.checkFixtureMove(id, gx, gy, rotation)
@@ -249,30 +293,13 @@ export class FixturePlacement {
     this.statusElement.textContent = result.valid && getInputDevice() === "gamepad"
       ? result.reason.replace(/^Click to place\./, "Press A to place.")
       : result.reason;
-    const color = result.valid ? 0x10b981 : 0xef4444;
     const x = gx * TILE_SIZE;
     const y = gy * TILE_SIZE;
-    this.graphics.clear().fillStyle(color, 0.22).lineStyle(2, color, 1)
-      .fillRect(x, y, w * TILE_SIZE, h * TILE_SIZE)
-      .strokeRect(x, y, w * TILE_SIZE, h * TILE_SIZE);
-    this.graphics.lineStyle(2, 0x38bdf8, 1);
-    // Registers also need the side behind them clear -- that's where the player stands.
-    const accessCells = this.spec.kind === "register"
-      ? [...fixtureAccessCells(this.placement), ...fixtureAccessCells(this.placement, true)]
-      : fixtureAccessCells(this.placement);
-    const clearance = fixtureFrontClearance(this.placement);
-    if (clearance) {
-      this.graphics.strokeRect(clearance.left * TILE_SIZE, clearance.top * TILE_SIZE,
-        (clearance.right - clearance.left) * TILE_SIZE, (clearance.bottom - clearance.top) * TILE_SIZE);
-    } else {
-      for (const cell of accessCells) {
-        this.graphics.strokeRect(cell.gx * TILE_SIZE + 3, cell.gy * TILE_SIZE + 3, TILE_SIZE - 6, TILE_SIZE - 6);
-      }
-    }
+    drawFixtureOutline(this.graphics.clear(), this.placement, result.valid ? VALID_COLOR : INVALID_COLOR, 1);
     this.ghost.setPosition(x + w * TILE_SIZE / 2, y + h * TILE_SIZE / 2);
     if (hasFacingTextures(this.spec)) {
       // Upright art for the chosen facing, at the same size as the placed fixture.
-      this.ghost.setTexture(getFixtureTexture(this.scene, this.spec, rotation)).setAngle(0);
+      this.ghost.setTexture(getFixtureTexture(this.spec, rotation)).setAngle(0);
       this.scene.sizeFacingArt(this.ghost, this.spec, rotation);
     } else {
       this.ghost.setAngle(rotation * 90);
@@ -298,6 +325,7 @@ export class FixturePlacement {
     if (this.fixtureCrate?.sprite.active) this.fixtureCrate.sprite.setVisible(true);
     this.ghost.destroy();
     this.graphics.clear().setVisible(false);
+    this.placedGraphics.clear().setVisible(false);
     this.scene.player.inputEnabled = true;
     // Keys held while placing would otherwise keep the player walking.
     this.scene.input.keyboard.resetKeys();
@@ -317,5 +345,6 @@ export class FixturePlacement {
     this.scene.input.keyboard.off("keydown-R", this.handleRotateKey);
     document.removeEventListener("mousemove", this.handleDocumentMouseMove, true);
     this.graphics.destroy();
+    this.placedGraphics.destroy();
   }
 }

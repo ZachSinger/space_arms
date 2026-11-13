@@ -28,6 +28,8 @@ notice something that needs doing but isn't being done right now.
 - [ ] Play at least three shifts from a new game without debug keys. Check whether sales
       cover stock orders and wages, customers are served through closing, and saving and
       continuing between shifts works.
+- [ ] Page Up / Page Down still zoom the sales floor while the player is in the backroom.
+      In the backroom they should zoom only the backroom window instead.
 - [x] Decide what happens if wages put the player in debt and they run out of sellable
       stock. For now, an emergency loan in the Finances tab tops credits up to 1,000; the
       player owes 25% extra, repaid from 25% of each later day's sales (provisional numbers).
@@ -72,8 +74,9 @@ notice something that needs doing but isn't being done right now.
       during the shift and applied once when it ends; Finances shows the pending change.
 - [x] Add provisional reputation thresholds for Shop Levels 1-30. Earned levels stay
       unlocked if reputation later falls; older level-capped saves catch up to earned reputation.
-- [x] Implement the planned rewards at Shop Levels 2-30, including supplier contracts,
-      fixture licenses, staff, and sales-floor and backroom expansions.
+- [x] Implement the planned rewards at Shop Levels 2-30, including assigning every
+      supplier contract to a level, fixture licenses, staff, and sales-floor and backroom
+      expansions.
 - [x] Level 5, 9, 17, 24, and 30 unlock sales-floor expansions for purchase in order.
       Each costs credits, requires the listed Shop Level, and can only be bought while
       the store is closed.
@@ -132,8 +135,8 @@ notice something that needs doing but isn't being done right now.
       keeping the same customer pool and doubling arrival frequency.
 - [x] Start with a much smaller shelf: a two-tile 2x1 starter shelf. (Superseded: new games now start with no shelves; the compact shelf is bought from the Fixtures tab. Placement checks preserve customer access to the register and both sides of the backroom entrance.)
 - [x] Let players turn fixtures: press R while placing or moving any fixture, including the register. Its front, keep-clear squares, customer line, and cashier spot turn with it, so shelves can line the bottom and side walls. Shelves use temporary, tile-sized overhead graphics with dark stock surfaces and a light front edge, including in placement previews. Lockers and registers still reuse rotated art until direction-specific art exists.
-- [x] Freer fixture placement, stage 1: fixtures move in eighth-of-a-tile (8px) steps with the mouse and quarter-tile steps on a controller, and saves keep those positions. A fixture facing down can tuck its back up to half a tile into the wall behind it. Walking is still square by square: a square a fixture covers by more than an eighth of a tile is blocked, and shoppers stand half a tile from the fixture's front, lined up with it.
-- [ ] Freer placement, stage 2: customers and staff walk freely around fixtures (RimWorld-style) instead of square to square, so in-between fixtures don't block whole extra squares and the register line can follow any counter position.
+- [x] Freer fixture placement, stage 1: fixtures move on an 8-pixel grid with the mouse or controller, and saves keep their positions. A fixture facing down can tuck its back up to half a tile into the wall behind it. Placement still checks floor-square access and shoppers stand half a tile from the fixture's front, lined up with it.
+- [x] Freer placement, stage 2: customers and staff follow smooth, collision-aware routes around fixtures instead of aiming only for floor-square centers, so fixtures placed between squares no longer block extra space and shoppers can approach any valid counter position.
 - [x] Redo player-facing game messages: show a large, readable banner below the HUD for
       2.5 seconds instead of tiny text above the player. Keep customer reactions anchored
       to the customer.
@@ -171,6 +174,8 @@ notice something that needs doing but isn't being done right now.
       move any stack over the new cap into the Go-Backs bin on load.
 
 ## Debug Tools
+- [ ] Speed up the `\` fixture-placement overlay. It can take about 10 seconds to finish
+      filling in; revisit it later since it is a debug aid.
 - [x] Desktop HUD "Debug Info": numbered full-window PNG screenshots and readable
       live-state reports in local playtest sessions, with recent events/errors and
       customer-pool calculations. See `documentation/DebugPlaytesting.md`.
@@ -188,9 +193,12 @@ notice something that needs doing but isn't being done right now.
       `gridAlignedCenter()` in game.js for the correct way to position one instead.
 
 ## Art / Assets
-- [ ] Replace the shelves' placeholder shapes with proper shelf artwork. The Budget Shelf is
-      done (purple rack style, with front, side, and back views); the other shelves still
-      use placeholder shapes.
+- [x] Replace the shelves' placeholder shapes with proper shelf artwork. The Budget Shelf
+      uses purple, facing-specific art; the remaining shelves use their registered
+      overhead metal-shelf illustrations.
+- [ ] Show how stocked each Budget Shelf is (front view) using box art from the box art
+      catalog, placed per shelf slot by how full that slot is. Tune it on the title screen's
+      DEV screen first.
 - [x] Create artwork for the cash bills and coins used at checkout.
 - [x] Create artwork for the Explorer Travel Chit: a programmable plasteel device
       with a screen, textured housing, and an octagonal shape.

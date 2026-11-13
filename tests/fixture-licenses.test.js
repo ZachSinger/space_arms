@@ -116,6 +116,44 @@ test("planned supplier contracts unlock at their assigned Shop Levels", () => {
   }
 });
 
+test("reputation-gated supplier contracts now use Shop Levels while keeping faction gates", () => {
+  const contracts = [
+    [3, "lic_start_armor_melee"],
+    [4, "lic_start_tools"],
+    [5, "lic_start_mods"],
+    [7, "lic_corp_scatter"],
+    [9, "lic_pro_adv_melee"],
+    [11, "lic_pro_arx_heavy"],
+    [13, "lic_pro_kessler"],
+    [15, "lic_pro_high_energy"],
+    [17, "lic_pro_aegis_sec"],
+    [18, "lic_pro_kodiak"],
+    [20, "lic_pro_zastava"],
+    [21, "lic_pro_artillery"],
+    [22, "lic_edge_kinetic"],
+    [23, "lic_edge_antique"],
+    [24, "lic_edge_blackwood"],
+    [25, "lic_edge_unrestricted"],
+    [28, "lic_edge_tessier"],
+    [30, "lic_edge_exotic"],
+  ];
+  const state = {
+    shopLevel: 1,
+    globalReputation: 0,
+    factionReputation: { scavengers: 100, mercenaries: 100, explorers: 100 },
+    credits: 100000,
+  };
+  for (const [level, id] of contracts) {
+    const license = new SupplierLicense(licenseById.get(id));
+    assert.equal(license.requiredShopLevel, level, id);
+    assert.equal(license.reqReputation, null, id);
+    state.shopLevel = level - 1;
+    assert.equal(license.isUnlocked(state), false, id);
+    state.shopLevel = level;
+    assert.equal(license.isUnlocked(state), true, id);
+  }
+});
+
 test("planned fixture licenses unlock functional display and storage fixtures", () => {
   const licensesByLevel = [
     [8, "lic_fixture_premium_shelf", "shelf_showcase"],
@@ -154,6 +192,8 @@ test("starter contracts and existing faction reputation requirements remain avai
   assert.equal(rations.isUnlocked(state), true);
   assert.equal(scavengerArmor.isUnlocked(state), false);
   state.factionReputation.scavengers = 2;
+  assert.equal(scavengerArmor.isUnlocked(state), false, "the assigned Shop Level is still required");
+  state.shopLevel = 3;
   assert.equal(scavengerArmor.isUnlocked(state), true);
 });
 
@@ -176,6 +216,18 @@ test("the budget shelf has 2x2 slots, is a starter shelf, and is the cheapest fi
   assert.equal(budget.licenseId, "lic_fixture_basics");
   for (const spec of Object.values(FIXTURE_TYPES)) {
     if (spec !== budget) assert.ok(budget.price < spec.price, `${spec.id} costs more`);
+  }
+});
+
+test("the wider budget shelves add columns, match their art's rows, and keep the starter contract", () => {
+  const starter = licenseById.get("lic_fixture_basics");
+  for (const columns of [3, 4, 5, 6]) {
+    const spec = FIXTURE_TYPES[`shelf_budget_2x${columns}`];
+    // The 2x4's art shows three tiers, so it holds three rows.
+    assert.deepEqual(getShelfDisplayGrid(spec), { w: columns, h: columns === 4 ? 3 : 2 });
+    assert.equal(spec.licenseId, "lic_fixture_basics");
+    assert.ok(starter.unlocksFixtures.includes(spec.id));
+    assert.equal(spec.price, columns * 75);
   }
 });
 

@@ -55,10 +55,13 @@ import {
 import { ShiftClock, SHIFT_DURATION_MS } from "../logic/ShiftClock.js";
 import { summarizeReceipt } from "../logic/DayLedger.js";
 import { Market } from "../logic/Market.js";
-import { findGridPath } from "../logic/Pathfinder.js";
+import { findFreeWalkPath } from "../logic/Pathfinder.js";
 import { FixturePlacement } from "../logic/FixturePlacement.js";
-import { ShelfIconDisplay } from "../logic/ShelfIconDisplay.js";
+import { FixturePlacementGrid } from "../logic/FixturePlacementGrid.js";
+import { ShelfAttentionHighlight } from "../logic/ShelfAttentionHighlight.js";
+import { ShelfItemDisplay } from "../logic/ShelfItemDisplay.js";
 import { getFixtureTexture, getSingleLockerSprite, hasFacingTextures, sizeSingleLocker } from "../logic/FixtureTexture.js";
+import { CapacityGauge } from "../logic/CapacityGauge.js";
 import { STARTING_FIXTURES, FIXTURE_TYPES, getFixtureType, getFixtureResaleValue, getShelfDisplayGrid, fixtureAccessCells, fixtureFacing, fixtureFacingStep, fixtureFootprint, fixtureInteractionDistance, fixtureRotation, fixtureStandingSpot, validateFixtureLayout } from "../logic/FixtureLayout.js";
 import { FixtureRegistry } from "../logic/FixtureRegistry.js";
 import { SHOP_LAYOUT_VERSION, validateShopSave } from "../logic/ShopSave.js";
@@ -86,6 +89,26 @@ function reputationPenaltyText(penalty, factionId) {
   const faction = factionId ? CUSTOMER_TRAITS[factionId] : null;
   if (factionId && !faction?.group) throw new Error(`Unknown customer faction: ${factionId}.`);
   return `-${penalty} store reputation${faction ? `\n-${penalty} ${faction.name} reputation` : ""}\nat shift end`;
+}
+
+function segmentIntersectsRectangle(from, to, rectangle) {
+  const epsilon = 0.001;
+  const left = rectangle.left + epsilon;
+  const right = rectangle.right - epsilon;
+  const top = rectangle.top + epsilon;
+  const bottom = rectangle.bottom - epsilon;
+  let minimum = 0;
+  let maximum = 1;
+  const clip = (origin, delta, low, high) => {
+    if (Math.abs(delta) < epsilon) return origin > low && origin < high;
+    const first = (low - origin) / delta;
+    const last = (high - origin) / delta;
+    minimum = Math.max(minimum, Math.min(first, last));
+    maximum = Math.min(maximum, Math.max(first, last));
+    return minimum < maximum;
+  };
+  return clip(from.x, to.x - from.x, left, right) &&
+    clip(from.y, to.y - from.y, top, bottom);
 }
 
 // Screen space kept clear when fitting the map: the top status bar (36px + 2px border)
@@ -143,6 +166,7 @@ const REGISTER_QUEUE_SPACING = 52;
 // Looser than Crate's INTERACT_RANGE because standPoint is a single pixel, so a tight radius
 // failed from almost any angle but dead-center.
 const SHELF_INTERACT_RANGE = 110;
+const LOCKER_GAUGE_DEPTH = 10100;
 
 /**
  * Grid-cell keys ("gx,gy") overlapped, even partially, by a world-space rectangle. Fixture
@@ -191,6 +215,8 @@ export class GameScene extends Phaser.Scene {
   create() {
     this.eventBus = new EventBus();
     this.debugInfo = null;
+    this.debugGridOverlays = new Map();
+    this.debugPlacementGrid = null;
     this.startingShift = false;
     this.loadFailed = false;
     this.autosaveBlocked = false;
@@ -299,8 +325,6 @@ export class GameScene extends Phaser.Scene {
     // The register's body is solid to the player and crates only: customers queue almost
     // flush against its front edge, so it can't join obstacleGroup.
     this.registerGroup = this.physics.add.staticGroup();
-    // Each fixture's footprint, blocked for pathfinding (filled by applyFixtureLayout).
-    this.blockedCells = new Set();
     for (const entry of STARTING_FIXTURES) this.spawnFixture(entry);
     this.operatingRegister = false;
     this.playerPositionBeforeRegister = null;
@@ -526,12 +550,23 @@ export class GameScene extends Phaser.Scene {
 
     // Debug-only: tile-grid overlay that makes off-grid fixtures obvious.
     this.bindControlKey("keydown-G", "debug", () => this.toggleDebugGrid());
+    this.bindControlKey("keydown-BACK_SLASH", "debugGrid", (event) => {
+      if (!event.repeat) this.toggleDebugGrid(8, 0x00ff00, 1);
+    });
 
     // Debug-only: lets one random customer in right away.
     this.bindControlKey("keydown-Y", "debug", () => this.spawnCustomer(null));
 
     // Debug-only: skip the opening setup with a stocked shelf and a third locker.
     this.bindControlKey("keydown-K", "debug", () => this.debugQuickstart());
+
+    // Debug-only HUD buttons: open the next sales-floor or backroom upgrade for free.
+    this.debugUpgradeButtons = [
+      ["hud-debug-shop-upgrade-btn", () => this.debugUnlockNextZone(EXPANSION_ORDER, "sales floor")],
+      ["hud-debug-backroom-upgrade-btn", () => this.debugUnlockNextZone(BACKROOM_UPGRADE_ORDER, "backroom")],
+    ].map(([id, handler]) => ({ element: document.getElementById(id), handler }))
+      .filter(({ element }) => element);
+    for (const { element, handler } of this.debugUpgradeButtons) element.addEventListener("click", handler);
 
     // The shift clock's manual pause: freezes time entirely so the player can think.
     this.bindControlKey("keydown-P", "pause", () => this.shiftClock.togglePause());
@@ -547,6 +582,11 @@ export class GameScene extends Phaser.Scene {
       this.uiNavigator.destroy();
       this.eventBus.clear();
       this.debugInfo.destroy();
+      for (const grid of this.debugGridOverlays.values()) grid.destroy();
+      this.debugGridOverlays.clear();
+      this.debugPlacementGrid?.destroy();
+      this.debugPlacementGrid = null;
+      for (const { element, handler } of this.debugUpgradeButtons) element.removeEventListener("click", handler);
       this.fixturePlacement.destroy();
       this.managerTablet.uiWindow.onClose = null;
       this.managerTablet.disableInventoryNavigation();
@@ -1010,18 +1050,14 @@ export class GameScene extends Phaser.Scene {
     }
     Object.assign(fixture, { type, gx, gy, rotation });
     if (spec.kind === "register") this.drawRegister(fixture);
-    else this.drawFixture(fixture, getFixtureTexture(this, spec));
+    else this.drawFixture(fixture, getFixtureTexture(spec));
     this.orientFixtureSprite(fixture);
     if (fixture instanceof ShelfFixture) {
-      fixture.stockDisplay = new ShelfIconDisplay(
-        this,
-        fixture,
-        (itemId) => database.getItem(itemId),
-      );
-      fixture.stockDisplay.setAngle(rotation * 90);
+      fixture.stockDisplay = new ShelfAttentionHighlight(this, fixture);
+      fixture.stockItemsDisplay = new ShelfItemDisplay(this, fixture, (itemId) => database.getItem(itemId));
       fixture.stockDisplay.sync();
     }
-    if (fixture.capacityLabel) this.refreshLockerCapacityDisplay(fixture);
+    if (fixture.capacityGauge) this.refreshLockerCapacityDisplay(fixture);
     return this.fixtures.add(fixture);
   }
 
@@ -1041,7 +1077,7 @@ export class GameScene extends Phaser.Scene {
       sprite.setTexture(sheet.key, fixture.lockerAnimation.frameIndex);
       sizeSingleLocker(sprite, rotation);
     } else if (facingArt) {
-      sprite.setTexture(getFixtureTexture(this, spec, rotation));
+      sprite.setTexture(getFixtureTexture(spec, rotation));
       this.sizeFacingArt(sprite, spec, rotation);
     }
     sprite.setPosition(x, y).setAngle(facingArt ? 0 : rotation * 90);
@@ -1102,7 +1138,8 @@ export class GameScene extends Phaser.Scene {
   despawnAllFixtures() {
     for (const fixture of this.fixtures.clear()) {
       fixture.stockDisplay?.destroy();
-      fixture.capacityLabel?.destroy();
+      fixture.stockItemsDisplay?.destroy();
+      fixture.capacityGauge?.destroy();
       fixture.sprite.destroy();
     }
   }
@@ -1403,18 +1440,18 @@ export class GameScene extends Phaser.Scene {
    * @param {number} [rotation]
    * @returns {{ valid: boolean, reason?: string }} validateFixtureLayout's result
    */
-  checkFixtureMove(id, gx, gy, rotation) {
+  checkFixtureMove(id, gx, gy, rotation, connectivityCache = null) {
     const areaBlock = this.getFixtureMoveAreaBlockReason(this.fixtures.get(id));
     if (areaBlock) return { valid: false, reason: areaBlock };
     if (isBackroomRow(Math.floor(gy)) !== Boolean(this.playerInBackroom)) {
       return { valid: false, reason: this.playerInBackroom ? "Keep it in the backroom." : "Keep it on the sales floor." };
     }
     const bodies = [this.player.sprite.body, ...this.restockCrates.map((crate) => crate.sprite.body)];
-    return validateFixtureLayout(this.layoutWithMove(id, gx, gy, rotation), this.getLayoutOptions(
+    return validateFixtureLayout(this.layoutWithMove(id, gx, gy, rotation), { ...this.getLayoutOptions(
       bodies.filter((body) => body.enable).map((body) => ({
         left: body.left, right: body.right, top: body.top, bottom: body.bottom,
       })),
-    ));
+    ), connectivityCache });
   }
 
   /**
@@ -1443,7 +1480,7 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * Moves and turns every fixture sprite to its layout cell and adopts the validated access
-   * points, pathfinding blocks, and register queue cells.
+   * points and register queue positions.
    * @param {Array<{ id: string, gx: number, gy: number, rotation?: number }>} layout
    * @param {object} result - a valid result from validateFixtureLayout for this layout
    */
@@ -1458,13 +1495,15 @@ export class GameScene extends Phaser.Scene {
       fixture.x = (entry.gx + footprint.w / 2) * TILE_SIZE;
       fixture.y = (entry.gy + footprint.h / 2) * TILE_SIZE;
       this.orientFixtureSprite(fixture);
+      fixture.accessCells = result.accessCells?.get(entry.id) ?? fixtureAccessCells(fixture);
       fixture.standPoint = fixtureStandingSpot(fixture, result.access.get(entry.id));
     }
-    this.blockedCells = result.blockedCells;
     for (const fixture of this.fixtures.all()) {
       fixture.stockDisplay?.setPosition(fixture.x, fixture.y);
       fixture.stockDisplay?.setAngle(fixtureRotation(fixture) * 90);
-      if (fixture.capacityLabel) this.refreshLockerCapacityDisplay(fixture);
+      fixture.stockItemsDisplay?.setPosition(fixture.x, fixture.y);
+      fixture.stockItemsDisplay?.setAngle(fixtureRotation(fixture) * 90);
+      if (fixture.capacityGauge) this.refreshLockerCapacityDisplay(fixture);
     }
     this.registerQueuePoints = this.placeRegisterQueue(result.queueCells.map(toWorld));
     this.registerQueueAnchor = this.registerQueuePoints[0];
@@ -1643,6 +1682,7 @@ export class GameScene extends Phaser.Scene {
 
   refreshShelfStockDisplay(shelf) {
     shelf?.stockDisplay?.sync();
+    shelf?.stockItemsDisplay?.sync();
   }
 
   refreshShelfStockDisplays() {
@@ -1815,17 +1855,6 @@ export class GameScene extends Phaser.Scene {
   // --- Pathfinding ---
 
   /**
-   * Whether a customer could stand at this cell: in an unlocked zone, not a wall, and not
-   * under a fixture.
-   * @param {number} gx
-   * @param {number} gy
-   */
-  isCellWalkable(gx, gy) {
-    if (!this.room.isWalkable(gx, gy)) return false;
-    return !this.blockedCells.has(`${gx},${gy}`);
-  }
-
-  /**
    * @param {ShelfFixture | null} [excludedShelf] - the customer's next planned stop
    * @returns {ShelfFixture | null} a different currently stocked shelf to browse
    */
@@ -1836,31 +1865,69 @@ export class GameScene extends Phaser.Scene {
     return shelves.length ? shelves[Math.floor(Math.random() * shelves.length)] : null;
   }
 
-  // Whether a customer can walk this segment without brushing a wall or a solid fixture.
-  isStraightWalkClear(fromX, fromY, toX, toY) {
-    const line = new Phaser.Geom.Line(fromX, fromY, toX, toY);
-    const halfW = SPRITE_DISPLAY_WIDTH / 2;
-    const halfH = SPRITE_DISPLAY_HEIGHT / 2;
+  getNavigationObstacles(bodySize = { width: SPRITE_DISPLAY_WIDTH, height: SPRITE_DISPLAY_HEIGHT }) {
+    const halfW = bodySize.width / 2;
+    const halfH = bodySize.height / 2;
     const solids = [...this.obstacleGroup.getChildren(), ...this.room.wallGroup.getChildren()];
-    return solids.every((solid) => {
-      const body = solid.body;
-      if (!body) return true;
-      const padded = new Phaser.Geom.Rectangle(body.x - halfW, body.y - halfH,
-        body.width + halfW * 2, body.height + halfH * 2);
-      return !Phaser.Geom.Intersects.LineToRectangle(line, padded);
+    const storeDoorBlocker = this.storeDoorAnimation?.door.blocker;
+    const obstacles = solids.flatMap((solid) => {
+      if (solid === storeDoorBlocker || !solid.body || solid.body.enable === false) return [];
+      const { body } = solid;
+      return [{
+        left: body.x - halfW,
+        right: body.x + body.width + halfW,
+        top: body.y - halfH,
+        bottom: body.y + body.height + halfH,
+      }];
     });
+    const registerBody = this.fixtures.register()?.sprite?.body;
+    if (registerBody) {
+      const bounds = {
+        left: registerBody.x - halfW,
+        right: registerBody.x + registerBody.width + halfW,
+        top: registerBody.y - halfH,
+        bottom: registerBody.y + registerBody.height + halfH,
+      };
+      switch (fixtureFacing(this.fixtures.register())) {
+        case "down": bounds.bottom -= REGISTER_FRONT_OVERLAP; break;
+        case "up": bounds.top += REGISTER_FRONT_OVERLAP; break;
+        case "left": bounds.left += REGISTER_FRONT_OVERLAP; break;
+        case "right": bounds.right -= REGISTER_FRONT_OVERLAP; break;
+      }
+      obstacles.push(bounds);
+    }
+    return obstacles;
+  }
+
+  isNavigationSegmentClear(from, to, obstacles) {
+    const distance = Math.hypot(to.x - from.x, to.y - from.y);
+    const steps = Math.ceil(distance / 8);
+    for (let index = 0; index <= steps; index += 1) {
+      const ratio = steps ? index / steps : 0;
+      const x = from.x + (to.x - from.x) * ratio;
+      const y = from.y + (to.y - from.y) * ratio;
+      if (!this.room.isWalkable(Math.floor(x / TILE_SIZE), Math.floor(y / TILE_SIZE))) return false;
+    }
+    return obstacles.every((rectangle) => !segmentIntersectsRectangle(from, to, rectangle));
+  }
+
+  // Whether a character-sized body can move directly between two world positions.
+  isStraightWalkClear(fromX, fromY, toX, toY, bodySize) {
+    const obstacles = this.getNavigationObstacles(bodySize);
+    return this.isNavigationSegmentClear({ x: fromX, y: fromY }, { x: toX, y: toY }, obstacles);
   }
 
   /**
-   * A grid path between two world points, routed around walls and fixtures. Null means
+   * A smoothed path between two world points, routed around walls and fixtures. Null means
    * no safe route exists and must not be treated as a direct path.
    * @param {number} fromX - px
    * @param {number} fromY - px
    * @param {number} toX - px
    * @param {number} toY - px
+   * @param {{width: number, height: number}} [bodySize] - collision size in px; defaults to a customer
    * @returns {Array<{ x: number, y: number }> | null} world-space waypoints
    */
-  findPath(fromX, fromY, toX, toY) {
+  findPath(fromX, fromY, toX, toY, bodySize) {
     // The shop and backroom only connect through their door pair: walk to this side's door,
     // step through it, then walk on from the other side's door.
     const inBackroom = (y) => isBackroomRow(Math.floor(y / TILE_SIZE));
@@ -1868,67 +1935,74 @@ export class GameScene extends Phaser.Scene {
       const [near, far] = inBackroom(fromY)
         ? [this.backroomExitFront, this.backroomDoorFront]
         : [this.backroomDoorFront, this.backroomExitFront];
-      const toDoor = this.findAreaPath(fromX, fromY, near.x, near.y);
-      const fromDoor = toDoor && this.findAreaPath(far.x, far.y, toX, toY);
+      const toDoor = this.findAreaPath(fromX, fromY, near.x, near.y, bodySize);
+      const fromDoor = toDoor && this.findAreaPath(far.x, far.y, toX, toY, bodySize);
       if (!fromDoor) return null;
       return [...toDoor, { x: near.x, y: near.y, teleportTo: { x: far.x, y: far.y } }, ...fromDoor];
     }
-    return this.findAreaPath(fromX, fromY, toX, toY);
+    return this.findAreaPath(fromX, fromY, toX, toY, bodySize);
   }
 
-  findAreaPath(fromX, fromY, toX, toY) {
-    // Close enough to step straight there; routing via tile centers would make a customer
-    // already at their spot (like the counter front) walk out and back.
-    if (Math.hypot(toX - fromX, toY - fromY) < TILE_SIZE && this.isStraightWalkClear(fromX, fromY, toX, toY)) {
-      return [];
-    }
-    const cellAt = (x, y) => ({ gx: Math.floor(x / TILE_SIZE), gy: Math.floor(y / TILE_SIZE) });
-    // Spots like the counter front sit over the register's floor space. Route from and to the
-    // closest open floor instead, so a customer leaving the counter backs out the way they came
-    // rather than slipping around the side of the register.
-    const nearestOpenCell = (x, y) => {
-      const cell = cellAt(x, y);
-      if (this.isCellWalkable(cell.gx, cell.gy)) return { cell, snapped: false };
-      const distance = ({ gx, gy }) => Math.hypot(this.room.worldX(gx) - x, this.room.worldY(gy) - y);
-      const open = [-1, 0, 1].flatMap((ox) => [-1, 0, 1].map((oy) => ({ gx: cell.gx + ox, gy: cell.gy + oy })))
-        .filter(({ gx, gy }) => this.isCellWalkable(gx, gy))
-        .sort((a, b) => distance(a) - distance(b));
-      return open[0] ? { cell: open[0], snapped: true } : { cell, snapped: false };
-    };
-    const start = nearestOpenCell(fromX, fromY);
-    const goal = nearestOpenCell(toX, toY).cell;
-
-    const gridPath = findGridPath(start.cell, goal, (gx, gy) => this.isCellWalkable(gx, gy));
-    if (!gridPath) return null;
-    if (start.snapped) gridPath.unshift(start.cell);
-
-    return gridPath.map(({ gx, gy }) => ({
-      x: this.room.worldX(gx),
-      y: this.room.worldY(gy),
-    }));
+  findAreaPath(fromX, fromY, toX, toY, bodySize) {
+    const obstacles = this.getNavigationObstacles(bodySize);
+    return findFreeWalkPath(
+      { x: fromX, y: fromY },
+      { x: toX, y: toY },
+      {
+        isWalkable: (x, y) =>
+          this.room.isWalkable(Math.floor(x / TILE_SIZE), Math.floor(y / TILE_SIZE)) &&
+          obstacles.every((rectangle) =>
+            x <= rectangle.left || x >= rectangle.right || y <= rectangle.top || y >= rectangle.bottom),
+        isSegmentClear: (from, to) => this.isNavigationSegmentClear(from, to, obstacles),
+      },
+    );
   }
 
   // --- Debug hooks ---
-  // G key: tile-grid overlay over the whole map, locked zones included. Depth 9998 sits
+  // World-pixel grids over the shop map, locked zones included. Depth 9998 sits
   // just under the player (9999) so it draws over every fixture, making off-grid ones obvious.
-  toggleDebugGrid() {
-    if (!this.debugGridGraphics) {
+  toggleDebugGrid(spacing = TILE_SIZE, color = 0x00ffff, alpha = 0.5) {
+    if (spacing === 8) {
+      this.debugPlacementGrid ??= new FixturePlacementGrid(this);
+      this.debugPlacementGrid.toggle();
+      return;
+    }
+    let graphics = this.debugGridOverlays.get(spacing);
+    if (!graphics) {
       const { gridW, gridH } = getTotalGridSize();
       const width = gridW * TILE_SIZE;
       const height = gridH * TILE_SIZE;
 
-      this.debugGridGraphics = this.add.graphics().setDepth(9998);
-      this.debugGridGraphics.lineStyle(1, 0x00ffff, 0.5);
-      for (let gx = 0; gx <= gridW; gx += 1) {
-        this.debugGridGraphics.lineBetween(gx * TILE_SIZE, 0, gx * TILE_SIZE, height);
+      graphics = this.add.graphics().setDepth(9998);
+      graphics.lineStyle(1, color, alpha);
+      for (let x = 0; x <= width; x += spacing) {
+        graphics.lineBetween(x, 0, x, height);
       }
-      for (let gy = 0; gy <= gridH; gy += 1) {
-        this.debugGridGraphics.lineBetween(0, gy * TILE_SIZE, width, gy * TILE_SIZE);
+      for (let y = 0; y <= height; y += spacing) {
+        graphics.lineBetween(0, y, width, y);
       }
-      this.debugGridGraphics.setVisible(false);
+      graphics.setVisible(false);
+      this.debugGridOverlays.set(spacing, graphics);
     }
 
-    this.debugGridGraphics.setVisible(!this.debugGridGraphics.visible);
+    graphics.setVisible(!graphics.visible);
+  }
+
+  // HUD debug buttons: opens the next sales-floor expansion or backroom upgrade for free,
+  // ignoring Shop Level, cost, and whether the store is open.
+  debugUnlockNextZone(order, areaName) {
+    const zone = order.map((id) => this.room.zones.find((candidate) => candidate.id === id))
+      .find((candidate) => candidate?.locked);
+    if (!zone) {
+      this.showShopMessage(`Every ${areaName} upgrade is already open.`);
+      return false;
+    }
+    this.room.unlockZone(zone.id);
+    this.refreshCamera();
+    this.playerState.notifyListeners();
+    this.requestAutosave();
+    this.showShopMessage(`Debug: ${zone.name} is open.`);
+    return true;
   }
 
   // K key: skips the opening setup for testing. Signs whatever contracts the four cheapest
@@ -1999,7 +2073,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.playerState.spendCredits(DELIVERY_FEE, { category: "delivery_fees", label: "Delivery fee" });
 
-    shelf.stockDisplay.sync();
+    this.refreshShelfStockDisplay(shelf);
     for (const locker of this.fixtures.ofKind("storage")) this.refreshLockerCapacityDisplay(locker);
     this.playerState.notifyListeners();
     this.showShopMessage("Quickstart: shelf stocked, third locker added.");
@@ -2345,7 +2419,8 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.fixtureWindow.fixture === fixture) this.fixtureWindow.uiWindow.close();
     fixture.stockDisplay?.destroy();
-    fixture.capacityLabel?.destroy();
+    fixture.stockItemsDisplay?.destroy();
+    fixture.capacityGauge?.destroy();
     fixture.sprite.destroy();
     this.fixtures.remove(fixture.id);
     this.applyFixtureLayout(layout, result);
@@ -2422,15 +2497,15 @@ export class GameScene extends Phaser.Scene {
    * @param {number} gy
    * @param {number} [rotation] - quarter turns clockwise
    */
-  checkFixturePlacement(typeId, gx, gy, rotation = 0) {
+  checkFixturePlacement(typeId, gx, gy, rotation = 0, connectivityCache = null) {
     const id = this.fixtures.nextId(typeId);
     const layout = [...this.fixtures.layout(), { id, type: typeId, gx, gy, rotation }];
     const bodies = [this.player.sprite.body, ...this.restockCrates.map((crate) => crate.sprite.body)];
-    return validateFixtureLayout(layout, this.getLayoutOptions(
+    return validateFixtureLayout(layout, { ...this.getLayoutOptions(
       bodies.filter((body) => body.enable).map((body) => ({
         left: body.left, right: body.right, top: body.top, bottom: body.bottom,
       })),
-    ));
+    ), connectivityCache });
   }
 
   /**
@@ -2901,14 +2976,9 @@ export class GameScene extends Phaser.Scene {
       if (pointer.event?.target === this.game.canvas) this.tryOpenFixtureWindow(fixture);
     });
     if (fixture instanceof StorageFixture) {
-      fixture.capacityLabel = this.add.text(0, 0, "", {
-        fontFamily: "Courier New, monospace",
-        fontSize: "13px",
-        fontStyle: "bold",
-        color: "#ffffff",
-        backgroundColor: "#111827",
-        padding: { x: 3, y: 2 },
-      }).setOrigin(0.5, fixture.type === "locker_single" ? 1 : 0).setDepth(3);
+      // Above the player and any stack of carried crates, so it's never hidden while restocking.
+      fixture.capacityGauge = new CapacityGauge(this, { orientation: "vertical", originY: 0, depth: LOCKER_GAUGE_DEPTH })
+        .setVisible(false);
       this.refreshLockerCapacityDisplay(fixture);
     }
   }
@@ -2957,15 +3027,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   refreshLockerCapacityDisplay(fixture) {
-    const text = `${fixture.usedCapacity()}/${fixture.capacity}`;
-    if (fixture.capacityLabel.text !== text) fixture.capacityLabel.setText(text);
+    fixture.capacityGauge.setValue(fixture.usedCapacity(), fixture.capacity);
     const bounds = fixture.sprite.getBounds();
-    if (fixture.type === "locker_single") {
-      const footprint = fixtureFootprint(fixture);
-      fixture.capacityLabel.setPosition(fixture.x, fixture.y - footprint.h * TILE_SIZE / 2 - 2);
-      return;
-    }
-    fixture.capacityLabel.setPosition(bounds.centerX, bounds.top + 4);
+    fixture.capacityGauge.setPosition(bounds.centerX, bounds.top + 6);
+  }
+
+  // A locker's gauge shows only while the player is close enough to open that locker.
+  refreshLockerGaugeVisibility(fixture) {
+    const inReach = Boolean(this.player?.sprite) &&
+      this.interactables.findTarget("fixture", this.getInteractionOrigin(), fixture) !== null;
+    fixture.capacityGauge.setVisible(inReach);
   }
 
   updateLockerAnimation(fixture, delta) {
@@ -3380,7 +3451,7 @@ export class GameScene extends Phaser.Scene {
       c !== arrivingCustomer && (c.state === "SEEK_SHELF" || c.state === "BROWSING") &&
       c.fixture === shelf,
     ).length;
-    const cells = fixtureAccessCells(shelf);
+    const cells = shelf.accessCells ?? fixtureAccessCells(shelf);
     return fixtureStandingSpot(shelf, cells[inFlight % cells.length]);
   }
 
@@ -3469,6 +3540,7 @@ export class GameScene extends Phaser.Scene {
   update(time, delta) {
     this.handleGamepad(time, delta);
     this.fixturePlacement.update();
+    this.debugPlacementGrid?.update();
     for (const crate of this.restockCrates) crate.updateThrow(delta);
     this.separateStuckCrates();
     // The front door opens for the player and for customers on their way out (arrivals
@@ -3509,7 +3581,11 @@ export class GameScene extends Phaser.Scene {
     this.updateCrateHint();
     for (const fixture of this.fixtures.stockHolders()) {
       this.updateLockerAnimation(fixture, delta);
-      if (fixture.capacityLabel) this.refreshLockerCapacityDisplay(fixture);
+      if (fixture.capacityGauge) {
+        this.refreshLockerCapacityDisplay(fixture);
+        this.refreshLockerGaugeVisibility(fixture);
+      }
+      fixture.stockDisplay?.update(time);
     }
     this.refreshCarriedCrateLabel();
     this.refreshCustomerPool(delta);

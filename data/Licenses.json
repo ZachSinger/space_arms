@@ -6,7 +6,16 @@
     "tier": 1,
     "baseCost": 0,
     "reqReputation": 0,
-    "unlocksFixtures": ["shelf_budget_2x2", "shelf_starter_2x1", "locker_single", "register_basic"]
+    "unlocksFixtures": [
+      "shelf_budget_2x2",
+      "shelf_budget_2x3",
+      "shelf_budget_2x4",
+      "shelf_budget_2x5",
+      "shelf_budget_2x6",
+      "shelf_starter_2x1",
+      "locker_single",
+      "register_basic"
+    ]
   },
   {
     "id": "lic_fixture_expanded",
@@ -84,7 +93,8 @@
     "description": "Access to discarded industrial plating and rusted blunt instruments. Perfect for budget-conscious brawlers.",
     "tier": 1,
     "baseCost": 200,
-    "reqReputation": 2,
+    "requiredShopLevel": 3,
+    "reqReputation": null,
     "reqFaction": "scavengers",
     "reqFactionRep": 2
   },
@@ -111,7 +121,8 @@
     "description": "Entry-level industrial tools for tearing ships apart or strapping them back together.",
     "tier": 1,
     "baseCost": 250,
-    "reqReputation": 5,
+    "requiredShopLevel": 4,
+    "reqReputation": null,
     "reqFaction": "explorers",
     "reqFactionRep": 2
   },
@@ -129,7 +140,8 @@
     "description": "Duct-taped flashlights and welded iron sights. Cheap upgrades for cheap guns.",
     "tier": 1,
     "baseCost": 75,
-    "reqReputation": 5,
+    "requiredShopLevel": 5,
+    "reqReputation": null,
     "reqFaction": "scavengers",
     "reqFactionRep": 5
   },
@@ -211,7 +223,8 @@
     "description": "A specialized contract for shotgun shells, bandoliers, and kinetic breaching slugs.",
     "tier": 2,
     "baseCost": 1600,
-    "reqReputation": 20,
+    "requiredShopLevel": 7,
+    "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 10
   },
@@ -221,7 +234,8 @@
     "description": "Military-spec pulse rifles, plasma shrouds, and massively reinforced heavy armor suits.",
     "tier": 3,
     "baseCost": 6500,
-    "reqReputation": 45,
+    "requiredShopLevel": 18,
+    "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 25
   },
@@ -231,7 +245,8 @@
     "description": "Devastating magnetic accelerator rifles, gauss spikes, and x-ray sniper optics.",
     "tier": 3,
     "baseCost": 7200,
-    "reqReputation": 50,
+    "requiredShopLevel": 20,
+    "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 30
   },
@@ -241,7 +256,8 @@
     "description": "Top-of-the-line planetary exploration suits, deployable bivouacs, and survival geo-locators.",
     "tier": 3,
     "baseCost": 5800,
-    "reqReputation": 40,
+    "requiredShopLevel": 13,
+    "reqReputation": null,
     "reqFaction": "explorers",
     "reqFactionRep": 25
   },
@@ -251,7 +267,8 @@
     "description": "Advanced personal defense armor including repulsor vests and energy-shielded combat helmets.",
     "tier": 3,
     "baseCost": 6000,
-    "reqReputation": 45,
+    "requiredShopLevel": 17,
+    "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 20
   },
@@ -261,7 +278,8 @@
     "description": "Unforgiving, steel-plated industrial pressure suits and reinforced greaves.",
     "tier": 3,
     "baseCost": 5500,
-    "reqReputation": 40
+    "requiredShopLevel": 11,
+    "reqReputation": null
   },
   {
     "id": "lic_pro_adv_melee",
@@ -269,7 +287,8 @@
     "description": "High-tier close combat tools including mono-katanas, plasma-axes, and stun batons.",
     "tier": 3,
     "baseCost": 4800,
-    "reqReputation": 35,
+    "requiredShopLevel": 9,
+    "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 15
   },
@@ -279,7 +298,8 @@
     "description": "Wholesale supplier of heavy plasma canisters, tactical coolant rigs, and thermal batteries.",
     "tier": 3,
     "baseCost": 5200,
-    "reqReputation": 40,
+    "requiredShopLevel": 15,
+    "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 20
   },
@@ -289,7 +309,8 @@
     "description": "Highly regulated access to mortars, unguided RPGs, and heavy counter-weight weapon stocks.",
     "tier": 3,
     "baseCost": 8500,
-    "reqReputation": 60,
+    "requiredShopLevel": 21,
+    "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 40
   },
@@ -299,7 +320,8 @@
     "description": "Exclusive access to ridiculously expensive, cutting-edge smart-flechette weapons and neural-link optics.",
     "tier": 4,
     "baseCost": 25000,
-    "reqReputation": 85,
+    "requiredShopLevel": 28,
+    "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 60
   },
@@ -309,7 +331,8 @@
     "description": "A private network sourcing perfectly preserved Pre-War ballistic weapons and wooden sporting goods.",
     "tier": 4,
     "baseCost": 18000,
-    "reqReputation": 75,
+    "requiredShopLevel": 23,
+    "reqReputation": null,
     "reqFaction": "scavengers",
     "reqFactionRep": 40
   },
@@ -319,7 +342,8 @@
     "description": "Military artillery attachments including massive autocannon belts, fluted barrels, and artillery sights.",
     "tier": 4,
     "baseCost": 22000,
-    "reqReputation": 80,
+    "requiredShopLevel": 24,
+    "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 55
   },
@@ -329,7 +353,8 @@
     "description": "Highly illegal or fiercely regulated weaponry, including singularity launchers and archaic liquid fuel.",
     "tier": 4,
     "baseCost": 35000,
-    "reqReputation": 95,
+    "requiredShopLevel": 30,
+    "reqReputation": null,
     "reqFaction": "explorers",
     "reqFactionRep": 50
   },
@@ -339,7 +364,8 @@
     "description": "Premium weapon enhancements including biometric grips, speed-loaders, and eye-tracking smart optics.",
     "tier": 4,
     "baseCost": 15000,
-    "reqReputation": 70,
+    "requiredShopLevel": 22,
+    "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 45
   },
@@ -349,7 +375,8 @@
     "description": "Under-the-counter access to severe trauma solutions like anti-radiation flush and synthetic skin.",
     "tier": 4,
     "baseCost": 20000,
-    "reqReputation": 80,
+    "requiredShopLevel": 25,
+    "reqReputation": null,
     "reqFaction": "scavengers",
     "reqFactionRep": 45
   }

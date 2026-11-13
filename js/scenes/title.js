@@ -1,7 +1,7 @@
 // ==========================================
 // FILE: title.js
 // ==========================================
-// Title screen scene: New Game / Continue / Settings menu, driven by mouse or arrow keys.
+// Title screen scene: New Game / Continue / Settings / Dev menu, driven by mouse or arrow keys.
 // Continue loads and validates the saved shop before starting the game scene.
 import Phaser from "phaser";
 import { SettingsPanel } from "../logic/SettingsPanel.js";
@@ -35,6 +35,8 @@ export class TitleScene extends Phaser.Scene {
         label: "SETTINGS",
         action: () => this.settingsPanel.open(),
       },
+      // Developer test harness for shelf stock visuals.
+      { label: "DEV", action: () => this.scene.start("scene-shelf-lab") },
     ];
 
     this.titleText = this.add

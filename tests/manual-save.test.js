@@ -201,6 +201,61 @@ test("buying all backroom expansions records costs and opens the wider room", ()
   assert.equal(harness.autosaves, 3);
 });
 
+test("debug upgrade buttons open the next zone free, even at Level 1 with the store open", () => {
+  const harness = createExpansionHarness({ shopLevel: 1, credits: 0 });
+  const { scene } = harness;
+  scene.shiftClock.started = true;
+  for (const [order, area] of [[EXPANSION_ORDER, "sales floor"], [BACKROOM_UPGRADE_ORDER, "backroom"]]) {
+    for (const id of order) {
+      assert.equal(scene.debugUnlockNextZone(order, area), true);
+      assert.equal(scene.room.zones.find((zone) => zone.id === id).locked, false);
+    }
+    assert.equal(scene.debugUnlockNextZone(order, area), false);
+    assert.match(harness.messages.at(-1), new RegExp(`Every ${area} upgrade is already open`));
+  }
+  assert.equal(scene.playerState.credits, 0);
+});
+
+test("the placement grid toggle stays hidden outside placement and independent of the tile grid", () => {
+  const scene = Object.create(GameScene.prototype);
+  const created = [];
+  scene.debugGridOverlays = new Map();
+  scene.fixturePlacement = { active: false };
+  scene.add = {
+    graphics() {
+      const graphics = {
+        visible: true,
+        lines: [],
+        clear() { return this; },
+        setDepth(depth) { this.depth = depth; return this; },
+        lineStyle(...style) { this.style = style; return this; },
+        lineBetween(...line) { this.lines.push(line); return this; },
+        setVisible(visible) { this.visible = visible; return this; },
+      };
+      created.push(graphics);
+      return graphics;
+    },
+  };
+
+  scene.toggleDebugGrid(8, 0x00ff00, 1);
+  const fine = created[0];
+  assert.equal(fine.visible, false);
+  assert.equal(scene.debugPlacementGrid.enabled, true);
+  assert.equal(fine.depth, 9998);
+
+  scene.toggleDebugGrid();
+  const coarse = created[1];
+  assert.equal(coarse.visible, true);
+  assert.deepEqual(coarse.style, [1, 0x00ffff, 0.5]);
+  scene.toggleDebugGrid(8, 0x00ff00, 1);
+  assert.equal(fine.visible, false);
+  assert.equal(scene.debugPlacementGrid.enabled, false);
+  assert.equal(coarse.visible, true);
+  scene.toggleDebugGrid(8, 0x00ff00, 1);
+  assert.equal(scene.debugPlacementGrid.enabled, true);
+  assert.equal(created.length, 2);
+});
+
 test("temporarily closing the store pauses arrivals and reschedules them on reopening", () => {
   let elapsedMs = 0;
   const spawned = [];

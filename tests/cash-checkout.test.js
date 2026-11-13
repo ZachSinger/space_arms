@@ -6,9 +6,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
-import { CashPayment } from "../js/logic/CashPayment.js";
+import { CashPayment, getCashDenominations } from "../js/logic/CashPayment.js";
 import { ChitPayment } from "../js/logic/ChitPayment.js";
-import { CheckoutRenderer } from "../js/logic/CheckoutRenderer.js";
+import { cashFaceValue, CheckoutRenderer } from "../js/logic/CheckoutRenderer.js";
 
 let server;
 let cacheDirectory;
@@ -344,6 +344,18 @@ test("the change drawer shows bare numbers on bills and coins, with no row headi
   assert.match(html, /HAND OVER CHANGE<span class="kbd-only"> \(SPACE\)<\/span>/);
   assert.match(html, /3\.77 credits/);
   assert.equal((html.match(/data-cash-units=/g) ?? []).length, 9);
+});
+
+test("every cash bill and coin face shows only its numeric amount", () => {
+  for (const currency of ["credits", "m-scrips"]) {
+    for (const denomination of getCashDenominations(currency)) {
+      assert.match(
+        cashFaceValue(denomination, currency),
+        /^\d+(,\d{3})*(\.\d+)?$/,
+        `${currency} ${denomination.kind} face should contain only its amount`,
+      );
+    }
+  }
 });
 
 test("Scavenger cash shows only M-Scrip bills and prices the sale in M-Scrips", () => {

@@ -1133,6 +1133,14 @@ button {
   text-align: center;
 }
 
+.cash-bill .cash-art > span,
+.cash-bill > .cash-value {
+  padding: 5px 6px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.35) 30%, transparent 100%);
+  white-space: nowrap;
+}
+
 .cash-coin .cash-art {
   width: 48px;
   height: 48px;
@@ -1228,7 +1236,7 @@ button {
   height: 50px;
 }
 
-.cash-loose > .cash-value {
+.cash-loose.cash-coin > .cash-value {
   max-width: calc(100% - 8px);
   overflow-wrap: anywhere;
 }

@@ -1,0 +1,2 @@
+export const CUSTOMER_COLLISION_WIDTH = 46;
+export const CUSTOMER_COLLISION_HEIGHT = 48;

@@ -9,6 +9,7 @@ import { ControlMode } from "../js/logic/ControlMode.js";
 import { EventBus, GAME_EVENTS } from "../js/logic/EventBus.js";
 import { InteractableRegistry } from "../js/logic/InteractableRegistry.js";
 import { Crate, INTERACT_RANGE } from "../js/logic/Crate.js";
+import { gaugeFillRect } from "../js/logic/CapacityGauge.js";
 import { getFixtureType } from "../js/logic/FixtureLayout.js";
 import { FixtureRegistry } from "../js/logic/FixtureRegistry.js";
 import { PAD } from "../js/logic/GamepadInput.js";
@@ -416,10 +417,12 @@ function drawLocker(scene) {
     destroy() { this.destroyed = true; },
   };
   const label = {
-    text: "", updates: 0,
-    setOrigin(x, y) { this.origin = [x, y]; return this; },
+    rects: [], clears: 0, visible: true,
+    setVisible(visible) { this.visible = visible; return this; },
     setDepth(depth) { this.depth = depth; return this; },
-    setText(text) { this.text = text; this.updates += 1; return this; },
+    clear() { this.rects = []; this.clears += 1; return this; },
+    fillStyle(color) { this.color = color; return this; },
+    fillRect(x, y, width, height) { this.rects.push({ color: this.color, x, y, width, height }); return this; },
     setPosition(x, y) { this.x = x; this.y = y; return this; },
     destroy() { this.destroyed = true; },
   };
@@ -429,7 +432,7 @@ function drawLocker(scene) {
       Object.assign(image, { x, y, texture, frame });
       return image;
     },
-    text: () => label,
+    graphics: () => label,
   };
   scene.obstacleGroup = { add() {} };
   const locker = new StorageFixture({
@@ -440,27 +443,47 @@ function drawLocker(scene) {
   return locker;
 }
 
-test("locker labels show occupied capacity, not the number of items", () => {
+test("locker gauges fill by occupied capacity, not the number of items", () => {
   const h = createHarness();
   const locker = drawLocker(h.scene);
-  const label = locker.capacityLabel;
-  assert.equal(label.text, "0/20");
-  assert.deepEqual([label.x, label.y], [96, 92]);
-  assert.deepEqual(label.origin, [0.5, 1]);
-  assert.equal(label.depth, 3);
+  const gauge = locker.capacityGauge.graphics;
+  const green = () => gauge.rects.find((rect) => rect.color === 0x22c55e);
+  // Sits on the locker's front, its top edge 6px below the locker's top.
+  assert.deepEqual([gauge.x, gauge.y], [96, locker.sprite.getBounds().top + 6]);
+  assert.ok(gauge.depth > 10003, "drawn above the player and a full stack of carried crates");
+  assert.equal(green(), undefined);
   assert.equal(locker.add("item", 3), 3); // Each unit uses two spaces.
   assert.equal(locker.add("single", 1), 1);
   h.scene.refreshLockerCapacityDisplay(locker);
-  assert.equal(label.text, "7/20");
-  const updates = label.updates;
+  assert.deepEqual(green(), { color: 0x22c55e, x: -3, y: 13, width: 6, height: 7 }); // 7 of 20, filled from the bottom
+  const clears = gauge.clears;
   h.scene.refreshLockerCapacityDisplay(locker);
-  assert.equal(label.updates, updates);
-  locker.remove("item", 1);
+  assert.equal(gauge.clears, clears);
+  locker.add("single", 13);
   h.scene.refreshLockerCapacityDisplay(locker);
-  assert.equal(label.text, "5/20");
-  locker.add("single", 15);
-  h.scene.refreshLockerCapacityDisplay(locker);
-  assert.equal(label.text, "20/20");
+  assert.deepEqual(green(), { color: 0x22c55e, x: -3, y: 0, width: 6, height: 20 });
+});
+
+test("a locker's gauge shows only while the player is close enough to open it", () => {
+  const h = createHarness();
+  const locker = drawLocker(h.scene);
+  const gauge = locker.capacityGauge.graphics;
+  h.scene.fixtures.stockHolders = () => [locker];
+  Object.assign(locker, { gx: 1, gy: 1, rotation: 0 }); // faces down; its front edge is y = 132
+  assert.equal(gauge.visible, false);
+  const front = 132;
+  h.scene.player.sprite = { x: locker.x, y: front + 10 };
+  h.scene.refreshLockerGaugeVisibility(locker);
+  assert.equal(gauge.visible, true);
+  h.scene.player.sprite = { x: locker.x, y: front + 400 };
+  h.scene.refreshLockerGaugeVisibility(locker);
+  assert.equal(gauge.visible, false);
+});
+
+test("horizontal gauges fill from the left and vertical gauges fill from the bottom", () => {
+  assert.deepEqual(gaugeFillRect("horizontal", 0.25), { x: 0, y: 0, width: 5, height: 6 });
+  assert.deepEqual(gaugeFillRect("vertical", 0.25), { x: 0, y: 15, width: 6, height: 5 });
+  assert.deepEqual(gaugeFillRect("vertical", 2), { x: 0, y: 0, width: 6, height: 20 });
 });
 
 test("single lockers open independently for their window and close when it closes", () => {
@@ -591,7 +614,7 @@ test("a carried crate shows what is inside and, for items, the locker spaces it 
 test("locker labels follow layout changes and are destroyed with the fixture", () => {
   const h = createHarness();
   const locker = drawLocker(h.scene);
-  const label = locker.capacityLabel;
+  const label = locker.capacityGauge.graphics;
   h.scene.fixtures = {
     get: () => locker,
     all: () => [locker],
@@ -601,7 +624,7 @@ test("locker labels follow layout changes and are destroyed with the fixture", (
   h.scene.applyFixtureLayout([{ id: "locker", gx: 3, gy: 4 }], {
     access: new Map([["locker", { gx: 3, gy: 6 }]]), blockedCells: [], queueCells: [],
   });
-  assert.deepEqual([label.x, label.y], [210, 254]);
+  assert.deepEqual([label.x, label.y], [210, 262]);
   h.scene.despawnAllFixtures();
   assert.equal(label.destroyed, true);
   assert.equal(locker.sprite.destroyed, true);

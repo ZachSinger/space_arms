@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { EventBus, GAME_EVENTS } from "../js/logic/EventBus.js";
 import { createServer } from "vite";
 import { fixtureBounds, fixtureStandingSpot, rectanglesOverlap } from "../js/logic/FixtureLayout.js";
+import { PLAYER_BODY_HEIGHT, PLAYER_BODY_WIDTH } from "../js/logic/Player.js";
 import { TILE_SIZE } from "../js/logic/RoomLayout.js";
 
 let server;
@@ -185,6 +186,21 @@ function makeEmployee({
   scene.employees = [employee];
   return { employee, shelf, locker, transfers, completedSales };
 }
+
+test("employees request routes sized for their own collision bodies", () => {
+  const { employee } = makeEmployee();
+  let requestedBodySize;
+  employee.scene.findPath = (...args) => {
+    requestedBodySize = args[4];
+    return [];
+  };
+
+  assert.equal(employee.walkTo({ x: 120, y: 80 }, "TO_SHELF"), true);
+  assert.deepEqual(requestedBodySize, {
+    width: PLAYER_BODY_WIDTH,
+    height: PLAYER_BODY_HEIGHT,
+  });
+});
 
 test("staff can stand at a narrow locker's front without colliding in every facing", () => {
   const { employee } = makeEmployee();

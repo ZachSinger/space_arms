@@ -83,6 +83,67 @@ function fixture(standPoint, placements) {
   };
 }
 
+function makeNavigationScene(obstacles = [], register = null) {
+  const scene = Object.create(GameScene.prototype);
+  scene.room = {
+    isWalkable: (gx, gy) => gx >= 0 && gx < 4 && gy >= 0 && gy < 4,
+    wallGroup: { getChildren: () => [] },
+  };
+  scene.obstacleGroup = { getChildren: () => obstacles };
+  scene.fixtures = { register: () => register };
+  return scene;
+}
+
+test("characters can walk through a clear passage narrower than one floor square", () => {
+  const scene = makeNavigationScene([
+    { body: { x: 80, y: 0, width: 80, height: 72 } },
+    { body: { x: 80, y: 120, width: 80, height: 136 } },
+  ]);
+
+  assert.deepEqual(scene.findAreaPath(32, 96, 224, 96), []);
+});
+
+test("the public door remains a route through the wall while its blocker opens on approach", () => {
+  const blocker = { body: { x: 80, y: 60, width: 80, height: 72 } };
+  const scene = makeNavigationScene([blocker]);
+  scene.storeDoorAnimation = { door: { blocker } };
+
+  assert.deepEqual(scene.findAreaPath(32, 96, 224, 96), []);
+});
+
+test("staff use their smaller collision body to fit passages shoppers cannot", () => {
+  const scene = makeNavigationScene([
+    { body: { x: 0, y: 0, width: 256, height: 80 } },
+    { body: { x: 0, y: 120, width: 256, height: 136 } },
+  ]);
+
+  assert.equal(scene.findAreaPath(32, 100, 224, 100), null);
+  assert.ok(scene.findAreaPath(32, 100, 224, 100, { width: 22, height: 20 }));
+});
+
+test("characters route around the true edges of a fixture body", () => {
+  const scene = makeNavigationScene([
+    { body: { x: 80, y: 32, width: 80, height: 96 } },
+  ]);
+  const path = scene.findAreaPath(32, 96, 224, 96);
+
+  assert.ok(path);
+  assert.ok(path.length > 0);
+  assert.ok(path.some(({ y }) => y <= 8 || y >= 152));
+  let previous = { x: 32, y: 96 };
+  for (const point of [...path, { x: 224, y: 96 }]) {
+    assert.equal(scene.isStraightWalkClear(previous.x, previous.y, point.x, point.y), true);
+    previous = point;
+  }
+});
+
+test("the register queue can approach the counter's exact front edge", () => {
+  const register = { rotation: 0, sprite: { body: { x: 80, y: 40, width: 90, height: 75 } } };
+  const scene = makeNavigationScene([], register);
+
+  assert.deepEqual(scene.findAreaPath(125, 200, 125, 129), []);
+});
+
 function makeShelfScene(shelves) {
   const scene = Object.create(GameScene.prototype);
   scene.fixtures = { shelves: () => shelves };

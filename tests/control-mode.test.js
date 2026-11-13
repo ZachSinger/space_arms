@@ -57,12 +57,16 @@ test("each mode exposes only its declared actions", () => {
   const controls = new ControlMode(scene);
 
   assert.equal(controls.allows("move"), true);
+  assert.equal(controls.allows("debugGrid"), true);
   scene.fixturePlacement.active = true;
   assert.equal(controls.allows("rotateFixture"), true);
+  assert.equal(controls.allows("debugGrid"), true);
+  assert.equal(controls.allows("debug"), false);
   assert.equal(controls.allows("crate"), false);
 
   scene.fixturePlacement.active = false;
   assert.equal(controls.allows("rotateFixture"), false);
   scene.startingShift = true;
   assert.equal(controls.allows("pause"), false);
+  assert.equal(controls.allows("debugGrid"), false);
 });

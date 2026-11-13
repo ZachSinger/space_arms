@@ -587,7 +587,7 @@ export class CheckoutWindow {
       element.type = "button";
       element.className = `cash-loose cash-${piece.kind}`;
       element.setAttribute("aria-label", `Take ${piece.label}`);
-      element.innerHTML = `<span class="cash-value">${piece.label}</span>`;
+      element.innerHTML = `<span class="cash-value">${cashFaceValue(piece, this.cashPayment.currency)}</span>`;
       // Random spot and tilt inside the area, kept clear of its edges.
       element.style.left = `${8 + Math.random() * 64}%`;
       element.style.top = `${10 + Math.random() * 60}%`;

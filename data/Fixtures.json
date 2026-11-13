@@ -5,15 +5,84 @@
     "kind": "shelf",
     "w": 1,
     "h": 1,
-    "texture": "shelf_budget_down",
+    "texture": "shelf_budget_2x2_down",
     "facingTextures": {
-      "down": "shelf_budget_down",
-      "left": "shelf_budget_left",
-      "up": "shelf_budget_up",
-      "right": "shelf_budget_right"
+      "down": "shelf_budget_2x2_down",
+      "left": "shelf_budget_2x2_left",
+      "up": "shelf_budget_2x2_up",
+      "right": "shelf_budget_2x2_right"
     },
     "stackDepth": 10,
     "price": 150,
+    "licenseId": "lic_fixture_basics"
+  },
+  "shelf_budget_2x3": {
+    "id": "shelf_budget_2x3",
+    "name": "BUDGET SHELF 2x3",
+    "kind": "shelf",
+    "w": 1.5,
+    "h": 1,
+    "texture": "shelf_budget_2x3_down",
+    "facingTextures": {
+      "down": "shelf_budget_2x3_down",
+      "left": "shelf_budget_2x3_left",
+      "up": "shelf_budget_2x3_up",
+      "right": "shelf_budget_2x3_right"
+    },
+    "stackDepth": 10,
+    "price": 225,
+    "licenseId": "lic_fixture_basics"
+  },
+  "shelf_budget_2x4": {
+    "id": "shelf_budget_2x4",
+    "name": "BUDGET SHELF 3x4",
+    "kind": "shelf",
+    "w": 2,
+    "h": 1,
+    "shelfRows": 3,
+    "texture": "shelf_budget_2x4_down",
+    "facingTextures": {
+      "down": "shelf_budget_2x4_down",
+      "left": "shelf_budget_2x4_left",
+      "up": "shelf_budget_2x4_up",
+      "right": "shelf_budget_2x4_right"
+    },
+    "stackDepth": 10,
+    "price": 300,
+    "licenseId": "lic_fixture_basics"
+  },
+  "shelf_budget_2x5": {
+    "id": "shelf_budget_2x5",
+    "name": "BUDGET SHELF 2x5",
+    "kind": "shelf",
+    "w": 2.5,
+    "h": 1,
+    "texture": "shelf_budget_2x5_down",
+    "facingTextures": {
+      "down": "shelf_budget_2x5_down",
+      "left": "shelf_budget_2x5_left",
+      "up": "shelf_budget_2x5_up",
+      "right": "shelf_budget_2x5_right"
+    },
+    "stackDepth": 10,
+    "price": 375,
+    "licenseId": "lic_fixture_basics"
+  },
+  "shelf_budget_2x6": {
+    "id": "shelf_budget_2x6",
+    "name": "BUDGET SHELF 2x6",
+    "kind": "shelf",
+    "w": 3,
+    "h": 1,
+    "texture": "shelf_budget_2x6_down",
+    "facingTextures": {
+      "down": "shelf_budget_2x6_down",
+      "left": "shelf_budget_2x6_left",
+      "up": "shelf_budget_2x6_up",
+      "right": "shelf_budget_2x6_right"
+    },
+    "stackDepth": 10,
+    "price": 450,
     "licenseId": "lic_fixture_basics"
   },
   "shelf_starter_2x1": {

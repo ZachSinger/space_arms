@@ -204,14 +204,14 @@ At least 10 logic modules take `scene` and use its internals:
 - **This is a symptom of problem 2:** rules aren't separable from Phaser.
 - **No test can run a full shift end to end,** which is what balance work actually needs.
 
-## 🟡 14. Pathfinding won't scale to a bigger map with employees
+## 🟡 14. Fine-grid pathfinding may need profiling on a fully expanded shop
 
-- **The algorithm is uniform-cost BFS with `queue.shift()`** (`Pathfinder.js:68`), so
-  each dequeue is O(n), plus a 4,000-step cap that can silently fail on large maps.
-- **`blockedCells` is rebuilt wholesale on layout changes,** and walking customers don't
-  re-path when a fixture moves.
-- **Fine today.** It becomes a problem with map expansion plus several employees pathing
-  continuously.
+- **Movement now uses heap-based A* on an 8-pixel grid** with a 50,000-node search cap;
+  layout reachability still uses the separate grid flood fill.
+- **Navigation obstacles are rebuilt for each route request.** This avoids a stale cache
+  when the room changes, but may cost more as the shop expands and more employees work.
+- **Profile a busy, fully expanded shop** before deciding whether obstacle caching or
+  route reuse is needed.
 
 ## 🟡 15. Debug features live in production code paths
 

@@ -115,19 +115,15 @@ exists" means "already authored in data," not "already rendered."
    supports one hand-seeded demo shelf. Real shelf/register/fixture placement
    (using the newly-extracted `Tileset/Fixtures/` sprites) and a Build Mode
    placement UI are separate, larger pieces of work.
-5. **Pathfinding.** Real grid-based pathfinding now exists (`Pathfinder.js`, an
-   8-directional BFS with corner-cutting prevention). `GameScene.findPath()`
-   combines `TileRoom.isWalkable()` (walls + locked zones) with a scene-level
-   `blockedCells` set (fixture footprints, e.g. the shelf) to route customers
-   around obstacles instead of walking straight at a point and getting stuck.
-   `Customer.setDestination()` computes a path once per state transition
-   (seek shelf / seek register / leave) and follows it waypoint-by-waypoint.
-   Collision (`TileRoom.wallGroup` + `GameScene.customerGroup`) remains in
-   place as a secondary safety net for the one thing pathfinding doesn't
-   cover: other customers, which are dynamic and not baked into the grid.
-   Still not modeled: path recomputation if a *new* fixture gets placed while
-   a customer is already mid-walk (static obstacles are snapshotted once at
-   scene creation), and a real navmesh for non-grid-aligned movement.
+5. **Pathfinding.** `Pathfinder.js` uses heap-based A* on an 8-pixel navigation
+   grid for character movement, then smooths routes wherever a straight walk
+   clears the room and character-sized fixture/wall boundaries. Customers and
+   staff can use narrow spaces that tile-center routes used to reject; staff
+   routes use their smaller collision body, and register destinations can sit
+   directly at the counter's front. Collision remains active as a safety net.
+   Other characters are still not route obstacles; customers can pass through
+   one another, as before. Fixture moves happen between shifts, so live routes
+   do not need to be rebuilt during rearrangement.
 6. **Player avatar -- DONE.** `js/logic/Player.js` + `GameScene` now have a
    WASD/arrow-controlled player (temporary tinted reuse of customer art, see TODO.md),
    colliding with walls/fixtures but not customers (bible Step 30/58, highest Z-index via

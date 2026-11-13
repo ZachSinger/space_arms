@@ -3,6 +3,7 @@
 // ==========================================
 // Compact category icons and quantities for the shop-floor shelves. One badge represents
 // one placement, including sold-out placements kept for restocking.
+// Retired: icons can't follow a turned shelf's shape; shelves use ShelfAttentionHighlight.
 import { getShelfDisplayGrid } from "./FixtureLayout.js";
 
 export const SHELF_CATEGORY_TEXTURES = Object.freeze({

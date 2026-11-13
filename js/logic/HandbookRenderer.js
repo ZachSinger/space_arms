@@ -119,7 +119,7 @@ function storeTopic({ shopLevel, reputation }) {
         `A see-through copy of the fixture appears. Move it into place, turn it with ${key("rotate")}, and
           <span class="kbd-only">click</span><span class="pad-only">press A</span> to place it.
           ${key("cancel")} cancels.`,
-        "The blue squares in front of a fixture must stay clear. That's where customers and staff stand to use it.",
+        "The green outline shows where the fixture sits; it turns red if you can't place it there. Keep the blue outlined area free of furniture so customers and staff can stand there.",
         "A fixture can't block a doorway or cut off part of the shop, and the register needs room in front for a line.",
       ])}
       <p>Fixtures can only be placed or moved <strong>between shifts</strong>. To move one that's

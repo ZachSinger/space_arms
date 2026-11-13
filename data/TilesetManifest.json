@@ -376,6 +376,86 @@
     "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_right.png"
   },
   {
+    "key": "shelf_budget_2x2_down",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x2_down.png"
+  },
+  {
+    "key": "shelf_budget_2x2_left",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x2_left.png"
+  },
+  {
+    "key": "shelf_budget_2x2_up",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x2_up.png"
+  },
+  {
+    "key": "shelf_budget_2x2_right",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x2_right.png"
+  },
+  {
+    "key": "shelf_budget_2x3_down",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x3_down.png"
+  },
+  {
+    "key": "shelf_budget_2x3_left",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x3_left.png"
+  },
+  {
+    "key": "shelf_budget_2x3_up",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x3_up.png"
+  },
+  {
+    "key": "shelf_budget_2x3_right",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x3_right.png"
+  },
+  {
+    "key": "shelf_budget_2x4_down",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x4_down.png"
+  },
+  {
+    "key": "shelf_budget_2x4_left",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x4_left.png"
+  },
+  {
+    "key": "shelf_budget_2x4_up",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x4_up.png"
+  },
+  {
+    "key": "shelf_budget_2x4_right",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x4_right.png"
+  },
+  {
+    "key": "shelf_budget_2x5_down",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x5_down.png"
+  },
+  {
+    "key": "shelf_budget_2x5_left",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x5_left.png"
+  },
+  {
+    "key": "shelf_budget_2x5_up",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x5_up.png"
+  },
+  {
+    "key": "shelf_budget_2x5_right",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x5_right.png"
+  },
+  {
+    "key": "shelf_budget_2x6_down",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x6_down.png"
+  },
+  {
+    "key": "shelf_budget_2x6_left",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x6_left.png"
+  },
+  {
+    "key": "shelf_budget_2x6_up",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x6_up.png"
+  },
+  {
+    "key": "shelf_budget_2x6_right",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x6_right.png"
+  },
+  {
     "key": "register_01",
     "path": "img/Icons_Extracted/Tileset/Fixtures/register_01.png"
   },
@@ -754,5 +834,61 @@
   {
     "key": "wall_window_star_widest",
     "path": "img/Icons_Extracted/Tileset/wall_window_star_widest.png"
+  },
+  {
+    "key": "shelf_box_weapons",
+    "path": "img/Icons_Extracted/Tileset/ShelfBoxes/shelf_box_weapons.png"
+  },
+  {
+    "key": "shelf_box_ammunition",
+    "path": "img/Icons_Extracted/Tileset/ShelfBoxes/shelf_box_ammunition.png"
+  },
+  {
+    "key": "shelf_box_attachments",
+    "path": "img/Icons_Extracted/Tileset/ShelfBoxes/shelf_box_attachments.png"
+  },
+  {
+    "key": "shelf_box_clothing",
+    "path": "img/Icons_Extracted/Tileset/ShelfBoxes/shelf_box_clothing.png"
+  },
+  {
+    "key": "shelf_box_armor",
+    "path": "img/Icons_Extracted/Tileset/ShelfBoxes/shelf_box_armor.png"
+  },
+  {
+    "key": "shelf_box_tools",
+    "path": "img/Icons_Extracted/Tileset/ShelfBoxes/shelf_box_tools.png"
+  },
+  {
+    "key": "shelf_box_survival",
+    "path": "img/Icons_Extracted/Tileset/ShelfBoxes/shelf_box_survival.png"
+  },
+  {
+    "key": "shelf_slatted_weapons",
+    "path": "img/Icons_Extracted/Tileset/ShelfBoxes/shelf_slatted_weapons.png"
+  },
+  {
+    "key": "shelf_slatted_ammunition",
+    "path": "img/Icons_Extracted/Tileset/ShelfBoxes/shelf_slatted_ammunition.png"
+  },
+  {
+    "key": "shelf_slatted_attachments",
+    "path": "img/Icons_Extracted/Tileset/ShelfBoxes/shelf_slatted_attachments.png"
+  },
+  {
+    "key": "shelf_slatted_clothing",
+    "path": "img/Icons_Extracted/Tileset/ShelfBoxes/shelf_slatted_clothing.png"
+  },
+  {
+    "key": "shelf_slatted_armor",
+    "path": "img/Icons_Extracted/Tileset/ShelfBoxes/shelf_slatted_armor.png"
+  },
+  {
+    "key": "shelf_slatted_tools",
+    "path": "img/Icons_Extracted/Tileset/ShelfBoxes/shelf_slatted_tools.png"
+  },
+  {
+    "key": "shelf_slatted_survival",
+    "path": "img/Icons_Extracted/Tileset/ShelfBoxes/shelf_slatted_survival.png"
   }
 ]
