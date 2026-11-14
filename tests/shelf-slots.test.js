@@ -15,6 +15,7 @@ let server;
 let cacheDirectory;
 let InventoryPool;
 let ShelfFixture;
+let ShelfStockingWindow;
 let StorageFixture;
 
 before(async () => {
@@ -34,13 +35,14 @@ before(async () => {
       },
       load(id) {
         if (id === "\0shelf-slots-test-database") {
-          return `export const database = { getItem: (id) => ({ id, dimensions: { w: id === "wpn_hvy_01" ? 4 : 1, h: 1 }, boxSize: id === "wpn_hvy_01" ? 20 : 1, slots: 1, stackSize: id === "paste" ? 15 : 4 }) };`;
+          return `export const database = { getItem: (id) => ({ id, name: id, image: "item.png", tags: ["Firearm"], dimensions: { w: id === "wpn_hvy_01" ? 4 : 1, h: 1 }, boxSize: id === "wpn_hvy_01" ? 20 : 1, slots: 1, stackSize: id === "paste" ? 15 : 4 }) };`;
         }
       },
     }],
   });
   ({ InventoryPool } = await server.ssrLoadModule("/js/logic/InventoryPool.js"));
   ({ ShelfFixture } = await server.ssrLoadModule("/js/logic/ShelfFixture.js"));
+  ({ ShelfStockingWindow } = await server.ssrLoadModule("/js/logic/ShelfStockingWindow.js"));
   ({ StorageFixture } = await server.ssrLoadModule("/js/logic/ShopInventory.js"));
 });
 
@@ -129,6 +131,66 @@ test("pulling uses empty or matching crates and shares live quantities with cust
   assert.equal(shelf.removeEmptyPlacement(placement), true);
   assert.equal(moveShelfCrateItem(shelf, [wrong], 0, 0, false).moved, 1);
   assert.equal(shelf.placements[0].itemId, "wpn_hvy_01");
+});
+
+test("the shelf window marks every space matching carried items and updates as crates change", () => {
+  const shelf = new ShelfFixture({ displayGrid: { w: 3, h: 2 }, stackDepth: 10, handsOn: true });
+  shelf.placeItem("amo_01", 0, 0, false, 20);
+  shelf.placeItem("wpn_pis_05", 1, 0, false, 0);
+  shelf.placeItem("amo_03", 2, 0, false, 2);
+  shelf.placeItem("amo_01", 0, 1, false, 0);
+  const ammoCrate = itemCrate("amo_01", 2);
+  const otherCrate = itemCrate("wpn_pis_05", 1);
+  const crates = [ammoCrate, otherCrate];
+  const cells = Array.from({ length: 6 }, () => {
+    const classes = new Set();
+    return {
+      dataset: {},
+      classList: {
+        toggle(name, active) { if (active) classes.add(name); else classes.delete(name); },
+        contains(name) { return classes.has(name); },
+      },
+      replaceChildren() {},
+      setAttribute() {},
+      appendChild() {},
+    };
+  });
+  const view = Object.assign(Object.create(ShelfStockingWindow.prototype), {
+    uiWindow: { isOpen: true },
+    scene: { getCarriedCrates: () => crates },
+    fixture: shelf,
+    art: getBudgetShelfArt(2, 3),
+    selected: null,
+    cells,
+    status: {},
+    card: {},
+  });
+  const marked = () => cells.map((cell) => cell.classList.contains("matches-carried"));
+  const originalDocument = globalThis.document;
+  globalThis.document = { createElement: () => ({ style: {} }) };
+  try {
+    view.refresh();
+    assert.deepEqual(marked(), [true, true, false, true, false, false]);
+
+    assert.equal(moveShelfCrateItem(shelf, [otherCrate], 1, 0, false).moved, 1);
+    view.refresh();
+    assert.deepEqual(marked(), [true, false, false, true, false, false]);
+
+    assert.equal(moveShelfCrateItem(shelf, [otherCrate], 2, 0, true).moved, 1);
+    view.refresh();
+    assert.deepEqual(marked(), [true, false, true, true, false, false]);
+
+    crates.splice(0, crates.length, itemCrate("amo_01", 0));
+    view.refresh();
+    assert.deepEqual(marked(), [false, false, false, false, false, false]);
+
+    crates.length = 0;
+    view.refresh();
+    assert.deepEqual(marked(), [false, false, false, false, false, false]);
+  } finally {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
 });
 
 test("every box size fits all shelf spaces and front boxes disappear before back boxes", () => {

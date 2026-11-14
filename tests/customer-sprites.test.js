@@ -88,7 +88,7 @@ test("characters walk while moving and hold the standing pose when stopped", () 
   assert.equal(sprite.frame, 7);
 });
 
-test("character collision box stays centered on the sprite position", () => {
+test("character collision box stays centered and leaves slack inside the planning size", () => {
   let body;
   const sprite = {
     setDisplaySize() { return this; },
@@ -112,8 +112,10 @@ test("character collision box stays centered on the sprite position", () => {
   };
   sprites.addCharacterSprite(scene, 0, 0, "customer_test", 46, 48);
   const scale = 64 / 96;
-  assert.equal(body.width * scale, 46);
-  assert.equal(body.height * scale, 48);
+  // A route flush along a fixture edge (the trashcan stuck the first customer) must not
+  // touch it, even after tiny rounding drift.
+  assert.ok(Math.abs(body.width * scale - 44) < 1e-9);
+  assert.ok(Math.abs(body.height * scale - 46) < 1e-9);
   assert.equal(body.offset.x + body.width / 2, 96 * sprite.origin.x);
   assert.equal(body.offset.y + body.height / 2, 96 * sprite.origin.y);
   assert.deepEqual(body.initialCenter, {

@@ -127,6 +127,7 @@ export class ShelfStockingWindow {
     hint.textContent = getInputDevice() === "gamepad"
       ? "A: stock one from carried crates. X: take one into a crate, or clear a sold-out space. B: close."
       : "Hold left mouse: stock from carried crates. Hold right mouse: take into a crate. Right-click a sold-out space to clear it. E or Esc: close.";
+    hint.textContent += " A green border marks spaces for items you're carrying.";
     this.status = document.createElement("p");
     this.status.setAttribute("role", "status");
     this.stage = document.createElement("div");
@@ -209,6 +210,7 @@ export class ShelfStockingWindow {
   refresh() {
     if (!this.uiWindow.isOpen) return;
     const crates = this.scene.getCarriedCrates().filter((crate) => crate.kind === "item");
+    const carriedItemIds = new Set(crates.filter((crate) => crate.quantity > 0).map((crate) => crate.itemId));
     this.status.textContent = this.notice || (crates.length
       ? `Carrying: ${crates.map((crate) => crate.quantity > 0
         ? `${database.getItem(crate.itemId).name} (${crate.quantity})` : "Empty crate").join(" | ")}`
@@ -218,6 +220,7 @@ export class ShelfStockingWindow {
       const placement = this.placementAt(index);
       const signature = placement ? `${placement.itemId}:${placement.quantity}` : "";
       cell.classList.toggle("selected", index === this.selected);
+      cell.classList.toggle("matches-carried", !!placement && carriedItemIds.has(placement.itemId));
       if (cell.dataset.stock === signature) continue;
       cell.dataset.stock = signature;
       cell.replaceChildren();

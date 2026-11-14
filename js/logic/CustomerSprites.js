@@ -16,6 +16,8 @@ const WALK_FRAME_RATE = 6;
 export const CHARACTER_DISPLAY_SIZE = 64;
 // Puts the old 46x48 collision box at the sprite's position despite the taller art canvas.
 export const CHARACTER_ORIGIN_Y = 0.625;
+// Pixels trimmed from each side of a character's physics body versus its planning size.
+export const CHARACTER_BODY_SLACK = 1;
 // px from the sprite's position up to the top of a typical character's head.
 export const CHARACTER_HEAD_HEIGHT = 32;
 
@@ -66,7 +68,11 @@ export function standingFrame(facing) {
  * Creates a customer/employee sprite whose collision box matches the old static art.
  * @returns {Phaser.GameObjects.Sprite}
  */
-export function addCharacterSprite(scene, x, y, textureKey, bodyWidth, bodyHeight) {
+export function addCharacterSprite(scene, x, y, textureKey, navWidth, navHeight) {
+  // Paths are planned with the full size and may run flush along a fixture's edge; the
+  // slightly smaller body leaves slack so rounding drift can't snag them on that edge.
+  const bodyWidth = navWidth - CHARACTER_BODY_SLACK * 2;
+  const bodyHeight = navHeight - CHARACTER_BODY_SLACK * 2;
   const sprite = scene.add
     .sprite(x, y, textureKey, standingFrame("down"))
     .setDisplaySize(CHARACTER_DISPLAY_SIZE, CHARACTER_DISPLAY_SIZE)

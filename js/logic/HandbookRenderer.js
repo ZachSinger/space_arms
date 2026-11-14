@@ -184,7 +184,7 @@ function stockingTopic() {
         "Customers only buy from shelves.",
         `Press ${key("interact")} at a 2x2 through 2x4 or 3x2 through 3x4 Budget Shelf to see its front up close, whichever way it faces in the shop.`,
         "Hold the left mouse button on a shelf space to place boxes one by one from your carried crates. Each space holds one kind of item. Small boxes fit twenty to a space; the largest fit one.",
-        "Each shelf space shows a picture of the item it holds, even when sold out. Point the mouse at a space to see the item's name and how many are on it in the bar at the bottom of the screen.",
+        "Shelf spaces show a picture of their item. A green border marks spaces that match an item in your crates, even when the space is sold out. Point the mouse at a space to see the item's name and how many are on it in the bar at the bottom of the screen.",
         "A sold-out space keeps its item, and customers keep looking for that item there. Until you clear it, only that item can be stocked there. Right-click a sold-out space to clear it, so customers stop looking there and you can stock something else.",
         "Hold the right mouse button to take boxes back into an empty crate, or a crate of the same item with room left. You can work while carrying up to three crates; the highest matching crate is used.",
         "The shop keeps running. Customers take boxes from the front first, including while you stock. Click an item's name card below the shelf to set its price in the Manager's Tablet.",
