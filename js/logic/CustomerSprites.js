@@ -79,6 +79,7 @@ export function addCharacterSprite(scene, x, y, textureKey, bodyWidth, bodyHeigh
     FRAME_SIZE / 2 - bodyWidth / scale / 2,
     FRAME_SIZE * CHARACTER_ORIGIN_Y - bodyHeight / scale / 2,
   );
+  sprite.body.updateFromGameObject();
   return sprite;
 }
 

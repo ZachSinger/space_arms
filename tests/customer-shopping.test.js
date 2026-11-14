@@ -14,7 +14,13 @@ let GameScene;
 const originalPhaser = globalThis.Phaser;
 
 before(async () => {
-  globalThis.Phaser = { Scene: class {} };
+  globalThis.Phaser = {
+    Scene: class {},
+    Math: {
+      Distance: { Between: (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1) },
+      Angle: { Between: (x1, y1, x2, y2) => Math.atan2(y2 - y1, x2 - x1) },
+    },
+  };
   cacheDirectory = await mkdtemp(join(tmpdir(), "space-arms-customer-shopping-test-"));
   server = await createServer({
     root: fileURLToPath(new URL("..", import.meta.url)),
@@ -142,6 +148,92 @@ test("the register queue can approach the counter's exact front edge", () => {
   const scene = makeNavigationScene([], register);
 
   assert.deepEqual(scene.findAreaPath(125, 200, 125, 129), []);
+});
+
+test("customers clear the captured door-side shelf corner before turning, even from its collision edge", () => {
+  const scene = makeNavigationScene([
+    { body: { x: 952, y: 104, width: 72, height: 64 } },
+  ]);
+  scene.room.isWalkable = (gx, gy) => gx >= 12 && gx < 22 && gy >= 0 && gy < 9;
+  for (const start of [{ x: 864, y: 266 }, { x: 1046.2471345207866, y: 192 }]) {
+    for (const delta of [1000 / 60, 33, 8]) {
+      const customer = Object.create(Customer.prototype);
+      let arrived = false;
+      const velocity = { x: 0, y: 0 };
+      customer.scene = scene;
+      customer.sprite = { ...start, body: {
+        setVelocity(x, y) { Object.assign(velocity, { x, y }); },
+      } };
+      customer.setDestination(1048, 88, () => { arrived = true; });
+      assert.notEqual(customer.path, null);
+      for (let elapsed = 0; elapsed < 4000 && !arrived; elapsed += delta) {
+        customer.followPath(delta);
+        const from = { x: customer.sprite.x, y: customer.sprite.y };
+        const to = { x: from.x + velocity.x * delta / 1000, y: from.y + velocity.y * delta / 1000 };
+        assert.equal(scene.isStraightWalkClear(from.x, from.y, to.x, to.y), true,
+          `customer must not cut into the shelf from ${JSON.stringify(from)} to ${JSON.stringify(to)}`);
+        Object.assign(customer.sprite, to);
+      }
+      assert.equal(arrived, true, "walk out in under four seconds, not the six-second exit timeout");
+    }
+  }
+});
+
+test("customer movement uses the current physics position, not the sprite from the previous frame", () => {
+  const customer = Object.create(Customer.prototype);
+  const calls = [];
+  const velocity = { x: 0, y: 0 };
+  customer.sprite = { x: 96, y: 100, body: {
+    center: { x: 100, y: 100 },
+    setVelocity(x, y) { Object.assign(velocity, { x, y }); },
+  } };
+  customer.scene = { findPath: (...args) => { calls.push(args); return []; } };
+  let arrived = false;
+  customer.setDestination(102, 100, () => { arrived = true; });
+  assert.deepEqual(calls, [[100, 100, 102, 100]]);
+  customer.moveToward(102, 100, () => { arrived = true; }, 1000 / 60, 0.0001);
+  assert.ok(Math.abs(velocity.x - 120) < 0.0001);
+  customer.sprite.body.center.x = 102;
+  customer.moveToward(102, 100, () => { arrived = true; }, 1000 / 60, 0.0001);
+  assert.equal(arrived, true);
+  assert.deepEqual(velocity, { x: 0, y: 0 });
+});
+
+test("a customer hitting an obstacle reroutes immediately without resetting their destination or timeout", () => {
+  const customer = Object.create(Customer.prototype);
+  const calls = [];
+  const events = [];
+  const velocity = { x: 0, y: 0 };
+  const detour = [{ x: 96, y: 160 }, { x: 160, y: 160 }];
+  customer.sprite = { x: 96, y: 96, body: {
+    blocked: { right: true },
+    setVelocity(x, y) { Object.assign(velocity, { x, y }); },
+  } };
+  customer.scene = {
+    findPath: (...args) => { calls.push(args); return detour.map((point) => ({ ...point })); },
+    debugInfo: { recordCustomer: (event) => events.push(event) },
+  };
+  customer.destination = { x: 160, y: 96 };
+  customer.path = [];
+  customer.seekingTimer = 1234;
+  customer.followPath(16);
+  assert.deepEqual(calls, [[96, 96, 160, 96]]);
+  assert.ok(Math.abs(velocity.x) < 0.0001);
+  assert.ok(velocity.y > 0, "walk around the obstacle instead of continuing right into it");
+  assert.equal(customer.seekingTimer, 1234);
+  assert.deepEqual(events, ["customer-collision-reroute"]);
+  customer.followPath(16);
+  assert.equal(calls.length, 1, "do not replan every frame from the same collision");
+  let unavailable = 0;
+  customer.setDestination(160, 96, () => assert.fail("must not arrive through an obstacle"),
+    () => { unavailable += 1; });
+  customer.sprite.body.blocked.down = true;
+  customer.scene.findPath = () => null;
+  customer.followPath(16);
+  assert.equal(customer.path, null);
+  assert.deepEqual(velocity, { x: 0, y: 0 });
+  customer.update(16);
+  assert.equal(unavailable, 1, "a failed reroute uses the original destination's failure handler");
 });
 
 function makeShelfScene(shelves) {

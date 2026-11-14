@@ -4,6 +4,17 @@ Running task list. Consult this before deciding what to work on. Add to it any t
 notice something that needs doing but isn't being done right now.
 
 ## Base-loop follow-ups
+- [ ] Add a pre-shift meal, breakfast, or another preparation choice that boosts stamina,
+      carrying ability, or another character stat for that shift only. Decide the choices,
+      costs, and effects before building it.
+- [x] E at a trashcan or the EMPTY CRATES bin returns all held empty crates, keeping filled
+      crates; E only supplies a free crate with completely empty hands. Q puts crates down.
+- [x] Empty crates reduce the walking/dashing slowdown compared with filled crates.
+- [x] Center an item picture over each assigned shelf space in the shelf window, including
+      sold-out spaces; clearing the assignment removes the picture.
+- [x] Customers reach shelf-corner waypoints before turning and reroute on directional
+      collisions rather than walking into the same obstacle until a timeout.
+- [x] Register keypad Backspace removes only the last character; CLEAR still erases all.
 - [x] Fixed closing when an employee is walking to the backroom: they finish walking or
       turn back for a waiting customer, so they cannot prevent the shift from ending.
 - [x] Fixed closing when an employee is already on break: they return to the register for
@@ -420,13 +431,14 @@ notice something that needs doing but isn't being done right now.
       fixture crates never stack. The player walks behind stacks, taller stacks are
       harder to push, and a 3-high stack can't be pushed while carrying anything. A
       96px bottom bar shows the marked crate's picture, name, and count, with one card
-      per carried crate above its right end. Q at the Empty Crates bin returns one empty
-      crate (hold: every empty crate on top). Q with empty hands opens Go-Backs (later:
+      per carried crate above its right end. E at the Empty Crates bin returns all held
+      empty crates. Q with empty hands opens Go-Backs (later:
       packs Go-Backs into crates). Saves
       keep floor stacks. Replaces Q/Y hovercart unpacking and the floating carried-crate
       label.
 - [x] Sales-floor trashcan fixture (`trash_can`, 40 credits, Basic Fixture Supply): works
-      like the backroom Empty Crates bin (E takes a free empty crate, Q puts empties in),
+      like the backroom Empty Crates bin (E returns held empty crates, or takes a free
+      empty crate when your hands are completely empty),
       can be moved/crated/sold in Layout and Fixtures, and is sales-floor only. New games
       start with one beside the front door; older saves don't get one automatically.
 - [x] A sold-out shelf space only accepts its own item until it is right-click cleared.
@@ -459,8 +471,8 @@ notice something that needs doing but isn't being done right now.
         "Load storage" job now carry delivered crates from the Loading Pad into lockers
         on their own (`Employee.js`, `EmployeeJobs.js`).
   - [x] ~~No Hovercart/backpack capacity model at all~~ -- see the new Hovercart entry
-        below. Crates themselves still carry a flat RESTOCK_QUANTITY (5) with no
-        carrying-capacity limit when hauled from the Loading Pad. (Unpacking a carried
+        below. Ordered crates now hold exactly one full Budget Shelf 2x2 space of their item
+        (`getCrateOrderQuantity`), with no carrying-capacity limit when hauled from the Loading Pad. (Unpacking a carried
         crate into the Hovercart was later removed; Q now puts crates down.)
 - [x] Storage Shelving + real capacity-pool storage (bible Step 42): the Storeroom is
       now a proper walled-off backroom (a `door_blast_keypad_01` door in its own east

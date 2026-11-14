@@ -218,6 +218,25 @@ test("Shift increases player speed only while moving and consumes stamina", () =
   assert.equal(player.stamina, 81.25);
 });
 
+test("empty crates slow walking and dashing less, including when mixed with filled crates", () => {
+  for (const [quantities, speed] of [
+    [[0, 0], 150],
+    [[5, 0], 135],
+    [[0, 0, 0], 140],
+    [[5, 0, 0], 120],
+    [[5, 5, 0], 100],
+  ]) {
+    const h = createPlayer();
+    h.scene.carriedCrates = quantities.map((quantity) => ({ kind: "item", quantity }));
+    h.wasd.right.isDown = true;
+    h.player.update(16);
+    assert.equal(h.body.velocity.x, speed);
+    h.shift.isDown = true;
+    h.player.update(16);
+    assert.equal(h.body.velocity.x, speed * 280 / 160);
+  }
+});
+
 test("two crates slow walking and dashing, and three slow them further", () => {
   const single = createPlayer();
   single.scene.carriedCrate = {};

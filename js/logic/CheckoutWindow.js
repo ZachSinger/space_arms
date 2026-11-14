@@ -146,7 +146,10 @@ export class CheckoutWindow {
     if (/^[0-9.]$/.test(event.key)) {
       event.preventDefault?.();
       this.appendDigit?.(event.key);
-    } else if (event.key === "Backspace" || event.key === "Delete" || event.key === "Escape") {
+    } else if (event.key === "Backspace") {
+      event.preventDefault?.();
+      this.backspaceBuffer?.();
+    } else if (event.key === "Delete" || event.key === "Escape") {
       this.clearBuffer?.();
     } else if (event.key === "Enter") {
       event.preventDefault?.();
@@ -461,6 +464,14 @@ export class CheckoutWindow {
     this.clearBuffer = () => {
       playKeypadClick();
       this.paymentBuffer = "";
+      feedbackElement.textContent = "";
+      refreshDisplay();
+    };
+
+    this.backspaceBuffer = () => {
+      if (this.paymentStage !== "total") return;
+      playKeypadClick();
+      this.paymentBuffer = this.paymentBuffer.slice(0, -1);
       feedbackElement.textContent = "";
       refreshDisplay();
     };

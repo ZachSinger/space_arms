@@ -307,6 +307,30 @@ test("cashless checkout still completes after entering the decimal total", () =>
   assert.equal(h.completed(), 1);
 });
 
+test("keypad Backspace removes one character, including the decimal point, while Clear resets all", () => {
+  const h = harness({ cash: false });
+  let prevented = 0;
+  const backspace = () => h.checkout.handleNumpadKeydown({
+    key: "Backspace", preventDefault: () => { prevented += 1; },
+  });
+  for (const digit of "1.23") h.checkout.appendDigit(digit);
+  h.elements.get("#checkout-payment-feedback").textContent = "AMOUNT INCORRECT";
+  for (const expected of ["1.2", "1.", "1", "", ""]) {
+    backspace();
+    assert.equal(h.checkout.paymentBuffer, expected);
+    assert.equal(h.elements.get("#checkout-payment-display").textContent, expected || "0");
+    assert.equal(h.elements.get("#checkout-payment-feedback").textContent, "");
+  }
+  assert.equal(prevented, 5);
+  for (const digit of "1.23") h.checkout.appendDigit(digit);
+  h.elements.get("#numpad-clear").listeners.get("click")();
+  assert.equal(h.checkout.paymentBuffer, "");
+  h.checkout.appendDigit("1");
+  h.checkout.paymentStage = "take";
+  backspace();
+  assert.equal(h.checkout.paymentBuffer, "1", "other payment stages do not edit the total");
+});
+
 test("Explorer Chit keyboard input resets mistakes and completes on the last right key", () => {
   const h = harness({ cash: false, chit: true });
   h.checkout.startChitPayment();

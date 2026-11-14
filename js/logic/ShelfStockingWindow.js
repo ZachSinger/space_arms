@@ -245,6 +245,11 @@ export class ShelfStockingWindow {
         });
         cell.appendChild(image);
       }
+      const picture = document.createElement("img");
+      picture.className = "shelf-stocking-item";
+      picture.src = item.image;
+      picture.alt = "";
+      cell.appendChild(picture);
     }
     const placement = this.selectedPlacement();
     this.card.hidden = !placement || placement.quantity === 0;

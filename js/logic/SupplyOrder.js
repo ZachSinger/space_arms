@@ -5,6 +5,20 @@
 // places it. Each delivery pays one flat fee, so batching crates into one order is cheaper
 // than ordering a single crate every time something runs low.
 
+import { getFixtureType, getShelfSlotCapacity } from "./FixtureLayout.js";
+
+// Ordered crates fill exactly one space on the starter Budget Shelf 2x2.
+export const ORDER_SIZE_SHELF_TYPE = "shelf_budget_2x2";
+
+/**
+ * How many of an item come in one ordered crate.
+ * @param {object} item - catalog item
+ */
+export function getCrateOrderQuantity(item) {
+  const shelf = getFixtureType(ORDER_SIZE_SHELF_TYPE);
+  return getShelfSlotCapacity(shelf.stackDepth, item, shelf.artLayout === "budget");
+}
+
 export const DELIVERY_FEE = 25; // credits
 // The Loading Pad has a 3x3 grid of crate spots (see GameScene.getLoadingPadSpawnPositions).
 export const LOADING_PAD_SPOTS = 9;

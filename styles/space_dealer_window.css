@@ -53,6 +53,17 @@
   outline: 1px solid var(--color-border-active);
 }
 
+.shelf-stocking-cell .shelf-stocking-item {
+  left: 50%;
+  top: 50%;
+  width: 65%;
+  height: 65%;
+  object-fit: contain;
+  transform: translate(-50%, -50%);
+  z-index: 1000;
+  filter: drop-shadow(0 1px 2px #000);
+}
+
 .shelf-stocking-card {
   white-space: pre-line;
   background: var(--color-panel);

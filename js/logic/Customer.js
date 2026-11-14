@@ -199,14 +199,14 @@ export class Customer {
           this.enterLeaving();
           break;
         }
-        this.followPath();
+        this.followPath(delta);
         this.updateFacing();
         break;
       case "BROWSING":
         this.updateBrowsing(delta);
         break;
       case "QUEUEING":
-        this.followPath();
+        this.followPath(delta);
         // A line of people should face the counter, not their last walking direction.
         this.updateFacing("up");
         this.updatePatience(delta);
@@ -218,7 +218,7 @@ export class Customer {
           this.destroy(); // safety net -- see LEAVING_TIMEOUT_MS
           break;
         }
-        this.followPath();
+        this.followPath(delta);
         if (!this.isDestroyed) this.updateFacing(); // arrival may have just destroyed this
         break;
     }
@@ -745,40 +745,70 @@ export class Customer {
     this.destination = { x: targetX, y: targetY };
     this.onArriveAtDestination = onArrive;
     this.seekingTimer = 0;
+    this.pathRetryMs = 0;
 
-    const path = this.scene.findPath?.(this.sprite.x, this.sprite.y, targetX, targetY);
+    const { x, y } = this.sprite.body?.center ?? this.sprite;
+    const path = this.scene.findPath?.(x, y, targetX, targetY);
     this.path = path === null ? null : path || [];
-    this.onPathUnavailable = path === null ? onPathUnavailable : null;
+    this.onPathUnavailable = onPathUnavailable;
   }
 
   // Walks the path waypoint by waypoint, then directly to the exact destination (which may
   // not sit on a grid-cell center) before firing the arrival callback.
-  followPath() {
+  followPath(delta = 1000 / 60) {
+    this.pathRetryMs = Math.max(0, (this.pathRetryMs ?? 0) - delta);
+    const target = this.path[0] ?? this.destination;
+    const { blocked, touching } = this.sprite.body ?? {};
+    const { x, y } = this.sprite.body?.center ?? this.sprite;
+    const hitting = (direction) => blocked?.[direction] || touching?.[direction];
+    const dx = target.x - x;
+    const dy = target.y - y;
+    if (this.pathRetryMs === 0 && this.scene.findPath &&
+        ((dx > 0.1 && hitting("right")) || (dx < -0.1 && hitting("left")) ||
+         (dy > 0.1 && hitting("down")) || (dy < -0.1 && hitting("up")))) {
+      this.pathRetryMs = 200;
+      this.path = this.scene.findPath(
+        x, y, this.destination.x, this.destination.y,
+      );
+      this.scene.debugInfo?.recordCustomer("customer-collision-reroute", this);
+      if (this.path === null) {
+        this.sprite.body.setVelocity(0, 0);
+        return;
+      }
+    }
     if (this.path.length > 0) {
       const waypoint = this.path[0];
-      this.moveToward(waypoint.x, waypoint.y, () => this.path.shift());
+      // Corner waypoints must be reached before turning; the destination's 6px tolerance
+      // would cut across nearby shelves. Capped velocity below prevents overshooting.
+      this.moveToward(waypoint.x, waypoint.y, () => this.path.shift(), delta, 0.0001);
       return;
     }
 
-    this.moveToward(this.destination.x, this.destination.y, () => this.onArriveAtDestination());
+    this.moveToward(this.destination.x, this.destination.y, () => this.onArriveAtDestination(), delta);
   }
 
   /**
    * @param {number} targetX
    * @param {number} targetY
-   * @param {() => void} onArrive - fired once within 6 px
+   * @param {() => void} onArrive
+   * @param {number} delta - ms until the next movement step
+   * @param {number} arrivalDistance - px; corners use a tighter tolerance than destinations
    */
-  moveToward(targetX, targetY, onArrive) {
-    const distance = Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, targetX, targetY);
+  moveToward(targetX, targetY, onArrive, delta = 1000 / 60, arrivalDistance = 6) {
+    // Physics has already moved the body; the drawn sprite catches up after scene update.
+    const { x, y } = this.sprite.body?.center ?? this.sprite;
+    const distance = Phaser.Math.Distance.Between(x, y, targetX, targetY);
 
-    if (distance < 6) {
+    if (distance < arrivalDistance) {
       this.sprite.body.setVelocity(0, 0);
       onArrive();
       return;
     }
 
-    const angle = Phaser.Math.Angle.Between(this.sprite.x, this.sprite.y, targetX, targetY);
-    this.sprite.body.setVelocity(Math.cos(angle) * SPEED, Math.sin(angle) * SPEED);
+    const angle = Phaser.Math.Angle.Between(x, y, targetX, targetY);
+    const stepMs = Math.max(delta, 1000 / 60);
+    const speed = delta > 0 ? Math.min(SPEED, distance / (stepMs / 1000)) : 0;
+    this.sprite.body.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
   }
 
   /**

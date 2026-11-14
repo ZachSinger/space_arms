@@ -100,6 +100,12 @@ test("character collision box stays centered on the sprite position", () => {
       body = {
         setSize(width, height) { this.width = width; this.height = height; },
         setOffset(x, y) { this.offset = { x, y }; },
+        updateFromGameObject() {
+          this.initialCenter = {
+            x: this.offset.x + this.width / 2,
+            y: this.offset.y + this.height / 2,
+          };
+        },
       };
       target.body = body;
     } } },
@@ -110,4 +116,7 @@ test("character collision box stays centered on the sprite position", () => {
   assert.equal(body.height * scale, 48);
   assert.equal(body.offset.x + body.width / 2, 96 * sprite.origin.x);
   assert.equal(body.offset.y + body.height / 2, 96 * sprite.origin.y);
+  assert.deepEqual(body.initialCenter, {
+    x: 96 * sprite.origin.x, y: 96 * sprite.origin.y,
+  }, "the body is aligned before the character chooses their first path");
 });

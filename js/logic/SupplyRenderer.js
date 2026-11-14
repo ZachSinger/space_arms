@@ -4,7 +4,7 @@
 // HTML for the Supply tab: the player builds one order of crates for licensed items, then
 // places it, spawning physical crates on the Loading Pad to haul in by hand.
 // See also: SupplyOrder.js (order rules), GameScene.handleInteract (crate hauling).
-import { MAX_CRATES_PER_ORDER, LOADING_PAD_SPOTS, DELIVERY_FEE } from "./SupplyOrder.js";
+import { MAX_CRATES_PER_ORDER, LOADING_PAD_SPOTS, DELIVERY_FEE, getCrateOrderQuantity } from "./SupplyOrder.js";
 
 /**
  * How an item is doing on the shop's shelves, for the Supply tab's badge.
@@ -66,7 +66,7 @@ export class SupplyRenderer {
                 <span class="item-card-cost">Total in shop: ${quantity}</span>
               </div>
               <div class="supply-card-row">
-                <span class="supply-crate-price">${cost} credits per crate of 5</span>
+                <span class="supply-crate-price">${cost} credits per crate of ${getCrateOrderQuantity(item)}</span>
                 <div class="supply-crate-stepper">
                   <button class="action-btn" data-supply-remove="${item.id}" data-pad-x aria-label="Remove one ${item.name} crate"${count > 0 ? "" : " disabled"}>-</button>
                   <span class="supply-crate-count" aria-label="${item.name} crates in order">${count}</span>

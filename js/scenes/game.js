@@ -38,7 +38,7 @@ import { getItemCrateTint } from "../logic/CrateCategory.js";
 import { FLOOR_STACK_MAX, HOLD_KEY_MS, MAX_CARRIED_CRATES, isInFacingCone } from "../logic/CrateStack.js";
 import { getCrateItemLimit } from "../logic/ShelfSlotStocking.js";
 import { CRATE_FOOTER_HEIGHT_PX, CrateFooter } from "../logic/CrateFooter.js";
-import { DELIVERY_FEE, summarizeSupplyOrder } from "../logic/SupplyOrder.js";
+import { DELIVERY_FEE, getCrateOrderQuantity, summarizeSupplyOrder } from "../logic/SupplyOrder.js";
 import { getEmergencyLoanOffer } from "../logic/EmergencyLoan.js";
 import { solveCratePush } from "../logic/CratePushing.js";
 import { separateOverlappingCrates } from "../logic/CrateSeparation.js";
@@ -143,9 +143,6 @@ const CRATE_FLOOR_DEPTH = 2;
 const ANGRY_REPUTATION_PENALTY = 1;
 // Reputation lost once when a customer cannot find any of their primary items.
 const MISSING_PRIMARY_REPUTATION_PENALTY = 1;
-
-// Units of stock in one ordered crate. Its cost comes from Market's per-item supplier rate.
-export const RESTOCK_QUANTITY = 5;
 
 // Loading Pad: a 3x3 grid of crate spots, each fitting one 32px crate (all px).
 const LOADING_PAD_SPOT_SIZE = 32;
@@ -2069,12 +2066,12 @@ export class GameScene extends Phaser.Scene {
       const [gx, gy] = spots[index];
       const placement = shelf.placeItem(item.id, gx, gy, false, 0);
       const capacity = shelf.getPlacementCapacity(placement);
-      const crates = Math.ceil(capacity / RESTOCK_QUANTITY);
+      const crates = Math.ceil(capacity / getCrateOrderQuantity(item));
       this.playerState.spendCredits(this.restockCost(item) * crates, {
         category: "stock_orders", label: item.name, quantity: crates,
       });
       placement.quantity = capacity;
-      let leftover = crates * RESTOCK_QUANTITY - capacity;
+      let leftover = crates * getCrateOrderQuantity(item) - capacity;
       for (const locker of this.fixtures.ofKind("storage")) {
         if (leftover <= 0) break;
         leftover -= locker.add(item.id, leftover);
@@ -2124,7 +2121,7 @@ export class GameScene extends Phaser.Scene {
    * @returns {number} credits
    */
   restockCost(item) {
-    return this.market.getSupplyCost(item.id, RESTOCK_QUANTITY);
+    return this.market.getSupplyCost(item.id, getCrateOrderQuantity(item));
   }
 
   /**
@@ -2330,7 +2327,7 @@ export class GameScene extends Phaser.Scene {
       }
       for (let index = 0; index < count; index += 1) {
         const spawn = spots.shift();
-        const crate = this.createItemCrate(itemId, RESTOCK_QUANTITY, spawn.x, spawn.y);
+        const crate = this.createItemCrate(itemId, getCrateOrderQuantity(database.getItem(itemId)), spawn.x, spawn.y);
         crate.setPaused(this.crateMotionPaused);
         crate.lockToPad();
         this.restockCrates.push(crate);
@@ -2549,8 +2546,10 @@ export class GameScene extends Phaser.Scene {
       this.setPlayerInBackroom(!this.playerInBackroom);
       return;
     }
-    if (this.isNearEmptyCrateBin()) {
-      this.takeEmptyCrateFromBin();
+    // Full crates alone fall through so E still opens a shelf or locker beside the bin.
+    if (this.isNearEmptyCrateBin() && (this.getCarriedCrates().length === 0 || this.heldEmptyCrates().length > 0)) {
+      if (this.getCarriedCrates().length === 0) this.takeEmptyCrateFromBin();
+      else this.returnEmptyCratesToBin();
       return;
     }
     if (this.carriedCrate) {
@@ -2570,6 +2569,11 @@ export class GameScene extends Phaser.Scene {
       }
       if (nearby) {
         this.tryOpenFixtureWindow(nearby);
+        return;
+      }
+      const bin = this.nearbyCrateBinName();
+      if (bin) {
+        this.showGameMessage(`Only empty crates go in the ${bin}.`, "#94a3b8");
         return;
       }
       this.showGameMessage("Too far from a shelf or locker", "#94a3b8");
@@ -2621,45 +2625,36 @@ export class GameScene extends Phaser.Scene {
     return near ? "trashcan" : null;
   }
 
-  // How many empty item crates sit together at the top of what you're carrying.
-  countTopEmptyCrates() {
-    const stack = this.getCarriedCrates();
-    let count = 0;
-    for (let index = stack.length - 1; index >= 0; index -= 1) {
-      if (stack[index].kind !== "item" || stack[index].quantity > 0) break;
-      count += 1;
-    }
-    return count;
+  heldEmptyCrates() {
+    return this.getCarriedCrates().filter((crate) => crate.kind === "item" && crate.quantity === 0);
   }
 
-  // Puts up to `count` empty crates from the top of what you're carrying back in the bin or trashcan.
-  returnEmptyCratesToBin(count) {
-    const returned = Math.min(count, this.countTopEmptyCrates());
-    const bin = this.nearbyCrateBinName() ?? "bin";
-    if (returned === 0) {
+  returnEmptyCratesToBin() {
+    const bin = this.nearbyCrateBinName();
+    if (!bin) {
+      this.showGameMessage("Move closer to a trashcan or the EMPTY CRATES bin.", "#94a3b8");
+      return false;
+    }
+    const empties = this.heldEmptyCrates();
+    if (empties.length === 0) {
       this.showGameMessage(`Only empty crates go in the ${bin}.`, "#94a3b8");
       return false;
     }
-    for (let index = 0; index < returned; index += 1) {
-      const crate = this.carriedCrate;
+    for (const crate of empties) {
       this.removeCarriedCrate(crate);
       crate.destroy();
     }
     this.playerState.notifyListeners();
-    this.showGameMessage(returned === 1
+    this.showGameMessage(empties.length === 1
       ? `Empty crate put in the ${bin}.`
-      : `${returned} empty crates put in the ${bin}.`, "#10b981");
+      : `${empties.length} empty crates put in the ${bin}.`, "#10b981");
     return true;
   }
 
   takeEmptyCrateFromBin() {
     const stack = this.getCarriedCrates();
-    if (stack.length >= MAX_CARRIED_CRATES) {
-      this.showGameMessage("You can only carry three crates.", "#f59e0b");
-      return false;
-    }
-    if (stack.some((crate) => crate.kind === "fixture")) {
-      this.showGameMessage("Put down the fixture crate before taking an empty crate.", "#94a3b8");
+    if (stack.length > 0) {
+      this.showGameMessage("Put your crates down before taking an empty crate.", "#94a3b8");
       return false;
     }
 
@@ -2670,7 +2665,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.addCarriedCrate(crate);
     this.playerState.notifyListeners();
-    this.showGameMessage("Free empty crate added to your stack.", "#10b981");
+    this.showGameMessage("Took a free empty crate.", "#10b981");
     return true;
   }
 
@@ -2815,12 +2810,6 @@ export class GameScene extends Phaser.Scene {
     if (holding === 0) {
       // Go-Backs only packs beside the register.
       actions.putDown = { tap: () => this.packGoBacks(), goBacks: true };
-    } else if (this.isNearEmptyCrateBin() && this.countTopEmptyCrates() > 0) {
-      actions.putDown = {
-        tap: () => this.returnEmptyCratesToBin(1),
-        hold: () => this.returnEmptyCratesToBin(holding),
-        bin: true,
-      };
     } else if (stack && top.kind !== "fixture") {
       const room = FLOOR_STACK_MAX - stack.crates.length;
       let reason = null;
@@ -2876,8 +2865,11 @@ export class GameScene extends Phaser.Scene {
       const handsFull = `Your hands are full (${MAX_CARRIED_CRATES} crates max)`;
       const { pickUp, putDown } = this.crateActions();
       const stack = this.markedFloorStack();
-      if (this.isNearEmptyCrateBin() && this.carriedCrate?.kind !== "fixture") {
-        lines.push(holding >= MAX_CARRIED_CRATES ? handsFull : `${interactKey}: Take a free empty crate from the ${this.nearbyCrateBinName()}`);
+      const bin = this.nearbyCrateBinName();
+      if (bin) {
+        const empties = this.heldEmptyCrates().length;
+        if (holding === 0) lines.push(`${interactKey}: Take a free empty crate from the ${bin}`);
+        else if (empties > 0) lines.push(`${interactKey}: Put ${empties === 1 ? "your empty crate" : `all ${empties} empty crates`} in the ${bin}`);
       }
       if (pickUp?.throws) {
         lines.push(`${pickKey} while walking: Throw your top crate`);
@@ -2887,12 +2879,7 @@ export class GameScene extends Phaser.Scene {
           lines.push(`Hold ${pickKey}: Pick up ${pickUp.lifted} crates (this one and the ones above it)`);
         }
       }
-      if (putDown?.bin) {
-        const bin = this.nearbyCrateBinName();
-        lines.push(`Tap ${putKey}: Put your top empty crate in the ${bin}`);
-        const empties = this.countTopEmptyCrates();
-        if (empties > 1) lines.push(`Hold ${putKey}: Put all ${empties} empty crates in the ${bin}`);
-      } else if (putDown?.blocked) {
+      if (putDown?.blocked) {
         lines.push(putDown.reason);
       } else if (putDown?.onStack) {
         lines.push(`Tap ${putKey}: Set your top crate on this stack`);
@@ -2905,11 +2892,12 @@ export class GameScene extends Phaser.Scene {
         if (holding > 1) lines.push(`Hold ${putKey}: Set all ${holding} crates down as a stack`);
       }
       if (stack?.crates.length > 1) lines.push(`${controlLabel("nextCrate")}: Move the arrow one crate down`);
-      if (this.carriedCrate?.kind === "item") {
+      const binTakesE = bin && this.heldEmptyCrates().length > 0;
+      if (!binTakesE && this.carriedCrate?.kind === "item") {
         const nearby = this.getNearbyFixture();
         if (nearby && isLocker(nearby)) lines.push(`${interactKey}: Fill a crate from this locker`);
         else if (nearby) lines.push(`${interactKey}: Open this shelf`);
-      } else if (this.carriedCrate?.kind === "fixture") lines.push(`${interactKey}: Place the fixture`);
+      } else if (!binTakesE && this.carriedCrate?.kind === "fixture") lines.push(`${interactKey}: Place the fixture`);
     }
     this.crateHint = [...new Set(lines)].join("\n");
     this.renderContextMessage();

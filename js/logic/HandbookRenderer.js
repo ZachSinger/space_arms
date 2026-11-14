@@ -147,7 +147,7 @@ function orderingTopic() {
     section("Ordering Stock", `
       ${list([
         "The <strong>Supply</strong> tab lists every item from the supply licenses you've signed.",
-        "Each crate holds 5 of one item. The price per crate is shown next to each item.",
+        "Each crate holds one item type, as many as fill one space on a Budget Shelf 2x2: from 20 of the smallest items down to 1 of the largest. Each item shows its crate size and price.",
         `Every order has a ${formatMoney(DELIVERY_FEE)} delivery fee, however many crates are in it.`,
         `The Loading Pad has ${LOADING_PAD_SPOTS} spots, so one order can't have more crates than there are free spots.`,
         "Orders arrive on the Loading Pad right away. You can order at any time, even during a shift.",
@@ -175,7 +175,7 @@ function stockingTopic() {
         `Tap ${key("putDown")} to put your top crate down in front of you. Hold ${key("putDown")} to set everything you're carrying down as one stack.`,
         `When the arrow points at a crate on the floor, ${key("putDown")} puts your crates on top of it instead: tap for one, hold for as many as fit. Stacks on the floor can be up to three crates high. Nothing can be stacked on a fixture crate or on the Loading Pad, and fixture crates are never stacked.`,
         `While walking with no arrow showing, press ${key("crate")} to throw your top crate the way you're walking. Thrown crates that hit a customer cost reputation.`,
-        "Carrying two crates slows you down; a third slows you down further. Your character faces the direction you move, and the crates stay straight.",
+        "Carrying two crates slows you down; a third slows you down further. Empty crates slow you less than filled crates. Your character faces the direction you move, and the crates stay straight.",
         `Press ${key("interact")} at a shelf to stock it by hand. At a locker, ${key("putDown")} empties crates into it and ${key("interact")} fills a crate from it (see <strong>Lockers</strong>).`,
         "Walk into a crate on the floor to push it out of the way. A taller stack is harder to push, and so is any crate while you're carrying something. A three-crate stack won't move at all while you're carrying a crate.",
       ])}`),
@@ -184,11 +184,11 @@ function stockingTopic() {
         "Customers only buy from shelves.",
         `Press ${key("interact")} at a 2x2 through 2x4 or 3x2 through 3x4 Budget Shelf to see its front up close, whichever way it faces in the shop.`,
         "Hold the left mouse button on a shelf space to place boxes one by one from your carried crates. Each space holds one kind of item. Small boxes fit twenty to a space; the largest fit one.",
-        "Point the mouse at a shelf space to see its item's picture, name, and how many are on it in the bar at the bottom of the screen.",
+        "Each shelf space shows a picture of the item it holds, even when sold out. Point the mouse at a space to see the item's name and how many are on it in the bar at the bottom of the screen.",
         "A sold-out space keeps its item, and customers keep looking for that item there. Until you clear it, only that item can be stocked there. Right-click a sold-out space to clear it, so customers stop looking there and you can stock something else.",
         "Hold the right mouse button to take boxes back into an empty crate, or a crate of the same item with room left. You can work while carrying up to three crates; the highest matching crate is used.",
         "The shop keeps running. Customers take boxes from the front first, including while you stock. Click an item's name card below the shelf to set its price in the Manager's Tablet.",
-        `Empty crates stay in your hands. Put them down to reuse them, or press ${key("interact")} beside the EMPTY CRATES bin in the backroom or a trashcan on the sales floor to get a free one. You can add one to your stack until you carry three. Beside the bin or a trashcan, tap ${key("putDown")} to put your top empty crate in it, or hold it to put in every empty crate on top of your stack.`,
+        `Empty crates stay in your hands. Beside the EMPTY CRATES bin in the backroom or a trashcan on the sales floor, press ${key("interact")} to put all your held empty crates in it. Filled crates stay in your hands. Press ${key("interact")} with completely empty hands to take one free empty crate. ${key("putDown")} still puts crates on the floor; it does not put them in the bin or trashcan.`,
       ])}`),
     section("Lockers", `
       ${list([
@@ -221,7 +221,7 @@ function customersTopic() {
       ${list([
         `Walk behind the register and press ${key("interact")}.`,
         "Click each item to scan it, or hold the mouse button and move over several items. Only the scanned item slides across the red bar; the others keep moving at normal belt speed.",
-        "<strong>Card:</strong> type the total on the keypad and press CONFIRM TOTAL.",
+        "<strong>Card:</strong> type the total on the keypad and press CONFIRM TOTAL. Backspace removes the last character; CLEAR erases the whole entry.",
         "<strong>Cash:</strong> take the customer's cash, then give back their change from the drawer. Some customers pay the exact amount, so there's no change to give.",
         "<strong>Scavengers:</strong> most pay in M-Scrips. 120 M-Scrips equal 1 credit; if the price doesn't convert to a whole M-Scrip, round the amount up. Their bills come in 1, 5, 10, 25, 50, 100, 500, and 1,000 M-Scrips. The sale still earns its listed price in credits, and any change is in M-Scrips.",
         "<strong>Explorers:</strong> most pay with a travel Chit. The Chit shows its value and a code made of 2 to 4 digits, each from 1 to 4. Enter the code with the arrow keys or the on-screen buttons (up = 1, down = 2, left = 3, right = 4); on a controller, use the D-pad. A wrong direction resets the code. The sale completes when you enter the last digit correctly, and the Explorer takes the Chit back. No change is given.",

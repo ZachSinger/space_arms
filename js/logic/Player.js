@@ -47,6 +47,7 @@ const STAMINA_DRAIN_PER_SECOND = 25;
 const STAMINA_RECOVERY_PER_SECOND = 25;
 const STAMINA_RECOVERY_DELAY_MS = 750;
 const EXHAUSTION_RECOVERY_STAMINA = 25;
+const EMPTY_CRATE_LOAD = 0.25;
 
 // The sheet's original pixel blocks become two world pixels each.
 export const PLAYER_DISPLAY_WIDTH = 64;
@@ -156,9 +157,14 @@ export class Player {
       vy /= magnitude;
     }
 
-    const carriedCount = this.scene.carriedCrates?.length ?? Number(Boolean(this.scene.carriedCrate));
-    if (carriedCount >= 3) speed *= THREE_CRATE_CARRY_SPEED_MULTIPLIER;
-    else if (carriedCount > 1) speed *= STACKED_CARRY_SPEED_MULTIPLIER;
+    const crates = this.scene.carriedCrates ?? (this.scene.carriedCrate ? [this.scene.carriedCrate] : []);
+    if (crates.length > 1) {
+      const fullMultiplier = crates.length >= 3
+        ? THREE_CRATE_CARRY_SPEED_MULTIPLIER : STACKED_CARRY_SPEED_MULTIPLIER;
+      const load = crates.reduce((total, crate) =>
+        total + (crate.kind === "item" && crate.quantity === 0 ? EMPTY_CRATE_LOAD : 1), 0);
+      speed *= 1 - (1 - fullMultiplier) * load / crates.length;
+    }
     this.sprite.body.setVelocity(vx * speed, vy * speed);
     this.sprite.anims.timeScale = speed / MOVE_SPEED;
     this.updateFacing(vx, vy);

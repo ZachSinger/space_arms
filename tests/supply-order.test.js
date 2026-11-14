@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { summarizeSupplyOrder, MAX_CRATES_PER_ORDER, DELIVERY_FEE } from "../js/logic/SupplyOrder.js";
+import { summarizeSupplyOrder, MAX_CRATES_PER_ORDER, DELIVERY_FEE, getCrateOrderQuantity } from "../js/logic/SupplyOrder.js";
+import { getSlotItemLimit } from "../js/logic/ShelfSlotStocking.js";
 
 const context = (overrides = {}) => ({
   getCrateCost: (itemId) => ({ ammo: 40, rations: 10 })[itemId],
@@ -45,4 +46,11 @@ test("the summary explains a full loading pad or missing credits in plain words"
   const broke = summarizeSupplyOrder(new Map([["ammo", 1]]), context({ credits: 50 }));
   assert.equal(broke.canPlace, false);
   assert.equal(broke.problem, `Not enough credits. This order costs ${40 + DELIVERY_FEE} credits and you have 50.`);
+});
+
+test("an ordered crate holds exactly one full Budget Shelf 2x2 space of its item", () => {
+  for (const [boxSize, quantity] of [[1, 20], [3, 6], [6, 3], [14, 1], [20, 1]]) {
+    assert.equal(getCrateOrderQuantity({ boxSize, stackSize: 10 }), quantity, `box size ${boxSize}`);
+    assert.equal(getCrateOrderQuantity({ boxSize, stackSize: 10 }), getSlotItemLimit(boxSize));
+  }
 });

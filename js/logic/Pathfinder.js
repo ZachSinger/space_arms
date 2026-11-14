@@ -184,7 +184,7 @@ export function findFreeWalkPath(start, goal, {
   }
   nodes.reverse();
 
-  const route = [start, ...nodes, goal];
+  const route = [start, { x: startNode.x * step, y: startNode.y * step }, ...nodes, goal];
   const smoothed = [];
   let index = 0;
   while (index < route.length - 1) {

@@ -520,21 +520,26 @@ test("controller X and Y tell a tap from a hold the same way, and R3 moves the a
   assert.deepEqual(h.scene.getCarriedCrates(), [middle]);
 });
 
-test("Q at the Empty Crates bin puts empty crates back: a tap one, a hold every empty one on top", () => {
+test("E returns every held empty crate, preserving filled crates; Q only puts crates down", () => {
   const h = createHarness();
   const full = crate();
   const empties = [crate({ quantity: 0 }), crate({ quantity: 0 })];
-  carry(h.scene, [full, ...empties]);
-  h.scene.isNearEmptyCrateBin = () => true;
-
-  tap(h, "Q");
-  assert.equal(empties[1].destroyed, true);
-  assert.deepEqual(h.scene.getCarriedCrates(), [full, empties[0]]);
-  carry(h.scene, [full, empties[0], crate({ quantity: 0 })]);
-  hold(h, "Q");
+  carry(h.scene, [empties[0], full, empties[1]]);
+  h.scene.nearbyCrateBinName = () => "bin";
+  h.scene.handleInteract();
+  assert.ok(empties.every((entry) => entry.destroyed));
   assert.deepEqual(h.scene.getCarriedCrates(), [full]);
   assert.equal(h.messages.at(-1), "2 empty crates put in the bin.");
 
+  h.scene.handleInteract();
+  assert.deepEqual(h.scene.getCarriedCrates(), [full]);
+  assert.equal(h.messages.at(-1), "Only empty crates go in the bin.");
+  const empty = crate({ quantity: 0 });
+  carry(h.scene, [full, empty]);
+  tap(h, "Q");
+  assert.ok(empty.dropped);
+  assert.notEqual(empty.destroyed, true);
+  assert.deepEqual(h.scene.getCarriedCrates(), [full]);
   tap(h, "Q");
   assert.equal(h.scene.carriedCrate, null, "a stocked crate is still put down normally beside the bin");
   assert.ok(full.dropped);
@@ -549,7 +554,7 @@ test("a sales-floor trashcan takes back empty crates like the bin, only within r
   Object.assign(h.scene.player.sprite, { x: 1168, y: 176 + 30 });
   assert.equal(h.scene.nearbyCrateBinName(), "trashcan");
   carry(h.scene, [crate({ quantity: 0 }), crate({ quantity: 0 })]);
-  hold(h, "Q");
+  h.scene.handleInteract();
   assert.deepEqual(h.scene.getCarriedCrates(), []);
   assert.equal(h.messages.at(-1), "2 empty crates put in the trashcan.");
 
@@ -560,7 +565,7 @@ test("a sales-floor trashcan takes back empty crates like the bin, only within r
   assert.equal(h.scene.nearbyCrateBinName(), null, "the trashcan isn't reachable from the backroom");
 });
 
-test("the Empty Crates bin supplies free empty crates up to the carry limit", () => {
+test("E supplies one free empty crate only with empty hands", () => {
   const h = createHarness();
   const created = [];
   h.scene.carriedCrates = [];
@@ -576,14 +581,20 @@ test("the Empty Crates bin supplies free empty crates up to the carry limit", ()
     return crate;
   };
 
-  assert.equal(h.scene.takeEmptyCrateFromBin(), true);
-  assert.equal(h.scene.takeEmptyCrateFromBin(), true);
-  assert.equal(h.scene.takeEmptyCrateFromBin(), true);
-  assert.equal(h.scene.getCarriedCrates().length, 3);
+  h.scene.nearbyCrateBinName = () => "trashcan";
+  h.scene.handleInteract();
+  assert.equal(h.scene.getCarriedCrates().length, 1);
   assert.ok(created.every((crate) => crate.pickedUpBy === h.scene.player.sprite));
   assert.equal(h.scene.takeEmptyCrateFromBin(), false);
-  assert.equal(created.length, 3);
-  assert.match(h.messages.at(-1), /only carry three crates/i);
+  assert.equal(created.length, 1);
+  assert.match(h.messages.at(-1), /put your crates down/i);
+  const placing = [];
+  h.scene.fixturePlacement = { beginFromCrate: (crate) => placing.push(crate) };
+  const fixtureCrate = crate({ kind: "fixture" });
+  carry(h.scene, [fixtureCrate]);
+  h.scene.handleInteract();
+  assert.equal(created.length, 1, "a fixture crate is not empty hands");
+  assert.deepEqual(placing, [fixtureCrate], "E still places a fixture beside the trashcan");
 });
 
 test("the context lines say what each crate button does right now", () => {
