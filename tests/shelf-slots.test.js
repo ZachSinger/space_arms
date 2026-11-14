@@ -119,6 +119,14 @@ test("pulling uses empty or matching crates and shares live quantities with cust
   assert.equal(moveShelfCrateItem(shelf, [empty, wrong], 0, 0, true).moved, 0);
   assert.equal(empty.quantity, 2);
   assert.equal(placement.quantity, 0);
+  // A sold-out space only takes its own item until it's cleared.
+  const refused = moveShelfCrateItem(shelf, [wrong], 0, 0, false);
+  assert.deepEqual([refused.moved, refused.reservedFor], [0, "amo_01"]);
+  assert.equal(shelf.placements[0], placement);
+  assert.equal(moveShelfCrateItem(shelf, [wrong, empty], 0, 0, false).moved, 1);
+  assert.equal(placement.quantity, 1);
+  shelf.takeItem(placement);
+  assert.equal(shelf.removeEmptyPlacement(placement), true);
   assert.equal(moveShelfCrateItem(shelf, [wrong], 0, 0, false).moved, 1);
   assert.equal(shelf.placements[0].itemId, "wpn_hvy_01");
 });

@@ -2,7 +2,7 @@
   {
     "id": "lic_fixture_basics",
     "name": "Basic Fixture Supply",
-    "description": "A starter contract for Budget Shelves, lockers, and checkout registers.",
+    "description": "A starter contract for Budget Shelves, lockers, checkout registers, and trashcans.",
     "tier": 1,
     "baseCost": 0,
     "reqReputation": 0,
@@ -14,7 +14,8 @@
       "shelf_budget_3x3",
       "shelf_budget_3x4",
       "locker_single",
-      "register_basic"
+      "register_basic",
+      "trash_can"
     ]
   },
   {

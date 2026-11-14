@@ -98,7 +98,11 @@ def side(template, levels, sections):
     band_end = SIDE_TOP_BAND[0] + (SIDE_TOP_BAND[1] - SIDE_TOP_BAND[0]) - cut
     if band_end < SIDE_TOP_BAND[0]:
         raise ValueError("Shelf too short for its side art")
-    rows = [(0, band_end)] + [(SIDE_TOP_BAND[1], SIDE_PANEL_TOP)]
+    # A shorter side panel (fewer levels) would leave the top of the image empty, so the
+    # shelf top grows by the same amount and the art still spans the shelf's full length.
+    filler_row = (SIDE_TOP_BAND[0] + 1, SIDE_TOP_BAND[0] + 2)
+    rows = [(0, band_end)] + [filler_row] * ((FULL_LEVELS - levels) * LEVEL) + \
+        [(SIDE_TOP_BAND[1], SIDE_PANEL_TOP)]
     panel = []
     opening = (SIDE_PANEL_BOTTOM - SIDE_PANEL_TOP - (FULL_LEVELS - levels) * LEVEL - DIVIDER * levels) // levels
     panel.append(("outline", DIVIDER))

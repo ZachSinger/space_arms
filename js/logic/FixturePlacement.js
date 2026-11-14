@@ -199,8 +199,11 @@ export class FixturePlacement {
       return false;
     }
     if (crate !== this.scene.carriedCrate || crate?.kind !== "fixture") return false;
-    if (this.scene.playerInBackroom && getFixtureType(crate.typeId)?.kind === "shelf") {
-      this.scene.showShopMessage("Shelves can only be placed on the sales floor.");
+    const spec = getFixtureType(crate.typeId);
+    if (this.scene.playerInBackroom && spec && spec.kind !== "storage") {
+      this.scene.showShopMessage(spec.kind === "shelf"
+        ? "Shelves can only be placed on the sales floor."
+        : `The ${spec.name} can only be placed on the sales floor.`);
       return false;
     }
     return this.start(crate.typeId, null, crate);

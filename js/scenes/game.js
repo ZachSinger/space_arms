@@ -94,6 +94,8 @@ function reputationPenaltyText(penalty, factionId) {
 const isLocker = (fixture) => getFixtureType(fixture.type).kind === "storage";
 // How far from the register the Go-Backs crates may be set down.
 const GO_BACKS_SEARCH_RADIUS = TILE_SIZE * 4;
+// How far from a trashcan's edge (in pixels) the player can still use it.
+const TRASHCAN_REACH = 40;
 // How long a locker door stays open after items go in or out.
 const LOCKER_DOOR_OPEN_MS = 600;
 
@@ -1090,7 +1092,7 @@ export class GameScene extends Phaser.Scene {
       const trim = height * REGISTER_PASSABLE_TOP_BY_FACING[fixtureFacing(fixture)];
       height -= trim;
       centerY += trim / 2;
-    } else if ((facingArt && spec.kind === "shelf") || spec.id === "locker_single") {
+    } else if ((facingArt && (spec.kind === "shelf" || spec.kind === "trash")) || spec.id === "locker_single") {
       const footprint = fixtureFootprint(fixture);
       width = footprint.w * TILE_SIZE;
       height = footprint.h * TILE_SIZE;
@@ -1115,7 +1117,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   sizeFacingArt(sprite, spec, rotation = 0) {
-    if (spec.kind === "shelf") {
+    if (spec.kind === "shelf" || spec.kind === "trash") {
       const footprint = fixtureFootprint({ type: spec.id, rotation });
       sprite.setDisplaySize(footprint.w * TILE_SIZE, footprint.h * TILE_SIZE);
     } else {
@@ -2594,9 +2596,29 @@ export class GameScene extends Phaser.Scene {
   }
 
   isNearEmptyCrateBin() {
-    return Boolean(this.playerInBackroom && this.emptyCrateBin &&
-      Phaser.Math.Distance.Between(this.player.sprite.x, this.player.sprite.y,
-        this.emptyCrateBin.x, this.emptyCrateBin.y) <= INTERACT_RANGE);
+    return Boolean(this.nearbyCrateBinName());
+  }
+
+  /**
+   * The backroom EMPTY CRATES bin and every sales-floor trashcan hand out and take back
+   * empty crates. Returns what to call the one in reach ("bin" or "trashcan"), or null.
+   */
+  nearbyCrateBinName() {
+    const { x, y } = this.player.sprite;
+    if (this.playerInBackroom) {
+      return this.emptyCrateBin &&
+        Phaser.Math.Distance.Between(x, y, this.emptyCrateBin.x, this.emptyCrateBin.y) <= INTERACT_RANGE
+        ? "bin" : null;
+    }
+    const near = this.fixtures.ofKind("trash").some((fixture) => {
+      const { w, h } = fixtureFootprint(fixture);
+      const left = fixture.gx * TILE_SIZE;
+      const top = fixture.gy * TILE_SIZE;
+      const dx = Math.max(left - x, 0, x - (left + w * TILE_SIZE));
+      const dy = Math.max(top - y, 0, y - (top + h * TILE_SIZE));
+      return Math.hypot(dx, dy) <= TRASHCAN_REACH;
+    });
+    return near ? "trashcan" : null;
   }
 
   // How many empty item crates sit together at the top of what you're carrying.
@@ -2610,11 +2632,12 @@ export class GameScene extends Phaser.Scene {
     return count;
   }
 
-  // Puts up to `count` empty crates from the top of what you're carrying back in the bin.
+  // Puts up to `count` empty crates from the top of what you're carrying back in the bin or trashcan.
   returnEmptyCratesToBin(count) {
     const returned = Math.min(count, this.countTopEmptyCrates());
+    const bin = this.nearbyCrateBinName() ?? "bin";
     if (returned === 0) {
-      this.showGameMessage("Only empty crates go back in the bin.", "#94a3b8");
+      this.showGameMessage(`Only empty crates go in the ${bin}.`, "#94a3b8");
       return false;
     }
     for (let index = 0; index < returned; index += 1) {
@@ -2624,8 +2647,8 @@ export class GameScene extends Phaser.Scene {
     }
     this.playerState.notifyListeners();
     this.showGameMessage(returned === 1
-      ? "Empty crate put back in the bin."
-      : `${returned} empty crates put back in the bin.`, "#10b981");
+      ? `Empty crate put in the ${bin}.`
+      : `${returned} empty crates put in the ${bin}.`, "#10b981");
     return true;
   }
 
@@ -2854,7 +2877,7 @@ export class GameScene extends Phaser.Scene {
       const { pickUp, putDown } = this.crateActions();
       const stack = this.markedFloorStack();
       if (this.isNearEmptyCrateBin() && this.carriedCrate?.kind !== "fixture") {
-        lines.push(holding >= MAX_CARRIED_CRATES ? handsFull : `${interactKey}: Take a free empty crate`);
+        lines.push(holding >= MAX_CARRIED_CRATES ? handsFull : `${interactKey}: Take a free empty crate from the ${this.nearbyCrateBinName()}`);
       }
       if (pickUp?.throws) {
         lines.push(`${pickKey} while walking: Throw your top crate`);
@@ -2865,9 +2888,10 @@ export class GameScene extends Phaser.Scene {
         }
       }
       if (putDown?.bin) {
-        lines.push(`Tap ${putKey}: Put your top empty crate back in the bin`);
+        const bin = this.nearbyCrateBinName();
+        lines.push(`Tap ${putKey}: Put your top empty crate in the ${bin}`);
         const empties = this.countTopEmptyCrates();
-        if (empties > 1) lines.push(`Hold ${putKey}: Put all ${empties} empty crates back in the bin`);
+        if (empties > 1) lines.push(`Hold ${putKey}: Put all ${empties} empty crates in the ${bin}`);
       } else if (putDown?.blocked) {
         lines.push(putDown.reason);
       } else if (putDown?.onStack) {

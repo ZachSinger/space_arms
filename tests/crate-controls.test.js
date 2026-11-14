@@ -90,6 +90,7 @@ function createHarness({ carrying = false } = {}) {
   scene.fixtures = {
     stockHolders: () => [],
     register: () => null,
+    ofKind: () => [],
     displayName: (fixture) => fixture.type === "locker_single" ? "LOCKER" : "SHELF",
   };
   scene.carriedCrate = carrying ? {} : null;
@@ -532,11 +533,31 @@ test("Q at the Empty Crates bin puts empty crates back: a tap one, a hold every 
   carry(h.scene, [full, empties[0], crate({ quantity: 0 })]);
   hold(h, "Q");
   assert.deepEqual(h.scene.getCarriedCrates(), [full]);
-  assert.equal(h.messages.at(-1), "2 empty crates put back in the bin.");
+  assert.equal(h.messages.at(-1), "2 empty crates put in the bin.");
 
   tap(h, "Q");
   assert.equal(h.scene.carriedCrate, null, "a stocked crate is still put down normally beside the bin");
   assert.ok(full.dropped);
+});
+
+test("a sales-floor trashcan takes back empty crates like the bin, only within reach", () => {
+  const h = createHarness();
+  const trashcan = { id: "trash_can_01", type: "trash_can", gx: 18, gy: 2, rotation: 0 };
+  h.scene.playerInBackroom = false;
+  h.scene.fixtures.ofKind = (kind) => kind === "trash" ? [trashcan] : [];
+  // The trashcan covers x 1152-1184 and y 128-176; stand just below it.
+  Object.assign(h.scene.player.sprite, { x: 1168, y: 176 + 30 });
+  assert.equal(h.scene.nearbyCrateBinName(), "trashcan");
+  carry(h.scene, [crate({ quantity: 0 }), crate({ quantity: 0 })]);
+  hold(h, "Q");
+  assert.deepEqual(h.scene.getCarriedCrates(), []);
+  assert.equal(h.messages.at(-1), "2 empty crates put in the trashcan.");
+
+  h.scene.player.sprite.y = 176 + 60;
+  assert.equal(h.scene.nearbyCrateBinName(), null, "too far from the trashcan");
+  h.scene.player.sprite.y = 176 + 30;
+  h.scene.playerInBackroom = true;
+  assert.equal(h.scene.nearbyCrateBinName(), null, "the trashcan isn't reachable from the backroom");
 });
 
 test("the Empty Crates bin supplies free empty crates up to the carry limit", () => {
@@ -1338,7 +1359,7 @@ test("packing the Go-Backs sets crates down by the register in stacks of at most
 
 test("inventory totals include all carried crates and active customer carts but not sold customers", () => {
   const scene = Object.create(GameScene.prototype);
-  scene.fixtures = { stockHolders: () => [] };
+  scene.fixtures = { stockHolders: () => [], ofKind: () => [] };
   scene.playerState = { goBacks: { stock: [] } };
   scene.restockCrates = [];
   scene.floorStacks = new Map();

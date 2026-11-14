@@ -44,6 +44,7 @@ export const FIXTURE_TYPES = fixtureTypes;
 export const STARTING_FIXTURES = [
   { id: "storage_demo_01", type: "locker_single", gx: 1, gy: BACKROOM_GRID_Y + 1 },
   { id: "storage_demo_02", type: "locker_single", gx: 1.5625, gy: BACKROOM_GRID_Y + 1 },
+  { id: "trash_can_01", type: "trash_can", gx: 18, gy: 2 },
   { id: "register", type: "register_basic", gx: 13, gy: 3 },
 ];
 

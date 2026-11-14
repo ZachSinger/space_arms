@@ -185,17 +185,17 @@ function stockingTopic() {
         `Press ${key("interact")} at a 2x2 through 2x4 or 3x2 through 3x4 Budget Shelf to see its front up close, whichever way it faces in the shop.`,
         "Hold the left mouse button on a shelf space to place boxes one by one from your carried crates. Each space holds one kind of item. Small boxes fit twenty to a space; the largest fit one.",
         "Point the mouse at a shelf space to see its item's picture, name, and how many are on it in the bar at the bottom of the screen.",
-        "A sold-out space keeps its item, and customers keep looking for that item there. Right-click a sold-out space to clear it so they stop.",
+        "A sold-out space keeps its item, and customers keep looking for that item there. Until you clear it, only that item can be stocked there. Right-click a sold-out space to clear it, so customers stop looking there and you can stock something else.",
         "Hold the right mouse button to take boxes back into an empty crate, or a crate of the same item with room left. You can work while carrying up to three crates; the highest matching crate is used.",
         "The shop keeps running. Customers take boxes from the front first, including while you stock. Click an item's name card below the shelf to set its price in the Manager's Tablet.",
-        `Empty crates stay in your hands. Put them down to reuse them, or press ${key("interact")} beside the EMPTY CRATES bin to get a free one. You can add one to your stack until you carry three. Beside the bin, tap ${key("putDown")} to put your top empty crate back, or hold it to put back every empty crate on top of your stack.`,
+        `Empty crates stay in your hands. Put them down to reuse them, or press ${key("interact")} beside the EMPTY CRATES bin in the backroom or a trashcan on the sales floor to get a free one. You can add one to your stack until you carry three. Beside the bin or a trashcan, tap ${key("putDown")} to put your top empty crate in it, or hold it to put in every empty crate on top of your stack.`,
       ])}`),
     section("Lockers", `
       ${list([
         "Each locker holds one kind of item. Walk close to see its item name and how full it is. A basic locker holds 40 box-size units: 40 small boxes or 2 of the largest boxes.",
         `Carrying a crate of items, tap ${key("putDown")} at a locker to empty your top crate into it. Hold ${key("putDown")} to keep emptying crates from the top of your stack until one doesn't fit. Emptied crates are put away for you; anything that doesn't fit stays in its crate.`,
         `To take items out, carry an empty crate (or one holding the locker's item) and press ${key("interact")} at the locker. It fills the highest crate in your stack that can take them, as full as it will go.`,
-        "Empty crates come free from the EMPTY CRATES bin in the backroom.",
+        "Empty crates come free from the EMPTY CRATES bin in the backroom, or from any trashcan on the sales floor.",
       ])}`),
     section("Go-Backs", `
       <p>When a customer gives up and leaves, the items they were holding go into the Go-Backs

@@ -7,21 +7,26 @@ import { TileRoom } from "../js/logic/TileRoom.js";
 import { findGridPath } from "../js/logic/Pathfinder.js";
 import { getZone, getStoreDoorCell, getStoreDoorCells, getBackroomLink, getBackroomInteriorBounds, getLoadingPadBounds, TILE_SIZE } from "../js/logic/RoomLayout.js";
 
-test("shelf crates cannot enter placement mode in the backroom", () => {
+test("shelf and trashcan crates cannot enter placement mode in the backroom", () => {
   const messages = [];
-  const crate = { kind: "fixture", typeId: "shelf_budget_2x4" };
-  const placement = Object.create(FixturePlacement.prototype);
-  placement.scene = {
-    canRearrangeFixtures: () => true,
-    carriedCrate: crate,
-    playerInBackroom: true,
-    showShopMessage: (message) => messages.push(message),
-  };
-  placement.start = () => assert.fail("Shelf placement should not start in the backroom.");
+  for (const typeId of ["shelf_budget_2x4", "trash_can"]) {
+    const crate = { kind: "fixture", typeId };
+    const placement = Object.create(FixturePlacement.prototype);
+    placement.scene = {
+      canRearrangeFixtures: () => true,
+      carriedCrate: crate,
+      playerInBackroom: true,
+      showShopMessage: (message) => messages.push(message),
+    };
+    placement.start = () => assert.fail(`${typeId} placement should not start in the backroom.`);
 
-  assert.equal(placement.beginFromCrate(crate), false);
-  assert.equal(placement.scene.carriedCrate, crate);
-  assert.deepEqual(messages, ["Shelves can only be placed on the sales floor."]);
+    assert.equal(placement.beginFromCrate(crate), false);
+    assert.equal(placement.scene.carriedCrate, crate);
+  }
+  assert.deepEqual(messages, [
+    "Shelves can only be placed on the sales floor.",
+    "The TRASHCAN can only be placed on the sales floor.",
+  ]);
 });
 
 test("storage crates can still enter placement mode in the backroom", () => {
@@ -214,8 +219,10 @@ function createRoom() {
 }
 
 // New games start with no shelves, so most layout tests add one clear of the front door.
+// They leave out the starting trashcan so shelves can be tried anywhere on the floor.
 const TEST_SHELF = { id: "fixture_demo_01", type: "shelf_budget_2x4", gx: 16, gy: 6 };
-const initialLayout = () => [TEST_SHELF, ...STARTING_FIXTURES].map((entry) => ({ ...entry }));
+const initialLayout = () => [TEST_SHELF, ...STARTING_FIXTURES.filter((entry) => entry.type !== "trash_can")]
+  .map((entry) => ({ ...entry }));
 
 const moved = (id, gx, gy) => initialLayout().map((entry) => entry.id === id ? { ...entry, gx, gy } : entry);
 
@@ -568,9 +575,9 @@ test("backroom walls follow the pad's edge and upgrades keep the exit", () => {
 
 test("the starting layout has accessible fronts, a register back, and six queue positions", () => {
   const options = createRoom();
-  const result = validateFixtureLayout(initialLayout(), options);
+  const result = validateFixtureLayout([TEST_SHELF, ...STARTING_FIXTURES], options);
   assert.equal(result.valid, true, result.reason);
-  assert.equal(result.access.size, 4);
+  assert.equal(result.access.size, 5, "two lockers, the register, the shelf, and the trashcan");
   assert.equal(result.queueCells.length, 6);
   assert.equal(new Set(result.queueCells.map(cellKey)).size, 6);
   for (const cell of result.queueCells) {

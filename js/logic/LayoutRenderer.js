@@ -11,6 +11,7 @@ const FIXTURE_PURPOSES = {
   shelf: "SHELVING - displays items for customers",
   storage: "STORAGE - holds stock for restocking",
   register: "CHECKOUT - serves customers",
+  trash: "TRASHCAN - hands out and takes back empty crates",
 };
 
 export class LayoutRenderer {

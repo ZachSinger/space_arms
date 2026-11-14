@@ -191,5 +191,39 @@
     },
     "price": 500,
     "licenseId": "lic_fixture_basics"
+  },
+  "trash_can": {
+    "id": "trash_can",
+    "name": "TRASHCAN",
+    "kind": "trash",
+    "w": 0.5,
+    "h": 0.75,
+    "texture": "bin_trash_04",
+    "facingTextures": {
+      "down": "bin_trash_04",
+      "left": "bin_trash_04",
+      "up": "bin_trash_04",
+      "right": "bin_trash_04"
+    },
+    "facingFootprints": {
+      "down": {
+        "w": 0.5,
+        "h": 0.75
+      },
+      "left": {
+        "w": 0.5,
+        "h": 0.75
+      },
+      "up": {
+        "w": 0.5,
+        "h": 0.75
+      },
+      "right": {
+        "w": 0.5,
+        "h": 0.75
+      }
+    },
+    "price": 40,
+    "licenseId": "lic_fixture_basics"
   }
 }

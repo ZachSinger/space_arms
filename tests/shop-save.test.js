@@ -356,11 +356,13 @@ test("saves accept earned shop levels and pending store and faction reputation",
 });
 
 test("saves from before fixture types existed load with types filled in", () => {
-  const legacy = snapshot();
+  // Saves that old came before trashcans, so they never have one.
+  const withoutTrash = (data) => ({ ...data, fixtures: data.fixtures.filter((entry) => entry.type !== "trash_can") });
+  const legacy = withoutTrash(snapshot());
   for (const entry of legacy.fixtures) delete entry.type;
   const migrated = validateShopSave(legacy, database);
   // Their original shelf (fixture_demo_01) was the retired 3x2 shelf: refunded, stock to Go-Backs.
-  assert.deepEqual(migrated.fixtures, snapshot().fixtures.slice(1));
+  assert.deepEqual(migrated.fixtures, withoutTrash(snapshot()).fixtures.slice(1));
   assert.equal(migrated.playerState.credits, 1500 + 2000);
   assert.deepEqual(migrated.playerState.goBacks, [{ itemId: "wpn_rif_01", quantity: 43 }]);
   assert.equal(legacy.fixtures[0].type, undefined);

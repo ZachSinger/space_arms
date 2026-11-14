@@ -197,7 +197,10 @@ export class ShelfStockingWindow {
     const { index, pull } = this.holding;
     const result = moveShelfCrateItem(this.fixture, this.scene.getCarriedCrates(),
       index % this.art.columns.length, Math.floor(index / this.art.columns.length), pull, this.scene.eventBus);
-    this.notice = result.message;
+    this.notice = result.reservedFor
+      ? `This space is saved for ${database.getItem(result.reservedFor).name}, which is sold out. ` +
+        `To put something else here, ${getInputDevice() === "gamepad" ? "press X on" : "right-click"} the space to clear it first.`
+      : result.message;
     if (!result.moved) this.stopHolding();
     else this.scene.playerState.notifyListeners();
     this.refresh();

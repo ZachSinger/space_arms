@@ -425,6 +425,13 @@ notice something that needs doing but isn't being done right now.
       packs Go-Backs into crates). Saves
       keep floor stacks. Replaces Q/Y hovercart unpacking and the floating carried-crate
       label.
+- [x] Sales-floor trashcan fixture (`trash_can`, 40 credits, Basic Fixture Supply): works
+      like the backroom Empty Crates bin (E takes a free empty crate, Q puts empties in),
+      can be moved/crated/sold in Layout and Fixtures, and is sales-floor only. New games
+      start with one beside the front door; older saves don't get one automatically.
+- [x] A sold-out shelf space only accepts its own item until it is right-click cleared.
+- [x] Sideways 2-level budget shelf art is as long as the front view is wide (2x2, 2x3,
+      2x4 were too short).
 - [x] Thrown crates hitting customers cost 1 store reputation and 1 reputation with the
       customer's faction, if any. Faction membership currently follows the character's
       sprite group; other groups are neutral. Each customer can be hit once per throw,

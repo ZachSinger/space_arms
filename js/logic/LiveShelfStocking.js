@@ -1,4 +1,5 @@
 // Transfers one real item, selecting the highest compatible crate in the carried stack.
+// A sold-out space keeps its item until the player clears it, so it only takes that item.
 import { transferItems } from "./InventoryTransfer.js";
 
 export function moveShelfCrateItem(shelf, crates, gx, gy, pull, eventBus = null) {
@@ -14,16 +15,14 @@ export function moveShelfCrateItem(shelf, crates, gx, gy, pull, eventBus = null)
   }
   const crate = candidates.find((candidate) => pull
     ? candidate.getRemainingUnitsFor(placement.itemId) > 0
-    : candidate.quantity > 0 && (!placement || placement.quantity === 0 ||
-      candidate.itemId === placement.itemId));
+    : candidate.quantity > 0 && (!placement || candidate.itemId === placement.itemId));
   if (!crate) {
+    if (!pull && placement?.quantity === 0) {
+      return { moved: 0, reservedFor: placement.itemId, message: "This sold-out space only takes the item it's saved for." };
+    }
     return { moved: 0, message: pull
       ? "Carry an empty crate, or a crate of this item with room for more."
       : "Carry a crate of this item, or choose an empty shelf space." };
-  }
-  if (!pull && placement?.quantity === 0 && placement.itemId !== crate.itemId) {
-    shelf.removeEmptyPlacement(placement);
-    placement = null;
   }
   const created = !placement;
   if (created) placement = shelf.placeItem(crate.itemId, gx, gy, false, 0);
