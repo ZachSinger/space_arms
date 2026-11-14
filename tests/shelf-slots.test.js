@@ -163,7 +163,7 @@ test("the shelf window marks every space matching carried items and updates as c
     selected: null,
     cells,
     status: {},
-    card: {},
+    stickers: [],
   });
   const marked = () => cells.map((cell) => cell.classList.contains("matches-carried"));
   const originalDocument = globalThis.document;
@@ -187,6 +187,60 @@ test("the shelf window marks every space matching carried items and updates as c
     crates.length = 0;
     view.refresh();
     assert.deepEqual(marked(), [false, false, false, false, false, false]);
+  } finally {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
+});
+
+test("shelf price stickers show each stocked space's price, turn sold out, and hide on empty spaces", () => {
+  const shelf = new ShelfFixture({ displayGrid: { w: 3, h: 2 }, stackDepth: 10, handsOn: true });
+  shelf.placeItem("amo_01", 0, 0, false, 5);
+  shelf.placeItem("amo_03", 1, 0, false, 0);
+  const prices = { amo_01: 1234.5, amo_03: 9 };
+  const fakeElement = () => {
+    const classes = new Set();
+    return {
+      dataset: {},
+      style: {},
+      hidden: false,
+      textContent: "",
+      children: [],
+      classList: {
+        toggle(name, active) { if (active) classes.add(name); else classes.delete(name); },
+        contains(name) { return classes.has(name); },
+      },
+      replaceChildren() {},
+      setAttribute() {},
+      appendChild(child) { this.children.push(child); },
+    };
+  };
+  const stickers = Array.from({ length: 6 }, fakeElement);
+  const view = Object.assign(Object.create(ShelfStockingWindow.prototype), {
+    uiWindow: { isOpen: true },
+    scene: { getCarriedCrates: () => [], getStorePrice: (itemId) => prices[itemId] },
+    fixture: shelf,
+    art: getBudgetShelfArt(2, 3),
+    selected: null,
+    cells: Array.from({ length: 6 }, fakeElement),
+    status: {},
+    stickers,
+  });
+  const originalDocument = globalThis.document;
+  globalThis.document = { createElement: () => fakeElement() };
+  try {
+    view.refresh();
+    assert.equal(stickers[0].hidden, false);
+    assert.equal(stickers[0].textContent, "1,234.50");
+    assert.equal(stickers[0].classList.contains("sold-out"), false);
+    assert.equal(stickers[1].textContent, "9.00");
+    assert.equal(stickers[1].classList.contains("sold-out"), true);
+    assert.equal(stickers[1].children[0].textContent, "SOLD OUT");
+    assert.equal(stickers[2].hidden, true);
+
+    prices.amo_01 = 1000;
+    view.refresh();
+    assert.equal(stickers[0].textContent, "1,000.00");
   } finally {
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;

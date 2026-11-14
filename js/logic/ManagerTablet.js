@@ -15,7 +15,7 @@ import { HandbookRenderer } from "./HandbookRenderer.js";
 import { FixtureHighlight } from "./FixtureHighlight.js";
 import { playErrorBuzz } from "./Sfx.js";
 import { GAME_EVENTS } from "./EventBus.js";
-import { formatMoney, roundMoney } from "./Money.js";
+import { adjustStorePrice, formatMoney } from "./Money.js";
 import { getFixtureResaleValue, getFixtureType } from "./FixtureLayout.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
@@ -481,16 +481,9 @@ export class ManagerTablet {
    * @param {"decrease" | "increase" | "market"} action
    */
   handlePriceAdjustment(itemId, action) {
-    const currentPrice = this.scene.getStorePrice(itemId);
-    const marketPrice = this.scene.market.getPrice(itemId);
-    const nextPrice =
-      action === "decrease"
-        ? Math.max(1, Math.min(roundMoney(currentPrice - 1), roundMoney(currentPrice * 0.9)))
-        : action === "increase"
-          ? Math.max(roundMoney(currentPrice + 1), roundMoney(currentPrice * 1.1))
-          : action === "market"
-            ? marketPrice
-            : null;
+    const nextPrice = adjustStorePrice(
+      this.scene.getStorePrice(itemId), this.scene.market.getPrice(itemId), action,
+    );
     if (nextPrice !== null) this.scene.setStorePrice(itemId, nextPrice);
   }
 

@@ -19,6 +19,23 @@ export function roundMoney(value) {
   return fromCents(Math.round(value * 100));
 }
 
+/**
+ * A store price after a price-control button: roughly ±10% (at least 1 credit, never
+ * below 1 credit), or the market price.
+ * @param {number} currentPrice - credits
+ * @param {number} marketPrice - credits
+ * @param {"decrease" | "increase" | "market"} action
+ * @returns {number | null} credits, or null for an unknown action
+ */
+export function adjustStorePrice(currentPrice, marketPrice, action) {
+  if (action === "decrease") {
+    return Math.max(1, Math.min(roundMoney(currentPrice - 1), roundMoney(currentPrice * 0.9)));
+  }
+  if (action === "increase") return Math.max(roundMoney(currentPrice + 1), roundMoney(currentPrice * 1.1));
+  if (action === "market") return marketPrice;
+  return null;
+}
+
 export function sumMoney(values) {
   return fromCents(values.reduce((sum, value) => sum + toCents(value), 0));
 }

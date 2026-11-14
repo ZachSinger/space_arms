@@ -6,7 +6,7 @@ import { getBudgetShelfArtForType } from "./BudgetShelfArt.js";
 import { getShelfBoxes } from "./ShelfBoxLayout.js";
 import { getItemCrateCategory } from "./CrateCategory.js";
 import { moveShelfCrateItem } from "./LiveShelfStocking.js";
-import { formatMoney } from "./Money.js";
+import { adjustStorePrice, formatMoney } from "./Money.js";
 import tilesetManifest from "../../data/TilesetManifest.json" with { type: "json" };
 import { getInputDevice } from "./InputDevice.js";
 
@@ -16,6 +16,11 @@ function texturePath(key) {
   const path = TEXTURE_PATHS.get(key);
   if (!path) throw new Error(`Missing shelf texture path: ${key}`);
   return path;
+}
+
+// Always two decimals, like a real price tag: 9 credits reads "9.00".
+function formatStickerPrice(price) {
+  return price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export class ShelfStockingWindow {
@@ -33,12 +38,23 @@ export class ShelfStockingWindow {
     this.uiWindow.onClose = () => {
       this.hovered = null;
       this.stopHolding();
+      this.closePriceWidget();
       window.clearInterval(this.refreshTimer);
     };
     this.onRelease = () => this.stopHolding();
     this.onBlur = () => this.stopHolding();
     this.onKey = (event) => {
-      if (this.uiWindow.isOpen && event.code === "KeyE" && !event.repeat) {
+      if (!this.uiWindow.isOpen) return;
+      // Esc (or the controller's B) closes the price widget before the shelf window.
+      if (this.priceWidget && event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        this.closePriceWidget();
+        return;
+      }
+      // E and other letters are typing while the price box has focus.
+      if (event.target?.matches?.("input")) return;
+      if (event.code === "KeyE" && !event.repeat) {
         event.preventDefault();
         event.stopImmediatePropagation();
         this.uiWindow.close();
@@ -59,6 +75,9 @@ export class ShelfStockingWindow {
       }
     });
     this.body.addEventListener("pointerdown", (event) => {
+      if (this.priceWidget && !event.target.closest(".shelf-price-widget, [data-shelf-price]")) {
+        this.closePriceWidget();
+      }
       const cell = event.target.closest("[data-shelf-cell]");
       if (!cell || ![0, 2].includes(event.button)) return;
       this.uiWindow.manager.focusWindow(this.uiWindow);
@@ -80,8 +99,8 @@ export class ShelfStockingWindow {
     });
     // mouseover (not pointerover) so the controller cursor's fake hovers count too.
     this.body.addEventListener("mouseover", (event) => {
-      const cell = event.target.closest("[data-shelf-cell]");
-      this.hovered = cell ? Number(cell.dataset.shelfCell) : null;
+      const cell = event.target.closest("[data-shelf-cell], [data-shelf-price]");
+      this.hovered = cell ? Number(cell.dataset.shelfCell ?? cell.dataset.shelfPrice) : null;
     });
     this.body.addEventListener("mouseleave", () => { this.hovered = null; });
   }
@@ -113,6 +132,7 @@ export class ShelfStockingWindow {
   openForFixture(fixture, title) {
     if (this.fixture === fixture && this.uiWindow.isOpen) return;
     this.stopHolding();
+    this.closePriceWidget();
     window.clearInterval(this.refreshTimer);
     this.fixture = fixture;
     this.selected = null;
@@ -127,7 +147,7 @@ export class ShelfStockingWindow {
     hint.textContent = getInputDevice() === "gamepad"
       ? "A: stock one from carried crates. X: take one into a crate, or clear a sold-out space. B: close."
       : "Hold left mouse: stock from carried crates. Hold right mouse: take into a crate. Right-click a sold-out space to clear it. E or Esc: close.";
-    hint.textContent += " A green border marks spaces for items you're carrying.";
+    hint.textContent += " A green border marks spaces for items you're carrying. Click a price sticker to change that item's price.";
     this.status = document.createElement("p");
     this.status.setAttribute("role", "status");
     this.stage = document.createElement("div");
@@ -163,16 +183,23 @@ export class ShelfStockingWindow {
         this.stage.appendChild(cell);
       }
     }
-    this.card = document.createElement("button");
-    this.card.className = "shelf-stocking-card";
-    this.card.title = "Set this item's price in the Manager's Tablet";
-    this.card.addEventListener("click", () => {
-      const placement = this.selectedPlacement();
-      if (!placement) return;
-      this.uiWindow.close();
-      this.scene.managerTablet.openForItem(placement.itemId);
+    // Stickers sit on each space's top-right corner. They're siblings of the spaces, not
+    // inside them, so clicking one never also stocks or takes items.
+    this.stickers = this.cells.map((cell, index) => {
+      const sticker = document.createElement("button");
+      sticker.type = "button";
+      sticker.className = "shelf-price-sticker";
+      sticker.dataset.shelfPrice = index;
+      sticker.hidden = true;
+      const gx = index % art.columns.length;
+      const gy = Math.floor(index / art.columns.length);
+      sticker.style.left = `${art.columns[gx][1] / art.width * 100}%`;
+      sticker.style.top = `${art.rows[gy][0] / art.height * 100}%`;
+      sticker.addEventListener("click", () => this.togglePriceWidget(index));
+      this.stage.appendChild(sticker);
+      return sticker;
     });
-    this.body.append(hint, this.status, this.stage, this.card);
+    this.body.append(hint, this.status, this.stage);
     this.uiWindow.openWindow();
     this.refresh();
     this.refreshTimer = window.setInterval(() => this.refresh(), 100);
@@ -254,12 +281,148 @@ export class ShelfStockingWindow {
       picture.alt = "";
       cell.appendChild(picture);
     }
-    const placement = this.selectedPlacement();
-    this.card.hidden = !placement || placement.quantity === 0;
-    if (placement) {
-      this.card.textContent = `${database.getItem(placement.itemId).name}\nPrice: ${
-        formatMoney(this.scene.getStorePrice(placement.itemId)).replace(/ credits$/, "")
-      }\nQuantity: ${placement.quantity}`;
+    for (let index = 0; index < this.stickers.length; index++) {
+      const placement = this.placementAt(index);
+      const sticker = this.stickers[index];
+      sticker.hidden = !placement;
+      if (!placement) continue;
+      const price = formatStickerPrice(this.scene.getStorePrice(placement.itemId));
+      const soldOut = placement.quantity === 0;
+      const signature = `${placement.itemId}:${price}:${soldOut}`;
+      if (sticker.dataset.price === signature) continue;
+      sticker.dataset.price = signature;
+      sticker.classList.toggle("sold-out", soldOut);
+      sticker.textContent = price;
+      if (soldOut) {
+        const label = document.createElement("small");
+        label.textContent = "SOLD OUT";
+        sticker.appendChild(label);
+      }
+      const name = database.getItem(placement.itemId).name;
+      sticker.title = `${name} sells for ${price} credits each. Click to change the price.`;
+      sticker.setAttribute("aria-label", `${name} price: ${price} credits${soldOut ? ", sold out" : ""}. Change price`);
+    }
+    this.refreshPriceWidget();
+  }
+
+  // --- Price widget ---
+
+  togglePriceWidget(index) {
+    const placement = this.placementAt(index);
+    if (!placement) return;
+    if (this.priceWidget?.index === index) {
+      this.closePriceWidget();
+      return;
+    }
+    this.closePriceWidget();
+    const { itemId } = placement;
+    const item = database.getItem(itemId);
+    const element = document.createElement("div");
+    element.className = "shelf-price-widget";
+    element.setAttribute("role", "dialog");
+    element.setAttribute("aria-label", `Price for ${item.name}`);
+    element.innerHTML = `
+      <div class="shelf-price-widget-head">
+        <span class="shelf-price-widget-name"></span>
+        <button type="button" data-price-close aria-label="Close price controls">X</button>
+      </div>
+      <div class="shelf-price-widget-market"></div>
+      <label class="shelf-price-widget-label">Your price, in credits
+        <input class="inventory-price-input" type="number" min="1" step="0.01" />
+      </label>
+      <div class="inventory-price-buttons">
+        <button type="button" data-price-action="decrease"
+          title="Decrease by 10% (at least 1 credit; minimum price 1 credit)">-10%</button>
+        <button type="button" data-price-action="increase"
+          title="Increase by 10% (at least 1 credit)">+10%</button>
+        <button type="button" data-price-action="market"
+          title="Set price to today's market price">MARKET</button>
+      </div>`;
+    element.querySelector(".shelf-price-widget-name").textContent = item.name;
+    const input = element.querySelector("input");
+    input.setAttribute("aria-label", `Store price for ${item.name}`);
+    input.value = this.scene.getStorePrice(itemId);
+    element.addEventListener("click", (event) => {
+      if (event.target.closest("[data-price-close]")) {
+        this.closePriceWidget();
+        return;
+      }
+      const action = event.target.closest("[data-price-action]")?.dataset.priceAction;
+      if (!action) return;
+      const nextPrice = adjustStorePrice(
+        this.scene.getStorePrice(itemId), this.scene.market.getPrice(itemId), action,
+      );
+      if (nextPrice !== null) this.scene.setStorePrice(itemId, nextPrice);
+      input.value = this.scene.getStorePrice(itemId);
+      this.refresh();
+    });
+    input.addEventListener("change", () => {
+      if (!this.scene.setStorePrice(itemId, Number(input.value))) input.value = this.scene.getStorePrice(itemId);
+      this.refresh();
+    });
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") input.blur();
+    });
+    // While a price control has focus, keys type or press it instead of moving the player.
+    const keyboard = this.scene.input?.keyboard;
+    element.addEventListener("focusin", () => this.lockGameKeyboard(true));
+    element.addEventListener("focusout", (event) => {
+      if (!element.contains(event.relatedTarget)) this.lockGameKeyboard(false);
+    });
+    this.priceWidget = { index, itemId, element, input, keyboard };
+    this.stage.appendChild(element);
+    this.refreshPriceWidget();
+    this.positionPriceWidget();
+    if (getInputDevice() !== "gamepad") {
+      input.focus();
+      input.select();
+    }
+  }
+
+  // Below the sticker, or above it when there's no room, kept inside the shelf picture.
+  positionPriceWidget() {
+    const { index, element } = this.priceWidget;
+    const stage = this.stage.getBoundingClientRect();
+    const sticker = this.stickers[index].getBoundingClientRect();
+    const width = element.offsetWidth;
+    const height = element.offsetHeight;
+    const left = Math.min(Math.max(0, sticker.right - stage.left - width), Math.max(0, stage.width - width));
+    let top = sticker.bottom - stage.top + 4;
+    if (top + height > stage.height) top = Math.max(0, sticker.top - stage.top - height - 4);
+    element.style.left = `${left}px`;
+    element.style.top = `${top}px`;
+  }
+
+  refreshPriceWidget() {
+    if (!this.priceWidget) return;
+    const { index, itemId, element, input } = this.priceWidget;
+    // The space was cleared or now holds a different item.
+    if (this.placementAt(index)?.itemId !== itemId) {
+      this.closePriceWidget();
+      return;
+    }
+    element.querySelector(".shelf-price-widget-market").textContent =
+      `Market price today: ${formatMoney(this.scene.market.getPrice(itemId))}`;
+    if (document.activeElement !== input) input.value = this.scene.getStorePrice(itemId);
+  }
+
+  closePriceWidget() {
+    if (!this.priceWidget) return;
+    this.priceWidget.element.remove();
+    this.lockGameKeyboard(false);
+    this.priceWidget = null;
+  }
+
+  lockGameKeyboard(locked) {
+    const keyboard = this.priceWidget?.keyboard;
+    if (!keyboard || this.keyboardLocked === locked) return;
+    this.keyboardLocked = locked;
+    keyboard.enabled = !locked;
+    if (locked) {
+      keyboard.disableGlobalCapture();
+      keyboard.resetKeys();
+    } else {
+      keyboard.enableGlobalCapture();
     }
   }
 

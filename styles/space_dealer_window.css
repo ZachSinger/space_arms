@@ -24,6 +24,8 @@
   flex-shrink: 0;
   user-select: none;
   touch-action: none;
+  /* Lets the price stickers grow and shrink with the shelf picture. */
+  container-type: inline-size;
 }
 
 .shelf-stocking-art,
@@ -74,14 +76,84 @@
   filter: drop-shadow(0 1px 2px #000);
 }
 
-.shelf-stocking-card {
-  white-space: pre-line;
+/* Price sticker slapped on each space's top-right corner. */
+.shelf-price-sticker {
+  position: absolute;
+  z-index: 1100;
+  transform: translate(calc(-100% + 6px), -10px) rotate(7deg);
+  padding: 2px 8px;
+  background: #f97316;
+  color: #fff;
+  border: 2px solid #111;
+  border-radius: 8px;
+  box-shadow: 3px 3px 0 #000;
+  font-family: "Courier New", monospace;
+  font-weight: bold;
+  font-size: clamp(12px, 3.2cqw, 28px);
+  line-height: 1.05;
+  text-align: center;
+  text-shadow: 2px 2px 0 #000;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.shelf-price-sticker[hidden] {
+  display: none;
+}
+
+.shelf-price-sticker:hover,
+.shelf-price-sticker:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+
+.shelf-price-sticker.sold-out {
+  background: #6b7280;
+}
+
+.shelf-price-sticker small {
+  display: block;
+  font-size: 0.5em;
+  letter-spacing: 1px;
+}
+
+.shelf-price-widget {
+  position: absolute;
+  z-index: 1200;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
   background: var(--color-panel);
   color: var(--color-text-main);
   border: 1px solid var(--color-border-active);
-  padding: 6px 16px;
+  box-shadow: 3px 3px 0 #000;
+  font-size: var(--font-size-12);
+  user-select: text;
+}
+
+.shelf-price-widget-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-weight: bold;
+}
+
+.shelf-price-widget-head button {
+  padding: 0 6px;
+  background: transparent;
+  color: var(--color-text-main);
+  border: 1px solid var(--color-border-active);
   font: inherit;
   cursor: pointer;
+}
+
+.shelf-price-widget-label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
 :root {
