@@ -9,7 +9,6 @@ import { InventoryRenderer } from "./InventoryRenderer.js";
 import { ContractRenderer } from "./ContractRenderer.js";
 import { SupplyRenderer } from "./SupplyRenderer.js";
 import { LayoutRenderer } from "./LayoutRenderer.js";
-import { EquipmentRenderer } from "./EquipmentRenderer.js";
 import { EmployeeRenderer } from "./EmployeeRenderer.js";
 import { FinancesRenderer } from "./FinancesRenderer.js";
 import { HandbookRenderer } from "./HandbookRenderer.js";
@@ -17,7 +16,6 @@ import { FixtureHighlight } from "./FixtureHighlight.js";
 import { playErrorBuzz } from "./Sfx.js";
 import { GAME_EVENTS } from "./EventBus.js";
 import { formatMoney, roundMoney } from "./Money.js";
-import { getNextHovercartUpgrade } from "./Hovercart.js";
 import { getFixtureResaleValue, getFixtureType } from "./FixtureLayout.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
@@ -28,7 +26,6 @@ const TAB_DEFS = [
   { id: "contracts", label: "Contracts" },
   { id: "supply", label: "Supply" },
   { id: "fixtures", label: "Fixtures" },
-  { id: "equipment", label: "Equipment" },
   { id: "layout", label: "Layout" },
   { id: "finances", label: "Finances" },
   { id: "handbook", label: "Handbook" },
@@ -49,7 +46,6 @@ export class ManagerTablet {
     this.supplyOrder = new Map(); // item id -> crates in the order being built
     this.fixturePurchaseNotice = "";
     this.fixtureSaleConfirmation = null;
-    this.equipmentPurchaseNotice = "";
     this.handbookTopic = "store";
     this.employeeTrainingConfirmation = null;
 
@@ -84,7 +80,6 @@ export class ManagerTablet {
     this.uiWindow.onClose = () => {
       this.fixturePurchaseNotice = "";
       this.fixtureSaleConfirmation = null;
-      this.equipmentPurchaseNotice = "";
       this.employeeTrainingConfirmation = null;
       this.fixtureHighlight.reset();
       this.scene.resumeRegisterCheckout();
@@ -211,22 +206,6 @@ export class ManagerTablet {
         this.refreshLayoutPanels();
       }
 
-      if (event.target.closest("[data-upgrade-hovercart]")) {
-        const upgrade = getNextHovercartUpgrade(this.playerState.hovercart.capacity);
-        this.equipmentPurchaseNotice = upgrade
-          ? `Hovercart upgraded to ${upgrade.capacity} spaces.`
-          : "";
-        if (!this.playerState.upgradeHovercart()) {
-          this.equipmentPurchaseNotice = "";
-          this.scene.showShopMessage(!upgrade
-            ? "Your hovercart is already at its maximum capacity."
-            : this.playerState.shopLevel < upgrade.requiredShopLevel
-              ? `Reach Shop Level ${upgrade.requiredShopLevel} to buy the ${upgrade.capacity}-space hovercart upgrade.`
-              : `Not enough credits. This upgrade costs ${formatMoney(upgrade.price)}.`);
-          this.refreshEquipmentPanel();
-        }
-      }
-
       const priceButton = event.target.closest(PRICE_BUTTON_SELECTOR);
       if (priceButton) {
         this.handlePriceAdjustment(
@@ -277,7 +256,6 @@ export class ManagerTablet {
       this.refreshContractsPanel();
       this.refreshSupplyPanel();
       this.refreshLayoutPanels();
-      this.refreshEquipmentPanel();
       this.refreshFinancesPanel();
     });
     this.scene.eventBus.on(GAME_EVENTS.INVENTORY_TRANSFERRED, ({ destination }) => {
@@ -319,7 +297,6 @@ export class ManagerTablet {
         this.scene, true, this.fixturePurchaseNotice, this.fixtureSaleConfirmation,
       );
     }
-    if (tabId === "equipment") return EquipmentRenderer.generateHTML(this.playerState, this.equipmentPurchaseNotice);
     if (tabId === "layout") return LayoutRenderer.generateHTML(this.scene);
     if (tabId === "finances") return FinancesRenderer.generateHTML(this.scene.getFinancesView());
     if (tabId === "handbook") {
@@ -338,13 +315,11 @@ export class ManagerTablet {
     this.fixtureHighlight.reset();
     this.fixturePurchaseNotice = "";
     this.fixtureSaleConfirmation = null;
-    this.equipmentPurchaseNotice = "";
     this.employeeTrainingConfirmation = null;
     if (tabId === "inventory") this.refreshInventoryPanel();
     if (tabId === "employee") this.refreshEmployeePanel();
     if (tabId === "supply") this.refreshSupplyPanel();
     if (tabId === "layout" || tabId === "fixtures") this.refreshLayoutPanels();
-    if (tabId === "equipment") this.refreshEquipmentPanel();
     if (tabId === "finances") this.refreshFinancesPanel();
     if (tabId === "handbook") this.refreshHandbookPanel();
     this.bodyElement.querySelectorAll(".tablet-tab-btn").forEach((btn) => {
@@ -353,6 +328,18 @@ export class ManagerTablet {
     this.bodyElement.querySelectorAll(".tablet-tab-panel").forEach((panel) => {
       panel.classList.toggle("hidden", panel.dataset.tabPanel !== tabId);
     });
+  }
+
+  openForItem(itemId) {
+    if (!database.getItem(itemId)) throw new Error(`Unknown inventory item: ${itemId}`);
+    this.openWindow();
+    this.switchTab("inventory");
+    this.disableInventoryNavigation();
+    this.disableInventoryNavigation = InventoryRenderer.enableListNavigation(this.uiWindow.element, itemId);
+    const input = [...this.bodyElement.querySelectorAll(PRICE_INPUT_SELECTOR)]
+      .find((element) => element.dataset.priceItemId === itemId);
+    input?.focus();
+    input?.select();
   }
 
   // Re-renders while preserving selection, scroll, and focus on a price button.
@@ -399,11 +386,6 @@ export class ManagerTablet {
     const scrollTop = panel.querySelector(".employee-panel")?.scrollTop ?? 0;
     panel.innerHTML = this.renderPanelContent("employee");
     panel.querySelector(".employee-panel").scrollTop = scrollTop;
-  }
-
-  refreshEquipmentPanel() {
-    const panel = this.bodyElement.querySelector('[data-tab-panel="equipment"]');
-    if (panel) panel.innerHTML = this.renderPanelContent("equipment");
   }
 
   refreshFinancesPanel() {
@@ -566,7 +548,6 @@ export class ManagerTablet {
     this.refreshEmployeePanel();
     this.refreshSupplyPanel(); // loading pad spots free up without any playerState change
     this.refreshLayoutPanels();
-    this.refreshEquipmentPanel();
     this.refreshFinancesPanel();
     this.uiWindow.openWindow();
     this.scene.checkoutWindow.suspend();

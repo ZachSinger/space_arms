@@ -1,7 +1,7 @@
 // ==========================================
 // FILE: HUDController.js
 // ==========================================
-// The persistent DOM HUD: credits, reputation, hovercart capacity, shift clock, and the
+// The persistent DOM HUD: credits, reputation, shop level, stamina, shift clock, and the
 // pause / temporary store closure / start-shift / end-day / save buttons.
 import { formatMoney } from "./Money.js";
 import { getNextShopLevel } from "./ShopProgression.js";
@@ -19,7 +19,6 @@ export class HUDController {
         this.creditsEl = document.getElementById('hud-credits');
         this.repEl = document.getElementById('hud-rep');
         this.shopLevelEl = document.getElementById('hud-shop-level');
-        this.hovercartEl = document.getElementById('hud-hovercart');
         this.staminaEl = document.getElementById('hud-stamina');
         this.staminaFillEl = document.getElementById('hud-stamina-fill');
         this.staminaValueEl = document.getElementById('hud-stamina-value');
@@ -114,10 +113,6 @@ export class HUDController {
         this.shopLevelEl.title = nextLevel
             ? `Finish a shift with at least ${nextLevel.reputation} store reputation to reach Shop Level ${nextLevel.level}.`
             : 'Your shop keeps its earned level even if reputation falls.';
-
-        // The hovercart has no subscribe() of its own; transfers call
-        // playerState.notifyListeners() (see FixtureWindow.transfer) to keep this live.
-        this.hovercartEl.innerText = `${state.hovercart.usedCapacity()}/${state.hovercart.capacity}`;
 
         this.awaitingEndDay = Boolean(state.awaitingEndDay);
         this.renderShiftButtons();

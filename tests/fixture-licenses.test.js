@@ -12,9 +12,9 @@ const licenses = JSON.parse(await readFile(
 ));
 const licenseById = new Map(licenses.map((license) => [license.id, license]));
 
-test("the first level rewards unlock a supply contract at 2 and a fixture contract at 3", () => {
+test("level rewards unlock a supply contract at 2 and a fixture contract at 14", () => {
   const supply = new SupplierLicense(licenseById.get("lic_start_apparel"));
-  const fixture = new SupplierLicense(licenseById.get("lic_fixture_expanded"));
+  const fixture = new SupplierLicense(licenseById.get("lic_fixture_storage_bank"));
   const state = {
     shopLevel: 1,
     globalReputation: 1000,
@@ -26,7 +26,7 @@ test("the first level rewards unlock a supply contract at 2 and a fixture contra
   assert.equal(fixture.isUnlocked(state), false);
   let html = ContractRenderer.generateHTML([supply, fixture], state);
   assert.match(html, /Shop Level 2/);
-  assert.match(html, /Shop Level 3/);
+  assert.match(html, /Shop Level 14/);
   assert.doesNotMatch(html, /data-license-id=/);
 
   state.shopLevel = 2;
@@ -35,14 +35,16 @@ test("the first level rewards unlock a supply contract at 2 and a fixture contra
   assert.equal(fixture.isUnlocked(state), false);
   html = ContractRenderer.generateHTML([supply, fixture], state);
   assert.match(html, /data-license-id="lic_start_apparel"/);
-  assert.doesNotMatch(html, /data-license-id="lic_fixture_expanded"/);
-  state.shopLevel = 3;
+  assert.doesNotMatch(html, /data-license-id="lic_fixture_storage_bank"/);
+  state.shopLevel = 13;
+  assert.equal(fixture.isUnlocked(state), false);
+  state.shopLevel = 14;
   assert.equal(fixture.isUnlocked(state), true);
   html = ContractRenderer.generateHTML([supply, fixture], state);
-  assert.match(html, /data-license-id="lic_fixture_expanded"/);
+  assert.match(html, /data-license-id="lic_fixture_storage_bank"/);
 
   state.shopLevel = 1;
-  state.activeLicenses.add("lic_fixture_expanded");
+  state.activeLicenses.add("lic_fixture_storage_bank");
   html = ContractRenderer.generateHTML([fixture], state);
   assert.match(html, /PURCHASED/);
   assert.match(html, /Purchased; stays available/);
@@ -50,10 +52,10 @@ test("the first level rewards unlock a supply contract at 2 and a fixture contra
 });
 
 test("contracts list signable ones first, locked next, and signed ones last", () => {
-  const ids = ["lic_start_apparel", "lic_fixture_expanded", "lic_corp_stellaris"];
+  const ids = ["lic_start_apparel", "lic_fixture_storage_bank", "lic_corp_aulin"];
   const list = ids.map((id) => new SupplierLicense(licenseById.get(id)));
   const state = {
-    shopLevel: 3,
+    shopLevel: 14,
     globalReputation: 1000,
     factionReputation: { scavengers: 0, mercenaries: 0, explorers: 0 },
     credits: 3000,
@@ -61,7 +63,7 @@ test("contracts list signable ones first, locked next, and signed ones last", ()
   };
   assert.deepEqual(
     ContractRenderer.sortLicenses(list, state).map((license) => license.id),
-    ["lic_fixture_expanded", "lic_corp_stellaris", "lic_start_apparel"],
+    ["lic_fixture_storage_bank", "lic_corp_aulin", "lic_start_apparel"],
   );
   const html = ContractRenderer.generateHTML(list, state);
   assert.ok(html.indexOf(list[1].name) < html.indexOf(list[2].name));
@@ -154,13 +156,10 @@ test("reputation-gated supplier contracts now use Shop Levels while keeping fact
   }
 });
 
-test("planned fixture licenses unlock functional display and storage fixtures", () => {
+test("planned fixture licenses unlock larger storage fixtures", () => {
   const licensesByLevel = [
-    [8, "lic_fixture_premium_shelf", "shelf_showcase"],
     [14, "lic_fixture_storage_bank", "locker_double"],
-    [21, "lic_fixture_bulk_display", "shelf_bulk"],
     [25, "lic_fixture_secure_storage", "locker_secure"],
-    [28, "lic_fixture_armory_display", "shelf_armory"],
   ];
   const state = {
     shopLevel: 1,
@@ -203,12 +202,6 @@ test("each fixture type is unlocked by its configured license", () => {
   }
 });
 
-test("the large shelf costs 2000 credits while the compact shelf remains 300", () => {
-  assert.equal(FIXTURE_TYPES.shelf_starter_2x1.price, 300);
-  assert.equal(FIXTURE_TYPES.shelf_universal.price, 2000);
-  assert.equal(FIXTURE_TYPES.shelf_universal.name, "LARGE SHELF");
-});
-
 test("the budget shelf has 2x2 slots, is a starter shelf, and is the cheapest fixture", () => {
   const budget = FIXTURE_TYPES.shelf_budget_2x2;
   assert.equal(budget.kind, "shelf");
@@ -219,29 +212,35 @@ test("the budget shelf has 2x2 slots, is a starter shelf, and is the cheapest fi
   }
 });
 
-test("the wider budget shelves add columns, match their art's rows, and keep the starter contract", () => {
+test("the budget shelves span 2-4 sections and 2-3 levels and keep the starter contract", () => {
   const starter = licenseById.get("lic_fixture_basics");
-  for (const columns of [3, 4, 5, 6]) {
-    const spec = FIXTURE_TYPES[`shelf_budget_2x${columns}`];
-    // The 2x4's art shows three tiers, so it holds three rows.
-    assert.deepEqual(getShelfDisplayGrid(spec), { w: columns, h: columns === 4 ? 3 : 2 });
-    assert.equal(spec.licenseId, "lic_fixture_basics");
-    assert.ok(starter.unlocksFixtures.includes(spec.id));
-    assert.equal(spec.price, columns * 75);
+  for (const levels of [2, 3]) {
+    for (const columns of [2, 3, 4]) {
+      const spec = FIXTURE_TYPES[`shelf_budget_${levels}x${columns}`];
+      assert.deepEqual(getShelfDisplayGrid(spec), { w: columns, h: levels });
+      assert.equal(spec.licenseId, "lic_fixture_basics");
+      assert.ok(starter.unlocksFixtures.includes(spec.id));
+      assert.equal(spec.price, columns * (levels === 2 ? 75 : 100));
+    }
+  }
+  assert.deepEqual(Object.values(FIXTURE_TYPES).filter((spec) => spec.kind === "shelf").map((spec) => spec.id).sort(),
+    ["2x2", "2x3", "2x4", "3x2", "3x3", "3x4"].map((size) => `shelf_budget_${size}`));
+});
+
+test("the starter contract covers every shelf, while bigger lockers need their own contracts", () => {
+  const starter = licenseById.get("lic_fixture_basics");
+  for (const spec of Object.values(FIXTURE_TYPES).filter((entry) => entry.kind === "shelf")) {
+    assert.ok(starter.unlocksFixtures.includes(spec.id), spec.id);
+  }
+  for (const id of ["locker_double", "locker_secure"]) {
+    assert.ok(!starter.unlocksFixtures.includes(id));
+    assert.notEqual(FIXTURE_TYPES[id].licenseId, "lic_fixture_basics");
+    assert.ok(licenseById.get(FIXTURE_TYPES[id].licenseId).baseCost > 0);
   }
 });
 
-test("the starter contract allows the compact shelf but not the large shelf", () => {
-  const starter = licenseById.get("lic_fixture_basics");
-  assert.ok(starter.unlocksFixtures.includes("shelf_starter_2x1"));
-  assert.ok(!starter.unlocksFixtures.includes("shelf_universal"));
-  assert.equal(FIXTURE_TYPES.shelf_starter_2x1.licenseId, "lic_fixture_basics");
-  assert.notEqual(FIXTURE_TYPES.shelf_universal.licenseId, "lic_fixture_basics");
-  assert.ok(licenseById.get(FIXTURE_TYPES.shelf_universal.licenseId).baseCost > 0);
-});
-
 test("a locked fixture names the contract to sign", () => {
-  const spec = FIXTURE_TYPES.shelf_universal;
+  const spec = FIXTURE_TYPES.locker_double;
   const html = LayoutRenderer.generateHTML({
     canRearrangeFixtures: () => true,
     fixtures: { all: () => [] },
@@ -250,7 +249,7 @@ test("a locked fixture names the contract to sign", () => {
       canAfford: true, uniqueAlreadyPlaced: false, hasDeliverySpace: true,
     }],
   }, true);
-  assert.match(html, /NEEDS CONTRACT: Expanded Fixture Supply \(Contracts tab\)/);
+  assert.match(html, /NEEDS CONTRACT: Expanded Storage Supply \(Contracts tab\)/);
   assert.match(html, /disabled>LOCKED/);
 });
 
@@ -266,13 +265,13 @@ test("fixture purchases explain shelving, storage, checkout, and floor space", (
   assert.match(html, /STORAGE - holds stock for restocking/);
   assert.match(html, /CHECKOUT - serves customers/);
   assert.match(html, /2 x 1 floor tiles/);
-  assert.match(html, /3 x 2 floor tiles/);
-  assert.match(html, /PRICE 2000 credits/);
+  assert.match(html, /1\.625 x 1 floor tiles/);
+  assert.match(html, /PRICE 2200 credits/);
 });
 
 test("fixtures tab offers resale with a clear value and a confirmation", () => {
   const locker = { id: "locker_1", type: "locker_single", gx: 1, gy: 1 };
-  const padCrate = { kind: "fixture", typeId: "shelf_starter_2x1", lockedToPad: true };
+  const padCrate = { kind: "fixture", typeId: "shelf_budget_2x4", lockedToPad: true };
   const scene = {
     canRearrangeFixtures: () => true,
     fixtures: { all: () => [locker], displayName: () => "LOCKER" },

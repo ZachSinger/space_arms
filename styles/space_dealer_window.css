@@ -2,6 +2,67 @@
 / SPACE ARMS DEALER SIMULATOR - BASE THEME & DESIGN TOKENS          /
 / ================================================================= */
 
+.shelf-stocking-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  /* Ends above the bottom bar (96px) so its item info stays visible. */
+  max-height: calc(100vh - 210px);
+  overflow: auto;
+}
+
+.shelf-stocking-body p {
+  width: 100%;
+  font-size: var(--font-size-12);
+  color: var(--color-text-main);
+}
+
+.shelf-stocking-stage {
+  position: relative;
+  width: 100%;
+  flex-shrink: 0;
+  user-select: none;
+  touch-action: none;
+}
+
+.shelf-stocking-art,
+.shelf-stocking-cell img {
+  position: absolute;
+  pointer-events: none;
+  image-rendering: pixelated;
+}
+
+.shelf-stocking-art {
+  width: 100%;
+  height: 100%;
+}
+
+.shelf-stocking-cell {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  overflow: visible;
+}
+
+.shelf-stocking-cell:hover,
+.shelf-stocking-cell.selected,
+.shelf-stocking-cell:focus-visible {
+  outline: 1px solid var(--color-border-active);
+}
+
+.shelf-stocking-card {
+  white-space: pre-line;
+  background: var(--color-panel);
+  color: var(--color-text-main);
+  border: 1px solid var(--color-border-active);
+  padding: 6px 16px;
+  font: inherit;
+  cursor: pointer;
+}
+
 :root {
   --text-scale: 1.15;
   --font-size-10: calc(10px * var(--text-scale));
@@ -1134,11 +1195,20 @@ button {
 }
 
 .cash-bill .cash-art > span,
-.cash-bill > .cash-value {
+.cash-bill > .cash-value,
+.cash-coin .cash-art > span,
+.cash-coin > .cash-value {
   padding: 5px 6px;
   border-radius: 50%;
   background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.35) 30%, transparent 100%);
   white-space: nowrap;
+}
+
+/* Coins are small, so any backdrop reads as a dark blot; an outline keeps the number legible. */
+.cash-coin .cash-art > span,
+.cash-coin > .cash-value {
+  background: none;
+  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
 }
 
 .cash-coin .cash-art {
@@ -1391,34 +1461,8 @@ button {
 }
 
 /* ================================================================= /
-/ FIXTURE WINDOW (SHELF / STORAGE CAPACITY POOL)                    /
+/ FIXTURE LISTS AND STOCK ROWS (TABLET PANELS)                     /
 / ================================================================= */
-
-.fixture-capacity-bar-wrap {
-  padding: 14px 14px 10px;
-}
-
-.fixture-capacity-bar {
-  width: 100%;
-  height: 14px;
-  background: #090d16;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 7px;
-  overflow: hidden;
-}
-
-.fixture-capacity-bar-fill {
-  height: 100%;
-  background: var(--color-accent, #38bdf8);
-  transition: width 0.2s ease;
-}
-
-.fixture-capacity-label {
-  margin-top: 4px;
-  text-align: center;
-  font-size: var(--font-size-11);
-  color: var(--color-text-muted);
-}
 
 .fixture-stock-row .item-icon {
   image-rendering: pixelated;
@@ -1428,10 +1472,6 @@ button {
   margin-top: 4px;
   font-size: var(--font-size-10);
   color: var(--color-text-muted);
-}
-
-.fixture-too-bulky {
-  color: #ef4444;
 }
 
 .fixture-empty-hint {
@@ -1564,20 +1604,6 @@ button {
   color: #facc15;
 }
 
-.fixture-transfer-btn {
-  flex-shrink: 0;
-  width: 60px;
-  min-width: 60px;
-  padding: 0;
-  font-size: var(--font-size-11);
-  line-height: 1;
-}
-
-.fixture-transfer-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
 .fixture-section-title {
   margin: 12px 14px 0;
   display: flex;
@@ -1587,201 +1613,6 @@ button {
   font-size: var(--font-size-12, 12px);
   font-weight: bold;
   letter-spacing: 1px;
-}
-
-.fixture-section-hint {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-10);
-  font-weight: normal;
-  letter-spacing: 0;
-}
-
-.fixture-pick-row {
-  cursor: pointer;
-}
-
-.fixture-pick-row:hover {
-  border-color: var(--color-border-active);
-}
-
-.fixture-placement-toolbar {
-  margin: 10px 14px 0;
-  padding: 8px 10px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: #090d16;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 4px;
-}
-
-.fixture-placement-label {
-  flex: 1;
-  font-size: var(--font-size-11);
-  color: var(--color-text-main);
-}
-
-.fixture-placement-keys {
-  font-size: var(--font-size-10);
-  color: var(--color-text-muted);
-}
-
-.fixture-placement-grid {
-  display: grid;
-  justify-content: center;
-  gap: 4px;
-  padding: 14px;
-}
-
-.fixture-cell {
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  border-radius: 3px;
-}
-
-.fixture-cell-empty {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px dashed var(--color-border-subtle);
-}
-
-/* Only actually clickable while a placement is pending (data-grid-cell is only present
-   on empty cells in that mode -- see FixtureRenderer.placementGridHTML) -- the cursor
-   hint applies generally since CSS has no way to key off a sibling's own JS-side state. */
-.fixture-cell-empty:hover {
-  border-color: var(--color-border-active);
-}
-
-.fixture-cell-occupied {
-  --bg-color: #090d16;
-  background: var(--scanline-pattern), var(--bg-color);
-  background-size:
-    100% 4px,
-    auto;
-  border: 1px solid var(--color-border-subtle);
-  padding: 4px;
-}
-
-.fixture-cell-interactive {
-  cursor: pointer;
-}
-
-.fixture-cell-interactive:hover {
-  border-color: var(--color-border-active);
-}
-
-/* Floating name card for the hovered shelf placement (FixtureWindow.updateItemTooltip). */
-.fixture-item-tooltip {
-  position: fixed;
-  z-index: 100000;
-  pointer-events: none;
-  max-width: 320px;
-  padding: 6px 10px;
-  background: rgba(8, 12, 20, 0.95);
-  border: 2px solid var(--color-border-active);
-  font-family: "Courier New", monospace;
-  font-size: 13px;
-  color: #cbd5e1;
-  line-height: 1.35;
-}
-
-.fixture-item-tooltip[hidden] {
-  display: none;
-}
-
-.fixture-item-tooltip-name {
-  font-size: 16px;
-  font-weight: bold;
-  color: #fff;
-}
-
-.fixture-item-tooltip-hint {
-  margin-top: 4px;
-  font-size: 11px;
-  color: #94a3b8;
-}
-
-/* Short "can't do that" message spawned at the cursor (FixtureWindow.showPopupText). */
-.fixture-popup-text {
-  position: fixed;
-  z-index: 100000;
-  transform: translate(-50%, -100%);
-  pointer-events: none;
-  white-space: nowrap;
-  font-family: "Courier New", monospace;
-  font-weight: bold;
-  font-size: 16px;
-  color: #ef4444;
-  text-shadow:
-    -2px 0 #000,
-    2px 0 #000,
-    0 -2px #000,
-    0 2px #000;
-  animation: fixture-popup-rise 1.4s ease-out forwards;
-}
-
-@keyframes fixture-popup-rise {
-  0%,
-  50% {
-    opacity: 1;
-    margin-top: 0;
-  }
-  100% {
-    opacity: 0;
-    margin-top: -30px;
-  }
-}
-
-.fixture-cell-image {
-  width: 100%;
-  height: 100%;
-  image-rendering: pixelated;
-  object-fit: contain;
-}
-
-.fixture-cell-sold-out .fixture-cell-image {
-  opacity: 0.35;
-}
-
-.fixture-cell-badge {
-  position: absolute;
-  right: 3px;
-  bottom: 2px;
-  font-size: var(--font-size-10);
-  font-weight: bold;
-  color: var(--color-text-main);
-  background: rgba(0, 0, 0, 0.7);
-  padding: 0 3px;
-  border-radius: 2px;
-}
-
-/* The "where will this actually land" preview shown while placing an item (see
-   FixtureWindow.showPlacementPreview) -- the item's own image at its real footprint,
-   anchored under the cursor. pointer-events: none is essential: without it, hovering the
-   preview itself (which can visually cover several grid cells at once) would steal mouse
-   events away from the empty cells underneath, breaking hover tracking the moment the
-   cursor sits over its own overlay. */
-.fixture-placement-preview {
-  pointer-events: none;
-  border-radius: 3px;
-  padding: 4px;
-  box-sizing: border-box;
-}
-
-.fixture-placement-preview-valid {
-  background: rgba(16, 185, 129, 0.25);
-  border: 2px solid #10b981;
-}
-
-.fixture-placement-preview-invalid {
-  background: rgba(239, 68, 68, 0.25);
-  border: 2px solid #ef4444;
-}
-
-.fixture-placement-preview .fixture-cell-image {
-  opacity: 0.85;
 }
 
 /* ================================================================= /
@@ -1814,6 +1645,116 @@ button {
      behind it; the HUD now hosts a real clickable control (pause button), so it needs to
      opt back in like .dialogue-window/.settings-window already do. */
   pointer-events: auto;
+}
+
+/* Bottom bar under the map (CrateFooter.js): the picture, name, and count of the crate the
+   green arrow points at. Its height matches MAP_SCREEN_BOTTOM in game.js. */
+#crate-footer {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 96px;
+  --bg-color: var(--color-panel);
+  background: var(--scanline-pattern), var(--bg-color);
+  background-size:
+    100% 4px,
+    auto;
+  border-top: 2px solid var(--color-border-active);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  font-family: "Courier New", monospace;
+  font-weight: bold;
+  user-select: none;
+  z-index: 90;
+}
+
+.crate-footer-label {
+  position: absolute;
+  left: 16px;
+  color: var(--color-text-main);
+  font-size: 16px;
+  letter-spacing: 2px;
+}
+
+.crate-footer-contents {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  max-width: calc(100% - 200px);
+}
+
+.crate-footer-image {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+
+.crate-footer-name {
+  max-width: 380px;
+  color: #10b981;
+  font-size: 24px;
+  text-align: center;
+}
+
+.crate-footer-name.crate-footer-empty {
+  color: #64748b;
+}
+
+.crate-footer-count {
+  color: var(--color-text-main);
+  font-size: 40px;
+}
+
+/* One card per carried crate, top crate first, just above the bottom bar's right end. */
+#holding-cards {
+  position: absolute;
+  right: 0;
+  bottom: 96px;
+  display: flex;
+  flex-direction: column;
+  font-family: "Courier New", monospace;
+  font-weight: bold;
+  user-select: none;
+  z-index: 90;
+}
+
+.holding-card {
+  display: flex;
+  align-items: center;
+  width: 320px;
+  height: 56px;
+  box-sizing: border-box;
+  padding: 0 10px 0 4px;
+  background: #0f172a;
+  border: 1px solid #334155;
+}
+
+.holding-card-image {
+  width: 44px;
+  height: 44px;
+  margin: 0 6px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+
+.holding-card-name {
+  flex: 1;
+  color: #10b981;
+  font-size: 15px;
+  text-align: center;
+}
+
+.holding-card-count {
+  margin-left: 4px;
+  color: var(--color-text-main);
+  font-size: 22px;
 }
 
 .hud-section {
@@ -2054,6 +1995,9 @@ button {
 }
 
 #persistent-hud.hidden,
+#crate-footer.hidden,
+#holding-cards.hidden,
+.crate-footer-image.hidden,
 .hud-debug-feedback.hidden,
 #debug-folder-btn.hidden,
 .hud-pause-btn.hidden,

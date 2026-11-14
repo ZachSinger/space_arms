@@ -10,6 +10,7 @@
 import Phaser from "phaser";
 import { TILE_SIZE } from "../logic/RoomLayout.js";
 import { getFixtureType, getShelfDisplayGrid } from "../logic/FixtureLayout.js";
+import { getBudgetShelfArtForType } from "../logic/BudgetShelfArt.js";
 import { getFixtureTexture } from "../logic/FixtureTexture.js";
 import { ITEM_CRATE_TINTS, getItemCrateCategory } from "../logic/CrateCategory.js";
 import { Crate, INTERACT_RANGE } from "../logic/Crate.js";
@@ -20,38 +21,17 @@ import { controlLabel } from "../logic/InputDevice.js";
 import { Player, PLAYER_CRATE_HOLD_OFFSET } from "../logic/Player.js";
 import { Market } from "../logic/Market.js";
 import { formatMoney } from "../logic/Money.js";
-import boxSizeDraft from "../../documentation/ShelfBoxSizeDraft.csv?raw";
+import { getShelfBoxes } from "../logic/ShelfBoxLayout.js";
 import {
   BOX_SIZES, canStock, canUnstock, createCrate, createSlots, getCrateItemLimit, stockOne, takeOne,
   unstockOne,
 } from "../logic/ShelfSlotStocking.js";
 
-const SHELF_TYPE = "shelf_budget_2x4";
+const SHELF_TYPE = "shelf_budget_3x4";
 // Where each item space sits on the shelf's front-view art, in source-image pixels: one row
 // per shelf level (top of its opening down to its board), one column per section.
-const SLOT_ART = Object.freeze({
-  width: 384,
-  height: 192,
-  rows: [[48, 88], [92, 132], [136, 172]],
-  columns: [[28, 106], [114, 192], [200, 278], [286, 364]],
-});
-// Board tops support single rows and the raised back row, in source-image pixels.
-const BOARD_TOPS = [80, 124, 164];
-// Each size uses the agreed packing pattern, measured in shelf-art pixels.
-const BOX_LAYOUTS = Object.freeze({
-  1: { across: 5, depth: 2, stackedRows: 2, width: 13, height: 16 },
-  2: { across: 5, depth: 2, stackedRows: 1, width: 13, height: 34 },
-  3: { across: 3, depth: 2, stackedRows: 1, width: 23, height: 34 },
-  4: { across: 5, depth: 1, stackedRows: 1, width: 14, height: 36 },
-  6: { across: 3, depth: 1, stackedRows: 1, width: 24, height: 36 },
-  8: { across: 2, depth: 1, stackedRows: 1, width: 34, height: 36 },
-  10: { across: 2, depth: 1, stackedRows: 1, width: 37, height: 36 },
-  14: { across: 1, depth: 1, stackedRows: 1, width: 56, height: 36 },
-  20: { across: 1, depth: 1, stackedRows: 1, width: 76, height: 38 },
-});
-// The back row of a space sits a little higher, in shadow, so it peeks out from behind the
-// front row.
-const BACK_LAYER = Object.freeze({ shiftX: 0, shiftY: 2, tint: 0x8a8a9a });
+const SLOT_ART = getBudgetShelfArtForType(getFixtureType(SHELF_TYPE));
+const BACK_LAYER = Object.freeze({ tint: 0x8a8a9a });
 const CATEGORIES = Object.keys(ITEM_CRATE_TINTS);
 const MOVE_INTERVAL_MS = 180;
 const CUSTOMER_INTERVAL_MS = 2500;
@@ -74,15 +54,10 @@ const EMPTY_CRATE_COUNT = 3;
 
 // Item ids grouped by crate category, then by their draft box size.
 function buildItemPool(items) {
-  const sizes = new Map();
-  for (const line of boxSizeDraft.split(/\r?\n/).slice(1)) {
-    const cells = line.split('","').map((cell) => cell.replace(/"/g, ""));
-    if (cells.length >= 4) sizes.set(cells[0], Number(cells[3]));
-  }
   const pool = {};
   for (const item of items) {
     const category = getItemCrateCategory(item.tags);
-    const size = sizes.get(item.id);
+    const size = item.boxSize;
     if (!category || !BOX_SIZES.includes(size)) continue;
     pool[category] ??= {};
     (pool[category][size] ??= []).push(item.id);
@@ -437,7 +412,8 @@ export class ShelfLabScene extends Phaser.Scene {
       const throwing = velocityX !== 0 || velocityY !== 0;
       const position = throwing
         ? crate.findThrowPosition(this.player.sprite, velocityX, velocityY)
-        : crate.findDropPosition(this.player.sprite.x, this.player.sprite.y, this.player.sprite);
+        : crate.findDropPosition(this.player.sprite.x, this.player.sprite.y, this.player.sprite,
+          [], undefined, this.player.currentFacing);
       if (!position) {
         this.lastEvent = throwing ? "There's no room to throw the crate." : "There's no room to put the crate down.";
         this.refresh();
@@ -452,6 +428,7 @@ export class ShelfLabScene extends Phaser.Scene {
       for (const crate of stack) {
         const position = crate.findDropPosition(
           this.player.sprite.x, this.player.sprite.y, this.player.sprite, reserved, INTERACT_RANGE,
+          this.player.currentFacing,
         );
         if (!position) {
           this.lastEvent = "There's no room to set the stack down.";
@@ -645,36 +622,20 @@ export class ShelfLabScene extends Phaser.Scene {
     this.slotBoxes[index] = [];
     const slot = this.slots[index];
     if (slot.count === 0) return;
-    const layout = BOX_LAYOUTS[slot.size];
-    if (!layout) return;
     const column = index % SLOT_ART.columns.length;
     const row = Math.floor(index / SLOT_ART.columns.length);
     const scaleX = this.shelf.width / SLOT_ART.width;
     const scaleY = this.shelf.height / SLOT_ART.height;
     const shelfLeft = this.shelf.x - this.shelf.width / 2;
     const shelfTop = this.shelf.y - this.shelf.height / 2;
-    const [left, right] = SLOT_ART.columns[column];
-    const gap = (right - left - layout.width * layout.across
-      - (layout.depth > 1 ? BACK_LAYER.shiftX : 0)) / (layout.across + 1);
-    const itemsPerLayer = layout.across * layout.stackedRows;
-    const stackStep = layout.height * 0.68;
-    const frontBottom = layout.depth > 1 ? SLOT_ART.rows[row][1] : BOARD_TOPS[row];
-    for (let item = 0; item < slot.count; item += 1) {
-      const layer = Math.floor(item / itemsPerLayer);
-      const inLayer = item % itemsPerLayer;
-      const level = Math.floor(inLayer / layout.across);
-      const isBack = layer === 0 && layout.depth > 1;
-      const x = left + gap + (inLayer % layout.across) * (layout.width + gap)
-        + (isBack ? BACK_LAYER.shiftX : 0);
-      const bottom = (isBack ? BOARD_TOPS[row] - BACK_LAYER.shiftY : frontBottom)
-        - level * stackStep;
+    for (const bounds of getShelfBoxes(SLOT_ART, column, row, slot.size, slot.count)) {
       const box = this.add.image(
-        shelfLeft + x * scaleX,
-        shelfTop + bottom * scaleY,
+        shelfLeft + bounds.x * scaleX,
+        shelfTop + (bounds.y + bounds.height) * scaleY,
         `shelf_box_${slot.category}`,
-      ).setOrigin(0, 1).setDisplaySize(layout.width * scaleX, layout.height * scaleY)
-        .setDepth(2.5 + layer * 0.1 + level * 0.01);
-      if (isBack) box.setTint(BACK_LAYER.tint);
+      ).setOrigin(0, 1).setDisplaySize(bounds.width * scaleX, bounds.height * scaleY)
+        .setDepth(2.5 + bounds.depth);
+      if (bounds.back) box.setTint(BACK_LAYER.tint);
       this.slotBoxes[index].push(this.addWorld(box));
     }
   }

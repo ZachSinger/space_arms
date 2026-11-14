@@ -32,7 +32,7 @@ lifecycle. No property lists.
 ```js
 /**
  * One crate in the world: its contents, sprite, and physics body.
- * Created by deliveries and fixture crating; destroyed when emptied or unpacked.
+ * Created by deliveries and fixture crating; destroyed when emptied or returned to the bin.
  */
 export class Crate {
 ```

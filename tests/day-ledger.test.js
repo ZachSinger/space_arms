@@ -165,13 +165,13 @@ test("previously signed contracts and hired staff remain owned below their new u
   const saved = new PlayerState().serialize();
   saved.globalReputation = 2;
   saved.shopLevel = 2;
-  saved.activeLicenses.push("lic_start_apparel", "lic_fixture_expanded");
+  saved.activeLicenses.push("lic_start_apparel", "lic_fixture_storage_bank");
   saved.hiredEmployees = ["tavi_stock_clerk"];
   delete saved.employeeJobPriorities;
   const restored = PlayerState.deserialize(saved);
   assert.equal(restored.shopLevel, 2);
   assert.equal(restored.activeLicenses.has("lic_start_apparel"), true);
-  assert.equal(restored.activeLicenses.has("lic_fixture_expanded"), true);
+  assert.equal(restored.activeLicenses.has("lic_fixture_storage_bank"), true);
   assert.deepEqual(restored.hiredEmployees, ["tavi_stock_clerk"]);
   assert.equal(restored.moveEmployeeJobPriority("tavi_stock_clerk", "stock_shelves", -1), true);
 });
@@ -354,72 +354,16 @@ test("training rejects unaffordable and unhired staff and older saves start with
   assert.deepEqual(restored.employeeTraining, {});
 });
 
-test("hovercart upgrades cost more for each five-space increase and stop at 40", () => {
+test("receipts describe fixture resale and fixture purchases separately", () => {
   const state = new PlayerState();
-  state.shopLevel = 30;
-  assert.equal(state.hovercart.capacity, 15);
-  assert.equal(state.hovercart.add("test_item", 3), 3);
-  state.addCredits(1000, { category: "sales", label: "Test sale" });
-  for (const [capacity, price] of [[20, 200], [25, 300], [30, 400], [35, 500], [40, 600]]) {
-    const before = state.credits;
-    assert.equal(state.upgradeHovercart(), true);
-    assert.equal(state.hovercart.capacity, capacity);
-    assert.equal(state.credits, before - price);
-    assert.equal(state.hovercart.getAvailableUnitsFor("test_item"), 3);
-  }
-  const balance = state.credits;
-  assert.equal(state.upgradeHovercart(), false);
-  assert.equal(state.credits, balance);
-  assert.equal(state.dayLedger.lines.filter((line) => line.category === "equipment").length, 5);
-  assert.equal(balanceOf(state), state.credits);
-});
-
-test("an unaffordable hovercart upgrade changes neither capacity nor credits", () => {
-  const state = new PlayerState();
-  state.shopLevel = 3;
-  state.spendCredits(1301, { category: "fixtures", label: "Test fixture" });
-  assert.equal(state.upgradeHovercart(), false);
-  assert.equal(state.hovercart.capacity, 15);
-  assert.equal(state.credits, 199);
-  assert.equal(state.dayLedger.lines.some((line) => line.category === "equipment"), false);
-});
-
-test("saved hovercart upgrades and older carts keep their capacity and contents", () => {
-  for (const [savedCapacity, restoredCapacity] of [[10, 15], [20, 20], [25, 25], [40, 40]]) {
-    const saved = new PlayerState().serialize();
-    saved.hovercart = { capacity: savedCapacity, stock: [{ itemId: "test_item", quantity: savedCapacity }] };
-    const restored = PlayerState.deserialize(saved);
-    assert.equal(restored.hovercart.capacity, restoredCapacity);
-    assert.equal(restored.hovercart.getAvailableUnitsFor("test_item"), savedCapacity);
-    assert.equal(restored.serialize().hovercart.capacity, restoredCapacity);
-  }
-});
-
-test("each hovercart upgrade waits for its Shop Level", () => {
-  const state = new PlayerState();
-  assert.equal(state.upgradeHovercart(), false, "Shop Level 1 cannot upgrade");
-  assert.equal(state.hovercart.capacity, 15);
-  assert.equal(state.credits, 1500);
-  state.shopLevel = 3;
-  assert.equal(state.upgradeHovercart(), true);
-  assert.equal(state.hovercart.capacity, 20);
-  assert.equal(state.upgradeHovercart(), false, "25 spaces needs Shop Level 8");
-  state.shopLevel = 8;
-  assert.equal(state.upgradeHovercart(), true);
-  assert.equal(state.hovercart.capacity, 25);
-});
-
-test("receipts describe fixture resale and hovercart upgrades separately", () => {
-  const state = new PlayerState();
-  state.shopLevel = 3;
   state.addCredits(90, { category: "fixture_sales", label: "LOCKER" });
-  assert.equal(state.upgradeHovercart(), true);
+  state.spendCredits(150, { category: "fixtures", label: "BUDGET SHELF 2x2" });
   const receipt = summarizeReceipt(state.dayLedger.serialize(), state.credits, state.globalReputation);
   const html = FinancesRenderer.generateHTML({ ...financesView(), today: receipt });
   assert.match(html, /Sold fixture: LOCKER/);
-  assert.match(html, /Equipment upgrade: Hovercart capacity: 20 spaces/);
+  assert.match(html, /Fixture: BUDGET SHELF 2x2/);
   assert.equal(receipt.totalEarned, 90);
-  assert.equal(receipt.totalSpent, 200);
+  assert.equal(receipt.totalSpent, 150);
 });
 
 test("cent-priced sales, spending and receipts survive ending the day and saving", () => {
@@ -594,7 +538,7 @@ test("the Finances tab offers End Day only after the shift, and Start Shift once
 
 test("the top bar shows PAUSE during a shift, END DAY after it, and START SHIFT before the next", (context) => {
   const elements = new Map();
-  const ids = ["hud-credits", "hud-rep", "hud-shop-level", "hud-hovercart", "hud-shift-time", "hud-pause-btn",
+  const ids = ["hud-credits", "hud-rep", "hud-shop-level", "hud-shift-time", "hud-pause-btn",
     "hud-store-toggle-btn",
     "hud-start-shift-btn", "hud-end-day-btn", "hud-save-btn", "hud-main-menu-btn", "persistent-hud"];
   for (const id of ids) {

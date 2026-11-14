@@ -30,10 +30,6 @@
               <span class="hud-label">SHOP LEVEL</span>
               <span id="hud-shop-level" class="hud-value rep">1</span>
             </div>
-            <div class="hud-stat">
-              <span class="hud-label">HOVERCART</span>
-              <span id="hud-hovercart" class="hud-value">0/15</span>
-            </div>
             <div id="hud-stamina" class="hud-stat hud-stamina" role="progressbar"
               aria-label="Player stamina" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"
               title="Hold Shift while moving to dash. Stamina recovers while walking or resting. When empty, recover to 25% before dashing again.">
@@ -71,6 +67,16 @@
           </div>
         </div>
         <div id="game-message" class="game-message hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+        <!-- Bottom bar: what's in the crate the green arrow points at. Holding cards sit just above its right end. -->
+        <div id="crate-footer" class="crate-footer hidden">
+          <span class="crate-footer-label">CRATE</span>
+          <div class="crate-footer-contents">
+            <img class="crate-footer-image hidden" alt="">
+            <span class="crate-footer-name"></span>
+            <span class="crate-footer-count"></span>
+          </div>
+        </div>
+        <div id="holding-cards" class="holding-cards hidden"></div>
       </div>
     </div>
     <script type="module" src="/js/scenes/main.js"></script>

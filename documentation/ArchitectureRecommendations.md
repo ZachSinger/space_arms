@@ -15,7 +15,7 @@ These are the facts that drive every recommendation below:
   Hauling loose crates from the floor, employee schedules, and breaks remain future work;
   shoplifters and a Military faction are stretch goals. Customers are only the first kind
   of NPC.
-- **Items move between many containers:** loading pad crates, floor crates, the hovercart,
+- **Items move between many containers:** loading pad crates, floor crates,
   shelf slots, storage lockers, the Go-Backs bin, customer carts, and employee backpacks.
 - **The game is UI-heavy.** The Manager's Tablet already has 5 working tabs, with
   the Employee tab now supporting hiring and staff information. Finances and Handbook
@@ -116,7 +116,7 @@ written the same way would duplicate most of it.
 
 ## 4. One transfer rule for item locations
 
-`InventoryTransfer.transferItems` now handles player stock moves between the hovercart,
+`InventoryTransfer.transferItems` now handles player stock moves between
 Go-Backs, shelves/lockers, and item crates. The containers expose the quantities and
 capacity needed by the shared operation:
 
@@ -215,20 +215,20 @@ Loading > Placing > ModalWindow > AtRegister > Carrying > Walking
 ```
 
 Each mode declares which actions it allows. Opening or closing a window automatically
-changes the resolved mode; only checkout and Go-Backs windows during register operation
+changes the resolved mode; only the checkout window during register operation
 remain part of the register profile. Modal windows block gameplay hotkeys and movement.
 "Can I press Space right now?" is answered in exactly one place.
 
-**Interactables registry.** Implemented for the current shelves/lockers, crates, and
-register. Live sources describe which actions each target supports, how range and priority
+**Interactables registry.** Implemented for the current shelves/lockers and register.
+Crates use their own facing-arrow targeting (`findCrateInFront` and `crateActions` in
+`game.js`) because Space and Q tell a tap from a hold. Live sources describe which actions each target supports, how range and priority
 are measured, and what prompt to show:
 
 - supported action (interact, pick up, or open Go-Backs),
 - usable distance and priority when targets overlap,
-- hint text such as "Item x5 | Space: Pick up".
+- hint text such as "E: Activate Register".
 
-The registry chooses the best valid target for E, Space, or Q and supplies the crate and
-register prompts. This replaces the separate nearest-crate and register-range searches.
+The registry chooses the best valid target for E and supplies the register prompt.
 Doors and employees can use the same system when those interactions are added.
 
 **Key rebinding.** Map actions (`Interact`, `PickUp`, `OpenTablet`) to keys in one table.
@@ -236,8 +236,8 @@ Steam players expect rebinding, and it's nearly free with an action map.
 
 **Controller input (implemented).** `GamepadInput` polls the browser Gamepad API once per
 frame (all pads merged, deadzone, menu-direction repeat). In the world, `game.js
-handleGamepad` maps buttons onto the same actions as the keys (A = interact, X = crate,
-Y = Go-Backs, B = leave register, Back = tablet, Start = top bar). Every DOM screen uses
+handleGamepad` maps buttons onto the same actions as the keys (A = interact, X = pick up/throw,
+Y = put down or Go-Backs, R3 = next crate down, B = leave register, Back = tablet, Start = top bar). Every DOM screen uses
 `UINavigator`, a menu cursor that fakes the mouse events a real click sends, so windows
 need no controller-specific code. Screens can opt in with `data-pad-autofocus`,
 `data-pad-world` (the controller drives the world, as in fixture placement),
@@ -277,7 +277,7 @@ both key and button maps.
 ## 10. Data-driven tuning
 
 - **Move tuning numbers into `data/Tuning.json`:** shift length, market swing, delivery
-  fee, pad size, hovercart capacity, throw speed/drag, push weights, patience, and arrival
+  fee, pad size, throw speed/drag, push weights, patience, and arrival
   rates. Bundle it with the game; validate on load.
 - **Hot-reload in dev** and a **debug tuning panel** (sliders) so feel can be tuned while
   playing. Today, every balance tweak is a code edit plus reload, which is most of what

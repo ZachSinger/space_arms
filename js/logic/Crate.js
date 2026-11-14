@@ -4,6 +4,11 @@
 // A physical cargo crate for ordered stock or one fixture. Item crates are delivered to
 // stock holders; fixture crates are carried and placed through FixturePlacement.
 // See also: CratePushing.js (player pushing).
+import items from "../../data/Items.json" with { type: "json" };
+import { getCrateItemLimit } from "./ShelfSlotStocking.js";
+import { getItemCrateTint } from "./CrateCategory.js";
+
+const ITEMS_BY_ID = new Map(items.map((item) => [item.id, item]));
 
 // Pixel-art crates from the 48px art pack, drawn at the same scale as the floor and walls
 // (each 64px game square shows 2x2 of the pack's 48px tiles). Sizes in px; drag in px/s².
@@ -14,9 +19,9 @@ export const FIXTURE_CRATE_SPRITE = Object.freeze({
   key: "crate_fixture_slatted", path: "img/Icons_Extracted/Tileset/Fixtures/crate_fixture_slatted.png",
   width: 28, height: 28,
 });
-// The box's lid is its top 10px; each crate above sits on it so only the front of the one
-// below shows.
-const CRATE_STACK_SPACING = 18;
+// Each crate in a stack (on the floor or in someone's hands) sits this many pixels above the
+// one below, so its bottom edge lands where the lower crate's side turns from light to dark.
+export const CRATE_STACK_SPACING = 10;
 const CRATE_THROW_MULTIPLIER = 1.5;
 const CRATE_DRAG = 480;
 const CRATE_BOUNCE = 0.6;
@@ -29,10 +34,23 @@ const THROW_PEAK_MULTIPLIER = 2.5;
 // Player-to-crate/fixture interaction distance (px): forgiving, but not across the room.
 export const INTERACT_RANGE = 56;
 const DROP_SEARCH_RADIUS = INTERACT_RANGE - DROP_SEARCH_STEP;
+const FACING_DIRECTIONS = Object.freeze({
+  up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
+});
+
+// The space a set-down crate must keep clear of: the carrier's art side to side, but only his
+// feet (physics body) top to bottom, so he can set a crate down close to a wall in front of
+// him even though his head and the crates he holds reach up past it.
+function carrierFootprint(carrierSprite) {
+  const art = carrierSprite.getBounds();
+  const feet = carrierSprite.body;
+  if (!feet) return art;
+  return { left: art.left, right: art.right, top: feet.top, bottom: feet.bottom };
+}
 
 /**
  * One crate in the world: its contents, sprite, and physics body.
- * Created by deliveries and fixture crating; destroyed when emptied or unpacked.
+ * Created by deliveries and fixture crating. Hand-stocked crates stay around when empty.
  */
 export class Crate {
   constructor(scene, itemId, quantity, x, y, { kind = "item", typeId = null, tint = null } = {}) {
@@ -88,9 +106,17 @@ export class Crate {
   }
 
   add(itemId, quantity) {
-    if (this.kind !== "item" || this.itemId !== itemId) return 0;
+    if (this.kind !== "item" || (this.quantity > 0 && this.itemId !== itemId)) return 0;
+    this.itemId = itemId;
+    const tint = getItemCrateTint(ITEMS_BY_ID.get(itemId)?.tags);
+    if (tint !== null) this.sprite?.setTint?.(tint);
     this.quantity += quantity;
     return quantity;
+  }
+
+  getRemainingUnitsFor(itemId) {
+    if (this.kind !== "item" || (this.quantity > 0 && this.itemId !== itemId)) return 0;
+    return Math.max(0, getCrateItemLimit(ITEMS_BY_ID.get(itemId)?.boxSize) - this.quantity);
   }
 
   remove(itemId, quantity) {
@@ -142,7 +168,7 @@ export class Crate {
       return false;
     }
     if (carrierSprite) {
-      const carrier = carrierSprite.getBounds();
+      const carrier = carrierFootprint(carrierSprite);
       if (left < carrier.right && right > carrier.left && top < carrier.bottom && bottom > carrier.top) {
         return false;
       }
@@ -163,18 +189,38 @@ export class Crate {
    * @param {Phaser.GameObjects.Sprite | null} [carrierSprite]
    * @param {object[]} [reservedRectangles]
    * @param {number} [searchRadius]
+   * @param {"up"|"down"|"left"|"right"|null} [facing] - tries straight ahead before anywhere else
    * @returns {{ x: number, y: number } | null}
    */
-  findDropPosition(x, y, carrierSprite = null, reservedRectangles = [], searchRadius = DROP_SEARCH_RADIUS) {
+  findDropPosition(
+    x, y, carrierSprite = null, reservedRectangles = [], searchRadius = DROP_SEARCH_RADIUS, facing = null,
+  ) {
     const offsets = [];
+    const ahead = FACING_DIRECTIONS[facing];
+    if (ahead) {
+      // The player's feet sit low in his art, so straight ahead may need to go past the usual
+      // radius to clear them.
+      let reach = searchRadius;
+      if (carrierSprite) {
+        const carrier = carrierFootprint(carrierSprite);
+        const edge = { up: y - carrier.top, down: carrier.bottom - y, left: x - carrier.left, right: carrier.right - x }[facing];
+        const half = (ahead.x ? this.sprite.body.width : this.sprite.body.height) / 2;
+        reach = Math.max(reach, Math.ceil((edge + half) / DROP_SEARCH_STEP) * DROP_SEARCH_STEP);
+      }
+      for (let distance = 0; distance <= reach; distance += DROP_SEARCH_STEP) {
+        offsets.push({ dx: ahead.x * distance, dy: ahead.y * distance, distanceSquared: -1 });
+      }
+    }
     for (let dx = -searchRadius; dx <= searchRadius; dx += DROP_SEARCH_STEP) {
       for (let dy = -searchRadius; dy <= searchRadius; dy += DROP_SEARCH_STEP) {
         const distanceSquared = dx * dx + dy * dy;
-        if (distanceSquared <= searchRadius * searchRadius) {
+        if (distanceSquared <= searchRadius * searchRadius && !(ahead && dx * ahead.y === dy * ahead.x &&
+          dx * ahead.x + dy * ahead.y >= 0)) {
           offsets.push({ dx, dy, distanceSquared });
         }
       }
     }
+    // Straight-ahead spots are -1, so the stable sort keeps them first, nearest to farthest.
     offsets.sort((a, b) => a.distanceSquared - b.distanceSquared);
 
     for (const { dx, dy } of offsets) {
@@ -438,10 +484,10 @@ export class Crate {
    * Per-frame while carried: held slightly above the player and drawn over them.
    * @param {Phaser.GameObjects.Sprite} carrierSprite
    */
-  followCarrier(carrierSprite, stackIndex = 0, holdOffset = 22) {
+  followCarrier(carrierSprite, stackIndex = 0, holdOffset = 22, spacing = CRATE_STACK_SPACING) {
     this.sprite.setPosition(
       carrierSprite.x,
-      carrierSprite.y - holdOffset - stackIndex * CRATE_STACK_SPACING,
+      carrierSprite.y - holdOffset - stackIndex * spacing,
     );
     this.sprite.setAngle?.(0);
     this.sprite.setDepth(carrierSprite.depth + 1 + stackIndex);

@@ -33,24 +33,23 @@ import {
   getLicensedFactionIds,
 } from "../logic/CustomerPooling.js";
 import { Player, PLAYER_CHARACTER_HEIGHT, PLAYER_CRATE_HOLD_OFFSET } from "../logic/Player.js";
-import { Crate, INTERACT_RANGE } from "../logic/Crate.js";
+import { Crate, CRATE_STACK_SPACING, INTERACT_RANGE } from "../logic/Crate.js";
 import { getItemCrateTint } from "../logic/CrateCategory.js";
-import { MAX_CARRIED_CRATES } from "../logic/CrateStack.js";
+import { FLOOR_STACK_MAX, HOLD_KEY_MS, MAX_CARRIED_CRATES, isInFacingCone } from "../logic/CrateStack.js";
+import { getCrateItemLimit } from "../logic/ShelfSlotStocking.js";
+import { CRATE_FOOTER_HEIGHT_PX, CrateFooter } from "../logic/CrateFooter.js";
 import { DELIVERY_FEE, summarizeSupplyOrder } from "../logic/SupplyOrder.js";
 import { getEmergencyLoanOffer } from "../logic/EmergencyLoan.js";
-import { HOVERCART_UPGRADES } from "../logic/Hovercart.js";
 import { solveCratePush } from "../logic/CratePushing.js";
 import { separateOverlappingCrates } from "../logic/CrateSeparation.js";
 import { CheckoutWindow } from "../logic/CheckoutWindow.js";
 import { chooseCustomerPayment } from "../logic/CustomerPayment.js";
-import { FixtureWindow } from "../logic/FixtureWindow.js";
-import { GoBacksWindow } from "../logic/GoBacksWindow.js";
 import { TileRoom } from "../logic/TileRoom.js";
 import { AnimatedDoor, BACKROOM_DOOR_SPRITE, SlidingDoor } from "../logic/SlidingDoor.js";
 import {
   TILE_SIZE, getZone, getTotalGridSize, getAuthoredGridSize, getStoreDoorCell, getStoreDoorCells, EXPANSION_ORDER,
   BACKROOM_UPGRADE_ORDER, getBackroomDoorCell, getBackroomExitCell, getBackroomLink, isBackroomRow,
-  getBackroomInteriorBounds, getLoadingPadBounds, LOADING_PAD_WIDTH, LOADING_PAD_HEIGHT,
+  getBackroomInteriorBounds, getBackroomBounds, getLoadingPadBounds, LOADING_PAD_WIDTH, LOADING_PAD_HEIGHT,
 } from "../logic/RoomLayout.js";
 import { ShiftClock, SHIFT_DURATION_MS } from "../logic/ShiftClock.js";
 import { summarizeReceipt } from "../logic/DayLedger.js";
@@ -60,6 +59,7 @@ import { FixturePlacement } from "../logic/FixturePlacement.js";
 import { FixturePlacementGrid } from "../logic/FixturePlacementGrid.js";
 import { ShelfAttentionHighlight } from "../logic/ShelfAttentionHighlight.js";
 import { ShelfItemDisplay } from "../logic/ShelfItemDisplay.js";
+import { ShelfStockingWindow } from "../logic/ShelfStockingWindow.js";
 import { getFixtureTexture, getSingleLockerSprite, hasFacingTextures, sizeSingleLocker } from "../logic/FixtureTexture.js";
 import { CapacityGauge } from "../logic/CapacityGauge.js";
 import { STARTING_FIXTURES, FIXTURE_TYPES, getFixtureType, getFixtureResaleValue, getShelfDisplayGrid, fixtureAccessCells, fixtureFacing, fixtureFacingStep, fixtureFootprint, fixtureInteractionDistance, fixtureRotation, fixtureStandingSpot, validateFixtureLayout } from "../logic/FixtureLayout.js";
@@ -91,6 +91,12 @@ function reputationPenaltyText(penalty, factionId) {
   return `-${penalty} store reputation${faction ? `\n-${penalty} ${faction.name} reputation` : ""}\nat shift end`;
 }
 
+const isLocker = (fixture) => getFixtureType(fixture.type).kind === "storage";
+// How far from the register the Go-Backs crates may be set down.
+const GO_BACKS_SEARCH_RADIUS = TILE_SIZE * 4;
+// How long a locker door stays open after items go in or out.
+const LOCKER_DOOR_OPEN_MS = 600;
+
 function segmentIntersectsRectangle(from, to, rectangle) {
   const epsilon = 0.001;
   const left = rectangle.left + epsilon;
@@ -111,9 +117,10 @@ function segmentIntersectsRectangle(from, to, rectangle) {
     clip(from.y, to.y - from.y, top, bottom);
 }
 
-// Screen space kept clear when fitting the map: the top status bar (36px + 2px border)
-// and a small margin around the map.
+// Screen space kept clear when fitting the map: the top status bar (36px + 2px border),
+// the bottom crate bar (#crate-footer, 96px), and a small margin around the map.
 const MAP_SCREEN_TOP = 38;
+const MAP_SCREEN_BOTTOM = CRATE_FOOTER_HEIGHT_PX;
 const MAP_SCREEN_MARGIN = 8;
 // Closest zoom-in still shows this many tile rows top to bottom.
 const CAMERA_MIN_VISIBLE_ROWS = 8;
@@ -127,6 +134,9 @@ const BACKROOM_FRAME_BORDER = 3;
 
 // Reputation lost when a thrown crate hits a customer.
 const CRATE_HIT_REPUTATION_PENALTY = 1;
+// Floor crates rest at this depth; one the player stands behind is drawn over him and the
+// crates he carries.
+const CRATE_FLOOR_DEPTH = 2;
 // Reputation lost when a customer leaves the queue without a sale.
 const ANGRY_REPUTATION_PENALTY = 1;
 // Reputation lost once when a customer cannot find any of their primary items.
@@ -237,8 +247,9 @@ export class GameScene extends Phaser.Scene {
       this.shiftClosingOverlay?.remove();
       this.shiftClosingOverlay = null;
     });
-    // Sync after Arcade Physics finalizes the player's position for this frame.
+    // Sync after Arcade Physics finalizes the player's and crates' positions for this frame.
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.syncCarriedCrate, this);
+    this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.syncFloorStacks, this);
     this.playerState = new PlayerState(this.eventBus);
     this.recalculateActiveFactions();
     this.market = new Market(database.getAllItems());
@@ -343,8 +354,7 @@ export class GameScene extends Phaser.Scene {
 
     this.checkoutWindow = new CheckoutWindow(this.windowManager);
     this.checkoutWindow.onFirstScan = () => this.registerLine[0]?.resetPatience();
-    this.goBacksWindow = new GoBacksWindow(this.windowManager, this.playerState);
-    this.fixtureWindow = new FixtureWindow(this.windowManager, this.playerState, this.eventBus);
+    this.shelfStockingWindow = new ShelfStockingWindow(this);
     // Customers waiting at the register; index 0 is being checked out. Re-laid-out by
     // layoutRegisterLine whenever it changes so they queue single-file.
     this.registerLine = [];
@@ -385,6 +395,12 @@ export class GameScene extends Phaser.Scene {
       LOADING_PAD_WIDTH,
       LOADING_PAD_HEIGHT,
     );
+    this.emptyCrateBin = this.add.rectangle(
+      this.loadingPadRect.right + 18, this.loadingPadRect.top - 24, 28, 32, 0x1f2937,
+    ).setStrokeStyle(2, 0x94a3b8).setDepth(2);
+    this.add.text(this.emptyCrateBin.x, this.emptyCrateBin.y, "EMPTY\nCRATES", {
+      fontFamily: "Courier New, monospace", fontSize: "7px", align: "center",
+    }).setOrigin(0.5).setDepth(3);
     const { gridW, gridH } = getAuthoredGridSize();
     this.crateBounds = new Phaser.Geom.Rectangle(0, 0, gridW * TILE_SIZE, gridH * TILE_SIZE);
     this.crateGroup = this.physics.add.group();
@@ -421,16 +437,19 @@ export class GameScene extends Phaser.Scene {
     this.restockCrates = []; // uncarried crates, at the Loading Pad or dropped on the floor
     this.carriedCrate = null; // the uppermost carried crate, used for the next action
     this.carriedCrates = [];
-    // Floats above a carried crate: what's inside, and for items, how many locker spaces it needs.
-    this.carriedCrateLabel = this.add.text(0, 0, "", {
-      fontFamily: "Courier New, monospace",
-      fontSize: "13px",
-      fontStyle: "bold",
-      color: "#ffffff",
-      backgroundColor: "#111827",
-      padding: { x: 3, y: 2 },
-      align: "center",
-    }).setOrigin(0.5, 1).setVisible(false);
+    // Floor stacks: a bottom crate (in restockCrates) -> the crates sitting on it, lowest first.
+    this.floorStacks = new Map();
+    // Which floor stack the green arrow is on, and how many crates down from the top it points.
+    this.markedStackBase = null;
+    this.markedFromTop = 0;
+    // The pick-up or put-down button being held, until it's released (tap) or held long enough (hold).
+    this.cratePress = null;
+    // Points down at the crate the pick-up button would take, or the stack the put-down button adds to.
+    this.pickupMarker = this.add.graphics().setDepth(20000).setVisible(false);
+    this.pickupMarker.fillStyle(0x22c55e).lineStyle(1, 0x052e16)
+      .fillTriangle(-5, -4, 5, -4, 0, 4).strokeTriangle(-5, -4, 5, -4, 0, 4);
+    this.crateFooter = new CrateFooter();
+    this.events.once("shutdown", () => this.crateFooter.destroy());
 
     this.crateMotionPaused = false;
     this.shiftClock.subscribe(({ started, isPaused }) => {
@@ -453,10 +472,10 @@ export class GameScene extends Phaser.Scene {
     this.registerInteractableSources();
     this.controlMode = new ControlMode(this);
 
-    // E opens fixtures or delivers/places crates; Q unpacks stock or opens Go-Backs.
+    // E opens fixtures or delivers/places crates. Space picks crates up and Q puts them down
+    // (tap: one crate, hold: a stack); Q with empty hands packs the Go-Backs. See bindCrateKeys.
     this.bindControlKey("keydown-E", "interact", () => this.handleInteract());
-    this.bindSecondaryInteractKey();
-    this.bindCrateKey();
+    this.bindCrateKeys();
     this.registerPrompt = this.add.text(0, 0, "", {
       fontFamily: "monospace",
       fontSize: "13px",
@@ -512,15 +531,14 @@ export class GameScene extends Phaser.Scene {
       this.customersServedThisShift += 1;
       this.debugInfo?.recordCustomer("customer-sale-completed", customer);
     });
+    // Only lockers take whole crates now (shelves are stocked by hand in their window).
     this.eventBus.on(GAME_EVENTS.CRATE_DELIVERY_RESULT, ({ itemId, accepted, remaining }) => {
       const item = database.getItem(itemId);
       if (remaining === 0) {
-        this.showGameMessage(`Restocked ${item.name} +${accepted}`, "#10b981");
+        this.showGameMessage(`Put ${accepted} ${item.name} in the locker.`, "#10b981");
       } else {
         this.showGameMessage(
-          accepted > 0
-            ? `Restocked +${accepted}, ${remaining} left (full)`
-            : `Already full -- still carrying ${remaining}`,
+          `Put ${accepted} ${item.name} in the locker. It's full, so ${remaining} stay in your crate.`,
           "#f59e0b",
         );
       }
@@ -596,7 +614,7 @@ export class GameScene extends Phaser.Scene {
       this.backroomDoorAnimation.destroy();
       this.backroomExitAnimation.destroy();
       this.hud.destroy();
-      this.fixtureWindow.destroy();
+      this.shelfStockingWindow.destroy();
       this.checkoutWindow.destroy();
       this.windowManager.destroy();
     });
@@ -641,24 +659,11 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  bindSecondaryInteractKey() {
-    this.bindControlKey("keydown-Q", "goBacks", (event) => {
-      if (!event.repeat) this.handleSecondaryInteract();
-    });
-  }
-
-  handleSecondaryInteract() {
-    if (this.carriedCrate?.kind === "item" && this.controlMode.allows("unpack")) {
-      this.unpackCarriedCrate();
-    } else {
-      this.openGoBacksBin();
-    }
-  }
-
   /**
    * One frame of controller input. A screen on top gets it through the menu cursor;
    * otherwise each button runs the same action as its keyboard key:
-   *   A = E (interact)   X = Space (crate)   Y = Q (go-backs; unpack a stock crate)   Back = I (tablet)
+   *   A = E (interact)   X = Space (pick up / throw)   Y = Q (put down; packs the Go-Backs with empty hands)
+   *   R3 (right stick click) = Ctrl (green arrow one crate down)   Back = I (tablet)
    *   LB/RB = PageDown/PageUp (zoom)   Start = top bar (pause, start shift, save, ...)
    *   B = leave the register   left stick / D-pad = walk   triggers = dash
    * @param {number} time
@@ -695,8 +700,11 @@ export class GameScene extends Phaser.Scene {
       this.fixturePlacement.handlePad(pad);
     } else {
       if (pad.justPressed(PAD.A)) this.handleInteract();
-      if (pad.justPressed(PAD.X) && !this.checkoutWindow.usesSpaceKey()) this.handleCrateInteract();
-      if (pad.justPressed(PAD.Y)) this.handleSecondaryInteract();
+      if (pad.justPressed(PAD.X) && !this.checkoutWindow.usesSpaceKey()) {
+        this.startCratePress("pickUp", { button: PAD.X });
+      }
+      if (pad.justPressed(PAD.Y)) this.startCratePress("putDown", { button: PAD.Y });
+      if (pad.justPressed(PAD.R3)) this.markNextCrateDown();
       if (pad.justPressed(PAD.B) && this.operatingRegister) this.endRegisterSession();
     }
     if (pad.justPressed(PAD.LB)) this.handleUnusedMenuButton(PAD.LB);
@@ -706,7 +714,7 @@ export class GameScene extends Phaser.Scene {
   // Buttons the open screen had no use for, e.g. B or Y while ringing up a customer.
   handleUnusedMenuButton(button) {
     if (button === PAD.B && this.operatingRegister) this.endRegisterSession();
-    if (button === PAD.Y) this.openGoBacksBin();
+    if (button === PAD.Y) this.packGoBacks();
     if ((button === PAD.LB || button === PAD.RB) && this.controlMode.allows("cameraZoom")) {
       this.zoomCamera(button === PAD.RB ? 1 : -1);
     }
@@ -741,14 +749,14 @@ export class GameScene extends Phaser.Scene {
 
   // Keeps the same amount of shop visible when the window or resolution changes.
   handleCameraResize() {
-    const viewH = Math.max(1, this.scale.height - MAP_SCREEN_TOP);
+    const viewH = Math.max(1, this.scale.height - MAP_SCREEN_TOP - MAP_SCREEN_BOTTOM);
     if (this.cameraZoom && this.cameraViewHeight) this.cameraZoom *= viewH / this.cameraViewHeight;
     this.refreshCamera();
   }
 
   getCameraZoomRange() {
     const viewW = Math.max(1, this.scale.width);
-    const viewH = Math.max(1, this.scale.height - MAP_SCREEN_TOP);
+    const viewH = Math.max(1, this.scale.height - MAP_SCREEN_TOP - MAP_SCREEN_BOTTOM);
     const shop = this.room.getCameraBounds();
     const fitZoom = Math.min(
       Math.max(1, viewW - 2 * MAP_SCREEN_MARGIN) / shop.width,
@@ -798,8 +806,8 @@ export class GameScene extends Phaser.Scene {
   refreshCamera() {
     const camera = this.cameras.main;
     const viewW = Math.max(1, this.scale.width);
-    const viewH = Math.max(1, this.scale.height - MAP_SCREEN_TOP);
-    // The map is drawn only below the top status bar.
+    const viewH = Math.max(1, this.scale.height - MAP_SCREEN_TOP - MAP_SCREEN_BOTTOM);
+    // The map is drawn only between the top status bar and the bottom crate bar.
     camera.setViewport(0, MAP_SCREEN_TOP, viewW, viewH);
 
     const { min, max } = this.getCameraZoomRange();
@@ -866,7 +874,7 @@ export class GameScene extends Phaser.Scene {
     if (!open) return;
 
     const screenW = Math.max(1, this.scale.width);
-    const screenH = Math.max(1, this.scale.height - MAP_SCREEN_TOP);
+    const screenH = Math.max(1, this.scale.height - MAP_SCREEN_TOP - MAP_SCREEN_BOTTOM);
     const room = this.room.getCameraBounds("backroom");
     const zoom = Math.min(
       (screenW * BACKROOM_WINDOW_SHARE) / room.width,
@@ -986,7 +994,9 @@ export class GameScene extends Phaser.Scene {
         actions: ["register", "goBacks", "interact"],
         range: REGISTER_INTERACT_RANGE,
         priority: 1,
-        hint: `${controlLabel("interact")}: Activate Register\n${controlLabel("goBacks")}: Go-Backs`,
+        hint: `${controlLabel("interact")}: Activate Register` + (this.playerState.goBacks.stock.some((entry) => entry.quantity > 0)
+          ? `\n${controlLabel("goBacks")}: Pack the Go-Backs into crates`
+          : ""),
         distanceFrom: ({ x, y }) => {
           const bounds = fixture.sprite.getBounds();
           const dx = Math.max(bounds.left - x, 0, x - bounds.right);
@@ -995,19 +1005,6 @@ export class GameScene extends Phaser.Scene {
         },
       }];
     });
-
-    this.interactables.registerProvider("crates", () =>
-      this.restockCrates.map((crate, index) => ({
-        id: `crate:${index}`,
-        target: crate,
-        actions: [crate.canPickUp() ? "cratePickup" : "movingCrate"],
-        range: INTERACT_RANGE,
-        priority: 1,
-        hint: crate.kind === "fixture"
-          ? `${getFixtureType(crate.typeId).name} fixture | ${controlLabel("crate")}: Pick up`
-          : `${database.getItem(crate.itemId).name} x${crate.quantity} | ${controlLabel("crate")}: Pick up`,
-        distanceFrom: ({ x, y }) => crate.distanceTo(x, y),
-      })));
   }
 
   getInteractionOrigin() {
@@ -1041,6 +1038,7 @@ export class GameScene extends Phaser.Scene {
         displayGrid: getShelfDisplayGrid(spec),
         // Per-placement slot cap, not a shared pool -- see ShelfFixture.getPlacementCapacity.
         stackDepth: spec.stackDepth,
+        handsOn: spec.artLayout === "budget",
         placements: [],
       });
     } else if (spec.kind === "storage") {
@@ -1140,6 +1138,7 @@ export class GameScene extends Phaser.Scene {
       fixture.stockDisplay?.destroy();
       fixture.stockItemsDisplay?.destroy();
       fixture.capacityGauge?.destroy();
+      fixture.itemNameLabel?.destroy?.();
       fixture.sprite.destroy();
     }
   }
@@ -1568,7 +1567,6 @@ export class GameScene extends Phaser.Scene {
   // --- Saving and loading ---
 
   serialize() {
-    const pending = this.fixtureWindow.pendingPlacement;
     const snapshot = {
       playerState: this.playerState.serialize(),
       market: this.market.serialize(),
@@ -1576,11 +1574,7 @@ export class GameScene extends Phaser.Scene {
         const entry = { id: fixture.id, type: fixture.type, gx: fixture.gx, gy: fixture.gy, rotation: fixtureRotation(fixture) };
         if (fixture instanceof ShelfFixture) {
           const placements = fixture.placements.map((stack) => ({ ...stack }));
-          // A stack lifted mid-move is saved back at its origin.
-          if (pending?.moving && this.fixtureWindow.fixture === fixture) {
-            placements.push({ ...pending.moving, ...pending.origin });
-          }
-          return { ...entry, placements };
+          return { ...entry, placements, ...(fixture.handsOn ? { stockingVersion: 1 } : {}) };
         }
         if (fixture instanceof StorageFixture) {
           return { ...entry, stock: fixture.stock.filter((stack) => stack.quantity > 0).map((stack) => ({ ...stack })) };
@@ -1589,7 +1583,12 @@ export class GameScene extends Phaser.Scene {
       }),
       unlockedZones: this.room.zones.filter((zone) => !zone.locked).map((zone) => zone.id),
       layoutVersion: SHOP_LAYOUT_VERSION,
-      crates: this.restockCrates.map((crate) => crate.serialize()),
+      crates: this.restockCrates.map((crate) => {
+        const above = this.floorStacks.get(crate) ?? [];
+        return above.length
+          ? { ...crate.serialize(), stack: above.map((stacked) => stacked.serializePayload()) }
+          : crate.serialize();
+      }),
       carriedCrate: this.carriedCrate ? {
         ...this.carriedCrate.serializePayload(),
       } : null,
@@ -1619,7 +1618,10 @@ export class GameScene extends Phaser.Scene {
     this.playerInBackroom = false;
     this.player.teleportTo(this.storeDoor.x, this.storeDoor.y + TILE_SIZE);
     this.refreshCamera();
-    for (const crate of this.restockCrates) crate.destroy();
+    for (const crate of this.getFloorCrates()) crate.destroy();
+    this.floorStacks = new Map();
+    this.markedStackBase = null;
+    this.cratePress = null;
     this.restockCrates = data.crates.map((entry) => {
       const crate = entry.kind === "fixture"
         ? new Crate(this, entry.itemId, entry.quantity, entry.x, entry.y, { kind: "fixture", typeId: entry.typeId })
@@ -1628,8 +1630,16 @@ export class GameScene extends Phaser.Scene {
       // Older saves have no onPad flag: anything resting on the pad was a delivery.
       const onPad = entry.onPad ?? this.loadingPadRect.contains(entry.x, entry.y);
       if (onPad) crate.lockToPad();
+      if (entry.stack?.length) {
+        this.floorStacks.set(crate, entry.stack.map((stacked) => {
+          const above = this.createItemCrate(stacked.itemId, stacked.quantity, entry.x, entry.y);
+          above.pickUp(crate.sprite);
+          return above;
+        }));
+      }
       return crate;
     });
+    this.syncFloorStacks();
     for (const crate of this.getCarriedCrates()) crate.destroy();
     if (this.carriedCrate && !this.getCarriedCrates().includes(this.carriedCrate)) this.carriedCrate.destroy();
     this.carriedCrate = null;
@@ -2217,12 +2227,8 @@ export class GameScene extends Phaser.Scene {
       const column = fixture instanceof ShelfFixture ? "stock" : "storage";
       for (const entry of fixture.stock) add(entry, column);
     }
-    // A lifted shelf stack is still owned and assigned to that shelf until dropped.
-    const moving = this.fixtureWindow.pendingPlacement?.moving;
-    if (moving) add(moving, "stock");
-    for (const entry of this.playerState.hovercart.stock) add(entry, "storage");
     for (const entry of this.playerState.goBacks.stock) add(entry, "storage");
-    for (const crate of this.restockCrates) add(crate, "storage");
+    for (const crate of this.getFloorCrates()) add(crate, "storage");
     for (const crate of this.getCarriedCrates()) {
       if (crate.kind === "item") add(crate, "storage");
     }
@@ -2397,11 +2403,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.canRearrangeFixtures()) return `Fixtures can only be ${action} while the store is closed.`;
     if (getFixtureType(fixture.type).kind === "register" &&
       this.fixtures.ofKind("register").length <= 1) return `The last register cannot be ${action}.`;
-    const pending = this.fixtureWindow?.fixture === fixture
-      ? this.fixtureWindow.pendingPlacement?.moving
-      : null;
-    if (fixture instanceof ShelfFixture &&
-      (fixture.placements.some((stack) => stack.quantity > 0) || pending?.quantity > 0)) {
+    if (fixture instanceof ShelfFixture && fixture.placements.some((stack) => stack.quantity > 0)) {
       return `Only empty fixtures can be ${action}.`;
     }
     if (fixture instanceof StorageFixture && fixture.stock.some((stack) => stack.quantity > 0)) {
@@ -2417,10 +2419,11 @@ export class GameScene extends Phaser.Scene {
       this.showShopMessage(result.reason);
       return false;
     }
-    if (this.fixtureWindow.fixture === fixture) this.fixtureWindow.uiWindow.close();
+    if (this.shelfStockingWindow?.fixture === fixture) this.shelfStockingWindow.uiWindow.close();
     fixture.stockDisplay?.destroy();
     fixture.stockItemsDisplay?.destroy();
     fixture.capacityGauge?.destroy();
+    fixture.itemNameLabel?.destroy?.();
     fixture.sprite.destroy();
     this.fixtures.remove(fixture.id);
     this.applyFixtureLayout(layout, result);
@@ -2544,6 +2547,10 @@ export class GameScene extends Phaser.Scene {
       this.setPlayerInBackroom(!this.playerInBackroom);
       return;
     }
+    if (this.isNearEmptyCrateBin()) {
+      this.takeEmptyCrateFromBin();
+      return;
+    }
     if (this.carriedCrate) {
       if (this.carriedCrate.kind === "fixture") {
         const nearby = this.getNearbyFixture();
@@ -2554,7 +2561,16 @@ export class GameScene extends Phaser.Scene {
         this.fixturePlacement.beginFromCrate(this.carriedCrate);
         return;
       }
-      this.tryDeliverCarriedCrate();
+      const nearby = this.getNearbyFixture();
+      if (nearby && isLocker(nearby)) {
+        this.fillCrateFromLocker(nearby);
+        return;
+      }
+      if (nearby) {
+        this.tryOpenFixtureWindow(nearby);
+        return;
+      }
+      this.showGameMessage("Too far from a shelf or locker", "#94a3b8");
       return;
     }
 
@@ -2577,8 +2593,67 @@ export class GameScene extends Phaser.Scene {
     this.showGameMessage("Nothing nearby to interact with", "#94a3b8");
   }
 
+  isNearEmptyCrateBin() {
+    return Boolean(this.playerInBackroom && this.emptyCrateBin &&
+      Phaser.Math.Distance.Between(this.player.sprite.x, this.player.sprite.y,
+        this.emptyCrateBin.x, this.emptyCrateBin.y) <= INTERACT_RANGE);
+  }
+
+  // How many empty item crates sit together at the top of what you're carrying.
+  countTopEmptyCrates() {
+    const stack = this.getCarriedCrates();
+    let count = 0;
+    for (let index = stack.length - 1; index >= 0; index -= 1) {
+      if (stack[index].kind !== "item" || stack[index].quantity > 0) break;
+      count += 1;
+    }
+    return count;
+  }
+
+  // Puts up to `count` empty crates from the top of what you're carrying back in the bin.
+  returnEmptyCratesToBin(count) {
+    const returned = Math.min(count, this.countTopEmptyCrates());
+    if (returned === 0) {
+      this.showGameMessage("Only empty crates go back in the bin.", "#94a3b8");
+      return false;
+    }
+    for (let index = 0; index < returned; index += 1) {
+      const crate = this.carriedCrate;
+      this.removeCarriedCrate(crate);
+      crate.destroy();
+    }
+    this.playerState.notifyListeners();
+    this.showGameMessage(returned === 1
+      ? "Empty crate put back in the bin."
+      : `${returned} empty crates put back in the bin.`, "#10b981");
+    return true;
+  }
+
+  takeEmptyCrateFromBin() {
+    const stack = this.getCarriedCrates();
+    if (stack.length >= MAX_CARRIED_CRATES) {
+      this.showGameMessage("You can only carry three crates.", "#f59e0b");
+      return false;
+    }
+    if (stack.some((crate) => crate.kind === "fixture")) {
+      this.showGameMessage("Put down the fixture crate before taking an empty crate.", "#94a3b8");
+      return false;
+    }
+
+    const crate = this.createItemCrate(null, 0, this.player.sprite.x, this.player.sprite.y);
+    if (!crate.pickUp(this.player.sprite)) {
+      crate.destroy();
+      throw new Error("A newly supplied empty crate could not be picked up.");
+    }
+    this.addCarriedCrate(crate);
+    this.playerState.notifyListeners();
+    this.showGameMessage("Free empty crate added to your stack.", "#10b981");
+    return true;
+  }
+
   /**
-   * Opens a shelf or locker window if the player is in range; silently does nothing if not.
+   * Opens a shelf's window if the player is in range; silently does nothing if not. Lockers
+   * have no window: E fills a carried crate from one and Q unloads into one.
    * @param {object} [fixture] - the clicked fixture; the E key passes none and uses the nearest
    * @returns {boolean} whether a window opened
    */
@@ -2590,90 +2665,367 @@ export class GameScene extends Phaser.Scene {
       fixture,
     )?.target;
     if (!target) return false;
+    if (isLocker(target)) {
+      if (this.carriedCrate?.kind === "item") return this.fillCrateFromLocker(target);
+      this.showGameMessage("Bring an empty crate from the EMPTY CRATES bin to take items out of this locker.", "#94a3b8");
+      return false;
+    }
 
-    const alreadyOpen = this.fixtureWindow.uiWindow.isOpen && this.fixtureWindow.fixture === target;
-    this.fixtureWindow.openForFixture(target, this.fixtures.displayName(target));
+    const fixtureWindow = this.shelfStockingWindow;
+    const alreadyOpen = fixtureWindow.uiWindow.isOpen && fixtureWindow.fixture === target;
+    fixtureWindow.openForFixture(target, this.fixtures.displayName(target));
     if (!alreadyOpen) {
       this.eventBus.emit(GAME_EVENTS.FIXTURE_OPENED, { fixtureId: target.id, type: target.type });
     }
     return true;
   }
 
-  // The nearest resting or pushed crate in reach, plus whether another moving crate is in reach
-  // (so pickup can say "wait" instead of "nothing here").
-  getCratePickupTarget() {
-    const origin = this.getInteractionOrigin();
-    return {
-      crate: this.interactables.findTarget("cratePickup", origin)?.target ?? null,
-      movingNearby: Boolean(this.interactables.findTarget("movingCrate", origin)),
-    };
+  // --- Crate handling ---
+  // Space (X) picks crates up and Q (Y) puts them down: a tap moves one crate, a hold moves a
+  // stack. A green arrow marks the floor crate those buttons act on; floor crates stack up to
+  // FLOOR_STACK_MAX high.
+
+  // Every crate on the floor: loose crates, plus the crates stacked on them.
+  getFloorCrates() {
+    return [...this.restockCrates, ...[...this.floorStacks.values()].flat()];
   }
 
-  // Shows the nearest crate the player can pick up.
-  updateCrateHint() {
-    this.crateHint = "";
-    const mode = this.controlMode.getMode();
-    if (mode === CONTROL_MODES.CARRYING && this.carriedCrate?.kind === "item") {
-      const stackSize = this.getCarriedCrates().length;
-      this.crateHint =
-        `${controlLabel("unpack")}: Unpack top crate | ` +
-        `${controlLabel("interact")}: Deliver top crate | ` +
-        `${controlLabel("crate")}: ${stackSize >= MAX_CARRIED_CRATES
-          ? "Drop stack (cannot throw)"
-          : stackSize > 1 ? "Stack nearby crate or drop stack" : "Stack nearby crate or drop/throw"}`;
-    } else if (mode === CONTROL_MODES.WALKING) {
-      this.crateHint = this.interactables.findTarget(
-        "cratePickup",
-        this.getInteractionOrigin(),
-      )?.hint ?? "";
+  /**
+   * The closest floor crate within reach in front of the player (a wide cone around the way
+   * he faces), so a stack behind him is never picked.
+   * @param {{ moving?: boolean }} [options] - moving: find a crate still flying or rolling instead
+   * @returns {Crate | null}
+   */
+  findCrateInFront({ moving = false } = {}) {
+    const { center } = this.player.sprite.body;
+    let best = null;
+    let bestDistance = INTERACT_RANGE;
+    for (const crate of this.restockCrates) {
+      if (crate.canPickUp() === moving) continue;
+      if (!isInFacingCone(center, crate.sprite, this.player.currentFacing)) continue;
+      const { left, right, top, bottom } = crate.sprite.getBounds();
+      const dx = Math.max(left - center.x, 0, center.x - right);
+      const dy = Math.max(top - center.y, 0, center.y - bottom);
+      const distance = Math.hypot(dx, dy);
+      if (distance <= bestDistance) {
+        best = crate;
+        bestDistance = distance;
+      }
     }
+    return best;
+  }
+
+  // The floor stack in reach (bottom crate first) and the crate its green arrow points at.
+  // The arrow starts on the top crate whenever the player reaches a different stack.
+  markedFloorStack() {
+    const base = this.findCrateInFront();
+    if (!base) {
+      this.markedStackBase = null;
+      return null;
+    }
+    const crates = [base, ...(this.floorStacks.get(base) ?? [])];
+    if (base !== this.markedStackBase) {
+      this.markedStackBase = base;
+      this.markedFromTop = 0;
+    }
+    this.markedFromTop = Math.min(this.markedFromTop, crates.length - 1);
+    return { base, crates, marked: crates[crates.length - 1 - this.markedFromTop] };
+  }
+
+  // Ctrl / right stick click: moves the green arrow one crate down the stack, looping back to
+  // the top after the bottom.
+  markNextCrateDown() {
+    if (!this.controlMode.allows("crate") || this.operatingRegister) return;
+    const stack = this.markedFloorStack();
+    if (!stack || stack.crates.length < 2) return;
+    this.markedFromTop = (this.markedFromTop + 1) % stack.crates.length;
+  }
+
+  /**
+   * What the pick-up (Space / X) and put-down (Q / Y) buttons do right now. Each has a `tap`
+   * and, if holding the button does something different, a `hold`. Flags describe the action
+   * for the on-screen hints.
+   * @returns {{ pickUp?: object, putDown?: object }}
+   */
+  crateActions() {
+    const say = (message, color = "#94a3b8") => () => this.showGameMessage(message, color);
+    const holding = this.getCarriedCrates().length;
+    const top = this.carriedCrate;
+    if (this.operatingRegister) {
+      return {
+        pickUp: { tap: say("Leave the register to pick up a crate") },
+        putDown: holding
+          ? { tap: say("Leave the register to put down a crate") }
+          : { tap: () => this.packGoBacks(), goBacks: true },
+      };
+    }
+
+    const actions = {};
+    const stack = this.markedFloorStack();
+    if (stack) {
+      const lifted = stack.crates.length - stack.crates.indexOf(stack.marked);
+      if (stack.marked.kind === "fixture" && holding > 0) {
+        actions.pickUp = { tap: say("Put your crates down before picking up a fixture crate"), blocked: true };
+      } else if (top?.kind === "fixture") {
+        actions.pickUp = { tap: say("Put the fixture crate down before picking up another crate"), blocked: true };
+      } else {
+        const tooMany = (count) => say(`You can only carry ${MAX_CARRIED_CRATES} crates. You're holding ` +
+          `${holding}, so you can't pick up ${count === 1 ? "another one" : `${count} more`}.`, "#f59e0b");
+        actions.pickUp = {
+          tap: holding + 1 <= MAX_CARRIED_CRATES ? () => this.pickUpFromStack(stack, false) : tooMany(1),
+          hold: holding + lifted <= MAX_CARRIED_CRATES ? () => this.pickUpFromStack(stack, true) : tooMany(lifted),
+          lifted,
+        };
+      }
+    } else if (holding > 0) {
+      // With no green arrow, the pick-up button throws your top crate while you're walking.
+      actions.pickUp = { tap: () => this.throwTopCrate(), throws: true };
+    } else {
+      actions.pickUp = {
+        tap: this.findCrateInFront({ moving: true })
+          ? say("Wait for crate to stop", "#f59e0b")
+          : say("No crate nearby"),
+      };
+    }
+
+    const locker = holding > 0 && top.kind === "item" && top.quantity > 0 ? this.getNearbyFixture() : null;
+    if (holding === 0) {
+      // Go-Backs only packs beside the register.
+      actions.putDown = { tap: () => this.packGoBacks(), goBacks: true };
+    } else if (this.isNearEmptyCrateBin() && this.countTopEmptyCrates() > 0) {
+      actions.putDown = {
+        tap: () => this.returnEmptyCratesToBin(1),
+        hold: () => this.returnEmptyCratesToBin(holding),
+        bin: true,
+      };
+    } else if (stack && top.kind !== "fixture") {
+      const room = FLOOR_STACK_MAX - stack.crates.length;
+      let reason = null;
+      if (stack.base.kind === "fixture") reason = "Crates can't be stacked on a fixture crate";
+      else if (stack.base.lockedToPad) reason = "Crates can't be stacked on the Loading Pad";
+      else if (room <= 0) reason = `You can't stack any higher. Stacks can only be ${FLOOR_STACK_MAX} crates high.`;
+      actions.putDown = reason
+        ? { tap: say(reason, "#f59e0b"), hold: say(reason, "#f59e0b"), blocked: true, full: room <= 0, reason }
+        : {
+          tap: () => this.setCratesOnStack(stack, 1),
+          hold: () => this.setCratesOnStack(stack, Math.min(room, holding)),
+          onStack: true,
+        };
+    } else if (locker && isLocker(locker)) {
+      const reason = this.lockerRefusal(locker, top.itemId);
+      actions.putDown = reason
+        ? { tap: say(reason, "#f59e0b"), blocked: true, reason }
+        : {
+          tap: () => this.unloadCratesIntoLocker(locker, 1),
+          hold: () => this.unloadCratesIntoLocker(locker, holding),
+          locker: true,
+        };
+    } else {
+      actions.putDown = { tap: () => this.dropTopCrate(), hold: () => this.dropWholeStack() };
+    }
+    return actions;
+  }
+
+  // "a crate of 6 Plasma Pistol", for hints.
+  describeCrate(crate) {
+    if (crate.kind === "fixture") return `the ${getFixtureType(crate.typeId).name} fixture crate`;
+    if (crate.quantity === 0) return "an empty crate";
+    return `a crate of ${crate.quantity} ${database.getItem(crate.itemId)?.name ?? "unknown items"}`;
+  }
+
+  // Picture, name, and count for the bottom bar and the holding cards.
+  describeCrateForFooter(crate) {
+    if (crate.kind === "fixture") return { name: `${getFixtureType(crate.typeId).name} fixture`, count: "", image: null };
+    if (crate.quantity === 0) return { name: "Empty crate", count: "", image: null };
+    const item = database.getItem(crate.itemId);
+    return { name: item?.name ?? "Unknown item", count: `x${crate.quantity}`, image: item?.image ?? null };
+  }
+
+  // The context lines at the top of the screen: what each crate button does right now.
+  updateCrateHint() {
+    const lines = [];
+    const mode = this.controlMode.getMode();
+    if (mode === CONTROL_MODES.WALKING || mode === CONTROL_MODES.CARRYING) {
+      const pickKey = controlLabel("crate");
+      const putKey = controlLabel("putDown");
+      const interactKey = controlLabel("interact");
+      const holding = this.getCarriedCrates().length;
+      const handsFull = `Your hands are full (${MAX_CARRIED_CRATES} crates max)`;
+      const { pickUp, putDown } = this.crateActions();
+      const stack = this.markedFloorStack();
+      if (this.isNearEmptyCrateBin() && this.carriedCrate?.kind !== "fixture") {
+        lines.push(holding >= MAX_CARRIED_CRATES ? handsFull : `${interactKey}: Take a free empty crate`);
+      }
+      if (pickUp?.throws) {
+        lines.push(`${pickKey} while walking: Throw your top crate`);
+      } else if (stack && pickUp && !pickUp.blocked) {
+        lines.push(holding >= MAX_CARRIED_CRATES ? handsFull : `Tap ${pickKey}: Pick up ${this.describeCrate(stack.marked)}`);
+        if (pickUp.lifted > 1 && holding + pickUp.lifted <= MAX_CARRIED_CRATES) {
+          lines.push(`Hold ${pickKey}: Pick up ${pickUp.lifted} crates (this one and the ones above it)`);
+        }
+      }
+      if (putDown?.bin) {
+        lines.push(`Tap ${putKey}: Put your top empty crate back in the bin`);
+        const empties = this.countTopEmptyCrates();
+        if (empties > 1) lines.push(`Hold ${putKey}: Put all ${empties} empty crates back in the bin`);
+      } else if (putDown?.blocked) {
+        lines.push(putDown.reason);
+      } else if (putDown?.onStack) {
+        lines.push(`Tap ${putKey}: Set your top crate on this stack`);
+        if (holding > 1) lines.push(`Hold ${putKey}: Set as many of your crates on this stack as fit`);
+      } else if (putDown?.locker) {
+        lines.push(`Tap ${putKey}: Empty your top crate into this locker`);
+        if (holding > 1) lines.push(`Hold ${putKey}: Empty your crates into this locker, top first, until one doesn't fit`);
+      } else if (putDown && !putDown.goBacks) {
+        lines.push(`Tap ${putKey}: Put your top crate down`);
+        if (holding > 1) lines.push(`Hold ${putKey}: Set all ${holding} crates down as a stack`);
+      }
+      if (stack?.crates.length > 1) lines.push(`${controlLabel("nextCrate")}: Move the arrow one crate down`);
+      if (this.carriedCrate?.kind === "item") {
+        const nearby = this.getNearbyFixture();
+        if (nearby && isLocker(nearby)) lines.push(`${interactKey}: Fill a crate from this locker`);
+        else if (nearby) lines.push(`${interactKey}: Open this shelf`);
+      } else if (this.carriedCrate?.kind === "fixture") lines.push(`${interactKey}: Place the fixture`);
+    }
+    this.crateHint = [...new Set(lines)].join("\n");
     this.renderContextMessage();
   }
 
-  // Handles a pickup or warns about a nearby moving crate.
-  tryPickUpNearestCrate() {
-    const { crate: nearest, movingNearby } = this.getCratePickupTarget();
-    if (!nearest || !nearest.pickUp(this.player.sprite)) {
-      if (!nearest && !movingNearby) return false;
-      this.showGameMessage("Wait for crate to stop", "#f59e0b");
-      return true;
+  // The green arrow over the marked crate, plus the bottom bar and holding cards.
+  updateCrateMarker() {
+    const mode = this.controlMode.getMode();
+    const stack = mode === CONTROL_MODES.WALKING || mode === CONTROL_MODES.CARRYING
+      ? this.markedFloorStack()
+      : null;
+    this.pickupMarker.setVisible(Boolean(stack));
+    if (stack) {
+      const bounds = stack.marked.sprite.getBounds();
+      // Points down at the top crate; for crates lower in a stack, points in from the left side.
+      if (this.markedFromTop === 0) this.pickupMarker.setAngle(0).setPosition(bounds.centerX, bounds.top - 7);
+      else this.pickupMarker.setAngle(-90).setPosition(bounds.left - 7, bounds.centerY);
     }
-
-    this.restockCrates = this.restockCrates.filter((crate) => crate !== nearest);
-    if (this.carriedCrate) this.addCarriedCrate(nearest);
-    else {
-      this.carriedCrates = [nearest];
-      this.carriedCrate = nearest;
-      this.syncCarriedCrate();
-    }
-
-    this.playerState.notifyListeners();
-    this.eventBus.emit(GAME_EVENTS.CRATE_PICKED_UP, {
-      kind: nearest.kind,
-      itemId: nearest.itemId,
-      typeId: nearest.typeId,
-      quantity: nearest.quantity,
+    this.crateFooter.render({
+      marked: stack ? this.describeCrateForFooter(stack.marked) : this.describeHoveredShelfForFooter(),
+      carried: [...this.getCarriedCrates()].reverse().map((crate) => this.describeCrateForFooter(crate)),
     });
+  }
+
+  // While the shelf window is open, the bar shows the shelf space under the cursor.
+  describeHoveredShelfForFooter() {
+    const shelf = this.shelfStockingWindow?.getHoveredShelf();
+    if (!shelf) return null;
+    if (shelf.empty) return { label: "SHELF", name: "Empty shelf space", count: "", image: null };
+    const item = database.getItem(shelf.itemId);
+    return { label: "SHELF", name: item?.name ?? "Unknown item",
+      count: shelf.quantity > 0 ? `x${shelf.quantity}` : "SOLD OUT", image: item?.image ?? null };
+  }
+
+  emitCratePickedUp(crate) {
+    this.eventBus.emit(GAME_EVENTS.CRATE_PICKED_UP, {
+      kind: crate.kind, itemId: crate.itemId, typeId: crate.typeId, quantity: crate.quantity,
+    });
+  }
+
+  emitCrateDropped(crate, { x, y }, thrown) {
+    this.eventBus.emit(GAME_EVENTS.CRATE_DROPPED, {
+      kind: crate.kind, itemId: crate.itemId, typeId: crate.typeId, quantity: crate.quantity, thrown, x, y,
+    });
+  }
+
+  // Adds the marked crate to the top of what you're carrying, and with withAbove every crate
+  // above it too. Without withAbove the floor stack closes the gap.
+  pickUpFromStack({ base, crates, marked }, withAbove) {
+    const lifted = withAbove ? crates.slice(crates.indexOf(marked)) : [marked];
+    const above = this.floorStacks.get(base) ?? [];
+    if (marked === base) {
+      const { x, y } = base.sprite;
+      if (!base.pickUp(this.player.sprite)) {
+        this.showGameMessage("Wait for crate to stop", "#f59e0b");
+        return false;
+      }
+      this.restockCrates = this.restockCrates.filter((crate) => crate !== base);
+      this.floorStacks.delete(base);
+      // The next crate up settles onto the floor in the bottom crate's place.
+      const [newBase, ...rest] = withAbove ? [] : above;
+      if (newBase) {
+        newBase.drop(x, y, 0, 0, this.crateMotionPaused);
+        this.restockCrates.push(newBase);
+        if (rest.length) this.floorStacks.set(newBase, rest);
+      }
+    } else {
+      const remaining = above.filter((crate) => !lifted.includes(crate));
+      if (remaining.length) this.floorStacks.set(base, remaining);
+      else this.floorStacks.delete(base);
+    }
+    for (const crate of lifted) this.addCarriedCrate(crate);
+    this.markedStackBase = null;
+    this.syncFloorStacks();
+    this.playerState.notifyListeners();
+    for (const crate of lifted) this.emitCratePickedUp(crate);
     return true;
+  }
+
+  // Moves `count` crates from the top of what you're carrying onto the floor stack, keeping
+  // their order; the rest stay in your hands.
+  setCratesOnStack({ base }, count) {
+    const stack = this.getCarriedCrates();
+    const placed = stack.slice(-count);
+    this.carriedCrates = stack.slice(0, -count);
+    this.carriedCrate = this.carriedCrates.at(-1) ?? null;
+    this.floorStacks.set(base, [...(this.floorStacks.get(base) ?? []), ...placed]);
+    this.markedStackBase = null;
+    this.syncCarriedCrate();
+    this.syncFloorStacks();
+    this.playerState.notifyListeners();
+    for (const crate of placed) this.emitCrateDropped(crate, base.sprite, false);
+    return true;
+  }
+
+  // Floor crates are drawn over the player while he stands behind them (his feet above their
+  // bottom edge); crates sitting on a floor crate are drawn on top of it and move with it.
+  syncFloorStacks() {
+    const body = this.player?.sprite?.body;
+    if (!body) return;
+    const inFront = this.player.sprite.depth + 1 + MAX_CARRIED_CRATES;
+    for (const crate of this.restockCrates) {
+      if (crate.launch || !crate.sprite.body) continue;
+      crate.sprite.setDepth(body.bottom < crate.sprite.body.bottom ? inFront : CRATE_FLOOR_DEPTH);
+    }
+    for (const [base, above] of this.floorStacks) {
+      above.forEach((crate, index) =>
+        crate.followCarrier(base.sprite, index, CRATE_STACK_SPACING, CRATE_STACK_SPACING));
+    }
   }
 
   /**
    * The player bumps into crates: loose resting crates get pushed (slowing the player),
    * loading pad crates act like walls. Crates still being launched by a throw are ignored.
+   * A floor stack is as heavy as its height, and whatever the player carries adds to the load;
+   * a full-height stack won't budge while he's carrying anything.
    * @param {number} delta - ms since last frame
    */
   updateCratePushing(delta) {
     const body = this.player.sprite.body;
     const rectOf = (b) => ({ left: b.x, top: b.y, width: b.width, height: b.height });
+    const holding = this.getCarriedCrates().length;
     const crates = this.restockCrates
       .filter((crate) => crate.lockedToPad || crate.isPushed || crate.isStationary() || crate.isSliding())
-      .map((crate) => ({ key: crate, rect: rectOf(crate.sprite.body), locked: crate.lockedToPad }));
+      .map((crate) => {
+        const height = 1 + (this.floorStacks.get(crate)?.length ?? 0);
+        return {
+          key: crate,
+          rect: rectOf(crate.sprite.body),
+          weight: height,
+          locked: crate.lockedToPad || (holding > 0 && height >= FLOOR_STACK_MAX),
+        };
+      });
     const { playerVelocity, crateVelocities } = solveCratePush({
       player: rectOf(body),
       velocity: body.velocity,
       dt: Math.min(delta, 50) / 1000,
       crates,
       isBlocked: (rect) => this.isCrateSpaceBlocked(rect),
+      carriedWeight: holding,
     });
     body.setVelocity(playerVelocity.x, playerVelocity.y);
     for (const crate of this.restockCrates) {
@@ -2711,119 +3063,126 @@ export class GameScene extends Phaser.Scene {
     return this.physics.overlapRect(left, top, width, height, false, true).some((b) => b.enable);
   }
 
-  bindCrateKey() {
+  // Space picks up and Q puts down. Each waits for release to tell a tap (one crate) from a
+  // hold (a stack); a hold fires as soon as the key has been down for HOLD_KEY_MS.
+  bindCrateKeys() {
+    const keyboard = this.input.keyboard;
     // Cursor keys capture Space by default, which blocks focused UI controls.
-    this.input.keyboard.removeCapture("SPACE");
-    this.input.keyboard.on("keydown-SPACE", (event) => {
+    keyboard.removeCapture("SPACE");
+    keyboard.on("keydown-SPACE", (event) => {
       if (event.target?.closest?.("#ui-layer")) return;
       event.preventDefault();
-      if (this.checkoutWindow?.usesSpaceKey()) return;
-      if (!event.repeat && this.controlMode.allows("crate")) this.handleCrateInteract();
+      if (event.repeat || this.checkoutWindow?.usesSpaceKey()) return;
+      this.startCratePress("pickUp");
     });
+    keyboard.on("keydown-Q", (event) => {
+      if (!event.repeat) this.startCratePress("putDown");
+    });
+    keyboard.on("keyup-SPACE", () => this.endCratePress("pickUp"));
+    keyboard.on("keyup-Q", () => this.endCratePress("putDown"));
+    keyboard.on("keydown-CTRL", () => this.markNextCrateDown());
   }
 
-  // Space picks up a nearby crate onto the stack, or drops/throws what is being carried.
-  handleCrateInteract() {
-    if (!this.controlMode.allows("crate")) return;
-    if (this.carriedCrate) {
-      const { crate } = this.getCratePickupTarget();
-      if (this.carriedCrate.kind === "item" && crate?.kind === "item") {
-        if (this.getCarriedCrates().length >= MAX_CARRIED_CRATES) {
-          this.showGameMessage("You can only carry three crates", "#f59e0b");
-          return;
-        }
-        this.tryPickUpNearestCrate();
-        return;
-      }
-      this.dropCarriedCrate();
+  // Q with empty hands is the Go-Backs button; otherwise both buttons are crate controls.
+  allowsCrateAction(which) {
+    return this.controlMode.allows(which === "putDown" && !this.carriedCrate ? "goBacks" : "crate");
+  }
+
+  /**
+   * A pick-up or put-down button went down. Actions with no hold version (like throwing)
+   * happen right away; the rest wait to see whether it's a tap or a hold.
+   * @param {"pickUp"|"putDown"} which
+   * @param {{ button?: number }} [options] - the controller button, which is polled for release
+   */
+  startCratePress(which, { button = null } = {}) {
+    if (!this.allowsCrateAction(which)) return;
+    const action = this.crateActions()[which];
+    if (!action) return;
+    if (!action.hold) {
+      this.cratePress = null;
+      action.tap();
       return;
     }
-    if (this.operatingRegister) {
-      this.showGameMessage("Leave the register to pick up a crate", "#94a3b8");
+    this.cratePress = { which, button, startedAt: this.time.now, fired: false };
+  }
+
+  // Releasing before the hold fired is a tap.
+  endCratePress(which) {
+    const press = this.cratePress;
+    if (press?.which !== which) return;
+    this.cratePress = null;
+    if (press.fired || !this.allowsCrateAction(which)) return;
+    this.crateActions()[which]?.tap();
+  }
+
+  // Each frame: ends controller presses on release, and fires a hold once it's long enough.
+  updateCratePress() {
+    const press = this.cratePress;
+    if (!press) return;
+    if (press.button !== null && !this.padInput?.isDown(press.button)) {
+      this.endCratePress(press.which);
       return;
     }
-    if (!this.tryPickUpNearestCrate()) {
-      this.showGameMessage("No crate nearby", "#94a3b8");
-    }
+    if (press.fired || this.time.now - press.startedAt < HOLD_KEY_MS) return;
+    press.fired = true;
+    if (!this.allowsCrateAction(press.which)) return;
+    const action = this.crateActions()[press.which];
+    (action?.hold ?? action?.tap)?.();
   }
 
-  dropCarriedStack() {
-    const stack = this.getCarriedCrates();
-    const reserved = [];
-    const drops = [];
-    for (const crate of stack) {
-      const position = crate.findDropPosition(
-        this.player.sprite.x, this.player.sprite.y, this.player.sprite, reserved, INTERACT_RANGE,
-      );
-      if (!position) {
-        this.showGameMessage("No room to drop the stack", "#94a3b8");
-        return false;
-      }
-      drops.push({ crate, position });
-      const bounds = crate.sprite.getBounds();
-      reserved.push({
-        left: position.x - bounds.width / 2,
-        right: position.x + bounds.width / 2,
-        top: position.y - bounds.height / 2,
-        bottom: position.y + bounds.height / 2,
-      });
-    }
-
-    for (const { crate, position } of drops) {
-      crate.drop(position.x, position.y, 0, 0, this.crateMotionPaused);
-      this.restockCrates.push(crate);
-      this.eventBus.emit(GAME_EVENTS.CRATE_DROPPED, {
-        kind: crate.kind, itemId: crate.itemId, typeId: crate.typeId, quantity: crate.quantity,
-        thrown: false, x: position.x, y: position.y,
-      });
-    }
-    this.carriedCrates = [];
-    this.carriedCrate = null;
-    this.syncCarriedCrate();
-    this.playerState.notifyListeners();
-    return true;
-  }
-
-  // Single crates are thrown while walking; a stack is always set down without a throw.
-  dropCarriedCrate() {
-    if (!this.controlMode.allows("crate")) return false;
-    const { x, y } = this.player.sprite;
+  // Tap Q: your top crate goes on the floor in front of you. With throwing, it's thrown the
+  // way you're walking instead.
+  dropTopCrate(throwing = false) {
     const crate = this.carriedCrate;
-    if (!crate) {
-      this.showGameMessage("No crate to drop", "#94a3b8");
-      return false;
-    }
-    if (this.operatingRegister) {
-      this.showGameMessage("Leave the register to drop a crate", "#94a3b8");
-      return false;
-    }
-    if (this.getCarriedCrates().length > 1) return this.dropCarriedStack();
-
-    const bodyVelocity = this.player.sprite.body.velocity;
-    const velocity = this.crateMotionPaused ? { x: 0, y: 0 } : { x: bodyVelocity.x, y: bodyVelocity.y };
-    const throwing = velocity.x !== 0 || velocity.y !== 0;
+    if (!crate) return false;
+    const { x, y } = this.player.sprite;
+    const { x: velocityX, y: velocityY } = this.player.sprite.body.velocity;
     const position = throwing
-      ? crate.findThrowPosition(this.player.sprite, velocity.x, velocity.y)
-      : crate.findDropPosition(x, y, this.player.sprite);
+      ? crate.findThrowPosition(this.player.sprite, velocityX, velocityY)
+      : crate.findDropPosition(x, y, this.player.sprite, [], undefined, this.player.currentFacing);
     if (!position) {
       this.showGameMessage(throwing ? "No room to throw crate" : "No room to drop crate", "#94a3b8");
       return false;
     }
-
-    if (throwing) crate.startThrow(this.player.sprite, velocity.x, velocity.y);
+    if (throwing) crate.startThrow(this.player.sprite, velocityX, velocityY);
     else crate.drop(position.x, position.y, 0, 0, this.crateMotionPaused);
     this.restockCrates.push(crate);
     this.removeCarriedCrate(crate);
+    this.syncFloorStacks();
     this.playerState.notifyListeners();
-    this.eventBus.emit(GAME_EVENTS.CRATE_DROPPED, {
-      kind: crate.kind,
-      itemId: crate.itemId,
-      typeId: crate.typeId,
-      quantity: crate.quantity,
-      thrown: throwing,
-      x: position.x,
-      y: position.y,
-    });
+    this.emitCrateDropped(crate, position, throwing);
+    return true;
+  }
+
+  // The pick-up button with no green arrow: throws your top crate the way you're walking.
+  throwTopCrate() {
+    const { x, y } = this.player.sprite.body.velocity;
+    if (this.crateMotionPaused || (x === 0 && y === 0)) {
+      this.showGameMessage(`To throw a crate, walk and press ${controlLabel("crate")}.`, "#94a3b8");
+      return false;
+    }
+    return this.dropTopCrate(true);
+  }
+
+  // Hold Q: everything you're carrying goes on the floor in front of you as one stack.
+  dropWholeStack() {
+    const [bottom, ...rest] = this.getCarriedCrates();
+    if (!bottom) return false;
+    const position = bottom.findDropPosition(this.player.sprite.x, this.player.sprite.y,
+      this.player.sprite, [], undefined, this.player.currentFacing);
+    if (!position) {
+      this.showGameMessage("No room to set the stack down", "#94a3b8");
+      return false;
+    }
+    bottom.drop(position.x, position.y, 0, 0, this.crateMotionPaused);
+    this.restockCrates.push(bottom);
+    if (rest.length) this.floorStacks.set(bottom, rest);
+    this.carriedCrates = [];
+    this.carriedCrate = null;
+    this.syncCarriedCrate();
+    this.syncFloorStacks();
+    this.playerState.notifyListeners();
+    for (const crate of [bottom, ...rest]) this.emitCrateDropped(crate, position, false);
     return true;
   }
 
@@ -2835,82 +3194,90 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
-  // Unloads the carried item crate into the nearest shelf or locker; whatever doesn't fit
-  // stays in the crate.
-  tryDeliverCarriedCrate() {
-    const crate = this.carriedCrate;
-    if (crate.kind === "fixture") {
-      this.showGameMessage("Fixtures can't be stocked here", "#94a3b8");
-      return;
-    }
-    const target = this.getNearbyFixture();
-
-    if (!target) {
-      this.showGameMessage("Too far from a fixture to deliver", "#94a3b8");
-      return;
-    }
-
-    if (target.getRemainingUnitsFor(crate.itemId) === 0) {
-      const item = database.getItem(crate.itemId);
-      this.showGameMessage(`${item.name} can't be stocked here`, "#94a3b8");
-      return;
-    }
-
-    const quantityBefore = crate.quantity;
-    const transfer = transferItems(crate, target, crate.itemId, crate.quantity, {
-      eventBus: this.eventBus,
-      sourceName: "crate",
-      destinationName: getFixtureType(target.type).kind === "shelf" ? "shelf" : "locker",
-    });
-    const accepted = transfer.moved;
-    const fullyAccepted = accepted >= quantityBefore;
-    const remaining = fullyAccepted ? 0 : quantityBefore - accepted;
-    this.fixtureWindow.refresh(target); // keep its capacity bar/stock list live if open
-
-    if (fullyAccepted) {
-      // Empty crates despawn immediately rather than lying around.
-      crate.destroy();
-      this.removeCarriedCrate(crate);
-    }
-    this.playerState.notifyListeners();
-    this.eventBus.emit(GAME_EVENTS.CRATE_DELIVERY_RESULT, {
-      itemId: crate.itemId,
-      accepted,
-      remaining,
-    });
+  // Why `itemId` can't go into this locker right now, or null if it can.
+  lockerRefusal(locker, itemId) {
+    if (locker.getRemainingUnitsFor(itemId) > 0) return null;
+    const stored = locker.stock.find((entry) => entry.quantity > 0);
+    if (stored && stored.itemId !== itemId) return `This locker only holds ${database.getItem(stored.itemId).name}.`;
+    return "This locker is full.";
   }
 
-  unpackCarriedCrate() {
-    if (!this.controlMode.allows("unpack")) return false;
-    const crate = this.carriedCrate;
-    if (!crate || crate.kind !== "item") return false;
+  // The crate E fills from a locker holding `itemId`: the highest carried one that's empty or
+  // already holds that item with room to spare.
+  findCrateToFill(itemId) {
+    return [...this.getCarriedCrates()].reverse().find((crate) => crate.getRemainingUnitsFor(itemId) > 0) ?? null;
+  }
 
-    const quantityBefore = crate.quantity;
-    const transfer = transferItems(crate, this.playerState.hovercart, crate.itemId, quantityBefore, {
-      eventBus: this.eventBus,
-      sourceName: "crate",
-      destinationName: "hovercart",
-    });
-
-    if (transfer.moved === 0) {
-      this.showGameMessage(`Hovercart full; ${quantityBefore} items remain in the box`, "#f59e0b");
+  /**
+   * E at a locker: fills one carried crate with as many of the locker's items as it holds.
+   * @returns {boolean} whether anything moved
+   */
+  fillCrateFromLocker(locker) {
+    const stored = locker.stock.find((entry) => entry.quantity > 0);
+    if (!stored) {
+      this.showGameMessage("This locker is empty.", "#94a3b8");
       return false;
     }
-
-    if (crate.quantity === 0) {
-      crate.destroy();
-      this.removeCarriedCrate(crate);
+    const item = database.getItem(stored.itemId);
+    const crate = this.findCrateToFill(stored.itemId);
+    if (!crate) {
+      const items = this.getCarriedCrates().filter((candidate) => candidate.kind === "item");
+      const full = items.length > 0 && items.every((candidate) => candidate.itemId === stored.itemId);
+      this.showGameMessage(full
+        ? `Your ${item.name} ${items.length === 1 ? "crate is" : "crates are"} already full.`
+        : `This locker holds ${item.name}. Bring an empty crate or one with ${item.name} in it.`, "#94a3b8");
+      return false;
     }
-    this.playerState.notifyListeners();
-    if (crate.quantity > 0) {
-      this.showGameMessage(
-        `Added ${transfer.moved} items to your hovercart; ${crate.quantity} remain in the box`,
-        "#f59e0b",
-      );
-    } else {
-      this.showGameMessage(`Added ${transfer.moved} items to your hovercart`, "#10b981");
-    }
+    const { moved } = transferItems(locker, crate, stored.itemId, crate.getRemainingUnitsFor(stored.itemId), {
+      eventBus: this.eventBus, sourceName: "locker", destinationName: "crate",
+    });
+    if (moved === 0) return false;
+    // TODO(locker-feedback): an animation and sound when items come out of a locker.
+    this.afterLockerTransfer(locker);
+    this.showGameMessage(`Took ${moved} ${item.name} from the locker.`, "#10b981");
     return true;
+  }
+
+  /**
+   * Q at a locker: empties up to `count` crates from the top of your stack into it. A crate
+   * that only partly fits stays in your hands with the rest.
+   * @returns {boolean} whether anything moved
+   */
+  unloadCratesIntoLocker(locker, count) {
+    let movedAny = false;
+    for (let unloaded = 0; unloaded < count; unloaded += 1) {
+      const crate = this.carriedCrate;
+      if (crate?.kind !== "item" || crate.quantity === 0) break;
+      const refusal = this.lockerRefusal(locker, crate.itemId);
+      if (refusal) {
+        if (!movedAny) this.showGameMessage(refusal, "#f59e0b");
+        break;
+      }
+      const quantityBefore = crate.quantity;
+      const { moved } = transferItems(crate, locker, crate.itemId, quantityBefore, {
+        eventBus: this.eventBus, sourceName: "crate", destinationName: "locker",
+      });
+      if (moved === 0) break;
+      movedAny = true;
+      const emptied = moved >= quantityBefore;
+      if (emptied) {
+        // Empty crates despawn rather than lying around.
+        crate.destroy();
+        this.removeCarriedCrate(crate);
+      }
+      this.eventBus.emit(GAME_EVENTS.CRATE_DELIVERY_RESULT, {
+        itemId: crate.itemId, accepted: moved, remaining: quantityBefore - moved,
+      });
+      if (!emptied) break;
+    }
+    if (movedAny) this.afterLockerTransfer(locker);
+    return movedAny;
+  }
+
+  afterLockerTransfer(locker) {
+    locker.lockerDoorOpenUntil = this.time.now + LOCKER_DOOR_OPEN_MS;
+    this.refreshLockerCapacityDisplay(locker);
+    this.playerState.notifyListeners();
   }
 
   /**
@@ -2979,39 +3346,17 @@ export class GameScene extends Phaser.Scene {
       // Above the player and any stack of carried crates, so it's never hidden while restocking.
       fixture.capacityGauge = new CapacityGauge(this, { orientation: "vertical", originY: 0, depth: LOCKER_GAUGE_DEPTH })
         .setVisible(false);
+      fixture.itemNameLabel = this.add.text(fixture.x, fixture.y, "", {
+        fontFamily: "Courier New, monospace",
+        fontSize: "7px",
+        color: "#f8fafc",
+        backgroundColor: "#111827",
+        padding: { x: 2, y: 1 },
+        align: "center",
+        wordWrap: { width: 72 },
+      }).setOrigin(0.5, 1).setDepth(LOCKER_GAUGE_DEPTH).setVisible(false);
       this.refreshLockerCapacityDisplay(fixture);
     }
-  }
-
-  // Item name, then "x5 (10)": crate quantity and the locker spaces it fills (same units as "7/20").
-  refreshCarriedCrateLabel() {
-    const label = this.carriedCrateLabel;
-    const crate = this.carriedCrate;
-    if (!label) return;
-    if (!crate) {
-      if (label.visible) label.setVisible(false);
-      return;
-    }
-    let text;
-    if (crate.kind === "fixture") {
-      text = `${getFixtureType(crate.typeId).name} fixture`;
-    } else {
-      const item = database.getItem(crate.itemId);
-      const spaces = crate.quantity * (item?.slots || 1);
-      text = `${item.name}\nx${crate.quantity} (${spaces})` +
-        (this.getCarriedCrates().length > 1 ? `\n${this.getCarriedCrates().length} crates stacked` : "");
-    }
-    if (label.text !== text) label.setText(text);
-    const bounds = crate.sprite.getBounds();
-    label.setScale(this.getPopupScale(bounds.centerX, bounds.centerY));
-    let x = bounds.centerX;
-    const view = this.cameraAt(bounds.centerX, bounds.centerY)?.worldView;
-    if (view && label.displayWidth) {
-      // Keep the whole label on screen near the room's edges.
-      const half = label.displayWidth / 2 + 2;
-      x = Math.min(Math.max(x, view.x + half), view.right - half);
-    }
-    label.setPosition(x, bounds.top - 2).setDepth(crate.sprite.depth + 1).setVisible(true);
   }
 
   refreshGoBacksBadge() {
@@ -3030,6 +3375,10 @@ export class GameScene extends Phaser.Scene {
     fixture.capacityGauge.setValue(fixture.usedCapacity(), fixture.capacity);
     const bounds = fixture.sprite.getBounds();
     fixture.capacityGauge.setPosition(bounds.centerX, bounds.top + 6);
+    const stocked = fixture.stock.find((entry) => entry.quantity > 0);
+    const label = stocked ? database.getItem(stocked.itemId).name : "EMPTY";
+    if (fixture.itemNameLabel.text !== label) fixture.itemNameLabel.setText(label);
+    fixture.itemNameLabel.setPosition(bounds.centerX, bounds.top - 2);
   }
 
   // A locker's gauge shows only while the player is close enough to open that locker.
@@ -3037,12 +3386,13 @@ export class GameScene extends Phaser.Scene {
     const inReach = Boolean(this.player?.sprite) &&
       this.interactables.findTarget("fixture", this.getInteractionOrigin(), fixture) !== null;
     fixture.capacityGauge.setVisible(inReach);
+    fixture.itemNameLabel.setVisible(inReach);
   }
 
+  // The door swings open briefly whenever items go in or out.
   updateLockerAnimation(fixture, delta) {
     if (!fixture.lockerAnimation) return;
-    const fixtureWindow = this.fixtureWindow;
-    fixture.lockerAnimation.update(delta, fixtureWindow.uiWindow.isOpen && fixtureWindow.fixture === fixture);
+    fixture.lockerAnimation.update(delta, this.time.now < (fixture.lockerDoorOpenUntil ?? 0));
   }
 
   /**
@@ -3084,11 +3434,85 @@ export class GameScene extends Phaser.Scene {
     this.startCheckout(customer); // resumes the sale if it's this customer's
   }
 
-  // Q at the register. The bin belongs to the register, so you have to be standing there.
-  openGoBacksBin() {
-    if (!this.controlMode.allows("goBacks")) return;
-    if (!this.interactables.findTarget("goBacks", this.getInteractionOrigin())) return;
-    this.goBacksWindow.open();
+  /**
+   * Q with empty hands at the register: packs the Go-Backs bin into crates and sets them down,
+   * stacked up to FLOOR_STACK_MAX high, as close to the register as they fit without blocking
+   * the customer line, the spot behind the counter, doorways, or the fronts of fixtures.
+   * Whatever doesn't fit on the floor stays in the bin.
+   * @returns {number} how many crates were set down
+   */
+  packGoBacks() {
+    if (!this.controlMode.allows("goBacks")) return 0;
+    const register = this.interactables.findTarget("goBacks", this.getInteractionOrigin())?.target;
+    if (!register) return 0;
+    const loads = [];
+    for (const entry of this.playerState.goBacks.stock) {
+      const limit = getCrateItemLimit(database.getItem(entry.itemId)?.boxSize);
+      if (entry.quantity <= 0 || limit <= 0) continue;
+      for (let left = entry.quantity; left > 0; left -= limit) loads.push(entry.itemId);
+    }
+    if (loads.length === 0) {
+      this.showGameMessage("The Go-Backs bin is empty.", "#94a3b8");
+      return 0;
+    }
+
+    const reserved = this.goBacksReservedRectangles();
+    const { centerX, centerY } = register.sprite.getBounds();
+    let packed = 0;
+    while (packed < loads.length) {
+      const base = this.createItemCrate(null, 0, centerX, centerY);
+      base.sprite.body.enable = false; // so it doesn't count as an obstacle while it looks for room
+      const spot = base.findDropPosition(centerX, centerY, this.player.sprite, reserved, GO_BACKS_SEARCH_RADIUS);
+      if (!spot) {
+        base.destroy();
+        break;
+      }
+      const stack = [base];
+      while (stack.length < FLOOR_STACK_MAX && packed + stack.length < loads.length) {
+        stack.push(this.createItemCrate(null, 0, spot.x, spot.y));
+      }
+      stack.forEach((crate, index) => this.playerState.packGoBacksIntoCrate(loads[packed + index], crate));
+      base.drop(spot.x, spot.y, 0, 0, this.crateMotionPaused);
+      this.restockCrates.push(base);
+      const above = stack.slice(1);
+      for (const crate of above) crate.pickUp(base.sprite);
+      if (above.length) this.floorStacks.set(base, above);
+      packed += stack.length;
+    }
+    this.syncFloorStacks();
+    this.playerState.notifyListeners();
+    if (packed === 0) {
+      this.showGameMessage("No room near the register to set the Go-Backs crates down.", "#f59e0b");
+    } else if (packed < loads.length) {
+      this.showGameMessage(`Packed ${packed} Go-Backs ${packed === 1 ? "crate" : "crates"} by the register. ` +
+        "There wasn't room for the rest, so they're still in the bin.", "#f59e0b");
+    } else {
+      this.showGameMessage(`Packed the Go-Backs into ${packed} ${packed === 1 ? "crate" : "crates"} by the register.`,
+        "#10b981");
+    }
+    return packed;
+  }
+
+  // Floor the Go-Backs crates must leave clear (px): the customer line, behind the counter,
+  // doorways, where people stand to use fixtures, and the backroom.
+  goBacksReservedRectangles() {
+    const tileAround = ({ x, y }) => ({
+      left: x - TILE_SIZE / 2, right: x + TILE_SIZE / 2, top: y - TILE_SIZE / 2, bottom: y + TILE_SIZE / 2,
+    });
+    const cellCenter = ({ gx, gy }) => ({ x: this.room.worldX(gx), y: this.room.worldY(gy) });
+    const link = getBackroomLink();
+    const cells = [
+      ...getStoreDoorCells().flatMap(({ gx, gy }) => [{ gx, gy }, { gx, gy: gy + 1 }]),
+      link.shop, link.backroom,
+      ...this.fixtures.stockHolders().flatMap((fixture) => fixture.accessCells ?? fixtureAccessCells(fixture)),
+    ];
+    const backroom = getBackroomBounds(this.room.zones);
+    return [
+      ...(this.registerQueuePoints ?? []).map(tileAround),
+      tileAround(this.getBehindRegisterPoint()),
+      ...cells.map((cell) => tileAround(cellCenter(cell))),
+      { left: backroom.x, top: backroom.y, right: backroom.x + backroom.width, bottom: backroom.y + backroom.height },
+    ];
   }
 
   // Shown above the register, or above a backroom door, whenever the player is in range of it.
@@ -3194,7 +3618,6 @@ export class GameScene extends Phaser.Scene {
     // The scan UI can't be operated from wherever the player is teleported back to. The
     // sale is set aside, not thrown away, so coming back can't re-roll it.
     if (this.checkoutWindow.mode === "checkout") this.checkoutWindow.suspend();
-    this.goBacksWindow.uiWindow.close();
     this.player.sprite.body.enable = true;
     this.player.inputEnabled = true;
     if (this.playerDepthBeforeRegister != null) {
@@ -3570,6 +3993,7 @@ export class GameScene extends Phaser.Scene {
       this.player.update(delta);
       this.updateCratePushing(delta);
       this.syncCarriedCrate();
+      this.syncFloorStacks();
       this.customers.forEach((customer) => customer.update(delta));
       this.employees.forEach((employee) => employee.update(delta));
     }
@@ -3578,7 +4002,9 @@ export class GameScene extends Phaser.Scene {
     this.shiftClock.update(delta);
     this.updateRegisterPrompt();
     this.positionGoBacksBadge();
+    this.updateCratePress();
     this.updateCrateHint();
+    this.updateCrateMarker();
     for (const fixture of this.fixtures.stockHolders()) {
       this.updateLockerAnimation(fixture, delta);
       if (fixture.capacityGauge) {
@@ -3587,7 +4013,6 @@ export class GameScene extends Phaser.Scene {
       }
       fixture.stockDisplay?.update(time);
     }
-    this.refreshCarriedCrateLabel();
     this.refreshCustomerPool(delta);
     this.spawnScheduledCustomers();
 
@@ -3654,13 +4079,6 @@ export class GameScene extends Phaser.Scene {
       }
       if (newBackroomExpansions.length) {
         levelMessage += ` Backroom expansion${newBackroomExpansions.length > 1 ? "s" : ""} available to buy in the Layout tab.`;
-      }
-      const newHovercartUpgrades = HOVERCART_UPGRADES.filter((upgrade) =>
-        upgrade.requiredShopLevel > previousLevel &&
-        upgrade.requiredShopLevel <= this.playerState.shopLevel &&
-        upgrade.capacity > this.playerState.hovercart.capacity);
-      if (newHovercartUpgrades.length) {
-        levelMessage += ` Hovercart upgrade to ${newHovercartUpgrades.map((upgrade) => upgrade.capacity).join(", ")} spaces available in the Equipment tab.`;
       }
       if (hasUnimplementedShopRewardBetween(previousLevel, this.playerState.shopLevel)) {
         levelMessage += " Some later level rewards are not in the game yet.";
@@ -3819,7 +4237,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.startingShift = true;
-    this.fixtureWindow.uiWindow.close();
+    this.shelfStockingWindow?.uiWindow.close();
     this.managerTablet.uiWindow.close();
     this.player.sprite.body.stop();
     try {

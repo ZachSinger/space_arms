@@ -32,12 +32,13 @@ test("the store page shows the player's level and the next goal", () => {
 test("level rewards come from the game's own unlock data", () => {
   const rewards = getLevelRewards(licenses);
   assert.ok(rewards.get(2).some((text) => text.startsWith("Supply license: Civilian Threads")));
-  assert.ok(rewards.get(3).includes("Fixture license: Expanded Fixture Supply"));
+  assert.ok(rewards.get(3).includes("Supply license: Scrap-Yard Armor & Melee"));
+  assert.ok(rewards.get(14).includes("Fixture license: Expanded Storage Supply"));
   assert.ok(rewards.get(4).includes("Staff limit: up to 1 employee hired at once"));
   assert.ok(rewards.get(23).includes("Staff limit: up to 6 employees hired at once"));
   assert.ok(rewards.get(5).some((text) => text.includes("Sales Floor Expansion West")));
   assert.ok(rewards.get(13).some((text) => text.includes("Backroom Upgrade A")));
-  assert.ok(rewards.get(8).some((text) => text.includes("25 spaces")));
+  assert.ok(![...rewards.values()].flat().some((text) => /hovercart|spaces/i.test(text)));
 });
 
 test("level rewards mark the levels already reached", () => {

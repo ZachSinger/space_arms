@@ -7,9 +7,9 @@ import {
   ShelfStockDisplay,
 } from "../js/logic/ShelfStockDisplay.js";
 
-test("shelf display grid scales at two visual slots per floor tile", () => {
-  assert.deepEqual(getShelfDisplayGrid(FIXTURE_TYPES.shelf_universal), { w: 6, h: 4 });
-  assert.deepEqual(getShelfDisplayGrid(FIXTURE_TYPES.shelf_starter_2x1), { w: 4, h: 2 });
+test("shelf display grid follows Budget sections and levels, or two visual slots per floor tile", () => {
+  assert.deepEqual(getShelfDisplayGrid(FIXTURE_TYPES.shelf_budget_3x4), { w: 4, h: 3 });
+  assert.deepEqual(getShelfDisplayGrid(FIXTURE_TYPES.shelf_budget_2x3), { w: 3, h: 2 });
   assert.deepEqual(getShelfDisplayGrid({ w: 1, h: 1 }), { w: 2, h: 2 });
   assert.deepEqual(getShelfDisplayGrid({ w: 2, h: 1 }), { w: 4, h: 2 });
 });

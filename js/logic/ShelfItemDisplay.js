@@ -4,11 +4,14 @@
 // Draws each shelf placement on down-facing shelves using the same item, grid position,
 // and quantity/capacity shown in the shelf window.
 import { TILE_SIZE } from "./RoomLayout.js";
+import { getFixtureType } from "./FixtureLayout.js";
+import { getBudgetShelfArtForType } from "./BudgetShelfArt.js";
+import { getShelfBoxes } from "./ShelfBoxLayout.js";
+import { getItemCrateCategory } from "./CrateCategory.js";
 
 const PIXEL_ART_FILTER = 1;
 const SHELF_AREAS = Object.freeze({
   budget: Object.freeze({ left: 28 / 384, right: 364 / 384, top: 48 / 192, bottom: 172 / 192 }),
-  starter: Object.freeze({ left: 0.1, right: 0.9, top: 0.25, bottom: 0.82 }),
   legacy: Object.freeze({ left: 0.06, right: 0.94, top: 0.08, bottom: 0.92 }),
 });
 const IMAGE_INSET = 4 / 48;
@@ -20,8 +23,16 @@ export function getShelfItemTextureKey(itemId) {
 }
 
 function getShelfArea(type) {
+  const art = getBudgetShelfArtForType(getFixtureType(type));
+  if (art) {
+    return {
+      left: art.columns[0][0] / art.width,
+      right: art.columns.at(-1)[1] / art.width,
+      top: art.rows[0][0] / art.height,
+      bottom: art.rows.at(-1)[1] / art.height,
+    };
+  }
   if (type?.startsWith("shelf_budget_")) return SHELF_AREAS.budget;
-  if (type === "shelf_starter_2x1") return SHELF_AREAS.starter;
   return SHELF_AREAS.legacy;
 }
 
@@ -89,6 +100,7 @@ export class ShelfItemDisplay {
     this.fixture = fixture;
     this.getItem = getItem;
     this.entries = new Map();
+    this.boxImages = [];
     this.destroyed = false;
     this.container = scene.add.container(fixture.x, fixture.y).setDepth(2.5);
     this.graphics = scene.add.graphics();
@@ -108,6 +120,10 @@ export class ShelfItemDisplay {
 
   sync() {
     if (this.destroyed || !this.container.visible) return;
+    if (this.fixture.handsOn) {
+      this.syncBoxes();
+      return;
+    }
     const { displayGrid, gridDimensions, type, placements } = this.fixture;
     const area = getShelfArea(type);
     const visible = new Set(placements);
@@ -174,6 +190,30 @@ export class ShelfItemDisplay {
         .setVisible(true);
       entry.image?.setVisible(Boolean(textureKey));
       this.container.bringToTop(entry.count);
+    }
+  }
+
+  syncBoxes() {
+    const signature = JSON.stringify(this.fixture.placements);
+    if (this.boxSignature === signature) return;
+    this.boxSignature = signature;
+    for (const image of this.boxImages) image.destroy();
+    this.boxImages = [];
+    const art = getBudgetShelfArtForType(getFixtureType(this.fixture.type));
+    const scale = this.fixture.gridDimensions.w * TILE_SIZE / art.width;
+    const left = -art.width * scale / 2;
+    const top = -art.height * scale / 2;
+    for (const placement of this.fixture.placements) {
+      const item = this.getItem(placement.itemId);
+      if (!item) throw new Error(`Unknown shelf item: ${placement.itemId}`);
+      for (const box of getShelfBoxes(art, placement.gx, placement.gy, item.boxSize, placement.quantity)) {
+        const image = this.scene.add.image(left + box.x * scale, top + box.y * scale,
+          `shelf_box_${getItemCrateCategory(item.tags)}`)
+          .setOrigin(0, 0).setDisplaySize(box.width * scale, box.height * scale);
+        if (box.back) image.setTint(0x8a8a9a);
+        this.container.add(image);
+        this.boxImages.push(image);
+      }
     }
   }
 

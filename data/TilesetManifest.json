@@ -424,36 +424,52 @@
     "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x4_right.png"
   },
   {
-    "key": "shelf_budget_2x5_down",
-    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x5_down.png"
+    "key": "shelf_budget_3x2_down",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_3x2_down.png"
   },
   {
-    "key": "shelf_budget_2x5_left",
-    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x5_left.png"
+    "key": "shelf_budget_3x2_left",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_3x2_left.png"
   },
   {
-    "key": "shelf_budget_2x5_up",
-    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x5_up.png"
+    "key": "shelf_budget_3x2_up",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_3x2_up.png"
   },
   {
-    "key": "shelf_budget_2x5_right",
-    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x5_right.png"
+    "key": "shelf_budget_3x2_right",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_3x2_right.png"
   },
   {
-    "key": "shelf_budget_2x6_down",
-    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x6_down.png"
+    "key": "shelf_budget_3x3_down",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_3x3_down.png"
   },
   {
-    "key": "shelf_budget_2x6_left",
-    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x6_left.png"
+    "key": "shelf_budget_3x3_left",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_3x3_left.png"
   },
   {
-    "key": "shelf_budget_2x6_up",
-    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x6_up.png"
+    "key": "shelf_budget_3x3_up",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_3x3_up.png"
   },
   {
-    "key": "shelf_budget_2x6_right",
-    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x6_right.png"
+    "key": "shelf_budget_3x3_right",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_3x3_right.png"
+  },
+  {
+    "key": "shelf_budget_3x4_down",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_3x4_down.png"
+  },
+  {
+    "key": "shelf_budget_3x4_left",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_3x4_left.png"
+  },
+  {
+    "key": "shelf_budget_3x4_up",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_3x4_up.png"
+  },
+  {
+    "key": "shelf_budget_3x4_right",
+    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_budget_3x4_right.png"
   },
   {
     "key": "register_01",
@@ -494,50 +510,6 @@
   {
     "key": "server_standee",
     "path": "img/Icons_Extracted/Tileset/Fixtures/server_standee.png"
-  },
-  {
-    "key": "shelf_frame_01",
-    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_frame_01.png"
-  },
-  {
-    "key": "shelf_frame_02",
-    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_frame_02.png"
-  },
-  {
-    "key": "shelf_frame_03",
-    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_frame_03.png"
-  },
-  {
-    "key": "shelf_frame_04",
-    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_frame_04.png"
-  },
-  {
-    "key": "shelf_frame_05",
-    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_frame_05.png"
-  },
-  {
-    "key": "shelf_starter_2x1",
-    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_starter_2x1.png"
-  },
-  {
-    "key": "shelf_universal_01",
-    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_universal_01.png"
-  },
-  {
-    "key": "shelf_universal_02",
-    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_universal_02.png"
-  },
-  {
-    "key": "shelf_universal_03",
-    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_universal_03.png"
-  },
-  {
-    "key": "shelf_universal_04",
-    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_universal_04.png"
-  },
-  {
-    "key": "shelf_universal_05",
-    "path": "img/Icons_Extracted/Tileset/Fixtures/shelf_universal_05.png"
   },
   {
     "key": "sign_neon_01",

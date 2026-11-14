@@ -18,17 +18,16 @@ function snapshot() {
       factionReputation: { scavengers: 0, mercenaries: -1, explorers: 3 },
       hiredEmployees: [],
       activeLicenses: ["lic_corp_aulin"], storePrices: { wpn_rif_01: 123 },
-      hovercart: { capacity: 10, stock: [{ itemId: "amo_01", quantity: 2 }] },
       goBacks: [{ itemId: "wpn_rif_01", quantity: 40 }],
     },
     market: new Market(database.getAllItems(), () => 0.5).serialize(),
     fixtures: [
-      { id: "fixture_demo_01", type: "shelf_starter_2x1", gx: 16, gy: 6 },
+      { id: "fixture_demo_01", type: "shelf_budget_2x2", gx: 16, gy: 6 },
       ...STARTING_FIXTURES,
     ].map(({ id, type, gx, gy }) => ({
       id, type, gx, gy,
-      ...(getFixtureType(type).kind === "shelf" ? { placements: [{
-        itemId: "wpn_rif_01", gx: 0, gy: 0, w: 2, h: 1, rotated: false, quantity: 3,
+      ...(getFixtureType(type).kind === "shelf" ? { stockingVersion: 1, placements: [{
+        itemId: "wpn_rif_01", gx: 0, gy: 0, w: 1, h: 1, rotated: false, quantity: 3,
       }] } : {}),
       ...(getFixtureType(type).kind === "storage" ? { stock: [{ itemId: "srv_01", quantity: 5 }] } : {}),
     })),
@@ -38,6 +37,42 @@ function snapshot() {
     layoutVersion: SHOP_LAYOUT_VERSION,
   };
 }
+
+test("hands-on shelves and empty carried or dropped crates survive save validation", () => {
+  const data = snapshot();
+  const shelf = {
+    id: "hands-on", type: "shelf_budget_3x4", gx: 17, gy: 2, stockingVersion: 1,
+    placements: [
+      { itemId: "amo_01", gx: 0, gy: 0, w: 1, h: 1, rotated: false, quantity: 20 },
+      { itemId: "wpn_hvy_01", gx: 1, gy: 0, w: 1, h: 1, rotated: false, quantity: 1 },
+    ],
+  };
+  data.fixtures.push(shelf);
+  data.carriedCrate = { kind: "item", itemId: null, quantity: 0 };
+  data.carriedCrates = [data.carriedCrate];
+  data.crates.push({ ...data.carriedCrate, x: 180, y: 6656, velocityX: 0, velocityY: 0 });
+  assert.deepEqual(validateShopSave(data, database), data);
+  shelf.placements[1].quantity = 2;
+  assert.throws(() => validateShopSave(data, database), /shelf stack does not fit/);
+});
+
+test("old three-level Budget Shelves keep their level and excess boxes go to Go-Backs once", () => {
+  const data = snapshot();
+  data.fixtures.push({
+    id: "old-budget", type: "shelf_budget_2x4", gx: 17, gy: 2,
+    placements: [{ itemId: "wpn_hvy_01", gx: 0, gy: 2, w: 3, h: 1, rotated: false, quantity: 8 }],
+  });
+  const migrated = validateShopSave(data, database);
+  const shelf = migrated.fixtures.at(-1);
+  assert.equal(shelf.type, "shelf_budget_3x4");
+  assert.equal(shelf.stockingVersion, 1);
+  assert.deepEqual(shelf.placements[0], {
+    itemId: "wpn_hvy_01", gx: 0, gy: 2, w: 1, h: 1, rotated: false, quantity: 1,
+  });
+  assert.equal(migrated.playerState.goBacks.find((entry) => entry.itemId === "wpn_hvy_01").quantity, 7);
+  assert.deepEqual(validateShopSave(migrated, database), migrated);
+  assert.equal(data.fixtures.at(-1).placements[0].quantity, 8);
+});
 
 test("shop saves preserve layout, all inventory locations, prices, factions, and market state", async () => {
   const entries = new Map();
@@ -127,17 +162,34 @@ test("saved emergency loans need a positive balance and a day no later than toda
   }
 });
 
-test("saved hovercarts accept legacy and upgrade capacities but reject invalid sizes", () => {
-  for (const capacity of [10, 15, 20, 25, 30, 35, 40]) {
-    const data = snapshot();
-    data.playerState.hovercart.capacity = capacity;
-    assert.doesNotThrow(() => validateShopSave(data, database), `${capacity} spaces`);
-  }
-  for (const capacity of [5, 14, 16, 21, 41, 45]) {
-    const data = snapshot();
-    data.playerState.hovercart.capacity = capacity;
-    assert.throws(() => validateShopSave(data, database), /invalid hovercart/);
-  }
+test("old saves lose retired shelves, contracts, and the hovercart for a refund, with their stock in Go-Backs", () => {
+  const data = snapshot();
+  data.fixtures.push({
+    id: "old-large", type: "shelf_universal", gx: 17, gy: 2,
+    placements: [
+      { itemId: "wpn_rif_01", gx: 0, gy: 0, w: 2, h: 1, rotated: false, quantity: 3 },
+      { itemId: "amo_01", gx: 2, gy: 0, w: 1, h: 1, rotated: false, quantity: 6 },
+    ],
+  });
+  data.crates.push({ kind: "fixture", typeId: "shelf_showcase", x: 320, y: 640, velocityX: 0, velocityY: 0 });
+  data.carriedCrate = { kind: "fixture", typeId: "shelf_bulk" };
+  data.carriedCrates = [data.carriedCrate];
+  data.playerState.activeLicenses.push("lic_fixture_expanded");
+  data.playerState.hovercart = { capacity: 25, stock: [{ itemId: "amo_01", quantity: 4 }, { itemId: "srv_01", quantity: 2 }] };
+
+  const migrated = validateShopSave(data, database);
+  assert.equal(migrated.fixtures.some((fixture) => fixture.id === "old-large"), false);
+  assert.equal(migrated.crates.some((crate) => crate.kind === "fixture"), false);
+  assert.equal(migrated.carriedCrate, null);
+  assert.deepEqual(migrated.carriedCrates, []);
+  assert.deepEqual(migrated.playerState.activeLicenses, ["lic_corp_aulin"]);
+  assert.equal(Object.hasOwn(migrated.playerState, "hovercart"), false);
+  // 2000 large shelf + 800 showcase crate + 2200 bulk crate + 750 contract + 200 + 300 cart upgrades.
+  assert.equal(migrated.playerState.credits, 1500 + 2000 + 800 + 2200 + 750 + 200 + 300);
+  const goBacks = Object.fromEntries(migrated.playerState.goBacks.map((entry) => [entry.itemId, entry.quantity]));
+  assert.deepEqual(goBacks, { wpn_rif_01: 43, amo_01: 10, srv_01: 2 });
+  assert.deepEqual(validateShopSave(migrated, database), migrated);
+  assert.equal(data.playerState.hovercart.capacity, 25, "the save being loaded is not changed");
 });
 
 test("saves accept cent balances and prices and reject fractions smaller than a cent", () => {
@@ -168,6 +220,27 @@ test("saved launch acceleration is preserved, and malformed launch states are re
     invalid.crates[0].launch = launch;
     assert.throws(() => validateShopSave(invalid, database), /invalid crate launch/);
   }
+});
+
+test("saved floor stacks keep up to two item crates on an item crate, off the Loading Pad", () => {
+  const data = snapshot();
+  const stack = [{ kind: "item", itemId: "amo_01", quantity: 2 }, { kind: "item", itemId: null, quantity: 0 }];
+  data.crates[0] = { ...data.crates[0], kind: "item", onPad: false, stack };
+  assert.deepEqual(validateShopSave(structuredClone(data), database).crates[0].stack, stack);
+  for (const corrupt of [
+    (crate) => { crate.stack = []; },
+    (crate) => { crate.stack.push({ kind: "item", itemId: "amo_01", quantity: 1 }); },
+    (crate) => { crate.onPad = true; },
+    (crate) => { Object.assign(crate, { kind: "fixture", typeId: "shelf_budget_2x2" }); },
+    (crate) => { crate.launch = { remainingMs: 80, accelerationX: 1500, accelerationY: 0, maxSpeed: 400 }; },
+  ]) {
+    const invalid = structuredClone(data);
+    corrupt(invalid.crates[0]);
+    assert.throws(() => validateShopSave(invalid, database), /invalid crate stack/);
+  }
+  const fixtureOnTop = structuredClone(data);
+  fixtureOnTop.crates[0].stack[1] = { kind: "fixture", typeId: "shelf_budget_2x2" };
+  assert.throws(() => validateShopSave(fixtureOnTop, database), /only item crates can be stacked/);
 });
 
 test("desktop saving uses IPC, and failures never silently fall back to browser storage", async () => {
@@ -209,7 +282,6 @@ test("invalid saved inventory and economy are rejected before restoration", () =
     (data) => { data.playerState.shopLevel = 31; },
     (data) => { data.playerState.pendingReputation = { global: 1, factions: {} }; },
     (data) => { data.playerState.activeLicenses.push("unknown"); },
-    (data) => { data.playerState.hovercart.stock[0].quantity = 999; },
     (data) => { data.playerState.storePrices.wpn_rif_01 = 0; },
     (data) => { data.market.day = 0; },
     (data) => { data.market.prices.wpn_rif_01 = 100000; },
@@ -221,7 +293,7 @@ test("invalid saved inventory and economy are rejected before restoration", () =
     (data) => { data.fixtures[1].type = "unknown"; },
     (data) => { data.fixtures[1].id = data.fixtures[0].id; },
     (data) => { data.unlockedZones = []; },
-    (data) => { data.crates[0].quantity = 0; },
+    (data) => { data.crates[0].quantity = -1; },
     (data) => { data.carriedCrate.itemId = "unknown"; },
     (data) => { data.playerState.goBacks[0].itemId = "unknown"; },
     (data) => { data.playerState.goBacks[0].quantity = 0; },
@@ -285,11 +357,12 @@ test("saves accept earned shop levels and pending store and faction reputation",
 
 test("saves from before fixture types existed load with types filled in", () => {
   const legacy = snapshot();
-  legacy.fixtures[0].type = "shelf_universal";
   for (const entry of legacy.fixtures) delete entry.type;
   const migrated = validateShopSave(legacy, database);
-  assert.deepEqual(migrated.fixtures, snapshot().fixtures.map((fixture, index) =>
-    index === 0 ? { ...fixture, type: "shelf_universal" } : fixture));
+  // Their original shelf (fixture_demo_01) was the retired 3x2 shelf: refunded, stock to Go-Backs.
+  assert.deepEqual(migrated.fixtures, snapshot().fixtures.slice(1));
+  assert.equal(migrated.playerState.credits, 1500 + 2000);
+  assert.deepEqual(migrated.playerState.goBacks, [{ itemId: "wpn_rif_01", quantity: 43 }]);
   assert.equal(legacy.fixtures[0].type, undefined);
 });
 
@@ -304,6 +377,43 @@ test("older saves keep the third starting locker and its contents", () => {
   assert.deepEqual(restored.fixtures.find((fixture) => fixture.id === thirdLocker.id), {
     ...thirdLocker, type: "locker_single",
   });
+});
+
+test("old multi-item lockers migrate to one item type and send overflow to Go-Backs", () => {
+  const data = snapshot();
+  data.layoutVersion = 5;
+  const lockers = data.fixtures.filter((fixture) => getFixtureType(fixture.type).kind === "storage");
+  lockers[0].stock = [
+    { itemId: "amo_01", quantity: 5 },
+    { itemId: "wpn_hvy_01", quantity: 1 },
+  ];
+  lockers[1].stock = [{ itemId: "wpn_hvy_01", quantity: 3 }];
+
+  const migrated = validateShopSave(data, database);
+  assert.equal(migrated.layoutVersion, SHOP_LAYOUT_VERSION);
+  const migratedLockers = migrated.fixtures.filter((fixture) =>
+    getFixtureType(fixture.type).kind === "storage");
+  assert.deepEqual(migratedLockers.map((locker) => locker.stock), [
+    [{ itemId: "amo_01", quantity: 5 }],
+    [{ itemId: "wpn_hvy_01", quantity: 2 }],
+  ]);
+  assert.deepEqual(
+    migrated.playerState.goBacks.find((entry) => entry.itemId === "wpn_hvy_01"),
+    { itemId: "wpn_hvy_01", quantity: 2 },
+  );
+  assert.deepEqual(validateShopSave(migrated, database), migrated);
+});
+
+test("new saves reject mixed-item lockers and box-size overflow", () => {
+  const data = snapshot();
+  const locker = data.fixtures.find((fixture) => getFixtureType(fixture.type).kind === "storage");
+  locker.stock = [
+    { itemId: "amo_01", quantity: 1 },
+    { itemId: "srv_01", quantity: 1 },
+  ];
+  assert.throws(() => validateShopSave(data, database), /locker contains more than one item type/);
+  locker.stock = [{ itemId: "wpn_hvy_01", quantity: 3 }];
+  assert.throws(() => validateShopSave(data, database), /inventory exceeds its capacity/);
 });
 
 test("saves using the old detached backroom explain that a new game is required", () => {
@@ -361,7 +471,7 @@ test("fixtures between floor squares save, including two-pixel locker positions"
 test("fixture crates can be saved on the floor or carried", () => {
   const data = snapshot();
   data.crates.push({
-    kind: "fixture", typeId: "shelf_universal", x: 320, y: 640, velocityX: 0, velocityY: 0,
+    kind: "fixture", typeId: "shelf_budget_3x4", x: 320, y: 640, velocityX: 0, velocityY: 0,
   });
   data.carriedCrate = { kind: "fixture", typeId: "locker_single" };
   assert.deepEqual(validateShopSave(data, database), data);
@@ -370,31 +480,36 @@ test("fixture crates can be saved on the floor or carried", () => {
   assert.throws(() => validateShopSave(data, database), /unknown fixture crate/);
 });
 
-test("older saves with shelf stacks over the new per-slot cap still load", () => {
+test("older shelf saves still load stacks within the legacy depth rule", () => {
   const data = snapshot();
-  data.fixtures[0].placements[0].quantity = 4; // rifle: legacy 12 / 3 = 4, current cap 3
-  assert.doesNotThrow(() => validateShopSave(data, database));
+  delete data.fixtures[0].stockingVersion;
+  Object.assign(data.fixtures[0].placements[0], { w: 2, quantity: 4 }); // rifle: legacy 12 / 3 = 4
+  const migrated = validateShopSave(data, database);
+  assert.equal(migrated.fixtures[0].stockingVersion, 1);
+  assert.deepEqual(migrated.fixtures[0].placements[0], {
+    itemId: "wpn_rif_01", gx: 0, gy: 0, w: 1, h: 1, rotated: false, quantity: 4,
+  });
   data.fixtures[0].placements[0].quantity = 5;
   assert.throws(() => validateShopSave(data, database), /shelf stack does not fit/);
 });
 
-test("shelf saves validate against the tile-derived visual grid", () => {
+test("shelf saves validate against the shelf's section grid", () => {
   const data = snapshot();
-  data.fixtures[0].type = "shelf_universal";
-  data.fixtures[0].placements[0].gx = 4;
-  data.fixtures[0].placements[0].gy = 3;
+  data.fixtures[0].type = "shelf_budget_3x4";
+  data.fixtures[0].placements[0].gx = 3;
+  data.fixtures[0].placements[0].gy = 2;
   assert.doesNotThrow(() => validateShopSave(data, database));
 
-  data.fixtures[0].placements[0].gx = 5;
+  data.fixtures[0].placements[0].gx = 4;
   assert.throws(() => validateShopSave(data, database), /shelf stack does not fit/);
 });
 
-test("compact starter shelf saves validate against its smaller visual grid", () => {
+test("the smallest Budget Shelf validates against its two-by-two grid", () => {
   const data = snapshot();
-  data.fixtures[0].placements[0].gx = 2;
+  data.fixtures[0].placements[0].gx = 1;
   data.fixtures[0].placements[0].gy = 1;
   assert.doesNotThrow(() => validateShopSave(data, database));
 
-  data.fixtures[0].placements[0].gx = 4;
+  data.fixtures[0].placements[0].gx = 2;
   assert.throws(() => validateShopSave(data, database), /shelf stack does not fit/);
 });

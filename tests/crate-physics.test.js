@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Crate, INTERACT_RANGE, THROW_ACCELERATION_MS } from "../js/logic/Crate.js";
+import { Crate, CRATE_STACK_SPACING, INTERACT_RANGE, THROW_ACCELERATION_MS } from "../js/logic/Crate.js";
 
 function createScene(obstacles = []) {
   const scene = {
@@ -123,10 +123,9 @@ test("three carried crates stay straight, cover the lids below, and draw newest 
   for (const [below, above] of [[lower, middle], [middle, upper]]) {
     assert.equal(above.sprite.x, below.sprite.x);
     assert.equal(above.sprite.angle, 0);
-    assert.ok(above.sprite.y < below.sprite.y);
-    const overlapHeight = above.sprite.y + above.sprite.height / 2 -
-      (below.sprite.y - below.sprite.height / 2);
-    assert.equal(overlapHeight, 10, "upper crate covers exactly the lower crate's 10px lid");
+    // Tight enough that the upper crate's bottom edge lines up with where the lower
+    // crate's dark and light side panels meet.
+    assert.equal(below.sprite.y - above.sprite.y, CRATE_STACK_SPACING);
   }
 });
 
@@ -144,11 +143,11 @@ test("fixture crates preserve their fixture type", () => {
   const scene = createScene();
   const crate = new Crate(scene, null, 1, 100, 100, {
     kind: "fixture",
-    typeId: "shelf_universal",
+    typeId: "shelf_budget_3x4",
   });
   assert.deepEqual(crate.serializePayload(), {
     kind: "fixture",
-    typeId: "shelf_universal",
+    typeId: "shelf_budget_3x4",
   });
   assert.equal(crate.itemId, null);
   assert.equal(crate.pickUp({ x: 120, y: 120, depth: 1 }), true);
@@ -156,7 +155,7 @@ test("fixture crates preserve their fixture type", () => {
   assert.equal(crate.isThrown, true);
   assert.deepEqual(crate.serializePayload(), {
     kind: "fixture",
-    typeId: "shelf_universal",
+    typeId: "shelf_budget_3x4",
   });
 });
 
@@ -263,7 +262,7 @@ test("a thrown crate that hits something ends its boost even while over the thro
 for (const kind of ["item", "fixture"]) {
   test(`a moving, pushed ${kind} crate can be picked up without waiting`, () => {
     const crate = new Crate(createScene(), "item", 5, 100, 100,
-      kind === "fixture" ? { kind, typeId: "shelf_universal" } : {});
+      kind === "fixture" ? { kind, typeId: "shelf_budget_3x4" } : {});
     crate.push({ x: 80, y: -40 });
     assert.equal(crate.isStationary(), false);
     assert.equal(crate.canPickUp(), true);
@@ -341,7 +340,7 @@ function advanceThrow(crate, milliseconds) {
 for (const kind of ["item", "fixture"]) {
   test(`${kind} throws inherit walking speed without teleporting, accelerate, then decelerate in all eight directions`, () => {
     for (const [x, y] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
-      const crate = new Crate(createScene(), "item", 5, 0, 0, { kind, typeId: "shelf_universal" });
+      const crate = new Crate(createScene(), "item", 5, 0, 0, { kind, typeId: "shelf_budget_3x4" });
       const carrier = carrierAt();
       const speed = 160;
       const length = Math.hypot(x, y);
@@ -399,7 +398,7 @@ for (const kind of ["item", "fixture"]) {
   });
 
   test(`${kind} crates dropped while stationary land beside the player`, () => {
-    const crate = new Crate(createScene(), "item", 5, 0, 0, { kind, typeId: "shelf_universal" });
+    const crate = new Crate(createScene(), "item", 5, 0, 0, { kind, typeId: "shelf_budget_3x4" });
     const carrier = carrierAt();
     const position = crate.findDropPosition(carrier.x, carrier.y, carrier);
     assert.ok(position);
@@ -407,6 +406,44 @@ for (const kind of ["item", "fixture"]) {
     assert.ok(Math.hypot(position.x - carrier.x, position.y - carrier.y) <= INTERACT_RANGE);
   });
 }
+
+test("a set-down crate goes straight ahead of the facing direction first", () => {
+  const carrier = carrierAt();
+  for (const [facing, check] of [
+    ["up", (p) => p.x === carrier.x && p.y < carrier.y],
+    ["down", (p) => p.x === carrier.x && p.y > carrier.y],
+    ["left", (p) => p.y === carrier.y && p.x < carrier.x],
+    ["right", (p) => p.y === carrier.y && p.x > carrier.x],
+  ]) {
+    const crate = new Crate(createScene(), "item", 5, 0, 0);
+    const position = crate.findDropPosition(carrier.x, carrier.y, carrier, [], undefined, facing);
+    assert.ok(position && check(position), `${facing}: ${JSON.stringify(position)}`);
+    assertClearOfCarrier(crate, position, carrier);
+  }
+
+  // The real player's art reaches 40px above his feet but only 24px below.
+  const tall = { ...carrierAt(), getBounds() {
+    return { left: this.x - 32, right: this.x + 32, top: this.y - 40, bottom: this.y + 24 };
+  } };
+  const upward = new Crate(createScene(), "item", 5, 0, 0);
+  const above = upward.findDropPosition(tall.x, tall.y, tall, [], undefined, "up");
+  assert.ok(above && above.x === tall.x && above.y < tall.y, `tall carrier up: ${JSON.stringify(above)}`);
+  assertClearOfCarrier(upward, above, tall);
+
+  const wallAbove = { enable: true, left: 0, right: 500, top: 0, bottom: carrier.y - 20 };
+  const blocked = new Crate(createScene([wallAbove]), "item", 5, 0, 0);
+  const fallback = blocked.findDropPosition(carrier.x, carrier.y, carrier, [], undefined, "up");
+  assert.ok(fallback && fallback.y >= carrier.y - 20, "falls back to another side when ahead is blocked");
+
+  // Only the feet must be clear top to bottom: a wall level with the top of his head still
+  // leaves room straight ahead.
+  const player = { ...tall, body: { left: tall.x - 11, right: tall.x + 11, top: tall.y, bottom: tall.y + 20 } };
+  const wallAtHead = { enable: true, left: 0, right: 500, top: 0, bottom: tall.y - 40 };
+  const nearWall = new Crate(createScene([wallAtHead]), "item", 5, 0, 0);
+  const atWall = nearWall.findDropPosition(player.x, player.y, player, [], undefined, "up");
+  assert.ok(atWall && atWall.x === player.x && atWall.y < player.y, `near a wall: ${JSON.stringify(atWall)}`);
+  assert.ok(atWall.y + nearWall.sprite.body.height / 2 <= player.body.top, "never on his feet");
+});
 
 test("forward releases cannot skip through obstacles, other crates, or the loading pad", () => {
   const carrier = carrierAt();

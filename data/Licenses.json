@@ -2,7 +2,7 @@
   {
     "id": "lic_fixture_basics",
     "name": "Basic Fixture Supply",
-    "description": "A starter contract for budget and compact shelves, lockers, and checkout registers.",
+    "description": "A starter contract for Budget Shelves, lockers, and checkout registers.",
     "tier": 1,
     "baseCost": 0,
     "reqReputation": 0,
@@ -10,32 +10,12 @@
       "shelf_budget_2x2",
       "shelf_budget_2x3",
       "shelf_budget_2x4",
-      "shelf_budget_2x5",
-      "shelf_budget_2x6",
-      "shelf_starter_2x1",
+      "shelf_budget_3x2",
+      "shelf_budget_3x3",
+      "shelf_budget_3x4",
       "locker_single",
       "register_basic"
     ]
-  },
-  {
-    "id": "lic_fixture_expanded",
-    "name": "Expanded Fixture Supply",
-    "description": "A supplier contract for bigger shop fixtures, including the large shelf.",
-    "tier": 2,
-    "baseCost": 750,
-    "requiredShopLevel": 3,
-    "reqReputation": null,
-    "unlocksFixtures": ["shelf_universal"]
-  },
-  {
-    "id": "lic_fixture_premium_shelf",
-    "name": "Premium Shelf Supply",
-    "description": "A contract for a larger display shelf with room for more merchandise.",
-    "tier": 2,
-    "baseCost": 600,
-    "requiredShopLevel": 8,
-    "reqReputation": null,
-    "unlocksFixtures": ["shelf_showcase"]
   },
   {
     "id": "lic_fixture_storage_bank",
@@ -48,16 +28,6 @@
     "unlocksFixtures": ["locker_double"]
   },
   {
-    "id": "lic_fixture_bulk_display",
-    "name": "Bulk Display Supply",
-    "description": "A contract for a wide shelf with more display space.",
-    "tier": 3,
-    "baseCost": 1500,
-    "requiredShopLevel": 21,
-    "reqReputation": null,
-    "unlocksFixtures": ["shelf_bulk"]
-  },
-  {
     "id": "lic_fixture_secure_storage",
     "name": "Secure Storage Supply",
     "description": "A contract for a high-capacity backroom locker.",
@@ -66,16 +36,6 @@
     "requiredShopLevel": 25,
     "reqReputation": null,
     "unlocksFixtures": ["locker_secure"]
-  },
-  {
-    "id": "lic_fixture_armory_display",
-    "name": "Armory Display Supply",
-    "description": "A contract for the largest merchandise display shelf.",
-    "tier": 3,
-    "baseCost": 2400,
-    "requiredShopLevel": 28,
-    "reqReputation": null,
-    "unlocksFixtures": ["shelf_armory"]
   },
   {
     "id": "lic_start_surplus",

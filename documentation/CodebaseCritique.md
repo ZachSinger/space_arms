@@ -130,7 +130,7 @@ At least 10 logic modules take `scene` and use its internals:
 
 ## 🟠 7. Inventory movement is partly standardized
 
-- `InventoryPool` is shared by the hovercart, Go-Backs, and lockers. That part is good.
+- `InventoryPool` is shared by Go-Backs and lockers. That part is good.
 - `InventoryTransfer` now handles player moves among pools, shelf slots, and item crates.
 - Shelves and crates expose the methods the shared transfer needs, but remain different
   models because shelf slots have grid positions and crates have physical behavior.
@@ -145,7 +145,7 @@ At least 10 logic modules take `scene` and use its internals:
 - `FIXTURE_TYPES` is a JS constant (`FixtureLayout.js`). Behaviour is selected by
   `kind === "register"` checks and `instanceof ShelfFixture/StorageFixture`.
 - That's about **15 type checks** across `game.js`, `FixtureLayout.js`,
-  `FixtureWindow.js`, and `FixturePlacement.js`.
+  `ShelfStockingWindow.js`, and `FixturePlacement.js`.
 - **Adding a fixture kind** (weapon rack, security scanner, employee break-room door)
   means finding and editing every one of those branches.
 
@@ -166,8 +166,8 @@ At least 10 logic modules take `scene` and use its internals:
   - **Lost state:** focus, scroll position, and in-progress input are reset by unrelated
     updates (e.g. credits changing during a shift).
   - **Wasted work:** whole panels re-render when one number changed.
-- **Interpolated values aren't escaped** (`UIWindow.js`, `FixtureRenderer.js`,
-  `GoBacksWindow.js`). The data is local today, so the security risk is low. It becomes
+- **Interpolated values aren't escaped** (`UIWindow.js` and other
+  panel renderers). The data is local today, so the security risk is low. It becomes
   real with mods, player-named things, or Steam Workshop content, and any `<` or `&` in a
   name breaks the layout now.
 - `WindowManager` modality is cooperative (it closes other windows) rather than a true
@@ -187,7 +187,7 @@ At least 10 logic modules take `scene` and use its internals:
 ## 🟡 12. Tuning numbers and fixture data are hardcoded in JS
 
 - **Balance values live in source code:** shift length and speed, market swing, delivery
-  fee, pad capacity, hovercart capacity, fixture prices, sizes, and licenses, throw
+  fee, pad capacity, fixture prices, sizes, and licenses, throw
   speed, drag, and push weights.
 - **Every playtest tweak is a code edit,** and the numbers are scattered across 8+ files.
 - **It's inconsistent with the project's own rule** (`AGENTS.md`): "Never hardcode item

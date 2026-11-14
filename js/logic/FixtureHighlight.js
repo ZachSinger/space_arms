@@ -5,6 +5,7 @@
 // left-click, and slides the Tablet aside when it would cover that fixture.
 import { TILE_SIZE } from "./RoomLayout.js";
 import { getFixtureType, fixtureFootprint } from "./FixtureLayout.js";
+import { CRATE_FOOTER_HEIGHT_PX } from "./CrateFooter.js";
 
 const HIGHLIGHT_COLOR = 0x22c55e;
 // Gap kept between the slid window and the fixture, px.
@@ -153,7 +154,7 @@ export class FixtureHighlight {
       left: 0,
       top: HUD_HEIGHT_PX,
       right: window.innerWidth,
-      bottom: window.innerHeight,
+      bottom: window.innerHeight - CRATE_FOOTER_HEIGHT_PX,
     }));
   }
 

@@ -1,8 +1,8 @@
 // ==========================================
 // FILE: PlayerState.js
 // ==========================================
-// The player's persistent economy: credits, reputation, licenses, store prices, the
-// hovercart, and the Go-Backs bin. Notifies subscribers on every change.
+// The player's persistent economy: credits, reputation, licenses, store prices, and the
+// Go-Backs bin. Notifies subscribers on every change.
 import { InventoryPool } from "./InventoryPool.js";
 import { transferItems } from "./InventoryTransfer.js";
 import { DayLedger } from "./DayLedger.js";
@@ -12,11 +12,6 @@ import { CUSTOMER_FACTION_IDS } from "./CustomerBuyLists.js";
 import { getDailyLoanRepayment } from "./EmergencyLoan.js";
 import employeeRoster from "../../data/Employees.json" with { type: "json" };
 import { getEmployeeProfile, getEmployeeTrainingOffer } from "./EmployeeTraining.js";
-
-// The starting capacity and upgrade rules for the player's hovercart.
-import { getNextHovercartUpgrade, HOVERCART_CAPACITY } from "./Hovercart.js";
-
-export { HOVERCART_CAPACITY };
 
 function emptyFactionReputation() {
   return Object.fromEntries(CUSTOMER_FACTION_IDS.map((id) => [id, 0]));
@@ -52,10 +47,7 @@ export class PlayerState {
     // The player's own retail price per item id (credits per unit).
     this.storePrices = {};
 
-    // Same model as a StorageFixture, just not on the map; moves stock between fixtures.
-    this.hovercart = new InventoryPool({ capacity: HOVERCART_CAPACITY, stock: [] });
-
-    // Carts abandoned by angry customers (unlimited room); emptied only into the hovercart.
+    // Carts abandoned by angry customers (unlimited room); packed into crates at the register.
     this.goBacks = new InventoryPool({ capacity: Infinity, stock: [] });
     this.hiredEmployees = [];
     // Hired staff who skip shifts: they don't work and aren't paid.
@@ -140,18 +132,6 @@ export class PlayerState {
     this.dayLedger.record({ ...entry, amount: -amount });
     this.credits = balance;
     this.notifyListeners();
-    return true;
-  }
-
-  upgradeHovercart() {
-    const upgrade = getNextHovercartUpgrade(this.hovercart.capacity);
-    if (!upgrade || this.shopLevel < upgrade.requiredShopLevel ||
-      this.credits < upgrade.price) return false;
-    this.hovercart.capacity = upgrade.capacity;
-    this.spendCredits(upgrade.price, {
-      category: "equipment",
-      label: `Hovercart capacity: ${upgrade.capacity} spaces`,
-    });
     return true;
   }
 
@@ -350,20 +330,22 @@ export class PlayerState {
   }
 
   /**
-   * Move 1 unit from the Go-Backs bin into the hovercart.
+   * Moves as many of one Go-Backs item as fit into a crate.
    * @param {string} itemId
-   * @returns {boolean} false if the hovercart has no room or the bin has none
+   * @param {object} crate - an item crate
+   * @returns {number} how many moved
    */
-  loadGoBacksItem(itemId) {
-    const result = transferItems(this.goBacks, this.hovercart, itemId, 1, {
+  packGoBacksIntoCrate(itemId, crate) {
+    const available = this.goBacks.getAvailableUnitsFor(itemId);
+    if (available <= 0) return 0;
+    const result = transferItems(this.goBacks, crate, itemId, available, {
       eventBus: this.eventBus,
       sourceName: "go-backs",
-      destinationName: "hovercart",
+      destinationName: "crate",
     });
-    if (result.moved !== 1) return false;
     this.goBacks.stock = this.goBacks.stock.filter((entry) => entry.quantity > 0);
-    this.notifyListeners();
-    return true;
+    if (result.moved) this.notifyListeners();
+    return result.moved;
   }
 
   signLicense(licenseId) {
@@ -413,10 +395,6 @@ export class PlayerState {
       activeLicenses: [...this.activeLicenses],
       storePrices: { ...this.storePrices },
       customersTurnedAway: this.customersTurnedAway,
-      hovercart: {
-        capacity: this.hovercart.capacity,
-        stock: this.hovercart.stock.filter((entry) => entry.quantity > 0).map((entry) => ({ ...entry })),
-      },
       goBacks: this.goBacks.stock.filter((entry) => entry.quantity > 0).map((entry) => ({ ...entry })),
       dayLedger: this.dayLedger.serialize(),
       lastDayReceipt: this.lastDayReceipt
@@ -464,11 +442,6 @@ export class PlayerState {
       activeFactions: new Set(),
       activeLicenses: new Set([...data.activeLicenses, "lic_fixture_basics"]),
       storePrices: { ...data.storePrices },
-      hovercart: new InventoryPool({
-        // Keep larger carts from existing saves, including their contents.
-        capacity: Math.max(HOVERCART_CAPACITY, data.hovercart?.capacity ?? HOVERCART_CAPACITY),
-        stock: (data.hovercart?.stock || []).map((entry) => ({ ...entry })),
-      }),
       goBacks: new InventoryPool({
         capacity: Infinity,
         stock: (data.goBacks || []).map((entry) => ({ ...entry })),

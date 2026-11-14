@@ -18,6 +18,21 @@ notice something that needs doing but isn't being done right now.
 - [x] Check landing-pad unloading with Load storage first. In a clean shift, Tavi moved
       four 5-unit crates (20 units total) into an empty 20-slot locker in about 20
       seconds. No stall occurred while that storage had room.
+- [ ] Locker feedback: add an animation and sound when items go into or come out of a
+      locker (E fills a crate, Q empties one). For now the door swings open briefly, the
+      capacity gauge changes, and the crate changes color.
+- [x] Lockers have no window. Carrying item crates, Q at a locker empties the top crate
+      into it (hold: keep emptying crates from the top until one doesn't fit); E fills the
+      highest carried crate that's empty or holds the locker's item, as full as it goes.
+- [x] Removed the hovercart, the Equipment tab, the older shelf models (Starter, Universal,
+      Showcase, Bulk, Armory, Budget 2x5/2x6), and their licenses. Older saves are refunded
+      what those cost, and anything on a removed shelf or in the hovercart goes to Go-Backs.
+- [x] Go-Backs packs itself: with empty hands, Q at the register fills crates from the bin
+      and sets them down near the register in stacks of up to 3, keeping the customer line,
+      the spot behind the counter, doorways, and fixture fronts clear. Whatever doesn't fit
+      on the floor stays in the bin.
+- [x] Right-click a sold-out shelf space to clear it so customers stop looking for that
+      item there.
 - [x] Lock Tavi's hiring until Shop Level 4. Existing hires remain employed.
 - [x] Let the player temporarily close and reopen the store during a shift. New customer
       arrivals pause and resume later, customers already inside keep shopping, their
@@ -395,6 +410,21 @@ notice something that needs doing but isn't being done right now.
       (including the register), without blocking players or customers. Their motion pauses
       with the shift. Space can pick them up again once their velocity reaches zero,
       including partially emptied crates.
+- [x] Crate controls and floor stacking (moved from the DEV Crate Lab into the shop):
+      a green arrow marks the reachable crate the player is facing; Ctrl (right stick
+      click) moves it one crate down a stack. Space (X) taps pick up one crate, holds pick
+      up the marked crate and everything above it; with no arrow, Space throws the top
+      carried crate while walking. Q (Y) taps put the top crate down, holds set the whole
+      carried stack down; with the arrow on a floor crate they stack onto it instead.
+      Floor stacks are up to 3 high, never on fixture crates or the Loading Pad, and
+      fixture crates never stack. The player walks behind stacks, taller stacks are
+      harder to push, and a 3-high stack can't be pushed while carrying anything. A
+      96px bottom bar shows the marked crate's picture, name, and count, with one card
+      per carried crate above its right end. Q at the Empty Crates bin returns one empty
+      crate (hold: every empty crate on top). Q with empty hands opens Go-Backs (later:
+      packs Go-Backs into crates). Saves
+      keep floor stacks. Replaces Q/Y hovercart unpacking and the floating carried-crate
+      label.
 - [x] Thrown crates hitting customers cost 1 store reputation and 1 reputation with the
       customer's faction, if any. Faction membership currently follows the character's
       sprite group; other groups are neutral. Each customer can be hit once per throw,
@@ -423,8 +453,8 @@ notice something that needs doing but isn't being done right now.
         on their own (`Employee.js`, `EmployeeJobs.js`).
   - [x] ~~No Hovercart/backpack capacity model at all~~ -- see the new Hovercart entry
         below. Crates themselves still carry a flat RESTOCK_QUANTITY (5) with no
-        carrying-capacity limit when hauled from the Loading Pad. The player can now choose
-        to unpack a carried crate into the Hovercart, so the crate's contents use its capacity.
+        carrying-capacity limit when hauled from the Loading Pad. (Unpacking a carried
+        crate into the Hovercart was later removed; Q now puts crates down.)
 - [x] Storage Shelving + real capacity-pool storage (bible Step 42): the Storeroom is
       now a proper walled-off backroom (a `door_blast_keypad_01` door in its own east
       wall, sealed via the new `TileRoom.addWall`, since two already-unlocked zones never
@@ -454,12 +484,11 @@ notice something that needs doing but isn't being done right now.
       open fixture's stock AND the hovercart's own stock side by side, each row with a
       TAKE (fixture -> hovercart) or STOCK (hovercart -> fixture) button that moves 1 unit
       at a time, disabled the instant the receiving side has no room left for that item.
-      The player can deliver a crate directly to a shelf or locker, or unpack it into the
-      Hovercart and stock a fixture later. The HUD gained a live `HOVERCART x/y`
+      The player can deliver a crate directly to a shelf or locker. The HUD gained a live `HOVERCART x/y`
       readout next to Credits/Reputation. Employees now carry stock in their own backpacks.
       Moving 1 unit per click is intended (decided; no bulk-transfer input planned).
-  - [x] While carrying a stock crate, press Q (or Y on a controller) to unpack as much as
-        fits into the hovercart. Any remainder stays in the box.
+  - [x] ~~While carrying a stock crate, press Q (or Y on a controller) to unpack as much as
+        fits into the hovercart.~~ Removed when Q became the put-down key.
 - [x] Sales Shelf: manual grid placement (bible Steps 4/5/22) -- NOT the same model as a
       Storage Fixture above. Originally built as a shared capacity pool (same as Storage),
       but that's wrong for a real storefront shelf: items need actual physical placement

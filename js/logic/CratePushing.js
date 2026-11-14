@@ -62,11 +62,14 @@ function pushDirection(from, to, direction) {
  * @param {{left:number, top:number, width:number, height:number}} options.player
  * @param {{x:number, y:number}} options.velocity - the player's intended velocity, px/s
  * @param {number} options.dt - seconds
- * @param {{key:any, rect:object, locked:boolean}[]} options.crates
+ * @param {{key:any, rect:object, locked:boolean, weight?:number}[]} options.crates - weight
+ *   is how many crates' worth this counts as when slowing the player (e.g. a floor stack)
  * @param {(rect:object) => boolean} options.isBlocked - true if a crate can't occupy rect
+ * @param {number} [options.carriedWeight] - crates the player is carrying, added to the
+ *   weight whenever anything is pushed
  * @returns {{playerVelocity:{x:number,y:number}, crateVelocities: Map<any,{x:number,y:number}>}}
  */
-export function solveCratePush({ player, velocity, dt, crates, isBlocked }) {
+export function solveCratePush({ player, velocity, dt, crates, isBlocked, carriedWeight = 0 }) {
   const run = (intended) => {
     const crateVelocities = new Map();
     const inChain = new Set();
@@ -136,9 +139,13 @@ export function solveCratePush({ player, velocity, dt, crates, isBlocked }) {
 
   if (!velocity.x && !velocity.y) return { playerVelocity: { x: 0, y: 0 }, crateVelocities: new Map() };
 
-  // First pass finds how many crates actually move, which sets how much the player slows.
-  const moving = [...run(velocity).crateVelocities.values()].filter((v) => Math.hypot(v.x, v.y) > EPSILON);
-  const factor = PUSH_SPEED_BY_CRATE_COUNT[Math.min(moving.length, MAX_PUSHED_CRATES)];
+  // First pass finds how much weight actually moves, which sets how much the player slows.
+  // A crate's weight defaults to 1; anything carried adds to the weight once something moves.
+  const moving = [...run(velocity).crateVelocities]
+    .filter(([, v]) => Math.hypot(v.x, v.y) > EPSILON);
+  const weight = moving.reduce((sum, [crate]) => sum + (crate.weight ?? 1), 0) +
+    (moving.length ? carriedWeight : 0);
+  const factor = PUSH_SPEED_BY_CRATE_COUNT[Math.min(weight, MAX_PUSHED_CRATES)];
   const result = run({ x: velocity.x * factor, y: velocity.y * factor });
   const crateVelocities = new Map();
   for (const [crate, v] of result.crateVelocities) crateVelocities.set(crate.key, v);

@@ -1,12 +1,12 @@
 // ==========================================
 // FILE: ShelfFixture.js
 // ==========================================
-// A sales shelf: a grid (two cells per floor tile each way) where the player packs items
-// by their own w x h, optionally rotated. Unlike a Storage Fixture's shared pool, each
-// placement has its own capacity: the item's stackSize, capped by the shelf's stackDepth.
+// A sales shelf with per-placement quantities shared by stocking, customers, and saves.
+// Hands-on Budget Shelves hold one item kind per space, up to 20 box-size units.
+// Legacy shelves pack by item dimensions and cap stackSize by shelf stackDepth.
 // See also: InventoryPool.js (the storage API this class mirrors).
 import { database } from "../scenes/boot.js";
-import { getShelfSlotCapacity } from "./FixtureLayout.js";
+import { getShelfSlotCapacity, getShelfItemFootprint } from "./FixtureLayout.js";
 
 export class ShelfFixture {
   constructor(data) {
@@ -17,6 +17,7 @@ export class ShelfFixture {
     this.gridDimensions = data.gridDimensions; // map footprint in tiles, not the item grid
     this.displayGrid = data.displayGrid;
     this.stackDepth = data.stackDepth;
+    this.handsOn = data.handsOn === true;
     // [{ itemId, gx, gy, w, h, rotated, quantity }]; gx/gy = top-left cell.
     this.placements = data.placements || [];
   }
@@ -31,7 +32,7 @@ export class ShelfFixture {
   }
 
   getPlacementCapacity(placement) {
-    return getShelfSlotCapacity(this.stackDepth, database.getItem(placement.itemId));
+    return getShelfSlotCapacity(this.stackDepth, database.getItem(placement.itemId), this.handsOn);
   }
 
   occupiedCellsFor(placement) {
@@ -66,8 +67,8 @@ export class ShelfFixture {
   }
 
   /**
-   * Place a new stack already holding 1 unit the caller took from somewhere (e.g. the
-   * hovercart). Returns null if it doesn't fit or can't hold even 1 unit.
+   * Place a new stack already holding 1 unit the caller took from somewhere (e.g. a
+   * carried crate). Returns null if it doesn't fit or can't hold even 1 unit.
    * @param {string} itemId
    * @param {number} gx
    * @param {number} gy
@@ -80,8 +81,7 @@ export class ShelfFixture {
       throw new RangeError("Shelf placement quantity must be a non-negative integer.");
     }
 
-    const w = rotated ? item.dimensions.h : item.dimensions.w;
-    const h = rotated ? item.dimensions.w : item.dimensions.h;
+    const { w, h } = getShelfItemFootprint(item, rotated, this.handsOn);
     if (!this.canPlaceAt(gx, gy, w, h)) return null;
 
     const placement = { itemId, gx, gy, w, h, rotated, quantity };
@@ -107,8 +107,7 @@ export class ShelfFixture {
    */
   attachPlacement(placement, gx, gy, rotated) {
     const item = database.getItem(placement.itemId);
-    const w = rotated ? item.dimensions.h : item.dimensions.w;
-    const h = rotated ? item.dimensions.w : item.dimensions.h;
+    const { w, h } = getShelfItemFootprint(item, rotated, this.handsOn);
     if (!this.canPlaceAt(gx, gy, w, h)) return false;
 
     Object.assign(placement, { gx, gy, w, h, rotated });

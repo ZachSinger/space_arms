@@ -6,6 +6,7 @@
 // See also: FixtureRegistry.js (placed fixture instances).
 import fixtureTypes from "../../data/Fixtures.json" with { type: "json" };
 import { roundMoney } from "./Money.js";
+import { getSlotItemLimit } from "./ShelfSlotStocking.js";
 import { getReachableGridCells } from "./Pathfinder.js";
 import { PLAYER_BODY_HEIGHT, PLAYER_BODY_WIDTH, PLAYER_CHARACTER_HEIGHT, PLAYER_CHARACTER_WIDTH } from "./Player.js";
 import { CUSTOMER_COLLISION_HEIGHT, CUSTOMER_COLLISION_WIDTH } from "./CharacterDimensions.js";
@@ -47,7 +48,7 @@ export const STARTING_FIXTURES = [
 ];
 
 // Saves made before fixture types existed (entries without a `type`) are migrated by id.
-// Old saves used fixture_demo_01 for the original 3x2 shelf.
+// Their original 3x2 shelf (fixture_demo_01) was retired; ShopSave turns it into a refund.
 const LEGACY_FIXTURE_TYPES = {
   fixture_demo_01: "shelf_universal",
   storage_demo_01: "locker_single",
@@ -57,19 +58,27 @@ const LEGACY_FIXTURE_TYPES = {
 };
 
 /**
- * Units of an item that fit in one shelf slot: its stackSize, capped by the shelf's stackDepth.
+ * Hands-on spaces hold 20 box-size units; legacy slots cap stackSize by stackDepth.
  * @param {number} stackDepth
  * @param {object} item
+ * @param {boolean} handsOn
  */
-export function getShelfSlotCapacity(stackDepth, item) {
+export function getShelfSlotCapacity(stackDepth, item, handsOn = false) {
+  if (handsOn) return getSlotItemLimit(item?.boxSize);
   if (!item?.stackSize) return 0;
   return Math.min(item.stackSize, stackDepth);
 }
 
+export function getShelfItemFootprint(item, rotated = false, handsOn = false) {
+  if (handsOn) return { w: 1, h: 1 };
+  return rotated ? { w: item.dimensions.h, h: item.dimensions.w } : { ...item.dimensions };
+}
+
 export function getShelfDisplayGrid(fixtureType) {
   return {
-    w: fixtureType.w * SHELF_VISUAL_SLOTS_PER_TILE,
-    // Shelves whose art shows a different number of tiers say so with `shelfRows`.
+    // Shelves whose art shows a different number of sections or tiers say so with
+    // `shelfColumns` / `shelfRows`.
+    w: fixtureType.shelfColumns ?? fixtureType.w * SHELF_VISUAL_SLOTS_PER_TILE,
     h: fixtureType.shelfRows ?? fixtureType.h * SHELF_VISUAL_SLOTS_PER_TILE,
   };
 }

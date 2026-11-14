@@ -45,7 +45,7 @@ important. Taking a capture must not close menus or cancel a shelf move.
   complete arrival schedule, and next scheduled arrival.
 - Customer IDs stable within the current game scene (reset on a new game), factions, shopping lists,
   purchases, missing items, price tolerance, patience, paths, and queue order.
-- Raw fixture contents, including sold-out stacks; hovercart and Go-Backs stock;
+- Raw fixture contents, including sold-out stacks; Go-Backs stock;
   carried/floor crates; licenses, active factions, reputation, and store prices.
 - Market prices, room locks, player/camera positions, open windows, checkout
   cards, pending shelf/fixture placement, and save/error status.
@@ -75,14 +75,16 @@ Placement snaps to an 8-pixel grid. The overlay shows which of those positions
 are valid without changing collision rules.
 The existing `G` shortcut independently toggles the larger cyan floor-tile grid.
 
-When you stand close enough to open a locker, a small gauge appears near the top of its front; it
-disappears when you walk away. Green shows how much of its
-storage space is used; red shows the free space left. This counts the space used by the items, not the number of items. The gauge
-updates as stock changes and stays with the locker when it is moved. Carrying an
-item crate no longer shows the large information card at the top of the screen;
-instead a small two-row label just above the carried crate shows the item name, then
-the crate quantity and the locker spaces it fills, for example "x5 (10)" (the locker
-window shows used and total spaces in the same units). A fixture crate shows, for example, "SHELF fixture".
+When you stand close enough to open a locker, its item name and a small capacity gauge appear
+near the top of its front; both disappear when you walk away. Green shows how much of its
+box-size capacity is used; red shows the free capacity left. Each locker accepts only one item
+type and can be reused for a different item once empty. The gauge updates as stock changes and
+stays with the locker when it is moved.
+
+The bottom bar shows the picture, name, and count of the crate under the green arrow; the
+cards above its right end list the carried crates, top crate first. The arrow only marks a
+crate in front of the player, within reach; Ctrl moves it one crate down a floor stack.
+Debug Info lists each floor stack and the carried crates.
 
 Pressing Space can pick up a crate while you are pushing it by walking into it.
 A thrown crate keeps its launch speed until it is clear of the player, then slides

@@ -35,8 +35,8 @@ export class TitleScene extends Phaser.Scene {
         label: "SETTINGS",
         action: () => this.settingsPanel.open(),
       },
-      // Developer test harness for shelf stock visuals.
-      { label: "DEV", action: () => this.scene.start("scene-shelf-lab") },
+      // Developer test harness for crate handling.
+      { label: "DEV", action: () => this.scene.start("scene-crate-lab") },
     ];
 
     this.titleText = this.add

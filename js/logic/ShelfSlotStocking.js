@@ -1,7 +1,7 @@
 // ==========================================
 // FILE: ShelfSlotStocking.js
 // ==========================================
-// Rules for hands-on shelf stocking (prototype on the DEV screen). Each shelf space holds one
+// Shared rules for hands-on shelf stocking in the shop and DEV screen. Each shelf space holds one
 // kind of item and fills one item at a time. The player and customers always take the item
 // placed last. A crate also holds one kind; once emptied it can take any kind.
 

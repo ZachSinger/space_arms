@@ -18,6 +18,16 @@ test("walking straight into a crate pushes it straight ahead and slows the playe
   assert.ok(Math.abs(crate.y - playerVelocity.y) < 0.01);
 });
 
+test("a heavier crate and carried crates slow the player more", () => {
+  const { playerVelocity } = solve([{ ...crateAt("a", 100, 179), weight: 2 }]);
+  assert.ok(Math.abs(playerVelocity.y + 160 * PUSH_SPEED_BY_CRATE_COUNT[2]) < 0.01);
+  const carrying = solveCratePush({
+    player: PLAYER, velocity: UP, dt: 1 / 60, crates: [crateAt("a", 100, 179)],
+    isBlocked: () => false, carriedWeight: 2,
+  });
+  assert.ok(Math.abs(carrying.playerVelocity.y + 160 * PUSH_SPEED_BY_CRATE_COUNT[3]) < 0.01);
+});
+
 test("a crate slightly off-center is still pushed straight ahead", () => {
   const crate = solve([crateAt("a", 112, 179)]).crateVelocities.get("a");
   assert.ok(crate.y < 0);

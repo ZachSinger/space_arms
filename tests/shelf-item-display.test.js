@@ -5,6 +5,19 @@ import {
   getShelfItemTextureKey,
   ShelfItemDisplay,
 } from "../js/logic/ShelfItemDisplay.js";
+import { getBudgetShelfArt } from "../js/logic/BudgetShelfArt.js";
+
+test("every budget shelf size keeps the 3x4's item spaces, centered on wider-snapped art", () => {
+  const big = getBudgetShelfArt(3, 4);
+  assert.deepEqual(big.columns, [[28, 106], [114, 192], [200, 278], [286, 364]]);
+  assert.deepEqual(big.rows, [[48, 88], [92, 132], [136, 172]]);
+  const small = getBudgetShelfArt(2, 2);
+  assert.equal(small.width, 216);
+  assert.deepEqual(small.columns, [[30, 108], [116, 194]]);
+  assert.deepEqual(small.rows, [[92, 132], [136, 172]]);
+  assert.deepEqual(small.boardTops, [124, 164]);
+  assert.throws(() => getBudgetShelfArt(4, 4), /No Budget Shelf art/);
+});
 
 const budgetArea = { left: 28 / 384, right: 364 / 384, top: 48 / 192, bottom: 172 / 192 };
 

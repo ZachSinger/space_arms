@@ -144,7 +144,13 @@ export function createDebugSnapshot(scene, identifyCustomer, recentEvents, envir
       stock: fixture.stock,
       capacity: fixture.capacity,
     })),
-    crates: scene.restockCrates.map((crate) => crate.serialize()),
+    crates: scene.restockCrates.map((crate) => {
+      const above = scene.floorStacks?.get(crate) ?? [];
+      return above.length
+        ? { ...crate.serialize(), stack: above.map((stacked) => stacked.serializePayload()) }
+        : crate.serialize();
+    }),
+    carriedCrates: (scene.carriedCrates ?? []).map((crate) => crate.serializePayload()),
     carriedCrate: scene.carriedCrate ? {
       ...scene.carriedCrate.serializePayload(),
       sprite: spriteState(scene.carriedCrate.sprite),
@@ -159,8 +165,7 @@ export function createDebugSnapshot(scene, identifyCustomer, recentEvents, envir
           bounds: point({ x: win.element.offsetLeft, y: win.element.offsetTop }),
           width: win.element.offsetWidth, height: win.element.offsetHeight,
         })),
-      fixtureId: scene.fixtureWindow.fixture?.id ?? null,
-      pendingShelfPlacement: scene.fixtureWindow.pendingPlacement,
+      fixtureId: scene.shelfStockingWindow?.uiWindow.isOpen ? scene.shelfStockingWindow.fixture?.id ?? null : null,
       fixturePlacement: {
         active: scene.fixturePlacement.active,
         placement: scene.fixturePlacement.placement,

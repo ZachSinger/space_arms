@@ -368,7 +368,6 @@ export class Employee {
       destinationName: "locker",
     });
     this.scene.refreshLockerCapacityDisplay(storage);
-    this.scene.fixtureWindow?.refresh(storage);
     this.scene.playerState.notifyListeners();
     if (result.moved === 0) {
       this.returnCrateToPad();

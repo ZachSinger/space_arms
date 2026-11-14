@@ -411,7 +411,6 @@ test("a shift that earns multiple levels announces each implemented unlock", () 
   assert.equal(state.shopLevel, 4);
   assert.match(messages[0], /Shop Level 4 reached/);
   assert.match(messages[0], /Civilian Threads/);
-  assert.match(messages[0], /Expanded Fixture Supply/);
   assert.match(messages[0], /You can now have 1 employee hired at once \(Employee tab\)/);
 
   state.endDay(2);
@@ -453,9 +452,9 @@ test("a shift from Shop Level 6 to 30 announces all remaining reward types", () 
 
   assert.equal(state.shopLevel, 30);
   assert.match(messages[0], /You can now have 6 employees hired at once/);
-  assert.match(messages[0], /Premium Shelf Supply/);
+  assert.match(messages[0], /Expanded Storage Supply/);
   assert.match(messages[0], /Hazard & Medical Supply/);
-  assert.match(messages[0], /Armory Display Supply/);
+  assert.match(messages[0], /Secure Storage Supply/);
   assert.match(messages[0], /Sales-floor expansions available to buy/);
   assert.match(messages[0], /Backroom expansions available to buy/);
   assert.doesNotMatch(messages[0], /Some later level rewards are not in the game yet/);
@@ -479,8 +478,8 @@ test("level-up messages do not reannounce contracts or staff already owned in ol
   });
   state.addReputation(60);
   scene.endShift();
-  assert.match(messages[0], /Expanded Fixture Supply/);
-  assert.doesNotMatch(messages[0], /Civilian Threads|Staff unlocked/);
+  assert.match(messages[0], /Shop Level 4 reached/);
+  assert.doesNotMatch(messages[0], /Contracts unlocked|Civilian Threads|Staff unlocked/);
 });
 
 test("the actual hire action explains the level lock and allows hiring after the unlock", () => {
@@ -778,7 +777,7 @@ test("HUD Save button is wired, reflects availability, and removes its handler o
   assert.match(html, /id="hud-main-menu-btn"/);
   const elements = new Map();
   for (const id of [
-    "hud-credits", "hud-rep", "hud-shop-level", "hud-hovercart", "hud-shift-time", "hud-pause-btn",
+    "hud-credits", "hud-rep", "hud-shop-level", "hud-shift-time", "hud-pause-btn",
     "hud-store-toggle-btn", "hud-start-shift-btn", "hud-end-day-btn", "hud-save-btn", "hud-main-menu-btn",
     "persistent-hud",
   ]) {
@@ -806,7 +805,7 @@ test("HUD Save button is wired, reflects availability, and removes its handler o
   let mainMenuRequests = 0;
   const hud = new HUDController({
     subscribe(callback) {
-      callback({ credits: 436, globalReputation: 2, shopLevel: 1, hovercart: { usedCapacity: () => 0, capacity: 10 } });
+      callback({ credits: 436, globalReputation: 2, shopLevel: 1 });
     },
   }, {
     subscribe(callback) { callback({ started: false, isPaused: true, softClosed: false }); },
@@ -866,7 +865,7 @@ test("the register blocks only its counter, so the player can walk over its moni
   assert.equal(sprite.angle, 0);
 });
 
-test("the budget shelf art fills its floor tile in every direction", () => {
+test("the budget shelf art fills its footprint in every direction", () => {
   const scene = Object.create(GameScene.prototype);
   const tree = { remove() {}, insert() {} };
   const body = { world: { staticTree: tree }, position: { set() {} }, center: { set() {} } };
@@ -884,10 +883,11 @@ test("the budget shelf art fills its floor tile in every direction", () => {
   };
   for (let rotation = 0; rotation < 4; rotation++) {
     scene.orientFixtureSprite({ type: "shelf_budget_2x2", x: 100, y: 200, rotation, sprite });
-    assert.equal(sprite.displayWidth, 64);
-    assert.equal(sprite.displayHeight, 64);
+    const [width, height] = rotation % 2 === 0 ? [72, 64] : [64, 72];
+    assert.equal(sprite.displayWidth, width);
+    assert.equal(sprite.displayHeight, height);
     assert.equal(sprite.angle, 0);
-    assert.equal(body.width, 64);
-    assert.equal(body.height, 64);
+    assert.equal(body.width, width);
+    assert.equal(body.height, height);
   }
 });

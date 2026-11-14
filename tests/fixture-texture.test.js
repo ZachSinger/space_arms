@@ -20,9 +20,9 @@ for (const spec of Object.values(FIXTURE_TYPES).filter((entry) => entry.kind ===
   });
 }
 
-test("the budget shelf uses a facing-specific image while keeping a one-tile footprint", () => {
+test("the budget shelf uses a facing-specific image on a one-tile-deep footprint", () => {
   const spec = FIXTURE_TYPES.shelf_budget_2x2;
-  assert.deepEqual({ w: spec.w, h: spec.h }, { w: 1, h: 1 });
+  assert.deepEqual({ w: spec.w, h: spec.h }, { w: 1.125, h: 1 });
   assert.deepEqual(FIXTURE_FACINGS.map((facing) => spec.facingTextures[facing]), [
     "shelf_budget_2x2_down",
     "shelf_budget_2x2_left",
@@ -36,9 +36,11 @@ test("the budget shelf uses a facing-specific image while keeping a one-tile foo
 
 test("each budget shelf size has four registered facings and the right display grid", () => {
   const paths = new Map(tilesetManifest.map(({ key, path }) => [key, path]));
-  for (const columns of [2, 3, 4, 5, 6]) {
-    const spec = FIXTURE_TYPES[`shelf_budget_2x${columns}`];
-    assert.deepEqual(getShelfDisplayGrid(spec), { w: columns, h: columns === 4 ? 3 : 2 });
+  const types = ["2x2", "2x3", "2x4", "3x2", "3x3", "3x4"];
+  for (const size of types) {
+    const spec = FIXTURE_TYPES[`shelf_budget_${size}`];
+    const [levels, columns] = size.split("x").map(Number);
+    assert.deepEqual(getShelfDisplayGrid(spec), { w: columns, h: levels });
     for (const facing of FIXTURE_FACINGS) {
       const key = spec.facingTextures[facing];
       const path = paths.get(key);

@@ -7,7 +7,6 @@ import {
   SHOP_LEVEL_TIERS, getNextShopLevel, getStaffLimit, STAFF_LIMIT_LEVELS,
 } from "./ShopProgression.js";
 import { DELIVERY_FEE, LOADING_PAD_SPOTS } from "./SupplyOrder.js";
-import { HOVERCART_UPGRADES } from "./Hovercart.js";
 import { ZONES } from "./RoomLayout.js";
 import {
   EMERGENCY_LOAN_FEE_RATE,
@@ -63,10 +62,6 @@ export function getLevelRewards(licenses) {
   for (const level of STAFF_LIMIT_LEVELS) {
     const limit = getStaffLimit(level);
     add(level, `Staff limit: up to ${limit} employee${limit === 1 ? "" : "s"} hired at once`);
-  }
-  for (const upgrade of HOVERCART_UPGRADES) {
-    add(upgrade.requiredShopLevel,
-      `Hovercart upgrade to ${upgrade.capacity} spaces (${formatMoney(upgrade.price)})`);
   }
   for (const zone of ZONES) {
     if (!zone.requiredShopLevel) continue;
@@ -165,9 +160,6 @@ function orderingTopic() {
         "A bought fixture arrives as a crate on the Loading Pad, so it needs a free spot there.",
         "See <strong>Running the Store &gt; Placing Fixtures</strong> to set it up.",
       ])}`),
-    section("Equipment", `
-      <p>The <strong>Equipment</strong> tab sells hovercart upgrades, which let you carry more
-        items at once. Each upgrade needs a certain Store Level and must be bought in order.</p>`),
   ].join("");
 }
 
@@ -177,31 +169,40 @@ function stockingTopic() {
       ${list([
         "Crates wait on the Loading Pad until someone picks them up.",
         "Crate colors show the item group: gray for weapons, red for ammunition, blue for attachments, purple for clothing, green for armor, yellow for tools, and teal for survival supplies.",
-        `Press ${key("crate")} to pick up a crate. While carrying an item crate, press it again near another item crate to stack it on top. You can carry up to three; the newest crate is on top.`,
+        "A green arrow points at the crate you're facing that you can reach. The bar at the bottom of the screen shows what's in that crate, and cards above the bar's right side show the crates in your hands, top crate first.",
+        `Tap ${key("crate")} to pick up the crate the arrow points at. Hold ${key("crate")} to pick up that crate and every crate stacked on it. You can carry up to three crates; the newest one is on top.`,
+        `Press ${key("nextCrate")} to move the arrow one crate down a stack, so you can pick up a lower crate.`,
+        `Tap ${key("putDown")} to put your top crate down in front of you. Hold ${key("putDown")} to set everything you're carrying down as one stack.`,
+        `When the arrow points at a crate on the floor, ${key("putDown")} puts your crates on top of it instead: tap for one, hold for as many as fit. Stacks on the floor can be up to three crates high. Nothing can be stacked on a fixture crate or on the Loading Pad, and fixture crates are never stacked.`,
+        `While walking with no arrow showing, press ${key("crate")} to throw your top crate the way you're walking. Thrown crates that hit a customer cost reputation.`,
         "Carrying two crates slows you down; a third slows you down further. Your character faces the direction you move, and the crates stay straight.",
-        `Press ${key("interact")} at a locker or shelf to unload the top crate. Press ${key("unpack")} to move as much of the top crate as fits into your hovercart. Anything that doesn't fit stays in that crate.`,
-        `Press ${key("crate")} away from other crates to put down what you're carrying. A single crate is thrown if you're walking, but a stack is only set down. Thrown crates that hit a customer cost reputation.`,
-        "Walk into a crate on the floor to push it out of the way.",
+        `Press ${key("interact")} at a shelf to stock it by hand. At a locker, ${key("putDown")} empties crates into it and ${key("interact")} fills a crate from it (see <strong>Lockers</strong>).`,
+        "Walk into a crate on the floor to push it out of the way. A taller stack is harder to push, and so is any crate while you're carrying something. A three-crate stack won't move at all while you're carrying a crate.",
       ])}`),
     section("Shelves", `
       ${list([
         "Customers only buy from shelves.",
-        `Each shelf has a grid of spots. Press ${key("interact")} at a shelf to open it, then pick an item from your hovercart to give it a spot. ${key("rotate")} turns the item and ${key("cancel")} stops placing.`,
-        "Once an item has a spot on a shelf, you can unload crates of it straight onto that shelf.",
-        "Some items are too big for some shelves.",
-        "Shelf symbols show item categories and counts. Open the shelf to see the item names. A count of 0 means that item's spot is kept for restocking.",
+        `Press ${key("interact")} at a 2x2 through 2x4 or 3x2 through 3x4 Budget Shelf to see its front up close, whichever way it faces in the shop.`,
+        "Hold the left mouse button on a shelf space to place boxes one by one from your carried crates. Each space holds one kind of item. Small boxes fit twenty to a space; the largest fit one.",
+        "Point the mouse at a shelf space to see its item's picture, name, and how many are on it in the bar at the bottom of the screen.",
+        "A sold-out space keeps its item, and customers keep looking for that item there. Right-click a sold-out space to clear it so they stop.",
+        "Hold the right mouse button to take boxes back into an empty crate, or a crate of the same item with room left. You can work while carrying up to three crates; the highest matching crate is used.",
+        "The shop keeps running. Customers take boxes from the front first, including while you stock. Click an item's name card below the shelf to set its price in the Manager's Tablet.",
+        `Empty crates stay in your hands. Put them down to reuse them, or press ${key("interact")} beside the EMPTY CRATES bin to get a free one. You can add one to your stack until you carry three. Beside the bin, tap ${key("putDown")} to put your top empty crate back, or hold it to put back every empty crate on top of your stack.`,
       ])}`),
-    section("Lockers and the Hovercart", `
+    section("Lockers", `
       ${list([
-        "Lockers hold extra stock that isn't on the shelves yet.",
-        `Press ${key("interact")} at a locker to move items between it and your hovercart.`,
-        "Your hovercart carries items between lockers and shelves. The top bar shows how full it is.",
+        "Each locker holds one kind of item. Walk close to see its item name and how full it is. A basic locker holds 40 box-size units: 40 small boxes or 2 of the largest boxes.",
+        `Carrying a crate of items, tap ${key("putDown")} at a locker to empty your top crate into it. Hold ${key("putDown")} to keep emptying crates from the top of your stack until one doesn't fit. Emptied crates are put away for you; anything that doesn't fit stays in its crate.`,
+        `To take items out, carry an empty crate (or one holding the locker's item) and press ${key("interact")} at the locker. It fills the highest crate in your stack that can take them, as full as it will go.`,
+        "Empty crates come free from the EMPTY CRATES bin in the backroom.",
       ])}`),
     section("Go-Backs", `
       <p>When a customer gives up and leaves, the items they were holding go into the Go-Backs
         bin at the register. A yellow "!" above your character means something is waiting in it.
-        Press ${key("goBacks")} at the register and use TAKE to move them into your hovercart,
-        then put them back on a shelf. Nothing can be put into the bin.</p>`),
+        With empty hands, press ${key("goBacks")} at the register to pack them into crates. The crates are
+        set down near the register, stacked up to three high, without blocking the customer line. If there
+        isn't room for all of them, the rest stay in the bin. Nothing can be put into the bin.</p>`),
   ].join("");
 }
 
@@ -243,7 +244,7 @@ function moneyTopic() {
     section("Where Money Goes", `
       <p><strong>Money in:</strong> sales.</p>
       <p><strong>Money out:</strong> stock orders, delivery fees, fixtures, licenses, hiring,
-        wages, shop expansions, and hovercart upgrades.</p>
+        wages, and shop expansions.</p>
       <p>The <strong>Finances</strong> tab shows today's receipt as it happens, plus the last
         finished day.</p>`),
     section("Emergency Loan", `
@@ -357,9 +358,12 @@ function controlsTopic() {
   const rows = [
     ["Walk", "WASD or arrow keys", "Left stick or D-pad"],
     ["Dash (uses stamina)", "Hold Shift", "Hold B or a trigger"],
-    ["Use, open, or unload", "E", "A"],
-    ["Pick up, put down, or throw a crate", "Space", "X"],
-    ["Go-Backs bin (at the register)", "Q", "Y"],
+    ["Use or open; fill a crate at a locker", "E", "A"],
+    ["Pick up a crate (hold: the whole stack from the arrow up)", "Space", "X"],
+    ["Throw your top crate (while walking, no arrow)", "Space", "X"],
+    ["Put a crate down, or empty it into a locker (hold: your whole stack)", "Q", "Y"],
+    ["Move the green arrow one crate down", "Ctrl", "Right stick click"],
+    ["Pack the Go-Backs bin into crates (at the register, empty hands)", "Q", "Y"],
     ["Manager's Tablet", "I", "Back / View"],
     ["Pause the shift", "P", "Start, then PAUSE"],
     ["Zoom", "Page Up / Page Down", "LB / RB"],

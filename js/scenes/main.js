@@ -8,6 +8,7 @@ import { TitleScene } from "./title.js";
 import { GameScene } from "./game.js";
 import { BootScene } from "./boot.js";
 import { ShelfLabScene } from "./shelfLab.js";
+import { CrateLabScene } from "./crateLab.js";
 import { watchKeyboardAndMouse } from "../logic/InputDevice.js";
 
 // Touching the keyboard or mouse switches on-screen prompts back from controller buttons.
@@ -28,7 +29,7 @@ const config = {
       debug: false, // true only when tuning counter or wall hitboxes
     },
   },
-  scene: [BootScene, TitleScene, GameScene, ShelfLabScene],
+  scene: [BootScene, TitleScene, GameScene, ShelfLabScene, CrateLabScene],
 };
 
 // Exposed for devtools/debugging convenience (e.g. `window.__game.scene.getScene(...)`).

@@ -5,7 +5,7 @@ import { TILE_SIZE } from "../js/logic/RoomLayout.js";
 
 function shelf(quantities, capacity = 10) {
   return {
-    type: "shelf_universal", rotation: 0, x: 320, y: 320,
+    type: "shelf_budget_2x4", rotation: 0, x: 320, y: 320,
     placements: quantities.map((quantity) => ({ quantity })),
     getPlacementCapacity: () => capacity,
   };
@@ -34,13 +34,13 @@ test("the outline follows the shelf's turned footprint and disappears once resto
     strokeRect(x, y, width, height) { strokes.push({ color: this.color, x, y, width, height }); return this; },
   };
   const fixture = shelf([0]);
-  fixture.rotation = 1; // turned sideways: 2 tiles wide, 3 tall
+  fixture.rotation = 1; // turned sideways: 1 tile wide, 2 tall
   const highlight = new ShelfAttentionHighlight({ add: { graphics: () => graphics } }, fixture);
   highlight.update(0);
   assert.equal(graphics.visible, true);
   const inner = strokes.at(-1);
   assert.equal(inner.color, 0xef4444);
-  assert.deepEqual([inner.width, inner.height], [2 * TILE_SIZE + 4, 3 * TILE_SIZE + 4]);
+  assert.deepEqual([inner.width, inner.height], [TILE_SIZE + 4, 2 * TILE_SIZE + 4]);
   fixture.placements[0].quantity = 10;
   highlight.update(100);
   assert.equal(graphics.visible, false);

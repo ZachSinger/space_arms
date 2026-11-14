@@ -43,7 +43,7 @@ export class InventoryRenderer {
     }).join("");
 
     return `
-      <div class="fixture-stock-meta">Storage includes lockers, the hovercart, unopened crates, and staff backpacks. Stock is on shelves; In Carts are with shoppers and return to Go-Backs if abandoned. Market is today's galactic average; set your own Price.</div>
+      <div class="fixture-stock-meta">Storage includes lockers, the Go-Backs bin, unopened crates, and staff backpacks. Stock is on shelves; In Carts are with shoppers and return to Go-Backs if abandoned. Market is today's galactic average; set your own Price.</div>
       <div class="inventory-column-header">
         <span></span>
         <span>ITEM</span>

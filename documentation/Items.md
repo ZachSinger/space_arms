@@ -1,5 +1,17 @@
 # Item Roster: The "3-Number Lock" Methodology
 
+## Hands-on shelf boxes
+
+`data/Items.json` now defines each item's `boxSize`, using the values agreed in
+`ShelfBoxSizeDraft.csv`: 1, 2, 3, 4, 6, 8, 10, 14, or 20. Both the Shelf Lab and live
+Budget Shelves read this field. Each space on the 2x2 through 2x4 and 3x2 through
+3x4 Budget Shelves holds one kind of item, with capacity `floor(20 / boxSize)`.
+Crates being filled from those shelves use the same 20-unit limit. Delivered crates
+may contain more; they can be emptied onto several shelf spaces.
+
+The dimensions and stack values listed below still apply to legacy shelves and
+other inventory systems. They do not determine the new Budget Shelves' capacity.
+
 ## Category 1: [Firearm] + [Rifle]
 
 **1. Aulin NT Assault Rifle**

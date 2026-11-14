@@ -68,7 +68,7 @@ function makeShelf(quantity = 0, capacity = 3, placementCount = 1) {
     quantity,
   }));
   return {
-    type: "shelf_starter_2x1",
+    type: "shelf_budget_2x4",
     standPoint: { x: 100, y: 100 },
     placements,
     getRemainingUnitsFor(itemId, entry) {

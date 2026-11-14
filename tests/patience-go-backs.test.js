@@ -142,12 +142,11 @@ test("queued customers do not lose patience while the store is temporarily close
   assert.equal(angry.length, 1);
 });
 
-test("the Go-Backs bin only empties into the hovercart, within its capacity", () => {
+test("returned items collect in the Go-Backs bin and pack into crates up to their capacity", () => {
   const transfers = [];
   const state = new PlayerState({
     emit: (event, payload) => transfers.push({ event, payload }),
   });
-  state.hovercart.capacity = 10;
   state.addToGoBacks([{ itemId: "big" }, { itemId: "big" }, { itemId: "big" }, { itemId: "amo_01" }]);
   assert.equal(state.goBacks.findStockEntry("big").quantity, 3);
   assert.deepEqual(transfers.slice(0, 2), [
@@ -171,19 +170,29 @@ test("the Go-Backs bin only empties into the hovercart, within its capacity", ()
     },
   ]);
 
-  assert.equal(state.loadGoBacksItem("big"), true);
+  const crate = (limit) => ({
+    itemId: null, quantity: 0,
+    getRemainingUnitsFor(itemId) {
+      return this.quantity > 0 && this.itemId !== itemId ? 0 : limit - this.quantity;
+    },
+    add(itemId, quantity) { this.itemId = itemId; this.quantity += quantity; return quantity; },
+  });
+  const first = crate(2);
+  assert.equal(state.packGoBacksIntoCrate("big", first), 2);
   assert.deepEqual(transfers[2], {
     event: GAME_EVENTS.INVENTORY_TRANSFERRED,
-    payload: { itemId: "big", quantity: 1, source: "go-backs", destination: "hovercart" },
+    payload: { itemId: "big", quantity: 2, source: "go-backs", destination: "crate" },
   });
-  assert.equal(state.loadGoBacksItem("big"), true);
-  assert.equal(state.loadGoBacksItem("big"), false); // 8 of 10 slots used
+  assert.equal(state.packGoBacksIntoCrate("big", first), 0, "a full crate takes nothing");
+  assert.equal(state.packGoBacksIntoCrate("amo_01", first), 0, "a crate holds one item type");
   assert.equal(state.goBacks.findStockEntry("big").quantity, 1);
-  assert.equal(state.loadGoBacksItem("amo_01"), true);
+  const second = crate(2);
+  assert.equal(state.packGoBacksIntoCrate("amo_01", second), 1);
   assert.equal(state.goBacks.findStockEntry("amo_01"), null);
-  assert.equal(state.loadGoBacksItem("amo_01"), false);
-  assert.equal(state.hovercart.findStockEntry("big").quantity, 2);
+  assert.equal(state.packGoBacksIntoCrate("amo_01", crate(2)), 0);
+  assert.deepEqual([first.itemId, first.quantity, second.itemId, second.quantity], ["big", 2, "amo_01", 1]);
 
+  assert.equal(Object.hasOwn(state.serialize(), "hovercart"), false);
   const restored = new PlayerState();
   restored.applySave(JSON.parse(JSON.stringify(state.serialize())));
   assert.deepEqual(restored.goBacks.stock, [{ itemId: "big", quantity: 1 }]);

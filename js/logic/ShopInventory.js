@@ -1,14 +1,13 @@
 // ==========================================
 // FILE: ShopInventory.js
 // ==========================================
-// Backroom storage fixtures: an InventoryPool with a place and footprint on the map.
-// Sales shelves use a different model (see ShelfFixture.js), since "any item fits while
-// there's shared room" suits a locker but not a real store shelf.
+// Backroom lockers each hold one item type, measured in box-size units, plus their map
+// footprint. Sales shelves use a different model (see ShelfFixture.js).
 import { InventoryPool } from "./InventoryPool.js";
 
 export class StorageFixture extends InventoryPool {
   constructor(data) {
-    super({ capacity: data.capacity, stock: data.stock });
+    super({ capacity: data.capacity, stock: data.stock, capacityUnit: "boxSize", singleItem: true });
     this.id = data.id;
     this.displayType = data.displayType;
     this.x = data.x;

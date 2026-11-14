@@ -1,15 +1,16 @@
 // ==========================================
 // FILE: InventoryPool.js
 // ==========================================
-// Capacity-pool stock model: a total capacity in slots (each unit costs its item's `slots`
-// value, not a flat 1) plus a flat list of stock. Any item fits while there's room.
-// See also: ShopInventory.js (storage fixtures), PlayerState.js (hovercart, go-backs).
+// Capacity-pool stock model: a total capacity measured by an item's configured size plus a
+// flat list of stock. See ShopInventory.js (lockers) and PlayerState.js (go-backs).
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
 export class InventoryPool {
-  constructor({ capacity, stock } = {}) {
+  constructor({ capacity, stock, capacityUnit = "slots", singleItem = false } = {}) {
     this.capacity = capacity;
     this.stock = stock || []; // [{ itemId, quantity }]
+    this.capacityUnit = capacityUnit;
+    this.singleItem = singleItem;
   }
 
   findStockEntry(itemId) {
@@ -23,7 +24,7 @@ export class InventoryPool {
   usedCapacity() {
     return this.stock.reduce((sum, entry) => {
       const item = database.getItem(entry.itemId);
-      return sum + entry.quantity * (item?.slots || 1);
+      return sum + entry.quantity * (item?.[this.capacityUnit] || 1);
     }, 0);
   }
 
@@ -33,8 +34,11 @@ export class InventoryPool {
 
   getRemainingUnitsFor(itemId) {
     const item = database.getItem(itemId);
-    if (!item || !item.slots) return 0;
-    return Math.floor(this.getRemainingCapacity() / item.slots);
+    const itemSize = item?.[this.capacityUnit];
+    if (!itemSize || !Number.isFinite(itemSize)) return 0;
+    const stocked = this.stock.find((entry) => entry.quantity > 0);
+    if (this.singleItem && stocked && stocked.itemId !== itemId) return 0;
+    return Math.floor(this.getRemainingCapacity() / itemSize);
   }
 
   // First stock entry with quantity left, or null if the pool is empty.
@@ -54,6 +58,9 @@ export class InventoryPool {
   takeItem(entry) {
     if (!entry || entry.quantity <= 0) return null;
     entry.quantity -= 1;
+    if (this.singleItem && entry.quantity === 0) {
+      this.stock = this.stock.filter((candidate) => candidate !== entry);
+    }
     return entry.itemId;
   }
 
@@ -64,6 +71,9 @@ export class InventoryPool {
    * @returns {number} units actually accepted
    */
   add(itemId, quantity) {
+    if (this.singleItem) {
+      this.stock = this.stock.filter((entry) => entry.quantity > 0);
+    }
     const accepted = Math.min(this.getRemainingUnitsFor(itemId), quantity);
     if (accepted <= 0) return 0;
 
@@ -87,6 +97,9 @@ export class InventoryPool {
 
     const removed = Math.min(entry.quantity, quantity);
     entry.quantity -= removed;
+    if (this.singleItem && entry.quantity === 0) {
+      this.stock = this.stock.filter((candidate) => candidate !== entry);
+    }
     return removed;
   }
 }

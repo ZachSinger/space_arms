@@ -29,7 +29,7 @@ function fixtureScene() {
     cameras: { main: { scrollX: 0, scrollY: 0, zoom: 1, width: 1280, height: 720 } },
     player: { sprite: { x: 40, y: 50 }, inputEnabled: true },
     playerState: {
-      serialize: () => ({ globalReputation: 5, hovercart: { stock: [] } }),
+      serialize: () => ({ globalReputation: 5, goBacks: [] }),
       activeFactions: new Set(["mercenaries"]),
     },
     market: { day: 1, serialize: () => ({ day: 1, prices: { ammo: 5 } }) },
@@ -42,7 +42,7 @@ function fixtureScene() {
     carriedCrate: null,
     room: { zones: [{ id: "sales_floor", locked: false }] },
     windowManager: { windows: new Map() },
-    fixtureWindow: { fixture, pendingPlacement: { itemId: "ammo", moving: { quantity: 3 } } },
+    shelfStockingWindow: { fixture, uiWindow: { isOpen: true } },
     fixturePlacement: { active: false },
     checkoutWindow: { mode: "checkout", total: 5, uiWindow: { element: { querySelectorAll: () => [] } } },
     saveStatus: "Saved", loadFailed: false,
@@ -86,7 +86,11 @@ test("debug snapshots detach raw runtime state without save validation or Phaser
   assert.deepEqual(snapshot.customers[0].shoppingPlan.shelfIds, ["shelf_1"]);
   assert.equal(snapshot.fixtures[0].placements[0].quantity, -1);
   assert.equal(snapshot.crates[0].velocityX, "NaN");
-  assert.equal(snapshot.ui.pendingShelfPlacement.moving.quantity, 3);
+  assert.equal(snapshot.ui.fixtureId, "shelf_1");
+  assert.equal(Object.hasOwn(snapshot.ui, "pendingShelfPlacement"), false);
+  scene.shelfStockingWindow.uiWindow.isOpen = false;
+  assert.equal(createDebugSnapshot(scene, () => 7, [], environment()).ui.fixtureId, null);
+  scene.shelfStockingWindow.uiWindow.isOpen = true;
   scene.fixtures.all()[0].placements[0].quantity = 10;
   scene.customers[0].cart[0].price = 99;
   assert.equal(snapshot.fixtures[0].placements[0].quantity, -1);

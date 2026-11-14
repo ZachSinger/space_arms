@@ -164,7 +164,6 @@ function createHarness() {
     listeners: [],
     hiredEmployees: [],
     credits: 1500,
-    hovercart: { capacity: 15, usedCapacity: () => 0 },
     subscribe(listener) { this.listeners.push(listener); listener(); },
     notifyListeners() { for (const listener of this.listeners) listener(); },
   };
@@ -296,14 +295,14 @@ test("contract signing enforces each shop level without spending credits early",
   tablet.handleSignContract("lic_start_apparel");
   assert.equal(state.credits, 1400);
   assert.equal(state.activeLicenses.has("lic_start_apparel"), true);
-  tablet.handleSignContract("lic_fixture_expanded");
+  tablet.handleSignContract("lic_fixture_storage_bank");
   assert.equal(state.credits, 1400);
-  assert.equal(state.activeLicenses.has("lic_fixture_expanded"), false);
+  assert.equal(state.activeLicenses.has("lic_fixture_storage_bank"), false);
 
-  state.shopLevel = 3;
-  tablet.handleSignContract("lic_fixture_expanded");
-  assert.equal(state.credits, 650);
-  assert.equal(state.activeLicenses.has("lic_fixture_expanded"), true);
+  state.shopLevel = 14;
+  tablet.handleSignContract("lic_fixture_storage_bank");
+  assert.equal(state.credits, 400);
+  assert.equal(state.activeLicenses.has("lic_fixture_storage_bank"), true);
   assert.deepEqual(entries.map((entry) => entry.category), ["licenses", "licenses"]);
 });
 
@@ -317,12 +316,10 @@ test("opening the tablet hides checkout and closing it resumes register work", (
   assert.deepEqual(calls, ["tablet-open", "suspend"]);
   tablet.fixturePurchaseNotice = "Bought a fixture.";
   tablet.fixtureSaleConfirmation = { name: "LOCKER" };
-  tablet.equipmentPurchaseNotice = "Hovercart upgraded.";
   tablet.uiWindow.onClose();
   assert.deepEqual(calls, ["tablet-open", "suspend", "resume"]);
   assert.equal(tablet.fixturePurchaseNotice, "");
   assert.equal(tablet.fixtureSaleConfirmation, null);
-  assert.equal(tablet.equipmentPurchaseNotice, "");
 });
 
 test("reopening the tablet refreshes cleared employee confirmations", () => {
@@ -471,7 +468,7 @@ test("lower funds reject additions but never prevent removing crates from the or
 test("fixture sale confirmations identify the chosen fixture or crate", () => {
   const tablet = Object.create(ManagerTablet.prototype);
   const locker = { id: "locker_2", type: "locker_single" };
-  const crate = { kind: "fixture", typeId: "shelf_starter_2x1" };
+  const crate = { kind: "fixture", typeId: "shelf_budget_2x4" };
   tablet.scene = {
     fixtures: { displayName: () => "LOCKER 2" },
     getFixtureSaleBlockReason: () => null,
@@ -482,7 +479,7 @@ test("fixture sale confirmations identify the chosen fixture or crate", () => {
   assert.equal(tablet.fixtureSaleConfirmation.name, "LOCKER 2");
   assert.equal(tablet.fixtureSaleConfirmation.value, 90);
   tablet.prepareFixtureSale("crate", crate);
-  assert.equal(tablet.fixtureSaleConfirmation.name, "COMPACT SHELF crate");
+  assert.equal(tablet.fixtureSaleConfirmation.name, "BUDGET SHELF 2x4 crate");
   assert.equal(tablet.fixtureSaleConfirmation.value, 150);
 });
 
