@@ -40,7 +40,7 @@ before(async () => {
       },
       load(id) {
         if (id === "\0customer-shopping-test-sprites") {
-          return "export const pickRandomCustomerCharacter = () => ({ factionId: null, textureKey: 'customer_test' }); export const addCharacterSprite = () => ({}); export const showCharacterFacing = () => {}; export const CHARACTER_HEAD_HEIGHT = 32;";
+          return "export const pickRandomCustomerCharacter = () => ({ factionId: null, textureKey: 'customer_test' }); export const addCharacterSprite = () => ({}); export const showCharacterFacing = () => {}; export const CHARACTER_HEAD_HEIGHT = 42; export const CHARACTER_ART_WIDTH = 46;";
         }
         if (id === "\0customer-shopping-test-database") {
           return "export const database = { getItem: (id) => ({ id, name: id, tags: [] }) };";
@@ -117,14 +117,14 @@ test("the public door remains a route through the wall while its blocker opens o
   assert.deepEqual(scene.findAreaPath(32, 96, 224, 96), []);
 });
 
-test("staff use their smaller collision body to fit passages shoppers cannot", () => {
+test("shoppers fit any passage wider than their feet, which the old whole-body box could not", () => {
   const scene = makeNavigationScene([
     { body: { x: 0, y: 0, width: 256, height: 80 } },
     { body: { x: 0, y: 120, width: 256, height: 136 } },
   ]);
 
-  assert.equal(scene.findAreaPath(32, 100, 224, 100), null);
-  assert.ok(scene.findAreaPath(32, 100, 224, 100, { width: 22, height: 20 }));
+  assert.ok(scene.findAreaPath(32, 100, 224, 100));
+  assert.equal(scene.findAreaPath(32, 100, 224, 100, { width: 46, height: 48 }), null);
 });
 
 test("characters route around the true edges of a fixture body", () => {
@@ -135,7 +135,7 @@ test("characters route around the true edges of a fixture body", () => {
 
   assert.ok(path);
   assert.ok(path.length > 0);
-  assert.ok(path.some(({ y }) => y <= 8 || y >= 152));
+  assert.ok(path.some(({ y }) => y <= 22 || y >= 138));
   let previous = { x: 32, y: 96 };
   for (const point of [...path, { x: 224, y: 96 }]) {
     assert.equal(scene.isStraightWalkClear(previous.x, previous.y, point.x, point.y), true);
@@ -197,6 +197,30 @@ test("customer movement uses the current physics position, not the sprite from t
   customer.moveToward(102, 100, () => { arrived = true; }, 1000 / 60, 0.0001);
   assert.equal(arrived, true);
   assert.deepEqual(velocity, { x: 0, y: 0 });
+});
+
+test("customers on a long walk across a big shop keep going; only a stuck one gives up", (t) => {
+  t.mock.method(console, "warn", () => {});
+  const walkFor = (state, ms, stepPx) => {
+    const customer = Object.create(Customer.prototype);
+    Object.assign(customer, {
+      state, sprite: { x: 0, y: 0 }, path: [], scene: {}, seekingTimer: 0, leavingTimer: 0,
+      gaveUp: false,
+      followPath() { this.sprite.x += stepPx; },
+      updateFacing() {},
+      updateReaction() {},
+      enterLeaving() { this.gaveUp = true; },
+      destroy() { this.isDestroyed = true; this.gaveUp = true; },
+    });
+    for (let elapsed = 0; elapsed < ms && !customer.gaveUp; elapsed += 100) customer.update(100);
+    return customer.gaveUp;
+  };
+  // 12px per 100ms is normal walking speed.
+  assert.equal(walkFor("SEEK_SHELF", 30000, 12), false);
+  assert.equal(walkFor("SEEK_SHELF", 15200, 0), true);
+  assert.equal(walkFor("LEAVING", 20000, 12), false);
+  assert.equal(walkFor("LEAVING", 6200, 0), true);
+  assert.equal(walkFor("SEEK_REGISTER", 61000, 12), true, "a trip that never ends still has a limit");
 });
 
 test("a customer hitting an obstacle reroutes immediately without resetting their destination or timeout", () => {
@@ -384,8 +408,8 @@ test("customer emoticons appear only for a new event and fade while following th
   assert.equal(customer.showReaction("price-too-high", "disappointed"), true);
   assert.equal(customer.showReaction("price-too-high", "disappointed"), false);
   assert.equal(customer.showReaction("left-angry", "angry"), false);
-  // Above the character's head: 100 - 32 head height - 12.
-  assert.deepEqual([reactionGraphics[0].x, reactionGraphics[0].y], [123, 56]);
+  // Above the character's head: 100 - 42 head height - 12.
+  assert.deepEqual([reactionGraphics[0].x, reactionGraphics[0].y], [123, 46]);
 
   customer.sprite.x = 130;
   customer.updateReaction(1500);

@@ -149,5 +149,35 @@ export function solveCratePush({ player, velocity, dt, crates, isBlocked, carrie
   const result = run({ x: velocity.x * factor, y: velocity.y * factor });
   const crateVelocities = new Map();
   for (const [crate, v] of result.crateVelocities) crateVelocities.set(crate.key, v);
-  return { playerVelocity: result.playerVelocity, crateVelocities };
+  const still = crates.filter((crate) => {
+    const v = result.crateVelocities.get(crate);
+    return !v || Math.hypot(v.x, v.y) <= EPSILON;
+  });
+  return { playerVelocity: keepOutOfCrates(player, result.playerVelocity, dt, still), crateVelocities };
+}
+
+// How far a rect sits inside a crate, measured along the shallower side (0 if apart).
+function depthInside(rect, crate) {
+  const x = Math.min(rect.left + rect.width, crate.left + crate.width) - Math.max(rect.left, crate.left);
+  const y = Math.min(rect.top + rect.height, crate.top + crate.height) - Math.max(rect.top, crate.top);
+  return x > 0 && y > 0 ? Math.min(x, y) : 0;
+}
+
+// Final guard, one axis at a time: no step may sink the player deeper into a crate that
+// isn't moving. Cutting a corner diagonally, then wiggling, used to slip him between
+// Loading Pad crates. Stepping out and sliding along an edge still work.
+function keepOutOfCrates(player, velocity, dt, crates) {
+  let rect = player;
+  const out = { x: 0, y: 0 };
+  for (const axis of ["x", "y"]) {
+    if (!velocity[axis]) continue;
+    const next = axis === "x"
+      ? { ...rect, left: rect.left + velocity.x * dt }
+      : { ...rect, top: rect.top + velocity.y * dt };
+    if (crates.every(({ rect: crate }) => depthInside(next, crate) <= depthInside(rect, crate) + EPSILON)) {
+      out[axis] = velocity[axis];
+      rect = next;
+    }
+  }
+  return out;
 }

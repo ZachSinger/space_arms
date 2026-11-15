@@ -35,8 +35,8 @@ export class TitleScene extends Phaser.Scene {
         label: "SETTINGS",
         action: () => this.settingsPanel.open(),
       },
-      // Developer test harness for crate handling.
-      { label: "DEV", action: () => this.scene.start("scene-crate-lab") },
+      // Developer test areas: the crate lab or the Shelf Test Room.
+      { label: "DEV", action: () => this.openDevChooser() },
     ];
 
     this.titleText = this.add
@@ -120,6 +120,27 @@ export class TitleScene extends Phaser.Scene {
       this.scene.start("scene-game");
     });
     this.newGameWindow.element.querySelector("[data-cancel-new-game]").addEventListener("click", () => this.newGameWindow.close());
+    this.devWindow = new UIWindow({
+      id: "dev-area-chooser", title: "DEV", width: "380px", height: "auto",
+      x: 80, y: 120, onClose: () => this.setMenuActive(true),
+      contentHTML: `
+        <p>Pick a test area. Nothing you do in either one is saved.</p>
+        <button class="action-btn" data-dev-crate-lab>CRATE LAB</button>
+        <button class="action-btn" data-dev-shelf-room>SHELF TEST ROOM</button>
+        <button class="action-btn" data-dev-cancel>CANCEL</button>
+      `,
+    }, this.windowManager);
+    const devButton = (selector, handler) =>
+      this.devWindow.element.querySelector(selector).addEventListener("click", handler);
+    devButton("[data-dev-crate-lab]", () => {
+      this.devWindow.close();
+      this.scene.start("scene-crate-lab");
+    });
+    devButton("[data-dev-shelf-room]", () => {
+      this.devWindow.close();
+      this.scene.start("scene-game", { sandbox: true });
+    });
+    devButton("[data-dev-cancel]", () => this.devWindow.close());
     this.padInput = new GamepadInput();
     this.uiNavigator = new UINavigator();
     this.events.once("shutdown", () => {
@@ -163,6 +184,12 @@ export class TitleScene extends Phaser.Scene {
     if (this.loadingSave) return;
     this.setMenuActive(false);
     this.newGameWindow.openWindow();
+  }
+
+  openDevChooser() {
+    if (this.loadingSave) return;
+    this.setMenuActive(false);
+    this.devWindow.openWindow();
   }
 
   // Load the save and start the game with it; any failure stays on the title with a message.

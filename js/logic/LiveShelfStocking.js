@@ -1,8 +1,9 @@
 // Transfers one real item, selecting the highest compatible crate in the carried stack.
+// When stocking, the player's chosen crate (preferred) goes first if it can be used here.
 // A sold-out space keeps its item until the player clears it, so it only takes that item.
 import { transferItems } from "./InventoryTransfer.js";
 
-export function moveShelfCrateItem(shelf, crates, gx, gy, pull, eventBus = null) {
+export function moveShelfCrateItem(shelf, crates, gx, gy, pull, eventBus = null, preferred = null) {
   if (!shelf.handsOn) throw new Error("This shelf does not support hands-on stocking.");
   let placement = shelf.placements.find((entry) => entry.gx === gx && entry.gy === gy);
   const candidates = [...crates].reverse().filter((crate) => crate.kind === "item");
@@ -12,6 +13,10 @@ export function moveShelfCrateItem(shelf, crates, gx, gy, pull, eventBus = null)
   if (!pull && placement?.quantity > 0 &&
     placement.quantity >= shelf.getPlacementCapacity(placement)) {
     return { moved: 0, message: "This shelf space is full." };
+  }
+  if (!pull && preferred && candidates.includes(preferred)) {
+    candidates.splice(candidates.indexOf(preferred), 1);
+    candidates.unshift(preferred);
   }
   const crate = candidates.find((candidate) => pull
     ? candidate.getRemainingUnitsFor(placement.itemId) > 0

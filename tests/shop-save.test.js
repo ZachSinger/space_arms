@@ -22,7 +22,7 @@ function snapshot() {
     },
     market: new Market(database.getAllItems(), () => 0.5).serialize(),
     fixtures: [
-      { id: "fixture_demo_01", type: "shelf_budget_2x2", gx: 16, gy: 6 },
+      { id: "fixture_demo_01", type: "shelf_budget_2x2", gx: 16, gy: 3 },
       ...STARTING_FIXTURES,
     ].map(({ id, type, gx, gy }) => ({
       id, type, gx, gy,
@@ -381,31 +381,6 @@ test("older saves keep the third starting locker and its contents", () => {
   });
 });
 
-test("old multi-item lockers migrate to one item type and send overflow to Go-Backs", () => {
-  const data = snapshot();
-  data.layoutVersion = 5;
-  const lockers = data.fixtures.filter((fixture) => getFixtureType(fixture.type).kind === "storage");
-  lockers[0].stock = [
-    { itemId: "amo_01", quantity: 5 },
-    { itemId: "wpn_hvy_01", quantity: 1 },
-  ];
-  lockers[1].stock = [{ itemId: "wpn_hvy_01", quantity: 3 }];
-
-  const migrated = validateShopSave(data, database);
-  assert.equal(migrated.layoutVersion, SHOP_LAYOUT_VERSION);
-  const migratedLockers = migrated.fixtures.filter((fixture) =>
-    getFixtureType(fixture.type).kind === "storage");
-  assert.deepEqual(migratedLockers.map((locker) => locker.stock), [
-    [{ itemId: "amo_01", quantity: 5 }],
-    [{ itemId: "wpn_hvy_01", quantity: 2 }],
-  ]);
-  assert.deepEqual(
-    migrated.playerState.goBacks.find((entry) => entry.itemId === "wpn_hvy_01"),
-    { itemId: "wpn_hvy_01", quantity: 2 },
-  );
-  assert.deepEqual(validateShopSave(migrated, database), migrated);
-});
-
 test("new saves reject mixed-item lockers and box-size overflow", () => {
   const data = snapshot();
   const locker = data.fixtures.find((fixture) => getFixtureType(fixture.type).kind === "storage");
@@ -426,7 +401,7 @@ test("saves using the old detached backroom explain that a new game is required"
     else Object.assign(entry, { gx: entry.gx - 7, gy: entry.gy - 1 });
   }
   legacy.crates[0].y = 640;
-  assert.throws(() => validateShopSave(legacy, database), /old backroom size.*Start a new game/);
+  assert.throws(() => validateShopSave(legacy, database), /old shop layout.*Start a new game/);
   assert.equal(legacy.crates[0].y, 640, "the save being loaded is not changed");
 });
 
@@ -438,11 +413,10 @@ test("older room layout versions explain that a new game is required", () => {
   }
   old.crates[0].x = 400;
   old.crates[0].y = 300;
-  assert.throws(() => validateShopSave(old, database), /old backroom size.*Start a new game/);
-  old.layoutVersion = 3;
-  assert.throws(() => validateShopSave(old, database), /old backroom size.*Start a new game/);
-  old.layoutVersion = 4;
-  assert.throws(() => validateShopSave(old, database), /old backroom size.*Start a new game/);
+  for (const version of [2, 3, 4, 5, 6, 7, 8]) {
+    old.layoutVersion = version;
+    assert.throws(() => validateShopSave(old, database), /old shop layout.*Start a new game/);
+  }
   assert.equal(old.crates[0].x, 400, "the save being loaded is not changed");
 });
 

@@ -1,17 +1,13 @@
 // ==========================================
 // FILE: ShelfAttentionHighlight.js
 // ==========================================
-// A pulsing outline around a shop-floor shelf that needs restocking. It follows the shelf's
-// footprint, so it works in every facing. Red and fast: something on it is sold out.
-// Orange and slower: something is below half full (same rule as the Supply tab's "running low").
-// Shelves that are fine, or empty because nothing was assigned yet, show nothing.
+// A pulsing outline around a shop-floor shelf that holds an item the player is carrying, so
+// the player can see where their crates go. Sold-out spaces count: they're saved for that item.
+// It follows the shelf's footprint, so it works in every facing.
 import { TILE_SIZE } from "./RoomLayout.js";
-import { fixtureFootprint } from "./FixtureLayout.js";
+import { fixtureArtInset, fixtureFootprint } from "./FixtureLayout.js";
 
-export const SHELF_ATTENTION = Object.freeze({
-  out: Object.freeze({ color: 0xef4444, periodMs: 500 }),
-  low: Object.freeze({ color: 0xf97316, periodMs: 1100 }),
-});
+export const SHELF_ATTENTION = Object.freeze({ color: 0x4ade80, periodMs: 700 });
 
 // How far the outline grows past the shelf's edge at the top of each pulse, in pixels.
 const PULSE_GROWTH = 4;
@@ -19,15 +15,13 @@ const GAP = 2;
 
 /**
  * @param {import("./ShelfFixture.js").ShelfFixture} shelf
- * @returns {"out" | "low" | null}
+ * @param {Array<{itemId: string|null, quantity: number}>} carriedCrates
+ * @returns {boolean} true if any space on the shelf is for an item in a carried crate
  */
-export function getShelfAttention(shelf) {
-  let level = null;
-  for (const placement of shelf.placements) {
-    if (placement.quantity <= 0) return "out";
-    if (placement.quantity * 2 < shelf.getPlacementCapacity(placement)) level = "low";
-  }
-  return level;
+export function shelfMatchesCarried(shelf, carriedCrates) {
+  const carried = new Set(carriedCrates.filter((crate) => crate.quantity > 0).map((crate) => crate.itemId));
+  if (carried.size === 0) return false;
+  return shelf.placements.some((placement) => carried.has(placement.itemId));
 }
 
 /**
@@ -43,7 +37,7 @@ export class ShelfAttentionHighlight {
   constructor(scene, fixture) {
     this.scene = scene;
     this.fixture = fixture;
-    this.level = null;
+    this.active = false;
     this.graphics = scene.add.graphics().setDepth(3).setVisible(false);
   }
 
@@ -53,22 +47,24 @@ export class ShelfAttentionHighlight {
   setAngle() {}
 
   sync() {
-    this.level = getShelfAttention(this.fixture);
-    if (!this.level) this.graphics.clear().setVisible(false);
+    this.active = shelfMatchesCarried(this.fixture, this.scene.getCarriedCrates?.() ?? []);
+    if (!this.active) this.graphics.clear().setVisible(false);
   }
 
   /** @param {number} timeMs - scene time */
   update(timeMs) {
     this.sync();
-    if (!this.level) return;
-    const { color, periodMs } = SHELF_ATTENTION[this.level];
+    if (!this.active) return;
+    const { color, periodMs } = SHELF_ATTENTION;
     const pulse = pulseAmount(timeMs, periodMs);
     const grow = GAP + PULSE_GROWTH * pulse;
+    // Hug the visible shelf: its picture is centered on (x, y), minus the see-through margin.
     const { w, h } = fixtureFootprint(this.fixture);
-    const x = this.fixture.x - w * TILE_SIZE / 2 - grow;
-    const y = this.fixture.y - h * TILE_SIZE / 2 - grow;
-    const width = w * TILE_SIZE + grow * 2;
-    const height = h * TILE_SIZE + grow * 2;
+    const inset = fixtureArtInset(this.fixture);
+    const x = this.fixture.x + (inset.left - w / 2) * TILE_SIZE - grow;
+    const y = this.fixture.y + (inset.top - h / 2) * TILE_SIZE - grow;
+    const width = (w - inset.left - inset.right) * TILE_SIZE + grow * 2;
+    const height = (h - inset.top - inset.bottom) * TILE_SIZE + grow * 2;
     this.graphics.clear().setVisible(true)
       .lineStyle(6, color, 0.25 + 0.2 * pulse).strokeRect(x - 2, y - 2, width + 4, height + 4)
       .lineStyle(2, color, 0.75 + 0.25 * pulse).strokeRect(x, y, width, height);

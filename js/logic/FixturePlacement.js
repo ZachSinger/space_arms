@@ -7,7 +7,7 @@
 import { UIWindow } from "./UIWindow.js";
 import { TILE_SIZE } from "./RoomLayout.js";
 import {
-  getFixtureType, fixtureAccessCells, fixtureAtWorldPoint, fixtureFootprint, fixtureFrontClearance, FIXTURE_SNAP_STEP, snapFixturePosition,
+  getFixtureType, fixtureAccessCells, fixtureAtWorldPoint, fixtureBounds, fixtureFootprint, fixtureFrontClearance, FIXTURE_SNAP_STEP, snapFixturePosition,
 } from "./FixtureLayout.js";
 import { getFixtureTexture, hasFacingTextures } from "./FixtureTexture.js";
 import { PAD } from "./GamepadInput.js";
@@ -20,16 +20,18 @@ const INVALID_COLOR = 0xef4444;
 const STANDING_COLOR = 0x38bdf8;
 
 /**
- * Outline a fixture's footprint and the standing space in front of it that must stay clear.
+ * Outline a fixture's collision box: its body box and its projection box.
  * @param {Phaser.GameObjects.Graphics} graphics
  * @param {{ type: string, gx: number, gy: number, rotation: number }} placement
  * @param {number} color - footprint color
  * @param {number} alpha - line opacity; the footprint fill is fainter
  */
 function drawFixtureOutline(graphics, placement, color, alpha, showStandingSpace = true) {
-  const { w, h } = fixtureFootprint(placement);
-  const x = placement.gx * TILE_SIZE;
-  const y = placement.gy * TILE_SIZE;
+  const bounds = fixtureBounds(placement);
+  const x = bounds.left * TILE_SIZE;
+  const y = bounds.top * TILE_SIZE;
+  const w = bounds.right - bounds.left;
+  const h = bounds.bottom - bounds.top;
   graphics.fillStyle(color, 0.22 * alpha).lineStyle(2, color, alpha)
     .fillRect(x, y, w * TILE_SIZE, h * TILE_SIZE)
     .strokeRect(x, y, w * TILE_SIZE, h * TILE_SIZE);

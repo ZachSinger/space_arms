@@ -12,6 +12,30 @@ const licenses = JSON.parse(await readFile(
 ));
 const licenseById = new Map(licenses.map((license) => [license.id, license]));
 
+test("new shops can sign only the survival supply contract until Shop Level 2", () => {
+  const state = {
+    shopLevel: 1,
+    globalReputation: 0,
+    factionReputation: { scavengers: 0, mercenaries: 0, explorers: 0 },
+    credits: 1500,
+    activeLicenses: new Set(["lic_fixture_basics"]),
+  };
+  const contracts = licenses.map((data) => new SupplierLicense(data));
+  const available = contracts.filter((license) =>
+    !state.activeLicenses.has(license.id) && license.isUnlocked(state) && license.canAfford(state));
+  assert.deepEqual(available.map((license) => license.id), ["lic_start_rations"]);
+
+  const html = ContractRenderer.generateHTML(contracts, state);
+  assert.deepEqual([...html.matchAll(/data-license-id="([^"]+)"/g)].map((match) => match[1]),
+    ["lic_start_rations"]);
+
+  state.shopLevel = 2;
+  state.globalReputation = -1;
+  for (const id of ["lic_start_surplus", "lic_start_ammo"]) {
+    assert.equal(contracts.find((license) => license.id === id).isUnlocked(state), true, id);
+  }
+});
+
 test("level rewards unlock a supply contract at 2 and a fixture contract at 14", () => {
   const supply = new SupplierLicense(licenseById.get("lic_start_apparel"));
   const fixture = new SupplierLicense(licenseById.get("lic_fixture_storage_bank"));

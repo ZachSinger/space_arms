@@ -8,6 +8,23 @@ terminal. Leave both running while playing. Restart Electron after changes to
 Desktop and browser saves are separate; switching to desktop does not import the
 browser's saved game.
 
+## Shelf Test Room
+
+On the title screen, choose **DEV**, then **SHELF TEST ROOM**. It's a fresh shop with
+every floor expansion open, every contract signed, the top store level and a million
+credits. Nothing in it is ever saved, so build any shelf layout you like.
+
+The panel in the top-right corner:
+
+- **Send 1 customer / Send 10 customers** lines people up outside; they walk in as soon
+  as the shop has room (at most 6 inside at once).
+- **Fill every shelf** stocks every empty spot on every shelf with random items and
+  tops up the rest.
+- The register serves customers by itself, so tests never stall at checkout.
+- **Gave up** counts customers who couldn't reach a shelf, the register line or the
+  door. The list under it says where each one was headed and where they stood, so a
+  bad spot can be found on the map. In a good layout this should stay at 0.
+
 ## Capturing a session
 
 Click **Debug Info** in the top HUD at any point, including while paused or
@@ -62,6 +79,13 @@ the game window, so review them before sharing.
 
 ## Working with the assistant
 
+For fixtures only, **body box** means the box fitted to the visible fixture pixels.
+**Projection box** means the pixel-free area kept clear in front of the fixture, in
+the direction it faces. Together they make the fixture's **collision box**.
+Transparent padding around the fixture image is not part of its body box.
+The doorway's full visible width stays clear for one floor tile immediately in front
+of it; the glass door's clear area is narrower than the public double door's.
+
 Press `\` to enable or disable the translucent solid green placement overlay. It appears only
 while moving or placing a fixture and shows the floor that the fixture's body can
 cover in at least one valid position. Other fixtures show their solid footprints
@@ -69,6 +93,8 @@ without blue standing-area outlines; the fixture being placed still shows its ow
 The checks include its size, facing, standing space, other fixtures, walls,
 locked areas, player/crate bodies, and checkout access. The grid fills in as
 checks finish and updates when the fixture is turned or the available space changes.
+This optional coverage overlay uses two-pixel blocks; individual body-box outlines
+are not rounded to those blocks.
 Access checks use the character-sized standing area and its route, rather than treating
 every touched floor tile as completely blocked.
 Placement snaps to an 8-pixel grid. The overlay shows which of those positions

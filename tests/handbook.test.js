@@ -74,6 +74,6 @@ test("the handbook describes duplicate purchases and the new cash collection ges
   assert.match(html, /120 M-Scrips equal 1 credit/);
   assert.match(html, /1,000 M-Scrips/);
   assert.match(html, /travel Chit/);
-  assert.match(html, /2 to 4 digits/);
+  assert.match(html, /2 to 5 digits/);
   assert.match(html, /The sale completes when you enter the last digit correctly/);
 });

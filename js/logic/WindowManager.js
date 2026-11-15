@@ -22,6 +22,11 @@ export class WindowManager {
     return this.consumedEvents.has(event);
   }
 
+  hasOpenWindow() {
+    for (const win of this.windows.values()) if (win.isOpen) return true;
+    return false;
+  }
+
   registerWindow(uiWindowInstance) {
     this.windows.set(uiWindowInstance.id, uiWindowInstance);
   }
@@ -50,7 +55,7 @@ export class WindowManager {
         const activeWinEl = document.querySelector(".retro-window.active");
         if (activeWinEl) {
           const activeWinObj = this.getWindow(activeWinEl.id);
-          if (activeWinObj?.closable) {
+          if (activeWinObj?.closable && activeWinObj.isOpen) {
             // Consumed, so a window revealed by this close doesn't also react to it.
             this.consumedEvents.add(e);
             activeWinObj.close();

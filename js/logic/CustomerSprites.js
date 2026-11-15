@@ -14,12 +14,18 @@ const WALK_FRAME_RATE = 6;
 
 // Sheet pixels are drawn as 2x2 blocks; this keeps one block per 1.33 world px, same as the player.
 export const CHARACTER_DISPLAY_SIZE = 64;
-// Puts the old 46x48 collision box at the sprite's position despite the taller art canvas.
-export const CHARACTER_ORIGIN_Y = 0.625;
+// Puts the character's feet at the sprite's position: the feet-sized collision box sits in the
+// same spot within the art as the player's (4px above the art's bottom edge).
+export const CHARACTER_ORIGIN_Y = 50 / 64;
+// px from the middle of a character's art (torso) down to their feet (the sprite's position).
+export const CHARACTER_FEET_DROP = 10;
+// px, the size of a character's whole art figure, for placing things beside it.
+export const CHARACTER_ART_WIDTH = 46;
+export const CHARACTER_ART_HEIGHT = 48;
 // Pixels trimmed from each side of a character's physics body versus its planning size.
 export const CHARACTER_BODY_SLACK = 1;
 // px from the sprite's position up to the top of a typical character's head.
-export const CHARACTER_HEAD_HEIGHT = 32;
+export const CHARACTER_HEAD_HEIGHT = 42;
 
 // Sprite-name faction -> game faction id. Civilians and androids belong to no faction.
 const FACTION_IDS = Object.freeze({
@@ -65,7 +71,7 @@ export function standingFrame(facing) {
 }
 
 /**
- * Creates a customer/employee sprite whose collision box matches the old static art.
+ * Creates a customer/employee sprite whose collision box sits at its feet, centered on its position.
  * @returns {Phaser.GameObjects.Sprite}
  */
 export function addCharacterSprite(scene, x, y, textureKey, navWidth, navHeight) {

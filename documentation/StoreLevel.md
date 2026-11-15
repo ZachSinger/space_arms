@@ -18,8 +18,8 @@ refunded what they paid for them, and any stock on them goes to the Go-Backs bin
 
 | Level | Total store reputation | Unlock |
 | --- | --- | --- |
-| 1 | 0 | Starting shop; Basic Fixture Supply; Scrap-Yard Ballistics Contract; Basic Rations & Water; Standard Munitions Supplier |
-| 2 | 15 | Supply license: Civilian Threads |
+| 1 | 0 | Starting shop; Basic Fixture Supply; Basic Rations & Water |
+| 2 | 15 | Supply licenses: Civilian Threads; Scrap-Yard Ballistics Contract; Standard Munitions Supplier |
 | 3 | 35 | Supply license: Scrap-Yard Armor & Melee |
 | 4 | 60 | Supply license: Salvage & Repair Tools (Nautilus); Staff limit: 1 employee hired at once |
 | 5 | 90 | Supply license: Scrap-Yard Weapon Mods; Sales Floor Expansion West (buy for 4,000 credits) |

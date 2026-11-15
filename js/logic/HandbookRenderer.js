@@ -182,20 +182,23 @@ function stockingTopic() {
     section("Shelves", `
       ${list([
         "Customers only buy from shelves.",
+        "A thin cyan light marks the side of each Budget Shelf that customers shop from. It fades on and off once every three seconds.",
+        "While you carry a crate of items, every shelf in the shop that has a space for that item pulses with a green outline, even if that space is sold out.",
         `Press ${key("interact")} at a 2x2 through 2x4 or 3x2 through 3x4 Budget Shelf to see its front up close, whichever way it faces in the shop.`,
         "Hold the left mouse button on a shelf space to place boxes one by one from your carried crates. Each space holds one kind of item. Small boxes fit twenty to a space; the largest fit one.",
+        "Carrying more than one crate of items? While the shelf is open, press Q (Y on a controller) to pick which crate stocks next. That crate glows green in your crate list on the right side of the screen. It's used for empty spaces, and for spaces that hold its item.",
         "Shelf spaces show a picture of their item. A green border marks spaces that match an item in your crates, even when the space is sold out. Point the mouse at a space to see the item's name and how many are on it in the bar at the bottom of the screen.",
         "A sold-out space keeps its item, and customers keep looking for that item there. Until you clear it, only that item can be stocked there. Right-click a sold-out space to clear it, so customers stop looking there and you can stock something else.",
         "Hold the right mouse button to take boxes back into an empty crate, or a crate of the same item with room left. You can work while carrying up to three crates; the highest matching crate is used.",
         "The shop keeps running. Customers take boxes from the front first, including while you stock. Each stocked space has an orange price sticker on its top-right corner showing what customers pay for one; it turns grey and says SOLD OUT when the space is empty. Click a sticker to change that item's price: type a new price, or use -10%, +10%, or MARKET (today's market price). Press Esc to put the price box away.",
-        `Empty crates stay in your hands. Beside the EMPTY CRATES bin in the backroom or a trashcan on the sales floor, press ${key("interact")} to put all your held empty crates in it. Filled crates stay in your hands. Press ${key("interact")} with completely empty hands to take one free empty crate. ${key("putDown")} still puts crates on the floor; it does not put them in the bin or trashcan.`,
+        `Empty crates stay in your hands. Beside a trashcan on the sales floor, press ${key("interact")} to put all your held empty crates in it. Filled crates stay in your hands. Press ${key("interact")} with completely empty hands to take one free empty crate. ${key("putDown")} still puts crates on the floor; it does not put them in the trashcan.`,
       ])}`),
     section("Lockers", `
       ${list([
         "Each locker holds one kind of item. Walk close to see its item name and how full it is. A basic locker holds 40 box-size units: 40 small boxes or 2 of the largest boxes.",
         `Carrying a crate of items, tap ${key("putDown")} at a locker to empty your top crate into it. Hold ${key("putDown")} to keep emptying crates from the top of your stack until one doesn't fit. Emptied crates are put away for you; anything that doesn't fit stays in its crate.`,
         `To take items out, carry an empty crate (or one holding the locker's item) and press ${key("interact")} at the locker. It fills the highest crate in your stack that can take them, as full as it will go.`,
-        "Empty crates come free from the EMPTY CRATES bin in the backroom, or from any trashcan on the sales floor.",
+        "Empty crates come free from any trashcan on the sales floor.",
       ])}`),
     section("Go-Backs", `
       <p>When a customer gives up and leaves, the items they were holding go into the Go-Backs
@@ -222,9 +225,9 @@ function customersTopic() {
         `Walk behind the register and press ${key("interact")}.`,
         "Click each item to scan it, or hold the mouse button and move over several items. Only the scanned item slides across the red bar; the others keep moving at normal belt speed.",
         "<strong>Card:</strong> type the total on the keypad and press CONFIRM TOTAL. Backspace removes the last character; CLEAR erases the whole entry.",
-        "<strong>Cash:</strong> take the customer's cash, then give back their change from the drawer. Some customers pay the exact amount, so there's no change to give.",
+        "<strong>Cash:</strong> take the customer's cash, then give back their change from the drawer. The large amber CURRENT CHANGE amount is what you have counted out; CHANGE OWED is what the customer needs back. Some customers pay the exact amount, so there's no change to give.",
         "<strong>Scavengers:</strong> most pay in M-Scrips. 120 M-Scrips equal 1 credit; if the price doesn't convert to a whole M-Scrip, round the amount up. Their bills come in 1, 5, 10, 25, 50, 100, 500, and 1,000 M-Scrips. The sale still earns its listed price in credits, and any change is in M-Scrips.",
-        "<strong>Explorers:</strong> most pay with a travel Chit. The Chit shows its value and a code made of 2 to 4 digits, each from 1 to 4. Enter the code with the arrow keys or the on-screen buttons (up = 1, down = 2, left = 3, right = 4); on a controller, use the D-pad. A wrong direction resets the code. The sale completes when you enter the last digit correctly, and the Explorer takes the Chit back. No change is given.",
+        "<strong>Explorers:</strong> most pay with a travel Chit. The Chit shows its value and a code made of 2 to 5 digits, each from 1 to 4. Enter the code with the arrow keys or the on-screen buttons (up = 1, down = 2, left = 3, right = 4); on a controller, use the D-pad. A wrong direction resets the code. After three wrong directions in one sale, the Explorer gives up and leaves angry: you lose the sale and store reputation, and their items go to the Go-Backs bin. The sale completes when you enter the last digit correctly, and the Explorer takes the Chit back. No change is given.",
         "Release the mouse button after scanning. Start a new click or click-and-hold to collect the customer's cash.",
         `To step away, press ${key("interact")} again<span class="pad-only"> or B</span>. The sale waits for you exactly as you left it.`,
       ])}
@@ -265,6 +268,8 @@ function licensesTopic() {
         "<strong>Supply licenses</strong> decide which items you can order in the Supply tab.",
         "<strong>Fixture licenses</strong> decide which shelves and lockers you can buy in the Fixtures tab.",
       ])}
+      <p>A new shop starts with Basic Fixture Supply already signed. Its first available
+        supply contract is Basic Rations &amp; Water.</p>
       <p>Sign them in the <strong>Contracts</strong> tab. Each one costs credits once, and you
         keep it for good.</p>`),
     section("How to Unlock Them", `
@@ -365,7 +370,7 @@ function controlsTopic() {
     ["Move the green arrow one crate down", "Ctrl", "Right stick click"],
     ["Pack the Go-Backs bin into crates (at the register, empty hands)", "Q", "Y"],
     ["Manager's Tablet", "I", "Back / View"],
-    ["Pause the shift", "P", "Start, then PAUSE"],
+    ["Pause or resume the shift", "P or Esc (Esc closes an open window first)", "Start, then PAUSE"],
     ["Zoom", "Page Up / Page Down", "LB / RB"],
     ["Turn a fixture or shelf item", "R", "Y"],
     ["Cancel", "Esc or right-click", "B"],

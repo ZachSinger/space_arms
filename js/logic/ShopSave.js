@@ -32,8 +32,8 @@ function integer(value, minimum = Number.MIN_SAFE_INTEGER) {
   return Number.isSafeInteger(value) && value >= minimum;
 }
 
-// The backroom snaps to whole squares now that crates and the Loading Pad match the tile art.
-export const SHOP_LAYOUT_VERSION = 6;
+// Version 9 removes another two rows from the starting sales floor.
+export const SHOP_LAYOUT_VERSION = 9;
 
 // Equipment that was taken out of the game, with what the player paid for it. Older saves
 // get those credits back, and any stock that was on it goes to the Go-Backs bin.
@@ -131,6 +131,10 @@ function retireRemovedEquipment(data) {
  */
 export function validateShopSave(data, database) {
   requireSave(isRecord(data), "missing shop state.");
+  requireSave(data.layoutVersion === SHOP_LAYOUT_VERSION,
+    data.layoutVersion === undefined || Number.isSafeInteger(data.layoutVersion) && data.layoutVersion < SHOP_LAYOUT_VERSION
+      ? "this save uses the old shop layout. Start a new game."
+      : "unknown shop layout version.");
   requireSave(Array.isArray(data.fixtures) && data.fixtures.length > 0, "missing fixture layout.");
   data = retireRemovedEquipment({ ...data, fixtures: data.fixtures.map((raw) => {
     const entry = migrateFixtureEntry(raw);
@@ -138,10 +142,6 @@ export function validateShopSave(data, database) {
     return entry?.type === "shelf_budget_2x4" && entry.stockingVersion === undefined
       ? { ...entry, type: "shelf_budget_3x4" } : { ...entry };
   }) });
-  requireSave(data.layoutVersion === SHOP_LAYOUT_VERSION || data.layoutVersion === 5,
-    data.layoutVersion === undefined || [2, 3, 4].includes(data.layoutVersion)
-      ? "this save uses the old backroom size. Start a new game."
-      : "unknown shop layout version.");
   const items = database.getAllItems();
   const itemById = new Map(items.map((item) => [item.id, item]));
   const stockCapacity = (stock, capacity, capacityUnit = "slots", singleItem = false) => {
@@ -159,7 +159,7 @@ export function validateShopSave(data, database) {
     requireSave(!singleItem || itemTypes.size <= 1, "locker contains more than one item type.");
     requireSave(used <= capacity, "inventory exceeds its capacity.");
   };
-  let player = data.playerState;
+  const player = data.playerState;
   requireSave(isRecord(player), "missing player state.");
   requireSave(isMoney(player.credits) && integer(player.globalReputation) &&
     integer(player.customersTurnedAway, 0), "invalid credits or reputation.");
@@ -222,33 +222,6 @@ export function validateShopSave(data, database) {
   ), "invalid store price.");
   // Optional so saves from before the Go-Backs bin existed still load.
   if (player.goBacks !== undefined) stockCapacity(player.goBacks, Infinity);
-  if (data.layoutVersion === 5) {
-    const goBacks = new Map((player.goBacks ?? []).map(({ itemId, quantity }) => [itemId, quantity]));
-    const addToGoBacks = (itemId, quantity) => {
-      if (quantity <= 0) return;
-      goBacks.set(itemId, (goBacks.get(itemId) ?? 0) + quantity);
-    };
-    const fixtures = data.fixtures.map((entry) => {
-      const spec = getFixtureType(entry.type);
-      if (spec.kind !== "storage") return entry;
-      const oldCapacity = entry.type === "locker_single" ? 20 : spec.capacity;
-      stockCapacity(entry.stock, oldCapacity);
-      const stocked = entry.stock.filter((stockEntry) => stockEntry.quantity > 0);
-      const first = stocked[0];
-      if (!first) return { ...entry, stock: [] };
-      const item = itemById.get(first.itemId);
-      const kept = Math.min(first.quantity, Math.floor(spec.capacity / item.boxSize));
-      addToGoBacks(first.itemId, first.quantity - kept);
-      for (const extra of stocked.slice(1)) addToGoBacks(extra.itemId, extra.quantity);
-      return { ...entry, stock: kept ? [{ itemId: first.itemId, quantity: kept }] : [] };
-    });
-    player = {
-      ...player,
-      goBacks: [...goBacks].map(([itemId, quantity]) => ({ itemId, quantity })),
-    };
-    data = { ...data, fixtures, playerState: player, layoutVersion: SHOP_LAYOUT_VERSION };
-  }
-
   const market = data.market;
   requireSave(isRecord(market) && integer(market.day, 1) &&
     isRecord(market.prices) && isRecord(market.supplyRatios), "missing market state.");

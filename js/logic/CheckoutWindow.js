@@ -6,7 +6,7 @@
 // player types the total, then counts cash change from an unlimited placeholder drawer.
 
 import { UIWindow } from "./UIWindow.js";
-import { CheckoutRenderer, cashFaceValue } from "./CheckoutRenderer.js";
+import { CheckoutRenderer, cashFaceValue, renderCurrentChange } from "./CheckoutRenderer.js";
 import {
   CashPayment, creditCentsToScrips, formatCashAmount, splitCash,
 } from "./CashPayment.js";
@@ -27,14 +27,39 @@ const SCANNER_GAP = 12;
 const BELT_SPEED_PX_PER_S = 260;
 const SCAN_SLIDE_MS = 220;
 
-// UIWindow's x is plain px, so right-aligning a vw-wide window is computed here.
+// UIWindow's x is plain px, so right-aligning a vw-wide window is computed here. This is
+// only the fallback spot; the game normally opens the window beside the register.
 const CHECKOUT_WIDTH_VW = 44;
 const RIGHT_MARGIN_PX = 24;
+// Space (px) between the register (and the player behind it) and the window beside it.
+const REGISTER_GAP_PX = 16;
+const SCREEN_MARGIN_PX = 8;
 export const EXACT_PAYMENT_CHANCE = 0.25;
 export const CASH_PAYMENT_CHANCE = 0.5;
+// Wrong Explorer Chit keys allowed per order; this many and the customer leaves angry.
+export const CHIT_MISTAKES_TO_LOSE_SALE = 3;
 
 export function customerPaysCash(random = Math.random) {
   return random() < CASH_PAYMENT_CHANCE;
+}
+
+/**
+ * Where a window of this size goes beside the target: to its right if it fits, else to its
+ * left, else whichever side has more room. Vertically centered on the target. Rects are
+ * {left, top, right, bottom} in screen px.
+ * @returns {{ left: number, top: number, side: "left" | "right" }}
+ */
+export function placeBeside({ width, height }, target, viewport, gap = REGISTER_GAP_PX) {
+  const rightLeft = target.right + gap;
+  const leftLeft = target.left - gap - width;
+  let side;
+  if (rightLeft + width <= viewport.right) side = "right";
+  else if (leftLeft >= viewport.left) side = "left";
+  else side = viewport.right - target.right >= target.left - viewport.left ? "right" : "left";
+  const clamp = (value, min, max) => Math.max(min, Math.min(value, max));
+  const left = clamp(side === "right" ? rightLeft : leftLeft, viewport.left, viewport.right - width);
+  const top = clamp((target.top + target.bottom) / 2 - height / 2, viewport.top, viewport.bottom - height);
+  return { left: Math.round(Math.max(viewport.left, left)), top: Math.round(Math.max(viewport.top, top)), side };
 }
 
 function formatCheckoutTotal(total, currency = "credits") {
@@ -77,6 +102,10 @@ export class CheckoutWindow {
     this.paymentBuffer = "";
     this.total = 0;
     this.chitPayment = null;
+    // Set by the game: () => ({ target, viewport }) in screen px, where target covers the
+    // register and the player behind it. Without it the window stays at its fallback spot.
+    this.getRegisterScreenArea = null;
+    this.side = "right"; // which side of the register the window opened on
 
     // Global, so a drag-scan works even if it doesn't start on a card.
     this.handleMouseDown = (event) => {
@@ -149,7 +178,7 @@ export class CheckoutWindow {
     } else if (event.key === "Backspace") {
       event.preventDefault?.();
       this.backspaceBuffer?.();
-    } else if (event.key === "Delete" || event.key === "Escape") {
+    } else if (event.key === "Delete") {
       this.clearBuffer?.();
     } else if (event.key === "Enter") {
       event.preventDefault?.();
@@ -240,7 +269,9 @@ export class CheckoutWindow {
   resume() {
     if (this.mode !== "checkout") return;
     this.uiWindow.openWindow();
+    this.placeNearRegister();
     this.tenderOverlay?.classList.remove("hidden");
+    this.placeTenderPanel();
   }
 
   /**
@@ -256,16 +287,20 @@ export class CheckoutWindow {
    * @param {{ itemId: string, price: number }[]} cart - prices in credits
    * @param {() => void} onComplete - fired when payment and change are correct
    * @param {{ cash?: boolean, exact?: boolean, currency?: string, chitCode?: string,
-   *   paymentType?: string, onWrongChange?: () => void }} [options]
+   *   paymentType?: string, onWrongChange?: () => void, onChitFailed?: () => void }} [options]
    *   exact: the customer pays the exact cash amount; rolled here if not given
+   *   onChitFailed: the player pressed a wrong Chit key too many times; the sale is lost
    */
   openForCustomer(cart, onComplete, {
     cash = true, exact = null, currency = "credits", chitCode, paymentType, onWrongChange = null,
+    onChitFailed = null,
   } = {}) {
     this.mode = "checkout";
     this.cart = cart;
     this.onComplete = onComplete;
     this.onWrongChange = onWrongChange;
+    this.onChitFailed = onChitFailed;
+    this.chitMistakes = 0;
     this.paymentBuffer = "";
     this.paymentStage = "total";
     this.total = sumMoney(cart.map((entry) => entry.price));
@@ -282,6 +317,7 @@ export class CheckoutWindow {
       : null;
     this.chitPayment = this.paymentType === "chit" ? new ChitPayment(this.total, chitCode) : null;
     this.removeTenderOverlay();
+    this.setWidth("full");
 
     this.bodyElement.innerHTML = CheckoutRenderer.generateHTML(
       cart,
@@ -291,6 +327,7 @@ export class CheckoutWindow {
     );
     // Open first: the belt needs real laid-out dimensions to place the cards.
     this.uiWindow.openWindow();
+    this.placeNearRegister();
     this.loadBelt();
     this.bindEvents(cart);
   }
@@ -420,6 +457,7 @@ export class CheckoutWindow {
   beginPayment() {
     if (!this.cashPayment && !this.chitPayment) {
       this.bodyElement.querySelector("#checkout-payment").classList.remove("hidden");
+      this.setWidth("keypad");
       return;
     }
     const payment = this.cashPayment ?? this.chitPayment;
@@ -540,6 +578,7 @@ export class CheckoutWindow {
     this.bodyElement.querySelector(".checkout-payment-prompt").textContent = "UNLOCK THE EXPLORER CHIT";
     this.refreshChit();
     this.bodyElement.scrollTop = 0;
+    this.keepOnScreen();
   }
 
   enterChitDigit(digit) {
@@ -549,7 +588,15 @@ export class CheckoutWindow {
     this.refreshChit();
     if (result.restarted) {
       playErrorBuzz();
-      this.bodyElement.querySelector("#checkout-chit-feedback").textContent = "WRONG KEY. START OVER.";
+      this.chitMistakes = (this.chitMistakes ?? 0) + 1;
+      if (this.chitMistakes >= CHIT_MISTAKES_TO_LOSE_SALE) {
+        this.paymentStage = "lost";
+        this.onChitFailed?.();
+        return;
+      }
+      const left = CHIT_MISTAKES_TO_LOSE_SALE - this.chitMistakes;
+      this.bodyElement.querySelector("#checkout-chit-feedback").textContent =
+        `WRONG KEY. START OVER. ${left === 1 ? "ONE MORE MISTAKE" : `${left} MORE MISTAKES`} AND THE CUSTOMER LEAVES.`;
       return;
     }
     this.bodyElement.querySelector("#checkout-chit-feedback").textContent = "";
@@ -617,6 +664,21 @@ export class CheckoutWindow {
     overlay.classList.toggle("checkout-paused", Boolean(this.paused));
     document.body.appendChild(overlay);
     this.tenderOverlay = overlay;
+    this.placeTenderPanel();
+  }
+
+  // The customer's money appears over the register, kept fully on screen.
+  placeTenderPanel() {
+    const panel = this.tenderOverlay?.querySelector(".cash-tender-panel");
+    const area = this.getRegisterScreenArea?.();
+    if (!panel || !area || this.tenderOverlay.classList.contains("hidden") ||
+      typeof panel.getBoundingClientRect !== "function") return;
+    const { target, viewport } = area;
+    panel.classList.add("cash-tender-panel-placed");
+    const { width, height } = panel.getBoundingClientRect();
+    const clamp = (value, min, max) => Math.max(min, Math.min(value, max));
+    panel.style.left = `${Math.round(clamp((target.left + target.right - width) / 2, viewport.left, viewport.right - width))}px`;
+    panel.style.top = `${Math.round(clamp((target.top + target.bottom - height) / 2, viewport.top, viewport.bottom - height))}px`;
   }
 
   removeTenderOverlay() {
@@ -644,6 +706,8 @@ export class CheckoutWindow {
     this.bodyElement.querySelector("#checkout-total-value").innerHTML =
       `${formatCheckoutTotal(this.total, this.cashPayment.currency)} - <span class="checkout-paid">${formatCashAmount(this.cashPayment.tenderUnits, this.cashPayment.currency)}</span>`;
     this.bodyElement.querySelector("#checkout-payment").classList.remove("hidden");
+    this.bodyElement.querySelector("#checkout-payment").classList.add("counting-change");
+    this.setWidth("change");
     this.bodyElement.querySelector("#checkout-payment-display").classList.add("hidden");
     this.bodyElement.querySelector(".checkout-belt").classList.add("hidden");
     this.bodyElement.querySelector(".checkout-numpad").classList.add("hidden");
@@ -651,12 +715,69 @@ export class CheckoutWindow {
     this.bodyElement.querySelector("#checkout-cash").classList.remove("hidden");
     this.refreshCash();
     this.bodyElement.scrollTop = 0;
+    this.keepOnScreen();
+  }
+
+  // Only a real, visible window can be measured (tests use a bare stand-in).
+  canMeasure() {
+    const element = this.uiWindow.element;
+    return typeof element.getBoundingClientRect === "function" && !element.classList.contains("hidden");
+  }
+
+  moveWindowTo(left, top) {
+    const element = this.uiWindow.element;
+    element.style.left = `${left}px`;
+    element.style.top = `${top}px`;
+    // Remembered, so stepping away and back reopens it in the same spot.
+    this.uiWindow.screenX = left;
+    this.uiWindow.screenY = top;
+  }
+
+  // Open beside the register you're at, wherever it has been placed in the shop.
+  placeNearRegister() {
+    const area = this.getRegisterScreenArea?.();
+    if (!area || !this.canMeasure()) return;
+    const { width, height } = this.uiWindow.element.getBoundingClientRect();
+    const spot = placeBeside({ width, height }, area.target, area.viewport);
+    this.side = spot.side;
+    this.moveWindowTo(spot.left, spot.top);
+  }
+
+  // Taller stages (the keypad, the change drawer) slide the window up rather than off-screen.
+  keepOnScreen() {
+    const area = this.getRegisterScreenArea?.();
+    if (!area || !this.canMeasure()) return;
+    const rect = this.uiWindow.element.getBoundingClientRect();
+    const overflow = rect.bottom - area.viewport.bottom;
+    if (overflow > 0) this.moveWindowTo(rect.left, Math.max(area.viewport.top, rect.top - overflow));
+  }
+
+  // The keypad and change-counting stages use narrow windows on every screen size, so their
+  // amounts stay close together. The edge facing the register stays put.
+  // width: "full" (scanning), "keypad" (card total), or "change" (counting change).
+  setWidth(width) {
+    const element = this.uiWindow.element;
+    const classes = { keypad: "checkout-keypad", change: "checkout-narrow" };
+    if (Object.entries(classes).every(([mode, name]) => element.classList.contains(name) === (mode === width))) return;
+    const apply = () => {
+      for (const [mode, name] of Object.entries(classes)) element.classList[mode === width ? "add" : "remove"](name);
+    };
+    if (!this.canMeasure()) {
+      apply();
+      return;
+    }
+    const before = element.getBoundingClientRect();
+    apply();
+    const after = element.getBoundingClientRect();
+    const left = this.side === "left" ? before.right - after.width : before.left;
+    this.moveWindowTo(Math.round(left), before.top);
+    this.keepOnScreen();
   }
 
   refreshCash() {
     const cash = this.cashPayment;
-    this.bodyElement.querySelector("#checkout-change-selected").textContent =
-      formatCashAmount(cash.changeUnits, cash.currency);
+    this.bodyElement.querySelector("#checkout-change-selected").innerHTML =
+      renderCurrentChange(cash.changeUnits, cash.currency);
     this.bodyElement.querySelectorAll("[data-cash-count]").forEach((element) => {
       element.textContent = `${cash.change.get(Number(element.dataset.cashCount)) ?? 0} in change`;
     });

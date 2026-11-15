@@ -20,6 +20,9 @@ const BACKROOM_FLOOR_TILE = BACKROOM_TILES.floor;
 export const LOADING_PAD_WIDTH = 128;
 export const LOADING_PAD_HEIGHT = 128;
 const BACKROOM_GRID_WIDTH = LOADING_PAD_WIDTH / TILE_SIZE + 2;
+const STOREROOM_GRID_HEIGHT = 4;
+const LOADING_PAD_GRID_HEIGHT = LOADING_PAD_HEIGHT / TILE_SIZE + 1;
+const BACKROOM_GRID_HEIGHT = STOREROOM_GRID_HEIGHT + LOADING_PAD_GRID_HEIGHT;
 
 // Expansion costs are paid in credits; all expansions also require a shop level.
 // Sales-floor zones together fill the 34x13 ShopA map. Bought in order, each one keeps the
@@ -31,7 +34,7 @@ export const ZONES = [
     gridX: 0,
     gridY: BACKROOM_GRID_Y,
     gridW: BACKROOM_GRID_WIDTH,
-    gridH: 3,
+    gridH: STOREROOM_GRID_HEIGHT,
     locked: false,
     backroom: true,
     floorTile: BACKROOM_FLOOR_TILE,
@@ -41,9 +44,9 @@ export const ZONES = [
     name: "Loading Pad",
     // Directly below the Storeroom, open to it on the north. Ordered crates spawn here.
     gridX: 0,
-    gridY: BACKROOM_GRID_Y + 3,
+    gridY: BACKROOM_GRID_Y + STOREROOM_GRID_HEIGHT,
     gridW: BACKROOM_GRID_WIDTH,
-    gridH: 3,
+    gridH: LOADING_PAD_GRID_HEIGHT,
     locked: false,
     backroom: true,
     floorTile: BACKROOM_FLOOR_TILE,
@@ -55,7 +58,7 @@ export const ZONES = [
     gridX: BACKROOM_GRID_WIDTH,
     gridY: BACKROOM_GRID_Y,
     gridW: 2,
-    gridH: 6,
+    gridH: BACKROOM_GRID_HEIGHT,
     locked: true,
     backroom: true,
     floorTile: BACKROOM_FLOOR_TILE,
@@ -68,7 +71,7 @@ export const ZONES = [
     gridX: BACKROOM_GRID_WIDTH + 2,
     gridY: BACKROOM_GRID_Y,
     gridW: 2,
-    gridH: 6,
+    gridH: BACKROOM_GRID_HEIGHT,
     locked: true,
     backroom: true,
     floorTile: BACKROOM_FLOOR_TILE,
@@ -81,7 +84,7 @@ export const ZONES = [
     gridX: BACKROOM_GRID_WIDTH + 4,
     gridY: BACKROOM_GRID_Y,
     gridW: 2,
-    gridH: 6,
+    gridH: BACKROOM_GRID_HEIGHT,
     locked: true,
     backroom: true,
     floorTile: BACKROOM_FLOOR_TILE,
@@ -94,8 +97,8 @@ export const ZONES = [
     name: "Sales Floor",
     gridX: 12,
     gridY: 0,
-    gridW: 11,
-    gridH: 9,
+    gridW: 9,
+    gridH: 6,
     locked: false,
     salesFloor: true, // customer-facing: registers and shelves may only go in these zones
     floorTile: SHOP_FLOOR_TILE,
@@ -106,7 +109,7 @@ export const ZONES = [
     gridX: 6,
     gridY: 0,
     gridW: 6,
-    gridH: 9,
+    gridH: 6,
     locked: true,
     salesFloor: true,
     floorTile: SHOP_FLOOR_TILE,
@@ -116,10 +119,10 @@ export const ZONES = [
   {
     id: "expansion_a",
     name: "Sales Floor Expansion A",
-    gridX: 23,
+    gridX: 21,
     gridY: 0,
-    gridW: 6,
-    gridH: 9,
+    gridW: 8,
+    gridH: 6,
     locked: true,
     salesFloor: true,
     floorTile: SHOP_FLOOR_TILE,
@@ -131,9 +134,9 @@ export const ZONES = [
     id: "expansion_b",
     name: "Sales Floor Expansion B",
     gridX: 6,
-    gridY: 9,
+    gridY: 6,
     gridW: 23,
-    gridH: 4,
+    gridH: 7,
     locked: true,
     salesFloor: true,
     floorTile: SHOP_FLOOR_TILE,
@@ -194,9 +197,8 @@ export function getBackroomDoorCell() {
 }
 
 /**
- * The backroom's way back out: a glass door at the right end of the Storeroom's back wall
- * (the backroom's top-right when it's its starting size). Pressing E in front of it returns the
- * player to the Sales Floor, just inside the backroom door.
+ * The backroom's way back out: a glass door in the Storeroom's back wall.
+ * Pressing E in front of it returns the player to the Sales Floor, just inside the backroom door.
  * @returns {{ gx: number, gy: number }}
  */
 export function getBackroomExitCell() {
@@ -222,9 +224,9 @@ export function getBackroomInteriorBounds(zones = ZONES) {
 }
 
 export function getLoadingPadBounds() {
-  const storeroom = getZone("storeroom");
-  const left = (storeroom.gridX + 1) * TILE_SIZE;
-  const bottom = (BACKROOM_GRID_Y + 5) * TILE_SIZE;
+  const zone = getZone("loading_pad");
+  const left = (zone.gridX + 1) * TILE_SIZE;
+  const bottom = (zone.gridY + zone.gridH - 1) * TILE_SIZE;
   return { left, right: left + LOADING_PAD_WIDTH, top: bottom - LOADING_PAD_HEIGHT, bottom };
 }
 
@@ -260,6 +262,20 @@ export function getStoreDoorCell() {
 /** Every cell of the store's doorway (it's one cell wide). */
 export function getStoreDoorCells() {
   return [getStoreDoorCell()];
+}
+
+// The full doorway width stays clear for one floor tile in front of each north-wall door.
+// The glass door occupies the middle half of its tile; the public double door fills its tile.
+export function getDoorwayClearanceBounds() {
+  const doors = [
+    ...getStoreDoorCells().map((cell) => ({ ...cell, width: TILE_SIZE })),
+    ...[getBackroomDoorCell(), getBackroomExitCell()].map((cell) => ({ ...cell, width: TILE_SIZE / 2 })),
+  ];
+  return doors.map(({ gx, gy, width }) => {
+    const x = (gx + 0.5) * TILE_SIZE;
+    const top = (gy + 1) * TILE_SIZE;
+    return { left: x - width / 2, right: x + width / 2, top, bottom: top + TILE_SIZE };
+  });
 }
 
 export function getTotalGridSize() {

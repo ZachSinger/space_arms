@@ -15,6 +15,7 @@ let cacheDirectory;
 let CheckoutWindow;
 let CASH_PAYMENT_CHANCE;
 let customerPaysCash;
+let placeBeside;
 
 before(async () => {
   cacheDirectory = await mkdtemp(join(tmpdir(), "space-arms-cash-test-"));
@@ -43,7 +44,7 @@ before(async () => {
       },
     }],
   });
-  ({ CheckoutWindow, CASH_PAYMENT_CHANCE, customerPaysCash } =
+  ({ CheckoutWindow, CASH_PAYMENT_CHANCE, customerPaysCash, placeBeside } =
     await server.ssrLoadModule("/js/logic/CheckoutWindow.js"));
 });
 
@@ -224,6 +225,8 @@ test("cash customers hand over money once scanning ends, with no total to key in
   assert.equal(h.elements.get(".checkout-numpad").classList.contains("hidden"), true);
   assert.equal(keypadPanel.classList.contains("hidden"), false);
   assert.equal(h.elements.get("#checkout-cash").classList.contains("hidden"), false);
+  assert.equal(keypadPanel.classList.contains("counting-change"), true);
+  assert.equal(h.checkout.uiWindow.element.classList.contains("checkout-narrow"), true);
   assert.equal(h.elements.get("#checkout-total-value").innerHTML,
     '1.23 credits - <span class="checkout-paid">5 credits</span>');
 });
@@ -257,9 +260,11 @@ test("drawer clicks and right-clicks adjust change, and Space rejects mistakes u
   h.checkout.startTakingPayment();
   h.takeAll();
   h.button.listeners.get("click")();
+  assert.equal(h.elements.get("#checkout-change-selected").innerHTML, "0.01 <small>credits</small>");
   let prevented = 0;
   h.button.listeners.get("contextmenu")({ preventDefault: () => { prevented += 1; } });
   assert.equal(h.checkout.cashPayment.changeUnits, 0);
+  assert.equal(h.elements.get("#checkout-change-selected").innerHTML, "0 <small>credits</small>");
   const space = { key: " ", preventDefault: () => { prevented += 1; } };
   assert.equal(h.checkout.usesSpaceKey(), true);
   assert.ok(h.button.listeners.has("mousedown"));
@@ -350,12 +355,53 @@ test("Explorer Chit keyboard input resets mistakes and completes on the last rig
   assert.equal(prevented, 4);
 });
 
+test("a five-digit Chit stays open until the fifth direction is entered", () => {
+  const h = harness({ cash: false, chit: true });
+  h.checkout.chitPayment = new ChitPayment(1.23, "12341");
+  h.checkout.startChitPayment();
+  assert.equal(h.elements.get("#checkout-chit-progress").textContent, "INPUT: _ _ _ _ _");
+  for (const direction of ["up", "down", "left", "right"]) h.checkout.enterChitDirection(direction);
+  assert.equal(h.completed(), 0);
+  assert.equal(h.checkout.paymentStage, "chit");
+  h.checkout.enterChitDirection("up");
+  assert.equal(h.completed(), 1);
+});
+
+test("a third wrong Explorer Chit key in one order loses the sale", () => {
+  const h = harness({ cash: false, chit: true });
+  let failed = 0;
+  h.checkout.onChitFailed = () => { failed += 1; };
+  h.checkout.startChitPayment();
+  h.checkout.enterChitDigit(2);
+  assert.match(h.elements.get("#checkout-chit-feedback").textContent, /2 MORE MISTAKES AND THE CUSTOMER LEAVES/);
+  h.checkout.enterChitDigit(3);
+  h.checkout.enterChitDigit(1);
+  h.checkout.enterChitDigit(2);
+  assert.match(h.elements.get("#checkout-chit-feedback").textContent, /ONE MORE MISTAKE AND THE CUSTOMER LEAVES/);
+  assert.equal(failed, 0, "starting over after a mistake is still allowed");
+  h.checkout.enterChitDigit(4);
+  assert.equal(failed, 1);
+  assert.equal(h.checkout.paymentStage, "lost");
+  h.checkout.enterChitDigit(3);
+  assert.equal(h.completed(), 0, "no more keys count once the sale is lost");
+});
+
 test("about half of customers pay cash, with a clear card keypad prompt", () => {
   assert.equal(CASH_PAYMENT_CHANCE, 0.5);
   assert.equal(customerPaysCash(() => 0.49), true);
   assert.equal(customerPaysCash(() => 0.5), false);
   const html = CheckoutRenderer.generateHTML([], {}, null);
   assert.match(html, /CARD PAYMENT - ENTER TOTAL/);
+});
+
+test("the register window opens beside the register, on whichever side has room", () => {
+  const viewport = { left: 8, top: 44, right: 1000, bottom: 700 };
+  const size = { width: 400, height: 300 };
+  const register = (left, right) => ({ left, right, top: 300, bottom: 400 });
+  assert.deepEqual(placeBeside(size, register(100, 200), viewport), { left: 216, top: 200, side: "right" });
+  assert.deepEqual(placeBeside(size, register(700, 800), viewport), { left: 284, top: 200, side: "left" });
+  // Near the bottom of the screen it slides up rather than off the edge.
+  assert.equal(placeBeside(size, { left: 100, right: 200, top: 650, bottom: 700 }, viewport).top, 400);
 });
 
 test("the change drawer shows bare numbers on bills and coins, with no row headings", () => {
@@ -387,22 +433,23 @@ test("Scavenger cash shows only M-Scrip bills and prices the sale in M-Scrips", 
   const html = CheckoutRenderer.generateHTML([], {}, payment);
   assert.match(html, /id="checkout-total-value">0 M-Scrips/);
   assert.match(html, /CHANGE OWED<\/span><strong>19 M-Scrips/);
-  assert.match(html, /id="checkout-change-selected">0 M-Scrips/);
+  assert.match(html, /id="checkout-change-selected">0 <small>M-Scrips<\/small>/);
   assert.doesNotMatch(html, /cash-coins|cash-coin|cent/);
   const faces = [...html.matchAll(/class="cash-art"><span>([^<]*)</g)].map((match) => match[1]);
   assert.deepEqual(faces, ["1", "5", "10", "25", "50", "100", "500", "1,000"]);
   assert.equal((html.match(/data-cash-units=/g) ?? []).length, 8);
 });
 
-test("Explorer Chit display shows its art, value, visible code, and four direction keys", async () => {
-  const html = CheckoutRenderer.generateHTML([], {}, null, new ChitPayment(100, "314"));
+test("Explorer Chit display fits a five-digit code and shows all five input spaces", async () => {
+  const html = CheckoutRenderer.generateHTML([], {}, null, new ChitPayment(100, "31421"));
   const css = await readFile(new URL("../styles/space_dealer_window.css", import.meta.url), "utf8");
   assert.match(css, /\.chit-card\s*\{[^}]*background-image:\s*url\("\.\.\/img\/Generated\/explorer_travel_chit\.png"\)/s);
   assert.match(css, /\.chit-card\s*\{[^}]*min-height:\s*calc\(240px \* var\(--text-scale\)\)/s);
   assert.match(html, /class="chit-screen"/);
   assert.match(html, /EXPLORER TRAVEL CHIT/);
   assert.match(html, /VALUE: <strong>100 credits/);
-  assert.match(html, /ACCESS CODE: <strong class="chit-code">3 1 4/);
+  assert.match(html, /ACCESS CODE: <strong class="chit-code">3 1 4 2 1/);
+  assert.match(html, /id="checkout-chit-progress">INPUT: _ _ _ _ _</);
   assert.match(html, /data-chit-digit="1" aria-label="Up, key 1"/);
   assert.match(html, /data-chit-digit="4" aria-label="Right, key 4"/);
   assert.doesNotMatch(html, /data-cash-units|cash-checkout/);

@@ -15,10 +15,10 @@ list). Store this as a set of active factions on the player state, and
 recalculate it whenever a license is acquired (and when a save loads). Inactive
 factions get no customers: nobody goes to a burger joint for motorcycle parts.
 
-Every MVP faction has at least one license with no faction-reputation
-requirement (Scavengers: Scrap-Yard Ballistics; Mercenaries: Standard
-Munitions; Explorers: Basic Rations & Water), so a faction can always be
-activated and cannot be permanently locked out.
+Every MVP faction has at least one license that needs no earned
+faction reputation: Basic Rations & Water for Explorers is available at Shop
+Level 1; Scrap-Yard Ballistics for Scavengers and Standard Munitions for
+Mercenaries become available at Shop Level 2.
 
 Store reputation sets the store's baseline traffic. Stock and employees adjust
 that total. The first-pass tuning values are in `CustomerPooling.js`.
@@ -82,8 +82,8 @@ increase to guarantee one visitor per active faction.
   shortage rules apply. Assigned, sold-out slots still define the store's
   assortment. Restocking eligible items lets the player recover through sales.
 - Faction-specific licenses may depend on faction reputation, but each faction
-  has a starting license that does not, so low reputation cannot deactivate a
-  faction or block it from being activated.
+  has an early license that needs no earned faction reputation. Level 2 opens
+  the initial Scavenger and Mercenary contracts.
 
 ## Scalers
 

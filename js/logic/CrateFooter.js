@@ -57,9 +57,11 @@ export class CrateFooter {
     this.cards.replaceChildren(...carried.map((crate) => this.createCard(crate)));
   }
 
-  createCard({ name, count, image }) {
+  createCard({ name, count, image, stockingNext }) {
     const card = this.doc.createElement("div");
     card.className = "holding-card";
+    // While a shelf window is open, the crate that will stock the next empty space glows.
+    if (stockingNext) card.classList.add("stocking-next");
     const picture = this.doc.createElement("img");
     picture.className = "holding-card-image";
     picture.alt = "";

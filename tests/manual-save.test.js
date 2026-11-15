@@ -10,6 +10,7 @@ import { SaveManager } from "../SaveManager.js";
 import { ControlMode } from "../js/logic/ControlMode.js";
 import { GAME_EVENTS } from "../js/logic/EventBus.js";
 import { SupplierLicense } from "../js/logic/Licenses.js";
+import { ContractRenderer } from "../js/logic/ContractRenderer.js";
 import { BACKROOM_UPGRADE_ORDER, EXPANSION_ORDER, ZONES } from "../js/logic/RoomLayout.js";
 
 let server;
@@ -463,6 +464,8 @@ test("a shift from Shop Level 6 to 30 announces all remaining reward types", () 
 test("level-up messages do not reannounce contracts or staff already owned in older saves", () => {
   const state = new PlayerState();
   state.activeLicenses.add("lic_start_apparel");
+  state.activeLicenses.add("lic_start_surplus");
+  state.activeLicenses.add("lic_start_ammo");
   state.hiredEmployees.push("tavi_stock_clerk");
   const scene = Object.create(GameScene.prototype);
   const messages = [];
@@ -480,6 +483,19 @@ test("level-up messages do not reannounce contracts or staff already owned in ol
   scene.endShift();
   assert.match(messages[0], /Shop Level 4 reached/);
   assert.doesNotMatch(messages[0], /Contracts unlocked|Civilian Threads|Staff unlocked/);
+});
+
+test("level 1 saves keep starting contracts signed before their level requirement changed", () => {
+  const state = new PlayerState();
+  for (const id of ["lic_start_surplus", "lic_start_ammo"]) state.signLicense(id);
+  const restored = PlayerState.deserialize(state.serialize());
+  const contracts = globalThis.__progressionTestLicenses.filter((license) =>
+    ["lic_start_surplus", "lic_start_ammo"].includes(license.id));
+  assert.equal(restored.shopLevel, 1);
+  assert.ok(contracts.every((license) => restored.activeLicenses.has(license.id)));
+  const html = ContractRenderer.generateHTML(contracts, restored);
+  assert.equal((html.match(/\[ PURCHASED \]/g) ?? []).length, 2);
+  assert.doesNotMatch(html, />LOCKED</);
 });
 
 test("the actual hire action explains the level lock and allows hiring after the unlock", () => {
@@ -683,20 +699,19 @@ test("a customer leaving while the tablet is open cannot leave a stale checkout 
   assert.equal(checkout.uiWindow.isOpen, true);
 });
 
-test("the Escape that closes the tablet does not also clear the amount typed at the register", () => {
+test("Escape never clears the amount typed at the register; Delete does", () => {
   const checkout = Object.create(CheckoutWindow.prototype);
-  const consumed = { key: "Escape" };
   const visible = { classList: { contains: () => false } };
   let cleared = 0;
   Object.assign(checkout, {
-    windowManager: { isConsumed: (event) => event === consumed },
+    windowManager: { isConsumed: () => false },
     uiWindow: { element: visible },
     bodyElement: { querySelector: () => visible },
     clearBuffer: () => { cleared += 1; },
   });
-  checkout.handleNumpadKeydown(consumed);
-  assert.equal(cleared, 0);
   checkout.handleNumpadKeydown({ key: "Escape" });
+  assert.equal(cleared, 0, "Esc pauses the shift instead");
+  checkout.handleNumpadKeydown({ key: "Delete" });
   assert.equal(cleared, 1);
 });
 
@@ -865,7 +880,7 @@ test("the register blocks only its counter, so the player can walk over its moni
   assert.equal(sprite.angle, 0);
 });
 
-test("the budget shelf art fills its footprint in every direction", () => {
+test("the budget shelf art fills its footprint in every direction; only the visible shelf is solid", () => {
   const scene = Object.create(GameScene.prototype);
   const tree = { remove() {}, insert() {} };
   const body = { world: { staticTree: tree }, position: { set() {} }, center: { set() {} } };
@@ -887,7 +902,9 @@ test("the budget shelf art fills its footprint in every direction", () => {
     assert.equal(sprite.displayWidth, width);
     assert.equal(sprite.displayHeight, height);
     assert.equal(sprite.angle, 0);
-    assert.equal(body.width, width);
-    assert.equal(body.height, height);
+    // The 2x2 art leaves an empty band at its top (facing up/down) or sides (facing left/right).
+    const [solidWidth, solidHeight] = rotation % 2 === 0 ? [68, 48] : [44, 70];
+    assert.equal(body.width, solidWidth);
+    assert.equal(body.height, solidHeight);
   }
 });

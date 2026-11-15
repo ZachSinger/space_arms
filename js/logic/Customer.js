@@ -7,6 +7,7 @@
 
 import {
   addCharacterSprite,
+  CHARACTER_ART_WIDTH,
   CHARACTER_HEAD_HEIGHT,
   pickRandomCustomerCharacter,
   showCharacterFacing,
@@ -23,9 +24,13 @@ const SPEED = 120; // px/s
 export const MIN_PRICE_TOLERANCE = 1.0;
 export const MAX_PRICE_TOLERANCE = 1.3;
 // Safety nets (ms) so an unreachable destination can never block the shift from ending.
-// Seeking is deliberately far longer than any legitimate walk across the map.
+// The seeking and leaving limits count only time spent stuck: any real step forward resets
+// them, so a long walk across a big shop never trips them. The walking limit caps the whole
+// trip in case a customer keeps moving without ever arriving.
 const LEAVING_TIMEOUT_MS = 6000;
 const SEEKING_TIMEOUT_MS = 15000;
+const MAX_WALK_MS = 60000;
+const PROGRESS_DISTANCE = 24; // px from the last checkpoint that counts as a step forward
 const CUSTOMER_REACTION_MS = 1800;
 const CUSTOMER_REACTION_FADE_MS = 300;
 const BIG_PURCHASE_ITEM_COUNT = 3;
@@ -63,8 +68,8 @@ export function getPatienceLevel(fraction) {
   return PATIENCE_LEVELS.findIndex(([minimum]) => fraction > minimum || minimum === 0);
 }
 
-// px, a customer's footprint: their collision box, and the size the register and line spacing
-// plan around. The walking art is drawn larger around it (CustomerSprites.js).
+// px, a customer's feet: their collision box, centered on their position. The walking art is
+// drawn larger, above it (CustomerSprites.js).
 export const SPRITE_DISPLAY_WIDTH = CUSTOMER_COLLISION_WIDTH;
 export const SPRITE_DISPLAY_HEIGHT = CUSTOMER_COLLISION_HEIGHT;
 
@@ -169,6 +174,7 @@ export class Customer {
     if (this.path === null) {
       this.sprite.body?.setVelocity(0, 0);
       this.scene.debugInfo?.recordCustomer("customer-path-unavailable", this);
+      this.scene.noteCustomerGaveUp?.(this, "found no way through");
       const onPathUnavailable = this.onPathUnavailable;
       this.path = [];
       this.onPathUnavailable = null;
@@ -191,8 +197,11 @@ export class Customer {
           break;
         }
         this.seekingTimer += delta;
-        if (this.seekingTimer > SEEKING_TIMEOUT_MS) {
+        if (this.madeWalkingProgress(delta)) this.seekingTimer = 0;
+        if (this.seekingTimer > SEEKING_TIMEOUT_MS || this.walkingMs > MAX_WALK_MS) {
           this.scene.debugInfo?.recordCustomer("customer-seeking-timeout", this);
+          this.scene.noteCustomerGaveUp?.(this, this.walkingMs > MAX_WALK_MS
+            ? "walked a full minute without arriving" : "stood stuck for 15 seconds");
           console.warn(
             `Customer gave up seeking a destination (state=${this.state}); abandoning and leaving.`,
           );
@@ -213,8 +222,10 @@ export class Customer {
         break;
       case "LEAVING":
         this.leavingTimer += delta;
-        if (this.leavingTimer > LEAVING_TIMEOUT_MS) {
+        if (this.madeWalkingProgress(delta)) this.leavingTimer = 0;
+        if (this.leavingTimer > LEAVING_TIMEOUT_MS || this.walkingMs > MAX_WALK_MS) {
           this.scene.debugInfo?.recordCustomer("customer-exit-timeout", this);
+          this.scene.noteCustomerGaveUp?.(this, "vanished after getting stuck on the way out");
           this.destroy(); // safety net -- see LEAVING_TIMEOUT_MS
           break;
         }
@@ -316,7 +327,7 @@ export class Customer {
       if (unreachableItemIds.length > 0) {
         this.scene.showFloatingText(
           this.sprite.x,
-          this.sprite.y - 40,
+          this.sprite.y - 50,
           `Can't reach:\n${getCustomerItemNames(this.scene, unreachableItemIds).join(", ")}`,
           "#f59e0b",
         );
@@ -467,7 +478,7 @@ export class Customer {
         if (this.factionId && !hint) throw new Error(`Unknown customer faction: ${this.factionId}`);
         this.scene.showFloatingText(
           this.sprite.x,
-          this.sprite.y - 40,
+          this.sprite.y - 50,
           hint,
           "#38bdf8",
         );
@@ -526,7 +537,7 @@ export class Customer {
       () => {
         this.scene.showFloatingText(
           this.sprite.x,
-          this.sprite.y - 100,
+          this.sprite.y - 110,
           "Can't reach the checkout!",
           "#f59e0b",
         );
@@ -666,7 +677,7 @@ export class Customer {
   positionReaction() {
     if (!this.reactionBubble) return;
     this.reactionBubble.setPosition(
-      this.sprite.x + SPRITE_DISPLAY_WIDTH / 2,
+      this.sprite.x + CHARACTER_ART_WIDTH / 2,
       this.sprite.y - CHARACTER_HEAD_HEIGHT - 12,
     );
     this.reactionBubble.setScale?.(this.scene.getPopupScale?.() ?? 1);
@@ -724,7 +735,7 @@ export class Customer {
     this.setDestination(exitTarget.x, exitTarget.y, () => this.destroy(), () => {
       this.scene.showFloatingText(
         this.sprite.x,
-        this.sprite.y - 100,
+        this.sprite.y - 110,
         "Can't reach the exit!",
         "#ef4444",
       );
@@ -745,12 +756,28 @@ export class Customer {
     this.destination = { x: targetX, y: targetY };
     this.onArriveAtDestination = onArrive;
     this.seekingTimer = 0;
+    this.walkingMs = 0;
+    this.progressCheckpoint = null;
     this.pathRetryMs = 0;
 
     const { x, y } = this.sprite.body?.center ?? this.sprite;
     const path = this.scene.findPath?.(x, y, targetX, targetY);
     this.path = path === null ? null : path || [];
     this.onPathUnavailable = onPathUnavailable;
+  }
+
+  /**
+   * Adds to the trip's walking time and reports whether the customer has moved far enough
+   * from their last checkpoint to count as a step forward (which moves the checkpoint).
+   * @param {number} delta - ms
+   */
+  madeWalkingProgress(delta) {
+    this.walkingMs = (this.walkingMs ?? 0) + delta;
+    const { x, y } = this.sprite.body?.center ?? this.sprite;
+    const checkpoint = this.progressCheckpoint;
+    if (checkpoint && Math.hypot(x - checkpoint.x, y - checkpoint.y) < PROGRESS_DISTANCE) return false;
+    this.progressCheckpoint = { x, y };
+    return checkpoint !== null && checkpoint !== undefined;
   }
 
   // Walks the path waypoint by waypoint, then directly to the exact destination (which may

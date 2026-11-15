@@ -44,7 +44,8 @@
     "description": "A handshake deal with local scavengers. Provides a steady stream of highly questionable, unregistered firearms.",
     "tier": 1,
     "baseCost": 0,
-    "reqReputation": 0,
+    "requiredShopLevel": 2,
+    "reqReputation": null,
     "reqFaction": "scavengers",
     "reqFactionRep": 0
   },
@@ -93,7 +94,8 @@
     "description": "A bulk contract for reliable, standard-caliber kinetic ammunition.",
     "tier": 1,
     "baseCost": 100,
-    "reqReputation": 0
+    "requiredShopLevel": 2,
+    "reqReputation": null
   },
   {
     "id": "lic_start_mods",

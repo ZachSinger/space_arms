@@ -7,7 +7,7 @@ notice something that needs doing but isn't being done right now.
 - [ ] Add a pre-shift meal, breakfast, or another preparation choice that boosts stamina,
       carrying ability, or another character stat for that shift only. Decide the choices,
       costs, and effects before building it.
-- [x] E at a trashcan or the EMPTY CRATES bin returns all held empty crates, keeping filled
+- [x] E at a trashcan returns all held empty crates, keeping filled
       crates; E only supplies a free crate with completely empty hands. Q puts crates down.
 - [x] Empty crates reduce the walking/dashing slowdown compared with filled crates.
 - [x] Center an item picture over each assigned shelf space in the shelf window, including
@@ -119,6 +119,7 @@ notice something that needs doing but isn't being done right now.
 - [ ] Security: introduce thieves and a minigame to stop them. **Postponed until the player
       can leave the shop** (until then, there's little for a thief to exploit).
 - [ ] Ways to customize the shop.
+  - [ ] Add customizable tinting plans so players can decorate their shop.
 
 ## Playtest follow-ups
 - [x] Cash drawer mockup: all customers pay cash, with unlimited 1/5/10/20 credit bills
@@ -431,14 +432,14 @@ notice something that needs doing but isn't being done right now.
       fixture crates never stack. The player walks behind stacks, taller stacks are
       harder to push, and a 3-high stack can't be pushed while carrying anything. A
       96px bottom bar shows the marked crate's picture, name, and count, with one card
-      per carried crate above its right end. E at the Empty Crates bin returns all held
+      per carried crate above its right end. E at a trashcan returns all held
       empty crates. Q with empty hands opens Go-Backs (later:
       packs Go-Backs into crates). Saves
       keep floor stacks. Replaces Q/Y hovercart unpacking and the floating carried-crate
       label.
-- [x] Sales-floor trashcan fixture (`trash_can`, 40 credits, Basic Fixture Supply): works
-      like the backroom Empty Crates bin (E returns held empty crates, or takes a free
-      empty crate when your hands are completely empty),
+- [x] Sales-floor trashcan fixture (`trash_can`, 40 credits, Basic Fixture Supply):
+      E returns held empty crates, or takes a free
+      empty crate when your hands are completely empty;
       can be moved/crated/sold in Layout and Fixtures, and is sales-floor only. New games
       start with one beside the front door; older saves don't get one automatically.
 - [x] A sold-out shelf space only accepts its own item until it is right-click cleared.

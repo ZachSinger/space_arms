@@ -15,6 +15,14 @@ it always fits on one 1920×1080 screen with tiles displayed at about 48 pixels
 when fully zoomed out. The current sales floor zones cover 34 by 13 tiles;
 additional expansion zones must be designed within that limit.
 
+## Starting sales floor
+
+The starting shop has **7 by 3 usable floor squares** (448 by 192 world pixels),
+or 9 by 6 squares including its walls. The front entrance is centered in the top
+wall, with the backroom door near its right corner. Adjacent expansion zones
+extend to the new edges, keeping the shop rectangular after each purchase and
+preserving the fully expanded 34-by-13 map.
+
 ## Backroom window
 
 The backroom (Storeroom, Loading Pad, and its upgrades) is a separate little map
@@ -23,10 +31,10 @@ never sees it. A second camera draws it inside a framed "BACKROOM" window
 (`#backroom-window`, under the HUD and pop-up windows) while the player is
 inside; the shop stays visible, dimmed, and keeps running behind it.
 
-- The starting usable floor is **128 by 256 world pixels** (2 by 4 game squares):
-  its width exactly matches the loading pad, and its bottom half is entirely the
-  pad. The black border sits outside the floor; total room size is 256 by 384
-  world pixels. The pad holds a 3 by 3 grid of 32-pixel crate spots, sized to
+- The starting usable floor is **128 by 320 world pixels** (2 by 5 game squares):
+  one extra row of floor sits above the loading pad, which remains at the bottom.
+  The black border sits outside the floor; total room size is 256 by 448 world pixels.
+  The pad holds a 3 by 3 grid of 32-pixel crate spots, sized to
   the pixel-art crates (one 48px art tile, drawn at the floor art's scale).
 - The Sales Floor's backroom door (`getBackroomDoorCell()`) and the backroom's exit
   (`getBackroomExitCell()`) are solid doors in north walls. Pressing E while
@@ -39,9 +47,8 @@ inside; the shop stays visible, dimmed, and keeps running behind it.
   `BACKROOM_UPGRADE_ORDER` adds 128 world pixels of width without changing its
   height or moving the loading pad or exit. The Layout tab sells
   the next upgrade once its Shop Level is reached.
-- Layout version 4 saves use the compact backroom. Older room layouts are
-  rejected with a message to start a new game rather than relocating furniture
-  or stock automatically.
+- During development, changed room layouts may require a new game rather than
+  migrating existing saves. Older layouts show a clear new-game message.
 
 ## Core idea: author the max size, don't resize at runtime
 

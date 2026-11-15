@@ -133,6 +133,34 @@ test("pulling uses empty or matching crates and shares live quantities with cust
   assert.equal(shelf.placements[0].itemId, "wpn_hvy_01");
 });
 
+test("Q in the shelf window picks which carried crate stocks an empty space next", () => {
+  const shelf = new ShelfFixture({ displayGrid: { w: 3, h: 2 }, stackDepth: 10, handsOn: true });
+  shelf.placeItem("amo_03", 1, 0, false, 1);
+  const bottom = itemCrate("amo_01", 3);
+  const empty = itemCrate(null, 0);
+  const top = itemCrate("amo_03", 3);
+  const crates = [bottom, empty, top];
+  const view = Object.assign(Object.create(ShelfStockingWindow.prototype), {
+    uiWindow: { isOpen: true },
+    scene: { getCarriedCrates: () => crates },
+    refresh() {},
+  });
+  assert.equal(view.getStockingCrate(), top);
+  view.chooseNextCrate();
+  assert.equal(view.getStockingCrate(), bottom, "skips the empty crate");
+  // The chosen crate fills an empty space even though another crate is higher.
+  assert.equal(moveShelfCrateItem(shelf, crates, 0, 0, false, null, view.getStockingCrate()).moved, 1);
+  assert.equal(shelf.placements.find((entry) => entry.gx === 0).itemId, "amo_01");
+  // A space holding another item still takes the crate that matches it.
+  assert.equal(moveShelfCrateItem(shelf, crates, 1, 0, false, null, bottom).moved, 1);
+  assert.equal(top.quantity, 2);
+  view.chooseNextCrate();
+  assert.equal(view.getStockingCrate(), top, "wraps back to the top");
+  view.chooseNextCrate();
+  bottom.quantity = 0;
+  assert.equal(view.getStockingCrate(), top, "falls back to the top when the chosen crate runs out");
+});
+
 test("the shelf window marks every space matching carried items and updates as crates change", () => {
   const shelf = new ShelfFixture({ displayGrid: { w: 3, h: 2 }, stackDepth: 10, handsOn: true });
   shelf.placeItem("amo_01", 0, 0, false, 20);

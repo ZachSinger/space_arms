@@ -1166,8 +1166,9 @@ button {
 .cash-summary {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 32px;
+  gap: 8px 24px;
   justify-content: flex-start;
+  align-items: center;
 }
 
 .cash-summary > div {
@@ -1186,6 +1187,53 @@ button {
 
 .cash-summary strong {
   color: var(--color-border-active);
+}
+
+.cash-summary .cash-current-change {
+  flex: 1;
+  padding-left: 10px;
+  border-left: 3px solid #fbbf24;
+}
+
+.cash-current-change > span,
+.cash-current-change > strong {
+  color: #fbbf24;
+}
+
+.cash-current-change > strong {
+  font-size: calc(36px * var(--text-scale));
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.cash-current-change small {
+  font-size: var(--font-size-16);
+}
+
+.cash-change-owed {
+  text-align: right;
+}
+
+#checkout-window.checkout-keypad {
+  width: min(44vw, calc(380px * var(--text-scale))) !important;
+}
+
+#checkout-window.checkout-narrow {
+  width: min(44vw, calc(490px * var(--text-scale))) !important;
+}
+
+.checkout-payment.counting-change {
+  gap: 6px;
+  padding: 6px 10px;
+}
+
+.checkout-payment.counting-change > .checkout-payment-prompt,
+.checkout-payment.counting-change > .checkout-payment-feedback:empty {
+  display: none;
+}
+
+.counting-change .cash-checkout {
+  gap: 8px;
 }
 
 .cash-drawer {
@@ -1366,6 +1414,13 @@ button {
   color: var(--color-text-main);
   font-weight: bold;
   text-shadow: 0 1px 3px #000;
+}
+
+/* Placed over the register by CheckoutWindow; the hint wraps to the money's width. */
+.cash-tender-panel.cash-tender-panel-placed {
+  position: absolute;
+  max-width: 440px;
+  text-align: center;
 }
 
 .cash-tender-area {
@@ -1826,6 +1881,16 @@ button {
   padding: 0 10px 0 4px;
   background: #0f172a;
   border: 1px solid #334155;
+}
+
+.holding-card.stocking-next {
+  border-color: #4ade80;
+  animation: stocking-next-glow 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes stocking-next-glow {
+  from { box-shadow: inset 0 0 0 1px #4ade80, 0 0 2px #4ade80; }
+  to { box-shadow: inset 0 0 0 3px #4ade80, 0 0 12px #4ade80; }
 }
 
 .holding-card-image {

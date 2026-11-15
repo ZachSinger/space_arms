@@ -98,7 +98,7 @@ export function findFreeWalkPath(start, goal, {
 }) {
   if (isSegmentClear(start, goal)) return [];
 
-  const findConnector = (point) => {
+  const findConnector = (point, requireClearSegment = true) => {
     const centerX = Math.round(point.x / step);
     const centerY = Math.round(point.y / step);
     for (let radius = 0; radius <= connectorRadius; radius += 1) {
@@ -110,7 +110,9 @@ export function findFreeWalkPath(start, goal, {
           const x = (centerX + dx) * step;
           const y = (centerY + dy) * step;
           const candidate = { x, y };
-          if (!isWalkable(x, y) || !isSegmentClear(point, candidate)) continue;
+          if (!isWalkable(x, y) || (requireClearSegment && !isSegmentClear(point, candidate))) {
+            continue;
+          }
           const distance = Math.hypot(x - point.x, y - point.y);
           if (distance < closestDistance) {
             closest = { x: centerX + dx, y: centerY + dy };
@@ -123,7 +125,10 @@ export function findFreeWalkPath(start, goal, {
     return null;
   };
 
-  const startNode = findConnector(start);
+  // Real bodies are slightly smaller than the planning clearance, so a nudged character can
+  // stand inside a fixture's margin. Every segment out of it then fails; step to the nearest
+  // open node instead of reporting the character as trapped.
+  const startNode = findConnector(start) ?? findConnector(start, false);
   const goalNode = findConnector(goal);
   if (!startNode || !goalNode) return null;
   if (startNode.x === goalNode.x && startNode.y === goalNode.y) {

@@ -1,23 +1,34 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BACKROOM_UPGRADE_ORDER, EXPANSION_ORDER, ZONES, getAuthoredGridSize, getBackroomBounds, getBackroomInteriorBounds, getBackroomLink, getLoadingPadBounds, getTotalGridSize, getZone, isBackroomRow } from "../js/logic/RoomLayout.js";
+import { BACKROOM_UPGRADE_ORDER, EXPANSION_ORDER, SHOP_BACK_WALL_HEIGHT, ZONES, getAuthoredGridSize, getBackroomBounds, getBackroomDoorCell, getBackroomInteriorBounds, getBackroomLink, getLoadingPadBounds, getStoreDoorCell, getTotalGridSize, getZone, isBackroomRow } from "../js/logic/RoomLayout.js";
 
 test("the full shop viewport is reserved at 39 by 21 tiles", () => {
   assert.deepEqual(getTotalGridSize(), { gridW: 39, gridH: 21 });
 });
 
 test("physical room bounds cover the authored shop and the backroom below it", () => {
-  assert.deepEqual(getAuthoredGridSize(), { gridW: 34, gridH: 106 });
+  assert.deepEqual(getAuthoredGridSize(), { gridW: 34, gridH: 107 });
 });
 
-test("the compact backroom is half as tall and its bottom floor is exactly the loading pad", () => {
+test("the starting sales floor has seven by three usable squares and both doors fit its top wall", () => {
+  const floor = getZone("sales_floor");
+  assert.equal(floor.gridW - 2, 7);
+  assert.equal(floor.gridH - SHOP_BACK_WALL_HEIGHT - 1, 3);
+  assert.deepEqual(getStoreDoorCell(), { gx: floor.gridX + 4, gy: floor.gridY + 1 });
+  assert.deepEqual(getBackroomDoorCell(), { gx: floor.gridX + 7, gy: floor.gridY + 1 });
+});
+
+test("the starting backroom is one floor square longer and the loading pad stays at the bottom", () => {
   const room = getBackroomBounds();
   const floor = getBackroomInteriorBounds();
   const pad = getLoadingPadBounds();
-  assert.equal(room.height, 768 / 2);
+  assert.equal(room.width, 256);
+  assert.equal(room.height, 448);
   assert.equal(floor.right - floor.left, 128);
+  assert.equal(floor.bottom - floor.top, 320);
   assert.equal(pad.left, floor.left);
   assert.equal(pad.right, floor.right);
+  assert.equal(pad.top - floor.top, 192);
   assert.equal(pad.bottom, floor.bottom);
   const zones = ZONES.map((zone) => ({ ...zone }));
   for (const [index, id] of BACKROOM_UPGRADE_ORDER.entries()) {

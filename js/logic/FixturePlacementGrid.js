@@ -1,8 +1,9 @@
-import { FIXTURE_SNAP_STEP, fixtureFootprint } from "./FixtureLayout.js";
+import { FIXTURE_POSITION_STEP, FIXTURE_SNAP_STEP, fixtureArtInset, fixtureFootprint } from "./FixtureLayout.js";
 import { TILE_SIZE } from "./RoomLayout.js";
 
 const SNAP_STEP = FIXTURE_SNAP_STEP * TILE_SIZE;
-const COVERAGE_STEP = SNAP_STEP / 2;
+// Body coverage is approximated in 2px cells; scaled art margins can be fractional.
+const COVERAGE_STEP = FIXTURE_POSITION_STEP * TILE_SIZE;
 const FRAME_BUDGET_MS = 4;
 const REDRAW_INTERVAL_MS = 80;
 
@@ -14,10 +15,10 @@ function addFootprint(scan, bounds) {
   if (left >= right || top >= bottom) return;
 
   // Four corner updates record the union without drawing overlapping transparent fills.
-  const fromX = (left - scan.left) / COVERAGE_STEP;
-  const toX = (right - scan.left) / COVERAGE_STEP;
-  const fromY = (top - scan.top) / COVERAGE_STEP;
-  const toY = (bottom - scan.top) / COVERAGE_STEP;
+  const fromX = Math.floor((left - scan.left) / COVERAGE_STEP);
+  const toX = Math.ceil((right - scan.left) / COVERAGE_STEP);
+  const fromY = Math.floor((top - scan.top) / COVERAGE_STEP);
+  const toY = Math.ceil((bottom - scan.top) / COVERAGE_STEP);
   scan.coverage[fromY * scan.stride + fromX] += 1;
   scan.coverage[fromY * scan.stride + toX] -= 1;
   scan.coverage[toY * scan.stride + fromX] -= 1;
@@ -117,14 +118,18 @@ export class FixturePlacementGrid {
           type: placement.spec.id, rotation: placement.rotation,
         };
         const footprint = fixtureFootprint(candidate);
-        const width = footprint.w * TILE_SIZE;
-        const height = footprint.h * TILE_SIZE;
+        // Paint the solid part of the fixture, not its see-through picture margin.
+        const inset = fixtureArtInset(candidate);
+        const offsetX = inset.left * TILE_SIZE;
+        const offsetY = inset.top * TILE_SIZE;
+        const width = (footprint.w - inset.left - inset.right) * TILE_SIZE;
+        const height = (footprint.h - inset.top - inset.bottom) * TILE_SIZE;
         const stride = (right - left) / COVERAGE_STEP + 1;
         const rows = (bottom - top) / COVERAGE_STEP;
-        const startX = Math.ceil((left - width) / SNAP_STEP) * SNAP_STEP;
-        const startY = Math.ceil((top - height) / SNAP_STEP) * SNAP_STEP;
+        const startX = Math.ceil((left - footprint.w * TILE_SIZE) / SNAP_STEP) * SNAP_STEP;
+        const startY = Math.ceil((top - footprint.h * TILE_SIZE) / SNAP_STEP) * SNAP_STEP;
         this.scan = {
-          left, top, right, bottom, width, height,
+          left, top, right, bottom, width, height, offsetX, offsetY,
           x: startX, y: startY,
           startX, run: null,
           stride, rows, coverage: new Int32Array(stride * (rows + 1)),
@@ -152,11 +157,13 @@ export class FixturePlacementGrid {
         ? scene.checkFixtureMove(candidate.id, candidate.gx, candidate.gy, candidate.rotation, scan.connectivityCache)
         : scene.checkFixturePlacement(candidate.type, candidate.gx, candidate.gy, candidate.rotation, scan.connectivityCache);
       if (result.valid) {
-        if (scan.run && x <= scan.run.right) {
-          scan.run.right = x + scan.width;
+        const solidLeft = x + scan.offsetX;
+        if (scan.run && solidLeft <= scan.run.right) {
+          scan.run.right = solidLeft + scan.width;
         } else {
           finishRun(scan);
-          scan.run = { left: x, right: x + scan.width, top: y, bottom: y + scan.height };
+          const solidTop = y + scan.offsetY;
+          scan.run = { left: solidLeft, right: solidLeft + scan.width, top: solidTop, bottom: solidTop + scan.height };
         }
       } else {
         finishRun(scan);

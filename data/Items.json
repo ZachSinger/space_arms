@@ -3195,7 +3195,7 @@
   },
   {
     "id": "srv_05",
-    "boxSize": 2,
+    "boxSize": 1,
     "name": "Frontier Micro-Fusion Fire Starter",
     "flavor": "A reusable, spark-emitting block that uses a tiny fusion reaction to instantly ignite kindling in sub-zero environments.",
     "tags": ["Survival", "Standard", "Exploration"],

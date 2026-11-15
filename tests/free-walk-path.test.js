@@ -50,6 +50,21 @@ test("free-walk paths fit through character-sized gaps smaller than a floor tile
   assert.ok(path.every(({ x, y }) => x % 8 === 0 && y % 8 === 0));
 });
 
+test("free-walk paths step out of a fixture's clearance margin instead of giving up", () => {
+  // A nudged customer whose center sits just inside a shelf's top-left margin.
+  const shelfMargin = { left: 100, right: 200, top: 100, bottom: 200 };
+  const start = { x: 105, y: 102 };
+  const goal = { x: 60, y: 160 };
+  const path = makeRoute(start, goal, [shelfMargin]);
+
+  assert.ok(path);
+  let previous = path[0];
+  for (const point of [...path.slice(1), goal]) {
+    assert.equal(segmentIntersectsRectangle(previous, point, shelfMargin), false);
+    previous = point;
+  }
+});
+
 test("free-walk paths route around fixture edges instead of crossing them", () => {
   const start = { x: 32, y: 96 };
   const goal = { x: 224, y: 96 };

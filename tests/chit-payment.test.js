@@ -3,12 +3,21 @@ import test from "node:test";
 import { CHIT_DIRECTION_DIGITS, ChitPayment, generateChitCode } from "../js/logic/ChitPayment.js";
 import { chooseCustomerPayment, FACTION_CURRENCY_PAYMENT_CHANCE } from "../js/logic/CustomerPayment.js";
 
-test("Explorer Chit codes contain two to four digits from one through four", () => {
-  for (const random of [() => 0, () => 0.49, () => 0.99]) {
-    const code = generateChitCode(random);
-    assert.match(code, /^[1-4]{2,4}$/);
+test("Explorer Chit codes can have two through five digits from one through four", () => {
+  for (const [roll, length] of [[0, 2], [0.25, 3], [0.5, 4], [0.99, 5]]) {
+    const code = generateChitCode(() => roll);
+    assert.match(code, /^[1-4]{2,5}$/);
+    assert.equal(code.length, length);
   }
   assert.deepEqual(CHIT_DIRECTION_DIGITS, { up: 1, down: 2, left: 3, right: 4 });
+});
+
+test("a five-digit Chit completes only after all five correct keys", () => {
+  const payment = new ChitPayment(12.34, "31421");
+  for (const digit of [3, 1, 4, 2]) {
+    assert.equal(payment.enterDigit(digit).completed, false);
+  }
+  assert.equal(payment.enterDigit(1).completed, true);
 });
 
 test("a wrong Chit key resets progress and the sale completes on the last correct key", () => {
@@ -27,7 +36,7 @@ test("a wrong Chit key resets progress and the sale completes on the last correc
 
 test("Chit values and codes reject invalid input", () => {
   assert.throws(() => new ChitPayment(-1, "12"), /Invalid Chit value/);
-  for (const code of ["1", "12345", "150", "abcd"]) {
+  for (const code of ["1", "123412", "150", "abcd"]) {
     assert.throws(() => new ChitPayment(1, code), /Invalid Chit code/);
   }
   const payment = new ChitPayment(1, "12");

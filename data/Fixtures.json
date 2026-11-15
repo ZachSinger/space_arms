@@ -15,6 +15,12 @@
       "up": "shelf_budget_2x2_up",
       "right": "shelf_budget_2x2_right"
     },
+    "artInsets": {
+      "down": { "left": 0.03125, "top": 0.25, "right": 0.03125, "bottom": 0 },
+      "left": { "left": 0.15625, "top": 0.03125, "right": 0.15625, "bottom": 0 },
+      "up": { "left": 0.03125, "top": 0.25, "right": 0.03125, "bottom": 0 },
+      "right": { "left": 0.15625, "top": 0.03125, "right": 0.15625, "bottom": 0 }
+    },
     "stackDepth": 10,
     "price": 150,
     "licenseId": "lic_fixture_basics"
@@ -34,6 +40,12 @@
       "left": "shelf_budget_2x3_left",
       "up": "shelf_budget_2x3_up",
       "right": "shelf_budget_2x3_right"
+    },
+    "artInsets": {
+      "down": { "left": 0.057291666666666664, "top": 0.25, "right": 0.057291666666666664, "bottom": 0 },
+      "left": { "left": 0.16666666666666666, "top": 0.078125, "right": 0.16666666666666666, "bottom": 0.036458333333333336 },
+      "up": { "left": 0.057291666666666664, "top": 0.25, "right": 0.057291666666666664, "bottom": 0 },
+      "right": { "left": 0.16666666666666666, "top": 0.078125, "right": 0.16666666666666666, "bottom": 0.036458333333333336 }
     },
     "stackDepth": 10,
     "price": 225,
@@ -55,6 +67,12 @@
       "up": "shelf_budget_2x4_up",
       "right": "shelf_budget_2x4_right"
     },
+    "artInsets": {
+      "down": { "left": 0.020833333333333332, "top": 0.25, "right": 0.020833333333333332, "bottom": 0 },
+      "left": { "left": 0.16666666666666666, "top": 0.041666666666666664, "right": 0.16666666666666666, "bottom": 0 },
+      "up": { "left": 0.020833333333333332, "top": 0.25, "right": 0.020833333333333332, "bottom": 0 },
+      "right": { "left": 0.16666666666666666, "top": 0.041666666666666664, "right": 0.16666666666666666, "bottom": 0 }
+    },
     "stackDepth": 10,
     "price": 300,
     "licenseId": "lic_fixture_basics"
@@ -74,6 +92,12 @@
       "left": "shelf_budget_3x2_left",
       "up": "shelf_budget_3x2_up",
       "right": "shelf_budget_3x2_right"
+    },
+    "artInsets": {
+      "down": { "left": 0.03125, "top": 0.020833333333333332, "right": 0.03125, "bottom": 0 },
+      "left": { "left": 0.16666666666666666, "top": 0.052083333333333336, "right": 0.16666666666666666, "bottom": 0.010416666666666666 },
+      "up": { "left": 0.03125, "top": 0.020833333333333332, "right": 0.03125, "bottom": 0 },
+      "right": { "left": 0.16666666666666666, "top": 0.052083333333333336, "right": 0.16666666666666666, "bottom": 0.010416666666666666 }
     },
     "stackDepth": 10,
     "price": 200,
@@ -95,6 +119,12 @@
       "up": "shelf_budget_3x3_up",
       "right": "shelf_budget_3x3_right"
     },
+    "artInsets": {
+      "down": { "left": 0.057291666666666664, "top": 0.020833333333333332, "right": 0.057291666666666664, "bottom": 0 },
+      "left": { "left": 0.16666666666666666, "top": 0.078125, "right": 0.16666666666666666, "bottom": 0.036458333333333336 },
+      "up": { "left": 0.057291666666666664, "top": 0.020833333333333332, "right": 0.057291666666666664, "bottom": 0 },
+      "right": { "left": 0.16666666666666666, "top": 0.078125, "right": 0.16666666666666666, "bottom": 0.036458333333333336 }
+    },
     "stackDepth": 10,
     "price": 300,
     "licenseId": "lic_fixture_basics"
@@ -114,6 +144,12 @@
       "left": "shelf_budget_3x4_left",
       "up": "shelf_budget_3x4_up",
       "right": "shelf_budget_3x4_right"
+    },
+    "artInsets": {
+      "down": { "left": 0.020833333333333332, "top": 0.020833333333333332, "right": 0.020833333333333332, "bottom": 0 },
+      "left": { "left": 0.16666666666666666, "top": 0.041666666666666664, "right": 0.16666666666666666, "bottom": 0 },
+      "up": { "left": 0.020833333333333332, "top": 0.020833333333333332, "right": 0.020833333333333332, "bottom": 0 },
+      "right": { "left": 0.16666666666666666, "top": 0.041666666666666664, "right": 0.16666666666666666, "bottom": 0 }
     },
     "stackDepth": 10,
     "price": 400,

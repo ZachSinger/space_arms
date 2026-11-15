@@ -14,6 +14,11 @@ export function cashFaceValue({ kind, units }, currency = "credits") {
     : units);
 }
 
+export function renderCurrentChange(units, currency) {
+  const [amount, currencyName] = formatCashAmount(units, currency).split(" ");
+  return `${amount} <small>${currencyName}</small>`;
+}
+
 function renderDrawer(kind, currency) {
   return getCashDenominations(currency).filter((denomination) => denomination.kind === kind)
     .map(({ units, label }) => `
@@ -44,7 +49,7 @@ function renderChit(chitPayment) {
       </div>
       <div class="chit-input-help kbd-only">Enter the code with the arrow keys or click a key.</div>
       <div class="chit-input-help pad-only">Enter the code with the D-pad.</div>
-      <div class="chit-progress" id="checkout-chit-progress">CODE: _ _ _ _</div>
+      <div class="chit-progress" id="checkout-chit-progress">INPUT: ${Array.from(chitPayment.code, () => "_").join(" ")}</div>
       <div class="chit-keypad">
         <button type="button" data-chit-digit="1" aria-label="Up, key 1">↑ <span>1</span></button>
         <button type="button" data-chit-digit="2" aria-label="Down, key 2">↓ <span>2</span></button>
@@ -105,8 +110,8 @@ export class CheckoutRenderer {
         ${cashPayment ? `
           <div class="cash-checkout hidden" id="checkout-cash">
             <div class="cash-summary">
-              <div><span>CURRENT CHANGE</span><strong id="checkout-change-selected">${formatCashAmount(0, currency)}</strong></div>
-              <div><span>CHANGE OWED</span><strong>${formatCashAmount(cashPayment.changeDueUnits, currency)}</strong></div>
+              <div class="cash-current-change"><span>CURRENT CHANGE</span><strong id="checkout-change-selected">${renderCurrentChange(0, currency)}</strong></div>
+              <div class="cash-change-owed"><span>CHANGE OWED</span><strong>${formatCashAmount(cashPayment.changeDueUnits, currency)}</strong></div>
             </div>
             <button type="button" class="action-btn cash-hand-over" id="cash-hand-over">HAND OVER CHANGE<span class="kbd-only"> (SPACE)</span></button>
             <div class="cash-drawer">

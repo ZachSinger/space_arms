@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { solveCratePush, PUSH_SPEED_BY_CRATE_COUNT } from "../js/logic/CratePushing.js";
+import { canLeaveLoadingPad } from "../js/logic/LoadingPadEscape.js";
 
 const PLAYER = { left: 89, top: 200, width: 22, height: 40 };
 const crateAt = (key, x, y, locked = false) => ({ key, rect: { left: x - 20, top: y - 20, width: 40, height: 40 }, locked });
@@ -163,4 +164,38 @@ test("a player overlapping crates on both sides can still move out between them"
     solve(crates, { player, velocity: { x: 160, y: -160 } }).playerVelocity,
     { x: 0, y: -160 },
   );
+});
+
+test("cutting diagonally past a pad crate's corner doesn't sink the player into it", () => {
+  const crates = [{ key: "pad", rect: { left: 74, top: 6666, width: 28, height: 28 }, locked: true }];
+  const player = { left: 106, top: 6654.6, width: 22, height: 20 };
+  const dt = 1 / 30;
+  const { playerVelocity } = solveCratePush({ player, velocity: { x: -198, y: -198 }, dt, crates, isBlocked: () => false });
+  const moved = { left: player.left + playerVelocity.x * dt, top: player.top + playerVelocity.y * dt };
+  const overlapsCrate = moved.left < 102 && moved.left + 22 > 74 && moved.top < 6694 && moved.top + 20 > 6666;
+  assert.equal(overlapsCrate, false);
+});
+
+// The real backroom: a 128px pad against the bottom wall, crate spots 40px apart.
+const PAD = { top: 6656 };
+const FLOOR = { left: 64, right: 192, bottom: 6784 };
+const padCrate = (x, y) => ({ left: x - 14, top: y - 14, width: 28, height: 28 });
+const IN_CORNER = { left: 170, top: 6764, width: 22, height: 20 };
+const padWithout = (...empty) => [6680, 6720, 6760].flatMap((y) => [88, 128, 168].map((x) => [x, y]))
+  .filter(([x, y]) => !empty.some(([ex, ey]) => ex === x && ey === y))
+  .map(([x, y]) => padCrate(x, y));
+
+test("crates around the bottom-right pad corner box the player in", () => {
+  const crates = padWithout([128, 6680], [168, 6680], [168, 6760]);
+  assert.equal(canLeaveLoadingPad({ player: IN_CORNER, crates, pad: PAD, floor: FLOOR }), false);
+});
+
+test("an open pad column lets the player walk off the pad", () => {
+  const crates = padWithout([128, 6680], [168, 6680], [168, 6720], [168, 6760]);
+  assert.equal(canLeaveLoadingPad({ player: IN_CORNER, crates, pad: PAD, floor: FLOOR }), true);
+});
+
+test("a crate on top of the player boxes him in", () => {
+  const player = { left: 157, top: 6750, width: 22, height: 20 };
+  assert.equal(canLeaveLoadingPad({ player, crates: [padCrate(168, 6760)], pad: PAD, floor: FLOOR }), false);
 });

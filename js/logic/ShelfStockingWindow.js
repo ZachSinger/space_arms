@@ -54,6 +54,12 @@ export class ShelfStockingWindow {
       }
       // E and other letters are typing while the price box has focus.
       if (event.target?.matches?.("input")) return;
+      if (event.code === "KeyQ") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (!event.repeat) this.chooseNextCrate();
+        return;
+      }
       if (event.code === "KeyE" && !event.repeat) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -63,6 +69,11 @@ export class ShelfStockingWindow {
     document.addEventListener("pointerup", this.onRelease);
     window.addEventListener("blur", this.onBlur);
     window.addEventListener("keydown", this.onKey, true);
+    // The controller's Y does what Q does here.
+    this.uiWindow.element.addEventListener("pad-alt", (event) => {
+      event.preventDefault();
+      this.chooseNextCrate();
+    });
     this.body.addEventListener("contextmenu", (event) => {
       event.preventDefault();
       const cell = event.target.closest("[data-shelf-cell]");
@@ -106,6 +117,31 @@ export class ShelfStockingWindow {
   }
 
   /**
+   * The carried crate that stocks next: the one the player chose with Q, or else the highest
+   * crate with items in it. Null when the window is closed or no carried crate has items.
+   */
+  getStockingCrate() {
+    if (!this.uiWindow.isOpen) return null;
+    const stockable = this.scene.getCarriedCrates()
+      .filter((crate) => crate.kind === "item" && crate.quantity > 0);
+    return stockable.includes(this.chosenCrate) ? this.chosenCrate : stockable.at(-1) ?? null;
+  }
+
+  // Q: the next crate down the stack (wrapping back to the top) stocks next.
+  chooseNextCrate() {
+    const topFirst = this.scene.getCarriedCrates()
+      .filter((crate) => crate.kind === "item" && crate.quantity > 0).reverse();
+    if (topFirst.length === 0) {
+      this.notice = "None of your crates have items to stock.";
+    } else {
+      const current = topFirst.indexOf(this.getStockingCrate());
+      this.chosenCrate = topFirst[(current + 1) % topFirst.length];
+      this.notice = `Stocking from your ${database.getItem(this.chosenCrate.itemId).name} crate next.`;
+    }
+    this.refresh();
+  }
+
+  /**
    * The shelf space under the cursor, for the bottom bar: its item and how many are on it
    * (0 when sold out), or { empty: true } for a space with no item. Null when the cursor
    * isn't over a shelf space.
@@ -145,9 +181,9 @@ export class ShelfStockingWindow {
     this.body.replaceChildren();
     const hint = document.createElement("p");
     hint.textContent = getInputDevice() === "gamepad"
-      ? "A: stock one from carried crates. X: take one into a crate, or clear a sold-out space. B: close."
-      : "Hold left mouse: stock from carried crates. Hold right mouse: take into a crate. Right-click a sold-out space to clear it. E or Esc: close.";
-    hint.textContent += " A green border marks spaces for items you're carrying. Click a price sticker to change that item's price.";
+      ? "A: stock one from carried crates. X: take one into a crate, or clear a sold-out space. Y: pick which crate stocks next. B: close."
+      : "Hold left mouse: stock from carried crates. Hold right mouse: take into a crate. Right-click a sold-out space to clear it. Q: pick which crate stocks next. E or Esc: close.";
+    hint.textContent += " The crate that stocks next glows in your crate list on the right. A green border marks spaces for items you're carrying. Click a price sticker to change that item's price.";
     this.status = document.createElement("p");
     this.status.setAttribute("role", "status");
     this.stage = document.createElement("div");
@@ -224,7 +260,8 @@ export class ShelfStockingWindow {
     }
     const { index, pull } = this.holding;
     const result = moveShelfCrateItem(this.fixture, this.scene.getCarriedCrates(),
-      index % this.art.columns.length, Math.floor(index / this.art.columns.length), pull, this.scene.eventBus);
+      index % this.art.columns.length, Math.floor(index / this.art.columns.length), pull, this.scene.eventBus,
+      this.getStockingCrate());
     this.notice = result.reservedFor
       ? `This space is saved for ${database.getItem(result.reservedFor).name}, which is sold out. ` +
         `To put something else here, ${getInputDevice() === "gamepad" ? "press X on" : "right-click"} the space to clear it first.`

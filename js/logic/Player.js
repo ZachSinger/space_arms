@@ -75,7 +75,7 @@ export class Player {
       .setDisplaySize(PLAYER_DISPLAY_WIDTH, PLAYER_DISPLAY_HEIGHT)
       // Keep the collision box at its old world position despite the taller art canvas.
       .setOrigin(0.5, 0.625)
-      // Always drawn above everything on the floor.
+      // Drawn above everything on the floor; the scene re-sorts people by their feet each frame.
       .setDepth(9999);
     scene.physics.add.existing(this.sprite);
     this.applyBodySize();
