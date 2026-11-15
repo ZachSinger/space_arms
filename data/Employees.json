@@ -4,8 +4,7 @@
     "name": "Tavi",
     "jobPriorities": [
       "register",
-      "stock_shelves",
-      "load_storage"
+      "stock_shelves"
     ]
   },
   {
@@ -13,8 +12,7 @@
     "name": "Sera",
     "jobPriorities": [
       "register",
-      "stock_shelves",
-      "load_storage"
+      "stock_shelves"
     ]
   },
   {
@@ -22,7 +20,6 @@
     "name": "Dax",
     "jobPriorities": [
       "stock_shelves",
-      "load_storage",
       "register"
     ]
   },
@@ -30,7 +27,6 @@
     "id": "ivo_shop_assistant",
     "name": "Ivo",
     "jobPriorities": [
-      "load_storage",
       "stock_shelves",
       "register"
     ]
@@ -40,7 +36,6 @@
     "name": "Rhea",
     "jobPriorities": [
       "register",
-      "load_storage",
       "stock_shelves"
     ]
   },
@@ -48,7 +43,6 @@
     "id": "kel_supply_runner",
     "name": "Kel",
     "jobPriorities": [
-      "load_storage",
       "stock_shelves",
       "register"
     ]

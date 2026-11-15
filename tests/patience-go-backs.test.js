@@ -213,11 +213,11 @@ test("hiring staff spends the fee once and keeps the hire when player state is r
   assert.equal(state.credits, 1250);
   assert.deepEqual(state.hiredEmployees, ["tavi_stock_clerk"]);
   assert.deepEqual(state.employeeJobPriorities.tavi_stock_clerk, [
-    "register", "stock_shelves", "load_storage",
+    "register", "stock_shelves",
   ]);
   assert.equal(state.moveEmployeeJobPriority("tavi_stock_clerk", "stock_shelves", -1), true);
   assert.deepEqual(state.employeeJobPriorities.tavi_stock_clerk, [
-    "stock_shelves", "register", "load_storage",
+    "stock_shelves", "register",
   ]);
   assert.equal(state.hireEmployee("tavi_stock_clerk", 250), false);
   assert.equal(state.credits, 1250);
@@ -227,14 +227,14 @@ test("hiring staff spends the fee once and keeps the hire when player state is r
   restored.applySave(saved);
   assert.deepEqual(restored.hiredEmployees, ["tavi_stock_clerk"]);
   assert.deepEqual(restored.employeeJobPriorities.tavi_stock_clerk, [
-    "stock_shelves", "register", "load_storage",
+    "stock_shelves", "register",
   ]);
   assert.equal(restored.credits, 1250);
 
   delete saved.employeeJobPriorities;
   restored.applySave(saved);
   assert.deepEqual(restored.employeeJobPriorities.tavi_stock_clerk, [
-    "register", "stock_shelves", "load_storage",
+    "register", "stock_shelves",
   ]);
 });
 

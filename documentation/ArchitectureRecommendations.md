@@ -10,13 +10,13 @@ Companion document: [CodebaseCritique.md](./CodebaseCritique.md) (what's weak to
 
 These are the facts that drive every recommendation below:
 
-- **More NPC types are coming.** Employees can now run the register, stock shelves, and
-  move delivered item crates into storage, following each hire's saved job priorities.
+- **More NPC types are coming.** Employees can now run the register and take delivered
+  item crates straight to shelf spots, following each hire's saved job priorities.
   Hauling loose crates from the floor, employee schedules, and breaks remain future work;
   shoplifters and a Military faction are stretch goals. Customers are only the first kind
   of NPC.
 - **Items move between many containers:** loading pad crates, floor crates,
-  shelf slots, storage lockers, the Go-Backs bin, customer carts, and employee backpacks.
+  shelf slots, the Go-Backs bin, and customer carts.
 - **The game is UI-heavy.** The Manager's Tablet already has 5 working tabs, with
   the Employee tab now supporting hiring and staff information. Finances and Handbook
   are built. Add checkout, Go-Backs, fixtures, dialogue, settings, and "God Window"
@@ -116,8 +116,8 @@ written the same way would duplicate most of it.
 
 ## 4. One transfer rule for item locations
 
-`InventoryTransfer.transferItems` now handles player stock moves between
-Go-Backs, shelves/lockers, and item crates. The containers expose the quantities and
+`InventoryTransfer.transferItems` now handles stock moves between
+Go-Backs, shelves, and item crates. The containers expose the quantities and
 capacity needed by the shared operation:
 
 ```js
@@ -136,8 +136,7 @@ interface TransferContainer {
 - Customer carts now use the same operation when taking one item from a shelf; their existing
   one-of-each shopping rule and price snapshot are unchanged.
 - Items in abandoned customer carts now use the same operation when returned to Go-Backs.
-- Employee stock clerks use the same operation to move stock from lockers into their
-  backpacks and then onto shelf slots.
+- Employees use the same operation to move stock directly from delivery crates to shelf slots.
 
 ---
 
@@ -148,8 +147,8 @@ interface TransferContainer {
   continues to provide the same lookup and placement rules.
 - The budget shelf (1 tile, 2x2 slots, 10 units per slot) costs 150 credits, the cheapest fixture; the
   compact shelf costs 300 credits; the large shelf costs 2,000 credits. The Fixtures
-  menu identifies shelving, storage, and checkout equipment and shows each floor footprint.
-  Shelf and locker interaction covers the full front width, within 110 pixels of the front
+  menu identifies shelving and checkout equipment and shows each floor footprint.
+  Shelf interaction covers the full front width, within 110 pixels of the front
   edge; side/back positions cannot select a neighboring fixture. Clicking and crate
   delivery use the same rule as E.
 - **Give fixtures components instead of `kind`/`instanceof` checks:**
@@ -157,7 +156,6 @@ interface TransferContainer {
   | Component | Used by |
   |---|---|
   | `Stockable` (shelf grid) | shelves, racks |
-  | `Storage` (pool) | lockers |
   | `Register` (queue + checkout) | registers |
   | `Interactable` (E-prompt, opens window) | all |
   | `Footprint` (blocks nav, placement rules) | all |
@@ -219,7 +217,7 @@ changes the resolved mode; only the checkout window during register operation
 remain part of the register profile. Modal windows block gameplay hotkeys and movement.
 "Can I press Space right now?" is answered in exactly one place.
 
-**Interactables registry.** Implemented for the current shelves/lockers and register.
+**Interactables registry.** Implemented for the current shelves and register.
 Crates use their own facing-arrow targeting (`findCrateInFront` and `crateActions` in
 `game.js`) because Space and Q tell a tap from a hold. Live sources describe which actions each target supports, how range and priority
 are measured, and what prompt to show:
@@ -329,8 +327,8 @@ both key and button maps.
 
 Ordered by what unblocks upcoming features. Each step leaves the game working.
 
-The first employee slice is in place: one hireable employee, provisional hiring and
-per-shift wage costs, register service, shelf restocking, crate-to-locker storage loading,
+The first employee slice is in place: hireable employees, hiring and
+per-shift wage costs, register service, and direct crate-to-shelf restocking,
 editable saved task priorities, and wage reporting. Hauling loose crates from the floor,
 schedules, training, skill grades, and break-room behavior remain future work.
 

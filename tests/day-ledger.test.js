@@ -165,13 +165,13 @@ test("previously signed contracts and hired staff remain owned below their new u
   const saved = new PlayerState().serialize();
   saved.globalReputation = 2;
   saved.shopLevel = 2;
-  saved.activeLicenses.push("lic_start_apparel", "lic_fixture_storage_bank");
+  saved.activeLicenses.push("lic_start_apparel", "lic_start_surplus");
   saved.hiredEmployees = ["tavi_stock_clerk"];
   delete saved.employeeJobPriorities;
   const restored = PlayerState.deserialize(saved);
   assert.equal(restored.shopLevel, 2);
   assert.equal(restored.activeLicenses.has("lic_start_apparel"), true);
-  assert.equal(restored.activeLicenses.has("lic_fixture_storage_bank"), true);
+  assert.equal(restored.activeLicenses.has("lic_start_surplus"), true);
   assert.deepEqual(restored.hiredEmployees, ["tavi_stock_clerk"]);
   assert.equal(restored.moveEmployeeJobPriority("tavi_stock_clerk", "stock_shelves", -1), true);
 });
@@ -276,7 +276,7 @@ test("each course costs more than that employee's last, whichever skill it train
   state.addCredits(20000, { category: "sales", label: "Training test" });
   state.hireEmployee("tavi_stock_clerk");
   const costs = [];
-  for (const jobId of ["register", "stock_shelves", "load_storage"]) {
+  for (const jobId of ["register", "stock_shelves"]) {
     for (let level = 2; level <= 5; level += 1) {
       const before = state.credits;
       assert.equal(state.trainEmployee("tavi_stock_clerk", jobId), true);
@@ -289,10 +289,9 @@ test("each course costs more than that employee's last, whichever skill it train
     assert.equal(state.trainEmployee("tavi_stock_clerk", jobId), false);
     assert.equal(state.credits, before);
   }
-  assert.deepEqual(costs, Array.from({ length: 12 }, (_, index) => 250 + 125 * index));
-  assert.equal(state.getEmployeeProfile("tavi_stock_clerk").wagePerShift, 110);
+  assert.deepEqual(costs, Array.from({ length: 8 }, (_, index) => 250 + 125 * index));
+  assert.equal(state.getEmployeeProfile("tavi_stock_clerk").wagePerShift, 90);
   assert.equal(state.getEmployeeProfile("tavi_stock_clerk").hireCost, 250);
-  assert.equal(state.getEmployeeProfile("tavi_stock_clerk").backpackCapacity, 35);
 });
 
 test("every employee starts identical, and Store Level caps how many are hired at once", () => {
@@ -301,8 +300,8 @@ test("every employee starts identical, and Store Level caps how many are hired a
   const fresh = ["tavi_stock_clerk", "kel_supply_runner"].map((id) => state.getEmployeeProfile(id));
   for (const employee of fresh) {
     assert.deepEqual(
-      [employee.hireCost, employee.wagePerShift, employee.backpackCapacity],
-      [250, 50, 10],
+      [employee.hireCost, employee.wagePerShift],
+      [250, 50],
     );
   }
   assert.equal(state.hireEmployee("kel_supply_runner"), false);
@@ -349,20 +348,20 @@ test("training rejects unaffordable and unhired staff and older saves start with
   delete oldSave.employeeTraining;
   const restored = PlayerState.deserialize(oldSave);
   assert.deepEqual(restored.getEmployeeProfile("tavi_stock_clerk").skillLevels, {
-    register: 1, stock_shelves: 1, load_storage: 1,
+    register: 1, stock_shelves: 1,
   });
   assert.deepEqual(restored.employeeTraining, {});
 });
 
 test("receipts describe fixture resale and fixture purchases separately", () => {
   const state = new PlayerState();
-  state.addCredits(90, { category: "fixture_sales", label: "LOCKER" });
+  state.addCredits(75, { category: "fixture_sales", label: "BUDGET SHELF 2x2" });
   state.spendCredits(150, { category: "fixtures", label: "BUDGET SHELF 2x2" });
   const receipt = summarizeReceipt(state.dayLedger.serialize(), state.credits, state.globalReputation);
   const html = FinancesRenderer.generateHTML({ ...financesView(), today: receipt });
-  assert.match(html, /Sold fixture: LOCKER/);
+  assert.match(html, /Sold fixture: BUDGET SHELF 2x2/);
   assert.match(html, /Fixture: BUDGET SHELF 2x2/);
-  assert.equal(receipt.totalEarned, 90);
+  assert.equal(receipt.totalEarned, 75);
   assert.equal(receipt.totalSpent, 150);
 });
 

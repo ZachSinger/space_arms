@@ -9,7 +9,6 @@ import { LOADING_PAD_SPOTS } from "./SupplyOrder.js";
 
 const FIXTURE_PURPOSES = {
   shelf: "SHELVING - displays items for customers",
-  storage: "STORAGE - holds stock for restocking",
   register: "CHECKOUT - serves customers",
   trash: "TRASHCAN - hands out and takes back empty crates",
 };
@@ -114,9 +113,7 @@ export class LayoutRenderer {
           return `
             <div class="layout-fixture-row">
               <span>${spec.name}
-                <small>${FIXTURE_PURPOSES[spec.kind]} | ${spec.id === "locker_single"
-                  ? "Narrow locker; keep room to stand in front"
-                  : `${spec.w} x ${spec.h} floor tiles`}</small>
+                <small>${FIXTURE_PURPOSES[spec.kind]} | ${spec.w} x ${spec.h} floor tiles</small>
                 <small>PRICE ${spec.price} credits | ${licensed ? "LICENSED" : `NEEDS CONTRACT: ${license.name} (Contracts tab)`}</small>
               </span>
               <button type="button" class="action-btn" data-buy-fixture-id="${spec.id}"

@@ -1,0 +1,23 @@
+E: Backroom
+E: Exit
+E: Activate
+Q: Pack Returns
+E: Empty Crate
+E: Throw Away (One)
+E: Throw Away (All)
+Space: Throw
+Tap Space: Pick Up
+Can't carry more
+Space (Hold): Pick Up
+Ctrl: Select
+Q: Put Down (One)
+Q (Hold): Put Down (All)
+Q: Stack (One)
+Q: Stack (All)
+Can't stack here
+Can't stack here
+Can't stack higher
+Q: Store
+E: Shelf
+E: Place
+THIS CONTROL IS WRONG => YOU CAN'T HOLD E BECAUSE JUST PRESSING E GRABS AN EMPTY CRATE => Hold E: Move this Trashcan

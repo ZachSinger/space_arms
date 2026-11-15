@@ -12,9 +12,9 @@ credits. Every employee can be hired from the start of staffing at the same pric
 levels only raise how many can be hired at once. Existing signed contracts and hired
 employees remain available.
 
-The hovercart (and its upgrades at Levels 3, 8, 14, 21, and 28) and the Expanded, Premium
-Shelf, Bulk Display, and Armory Display fixture licenses were removed. Older saves are
-refunded what they paid for them, and any stock on them goes to the Go-Backs bin. Level 8 currently has no reward.
+The hovercart (and its upgrades at Levels 3, 8, 14, 21, and 28) and several retired fixture
+licenses were removed. Older saves are refunded what they paid for them, and any stock on
+them goes to the Go-Backs bin. Level 8 currently has no reward.
 
 | Level | Total store reputation | Unlock |
 | --- | --- | --- |
@@ -31,7 +31,7 @@ refunded what they paid for them, and any stock on them goes to the Go-Backs bin
 | 11 | 375 | Supply license: Industrial Labor Gear; Arx Heavy Armatura |
 | 12 | 440 | Supply license: Hazard & Medical Supply |
 | 13 | 510 | Supply license: Kessler Expeditionary; Backroom Upgrade A (buy for 4,000 credits) |
-| 14 | 585 | Fixture license: Expanded Storage Supply |
+| 14 | 585 | (none) |
 | 15 | 665 | Supply license: High-Energy Munitions; Staff limit: 4 employees hired at once |
 | 16 | 750 | Supply license: Aulin NT Distributorship |
 | 17 | 840 | Supply license: Aegis Active Security; Sales Floor Expansion B (buy for 7,500 credits) |
@@ -42,7 +42,7 @@ refunded what they paid for them, and any stock on them goes to the Go-Backs bin
 | 22 | 1365 | Supply license: Kinetic-Tek Smart Systems; Quasar Diagnostics |
 | 23 | 1485 | Supply license: Antique Collector's Network; Staff limit: 6 employees hired at once |
 | 24 | 1610 | Supply license: Blackwood Ordnance; Sales Floor Expansion C (buy for 10,000 credits) |
-| 25 | 1740 | Supply license: Unrestricted Bio-Medical; Fixture license: Secure Storage Supply |
+| 25 | 1740 | Supply license: Unrestricted Bio-Medical |
 | 26 | 1875 | Supply license: Breach-Tech Heavy Tools |
 | 27 | 2015 | Backroom Upgrade C (buy for 9,000 credits) |
 | 28 | 2160 | Supply license: Tessier-Ashpool Verified Vendor |

@@ -7,10 +7,12 @@
 import fixtureTypes from "../../data/Fixtures.json" with { type: "json" };
 import { roundMoney } from "./Money.js";
 import { getSlotItemLimit } from "./ShelfSlotStocking.js";
-import { createFloorReachability } from "./FloorReachability.js";
-import { getReachableGridCells } from "./Pathfinder.js";
-import { PLAYER_BODY_HEIGHT, PLAYER_BODY_WIDTH, PLAYER_CHARACTER_HEIGHT, PLAYER_CHARACTER_WIDTH } from "./Player.js";
-import { CUSTOMER_COLLISION_HEIGHT, CUSTOMER_COLLISION_WIDTH } from "./CharacterDimensions.js";
+import { createFloorReachability, FLOOR_NODE_STEP } from "./FloorReachability.js";
+import { PLAYER_BODY_HEIGHT, PLAYER_BODY_WIDTH } from "./Player.js";
+import {
+  CHARACTER_ART_HEIGHT, CHARACTER_ART_WIDTH, CHARACTER_FEET_DROP,
+  CUSTOMER_COLLISION_HEIGHT, CUSTOMER_COLLISION_WIDTH,
+} from "./CharacterDimensions.js";
 import {
   BACKROOM_GRID_Y, TILE_SIZE, getAuthoredGridSize, zoneAt,
 } from "./RoomLayout.js";
@@ -28,13 +30,17 @@ const FLOOR_EDGE_ALLOWANCE = 1 / 8;
 export const BACK_WALL_TUCK = 1 / 2;
 // Tiles below the wall's bottom edge where a down-facing shelf's feet stop when pushed back.
 export const SHELF_FEET_BELOW_WALL = 1 / 4;
-// Tiles of floor kept clear in front of a shelf: the narrowest gap a walker fits through.
+// Tiles of floor kept clear in front of a fixture: the narrowest gap a walker fits through.
 // Shelf art never reaches outside the shelf's own space, so facing shelves this close apart
 // still never hide each other.
-export const SHELF_FRONT_CLEARANCE = 1 / 2;
+export const FIXTURE_FRONT_CLEARANCE = 1 / 2;
 // px, the feet box every walker (customers, staff, the player) must fit through.
 const WALKING_BODY_WIDTH = Math.max(PLAYER_BODY_WIDTH, CUSTOMER_COLLISION_WIDTH);
 const WALKING_BODY_HEIGHT = Math.max(PLAYER_BODY_HEIGHT, CUSTOMER_COLLISION_HEIGHT);
+// How far the first customer may overlap the front of the register art, in pixels.
+export const REGISTER_FRONT_OVERLAP = 10;
+const REGISTER_QUEUE_SPACING = 52;
+const MIN_REGISTER_QUEUE_SEPARATION = 32;
 
 export function isFixturePosition(value) {
   return Number.isFinite(value) && Number.isInteger(value / FIXTURE_POSITION_STEP);
@@ -49,8 +55,6 @@ export const FIXTURE_TYPES = fixtureTypes;
 
 // A new game's layout: no shelves, so the player buys their first one from the Fixtures tab.
 export const STARTING_FIXTURES = [
-  { id: "storage_demo_01", type: "locker_single", gx: 1, gy: BACKROOM_GRID_Y + 1 },
-  { id: "storage_demo_02", type: "locker_single", gx: 1.5625, gy: BACKROOM_GRID_Y + 1 },
   { id: "trash_can_01", type: "trash_can", gx: 18, gy: 2 },
   { id: "register", type: "register_basic", gx: 13, gy: 3 },
 ];
@@ -59,9 +63,6 @@ export const STARTING_FIXTURES = [
 // Their original 3x2 shelf (fixture_demo_01) was retired; ShopSave turns it into a refund.
 const LEGACY_FIXTURE_TYPES = {
   fixture_demo_01: "shelf_universal",
-  storage_demo_01: "locker_single",
-  storage_demo_02: "locker_single",
-  storage_demo_03: "locker_single",
   register: "register_basic",
 };
 
@@ -188,18 +189,20 @@ export function fixtureAtWorldPoint(placement, worldX, worldY) {
  * The fixture's projection box in tiles, extending from the body box in its facing direction.
  * @param {object} placement
  */
-export function fixtureFrontClearance(placement) {
-  const isShelf = getFixtureType(placement.type).kind === "shelf";
-  if (!isShelf && placement.type !== "locker_single") return null;
+export function fixtureFrontClearance(placement, behind = false) {
   const bounds = fixtureBounds(placement);
-  const height = isShelf ? SHELF_FRONT_CLEARANCE : PLAYER_CHARACTER_HEIGHT / TILE_SIZE;
-  const width = isShelf ? SHELF_FRONT_CLEARANCE : PLAYER_CHARACTER_WIDTH / TILE_SIZE;
-  switch (fixtureFacing(placement)) {
-    case "down": return { ...bounds, top: bounds.bottom, bottom: bounds.bottom + height };
-    case "up": return { ...bounds, bottom: bounds.top, top: bounds.top - height };
-    case "left": return { ...bounds, right: bounds.left, left: bounds.left - width };
-    default: return { ...bounds, left: bounds.right, right: bounds.right + width };
+  switch (fixtureFacing(placement, behind)) {
+    case "down": return { ...bounds, top: bounds.bottom, bottom: bounds.bottom + FIXTURE_FRONT_CLEARANCE };
+    case "up": return { ...bounds, bottom: bounds.top, top: bounds.top - FIXTURE_FRONT_CLEARANCE };
+    case "left": return { ...bounds, right: bounds.left, left: bounds.left - FIXTURE_FRONT_CLEARANCE };
+    default: return { ...bounds, left: bounds.right, right: bounds.right + FIXTURE_FRONT_CLEARANCE };
   }
+}
+
+export function fixtureProjectionBoxes(placement) {
+  return getFixtureType(placement.type).kind === "register"
+    ? [fixtureFrontClearance(placement), fixtureFrontClearance(placement, true)]
+    : [fixtureFrontClearance(placement)];
 }
 
 export function rectanglesOverlap(a, b) {
@@ -209,11 +212,9 @@ export function rectanglesOverlap(a, b) {
 export function fixturesOverlap(a, b) {
   const first = fixtureBounds(a);
   const second = fixtureBounds(b);
-  const firstFront = fixtureFrontClearance(a);
-  const secondFront = fixtureFrontClearance(b);
   return rectanglesOverlap(first, second) ||
-    Boolean(firstFront && rectanglesOverlap(firstFront, second)) ||
-    Boolean(secondFront && rectanglesOverlap(first, secondFront));
+    fixtureProjectionBoxes(a).some((projection) => rectanglesOverlap(projection, second)) ||
+    fixtureProjectionBoxes(b).some((projection) => rectanglesOverlap(first, projection));
 }
 
 // The range of floor squares the fixture covers by more than a sliver.
@@ -274,20 +275,7 @@ function fixturePixelBounds(placement) {
 
 // Shared paths clear centered staff bodies and the player's lower-body collision.
 export function fixtureCells(placement) {
-  if (placement.type !== "locker_single") return fixtureCoveredCells(placement);
-  const bounds = fixtureBounds(placement);
-  const cells = [];
-  for (let gy = Math.floor(bounds.top); gy < Math.ceil(bounds.bottom); gy++) {
-    for (let gx = Math.floor(bounds.left); gx < Math.ceil(bounds.right); gx++) {
-      const x = gx + 0.5;
-      const y = gy + 0.5;
-      if (rectanglesOverlap(bounds, {
-        left: x - PLAYER_BODY_WIDTH / TILE_SIZE / 2, right: x + PLAYER_BODY_WIDTH / TILE_SIZE / 2,
-        top: y - PLAYER_BODY_HEIGHT / TILE_SIZE / 2, bottom: y + PLAYER_BODY_HEIGHT / TILE_SIZE,
-      })) cells.push({ gx, gy });
-    }
-  }
-  return cells;
+  return fixtureCoveredCells(placement);
 }
 
 /**
@@ -298,17 +286,6 @@ export function fixtureCells(placement) {
  * @returns {{ gx: number, gy: number }[]}
  */
 export function fixtureAccessCells(placement, behind = false) {
-  if (placement.type === "locker_single") {
-    const spot = fixtureStandingSpot(placement, null);
-    const cell = { gx: Math.floor(spot.x / TILE_SIZE), gy: Math.floor(spot.y / TILE_SIZE) };
-    const step = fixtureFacingStep(placement);
-    const blocked = new Set(fixtureCells(placement).map(cellKey));
-    while (blocked.has(cellKey(cell))) {
-      cell.gx += step.dx;
-      cell.gy += step.dy;
-    }
-    return [cell];
-  }
   const { left, top, right, bottom } = fixtureBounds(placement);
   const { x0, x1, y0, y1 } = coveredCellRange(placement);
   // Squares whose centers lie along the fixture's edge.
@@ -326,37 +303,28 @@ export function fixtureAccessCells(placement, behind = false) {
 }
 
 /**
- * Where someone using the fixture from this access cell stands (px): half a tile out from
- * the front edge and lined up with the fixture, so a fixture between floor squares doesn't
+ * Where someone using the fixture from this access cell stands (px): centered in the projection box
+ * and lined up with the fixture, so a fixture between floor squares doesn't
  * leave shoppers standing back or off to one side.
  * @param {object} placement
  * @param {{ gx: number, gy: number }} cell - a front access cell or register back access cell
  */
 export function fixtureStandingSpot(placement, cell) {
   const { left, top, right, bottom } = fixtureBounds(placement);
-  if (placement.type === "locker_single") {
-    const x = (left + right) * TILE_SIZE / 2;
-    const y = (top + bottom) * TILE_SIZE / 2;
-    switch (fixtureFacing(placement)) {
-      case "down": return { x, y: bottom * TILE_SIZE + PLAYER_CHARACTER_HEIGHT / 2 };
-      case "up": return { x, y: top * TILE_SIZE - PLAYER_CHARACTER_HEIGHT / 2 };
-      case "left": return { x: left * TILE_SIZE - PLAYER_CHARACTER_WIDTH / 2, y };
-      default: return { x: right * TILE_SIZE + PLAYER_CHARACTER_WIDTH / 2, y };
-    }
-  }
   const frontCells = fixtureAccessCells(placement);
   const frontIndex = frontCells.findIndex(({ gx, gy }) => gx === cell.gx && gy === cell.gy);
   const backCells = fixtureAccessCells(placement, true);
   const backIndex = backCells.findIndex(({ gx, gy }) => gx === cell.gx && gy === cell.gy);
   const behind = frontIndex < 0 && backIndex >= 0;
   const index = behind ? backIndex : frontIndex;
-  const x = (index >= 0 ? left + index + 0.5 : cell.gx + 0.5) * TILE_SIZE;
-  const y = (index >= 0 ? top + index + 0.5 : cell.gy + 0.5) * TILE_SIZE;
-  // Shoppers stand in the middle of a shelf's clear strip.
-  const out = getFixtureType(placement.type).kind === "shelf" ? SHELF_FRONT_CLEARANCE / 2 : 0.5;
+  const feetOffset = behind && getFixtureType(placement.type).kind === "register" ? PLAYER_BODY_HEIGHT / 2 : 0;
+  const along = (from, to) => from + Math.min(index + 0.5, to - from - Math.min(0.5, (to - from) / 2));
+  const x = (index >= 0 ? along(left, right) : cell.gx + 0.5) * TILE_SIZE;
+  const y = (index >= 0 ? along(top, bottom) : cell.gy + 0.5) * TILE_SIZE + feetOffset;
+  const out = FIXTURE_FRONT_CLEARANCE / 2;
   switch (fixtureFacing(placement, behind)) {
-    case "down": return { x, y: (bottom + out) * TILE_SIZE };
-    case "up": return { x, y: (top - out) * TILE_SIZE };
+    case "down": return { x, y: (bottom + out) * TILE_SIZE + feetOffset };
+    case "up": return { x, y: (top - out) * TILE_SIZE + feetOffset };
     case "left": return { x: (left - out) * TILE_SIZE, y };
     default: return { x: (right + out) * TILE_SIZE, y };
   }
@@ -400,18 +368,17 @@ export function cellKey({ gx, gy }) {
  * entrance, no cut-off floor, and room for the register queue. `links` are pairs of cells
  * joined by a door (the shop and the backroom), so walking reaches one from the other.
  * Reachability is checked at 8px precision with a walking feet box, so any gap a shopper fits
- * through counts. `fixtureSolid(placement)` gives a fixture's true solid edges (px) when they
- * differ from its floor footprint (the register's art), or null.
+ * through counts. Every fixture uses its body box as its solid walking obstacle.
  * @param {object[]} placements
  * @param {object} options
- * @returns {{ valid: boolean, reason: string, blockedCells?: Set<string>, access?: Map, accessCells?: Map, queueCells?: object[] }}
+ * @returns {{ valid: boolean, reason: string, blockedCells?: Set<string>, access?: Map, accessCells?: Map, queueCells?: object[], queuePoints?: object[] }}
  */
 export function validateFixtureLayout(placements, {
   isWalkable, isWall = () => false, entrance, reservedCells = new Set(), doorwayCells = new Set(),
   occupiedRectangles = [], gridSize = getAuthoredGridSize(), queueSize = 6, requireSalesFloor = true,
-  links = [], backroomBounds = null, reservedRectangles = [],
+  links = [], backroomBounds = null, reservedRectangles = [], doorwayClearanceRectangles = [],
   fixtureReservedCells = reservedCells,
-  connectivityCache = null, fixtureSolid = () => null,
+  connectivityCache = null,
 }) {
   const invalid = (reason) => ({ valid: false, reason });
   if (!Array.isArray(placements)) return invalid("The fixture layout is invalid.");
@@ -427,8 +394,8 @@ export function validateFixtureLayout(placements, {
     }
     ids.add(placement.id);
     const bounds = fixtureBounds(placement);
-    const front = fixtureFrontClearance(placement);
-    const rectangles = front ? [bounds, front] : [bounds];
+    const projections = fixtureProjectionBoxes(placement);
+    const rectangles = [bounds, ...projections];
     const facesDown = fixtureFacing(placement) === "down";
     // Like the wall-cell check below, a down-facing fixture may tuck into the top wall.
     const backroomTop = backroomBounds && backroomBounds.top - (facesDown ? BACK_WALL_TUCK * TILE_SIZE : 0);
@@ -441,19 +408,22 @@ export function validateFixtureLayout(placements, {
         ? "Too far into the wall. Move it down a little."
         : "Keep the fixture and its standing space inside the backroom.");
     }
-    if (rectangles.some((rect) => reservedRectangles.some((reserved) => rectanglesOverlap({
+    const pixelRectangles = rectangles.map((rect) => ({
       left: rect.left * TILE_SIZE, right: rect.right * TILE_SIZE,
       top: rect.top * TILE_SIZE, bottom: rect.bottom * TILE_SIZE,
-    }, reserved)))) {
+    }));
+    if (pixelRectangles.some((rect) => reservedRectangles.some((reserved) => rectanglesOverlap(rect, reserved))) ||
+      doorwayClearanceRectangles.some((door) => rectanglesOverlap(pixelRectangles[0], door))) {
       return invalid("Keep entrances and the loading area clear.");
     }
-    if (spec.kind === "shelf") {
-      for (let gy = Math.floor(front.top); gy < Math.ceil(front.bottom); gy++) {
-        for (let gx = Math.floor(front.left); gx < Math.ceil(front.right); gx++) {
+    for (const [index, projection] of projections.entries()) {
+      const side = index === 0 ? "front" : "back";
+      for (let gy = Math.floor(projection.top); gy < Math.ceil(projection.bottom); gy++) {
+        for (let gx = Math.floor(projection.left); gx < Math.ceil(projection.right); gx++) {
           const key = cellKey({ gx, gy });
           if (fixtureReservedCells.has(key)) return invalid("Keep entrances and the loading area clear.");
-          if (doorwayCells.has(key)) return invalid(`The front of ${spec.name} can't face into a doorway.`);
-          if (!isWalkable(gx, gy)) return invalid(`Keep the front of ${spec.name} accessible.`);
+          if (doorwayCells.has(key)) return invalid(`The ${side} of ${spec.name} can't face into a doorway.`);
+          if (!isWalkable(gx, gy)) return invalid(`Keep the front${spec.kind === "register" ? " and back" : ""} of ${spec.name} accessible.`);
         }
       }
     }
@@ -470,19 +440,16 @@ export function validateFixtureLayout(placements, {
           ? "Too far into the wall. Move it down a little."
           : "Place fixtures on unlocked floor, away from walls.");
       }
-      if (!tucked && requireSalesFloor && spec.kind !== "storage" && !zoneAt(cell.gx, cell.gy)?.salesFloor) {
-        return invalid(`The ${spec.name} must go on the sales floor. Only storage goes in the back.`);
+      if (!tucked && requireSalesFloor && !zoneAt(cell.gx, cell.gy)?.salesFloor) {
+        return invalid(`The ${spec.name} must go on the sales floor.`);
       }
       if (fixtureReservedCells.has(key)) return invalid("Keep entrances and the loading area clear.");
-      if (!tucked && placement.type !== "locker_single") blockedCells.add(key);
-    }
-    if (placement.type === "locker_single") {
-      for (const cell of fixtureCells(placement)) blockedCells.add(cellKey(cell));
+      if (!tucked) blockedCells.add(key);
     }
     if (placed.some((other) => fixturesOverlap(placement, other))) {
       return invalid(placed.some((other) => rectanglesOverlap(bounds, fixtureBounds(other)))
         ? "Fixtures cannot overlap."
-        : "Keep room to stand in front of shelves and lockers.");
+        : "Keep room to stand at fixtures.");
     }
     placed.push(placement);
     const left = bounds.left * TILE_SIZE;
@@ -521,24 +488,27 @@ export function validateFixtureLayout(placements, {
   };
   const canWalk = (gx, gy) => isWalkable(gx, gy) && !blockedCells.has(`${gx},${gy}`);
   // Everyone walks on the same size of feet box (customers, staff, and the player).
-  const floor = createFloorReachability({
-    isWalkable,
-    solids: placements.map((placement) => fixtureSolid(placement) ?? fixturePixelBounds(placement)),
-    body: { width: WALKING_BODY_WIDTH, height: WALKING_BODY_HEIGHT },
-    gridSize,
-  });
-  floor.floodFromCell(entrance);
-  for (let changed = true; changed;) {
-    changed = false;
-    for (const [a, b] of links) {
-      for (const [from, to] of [[a, b], [b, a]]) {
-        if (!floor.reachesCell(from) || floor.reachesCell(to)) continue;
-        floor.floodFromCell(to);
-        changed ||= floor.reachesCell(to);
+  const reachableFloor = (solids) => {
+    const floor = createFloorReachability({
+      isWalkable, solids,
+      body: { width: WALKING_BODY_WIDTH, height: WALKING_BODY_HEIGHT },
+      gridSize,
+    });
+    floor.floodFromCell(entrance);
+    for (let changed = true; changed;) {
+      changed = false;
+      for (const [a, b] of links) {
+        for (const [from, to] of [[a, b], [b, a]]) {
+          if (!floor.reachesCell(from) || floor.reachesCell(to)) continue;
+          floor.floodFromCell(to);
+          changed ||= floor.reachesCell(to);
+        }
       }
     }
-  }
-  // Otherwise whatever is through the door (like the backroom lockers) gets the blame.
+    return floor;
+  };
+  const floor = reachableFloor(placements.map(fixturePixelBounds));
+  // Otherwise whatever is through the door gets the blame.
   if (links.some((pair) => pair.some((cell) => isWalkable(cell.gx, cell.gy) && !floor.reachesCell(cell)))) {
     return remember(invalid("Keep a path open to the backroom door."));
   }
@@ -562,21 +532,198 @@ export function validateFixtureLayout(placements, {
   }
   if (floor.hasCutOffFloor()) return remember(invalid("This placement cuts off part of the shop."));
   const queueStart = access.get(registers[0].id);
-  // The line only forms on the register's front side, never curling around beside or behind it.
-  // It may pass in front of shelves (a checkout aisle lined with impulse buys); customers don't
-  // bump into each other, so shoppers can still reach those shelves.
-  const canQueue = (gx, gy) =>
-    (gx - queueStart.gx) * step.dx + (gy - queueStart.gy) * step.dy >= 0 && canWalk(gx, gy) &&
-    !reservedCells.has(`${gx},${gy}`);
-  const queueCells = planRegisterQueue(queueStart, step, entrance, canQueue, canWalk, queueSize);
-  if (queueCells.length < queueSize) return remember(invalid("Leave room in front of the register for the customer queue."));
+  // Prefer a line in front; in tight rooms it can turn beside, but never behind, the counter.
+  // It may pass in front of shelves because customers don't block each other.
+  const queueFloor = (gx, gy) => canWalk(gx, gy) && !reservedCells.has(`${gx},${gy}`);
+  const canQueue = (gx, gy) => queueFloor(gx, gy) &&
+    (gx - queueStart.gx) * step.dx + (gy - queueStart.gy) * step.dy >= 0;
+  const isConnectedQueue = (cells) => cells.length === queueSize && cells.every((cell, index) => index === 0 ||
+    Math.abs(cell.gx - cells[index - 1].gx) + Math.abs(cell.gy - cells[index - 1].gy) === 1);
+  const bounds = fixtureBounds(registers[0]);
+  const backEdge = step.dx ? (step.dx < 0 ? bounds.right : bounds.left) :
+    (step.dy < 0 ? bounds.bottom : bounds.top);
+  const isBesideOrInFront = (gx, gy) =>
+    (step.dx ? (gx + 0.5 - backEdge) * step.dx : (gy + 0.5 - backEdge) * step.dy) >= 0;
+  const registerBounds = fixturePixelBounds(registers[0]);
+  const registerBody = {
+    width: registerBounds.right - registerBounds.left, height: registerBounds.bottom - registerBounds.top,
+    center: { x: (registerBounds.left + registerBounds.right) / 2, y: (registerBounds.top + registerBounds.bottom) / 2 },
+  };
+  const customerBody = accessBody(registers[0], false);
+  let queueReachability;
+  let queuePoints;
+  const acceptPoints = (points, clearRegister = false) => {
+    if (points.length !== queueSize || points.some((point, index) =>
+      reservedCells.has(`${Math.floor(point.x / TILE_SIZE)},${Math.floor(point.y / TILE_SIZE)}`) ||
+      points.slice(0, index).some((other) =>
+        Math.hypot(point.x - other.x, point.y - other.y) < MIN_REGISTER_QUEUE_SEPARATION) ||
+      (clearRegister && rectanglesOverlap({
+        left: point.x + customerBody.left, right: point.x + customerBody.right,
+        top: point.y + customerBody.top, bottom: point.y + customerBody.bottom,
+      }, registerBounds)))) return false;
+    const reach = getQueueReachability();
+    if (points.some((point) => !reach.reachesSpot(point, customerBody))) return false;
+    queuePoints = points;
+    return true;
+  };
+  function getQueueReachability() {
+    if (!queueReachability) {
+      const solids = placements.map((placement) => {
+        const solid = fixturePixelBounds(placement);
+        if (placement === registers[0]) {
+          if (step.dx < 0) solid.left += REGISTER_FRONT_OVERLAP;
+          else if (step.dx > 0) solid.right -= REGISTER_FRONT_OVERLAP;
+          else if (step.dy < 0) solid.top += REGISTER_FRONT_OVERLAP;
+          else solid.bottom -= REGISTER_FRONT_OVERLAP;
+        }
+        return solid;
+      });
+      queueReachability = reachableFloor(solids);
+    }
+    return queueReachability;
+  }
+  const toWorld = ({ gx, gy }) => ({ x: (gx + 0.5) * TILE_SIZE, y: (gy + 0.5) * TILE_SIZE });
+  const acceptCells = (cells) => acceptPoints(positionRegisterQueue(cells.map(toWorld), registerBody, step));
+  let queueCells = planRegisterQueue(queueStart, step, entrance, canQueue, canWalk, queueSize, acceptCells);
+  if (!isConnectedQueue(queueCells)) {
+    const canQueueBeside = (gx, gy) => queueFloor(gx, gy) && isBesideOrInFront(gx, gy);
+    const beside = planRegisterQueue(queueStart, step, entrance, canQueueBeside, canWalk, queueSize, acceptCells);
+    if (isConnectedQueue(beside)) queueCells = beside;
+  }
+  if (!isConnectedQueue(queueCells)) {
+    const spot = fixtureStandingSpot(registers[0], queueStart);
+    const start = { gx: Math.floor(spot.x / TILE_SIZE), gy: Math.floor(spot.y / TILE_SIZE) };
+    const startKey = cellKey(start);
+    if (isWalkable(start.gx, start.gy) && !reservedCells.has(startKey)) {
+      const canQueueFromSpot = (gx, gy) => `${gx},${gy}` === startKey ||
+        (queueFloor(gx, gy) && isBesideOrInFront(gx, gy));
+      const accept = (cells) => {
+        const path = [spot, ...cells.slice(1).map(toWorld)];
+        return acceptPoints(spreadRegisterQueue(path, queueSize), true);
+      };
+      const fromSpot = planRegisterQueue(start, step, entrance, canQueueFromSpot, canWalk, queueSize, accept);
+      if (isConnectedQueue(fromSpot)) queueCells = fromSpot;
+    }
+  }
+  if (!isConnectedQueue(queueCells)) {
+    // Whole floor squares are too coarse when the counter sits between them: trace the line
+    // over the real open floor instead.
+    const traced = traceRegisterQueue({
+      spot: fixtureStandingSpot(registers[0], queueStart), step, backEdge: backEdge * TILE_SIZE,
+      reach: getQueueReachability(), customerBody, registerBounds, reservedCells, queueSize,
+      doorSteps: stepsToEntrance(entrance, isWalkable), accept: (points) => acceptPoints(points, true),
+    });
+    if (traced) {
+      queueCells = traced.map(({ x, y }) => ({ gx: Math.floor(x / TILE_SIZE), gy: Math.floor(y / TILE_SIZE) }));
+    } else {
+      return remember(invalid("Leave room in front of the register for the customer queue."));
+    }
+  }
   return remember({
     valid: true, reason: "Click to place. Contents stay on the fixture.",
-    blockedCells, access, accessCells, queueCells,
+    blockedCells, access, accessCells, queueCells, queuePoints,
   });
 }
 
 const ORTHOGONAL_STEPS = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+
+function spreadRegisterQueue(path, count) {
+  if (path.length === 0) return [];
+  const placed = [path[0]];
+  const segmentLength = (i) => Math.hypot(path[i + 1].x - path[i].x, path[i + 1].y - path[i].y);
+  let segment = 0;
+  let along = 0;
+  while (placed.length < count) {
+    along += REGISTER_QUEUE_SPACING;
+    while (segment < path.length - 1 && along > segmentLength(segment)) {
+      along -= segmentLength(segment);
+      segment += 1;
+    }
+    if (segment >= path.length - 1) break;
+    const t = along / segmentLength(segment);
+    const a = path[segment];
+    const b = path[segment + 1];
+    placed.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+  }
+  return placed;
+}
+
+/**
+ * A line traced over open floor in small steps, for when whole floor squares can't fit one.
+ * Starts at the counter, never goes behind it, and prefers a straight line, then one bending
+ * toward the front door. Returns the accepted spots (front first) or null.
+ */
+function traceRegisterQueue({
+  spot, step, backEdge, reach, customerBody, registerBounds, reservedCells, queueSize, doorSteps, accept,
+}) {
+  const node = FLOOR_NODE_STEP;
+  const depth = Math.ceil((queueSize - 1) * REGISTER_QUEUE_SPACING / node);
+  const canStand = (x, y) =>
+    (step.dx ? (x - backEdge) * step.dx : (y - backEdge) * step.dy) >= 0 &&
+    !reservedCells.has(`${Math.floor(x / TILE_SIZE)},${Math.floor(y / TILE_SIZE)}`) &&
+    !rectanglesOverlap({
+      left: x + customerBody.left, right: x + customerBody.right,
+      top: y + customerBody.top, bottom: y + customerBody.bottom,
+    }, registerBounds) &&
+    reach.reachesSpot({ x, y }, customerBody);
+  const sx = Math.round(spot.x / node);
+  const sy = Math.round(spot.y / node);
+  const starts = [[sx, sy], [sx + step.dx, sy + step.dy], [sx + 1, sy], [sx - 1, sy], [sx, sy + 1], [sx, sy - 1]];
+  const start = starts.find(([nx, ny]) => canStand(nx * node, ny * node));
+  if (!start) return null;
+  // Out from the counter first, then sideways, then back.
+  const moves = [[step.dx, step.dy], [step.dy, step.dx], [-step.dy, -step.dx], [-step.dx, -step.dy]];
+  const parents = new Map([[`${start[0]},${start[1]}`, null]]);
+  let layer = [start];
+  for (let d = 0; d < depth && layer.length; d += 1) {
+    const next = [];
+    for (const [nx, ny] of layer) {
+      for (const [mx, my] of moves) {
+        const key = `${nx + mx},${ny + my}`;
+        if (parents.has(key) || !canStand((nx + mx) * node, (ny + my) * node)) continue;
+        parents.set(key, `${nx},${ny}`);
+        next.push([nx + mx, ny + my]);
+      }
+    }
+    layer = next;
+  }
+  const toDoor = ([nx, ny]) =>
+    doorSteps.get(`${Math.floor(nx * node / TILE_SIZE)},${Math.floor(ny * node / TILE_SIZE)}`) ?? Infinity;
+  const reachOut = ([nx, ny]) => Math.round(Math.hypot(nx * node - spot.x, ny * node - spot.y) / node);
+  const ends = layer.sort((a, b) => (reachOut(b) - reachOut(a)) || (toDoor(a) - toDoor(b))).slice(0, 32);
+  for (const end of ends) {
+    const path = [];
+    for (let key = `${end[0]},${end[1]}`; key; key = parents.get(key)) {
+      const [nx, ny] = key.split(",").map(Number);
+      path.unshift({ x: nx * node, y: ny * node });
+    }
+    const points = spreadRegisterQueue([spot, ...path], queueSize);
+    if (accept(points)) return points;
+  }
+  return null;
+}
+
+export function positionRegisterQueue(points, bounds, { dx, dy }) {
+  if (points.length === 0) return points;
+  const reachX = bounds.width / 2 + CHARACTER_ART_WIDTH / 2 - REGISTER_FRONT_OVERLAP;
+  const reachY = bounds.height / 2 + CHARACTER_ART_HEIGHT / 2 - REGISTER_FRONT_OVERLAP;
+  const front = {
+    x: bounds.center.x + dx * reachX,
+    y: bounds.center.y + dy * reachY + CHARACTER_FEET_DROP,
+  };
+  const shift = (front.x - points[0].x) * dx + (front.y - points[0].y) * dy;
+  if (shift >= 0) return points;
+  let straight = true;
+  const path = [front, ...points.slice(1).map((point, offset) => {
+    const index = offset + 1;
+    straight = straight && point.x === points[0].x + dx * index * TILE_SIZE &&
+      point.y === points[0].y + dy * index * TILE_SIZE;
+    if (!straight) return point;
+    return dx !== 0 ? { x: point.x, y: front.y } : { x: front.x, y: point.y };
+  })];
+  const placed = spreadRegisterQueue(path, points.length);
+  return placed.concat(points.slice(placed.length));
+}
 
 // Steps from each walkable cell to the entrance, walking orthogonally.
 function stepsToEntrance(entrance, canWalk) {
@@ -601,7 +748,7 @@ function stepsToEntrance(entrance, canWalk) {
  * line can't go straight. Each spot touches the one before it.
  * @returns {{ gx: number, gy: number }[]} front of the line first
  */
-export function planRegisterQueue(start, step, entrance, canQueue, canWalk, queueSize) {
+export function planRegisterQueue(start, step, entrance, canQueue, canWalk, queueSize, accept = () => true) {
   if (!canQueue(start.gx, start.gy)) return [];
   const doorSteps = stepsToEntrance(entrance, canWalk);
   const toDoor = (cell) => doorSteps.get(cellKey(cell)) ?? Infinity;
@@ -635,15 +782,32 @@ export function planRegisterQueue(start, step, entrance, canQueue, canWalk, queu
     line.push({ gx: next.gx, gy: next.gy });
     used.add(cellKey(next));
   }
-  // A dead end (the line boxed in) still fills the remaining spots from the nearest open floor.
-  if (line.length < queueSize) {
-    for (const cell of getReachableGridCells(start, canQueue)) {
-      if (line.length >= queueSize) break;
-      if (!used.has(cellKey(cell))) {
-        line.push(cell);
-        used.add(cellKey(cell));
-      }
+  if (line.length === queueSize && accept(line)) return line;
+
+  // If the preferred turn dead-ends, try the other connected turns before giving up.
+  const search = (path, visited, hasTurned) => {
+    if (path.length === queueSize) return accept(path) ? [...path] : null;
+    const last = path.at(-1);
+    const previous = path.at(-2);
+    const heading = previous ? { dx: last.gx - previous.gx, dy: last.gy - previous.gy } : step;
+    const options = ORTHOGONAL_STEPS
+      .map(([dx, dy]) => ({ gx: last.gx + dx, gy: last.gy + dy, straight: dx === heading.dx && dy === heading.dy }))
+      .filter((cell) => canQueue(cell.gx, cell.gy) && !visited.has(cellKey(cell)))
+      .sort((a, b) => {
+        const straight = Number(b.straight) - Number(a.straight);
+        return (!hasTurned && straight) || (toDoor(a) - toDoor(b)) || straight;
+      });
+    for (const option of options) {
+      const next = { gx: option.gx, gy: option.gy };
+      const key = cellKey(next);
+      visited.add(key);
+      path.push(next);
+      const found = search(path, visited, hasTurned || !option.straight);
+      if (found) return found;
+      path.pop();
+      visited.delete(key);
     }
-  }
-  return line;
+    return null;
+  };
+  return search([start], new Set([cellKey(start)]), false) ?? [];
 }

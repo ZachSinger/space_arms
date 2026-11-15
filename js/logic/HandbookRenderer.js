@@ -16,8 +16,7 @@ import {
 import { controlLabel } from "./InputDevice.js";
 import { formatMoney } from "./Money.js";
 import {
-  MAX_EMPLOYEE_SKILL_LEVEL, EMPLOYEE_BASE_CARRY, EMPLOYEE_MILESTONE_LEVELS,
-  getEmployeeCarryCapacity, getEmployeeJobSpeed,
+  MAX_EMPLOYEE_SKILL_LEVEL, EMPLOYEE_MILESTONE_LEVELS, getEmployeeJobSpeed,
 } from "./EmployeeTraining.js";
 
 export const HANDBOOK_TOPICS = Object.freeze([
@@ -100,22 +99,24 @@ function storeTopic({ shopLevel, reputation }) {
     section("Store Space", `
       ${list([
         "<strong>Sales floor:</strong> where customers shop. Shelves and the register go here.",
-        "<strong>Backroom:</strong> the storeroom and the Loading Pad. Customers never go back here. Only lockers can be placed in the backroom.",
+        "<strong>Backroom:</strong> where orders arrive on the Loading Pad. Customers never go back here.",
         "<strong>Loading Pad:</strong> where every order you buy arrives, as crates.",
       ])}
       <p>To get more room, buy sales floor expansions and backroom upgrades in the
         <strong>Layout</strong> tab. Each one needs a certain Store Level, costs credits, and
         must be bought in order, between shifts.</p>`),
     section("Placing Fixtures", `
-      <p>Fixtures are your shelves, lockers, and the register.</p>
+      <p>Fixtures are your shelves, register, and trashcan.</p>
       ${list([
         "Buy one in the <strong>Fixtures</strong> tab. It arrives as a crate on the Loading Pad.",
         `Pick up the crate with ${key("crate")}, carry it to where you want it, and press ${key("interact")}.`,
-        `A see-through copy of the fixture appears. Move it into place, turn it with ${key("rotate")}, and
+        `A see-through copy of the fixture appears. You can walk while placing it.
+          Move it with the <span class="kbd-only">mouse</span><span class="pad-only">right stick</span>,
+          turn it with ${key("rotate")}, and
           <span class="kbd-only">click</span><span class="pad-only">press A</span> to place it.
-          ${key("cancel")} cancels.`,
-        "The green outline shows where the fixture sits; it turns red if you can't place it there. Keep the blue outlined area free of furniture so customers and staff can stand there.",
-        "A fixture can't block a doorway or cut off part of the shop, and the register needs room in front for a line.",
+          <span class="kbd-only">Esc or right-click</span><span class="pad-only">X</span> cancels.`,
+        "Every fixture uses a Collision Box: its body box fits the visible fixture, and its blue projection box extends out in front. The register also needs a projection box behind it for the cashier. Keep blue areas free of furniture; people can walk through them. The body outline turns red if placement is blocked.",
+        "A fixture can't block a doorway or cut off part of the shop. Customers need room to line up in front of or beside the register.",
       ])}
       <p>Fixtures can only be placed or moved <strong>between shifts</strong>. To move one that's
         already placed, use <strong>MOVE</strong> in the Layout tab. Its contents move with it.</p>
@@ -155,7 +156,7 @@ function orderingTopic() {
       ])}`),
     section("Ordering Fixtures", `
       ${list([
-        "The <strong>Fixtures</strong> tab sells shelves, lockers, and registers.",
+        "The <strong>Fixtures</strong> tab sells shelves, registers, and trashcans.",
         "Each fixture needs a fixture license. You start with Basic Fixture Supply. Higher Store Levels unlock more.",
         "A bought fixture arrives as a crate on the Loading Pad, so it needs a free spot there.",
         "See <strong>Running the Store &gt; Placing Fixtures</strong> to set it up.",
@@ -176,7 +177,7 @@ function stockingTopic() {
         `When the arrow points at a crate on the floor, ${key("putDown")} puts your crates on top of it instead: tap for one, hold for as many as fit. Stacks on the floor can be up to three crates high. Nothing can be stacked on a fixture crate or on the Loading Pad, and fixture crates are never stacked.`,
         `While walking with no arrow showing, press ${key("crate")} to throw your top crate the way you're walking. Thrown crates that hit a customer cost reputation.`,
         "Carrying two crates slows you down; a third slows you down further. Empty crates slow you less than filled crates. Your character faces the direction you move, and the crates stay straight.",
-        `Press ${key("interact")} at a shelf to stock it by hand. At a locker, ${key("putDown")} empties crates into it and ${key("interact")} fills a crate from it (see <strong>Lockers</strong>).`,
+        `Press ${key("interact")} at a shelf to stock it by hand.`,
         "Walk into a crate on the floor to push it out of the way. A taller stack is harder to push, and so is any crate while you're carrying something. A three-crate stack won't move at all while you're carrying a crate.",
       ])}`),
     section("Shelves", `
@@ -192,13 +193,6 @@ function stockingTopic() {
         "Hold the right mouse button to take boxes back into an empty crate, or a crate of the same item with room left. You can work while carrying up to three crates; the highest matching crate is used.",
         "The shop keeps running. Customers take boxes from the front first, including while you stock. Each stocked space has an orange price sticker on its top-right corner showing what customers pay for one; it turns grey and says SOLD OUT when the space is empty. Click a sticker to change that item's price: type a new price, or use -10%, +10%, or MARKET (today's market price). Press Esc to put the price box away.",
         `Empty crates stay in your hands. Beside a trashcan on the sales floor, press ${key("interact")} to put all your held empty crates in it. Filled crates stay in your hands. Press ${key("interact")} with completely empty hands to take one free empty crate. ${key("putDown")} still puts crates on the floor; it does not put them in the trashcan.`,
-      ])}`),
-    section("Lockers", `
-      ${list([
-        "Each locker holds one kind of item. Walk close to see its item name and how full it is. A basic locker holds 40 box-size units: 40 small boxes or 2 of the largest boxes.",
-        `Carrying a crate of items, tap ${key("putDown")} at a locker to empty your top crate into it. Hold ${key("putDown")} to keep emptying crates from the top of your stack until one doesn't fit. Emptied crates are put away for you; anything that doesn't fit stays in its crate.`,
-        `To take items out, carry an empty crate (or one holding the locker's item) and press ${key("interact")} at the locker. It fills the highest crate in your stack that can take them, as full as it will go.`,
-        "Empty crates come free from any trashcan on the sales floor.",
       ])}`),
     section("Go-Backs", `
       <p>When a customer gives up and leaves, the items they were holding go into the Go-Backs
@@ -225,7 +219,7 @@ function customersTopic() {
         `Walk behind the register and press ${key("interact")}.`,
         "Click each item to scan it, or hold the mouse button and move over several items. Only the scanned item slides across the red bar; the others keep moving at normal belt speed.",
         "<strong>Card:</strong> type the total on the keypad and press CONFIRM TOTAL. Backspace removes the last character; CLEAR erases the whole entry.",
-        "<strong>Cash:</strong> take the customer's cash, then give back their change from the drawer. The large amber CURRENT CHANGE amount is what you have counted out; CHANGE OWED is what the customer needs back. Some customers pay the exact amount, so there's no change to give.",
+        `<strong>Cash:</strong> take the customer's cash, then give back their change from the drawer. The large CURRENT CHANGE amount is what you have counted out; CHANGE OWED is what the customer needs back. CURRENT CHANGE turns green when it matches exactly and red when it's too much. Press ${key("handOverChange")} to hand it over. Some customers pay the exact amount, so there's no change to give.`,
         "<strong>Scavengers:</strong> most pay in M-Scrips. 120 M-Scrips equal 1 credit; if the price doesn't convert to a whole M-Scrip, round the amount up. Their bills come in 1, 5, 10, 25, 50, 100, 500, and 1,000 M-Scrips. The sale still earns its listed price in credits, and any change is in M-Scrips.",
         "<strong>Explorers:</strong> most pay with a travel Chit. The Chit shows its value and a code made of 2 to 5 digits, each from 1 to 4. Enter the code with the arrow keys or the on-screen buttons (up = 1, down = 2, left = 3, right = 4); on a controller, use the D-pad. A wrong direction resets the code. After three wrong directions in one sale, the Explorer gives up and leaves angry: you lose the sale and store reputation, and their items go to the Go-Backs bin. The sale completes when you enter the last digit correctly, and the Explorer takes the Chit back. No change is given.",
         "Release the mouse button after scanning. Start a new click or click-and-hold to collect the customer's cash.",
@@ -266,7 +260,7 @@ function licensesTopic() {
     section("Two Kinds of License", `
       ${list([
         "<strong>Supply licenses</strong> decide which items you can order in the Supply tab.",
-        "<strong>Fixture licenses</strong> decide which shelves and lockers you can buy in the Fixtures tab.",
+        "<strong>Fixture licenses</strong> decide which shelves, registers, and trashcans you can buy in the Fixtures tab.",
       ])}
       <p>A new shop starts with Basic Fixture Supply already signed. Its first available
         supply contract is Basic Rations &amp; Water.</p>
@@ -290,11 +284,10 @@ function employeesTopic() {
         and do the <strong>first job that needs doing</strong>:</p>
       ${list([
         "<strong>Run register:</strong> a customer is in line, you aren't at the register, and no other employee is on it.",
-        "<strong>Stock shelves:</strong> a shelf spot has room, and a locker has that item.",
-        "<strong>Load storage:</strong> a crate is on the Loading Pad, and a locker has room for it.",
+        "<strong>Stock shelves:</strong> a crate is on the Loading Pad, and a matching shelf spot has room.",
       ])}
-      <p>They always finish putting away what they're carrying first. They only stock items that
-        already have a spot on a shelf. With nothing to do, they take a break in the backroom and
+      <p>They take a matching crate from the Loading Pad straight to its shelf spot. They only
+        stock items that already have a spot on a shelf. With nothing to do, they take a break in the backroom and
         check again soon.</p>
       <p>At closing time, they finish up and leave once the last customer is gone.</p>`),
     section("How to Set Priorities", `
@@ -320,18 +313,17 @@ function employeesTopic() {
       ])}`),
     section("Job Levels &amp; Training", `
       ${list([
-        `Each employee has three separate skills: <strong>Run register</strong>, <strong>Stock shelves</strong>,
-          and <strong>Load storage</strong>. Each starts at Level 1 and can reach Level ${MAX_EMPLOYEE_SKILL_LEVEL}.`,
+        `Each employee has two separate skills: <strong>Run register</strong> and <strong>Stock shelves</strong>.
+          Each starts at Level 1 and can reach Level ${MAX_EMPLOYEE_SKILL_LEVEL}.`,
         "Between shifts, open the Employee tab, find the person under YOUR STAFF, and select TRAIN beside the skill you want to improve.",
         "Review the price and the new wage, then select CONFIRM TRAINING.",
         "Each course costs more than that employee's previous course, no matter which skill it trains. Ten courses cost the same whether you focus them on one skill or spread them out.",
         "Training takes the entire next shift. That employee will not work in the shop, but you still pay their current wage when the shift starts.",
         "The skill improves when that shift ends. The higher wage starts with the following shift.",
-        `Run register and Load storage gain a larger speed boost at Levels ${EMPLOYEE_MILESTONE_LEVELS.join(" and ")}:
+        `Run register gains a larger speed boost at Levels ${EMPLOYEE_MILESTONE_LEVELS.join(" and ")}:
           employees work ${Math.round((getEmployeeJobSpeed({ register: 3 }, "register") - 1) * 100)}% faster
           at Level 3 and ${getEmployeeJobSpeed({ register: 5 }, "register")} times normal speed at Level 5.`,
-        `Stock shelves makes restocking trips faster with each level. Employees carry ${EMPLOYEE_BASE_CARRY} items
-          at Level 1, ${getEmployeeCarryCapacity(3)} at Level 3, and ${getEmployeeCarryCapacity(5)} at Level 5.`,
+        "Stock shelves makes restocking trips faster with each level.",
         "Skills and higher wages are permanent.",
         "Once training is booked, wait until the employee returns before booking another course or changing On Shift / Off Shift.",
       ])}`),
@@ -363,17 +355,19 @@ function controlsTopic() {
   const rows = [
     ["Walk", "WASD or arrow keys", "Left stick or D-pad"],
     ["Dash (uses stamina)", "Hold Shift", "Hold B or a trigger"],
-    ["Use or open; fill a crate at a locker", "E", "A"],
+    ["Use or open", "E", "A"],
     ["Pick up a crate (hold: the whole stack from the arrow up)", "Space", "X"],
     ["Throw your top crate (while walking, no arrow)", "Space", "X"],
-    ["Put a crate down, or empty it into a locker (hold: your whole stack)", "Q", "Y"],
+    ["Put a crate down (hold: your whole stack)", "Q", "Y"],
     ["Move the green arrow one crate down", "Ctrl", "Right stick click"],
     ["Pack the Go-Backs bin into crates (at the register, empty hands)", "Q", "Y"],
     ["Manager's Tablet", "I", "Back / View"],
     ["Pause or resume the shift", "P or Esc (Esc closes an open window first)", "Start, then PAUSE"],
     ["Zoom", "Page Up / Page Down", "LB / RB"],
+    ["Move a fixture while placing it", "Mouse", "Right stick"],
     ["Turn a fixture or shelf item", "R", "Y"],
-    ["Cancel", "Esc or right-click", "B"],
+    ["Cancel fixture placement", "Esc or right-click", "X"],
+    ["Cancel other actions", "Esc or right-click", "B"],
   ].map(([action, keyboard, pad]) => `<tr><td>${action}</td><td>${keyboard}</td><td>${pad}</td></tr>`).join("");
   return [
     section("Controls", `

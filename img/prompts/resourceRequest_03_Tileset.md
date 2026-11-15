@@ -13,8 +13,8 @@ Sheet 1 — Modular Floor & Wall Tiles (fill all 64 cells; named below are requi
 
 Sheet 2 — Standalone Fixtures & Decor (fill all 100 cells; named below are required, remaining cells can be sensible variations in the same style):
 - Counters & registers: checkout register counter (top-down front view), register counter corner-end piece
-- Shelving & racks: empty universal shelving unit (top-down, no items on it), empty specialized weapon rack (top-down), empty armor mannequin stand (top-down), empty backroom storage shelf (top-down)
-- Crates & storage: generic stackable supply crate (top-down, closed), open/empty supply crate (top-down)
+- Shelving & racks: empty universal shelving unit (top-down, no items on it), empty specialized weapon rack (top-down), empty armor mannequin stand (top-down)
+- Crates: generic stackable supply crate (top-down, closed), open/empty supply crate (top-down)
 - Loading pad: crate anchor/tie-down marker, pad edge barrier railing
 - Decor & signage: overhead neon shop sign, wall-mounted hazard/warning sign, ceiling light fixture (top-down glow pool), security camera mount, wall-mounted CRT monitor/terminal, potted alien plant, break-room vending machine, trash/disposal bin
 After Generating, but before Finishing, please revisit both sheets and ensure they match the request above. For Sheet 1, confirm every tile aligns exactly to its grid cell with no bleed into neighboring cells, and that floor/wall tiles tile seamlessly edge-to-edge. For Sheet 2, confirm each fixture is separated and not touching its neighbors, so it can be easily extracted. Ensure there are no malformed images on either sheet.

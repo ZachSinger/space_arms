@@ -52,6 +52,35 @@ test("register windows retain register controls, while other open windows take m
   assert.equal(controls.allows("debug"), false);
 });
 
+test("placement allows walking unless another window or controller menu has focus", () => {
+  const scene = createScene();
+  const placementWindow = { id: "fixture-placement-window", isOpen: true };
+  let tabletFocused = false;
+  let controllerMenuOpen = false;
+  const tablet = {
+    id: "manager-tablet",
+    isOpen: true,
+    element: { classList: { contains: () => tabletFocused } },
+  };
+  scene.fixturePlacement = { active: true, uiWindow: placementWindow };
+  scene.windowManager.windows.set(placementWindow.id, placementWindow);
+  scene.windowManager.windows.set(tablet.id, tablet);
+  scene.uiNavigator = { hasScope: () => controllerMenuOpen };
+  const controls = new ControlMode(scene);
+
+  assert.equal(controls.getMode(), CONTROL_MODES.PLACING);
+  assert.equal(controls.allows("move"), true);
+  tabletFocused = true;
+  assert.equal(controls.getMode(), CONTROL_MODES.MODAL);
+  assert.equal(controls.allows("move"), false);
+  tabletFocused = false;
+  controllerMenuOpen = true;
+  assert.equal(controls.getMode(), CONTROL_MODES.MODAL);
+  assert.equal(controls.allows("move"), false);
+  controllerMenuOpen = false;
+  assert.equal(controls.allows("move"), true);
+});
+
 test("each mode exposes only its declared actions", () => {
   const scene = createScene();
   const controls = new ControlMode(scene);

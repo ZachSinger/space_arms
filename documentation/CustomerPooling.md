@@ -107,7 +107,7 @@ All numerical values below are initial tuning values, not final balance.
 
 ### Overall Stock Scaler
 
-- Compare available units on store shelves (not storage) with the units
+- Compare available units on store shelves (not loose crates or Go-Backs) with the units
   customers in the potential pool are expected to buy.
 - `Expected Demand = Pre-Stock Pool x Average Units Per Customer`
 - Average units per customer is a weighted average of the customer groups'

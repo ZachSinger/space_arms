@@ -43,7 +43,7 @@ export class EmployeeRenderer {
             ? "Hire between shifts."
             : !affordable
               ? `You need ${employee.hireCost - credits} more credits.`
-              : "Can run the register, stock shelves, and load delivered crates into storage.";
+              : "Can run the register or take stock from the Loading Pad to matching shelf spots.";
         return `
           <div class="fixture-stock-row">
             <div>
@@ -52,8 +52,7 @@ export class EmployeeRenderer {
               <div class="fixture-stock-meta">Hiring cost: ${employee.hireCost} credits.
                 Wages: ${employee.wagePerShift} credits per shift.</div>
               <div class="fixture-stock-meta">Skills:
-                ${EMPLOYEE_JOBS.map(({ id, label }) => `${label}: Level ${employee.skillLevels[id]}`).join("; ")}.
-                Carries ${employee.backpackCapacity} items when stocking.</div>
+                ${EMPLOYEE_JOBS.map(({ id, label }) => `${label}: Level ${employee.skillLevels[id]}`).join("; ")}.</div>
             </div>
             <button type="button" class="action-btn" data-hire-employee-id="${employee.id}"
               ${disabled ? "disabled" : ""} aria-label="${buttonLabel}">
@@ -91,17 +90,14 @@ export class EmployeeRenderer {
         const skillRows = EMPLOYEE_JOBS.map(({ id, label }) => {
           const level = employee.skillLevels[id];
           const bonus = Math.round((getEmployeeJobSpeed(employee.skillLevels, id) - 1) * 100);
-          const benefit = id === "register" ? "register service" : id === "stock_shelves"
-            ? "stocking trips" : "delivery-crate trips";
-          const carry = id === "stock_shelves"
-            ? ` Carries ${employee.backpackCapacity} items per trip.` : "";
+          const benefit = id === "register" ? "register service" : "shelf stocking";
           const offer = getEmployeeTrainingOffer(employee.id, employee.skillLevels, id);
           const disabled = !canHire || trainingJobId || !offer || credits < offer.cost;
           return `
             <div class="employee-training-row">
               <div>
                 <strong>${label}: Level ${level}/${MAX_EMPLOYEE_SKILL_LEVEL}</strong>
-                <div class="fixture-stock-meta">${bonus ? `${bonus}% faster ${benefit}.` : `Normal ${benefit} speed.`}${carry}</div>
+                <div class="fixture-stock-meta">${bonus ? `${bonus}% faster ${benefit}.` : `Normal ${benefit} speed.`}</div>
                 <div class="fixture-stock-meta">${trainingJobId
                   ? trainingJobId === id && offer
                     ? `Booked: Level ${offer.targetLevel}. Wages after training: ${offer.nextWagePerShift} credits per shift.`
@@ -124,14 +120,11 @@ export class EmployeeRenderer {
               Pay ${confirmedOffer.cost} credits now. Away for the next shift; still paid
               ${confirmedOffer.wagePerShift} credits for that shift.
               After training, wages become ${confirmedOffer.nextWagePerShift} credits per shift.
-              ${confirmedOffer.jobId !== "stock_shelves"
-                ? `After training, ${Math.round((getEmployeeJobSpeed({
-                  ...employee.skillLevels,
-                  [confirmedOffer.jobId]: confirmedOffer.targetLevel,
-                }, confirmedOffer.jobId) - 1) * 100)}% faster ${confirmedOffer.jobId === "register"
-                  ? "register service" : "delivery-crate trips"}.` : ""}
-              ${confirmedOffer.jobId === "stock_shelves"
-                ? `They will carry ${confirmedOffer.nextBackpackCapacity} items per stocking trip.` : ""}
+              After training, ${Math.round((getEmployeeJobSpeed({
+                ...employee.skillLevels,
+                [confirmedOffer.jobId]: confirmedOffer.targetLevel,
+              }, confirmedOffer.jobId) - 1) * 100)}% faster
+              ${confirmedOffer.jobId === "register" ? "register service" : "shelf stocking"}.
               Each course for ${employee.name} costs more than the last, whichever skill it trains.
               Skills and higher wages are permanent.
             </p>
@@ -183,8 +176,8 @@ export class EmployeeRenderer {
     return `
       <div class="employee-panel">
       <div class="fixture-stock-meta">
-        Each employee can run the register, stock shelves, or move delivered crates into
-        storage. Set their job order below. Wages are paid when a shift starts, for
+        Each employee can run the register or take delivered crates straight to matching
+        shelf spots. Set their job order below. Wages are paid when a shift starts, for
         employees who are On Shift or in training. Off Shift employees stay home unpaid.
         Everyone starts with the same skills; training is how they improve. It takes one paid
         shift away and permanently raises wages.

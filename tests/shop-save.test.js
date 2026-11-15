@@ -29,7 +29,6 @@ function snapshot() {
       ...(getFixtureType(type).kind === "shelf" ? { stockingVersion: 1, placements: [{
         itemId: "wpn_rif_01", gx: 0, gy: 0, w: 1, h: 1, rotated: false, quantity: 3,
       }] } : {}),
-      ...(getFixtureType(type).kind === "storage" ? { stock: [{ itemId: "srv_01", quantity: 5 }] } : {}),
     })),
     unlockedZones: ["storeroom", "sales_floor", "loading_pad"],
     crates: [{ itemId: "wpn_rif_01", quantity: 5, x: 132, y: 6656, velocityX: 120, velocityY: 0 }],
@@ -288,7 +287,7 @@ test("invalid saved inventory and economy are rejected before restoration", () =
     (data) => { data.market.supplyRatios.wpn_rif_01 = 0; },
     (data) => { data.fixtures[0].placements[0].quantity = 99; },
     (data) => { data.fixtures[0].placements.push({ ...data.fixtures[0].placements[0] }); },
-    (data) => { data.fixtures[1].stock[0].itemId = "unknown"; },
+    (data) => { data.fixtures[0].placements[0].itemId = "unknown"; },
     (data) => { data.fixtures[1].gx = 1.3; },
     (data) => { data.fixtures[1].type = "unknown"; },
     (data) => { data.fixtures[1].id = data.fixtures[0].id; },
@@ -302,7 +301,7 @@ test("invalid saved inventory and economy are rejected before restoration", () =
     (data) => { data.playerState.hiredEmployees = ["tavi_stock_clerk", "tavi_stock_clerk"]; },
     (data) => {
       data.playerState.hiredEmployees = ["tavi_stock_clerk"];
-      data.playerState.employeeJobPriorities = { tavi_stock_clerk: ["register", "register", "load_storage"] };
+      data.playerState.employeeJobPriorities = { tavi_stock_clerk: ["register", "register", "unknown"] };
     },
   ];
   for (const corrupt of corruptions) {
@@ -328,7 +327,7 @@ test("saves from before employees existed still load", () => {
 test("employee skills remain valid after firing, while booked training requires hired non-maxed staff", () => {
   const data = snapshot();
   data.playerState.employeeSkills = {
-    tavi_stock_clerk: { register: 2, stock_shelves: 1, load_storage: 1 },
+    tavi_stock_clerk: { register: 2, stock_shelves: 1 },
   };
   assert.doesNotThrow(() => validateShopSave(data, database));
   data.playerState.employeeTraining = { tavi_stock_clerk: "register" };
@@ -368,32 +367,40 @@ test("saves from before fixture types existed load with types filled in", () => 
   assert.equal(legacy.fixtures[0].type, undefined);
 });
 
-test("older saves keep the third starting locker and its contents", () => {
+test("version 9 saves remove storage fixtures, refund purchases, and move stock into Go-Backs", () => {
   const data = snapshot();
-  const thirdLocker = {
-    id: "storage_demo_03", gx: 3, gy: 101, stock: [{ itemId: "srv_01", quantity: 5 }],
-  };
-  data.fixtures.push(thirdLocker);
-  const restored = validateShopSave(data, database);
-  assert.equal(restored.fixtures.filter((fixture) => fixture.type === "locker_single").length, 3);
-  assert.deepEqual(restored.fixtures.find((fixture) => fixture.id === thirdLocker.id), {
-    ...thirdLocker, type: "locker_single",
+  data.layoutVersion = 9;
+  data.fixtures.push({
+    id: "old-locker", type: "locker_single", gx: 3, gy: 101,
+    stock: [{ itemId: "srv_01", quantity: 5 }],
   });
+  data.crates.push({ kind: "fixture", typeId: "locker_single", x: 100, y: 200, velocityX: 0, velocityY: 0 });
+  data.carriedCrate = { kind: "fixture", typeId: "locker_single" };
+  data.playerState.activeLicenses.push("lic_fixture_storage_bank");
+  data.playerState.hiredEmployees = ["tavi_stock_clerk"];
+  data.playerState.employeeJobPriorities = { tavi_stock_clerk: ["load_storage", "register"] };
+  data.playerState.employeeSkills = { tavi_stock_clerk: { register: 2, stock_shelves: 1, load_storage: 3 } };
+  data.playerState.employeeTraining = { tavi_stock_clerk: "load_storage" };
+
+  const restored = validateShopSave(data, database);
+  assert.equal(restored.layoutVersion, SHOP_LAYOUT_VERSION);
+  assert.equal(restored.fixtures.some((fixture) => fixture.type === "locker_single"), false);
+  assert.equal(restored.crates.some((crate) => crate.typeId === "locker_single"), false);
+  assert.equal(restored.carriedCrate, null);
+  assert.equal(restored.playerState.credits, 1500 + 180 * 3 + 1000);
+  assert.deepEqual(restored.playerState.goBacks, [
+    { itemId: "srv_01", quantity: 5 },
+    { itemId: "wpn_rif_01", quantity: 40 },
+  ]);
+  assert.deepEqual(restored.playerState.activeLicenses, ["lic_corp_aulin"]);
+  assert.deepEqual(restored.playerState.employeeJobPriorities, { tavi_stock_clerk: ["stock_shelves", "register"] });
+  assert.deepEqual(restored.playerState.employeeSkills, { tavi_stock_clerk: { register: 2, stock_shelves: 3 } });
+  assert.deepEqual(restored.playerState.employeeTraining, { tavi_stock_clerk: "stock_shelves" });
+  assert.equal(data.fixtures.some((fixture) => fixture.type === "locker_single"), true,
+    "migration does not mutate the source save");
 });
 
-test("new saves reject mixed-item lockers and box-size overflow", () => {
-  const data = snapshot();
-  const locker = data.fixtures.find((fixture) => getFixtureType(fixture.type).kind === "storage");
-  locker.stock = [
-    { itemId: "amo_01", quantity: 1 },
-    { itemId: "srv_01", quantity: 1 },
-  ];
-  assert.throws(() => validateShopSave(data, database), /locker contains more than one item type/);
-  locker.stock = [{ itemId: "wpn_hvy_01", quantity: 3 }];
-  assert.throws(() => validateShopSave(data, database), /inventory exceeds its capacity/);
-});
-
-test("saves using the old detached backroom explain that a new game is required", () => {
+test("saves using the old detached backroom are rejected as unsupported", () => {
   const legacy = snapshot();
   delete legacy.layoutVersion;
   for (const entry of legacy.fixtures) {
@@ -401,11 +408,11 @@ test("saves using the old detached backroom explain that a new game is required"
     else Object.assign(entry, { gx: entry.gx - 7, gy: entry.gy - 1 });
   }
   legacy.crates[0].y = 640;
-  assert.throws(() => validateShopSave(legacy, database), /old shop layout.*Start a new game/);
+  assert.throws(() => validateShopSave(legacy, database), /unsupported shop layout/);
   assert.equal(legacy.crates[0].y, 640, "the save being loaded is not changed");
 });
 
-test("older room layout versions explain that a new game is required", () => {
+test("older room layout versions are rejected as unsupported", () => {
   const old = snapshot();
   old.layoutVersion = 2;
   for (const entry of old.fixtures) {
@@ -415,7 +422,7 @@ test("older room layout versions explain that a new game is required", () => {
   old.crates[0].y = 300;
   for (const version of [2, 3, 4, 5, 6, 7, 8]) {
     old.layoutVersion = version;
-    assert.throws(() => validateShopSave(old, database), /old shop layout.*Start a new game/);
+    assert.throws(() => validateShopSave(old, database), /unsupported shop layout/);
   }
   assert.equal(old.crates[0].x, 400, "the save being loaded is not changed");
 });
@@ -432,11 +439,10 @@ test("fixture rotation is saved, and older saves without it still load", () => {
   }
 });
 
-test("fixtures between floor squares save, including two-pixel locker positions", () => {
+test("fixtures between floor squares save at valid positions", () => {
   const data = snapshot();
   data.fixtures[0].gx += 0.5;
   data.fixtures[0].gy += 0.125;
-  data.fixtures.find((fixture) => fixture.type === "locker_single").gx += 1 / 32;
   assert.deepEqual(validateShopSave(data, database), data);
   for (const gx of [0.1, -0.5]) {
     data.fixtures[0].gx = gx;
@@ -449,7 +455,7 @@ test("fixture crates can be saved on the floor or carried", () => {
   data.crates.push({
     kind: "fixture", typeId: "shelf_budget_3x4", x: 320, y: 640, velocityX: 0, velocityY: 0,
   });
-  data.carriedCrate = { kind: "fixture", typeId: "locker_single" };
+  data.carriedCrate = { kind: "fixture", typeId: "shelf_budget_2x4" };
   assert.deepEqual(validateShopSave(data, database), data);
 
   data.carriedCrate.typeId = "unknown";

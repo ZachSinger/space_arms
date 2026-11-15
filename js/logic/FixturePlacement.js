@@ -7,14 +7,13 @@
 import { UIWindow } from "./UIWindow.js";
 import { TILE_SIZE } from "./RoomLayout.js";
 import {
-  getFixtureType, fixtureAccessCells, fixtureAtWorldPoint, fixtureBounds, fixtureFootprint, fixtureFrontClearance, FIXTURE_SNAP_STEP, snapFixturePosition,
+  getFixtureType, fixtureAtWorldPoint, fixtureBounds, fixtureFootprint, fixtureProjectionBoxes,
 } from "./FixtureLayout.js";
 import { getFixtureTexture, hasFacingTextures } from "./FixtureTexture.js";
 import { PAD } from "./GamepadInput.js";
 import { getInputDevice } from "./InputDevice.js";
 
-const PAD_STEPS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
-const PAD_STEP = FIXTURE_SNAP_STEP;
+const PAD_CURSOR_SPEED = 240;
 const VALID_COLOR = 0x10b981;
 const INVALID_COLOR = 0xef4444;
 const STANDING_COLOR = 0x38bdf8;
@@ -37,18 +36,9 @@ function drawFixtureOutline(graphics, placement, color, alpha, showStandingSpace
     .strokeRect(x, y, w * TILE_SIZE, h * TILE_SIZE);
   if (!showStandingSpace) return;
   graphics.lineStyle(2, STANDING_COLOR, alpha);
-  const clearance = fixtureFrontClearance(placement);
-  if (clearance) {
+  for (const clearance of fixtureProjectionBoxes(placement)) {
     graphics.strokeRect(clearance.left * TILE_SIZE, clearance.top * TILE_SIZE,
       (clearance.right - clearance.left) * TILE_SIZE, (clearance.bottom - clearance.top) * TILE_SIZE);
-    return;
-  }
-  // Registers also need the side behind them clear -- that's where the player stands.
-  const accessCells = getFixtureType(placement.type).kind === "register"
-    ? [...fixtureAccessCells(placement), ...fixtureAccessCells(placement, true)]
-    : fixtureAccessCells(placement);
-  for (const cell of accessCells) {
-    graphics.strokeRect(cell.gx * TILE_SIZE + 3, cell.gy * TILE_SIZE + 3, TILE_SIZE - 6, TILE_SIZE - 6);
   }
 }
 
@@ -65,10 +55,11 @@ export class FixturePlacement {
       y: 80,
       contentHTML: `
         <p data-placement-name></p>
-        <p class="fixture-stock-meta kbd-only">Left-click to place. R to turn it. Right-click or Esc to cancel.
-          WASD / arrow keys pan the camera. Keep the blue area in front clear for someone to stand.</p>
-        <p class="fixture-stock-meta pad-only">Move it with the left stick or D-pad. A to place. Y to turn it.
-          B to cancel. Keep the blue area in front clear for someone to stand.</p>
+        <p class="fixture-stock-meta kbd-only">WASD / arrows: walk. Mouse: move fixture.
+          Left-click: place. R: turn. Right-click / Esc: cancel.</p>
+        <p class="fixture-stock-meta pad-only">Left stick / D-pad: walk. Right stick: move fixture.
+          A: place. Y: turn. X: cancel.</p>
+        <p class="fixture-stock-meta">Keep blue areas clear for people to stand.</p>
         <p class="fixture-stock-meta hidden" data-placement-grid-hint>The fixture snaps to an 8-pixel grid.
           Green shows where its body can be placed.</p>
         <p data-placement-status role="status"></p>
@@ -88,7 +79,8 @@ export class FixturePlacement {
     this.placedGraphics = scene.add.graphics().setDepth(9995).setVisible(false);
     this.handlePointerDown = (pointer) => {
       // Ignore clicks that land on DOM windows over the canvas.
-      if (!this.active || pointer.event?.target !== scene.game.canvas) return;
+      if (!this.active || !scene.controlMode.allows("rotateFixture") ||
+        pointer.event?.target !== scene.game.canvas) return;
       if (pointer.rightButtonDown()) {
         this.cancel();
         return;
@@ -134,27 +126,44 @@ export class FixturePlacement {
   }
 
   /**
-   * Controller: D-pad or left stick moves fixtures by one snap-grid step.
+   * Controller: walk with the left stick or D-pad and position the fixture with the right stick.
    * @param {import("./GamepadInput.js").GamepadInput} pad
+   * @param {number} delta - ms since last frame
    */
-  handlePad(pad) {
+  handlePad(pad, delta) {
     if (!this.active) return;
-    if (pad.navDirection || pad.justPressed(PAD.A) || pad.justPressed(PAD.Y)) this.usePadPoint();
-    if (pad.navDirection) {
-      const [dx, dy] = PAD_STEPS[pad.navDirection];
-      this.padPoint = { x: this.padPoint.x + dx * PAD_STEP, y: this.padPoint.y + dy * PAD_STEP };
+    if (getInputDevice() === "gamepad" || pad.rightStick.x || pad.rightStick.y ||
+      pad.justPressed(PAD.A) || pad.justPressed(PAD.Y)) this.usePadPoint();
+    if (pad.rightStick.x || pad.rightStick.y) {
+      const camera = this.getPlacementCamera();
+      const distance = PAD_CURSOR_SPEED * Math.min(delta, 50) / 1000;
+      this.padPoint.x = Math.max(camera.x, Math.min(camera.x + camera.width - 1, this.padPoint.x + pad.rightStick.x * distance));
+      this.padPoint.y = Math.max(camera.y, Math.min(camera.y + camera.height - 1, this.padPoint.y + pad.rightStick.y * distance));
       this.refreshPreview();
     }
     if (pad.justPressed(PAD.Y)) this.rotate();
     if (pad.justPressed(PAD.A)) this.confirm();
-    else if (pad.justPressed(PAD.B)) this.cancel();
+    else if (pad.justPressed(PAD.X)) this.cancel();
   }
 
-  // Switch from the mouse to controller steps, starting where the preview already is.
+  getPlacementCamera() {
+    return this.scene.playerInBackroom ? this.scene.backroomCamera : this.scene.cameras.main;
+  }
+
+  setPadPoint(worldX, worldY) {
+    const camera = this.getPlacementCamera();
+    const point = camera.matrix.transformPoint(worldX - camera.scrollX, worldY - camera.scrollY);
+    this.padPoint = {
+      x: Math.max(camera.x, Math.min(camera.x + camera.width - 1, point.x)),
+      y: Math.max(camera.y, Math.min(camera.y + camera.height - 1, point.y)),
+    };
+  }
+
+  // Switch from the mouse to the controller, starting where the preview already is.
   usePadPoint() {
     if (this.padPoint) return;
     const { w, h } = fixtureFootprint({ type: this.spec.id, rotation: this.rotation });
-    this.padPoint = { x: this.placement.gx + w / 2, y: this.placement.gy + h / 2 };
+    this.setPadPoint((this.placement.gx + w / 2) * TILE_SIZE, (this.placement.gy + h / 2) * TILE_SIZE);
   }
 
   // Faded windows ignore the pointer, so hover is tested against their bounds instead.
@@ -202,17 +211,15 @@ export class FixturePlacement {
     }
     if (crate !== this.scene.carriedCrate || crate?.kind !== "fixture") return false;
     const spec = getFixtureType(crate.typeId);
-    if (this.scene.playerInBackroom && spec && spec.kind !== "storage") {
-      this.scene.showShopMessage(spec.kind === "shelf"
-        ? "Shelves can only be placed on the sales floor."
-        : `The ${spec.name} can only be placed on the sales floor.`);
+    if (this.scene.playerInBackroom && spec) {
+      this.scene.showShopMessage("Fixtures can only be placed on the sales floor.");
       return false;
     }
     return this.start(crate.typeId, null, crate);
   }
 
   /**
-   * Enter placement mode: freeze the player and crates, unfollow the camera, show the ghost.
+   * Enter placement mode and show the ghost while the player continues moving normally.
    * @param {string} typeId
    * @param {object|null} original - fixture being moved, or null when placing from a crate
    * @param {Crate|null} fixtureCrate
@@ -232,9 +239,6 @@ export class FixturePlacement {
       this.fixtureCrate.sprite.setVisible(false);
       this.nameElement.textContent = `Placing ${this.spec.name}`;
     }
-    this.scene.player.inputEnabled = false;
-    this.scene.player.sprite.body.stop();
-    this.scene.restockCrates.forEach((crate) => crate.setPaused(true));
     const x = original?.x ?? fixtureCrate.sprite.x;
     const y = original?.y ?? fixtureCrate.sprite.y;
     this.ghost = this.scene.add.image(x, y, getFixtureTexture(this.spec))
@@ -244,10 +248,8 @@ export class FixturePlacement {
     this.drawPlacedFixtures();
     this.uiWindow.openWindow();
     this.mouseClient = null;
-    // On a controller the fixture starts where it stands (or where its crate is).
-    this.padPoint = getInputDevice() === "gamepad"
-      ? { x: snapFixturePosition(x / TILE_SIZE), y: snapFixturePosition(y / TILE_SIZE) }
-      : null;
+    this.padPoint = null;
+    if (getInputDevice() === "gamepad") this.setPadPoint(x, y);
     this.refreshPreview();
     return true;
   }
@@ -261,10 +263,11 @@ export class FixturePlacement {
     }
   }
 
-  // Follow the controller's point if it's in use, else the mouse pointer.
+  // Both pointers stay at their screen position as the camera follows the player.
   refreshPreview() {
     if (this.padPoint) {
-      this.updatePreviewAt(this.padPoint.x * TILE_SIZE, this.padPoint.y * TILE_SIZE);
+      const world = this.getPlacementCamera().getWorldPoint(this.padPoint.x, this.padPoint.y);
+      this.updatePreviewAt(world.x, world.y);
     } else {
       this.updatePreview(this.scene.input.activePointer);
     }
@@ -312,15 +315,14 @@ export class FixturePlacement {
   }
 
   /**
-   * Keep the preview under the pointer (or the controller's tile) each frame.
+   * Keep the preview under the mouse or controller pointer each frame.
    */
   update() {
     if (!this.active) return;
     this.refreshPreview();
   }
 
-  // Leave placement mode and restore the player and crates. Doesn't close the
-  // window (it calls this from onClose); use cancel() for that.
+  // Leave placement mode. Doesn't close the window (it calls this from onClose).
   finish() {
     if (!this.active) return;
     this.active = false;
@@ -331,10 +333,6 @@ export class FixturePlacement {
     this.ghost.destroy();
     this.graphics.clear().setVisible(false);
     this.placedGraphics.clear().setVisible(false);
-    this.scene.player.inputEnabled = true;
-    // Keys held while placing would otherwise keep the player walking.
-    this.scene.input.keyboard.resetKeys();
-    this.scene.restockCrates.forEach((crate) => crate.setPaused(this.scene.crateMotionPaused));
     this.original = null;
     this.fixtureCrate = null;
   }

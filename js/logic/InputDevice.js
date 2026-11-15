@@ -16,6 +16,7 @@ const KEYBOARD_LABELS = Object.freeze({
   tablet: "I",
   rotate: "R",
   cancel: "Esc",
+  handOverChange: "Space",
 });
 
 const GAMEPAD_LABELS = Object.freeze({
@@ -27,6 +28,7 @@ const GAMEPAD_LABELS = Object.freeze({
   tablet: "Back",
   rotate: "Y",
   cancel: "B",
+  handOverChange: "Y",
 });
 
 export function getInputDevice() {

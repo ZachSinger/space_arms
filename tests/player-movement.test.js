@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
+import { ControlMode } from "../js/logic/ControlMode.js";
 import { HUDController } from "../js/logic/HUDController.js";
 
 let server;
@@ -216,6 +217,21 @@ test("Shift increases player speed only while moving and consumes stamina", () =
   player.update(1000);
   assert.deepEqual(body.velocity, { x: 0, y: 0 });
   assert.equal(player.stamina, 81.25);
+});
+
+test("walking and dashing remain available while placing a fixture", () => {
+  const { player, scene, wasd, shift, body } = createPlayer();
+  scene.fixturePlacement = { active: true };
+  scene.windowManager = { windows: new Map() };
+  scene.controlMode = new ControlMode(scene);
+  wasd.right.isDown = true;
+
+  player.update(1000);
+  assert.equal(body.velocity.x, 160);
+  shift.isDown = true;
+  player.update(1000);
+  assert.equal(body.velocity.x, 280);
+  assert.equal(player.stamina, 75);
 });
 
 test("empty crates slow walking and dashing less, including when mixed with filled crates", () => {

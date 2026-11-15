@@ -155,75 +155,28 @@
     "price": 400,
     "licenseId": "lic_fixture_basics"
   },
-  "locker_single": {
-    "id": "locker_single",
-    "name": "LOCKER",
-    "kind": "storage",
-    "w": 0.5625,
-    "h": 1.0625,
-    "texture": "locker_single",
-    "facingTextures": {
-      "down": "locker_single",
-      "left": "locker_single_left",
-      "up": "locker_single_up",
-      "right": "locker_single_right"
-    },
-    "facingFootprints": {
-      "down": {
-        "w": 0.5625,
-        "h": 1.0625
-      },
-      "left": {
-        "w": 0.375,
-        "h": 1.0625
-      },
-      "up": {
-        "w": 0.5625,
-        "h": 1.0625
-      },
-      "right": {
-        "w": 0.375,
-        "h": 1.0625
-      }
-    },
-    "capacity": 40,
-    "price": 180,
-    "licenseId": "lic_fixture_basics"
-  },
-  "locker_double": {
-    "id": "locker_double",
-    "name": "DOUBLE LOCKER",
-    "kind": "storage",
-    "w": 2,
-    "h": 2,
-    "texture": "locker_storage",
-    "capacity": 60,
-    "price": 1200,
-    "licenseId": "lic_fixture_storage_bank"
-  },
-  "locker_secure": {
-    "id": "locker_secure",
-    "name": "SECURE STORAGE LOCKER",
-    "kind": "storage",
-    "w": 2,
-    "h": 2,
-    "texture": "locker_storage",
-    "capacity": 100,
-    "price": 2200,
-    "licenseId": "lic_fixture_secure_storage"
-  },
   "register_basic": {
     "id": "register_basic",
     "name": "REGISTER",
     "kind": "register",
-    "w": 1,
-    "h": 1,
+    "w": 1.125,
+    "h": 0.875,
     "texture": "register_basic_down",
     "facingTextures": {
       "down": "register_basic_down",
       "left": "register_basic_left",
       "up": "register_basic_up",
       "right": "register_basic_right"
+    },
+    "facingFootprints": {
+      "down": { "w": 1.125, "h": 0.875 },
+      "left": { "w": 0.6875, "h": 1.0625 },
+      "up": { "w": 1.125, "h": 0.875 },
+      "right": { "w": 0.6875, "h": 1.0625 }
+    },
+    "artInsets": {
+      "left": { "right": 0.20833333333333334 },
+      "right": { "left": 0.20833333333333334 }
     },
     "price": 500,
     "licenseId": "lic_fixture_basics"
@@ -258,6 +211,12 @@
         "w": 0.5,
         "h": 0.75
       }
+    },
+    "artInsets": {
+      "down": { "left": 0.007751937984496124, "top": 0.007614213197969543, "right": 0.007751937984496124, "bottom": 0.007614213197969543 },
+      "left": { "left": 0.007751937984496124, "top": 0.007614213197969543, "right": 0.007751937984496124, "bottom": 0.007614213197969543 },
+      "up": { "left": 0.007751937984496124, "top": 0.007614213197969543, "right": 0.007751937984496124, "bottom": 0.007614213197969543 },
+      "right": { "left": 0.007751937984496124, "top": 0.007614213197969543, "right": 0.007751937984496124, "bottom": 0.007614213197969543 }
     },
     "price": 40,
     "licenseId": "lic_fixture_basics"

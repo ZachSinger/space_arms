@@ -61,6 +61,7 @@ function harness({ cash = true, tender = 5, chit = false } = {}) {
       classList: {
         add: (name) => classes.add(name), remove: (name) => classes.delete(name),
         contains: (name) => classes.has(name),
+        toggle: (name, on) => (on ? classes.add(name) : classes.delete(name)),
       },
       addEventListener(type, listener) { this.listeners.set(type, listener); },
     };
@@ -69,7 +70,7 @@ function harness({ cash = true, tender = 5, chit = false } = {}) {
   for (const selector of [
     "#checkout-payment-display", "#checkout-payment-feedback", "#numpad-clear",
     "#numpad-confirm", ".checkout-numpad", ".checkout-payment-prompt",
-    "#checkout-payment", "#checkout-cash", "#cash-hand-over", ".checkout-belt",
+    "#checkout-payment", "#checkout-cash", "#checkout-change-current", ".checkout-belt",
     "#checkout-change-selected", "#checkout-change-pile", "#checkout-total-value",
     "#checkout-chit", "#checkout-chit-progress", "#checkout-chit-feedback",
   ]) elements.set(selector, element());
@@ -261,6 +262,17 @@ test("drawer clicks and right-clicks adjust change, and Space rejects mistakes u
   h.takeAll();
   h.button.listeners.get("click")();
   assert.equal(h.elements.get("#checkout-change-selected").innerHTML, "0.01 <small>credits</small>");
+  const current = h.elements.get("#checkout-change-current").classList;
+  assert.equal(current.contains("change-exact") || current.contains("change-over"), false);
+  h.checkout.cashPayment.change = new Map([[1, 377]]);
+  h.checkout.refreshCash();
+  assert.equal(current.contains("change-exact"), true);
+  h.checkout.cashPayment.change = new Map([[1, 378]]);
+  h.checkout.refreshCash();
+  assert.equal(current.contains("change-over"), true);
+  assert.equal(current.contains("change-exact"), false);
+  h.checkout.cashPayment.change = new Map([[1, 1]]);
+  h.checkout.refreshCash();
   let prevented = 0;
   h.button.listeners.get("contextmenu")({ preventDefault: () => { prevented += 1; } });
   assert.equal(h.checkout.cashPayment.changeUnits, 0);
@@ -411,8 +423,8 @@ test("the change drawer shows bare numbers on bills and coins, with no row headi
   assert.match(html, /CURRENT CHANGE/);
   const faces = [...html.matchAll(/class="cash-art"><span>([^<]*)</g)].map((match) => match[1]);
   assert.deepEqual(faces, ["1", "5", "10", "20", "1", "5", "10", "25", "50"]);
-  assert.match(html, /HAND OVER CHANGE<span class="kbd-only"> \(SPACE\)<\/span>/);
-  assert.match(html, /3\.77 credits/);
+  assert.doesNotMatch(html, /HAND OVER CHANGE/);
+  assert.match(html, /3\.77 <small>credits<\/small>/);
   assert.equal((html.match(/data-cash-units=/g) ?? []).length, 9);
 });
 
@@ -432,7 +444,7 @@ test("Scavenger cash shows only M-Scrip bills and prices the sale in M-Scrips", 
   const payment = new CashPayment(12.34, 1500, "m-scrips");
   const html = CheckoutRenderer.generateHTML([], {}, payment);
   assert.match(html, /id="checkout-total-value">0 M-Scrips/);
-  assert.match(html, /CHANGE OWED<\/span><strong>19 M-Scrips/);
+  assert.match(html, /CHANGE OWED<\/span><strong>19 <small>M-Scrips<\/small>/);
   assert.match(html, /id="checkout-change-selected">0 <small>M-Scrips<\/small>/);
   assert.doesNotMatch(html, /cash-coins|cash-coin|cent/);
   const faces = [...html.matchAll(/class="cash-art"><span>([^<]*)</g)].map((match) => match[1]);

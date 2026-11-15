@@ -191,7 +191,7 @@ function createHarness() {
     customerCartCount: 0,
     canHireEmployees: () => true,
     market: { getPrice: (itemId) => marketPrices.get(itemId) },
-    storage: 1,
+    offShelves: 1,
     getStorePrice: (itemId) => prices.get(itemId),
     setStorePrice(itemId, price) {
       if (!isMoney(price) || price < 1) return false;
@@ -202,7 +202,7 @@ function createHarness() {
     getInventoryItems() {
       return ["rifle", "pistol"].map((itemId) => ({
         item: { id: itemId, name: itemId },
-        storage: this.storage,
+        offShelves: this.offShelves,
         stock: 0,
         inCustomerCarts: this.customerCartCount,
         marketPrice: marketPrices.get(itemId),
@@ -295,15 +295,7 @@ test("contract signing enforces each shop level without spending credits early",
   tablet.handleSignContract("lic_start_apparel");
   assert.equal(state.credits, 1400);
   assert.equal(state.activeLicenses.has("lic_start_apparel"), true);
-  tablet.handleSignContract("lic_fixture_storage_bank");
-  assert.equal(state.credits, 1400);
-  assert.equal(state.activeLicenses.has("lic_fixture_storage_bank"), false);
-
-  state.shopLevel = 14;
-  tablet.handleSignContract("lic_fixture_storage_bank");
-  assert.equal(state.credits, 400);
-  assert.equal(state.activeLicenses.has("lic_fixture_storage_bank"), true);
-  assert.deepEqual(entries.map((entry) => entry.category), ["licenses", "licenses"]);
+  assert.deepEqual(entries.map((entry) => entry.category), ["licenses"]);
 });
 
 test("opening the tablet hides checkout and closing it resumes register work", () => {
@@ -315,7 +307,7 @@ test("opening the tablet hides checkout and closing it resumes register work", (
   tablet.openWindow();
   assert.deepEqual(calls, ["tablet-open", "suspend"]);
   tablet.fixturePurchaseNotice = "Bought a fixture.";
-  tablet.fixtureSaleConfirmation = { name: "LOCKER" };
+  tablet.fixtureSaleConfirmation = { name: "BUDGET SHELF 2x4" };
   tablet.uiWindow.onClose();
   assert.deepEqual(calls, ["tablet-open", "suspend", "resume"]);
   assert.equal(tablet.fixturePurchaseNotice, "");
@@ -391,14 +383,14 @@ test("percentage buttons change low prices by at least one credit", () => {
 test("pending changes refresh when leaving price controls", async () => {
   const h = createHarness();
   h.focus(h.panel.input("rifle"));
-  h.scene.storage = 5;
+  h.scene.offShelves = 5;
   h.scene.playerState.notifyListeners();
   assert.equal(h.tablet.inventoryRefreshPending, true);
   h.focus(h.panel.button("rifle", "market"));
   h.focus(null);
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(h.tablet.inventoryRefreshPending, false);
-  assert.match(h.panel.markup, /data-inventory-storage>5<\/span>/);
+  assert.match(h.panel.markup, /data-inventory-off-shelves>5<\/span>/);
   assert.equal(h.keyboard.enabled, true);
 });
 
@@ -467,17 +459,17 @@ test("lower funds reject additions but never prevent removing crates from the or
 
 test("fixture sale confirmations identify the chosen fixture or crate", () => {
   const tablet = Object.create(ManagerTablet.prototype);
-  const locker = { id: "locker_2", type: "locker_single" };
+  const shelf = { id: "shelf_2", type: "shelf_budget_2x4" };
   const crate = { kind: "fixture", typeId: "shelf_budget_2x4" };
   tablet.scene = {
-    fixtures: { displayName: () => "LOCKER 2" },
+    fixtures: { displayName: () => "BUDGET SHELF 2x4" },
     getFixtureSaleBlockReason: () => null,
     getFixtureCrateSaleBlockReason: () => null,
   };
   tablet.refreshLayoutPanels = () => {};
-  tablet.prepareFixtureSale("placed", locker);
-  assert.equal(tablet.fixtureSaleConfirmation.name, "LOCKER 2");
-  assert.equal(tablet.fixtureSaleConfirmation.value, 90);
+  tablet.prepareFixtureSale("placed", shelf);
+  assert.equal(tablet.fixtureSaleConfirmation.name, "BUDGET SHELF 2x4");
+  assert.equal(tablet.fixtureSaleConfirmation.value, 150);
   tablet.prepareFixtureSale("crate", crate);
   assert.equal(tablet.fixtureSaleConfirmation.name, "BUDGET SHELF 2x4 crate");
   assert.equal(tablet.fixtureSaleConfirmation.value, 150);
@@ -485,15 +477,15 @@ test("fixture sale confirmations identify the chosen fixture or crate", () => {
 
 test("a removed fixture cannot be sold through an old confirmation", () => {
   const tablet = Object.create(ManagerTablet.prototype);
-  const locker = { id: "locker_2", type: "locker_single" };
+  const shelf = { id: "shelf_2", type: "shelf_budget_2x4" };
   const messages = [];
   tablet.scene = {
-    fixtures: { displayName: () => "LOCKER 2", get: () => undefined },
+    fixtures: { displayName: () => "BUDGET SHELF 2x4", get: () => undefined },
     getFixtureSaleBlockReason: () => null,
     showShopMessage: (message) => messages.push(message),
   };
   tablet.refreshLayoutPanels = () => {};
-  tablet.prepareFixtureSale("placed", locker);
+  tablet.prepareFixtureSale("placed", shelf);
   tablet.confirmFixtureSale();
   assert.equal(tablet.fixtureSaleConfirmation, null);
   assert.match(messages[0], /no longer available/);

@@ -12,12 +12,15 @@ import { GAME_EVENTS } from "../js/logic/EventBus.js";
 import { SupplierLicense } from "../js/logic/Licenses.js";
 import { ContractRenderer } from "../js/logic/ContractRenderer.js";
 import { BACKROOM_UPGRADE_ORDER, EXPANSION_ORDER, ZONES } from "../js/logic/RoomLayout.js";
+import { FIXTURE_TYPES, fixtureBounds, fixtureFacingStep, fixtureFootprint, positionRegisterQueue } from "../js/logic/FixtureLayout.js";
 
 let server;
 let cacheDirectory;
 let GameScene;
 let CheckoutWindow;
 let PlayerState;
+let CHARACTER_ART_WIDTH;
+let CHARACTER_FEET_DROP;
 const originalPhaser = globalThis.Phaser;
 
 before(async () => {
@@ -50,6 +53,7 @@ before(async () => {
   ({ GameScene } = await server.ssrLoadModule("/js/scenes/game.js"));
   ({ CheckoutWindow } = await server.ssrLoadModule("/js/logic/CheckoutWindow.js"));
   ({ PlayerState } = await server.ssrLoadModule("/js/logic/PlayerState.js"));
+  ({ CHARACTER_ART_WIDTH, CHARACTER_FEET_DROP } = await server.ssrLoadModule("/js/logic/CustomerSprites.js"));
 });
 
 after(async () => {
@@ -453,9 +457,7 @@ test("a shift from Shop Level 6 to 30 announces all remaining reward types", () 
 
   assert.equal(state.shopLevel, 30);
   assert.match(messages[0], /You can now have 6 employees hired at once/);
-  assert.match(messages[0], /Expanded Storage Supply/);
   assert.match(messages[0], /Hazard & Medical Supply/);
-  assert.match(messages[0], /Secure Storage Supply/);
   assert.match(messages[0], /Sales-floor expansions available to buy/);
   assert.match(messages[0], /Backroom expansions available to buy/);
   assert.doesNotMatch(messages[0], /Some later level rewards are not in the game yet/);
@@ -858,26 +860,68 @@ test("HUD Save button is wired, reflects availability, and removes its handler o
   assert.equal(hudRoot.listeners.size, 0);
 });
 
-test("the register blocks only its counter, so the player can walk over its monitor and printer", () => {
+test("all placeable fixture physics bodies use the same art-trimmed bounds as placement", () => {
   const scene = Object.create(GameScene.prototype);
   const tree = { remove() {}, insert() {} };
   const body = { world: { staticTree: tree }, position: { set(x, y) { this.x = x; this.y = y; } },
     center: { set(x, y) { this.x = x; this.y = y; } } };
-  const textures = [];
-  const sprite = { displayWidth: 90, displayHeight: 90, body,
-    setTexture(key) { textures.push(key); return this; }, setScale() { return this; },
+  const sprite = { displayWidth: 0, displayHeight: 0, body,
+    setTexture() { return this; },
+    setDisplaySize(width, height) { this.displayWidth = width; this.displayHeight = height; return this; },
     setPosition() { return this; }, setAngle(angle) { this.angle = angle; return this; } };
-  scene.orientFixtureSprite({ type: "register_basic", x: 832, y: 192, rotation: 0, sprite });
-  assert.equal(textures.at(-1), "register_basic_down");
-  assert.equal(sprite.angle, 0, "facing art is shown upright, not spun");
-  const top = body.position.y;
-  assert.ok(Math.abs(top - (147 + 90 * 0.14)) < 0.01, `counter top is below the monitor (${top})`);
-  assert.ok(Math.abs(body.position.y + body.height - 237) < 0.01, "bottom edge unchanged");
-  assert.equal(body.width, 90);
+  for (const type of Object.keys(FIXTURE_TYPES)) {
+    for (let rotation = 0; rotation < 4; rotation++) {
+      const fixture = { type, x: 832, y: 192, rotation, sprite };
+      scene.orientFixtureSprite(fixture);
+      const footprint = fixtureFootprint(fixture);
+      const bounds = fixtureBounds({ ...fixture, gx: 832 / 64 - footprint.w / 2, gy: 192 / 64 - footprint.h / 2 });
+      assert.ok(Math.abs(body.width - (bounds.right - bounds.left) * 64) < 1e-9);
+      assert.ok(Math.abs(body.height - (bounds.bottom - bounds.top) * 64) < 1e-9);
+      assert.ok(Math.abs(body.position.x - bounds.left * 64) < 1e-9);
+      assert.ok(Math.abs(body.position.y - bounds.top * 64) < 1e-9);
+      assert.equal(sprite.angle, 0);
+    }
+  }
+});
 
-  scene.orientFixtureSprite({ type: "register_basic", x: 832, y: 192, rotation: 1, sprite });
-  assert.equal(textures.at(-1), "register_basic_left");
-  assert.equal(sprite.angle, 0);
+test("side-facing register queue and cashier align with the body box rather than transparent art", () => {
+  const scene = Object.create(GameScene.prototype);
+  const body = { width: 30, height: 68, center: { x: 100, y: 100 } };
+  const register = { type: "register_basic", rotation: 1, sprite: { body } };
+  scene.fixtures = { register: () => register };
+  scene.player = { sprite: { displayWidth: 48, displayHeight: 72 } };
+  assert.deepEqual(scene.getBehindRegisterPoint(), { x: 129, y: 100 });
+  const first = positionRegisterQueue([{ x: 0, y: 100 }, { x: -64, y: 100 }], body, fixtureFacingStep(register))[0];
+  assert.deepEqual(first, {
+    x: 85 - CHARACTER_ART_WIDTH / 2 + 10,
+    y: 100 + CHARACTER_FEET_DROP,
+  });
+
+  test("the player can enter and leave the register in every facing", () => {
+    for (let rotation = 0; rotation < 4; rotation++) {
+      const scene = Object.create(GameScene.prototype);
+      const register = { type: "register_basic", rotation, sprite: {
+        depth: 1, body: { width: 72, height: 56, center: { x: 100, y: 100 } },
+      } };
+      const sprite = { x: 200, y: 200, depth: 2, displayWidth: 48, displayHeight: 72,
+        body: { enable: true }, setDepth(depth) { this.depth = depth; } };
+      scene.fixtures = { register: () => register };
+      scene.employees = [];
+      scene.eventBus = { emit() {} };
+      scene.checkoutWindow = { mode: "closed" };
+      scene.player = { sprite, inputEnabled: true,
+        teleportTo(x, y) { sprite.x = x; sprite.y = y; }, forceFacing() {} };
+      scene.beginRegisterSession();
+      assert.equal(scene.operatingRegister, true);
+      assert.equal(sprite.body.enable, false);
+      assert.ok(Number.isFinite(sprite.x) && Number.isFinite(sprite.y));
+      scene.endRegisterSession();
+      assert.equal(scene.operatingRegister, false);
+      assert.equal(sprite.body.enable, true);
+      assert.equal(scene.player.inputEnabled, true);
+      assert.deepEqual({ x: sprite.x, y: sprite.y, depth: sprite.depth }, { x: 200, y: 200, depth: 2 });
+    }
+  });
 });
 
 test("the budget shelf art fills its footprint in every direction; only the visible shelf is solid", () => {

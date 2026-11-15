@@ -562,9 +562,12 @@ export class CheckoutWindow {
           adjust(-1);
         });
       });
-      const handOverButton = this.bodyElement.querySelector("#cash-hand-over");
-      handOverButton.addEventListener("click", () => this.handOverChange());
-      handOverButton.addEventListener("mousedown", (event) => event.preventDefault());
+      // Y on a controller hands over the change (Space on the keyboard).
+      this.bodyElement.querySelector("#checkout-cash").addEventListener("pad-alt", (event) => {
+        if (this.paymentStage !== "change") return;
+        event.preventDefault();
+        this.handOverChange();
+      });
     }
   }
 
@@ -778,6 +781,9 @@ export class CheckoutWindow {
     const cash = this.cashPayment;
     this.bodyElement.querySelector("#checkout-change-selected").innerHTML =
       renderCurrentChange(cash.changeUnits, cash.currency);
+    const current = this.bodyElement.querySelector("#checkout-change-current");
+    current.classList.toggle("change-exact", cash.changeUnits === cash.changeDueUnits);
+    current.classList.toggle("change-over", cash.changeUnits > cash.changeDueUnits);
     this.bodyElement.querySelectorAll("[data-cash-count]").forEach((element) => {
       element.textContent = `${cash.change.get(Number(element.dataset.cashCount)) ?? 0} in change`;
     });

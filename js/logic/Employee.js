@@ -1,10 +1,8 @@
 // ==========================================
 // FILE: Employee.js
 // ==========================================
-// A hired employee who serves the register, stocks shelves, and loads storage.
-import { InventoryPool } from "./InventoryPool.js";
+// A hired employee who serves the register and stocks shelves from delivered crates.
 import { transferItems } from "./InventoryTransfer.js";
-import { getFixtureType } from "./FixtureLayout.js";
 import { addCharacterSprite, pickRandomCustomerCharacter, showCharacterFacing } from "./CustomerSprites.js";
 import { EMPLOYEE_JOB_IDS } from "./EmployeeJobs.js";
 import { getEmployeeJobSpeed } from "./EmployeeTraining.js";
@@ -19,14 +17,9 @@ export class Employee {
   constructor(scene, employeeData) {
     this.scene = scene;
     this.data = employeeData;
-    this.backpack = new InventoryPool({
-      capacity: employeeData.backpackCapacity,
-      stock: [],
-    });
     this.state = "IDLE";
     this.currentJob = null;
     this.jobPriorities = [...scene.playerState.employeeJobPriorities[employeeData.id]];
-    this.sourceStorage = null;
     this.destination = null;
     this.registerServiceRemainingMs = 0;
     this.path = [];
@@ -50,9 +43,7 @@ export class Employee {
     if (this.state === "IDLE" || this.state === "ON_BREAK") {
       this.retryInMs -= delta;
       if (this.clockOutRequested) {
-        const carried = this.backpack.stock.find((entry) => entry.quantity > 0);
-        if (carried && this.retryInMs <= 0) this.returnStockToLocker(carried.itemId);
-        else if (this.jobPriorities.includes("register") &&
+        if (this.jobPriorities.includes("register") &&
           this.scene.registerLine.length > 0 && this.retryInMs <= 0) {
           this.startRegisterJob();
         }
@@ -73,13 +64,12 @@ export class Employee {
     }
     if (this.state === "SERVING_REGISTER") {
       this.updateRegisterService(delta);
-    } else if (["TO_STORAGE", "TO_SHELF", "TO_RETURN", "TO_CRATE", "TO_REGISTER",
-      "TO_STORAGE_CRATE", "TO_BREAKROOM"].includes(this.state)) {
-      if (this.state === "TO_STORAGE_CRATE") {
+    } else if (["TO_SHELF", "TO_CRATE", "TO_REGISTER", "TO_BREAKROOM"].includes(this.state)) {
+      if (this.state === "TO_SHELF" && this.currentJob.crate.isCarried) {
         this.currentJob.crate.followCarrier(this.sprite);
       }
       this.followPath();
-      if (this.state === "TO_STORAGE_CRATE") {
+      if (this.state === "TO_SHELF" && this.currentJob?.crate.isCarried) {
         this.currentJob.crate.followCarrier(this.sprite);
       }
     }
@@ -87,18 +77,6 @@ export class Employee {
   }
 
   startNextTask() {
-    const carried = this.backpack.stock.find((entry) => entry.quantity > 0);
-    if (carried) {
-      const target = this.findOpenPlacement(carried.itemId);
-      if (target) {
-        this.currentJob = { ...target, itemId: carried.itemId };
-        this.walkTo(target.shelf.standPoint, "TO_SHELF");
-      } else {
-        this.returnStockToLocker(carried.itemId);
-      }
-      return;
-    }
-
     for (const jobId of this.jobPriorities) {
       if (jobId === "register") {
         if (this.findRegisterJob()) {
@@ -107,13 +85,6 @@ export class Employee {
         }
       } else if (jobId === "stock_shelves") {
         const job = this.findStockingJob();
-        if (job) {
-          this.currentJob = { ...job, jobId };
-          this.walkTo(job.storage.standPoint, "TO_STORAGE");
-          return;
-        }
-      } else if (jobId === "load_storage") {
-        const job = this.findStorageLoadingJob();
         if (job) {
           this.currentJob = { ...job, jobId };
           this.walkTo({ x: job.crate.sprite.x, y: job.crate.sprite.y }, "TO_CRATE");
@@ -146,17 +117,28 @@ export class Employee {
 
   findStockingJob() {
     const reserved = this.getReservedShelfPlacements();
-    const storages = this.scene.fixtures.stockHolders()
-      .filter((fixture) => getFixtureType(fixture.type)?.kind === "storage");
+    const reservedCrates = new Set(this.scene.employees
+      .filter((employee) => employee !== this)
+      .map((employee) => employee.currentJob?.crate)
+      .filter(Boolean));
 
-    for (const shelf of this.scene.fixtures.shelves()) {
-      for (const placement of shelf.placements) {
-        if (reserved.has(placement) ||
-          shelf.getRemainingUnitsFor(placement.itemId, placement) <= 0) continue;
-        const storage = storages.find((fixture) =>
-          fixture.getAvailableUnitsFor(placement.itemId) > 0,
+    for (const crate of this.scene.restockCrates) {
+      if (crate.kind !== "item" || !crate.lockedToPad || crate.quantity <= 0 ||
+        reservedCrates.has(crate)) continue;
+      for (const shelf of this.scene.fixtures.shelves()) {
+        const placement = shelf.placements.find((entry) =>
+          entry.itemId === crate.itemId && !reserved.has(entry) &&
+          shelf.getRemainingUnitsFor(crate.itemId, entry) > 0,
         );
-        if (storage) return { shelf, placement, storage, itemId: placement.itemId };
+        if (placement) {
+          return {
+            crate,
+            cratePosition: { x: crate.sprite.x, y: crate.sprite.y },
+            shelf,
+            placement,
+            itemId: crate.itemId,
+          };
+        }
       }
     }
     return null;
@@ -167,52 +149,6 @@ export class Employee {
       .filter((employee) => employee !== this)
       .map((employee) => employee.currentJob?.placement)
       .filter(Boolean));
-  }
-
-  getUnreservedShelfUnits(shelf, itemId) {
-    const reserved = this.getReservedShelfPlacements();
-    return shelf.placements.reduce((sum, placement) =>
-      sum + (placement.itemId === itemId && !reserved.has(placement)
-        ? shelf.getRemainingUnitsFor(itemId, placement)
-        : 0), 0);
-  }
-
-  findStorageLoadingJob() {
-    const storages = this.scene.fixtures.stockHolders()
-      .filter((fixture) => getFixtureType(fixture.type)?.kind === "storage");
-    const reserved = new Set(this.scene.employees
-      .filter((employee) => employee !== this)
-      .map((employee) => employee.currentJob?.crate)
-      .filter(Boolean));
-    for (const crate of this.scene.restockCrates) {
-      if (crate.kind !== "item" || !crate.lockedToPad || crate.quantity <= 0 ||
-        reserved.has(crate)) continue;
-      const storage = storages.find((fixture) =>
-        fixture.getRemainingUnitsFor(crate.itemId) > 0,
-      );
-      if (storage) {
-        return {
-          crate,
-          cratePosition: { x: crate.sprite.x, y: crate.sprite.y },
-          storage,
-          itemId: crate.itemId,
-        };
-      }
-    }
-    return null;
-  }
-
-  findOpenPlacement(itemId) {
-    const reserved = this.getReservedShelfPlacements();
-    for (const shelf of this.scene.fixtures.shelves()) {
-      const placement = shelf.placements.find((entry) =>
-        entry.itemId === itemId &&
-        !reserved.has(entry) &&
-        shelf.getRemainingUnitsFor(itemId, entry) > 0,
-      );
-      if (placement) return { shelf, placement };
-    }
-    return null;
   }
 
   walkTo(point, nextState) {
@@ -252,9 +188,7 @@ export class Employee {
       this.arriveAtDestination();
       return;
     }
-    const jobId = ["TO_STORAGE", "TO_SHELF", "TO_RETURN"].includes(this.state)
-      ? "stock_shelves"
-      : ["TO_CRATE", "TO_STORAGE_CRATE"].includes(this.state) ? "load_storage" : null;
+    const jobId = ["TO_SHELF", "TO_CRATE"].includes(this.state) ? "stock_shelves" : null;
     const speed = WALK_SPEED * (jobId ? getEmployeeJobSpeed(this.data.skillLevels, jobId) : 1);
     this.sprite.body.setVelocity((dx / distance) * speed, (dy / distance) * speed);
   }
@@ -265,10 +199,7 @@ export class Employee {
       this.state = "ON_BREAK";
       this.destination = null;
       this.retryInMs = BREAK_CHECK_MS;
-    } else if (this.state === "TO_STORAGE") this.takeStockFromLocker();
-    else if (this.state === "TO_SHELF") this.stockShelf();
-    else if (this.state === "TO_RETURN") this.finishReturningStock();
-    else if (this.state === "TO_CRATE") {
+    } else if (this.state === "TO_CRATE") {
       const { crate, cratePosition } = this.currentJob;
       if (!crate.lockedToPad || crate.quantity <= 0 || !crate.pickUp(this.sprite)) {
         this.finishTask();
@@ -277,110 +208,44 @@ export class Employee {
       this.scene.restockCrates = this.scene.restockCrates.filter((candidate) => candidate !== crate);
       this.currentJob.cratePosition = cratePosition;
       const job = this.currentJob;
-      if (!this.walkTo(job.storage.standPoint, "TO_STORAGE_CRATE")) {
+      if (!this.walkTo(job.shelf.standPoint, "TO_SHELF")) {
         this.currentJob = job;
         this.returnCrateToPad();
       }
-    } else if (this.state === "TO_STORAGE_CRATE") {
-      this.loadCrateIntoStorage();
+    } else if (this.state === "TO_SHELF") {
+      this.stockCrateOnShelf();
     } else if (this.state === "TO_REGISTER") {
       this.beginRegisterService();
     }
   }
 
-  takeStockFromLocker() {
-    const { shelf, placement, storage, itemId } = this.currentJob;
-    const quantity = Math.min(
-      this.getUnreservedShelfUnits(shelf, itemId),
-      storage.getAvailableUnitsFor(itemId),
-      this.backpack.getRemainingUnitsFor(itemId),
-    );
-    if (quantity <= 0) {
-      this.finishTask();
-      return;
-    }
-
-    const result = transferItems(storage, this.backpack, itemId, quantity, {
-      eventBus: this.scene.eventBus,
-      sourceName: "locker",
-      destinationName: "employee-backpack",
-    });
-    this.scene.refreshLockerCapacityDisplay(storage);
-    this.scene.playerState.notifyListeners();
-    if (result.moved === 0) {
-      this.finishTask();
-      return;
-    }
-    this.sourceStorage = storage;
-    this.walkTo(shelf.standPoint, "TO_SHELF");
-  }
-
-  stockShelf() {
-    const { shelf, placement, itemId } = this.currentJob;
+  stockCrateOnShelf() {
+    const { crate, shelf, placement, itemId } = this.currentJob;
     const quantity = Math.min(
       shelf.getRemainingUnitsFor(itemId, placement),
-      this.backpack.getAvailableUnitsFor(itemId),
+      crate.getAvailableUnitsFor(itemId),
     );
     if (quantity <= 0) {
-      this.returnStockToLocker(itemId);
+      this.returnCrateToPad();
       return;
     }
 
-    const result = transferItems(this.backpack, shelf, itemId, quantity, {
+    transferItems(crate, shelf, itemId, quantity, {
       destinationEntry: placement,
       eventBus: this.scene.eventBus,
-      sourceName: "employee-backpack",
+      sourceName: "loading-pad",
       destinationName: "shelf",
     });
     this.scene.refreshShelfStockDisplay(shelf);
     this.scene.playerState.notifyListeners();
 
-    if (this.backpack.getAvailableUnitsFor(itemId) > 0) {
-      this.currentJob = null;
-      this.state = "IDLE";
-      this.retryInMs = 0;
-    } else if (result.moved > 0) {
-      this.finishTask();
-    } else {
-      this.returnStockToLocker(itemId);
-    }
-  }
-
-  loadCrateIntoStorage() {
-    const { crate, storage, itemId } = this.currentJob;
-    if (!crate.isCarried || crate.quantity <= 0 ||
-      storage.getRemainingUnitsFor(itemId) <= 0) {
-      this.returnCrateToPad();
-      return;
-    }
-
-    const quantity = Math.min(
-      crate.getAvailableUnitsFor(itemId),
-      storage.getRemainingUnitsFor(itemId),
-    );
-    if (quantity <= 0) {
-      this.returnCrateToPad();
-      return;
-    }
-    const result = transferItems(crate, storage, itemId, quantity, {
-      eventBus: this.scene.eventBus,
-      sourceName: "crate",
-      destinationName: "locker",
-    });
-    this.scene.refreshLockerCapacityDisplay(storage);
-    this.scene.playerState.notifyListeners();
-    if (result.moved === 0) {
-      this.returnCrateToPad();
-      return;
-    }
     if (crate.quantity <= 0) {
       this.scene.restockCrates = this.scene.restockCrates.filter((candidate) => candidate !== crate);
       crate.destroy();
-    } else {
-      this.returnCrateToPad();
+      this.finishTask();
       return;
     }
-    this.finishTask();
+    this.returnCrateToPad();
   }
 
   returnCrateToPad() {
@@ -423,51 +288,8 @@ export class Employee {
     this.finishTask();
   }
 
-  returnStockToLocker(itemId) {
-    const storages = this.scene.fixtures.stockHolders()
-      .filter((fixture) => getFixtureType(fixture.type)?.kind === "storage");
-    const storage = [this.sourceStorage, ...storages].find((fixture) =>
-      fixture?.getRemainingUnitsFor(itemId) > 0,
-    );
-    if (!storage) {
-      this.currentJob = null;
-      this.state = "IDLE";
-      this.retryInMs = JOB_RETRY_MS;
-      return;
-    }
-    this.returnStorage = storage;
-    this.currentJob = null;
-    this.walkTo(storage.standPoint, "TO_RETURN");
-  }
-
-  finishReturningStock() {
-    const entry = this.backpack.findStockEntry(this.backpack.stock.find((stock) =>
-      stock.quantity > 0,
-    )?.itemId);
-    if (!entry) {
-      this.finishTask();
-      return;
-    }
-    const result = transferItems(this.backpack, this.returnStorage, entry.itemId, entry.quantity, {
-      eventBus: this.scene.eventBus,
-      sourceName: "employee-backpack",
-      destinationName: "locker",
-    });
-    this.scene.refreshLockerCapacityDisplay(this.returnStorage);
-    this.scene.playerState.notifyListeners();
-    if (result.moved < entry.quantity) {
-      this.returnStockToLocker(entry.itemId);
-      return;
-    }
-    this.sourceStorage = null;
-    this.returnStorage = null;
-    this.finishTask();
-  }
-
   finishTask() {
     this.currentJob = null;
-    this.sourceStorage = null;
-    this.returnStorage = null;
     this.registerServiceRemainingMs = 0;
     this.state = "IDLE";
     this.retryInMs = 0;
@@ -478,7 +300,7 @@ export class Employee {
   }
 
   isReadyToClockOut() {
-    return (this.state === "IDLE" || this.state === "ON_BREAK") && this.backpack.usedCapacity() === 0;
+    return this.state === "IDLE" || this.state === "ON_BREAK";
   }
 
   // Walks in the direction of travel, or holds the standing pose in the last facing.

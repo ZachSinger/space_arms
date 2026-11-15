@@ -4,7 +4,7 @@
 // A sales shelf with per-placement quantities shared by stocking, customers, and saves.
 // Hands-on Budget Shelves hold one item kind per space, up to 20 box-size units.
 // Legacy shelves pack by item dimensions and cap stackSize by shelf stackDepth.
-// See also: InventoryPool.js (the storage API this class mirrors).
+// See also: InventoryPool.js (the stock API this class mirrors).
 import { database } from "../scenes/boot.js";
 import { getShelfSlotCapacity, getShelfItemFootprint } from "./FixtureLayout.js";
 
@@ -22,7 +22,7 @@ export class ShelfFixture {
     this.placements = data.placements || [];
   }
 
-  // Same shape as InventoryPool.stock, so shelves and storage can be handled alike.
+  // Same shape as InventoryPool.stock for shared inventory displays.
   get stock() {
     return this.placements;
   }
@@ -168,7 +168,7 @@ export class ShelfFixture {
   }
 
   /**
-   * Fill existing placements of this item; returns units accepted. Unlike a storage pool,
+   * Fill existing placements of this item; returns units accepted. Unlike off-shelf inventory,
    * a new item can't be added here: it must be placed on the grid first.
    * @param {string} itemId
    * @param {number} quantity

@@ -2,7 +2,7 @@
   {
     "id": "lic_fixture_basics",
     "name": "Basic Fixture Supply",
-    "description": "A starter contract for Budget Shelves, lockers, checkout registers, and trashcans.",
+    "description": "A starter contract for Budget Shelves, checkout registers, and trashcans.",
     "tier": 1,
     "baseCost": 0,
     "reqReputation": 0,
@@ -13,30 +13,9 @@
       "shelf_budget_3x2",
       "shelf_budget_3x3",
       "shelf_budget_3x4",
-      "locker_single",
       "register_basic",
       "trash_can"
     ]
-  },
-  {
-    "id": "lic_fixture_storage_bank",
-    "name": "Expanded Storage Supply",
-    "description": "A contract for larger backroom lockers that hold more stock.",
-    "tier": 2,
-    "baseCost": 1000,
-    "requiredShopLevel": 14,
-    "reqReputation": null,
-    "unlocksFixtures": ["locker_double"]
-  },
-  {
-    "id": "lic_fixture_secure_storage",
-    "name": "Secure Storage Supply",
-    "description": "A contract for a high-capacity backroom locker.",
-    "tier": 3,
-    "baseCost": 1800,
-    "requiredShopLevel": 25,
-    "reqReputation": null,
-    "unlocksFixtures": ["locker_secure"]
   },
   {
     "id": "lic_start_surplus",

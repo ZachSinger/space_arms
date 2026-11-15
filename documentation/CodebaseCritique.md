@@ -130,7 +130,7 @@ At least 10 logic modules take `scene` and use its internals:
 
 ## 🟠 7. Inventory movement is partly standardized
 
-- `InventoryPool` is shared by Go-Backs and lockers. That part is good.
+- `InventoryPool` is used by Go-Backs.
 - `InventoryTransfer` now handles player moves among pools, shelf slots, and item crates.
 - Shelves and crates expose the methods the shared transfer needs, but remain different
   models because shelf slots have grid positions and crates have physical behavior.
@@ -143,7 +143,7 @@ At least 10 logic modules take `scene` and use its internals:
 ## 🟠 8. Fixture behaviour uses type checks spread across files
 
 - `FIXTURE_TYPES` is a JS constant (`FixtureLayout.js`). Behaviour is selected by
-  `kind === "register"` checks and `instanceof ShelfFixture/StorageFixture`.
+  `kind === "register"` checks and `instanceof ShelfFixture`.
 - That's about **15 type checks** across `game.js`, `FixtureLayout.js`,
   `ShelfStockingWindow.js`, and `FixturePlacement.js`.
 - **Adding a fixture kind** (weapon rack, security scanner, employee break-room door)

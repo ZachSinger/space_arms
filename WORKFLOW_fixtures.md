@@ -13,7 +13,7 @@ the list with the user before adding any.
 ### 2. Fixture crates — DONE
 - Fixture crates use a distinct generated graphic and can be carried, dropped, thrown, saved,
   and restored.
-- Fixture crates cannot be stocked in storage.
+- Fixture crates cannot be stacked with item crates.
 
 ### 3. Place fixtures from crates — DONE
 - Carry a fixture crate and press E to enter the shared fixture placement mode.
@@ -25,7 +25,7 @@ the list with the user before adding any.
 - Fixtures with stock cannot be crated, and the last register is protected.
 
 ### 5. Buy fixtures — PARTIAL
-- The Fixtures tab can purchase shelves and lockers; purchases arrive as crates at the Loading
+- The Fixtures tab can purchase shelves and registers; purchases arrive as crates at the Loading
   Pad. This was verified in the live shop. The already-placed register is treated as unique
   and cannot currently be purchased.
 - **Remaining:** agree on which additional fixture types, if any, belong in the game before
@@ -33,14 +33,14 @@ the list with the user before adding any.
 
 ### 6. Fixture licenses — PARTIAL
 - The starting fixture license is active for new and existing players and covers the current
-  shelf, locker, and register types. Contracts can describe fixture unlocks.
+  shelf and register types. Contracts can describe fixture unlocks.
 - **Remaining:** add higher-tier fixture licenses only after the user confirms which real
   fixture types they should unlock. No vending-machine fixture is part of the game.
 
 ### 7. Wrap-up — DONE for the current fixture set
 - `AGENTS.md`, `TODO.md`, and the design bible have been updated. The test suite passes and the
   production build succeeds.
-- Live playthrough with the current shelf and locker types: purchased both, placed the shelf,
+- Live playthrough with the current fixture types: purchased and placed a shelf,
   stocked it, confirmed crating is blocked while stocked, emptied and crated it, then saved and
   reloaded. Both fixture crates were restored.
 - The temporary plan remains until Steps 5 and 6 are complete.

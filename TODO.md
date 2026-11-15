@@ -24,17 +24,8 @@ notice something that needs doing but isn't being done right now.
 - [x] Fixed shelf fixture crates vibrating while carried. Their position is now synced
       after the player's final position for each frame is applied.
 - [x] Batch employee shelf restocking across multiple open shelf stacks. They previously
-      picked up only enough to fill one stack per trip, even when their backpack and
-      nearby shelf space had room for more.
-- [x] Check landing-pad unloading with Load storage first. In a clean shift, Tavi moved
-      four 5-unit crates (20 units total) into an empty 20-slot locker in about 20
-      seconds. No stall occurred while that storage had room.
-- [ ] Locker feedback: add an animation and sound when items go into or come out of a
-      locker (E fills a crate, Q empties one). For now the door swings open briefly, the
-      capacity gauge changes, and the crate changes color.
-- [x] Lockers have no window. Carrying item crates, Q at a locker empties the top crate
-      into it (hold: keep emptying crates from the top until one doesn't fit); E fills the
-      highest carried crate that's empty or holds the locker's item, as full as it goes.
+      took only enough to fill one stack per trip, even when the crate and nearby shelf
+      space had room for more.
 - [x] Removed the hovercart, the Equipment tab, the older shelf models (Starter, Universal,
       Showcase, Bulk, Armory, Budget 2x5/2x6), and their licenses. Older saves are refunded
       what those cost, and anything on a removed shelf or in the hovercart goes to Go-Backs.
@@ -65,8 +56,8 @@ notice something that needs doing but isn't being done right now.
 - [x] All employees start identical (same price, wage, skills, and carry amount); Shop Levels
       raise how many can be hired at once. Each course costs more than that employee's last,
       whichever skill it trains. Stock shelves training also raises carry amount.
-- [x] Add employee skill milestones: Run register and Load storage reach 1.5x normal speed
-      at Level 3 and 2x at Level 5; Stock shelves carries 25 items at Level 3 and 35 at Level 5.
+- [x] Add employee skill milestones: Run register reaches 1.5x normal speed at Level 3
+      and 2x at Level 5.
 - [x] Employee shift scheduling: each hired employee is On Shift (works, paid) or Off Shift
       (stays home, unpaid, keeps skills). Firing is removed. Trainees are unavailable for
       their training shift (still paid) whatever their setting.
@@ -161,7 +152,7 @@ notice something that needs doing but isn't being done right now.
 - [x] Improve first-shift pacing: shortened shifts from ten to five minutes,
       keeping the same customer pool and doubling arrival frequency.
 - [x] Start with a much smaller shelf: a two-tile 2x1 starter shelf. (Superseded: new games now start with no shelves; the compact shelf is bought from the Fixtures tab. Placement checks preserve customer access to the register and both sides of the backroom entrance.)
-- [x] Let players turn fixtures: press R while placing or moving any fixture, including the register. Its front, keep-clear squares, customer line, and cashier spot turn with it, so shelves can line the bottom and side walls. Shelves use temporary, tile-sized overhead graphics with dark stock surfaces and a light front edge, including in placement previews. Lockers and registers still reuse rotated art until direction-specific art exists.
+- [x] Let players turn fixtures: press R while placing or moving any fixture, including the register. Its front, keep-clear squares, customer line, and cashier spot turn with it, so shelves can line the bottom and side walls. Shelves use temporary, tile-sized overhead graphics with dark stock surfaces and a light front edge, including in placement previews. Registers still reuse rotated art until direction-specific art exists.
 - [x] Freer fixture placement, stage 1: fixtures move on an 8-pixel grid with the mouse or controller, and saves keep their positions. A fixture facing down can tuck its back up to half a tile into the wall behind it. Placement still checks floor-square access and shoppers stand half a tile from the fixture's front, lined up with it.
 - [x] Freer placement, stage 2: customers and staff follow smooth, collision-aware routes around fixtures instead of aiming only for floor-square centers, so fixtures placed between squares no longer block extra space and shoppers can approach any valid counter position.
 - [x] Redo player-facing game messages: show a large, readable banner below the HUD for
@@ -189,9 +180,9 @@ notice something that needs doing but isn't being done right now.
       a shift or while a save is in progress; closed-store autosaves remain enabled.
 
 ## Fixture zones
-- [x] Registers and shelves can only be placed on sales-floor zones (`salesFloor: true` in
-      `RoomLayout.js`); storage fixtures can go anywhere. Older saves with a register or
-      shelf in the back still load, so the fixture can be moved out.
+- [x] Fixtures can only be placed on sales-floor zones (`salesFloor: true` in
+      `RoomLayout.js`). Older saves with a register or shelf in the back still load, so
+      the fixture can be moved out.
 
 ## Shelf stacking
 - [x] `stackSize` now means how many units fit in one shelf slot (max 10), capped by the
@@ -207,13 +198,11 @@ notice something that needs doing but isn't being done right now.
       live-state reports in local playtest sessions, with recent events/errors and
       customer-pool calculations. See `documentation/DebugPlaytesting.md`.
 - [x] Spawn-customer debug key (Y key): lets one random customer in right away.
-- [x] Quickstart debug key (K key, before any shelf is placed): signs Basic Rations, places
-      a Budget Shelf near the door full of the four cheapest items, adds a third locker,
-      and charges for all of it.
+- [x] Quickstart debug key (K key, before any shelf is placed): signs needed supply
+      contracts, places a Budget Shelf near the door, and stocks it with four low-cost items.
 - [x] Tile-grid overlay (G key, `GameScene.toggleDebugGrid`): draws a 1px line every
       TILE_SIZE across the whole authored map (including locked/not-yet-built zones), on
-      top of everything else. Added after discovering the Storage Fixture's lockers (and,
-      slightly, the sales shelf) weren't actually sitting on tile boundaries -- their
+      top of everything else. Added after discovering fixtures weren't sitting on tile boundaries -- their
       positions were computed as a fractional percentage of the zone's raw pixel
       width/height, which only lines up with the grid by coincidence. Use this any time a
       fixture looks even slightly off to confirm it before chasing the wrong cause -- see
@@ -280,10 +269,6 @@ notice something that needs doing but isn't being done right now.
 - [x] Redo the backroom's art to match the new sales floor: the backroom uses the BackroomA
   look (lavender back wall, floor with edges and a bottom lip), a black border boxes in the
   unlocked part and follows upgrades, and the exit is the animated glass door at the top right.
-- [x] Replace the single locker's oversized art with a narrow purple locker at the player's
-  scale, with upright art and four-frame opening/closing animations for all four facings.
-  Its solid collision matches the cabinet, while a walkable character-sized standing area
-  follows its front. Two-pixel placement lets lockers touch side by side.
 - [x] Compact the starting backroom to the loading pad's exact floor width and half its
   previous height. The pad fills the bottom floor; the outside black border follows each
   width upgrade without moving the pad or animated exit.
@@ -377,18 +362,6 @@ notice something that needs doing but isn't being done right now.
       (it was in `Items.json` the whole time, just never read). `lic_start_surplus` is
       free (0 credits, 0 reputation required) specifically so there's always at least one
       immediately-signable contract to get the loop started from a brand new game.
-- [x] ~~Storage lockers (3 doors, one `locker_storage` image) were actually one single
-      Fixture sharing one combined capacity pool~~ -- visually they're 3 separate lockers,
-      and they're supposed to actually be 3 separate storage spaces, not one pool that
-      just happens to render with 3 doors. Split into `this.storageLockers` -- 3
-      genuinely independent `StorageFixture` instances (each its own 1x2 world footprint,
-      capacity 20, no shared state at all), each drawn with its own dedicated
-      `locker_single.png` placed directly adjacent to the next, so the art still reads as
-      one bank of lockers. (First attempt cropped 3 fixtures to thirds of the same combined
-      `locker_storage.png` texture instead -- looked bad, replaced with real single-door
-      art provided afterward.) `FixtureWindow` titles now read "LOCKER 1"/"LOCKER
-      2"/"LOCKER 3" so they're distinguishable when opened. New games now start with two
-      lockers; existing saves keep all of their lockers.
 - [x] ~~Shelf placement UI highlighted every valid anchor cell green at once~~ -- looked
       like one solid block of taken-up space, not "here's everywhere a 2x1 item COULD go."
       Confusing in practice -- a 2x1 item on a 4x2 grid highlighting 6 cells read as
@@ -403,7 +376,7 @@ notice something that needs doing but isn't being done right now.
       only existed for the old all-cells-highlighted approach.
 
 ## Bigger Features Not Yet Built (from the bible)
-- [x] Off-shift rearrangement of shelves, lockers, and the register through
+- [x] Off-shift rearrangement of shelves and the register through
       Manager Tablet Fixtures/Layout MOVE controls. Grid-snapped previews reject overlaps,
       blocked access, disconnected floor, doors/loading-area obstruction, and insufficient
       register queue space. Contents stay attached; right-click/Escape cancels.
@@ -411,8 +384,8 @@ notice something that needs doing but isn't being done right now.
       hovercart, crates, player economy/licenses, prices/market, and unlocked rooms.
       Electron uses an atomic user-data save file; browser uses localStorage.
       Continue restores closed-shop preparation; active shifts resume the last checkpoint.
-- [x] Manager Tablet Inventory now shows only owned items, with Storage and Stock unit
-      counts. Storage includes all lockers, the hovercart, and unemptied crates (on the
+- [x] Manager Tablet Inventory now shows only owned items, with Off Shelves and Stock unit
+      counts. Off Shelves includes the Go-Backs bin and unemptied crates (on the
       Loading Pad, carried, or dropped). Stock totals all placements on sales shelves,
       including stacks temporarily lifted in move mode. Counts refresh on transfers,
       ordering/delivery, and customers taking shelf stock; zero-total items disappear.
@@ -459,58 +432,30 @@ notice something that needs doing but isn't being done right now.
       Loading Pad; press Space near it to pick it up, carry it to the shelf, press E to
       deliver (restocks that item). Deliberately simplified vs. the bible's full vision --
       logged below, not yet built:
-  - [x] ~~No backroom intermediate storage stage yet -- crates go straight from the Loading
-        Pad to the sales-floor shelf, skipping Storage Fixtures / the Storeroom entirely~~
-        -- see the new Storage Shelving entry below; crates can now be delivered to either
-        fixture depending on which one the player is standing near.
+  - [x] Employees take matching item crates straight from the Loading Pad to shelf spots.
   - [x] Decided: ordering a new product and giving it shelf space stay separate actions.
         Any product covered by a signed supplier contract can be ordered before it has
         a shelf spot.
   - [x] Decided: supplier prices stay as they are (a fixed per-item percentage of a hidden
         base price, shown per crate). No contract-based pricing model is planned.
-  - [x] ~~No employee auto-hauling (bible Step 14/15)~~ -- hired employees with the
-        "Load storage" job now carry delivered crates from the Loading Pad into lockers
-        on their own (`Employee.js`, `EmployeeJobs.js`).
+  - [x] Hired employees can carry delivered crates from the Loading Pad directly to
+        matching shelf spots (`Employee.js`, `EmployeeJobs.js`).
   - [x] ~~No Hovercart/backpack capacity model at all~~ -- see the new Hovercart entry
         below. Ordered crates now hold exactly one full Budget Shelf 2x2 space of their item
         (`getCrateOrderQuantity`), with no carrying-capacity limit when hauled from the Loading Pad. (Unpacking a carried
         crate into the Hovercart was later removed; Q now puts crates down.)
-- [x] Storage Shelving + real capacity-pool storage (bible Step 42): the Storeroom is
-      now a proper walled-off backroom (a `door_blast_keypad_01` door in its own east
-      wall, sealed via the new `TileRoom.addWall`, since two already-unlocked zones never
-      auto-wall against each other -- see `TileRoom.needsWallAt`) with a `locker_storage`
-      Storage Fixture inside it, completely empty to start. `StorageFixture`
-      (`ShopInventory.js`, renamed from the original `Fixture` once the sales shelf got
-      its own completely different model -- see below) models one shared total `capacity`
-      number (e.g. 20 "slots") instead of unlimited quantity -- every item in
-      `Items.json` has its own `slots` value (1-5, derived from its `dimensions`
-      footprint: small stuff like ammo/attachments/pistols costs 1, bulky armor/heavy
-      weapons costs 4-5), and stocking it eats that many units out of the fixture's
-      shared pool. Any item can be stocked anywhere there's room -- no pre-assignment/
-      configuration step needed. This is the correct model for a Storage Fixture
-      specifically (a flexible overflow/staging locker, not a real storefront display) --
-      see the Sales Shelf entry below for why the real sales shelf needed something
-      completely different instead. `FixtureWindow`/`FixtureRenderer` show a capacity bar
-      + a plain list of whatever's currently stocked; walk up and press E (or click it)
-      to open it. Stock gets there via ordering (Supply tab) + hauling + delivering a
-      crate (`GameScene.tryDeliverCarriedCrate`), or via the Hovercart (see below).
 - [x] Hovercart (bible Step 10/63: "an abstract character/employee inventory size, not a
-      physical moving entity"): extracted the capacity-pool logic shared by every
-      StorageFixture into a new base class (`InventoryPool.js` -- capacity + stock +
-      add/remove/usedCapacity/etc.), and gave `PlayerState` its own instance
+      physical moving entity"): gave `PlayerState` its own inventory instance
       (15 spaces in new games; Equipment upgrades add 5 spaces at a time up to 40 for
       200/300/400/500/600 credits. Old 10-space carts load at 15; 20-space and upgraded
       carts keep their capacity and contents). `FixtureWindow` shows the
-      open fixture's stock AND the hovercart's own stock side by side, each row with a
-      TAKE (fixture -> hovercart) or STOCK (hovercart -> fixture) button that moves 1 unit
-      at a time, disabled the instant the receiving side has no room left for that item.
-      The player can deliver a crate directly to a shelf or locker. The HUD gained a live `HOVERCART x/y`
-      readout next to Credits/Reputation. Employees now carry stock in their own backpacks.
+      The player can deliver a crate directly to a shelf. The HUD gained a live `HOVERCART x/y`
+      readout next to Credits/Reputation.
       Moving 1 unit per click is intended (decided; no bulk-transfer input planned).
   - [x] ~~While carrying a stock crate, press Q (or Y on a controller) to unpack as much as
         fits into the hovercart.~~ Removed when Q became the put-down key.
-- [x] Sales Shelf: manual grid placement (bible Steps 4/5/22) -- NOT the same model as a
-      Storage Fixture above. Originally built as a shared capacity pool (same as Storage),
+- [x] Sales Shelf: manual grid placement (bible Steps 4/5/22). Originally built as a
+      shared capacity pool,
       but that's wrong for a real storefront shelf: items need actual physical placement
       on a grid (Tarkov-style packing using each item's own `dimensions` w/h, optionally
       rotated 90 degrees), and "depth"/stack capacity is NOT shared across the fixture --
@@ -529,19 +474,15 @@ notice something that needs doing but isn't being done right now.
       sized to the item's existing dimensions, with an `xN` label. A single graphics layer
       batches blocks per shelf; labels are per placement, never per unit. An existing
       placement still at 0 stock can be clicked away again to free up
-      the space. Below the grid, a flat list of current placements (same TAKE-into-
-      hovercart affordance as Storage) plus the hovercart section. Demo shelf starts
+      the space. Below the grid, a flat list of current placements with TAKE-into-
+      inventory controls plus the hovercart section. Demo shelf starts
       completely empty (tile-derived grid, stackDepth 10). Found and fixed two real bugs building
       this: (1) CSS grid rows sized with `1fr` inside an unbounded-height container blew
       up to a runaway size the instant an item's image rendered -- fixed with fixed-px
       grid tracks instead; (2) giving `.fixture-cell` an explicit width/height clamped
       multi-column placements back down to one cell's worth of space despite spanning
       more grid tracks -- removed the explicit size so grid items stretch to fill their
-      actual spanned area. Known simplification: `StorageFixture`'s `getOpenSlotsFor` and
-      the shelf's `getOpenPlacementsFor` have very similar names/shapes but aren't
-      actually unified into one shared concept -- duck-typed to the same small public API
-      (`stock`/`add`/`remove`/`getRemainingUnitsFor`/etc.) so GameScene and FixtureWindow
-      can treat both generically, but the internal models remain genuinely different.
+      actual spanned area.
 - [x] Single-file register line: runs straight out from the counter until blocked, then
   turns toward the door (planRegisterQueue); the first customer stands at the counter like
   the player does behind it, and everyone is spaced evenly along the line.
@@ -556,7 +497,7 @@ notice something that needs doing but isn't being done right now.
       opened from the register UI's GO-BACKS BIN button (the register now shows an idle view
       when nobody's in line). Clicking a bin item loads 1 into the hovercart -- the only way
       out of the bin.
-- [x] Go-Backs bin works like a take-only locker (TAKE moves 1 unit into the hovercart; nothing
+- [x] Go-Backs bin works as a take-only stock bin (TAKE moves 1 unit into the hovercart; nothing
       can be put back in). A yellow "!" above the player shows while anything is in the bin.
 - [x] Inventory tab shows how many items are in active customers' carts, updating when they
       shop or finish checkout; abandoned carts move to Go-Backs as before.
@@ -576,9 +517,8 @@ notice something that needs doing but isn't being done right now.
 - [x] Employees: hiring, Work Register / Stock Shelves tasks (Step 13-19). Tavi the
       Stock Clerk can be hired from the Employee tab (250 credits, 50 credits in wages
       paid automatically at each shift start). Each employee has a reorderable job
-      priority list: run register, stock shelves, load storage. Employees walk the shop,
-      serve the register line, refill assigned shelf slots from lockers via a backpack,
-      haul delivered crates into lockers, and return unplaced stock to lockers when
+      priority list: run register or stock shelves. Employees walk the shop,
+      serve the register line, and take matching delivered crates to assigned shelf spots.
       clocking out. Hired staff and job priorities save and load (`Employee.js`,
       `EmployeeJobs.js`, `EmployeeRenderer.js`, `data/Employees.json`).
 - [x] Fixture purchasing, fixture crates, off-shift placement/crating, and fixture licenses

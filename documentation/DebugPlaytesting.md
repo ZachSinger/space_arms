@@ -101,12 +101,6 @@ Placement snaps to an 8-pixel grid. The overlay shows which of those positions
 are valid without changing collision rules.
 The existing `G` shortcut independently toggles the larger cyan floor-tile grid.
 
-When you stand close enough to open a locker, its item name and a small capacity gauge appear
-near the top of its front; both disappear when you walk away. Green shows how much of its
-box-size capacity is used; red shows the free capacity left. Each locker accepts only one item
-type and can be reused for a different item once empty. The gauge updates as stock changes and
-stays with the locker when it is moved.
-
 The bottom bar shows the picture, name, and count of the crate under the green arrow; the
 cards above its right end list the carried crates, top crate first. The arrow only marks a
 crate in front of the player, within reach; Ctrl moves it one crate down a floor stack.

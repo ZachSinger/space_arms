@@ -16,7 +16,6 @@ let cacheDirectory;
 let InventoryPool;
 let ShelfFixture;
 let ShelfStockingWindow;
-let StorageFixture;
 
 before(async () => {
   cacheDirectory = await mkdtemp(join(tmpdir(), "space-arms-shelf-slots-test-"));
@@ -43,7 +42,6 @@ before(async () => {
   ({ InventoryPool } = await server.ssrLoadModule("/js/logic/InventoryPool.js"));
   ({ ShelfFixture } = await server.ssrLoadModule("/js/logic/ShelfFixture.js"));
   ({ ShelfStockingWindow } = await server.ssrLoadModule("/js/logic/ShelfStockingWindow.js"));
-  ({ StorageFixture } = await server.ssrLoadModule("/js/logic/ShopInventory.js"));
 });
 
 after(async () => {
@@ -68,17 +66,6 @@ test("sold-out shelf slots keep their spot until deliberately removed while empt
   shelf.remove("amo_01", 2);
   assert.equal(shelf.removeEmptyPlacement(slot), true);
   assert.deepEqual(shelf.placements, []);
-});
-
-test("lockers hold one item type and use box-size units for capacity", () => {
-  const locker = new StorageFixture({ capacity: 40, stock: [] });
-  assert.equal(locker.add("amo_01", 40), 40);
-  assert.equal(locker.usedCapacity(), 40);
-  assert.equal(locker.getRemainingUnitsFor("wpn_hvy_01"), 0);
-  assert.equal(locker.remove("amo_01", 40), 40);
-  assert.deepEqual(locker.stock, []);
-  assert.equal(locker.add("wpn_hvy_01", 3), 2);
-  assert.equal(locker.usedCapacity(), 40);
 });
 
 function itemCrate(itemId, quantity) {

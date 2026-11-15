@@ -32,8 +32,8 @@ function integer(value, minimum = Number.MIN_SAFE_INTEGER) {
   return Number.isSafeInteger(value) && value >= minimum;
 }
 
-// Version 9 removes another two rows from the starting sales floor.
-export const SHOP_LAYOUT_VERSION = 9;
+// Version 10 removes stock fixtures and moves their contents into Go-Backs.
+export const SHOP_LAYOUT_VERSION = 10;
 
 // Equipment that was taken out of the game, with what the player paid for it. Older saves
 // get those credits back, and any stock that was on it goes to the Go-Backs bin.
@@ -41,19 +41,26 @@ const RETIRED_SHELF_PRICES = Object.freeze({
   shelf_budget_2x5: 375, shelf_budget_2x6: 450, shelf_starter_2x1: 300, shelf_universal: 2000,
   shelf_showcase: 800, shelf_bulk: 2200, shelf_armory: 3500,
 });
+const RETIRED_FIXTURE_PRICES = Object.freeze({
+  ...RETIRED_SHELF_PRICES,
+  locker_single: 180,
+  locker_double: 1200,
+  locker_secure: 2200,
+});
 const RETIRED_LICENSE_PRICES = Object.freeze({
   lic_fixture_expanded: 750, lic_fixture_premium_shelf: 600,
   lic_fixture_bulk_display: 1500, lic_fixture_armory_display: 2400,
+  lic_fixture_storage_bank: 1000, lic_fixture_secure_storage: 1800,
 });
 // The hovercart started at 10 or 15 spaces; each 5 spaces past 15 was a paid upgrade.
 const RETIRED_HOVERCART_UPGRADE_PRICES = Object.freeze({ 20: 200, 25: 300, 30: 400, 35: 500, 40: 600 });
 
 function isRetiredFixtureCrate(crate) {
-  return isRecord(crate) && crate.kind === "fixture" && Object.hasOwn(RETIRED_SHELF_PRICES, crate.typeId);
+  return isRecord(crate) && crate.kind === "fixture" && Object.hasOwn(RETIRED_FIXTURE_PRICES, crate.typeId);
 }
 
 /**
- * Removes retired shelves (placed or still in their crates), retired supplier contracts, and
+ * Removes retired fixtures (placed or still in their crates), retired supplier contracts, and
  * the hovercart from an older save: refunds what they cost and sends their stock to Go-Backs.
  * @param {object} data
  * @returns {object}
@@ -69,23 +76,24 @@ function retireRemovedEquipment(data) {
   };
 
   const fixtures = data.fixtures.filter((entry) => {
-    if (!Object.hasOwn(RETIRED_SHELF_PRICES, entry?.type)) return true;
-    refund += RETIRED_SHELF_PRICES[entry.type];
+    if (!Object.hasOwn(RETIRED_FIXTURE_PRICES, entry?.type)) return true;
+    refund += RETIRED_FIXTURE_PRICES[entry.type];
     (Array.isArray(entry.placements) ? entry.placements : []).forEach(addToGoBacks);
+    (Array.isArray(entry.stock) ? entry.stock : []).forEach(addToGoBacks);
     return false;
   });
   let crates = data.crates;
   if (Array.isArray(crates)) {
     crates = crates.filter((crate) => {
       if (!isRetiredFixtureCrate(crate)) return true;
-      refund += RETIRED_SHELF_PRICES[crate.typeId];
+      refund += RETIRED_FIXTURE_PRICES[crate.typeId];
       return false;
     });
   }
   let { carriedCrate, carriedCrates } = data;
   // Fixture crates are always carried alone.
   if (isRetiredFixtureCrate(carriedCrate)) {
-    refund += RETIRED_SHELF_PRICES[carriedCrate.typeId];
+    refund += RETIRED_FIXTURE_PRICES[carriedCrate.typeId];
     carriedCrate = null;
     if (carriedCrates !== undefined) carriedCrates = [];
   }
@@ -122,6 +130,36 @@ function retireRemovedEquipment(data) {
   };
 }
 
+function migrateRemovedEmployeeJob(data) {
+  const player = data.playerState;
+  if (!isRecord(player)) return data;
+  const priorities = { ...(player.employeeJobPriorities ?? {}) };
+  for (const [employeeId, jobs] of Object.entries(priorities)) {
+    if (Array.isArray(jobs)) {
+      priorities[employeeId] = jobs.map((job) => job === "load_storage" ? "stock_shelves" : job)
+        .filter((job, index, list) => list.indexOf(job) === index);
+    }
+  }
+  const skills = { ...(player.employeeSkills ?? {}) };
+  for (const [employeeId, levels] of Object.entries(skills)) {
+    if (!isRecord(levels) || levels.load_storage === undefined) continue;
+    const { load_storage, ...remaining } = levels;
+    remaining.stock_shelves = Math.max(remaining.stock_shelves ?? 1, load_storage);
+    skills[employeeId] = remaining;
+  }
+  const training = Object.fromEntries(Object.entries(player.employeeTraining ?? {})
+    .map(([employeeId, jobId]) => [employeeId, jobId === "load_storage" ? "stock_shelves" : jobId]));
+  return {
+    ...data,
+    playerState: {
+      ...player,
+      employeeJobPriorities: priorities,
+      employeeSkills: skills,
+      employeeTraining: training,
+    },
+  };
+}
+
 /**
  * Validate a shop save and return it, with pre-fixture-type entries migrated.
  * Throws on the first invalid field.
@@ -131,32 +169,32 @@ function retireRemovedEquipment(data) {
  */
 export function validateShopSave(data, database) {
   requireSave(isRecord(data), "missing shop state.");
-  requireSave(data.layoutVersion === SHOP_LAYOUT_VERSION,
-    data.layoutVersion === undefined || Number.isSafeInteger(data.layoutVersion) && data.layoutVersion < SHOP_LAYOUT_VERSION
-      ? "this save uses the old shop layout. Start a new game."
+  requireSave(data.layoutVersion === SHOP_LAYOUT_VERSION || data.layoutVersion === SHOP_LAYOUT_VERSION - 1,
+    data.layoutVersion === undefined || Number.isSafeInteger(data.layoutVersion) && data.layoutVersion < SHOP_LAYOUT_VERSION - 1
+      ? "this save uses an unsupported shop layout."
       : "unknown shop layout version.");
   requireSave(Array.isArray(data.fixtures) && data.fixtures.length > 0, "missing fixture layout.");
+  const oldLayout = data.layoutVersion < SHOP_LAYOUT_VERSION;
   data = retireRemovedEquipment({ ...data, fixtures: data.fixtures.map((raw) => {
     const entry = migrateFixtureEntry(raw);
     // The old 2x4 id was sold as a three-level shelf. Keep those purchased shelves intact.
     return entry?.type === "shelf_budget_2x4" && entry.stockingVersion === undefined
       ? { ...entry, type: "shelf_budget_3x4" } : { ...entry };
   }) });
+  if (oldLayout) data = migrateRemovedEmployeeJob(data);
+  data.layoutVersion = SHOP_LAYOUT_VERSION;
   const items = database.getAllItems();
   const itemById = new Map(items.map((item) => [item.id, item]));
-  const stockCapacity = (stock, capacity, capacityUnit = "slots", singleItem = false) => {
+  const stockCapacity = (stock, capacity) => {
     requireSave(Array.isArray(stock), "missing inventory.");
     const ids = new Set();
-    const itemTypes = new Set();
     let used = 0;
     for (const entry of stock) {
       const item = itemById.get(entry?.itemId);
       requireSave(item && integer(entry.quantity, 1) && !ids.has(item.id), "invalid inventory entry.");
       ids.add(item.id);
-      itemTypes.add(item.id);
-      used += item[capacityUnit] * entry.quantity;
+      used += item.slots * entry.quantity;
     }
-    requireSave(!singleItem || itemTypes.size <= 1, "locker contains more than one item type.");
     requireSave(used <= capacity, "inventory exceeds its capacity.");
   };
   const player = data.playerState;
@@ -265,7 +303,6 @@ export function validateShopSave(data, database) {
       isValidFixtureRotation(entry.rotation),
     "invalid fixture position.");
     fixtureIds.add(entry.id);
-    if (spec.kind === "storage") stockCapacity(entry.stock, spec.capacity, "boxSize", true);
     if (spec.kind === "shelf") {
       const handsOn = spec.artLayout === "budget";
       requireSave(entry.stockingVersion === undefined || handsOn && entry.stockingVersion === 1,

@@ -27,14 +27,6 @@ export class FixtureRegistry {
     return this.ofKind("shelf");
   }
 
-  // Fixtures that hold stock: shelves and storage lockers.
-  stockHolders() {
-    return this.fixtures.filter((fixture) => {
-      const { kind } = getFixtureType(fixture.type);
-      return kind === "shelf" || kind === "storage";
-    });
-  }
-
   // The first (and normally only) register.
   register() {
     return this.ofKind("register")[0];
@@ -76,7 +68,7 @@ export class FixtureRegistry {
   }
 
   /**
-   * "SHELF", or "LOCKER 2" when several fixtures share a type.
+   * "SHELF 2" when several fixtures share a type.
    * @param {object} fixture
    */
   displayName(fixture) {

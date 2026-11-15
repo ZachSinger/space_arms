@@ -9,17 +9,6 @@ export const EMPLOYEE_MILESTONE_SPEED_BONUS = 10;
 export const EMPLOYEE_MILESTONE_LEVELS = Object.freeze([3, 5]);
 export const EMPLOYEE_HIRE_COST = 250;
 export const EMPLOYEE_BASE_WAGE = 50;
-export const EMPLOYEE_BASE_CARRY = 10;
-export const EMPLOYEE_CARRY_PER_STOCKING_LEVEL = 5;
-export const EMPLOYEE_STOCKING_MILESTONE_CARRY_BONUS = 5;
-
-export function getEmployeeCarryCapacity(stockShelvesLevel) {
-  const milestoneBonus = stockShelvesLevel >= 3
-    ? EMPLOYEE_STOCKING_MILESTONE_CARRY_BONUS
-    : 0;
-  return EMPLOYEE_BASE_CARRY +
-    EMPLOYEE_CARRY_PER_STOCKING_LEVEL * (stockShelvesLevel - 1) + milestoneBonus;
-}
 
 function countCoursesTaken(skillLevels) {
   return Object.values(skillLevels).reduce((sum, level) => sum + level - 1, 0);
@@ -42,15 +31,13 @@ export function getEmployeeProfile(employeeId, savedLevels = {}) {
     coursesTaken,
     wagePerShift: EMPLOYEE_BASE_WAGE + Math.ceil(EMPLOYEE_BASE_WAGE * coursesTaken / 10),
     hireCost: EMPLOYEE_HIRE_COST,
-    backpackCapacity: getEmployeeCarryCapacity(skillLevels.stock_shelves),
   };
 }
 
 export function getEmployeeJobSpeed(skillLevels, jobId) {
   if (!EMPLOYEE_JOB_IDS.includes(jobId)) throw new Error(`Unknown employee job: ${jobId}`);
   const level = skillLevels?.[jobId] ?? 1;
-  const hasSpeedMilestone = jobId === "register" || jobId === "load_storage";
-  const milestoneCount = hasSpeedMilestone
+  const milestoneCount = jobId === "register"
     ? EMPLOYEE_MILESTONE_LEVELS.filter((milestone) => level >= milestone).length
     : 0;
   const bonus = EMPLOYEE_SPEED_BONUS_PER_LEVEL * (level - 1) +
@@ -78,6 +65,5 @@ export function getEmployeeTrainingOffer(employeeId, skillLevels, jobId) {
     cost: getEmployeeTrainingCost(employee.coursesTaken),
     wagePerShift: employee.wagePerShift,
     nextWagePerShift: trained.wagePerShift,
-    nextBackpackCapacity: trained.backpackCapacity,
   };
 }

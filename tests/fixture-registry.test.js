@@ -10,14 +10,13 @@ function registryWith(...types) {
 }
 
 test("registry groups fixtures by kind and names duplicates by number", () => {
-  const registry = registryWith("shelf_budget_2x4", "locker_single", "locker_single", "register_basic");
-  const [shelf, lockerA, lockerB, register] = registry.all();
+  const registry = registryWith("shelf_budget_2x4", "shelf_budget_2x2", "shelf_budget_2x2", "register_basic");
+  const [shelf, shelfA, shelfB, register] = registry.all();
 
-  assert.deepEqual(registry.shelves(), [shelf]);
-  assert.deepEqual(registry.stockHolders(), [shelf, lockerA, lockerB]);
+  assert.deepEqual(registry.shelves(), [shelf, shelfA, shelfB]);
   assert.equal(registry.register(), register);
   assert.equal(registry.displayName(shelf), getFixtureType("shelf_budget_2x4").name);
-  assert.equal(registry.displayName(lockerB), `${getFixtureType("locker_single").name} 2`);
+  assert.equal(registry.displayName(shelfB), `${getFixtureType("shelf_budget_2x2").name} 2`);
 });
 
 test("registry ids stay unique and removal frees the id", () => {

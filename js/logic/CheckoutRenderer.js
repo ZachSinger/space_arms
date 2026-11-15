@@ -110,10 +110,9 @@ export class CheckoutRenderer {
         ${cashPayment ? `
           <div class="cash-checkout hidden" id="checkout-cash">
             <div class="cash-summary">
-              <div class="cash-current-change"><span>CURRENT CHANGE</span><strong id="checkout-change-selected">${renderCurrentChange(0, currency)}</strong></div>
-              <div class="cash-change-owed"><span>CHANGE OWED</span><strong>${formatCashAmount(cashPayment.changeDueUnits, currency)}</strong></div>
+              <div class="cash-current-change" id="checkout-change-current"><span>CURRENT CHANGE</span><strong id="checkout-change-selected">${renderCurrentChange(0, currency)}</strong></div>
+              <div class="cash-change-owed"><span>CHANGE OWED</span><strong>${renderCurrentChange(cashPayment.changeDueUnits, currency)}</strong></div>
             </div>
-            <button type="button" class="action-btn cash-hand-over" id="cash-hand-over">HAND OVER CHANGE<span class="kbd-only"> (SPACE)</span></button>
             <div class="cash-drawer">
               <div class="cash-bills">${renderDrawer("bill", currency)}</div>
               ${currency === "credits" ? `<div class="cash-coins">${renderDrawer("coin", currency)}</div>` : ""}

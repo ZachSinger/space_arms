@@ -42,7 +42,7 @@ ROW_NAMES = [
      "plant_potted_01", "plant_potted_02", "plant_potted_03", "plant_potted_04", "plant_potted_05"],
     ["vending_machine_01", "vending_machine_02", "vending_machine_03", "vending_machine_04", "vending_machine_05",
      "bin_trash_01", "bin_trash_02", "bin_trash_03", "bin_trash_04", "bin_trash_05"],
-    ["podium_octagon", "desk_office", "chair_office", "locker_storage", "server_standee",
+    ["podium_octagon", "desk_office", "chair_office", "server_standee",
      "workbench_drawer", "workbench_plain", "workbench_tools", "unit_hvac_01", "unit_hvac_02"],
 ]
 
