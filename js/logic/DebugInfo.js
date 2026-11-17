@@ -131,7 +131,8 @@ export function createDebugSnapshot(scene, identifyCustomer, recentEvents, envir
       arrivalSchedule: scene.customerArrivalSchedule,
       nextScheduledArrival: scene.nextScheduledArrival,
       remainingScheduledArrivals: scene.customerArrivalSchedule.length - scene.nextScheduledArrival,
-      registerLine: scene.registerLine.map(identifyCustomer),
+      registerLines: Object.fromEntries(scene.fixtures.registers().map((register) =>
+        [register.id, scene.lineFor(register).map(identifyCustomer)])),
     },
     customers: scene.customers.map((customer) =>
       snapshotCustomer(customer, identifyCustomer(customer)),

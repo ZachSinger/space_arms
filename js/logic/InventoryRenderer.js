@@ -1,57 +1,55 @@
 // ==========================================
 // FILE: InventoryRenderer.js
 // ==========================================
-// HTML for the Manager Tablet's Inventory tab (per-item loose stock, shelf stock, customer carts,
-// market price, and store price controls) plus its keyboard/hover list navigation.
+// HTML for the Manager Tablet's Inventory tab plus its keyboard/hover list navigation.
 // See also: ManagerTablet.js (hosts the tab).
-import { formatMoney } from "./Money.js";
+import { formatMoneyAmount, roundMoney } from "./Money.js";
 export class InventoryRenderer {
+  static generateProfitHTML(storePrice, unitCost) {
+    const profit = roundMoney(storePrice - unitCost);
+    const profitClass = profit > 0 ? "positive" : profit < 0 ? "negative" : "neutral";
+    return `<span class="inventory-profit ${profitClass}" data-inventory-profit title="Profit per item: your price minus the cost of one item in a supply crate. Delivery fees are not included.">${formatMoneyAmount(profit)}</span>`;
+  }
+
   /**
    * Render just the Inventory tab's content; the hosting window owns the tab chrome.
-   * @param {{ item: object, offShelves: number, stock: number, inCustomerCarts: number, marketPrice: number, storePrice: number }[]} entries - prices in credits
+   * @param {{ item: object, stock: number, unitCost: number, storePrice: number }[]} entries - prices in credits
    * @returns {string}
    */
   static generateHTML(entries) {
-    const rows = entries.map(({ item, offShelves, stock, inCustomerCarts, marketPrice, storePrice }, index) => {
+    const rows = entries.map(({ item, stock, unitCost, storePrice }, index) => {
       const iconHTML = item.image
         ? `<img class="item-icon" src="${item.image}" alt="" />`
         : `<div class="item-icon"></div>`;
       return `
         <div class="item-card inventory-item-card" data-index="${index}" data-item-id="${item.id}">
-          ${iconHTML}
-          <span class="item-card-title">${item.name}</span>
-          <span class="inventory-quantity" data-inventory-off-shelves>${offShelves}</span>
+          <div class="inventory-name">${iconHTML}<span class="item-card-title">${item.name}</span></div>
           <span class="inventory-quantity" data-inventory-stock>${stock}</span>
-          <span class="inventory-quantity" data-inventory-carts>${inCustomerCarts}</span>
-          <span class="inventory-quantity" data-inventory-market>${formatMoney(marketPrice)}</span>
           <div class="inventory-price-controls">
             <input class="inventory-price-input" type="number" min="1" step="0.01" value="${storePrice}"
               data-price-item-id="${item.id}" aria-label="Store price for ${item.name}" />
             <div class="inventory-price-buttons">
               <button type="button" data-price-action="decrease" data-price-item-id="${item.id}"
-                aria-label="Decrease price by 10% for ${item.name}, at least 1 credit when possible"
-                title="Decrease by 10% (at least 1 credit; minimum price 1 credit)">-10%</button>
+                aria-label="Decrease price by 10% for ${item.name}, at least 1 when possible"
+                title="Decrease by 10%, or by at least 1. The price never drops below 1.">-10%</button>
               <button type="button" data-price-action="increase" data-price-item-id="${item.id}"
-                aria-label="Increase price by 10% for ${item.name}, at least 1 credit"
-                title="Increase by 10% (at least 1 credit)">+10%</button>
+                aria-label="Increase price by 10% for ${item.name}, at least 1"
+                title="Increase by 10%, or by at least 1.">+10%</button>
               <button type="button" data-price-action="market" data-price-item-id="${item.id}"
                 aria-label="Set price to market for ${item.name}" title="Set price to current market price">MKT</button>
             </div>
           </div>
+          ${this.generateProfitHTML(storePrice, unitCost)}
         </div>
       `;
     }).join("");
 
     return `
-      <div class="fixture-stock-meta">Off Shelves includes the Go-Backs bin and item crates on the floor or in your hands. Stock is on shelves; In Carts are with shoppers and return to Go-Backs if abandoned. Market is today's galactic average; set your own Price.</div>
       <div class="inventory-column-header">
-        <span></span>
-        <span>ITEM</span>
-        <span class="inventory-quantity">OFF SHELVES</span>
-        <span class="inventory-quantity">STOCK</span>
-        <span class="inventory-quantity" title="Items shoppers have picked up but not yet bought">IN CARTS</span>
-        <span class="inventory-quantity">MARKET</span>
-        <span class="inventory-quantity">PRICE</span>
+        <h3 class="type-h3">Name</h3>
+        <h3 class="type-h3">Stock</h3>
+        <h3 class="type-h3">Price</h3>
+        <h3 class="type-h3">Profit</h3>
       </div>
       <div class="retro-slot custom-scrollbar inventory-list" style="padding: 10px; display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto;">
         ${rows || `<div class="fixture-empty-hint">No inventory owned yet -- order items from Supply.</div>`}

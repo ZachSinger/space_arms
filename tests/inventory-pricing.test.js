@@ -8,6 +8,7 @@ import { createServer } from "vite";
 import { summarizeSupplyOrder, DELIVERY_FEE } from "../js/logic/SupplyOrder.js";
 import { GAME_EVENTS } from "../js/logic/EventBus.js";
 import { isMoney } from "../js/logic/Money.js";
+import { InventoryRenderer } from "../js/logic/InventoryRenderer.js";
 import { SupplierLicense } from "../js/logic/Licenses.js";
 
 let server;
@@ -104,7 +105,15 @@ function createHarness() {
         }
       });
     },
-    closest(selector) { return this.matches(selector) ? this : null; },
+    closest(selector) {
+      if (selector === ".inventory-item-card") {
+        return {
+          querySelector: (query) =>
+            query === "[data-inventory-profit]" ? panel.profits.get(itemId) : null,
+        };
+      }
+      return this.matches(selector) ? this : null;
+    },
     focus() { focus(this); },
     blur() { if (document.activeElement === this) focus(null); },
   });
@@ -122,6 +131,10 @@ function createHarness() {
       this.renderCount += 1;
       this.markup = markup;
       this.controls = [];
+      this.profits = new Map(
+        [...markup.matchAll(/data-item-id="([^"]+)"[\s\S]*?(<span class="inventory-profit [^"]+" data-inventory-profit[^>]*>[^<]*<\/span>)/g)]
+          .map(([, itemId, html]) => [itemId, { outerHTML: html }]),
+      );
       for (const [, value, itemId] of markup.matchAll(
         /<input\b[^>]*value="([^"]*)"[^>]*data-price-item-id="([^"]*)"[^>]*>/g,
       )) {
@@ -143,6 +156,7 @@ function createHarness() {
         item.dataset.priceAction === action,
       );
     },
+    profit(itemId) { return this.profits.get(itemId)?.outerHTML; },
   };
   body.querySelector = (selector) => {
     if (selector === ".tablet-tab-bar") return tabBar;
@@ -160,6 +174,7 @@ function createHarness() {
 
   const prices = new Map([["rifle", 100], ["pistol", 200]]);
   const marketPrices = new Map([["rifle", 275], ["pistol", 250]]);
+  const unitCosts = new Map([["rifle", 80], ["pistol", 250]]);
   const playerState = {
     listeners: [],
     hiredEmployees: [],
@@ -206,6 +221,7 @@ function createHarness() {
         stock: 0,
         inCustomerCarts: this.customerCartCount,
         marketPrice: marketPrices.get(itemId),
+        unitCost: unitCosts.get(itemId),
         storePrice: prices.get(itemId),
       }));
     },
@@ -225,7 +241,8 @@ function createHarness() {
         day: 1, openingCredits: 1500, closingCredits: 1500, reputationChange: 0,
         earned: [], spent: [], totalEarned: 0, totalSpent: 0, shift: null,
       },
-      lastDay: null,
+      receipts: [],
+      lifetime: { daysCompleted: 0, totalSales: 0, customersServed: 0 },
     }),
     fixtures: { all: () => [], displayName: () => "" },
   };
@@ -238,10 +255,30 @@ function createHarness() {
   return { body, click, document, focus, keyboard, list, marketPrices, panel, scene, tablet };
 }
 
+test("inventory calculates profit per item from supplier cost, not market price", () => {
+  const html = InventoryRenderer.generateHTML([
+    { item: { id: "rifle", name: "Rifle" }, stock: 3, marketPrice: 20.88, unitCost: 12.34, storePrice: 30.56 },
+    { item: { id: "pistol", name: "Pistol" }, stock: 2, marketPrice: 12, unitCost: 15.10, storePrice: 10.05 },
+    { item: { id: "kit", name: "Kit" }, stock: 1, marketPrice: 7, unitCost: 10, storePrice: 10 },
+  ]);
+
+  assert.deepEqual(
+    [...html.matchAll(/<h3 class="type-h3">([^<]+)<\/h3>/g)].map(([, label]) => label),
+    ["Name", "Stock", "Price", "Profit"],
+  );
+  assert.match(html, /data-inventory-stock>3</);
+  assert.match(html, /inventory-profit positive" data-inventory-profit[^>]*>18\.22</);
+  assert.match(html, /inventory-profit negative" data-inventory-profit[^>]*>-5\.05</);
+  assert.match(html, /inventory-profit neutral" data-inventory-profit[^>]*>0</);
+  assert.match(html, /Delivery fees are not included/);
+  assert.doesNotMatch(html, /Off Shelves|In Carts|data-inventory-off-shelves|data-inventory-carts|data-inventory-market/);
+});
+
 test("price buttons update the displayed value and retain keyboard focus", () => {
   const h = createHarness();
   h.click("rifle", "increase");
   assert.equal(h.panel.input("rifle").value, "110");
+  assert.match(h.panel.profit("rifle"), />30<\/span>/);
   assert.equal(h.scene.getStorePrice("rifle"), 110);
   assert.equal(h.document.activeElement, h.panel.button("rifle", "increase"));
   assert.equal(h.keyboard.enabled, false);
@@ -254,13 +291,37 @@ test("price buttons update the displayed value and retain keyboard focus", () =>
 
   h.click("rifle", "decrease");
   assert.equal(h.panel.input("rifle").value, "108.9");
+  const profitBeforeMarketChange = h.panel.profit("rifle");
   h.marketPrices.set("rifle", 300);
+  h.scene.playerState.notifyListeners();
+  assert.equal(h.panel.profit("rifle"), profitBeforeMarketChange);
   h.click("rifle", "market");
   assert.equal(h.panel.input("rifle").value, "300");
+  assert.match(h.panel.profit("rifle"), />220<\/span>/);
   assert.equal(h.panel.input("pistol").value, "200");
   assert.equal(h.list.scrollTop, 37);
   h.focus(null);
   assert.equal(h.keyboard.enabled, true);
+});
+
+test("committing a typed price updates profit without replacing the next price button", async () => {
+  const h = createHarness();
+  const input = h.panel.input("rifle");
+  h.focus(input);
+  input.value = "95.37";
+  const renders = h.panel.renderCount;
+  h.body.emit("change", { target: input });
+  assert.equal(h.scene.getStorePrice("rifle"), 95.37);
+  assert.match(h.panel.profit("rifle"), />15\.37<\/span>/);
+  assert.equal(h.panel.renderCount, renders);
+
+  const button = h.panel.button("rifle", "increase");
+  h.focus(button);
+  assert.equal(h.panel.contains(button), true);
+  assert.match(h.panel.profit("rifle"), />15\.37<\/span>/);
+  h.focus(null);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.match(h.panel.profit("rifle"), />15\.37<\/span>/);
 });
 
 test("contract signing enforces each shop level without spending credits early", async () => {
@@ -293,7 +354,7 @@ test("contract signing enforces each shop level without spending credits early",
   state.shopLevel = 2;
   state.globalReputation = -5;
   tablet.handleSignContract("lic_start_apparel");
-  assert.equal(state.credits, 1400);
+  assert.equal(state.credits, 1225);
   assert.equal(state.activeLicenses.has("lic_start_apparel"), true);
   assert.deepEqual(entries.map((entry) => entry.category), ["licenses"]);
 });
@@ -314,33 +375,89 @@ test("opening the tablet hides checkout and closing it resumes register work", (
   assert.equal(tablet.fixtureSaleConfirmation, null);
 });
 
-test("reopening the tablet refreshes cleared employee confirmations", () => {
+test("reopening the tablet refreshes the employee panel", () => {
   const { scene, tablet } = createHarness();
   scene.checkoutWindow = { suspend() {} };
   scene.resumeRegisterCheckout = () => {};
   tablet.uiWindow.openWindow = () => {};
-  tablet.employeeTrainingConfirmation = { employeeId: "tavi_stock_clerk", jobId: "register" };
   tablet.uiWindow.onClose();
-  const refreshed = [];
-  tablet.refreshEmployeePanel = () => refreshed.push({
-    training: tablet.employeeTrainingConfirmation,
-  });
+  let refreshed = 0;
+  tablet.refreshEmployeePanel = () => { refreshed += 1; };
   tablet.openWindow();
-  assert.deepEqual(refreshed, [{ training: null }]);
+  assert.equal(refreshed, 1);
+});
+
+test("employee priority choices select the other job and ignore the selected job", () => {
+  const { body, scene, tablet } = createHarness();
+  const calls = [];
+  scene.moveEmployeeJobPriority = (...args) => { calls.push(args); return true; };
+  const choice = (pressed) => ({
+    dataset: { employeePriorityId: "tavi_stock_clerk", employeePriorityJob: "stock_shelves" },
+    getAttribute: () => String(pressed),
+    closest(selector) { return selector === "[data-employee-priority-id]" ? this : null; },
+  });
+  body.emit("click", { target: choice(false) });
+  assert.deepEqual(calls, [["tavi_stock_clerk", "stock_shelves", -1]]);
+  body.emit("click", { target: choice(true) });
+  assert.equal(calls.length, 1);
+
+  let refreshed = 0;
+  scene.moveEmployeeJobPriority = () => false;
+  tablet.refreshEmployeePanel = () => { refreshed += 1; };
+  body.emit("click", { target: choice(false) });
+  assert.equal(refreshed, 1);
+});
+
+test("employee panel refresh preserves each column's scroll and priority focus", () => {
+  const previousDocument = globalThis.document;
+  const oldButton = {
+    dataset: { employeePriorityId: "tavi_stock_clerk", employeePriorityJob: "register" },
+    matches: (selector) => selector === "button[data-employee-priority-id]",
+  };
+  const newButton = { dataset: { ...oldButton.dataset }, focus: (options) => { newButton.focusOptions = options; } };
+  const before = [
+    { dataset: { employeeScroll: "hiring" }, scrollTop: 140 },
+    { dataset: { employeeScroll: "staff" }, scrollTop: 72 },
+  ];
+  const after = before.map(({ dataset }) => ({ dataset: { ...dataset }, scrollTop: 0 }));
+  let rendered = false;
+  const panel = {
+    contains: (element) => element === oldButton,
+    querySelectorAll(selector) {
+      if (selector === "[data-employee-scroll]") return rendered ? after : before;
+      if (selector === "button[data-employee-priority-id]") return [newButton];
+      return [];
+    },
+    set innerHTML(markup) { rendered = Boolean(markup); },
+  };
+  const tablet = Object.create(ManagerTablet.prototype);
+  tablet.bodyElement = { querySelector: () => panel };
+  tablet.renderPanelContent = () => "updated";
+  globalThis.document = { activeElement: oldButton };
+  try {
+    tablet.refreshEmployeePanel();
+    assert.deepEqual(after.map(({ scrollTop }) => scrollTop), [140, 72]);
+    assert.deepEqual(newButton.focusOptions, { preventScroll: true });
+  } finally {
+    globalThis.document = previousDocument;
+  }
 });
 
 test("inventory refreshes when customers shop and finish checkout", () => {
   const h = createHarness();
   h.scene.customerCartCount = 2;
+  const initialRenderCount = h.panel.renderCount;
   h.scene.eventBus.emit(GAME_EVENTS.INVENTORY_TRANSFERRED, {
     destination: "customer-cart",
   });
-  assert.match(h.panel.markup, /data-inventory-carts>2</);
-  assert.match(h.panel.markup, /IN CARTS/);
+  assert.ok(h.panel.renderCount > initialRenderCount);
+  assert.match(h.panel.markup, /data-inventory-stock/);
+  assert.doesNotMatch(h.panel.markup, /IN CARTS|OFF SHELVES/);
 
   h.scene.customerCartCount = 0;
+  const cartRenderCount = h.panel.renderCount;
   h.scene.eventBus.emit(GAME_EVENTS.CUSTOMER_SALE_COMPLETED, {});
-  assert.match(h.panel.markup, /data-inventory-carts>0</);
+  assert.ok(h.panel.renderCount > cartRenderCount);
 });
 
 test("a typed price commits before a subsequent button click", async () => {
@@ -390,7 +507,7 @@ test("pending changes refresh when leaving price controls", async () => {
   h.focus(null);
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(h.tablet.inventoryRefreshPending, false);
-  assert.match(h.panel.markup, /data-inventory-off-shelves>5<\/span>/);
+  assert.doesNotMatch(h.panel.markup, /data-inventory-off-shelves/);
   assert.equal(h.keyboard.enabled, true);
 });
 
@@ -417,8 +534,8 @@ test("an unaffordable first crate is rejected with a warning and sound, includin
   const h = createSupplyHarness(40 + DELIVERY_FEE - 1);
   h.tablet.changeSupplyOrder("ammo", 1);
   assert.deepEqual([...h.tablet.supplyOrder], []);
-  assert.match(h.warnings[0], /Not enough credits/);
-  assert.match(h.warnings[0], /65 credits/);
+  assert.match(h.warnings[0], /Not enough money/);
+  assert.match(h.warnings[0], /costs 65/);
   assert.equal(h.buzzes(), 1);
   assert.equal(h.refreshes(), 0);
 });
@@ -433,7 +550,7 @@ test("cart additions consider every crate already selected and allow the exact a
   assert.equal(h.refreshes(), 2);
   h.tablet.changeSupplyOrder("rations", 1);
   assert.deepEqual([...h.tablet.supplyOrder], [["ammo", 1], ["rations", 1]]);
-  assert.match(h.warnings[0], /85 credits/);
+  assert.match(h.warnings[0], /costs 85/);
   assert.equal(h.buzzes(), 1);
 });
 
@@ -501,7 +618,7 @@ test("refreshing fixture panels preserves list scroll positions", () => {
       },
     };
   };
-  const fixtures = makePanel({ ".fixture-management-scroll": 137 });
+  const fixtures = makePanel({ ".fixtures-catalog-list": 137, ".fixtures-owned-list": 61 });
   const layout = makePanel({ ".layout-fixture-list": 23 });
   const tablet = Object.create(ManagerTablet.prototype);
   tablet.bodyElement = {
@@ -510,6 +627,7 @@ test("refreshing fixture panels preserves list scroll positions", () => {
   tablet.renderPanelContent = () => "";
   tablet.updateSaveStatus = () => {};
   tablet.refreshLayoutPanels();
-  assert.equal(fixtures.querySelector(".fixture-management-scroll").scrollTop, 137);
+  assert.equal(fixtures.querySelector(".fixtures-catalog-list").scrollTop, 137);
+  assert.equal(fixtures.querySelector(".fixtures-owned-list").scrollTop, 61);
   assert.equal(layout.querySelector(".layout-fixture-list").scrollTop, 23);
 });

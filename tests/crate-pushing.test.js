@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { solveCratePush, PUSH_SPEED_BY_CRATE_COUNT } from "../js/logic/CratePushing.js";
+import {
+  CUSTOMER_PUSH_CLAIM_MS, findCratePushRival, solveCratePush, PUSH_SPEED_BY_CRATE_COUNT,
+} from "../js/logic/CratePushing.js";
 import { canLeaveLoadingPad } from "../js/logic/LoadingPadEscape.js";
 
 const PLAYER = { left: 89, top: 200, width: 22, height: 40 };
@@ -83,11 +85,45 @@ test("loading pad crates act like walls", () => {
   assert.equal(crateVelocities.size, 0);
 });
 
-test("each crate in a row slows the player more, and four can't be pushed", () => {
+test("each crate in a row slows the player more, and five can't be pushed", () => {
   const row = (n) => Array.from({ length: n }, (_, i) => crateAt(`c${i}`, 100, 179 - i * 40));
   const speeds = [1, 2, 3].map((n) => -solve(row(n)).playerVelocity.y);
   assert.ok(speeds[0] > speeds[1] && speeds[1] > speeds[2] && speeds[2] > 0);
-  assert.ok(Math.abs(solve(row(4)).playerVelocity.y) < 0.01);
+  assert.ok(-solve(row(4)).playerVelocity.y > 0);
+  assert.ok(Math.abs(solve(row(5)).playerVelocity.y) < 0.01);
+});
+
+test("no more than four crates move at once, counting stacks and what the player carries", () => {
+  const stack = (key, y, weight) => ({ ...crateAt(key, 100, y), weight });
+  const twoStacks = [stack("a", 179, 3), stack("b", 139, 3)];
+  assert.ok(Math.abs(solve(twoStacks).playerVelocity.y) < 0.01, "two stacks of 3 won't budge");
+  const carrying = (carriedWeight, crates) => solveCratePush({
+    player: PLAYER, velocity: UP, dt: 1 / 60, crates, isBlocked: () => false, carriedWeight,
+  }).playerVelocity.y;
+  assert.ok(carrying(1, [stack("a", 179, 3)]) < 0, "holding 1 and pushing 3 is 4");
+  assert.ok(Math.abs(carrying(2, [stack("a", 179, 3)])) < 0.01, "holding 2 and pushing 3 is too many");
+});
+
+test("customers shove any number of crates out of their way", () => {
+  const stacks = [{ ...crateAt("a", 100, 179), weight: 3 }, { ...crateAt("b", 100, 139), weight: 3 }];
+  const { playerVelocity, crateVelocities } = solveCratePush({
+    player: PLAYER, velocity: UP, dt: 1 / 60, crates: stacks, isBlocked: () => false, maxMoved: Infinity,
+  });
+  assert.ok(playerVelocity.y < 0);
+  assert.ok(crateVelocities.get("b").y < 0);
+});
+
+test("when customers push the same crates, the one further from their destination wins", () => {
+  const near = { name: "near" };
+  const far = { name: "far" };
+  const crate = { customerPushClaim: { customer: far, distance: 300, time: 1000 } };
+  const rival = (customer, distance, now = 1050, isActive) =>
+    findCratePushRival({ customer, distance, now, crates: [crate], isActive });
+  assert.equal(rival(near, 100), crate.customerPushClaim, "the closer customer gives way");
+  assert.equal(rival(near, 400), null, "the further customer keeps pushing");
+  assert.equal(rival(far, 100), null, "a customer never gives way to themselves");
+  assert.equal(rival(near, 100, 1000 + CUSTOMER_PUSH_CLAIM_MS + 1), null, "an old claim has lapsed");
+  assert.equal(rival(near, 100, 1050, () => false), null, "a claim by someone who left doesn't count");
 });
 
 test("overlapping crates block movement farther inside, but allow escape in every direction", () => {

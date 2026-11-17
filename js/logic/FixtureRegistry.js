@@ -27,7 +27,12 @@ export class FixtureRegistry {
     return this.ofKind("shelf");
   }
 
-  // The first (and normally only) register.
+  // Every register, in placement order. Each runs its own checkout line.
+  registers() {
+    return this.ofKind("register");
+  }
+
+  // The first register, for callers that just need somewhere to point.
   register() {
     return this.ofKind("register")[0];
   }

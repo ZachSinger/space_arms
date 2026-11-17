@@ -7,6 +7,7 @@ import Phaser from "phaser";
 import { DatabaseManager } from "../logic/DatabaseManager.js";
 import tilesetManifest from "../../data/TilesetManifest.json";
 import { loadCustomerCharacters, registerCustomerAnimations } from "../logic/CustomerSprites.js";
+import { installSceneTextSize } from "../logic/GameTextSize.js";
 import { SHOP_TILE_ASSETS } from "../logic/ShopTiles.js";
 import { BACKROOM_TILE_ASSETS } from "../logic/BackroomTiles.js";
 import { BACKROOM_DOOR_SPRITE, STORE_DOOR_SPRITE } from "../logic/SlidingDoor.js";
@@ -46,6 +47,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   create() {
+    installSceneTextSize(this, Phaser);
     // Pixel art drawn larger or smaller than its sheet stays crisp.
     for (const key of [PLAYER_SPRITE.key, PLAYER_CARRY_SPRITE.key, STORE_DOOR_SPRITE.key, BACKROOM_DOOR_SPRITE.key,
       ITEM_CRATE_SPRITE.key, FIXTURE_CRATE_SPRITE.key,

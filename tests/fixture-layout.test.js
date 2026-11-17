@@ -84,15 +84,13 @@ test("starting and cancelling placement keep the player and loose crates moving"
           input: { keyboard: { resetKeys() { heldKey = false; } } },
           fixtures: { displayName: () => "SHELF" },
           endRegisterSession() {},
+          windowManager: { closeAllExcept() {} },
           add: { image: () => ghost },
         },
-        nameElement: {},
         graphics: graphics(),
         placedGraphics: graphics(),
-        uiWindow: { openWindow() {}, close() {} },
         drawPlacedFixtures() {},
         refreshPreview() {},
-        updateWindowTransparency() {},
       });
 
       assert.equal(placement.start("shelf_budget_2x2", fromCrate ? null : original, fromCrate ? carriedCrate : null), true);
@@ -121,7 +119,6 @@ test("the fixture placement preview uses the size for its current facing", () =>
   const rotations = [];
   const outlines = [];
   placement.original = null;
-  placement.statusElement = {};
   placement.scene = {
     fixtures: { nextId: () => "preview" },
     checkFixturePlacement: () => ({ valid: true, reason: "Click to place." }),
@@ -1052,7 +1049,7 @@ test("the starting shop has seven by three floor squares, top-wall doors, and a 
   }
 });
 
-test("layouts can hold any number of fixtures, but exactly one register", () => {
+test("layouts can hold any number of fixtures, including extra registers with their own queues", () => {
   const withExtraShelf = [
     ...initialLayout(),
     { id: "shelf_budget_3x4_2", type: "shelf_budget_3x4", gx: 18, gy: 3 },
@@ -1064,8 +1061,25 @@ test("layouts can hold any number of fixtures, but exactly one register", () => 
   const withoutShelf = initialLayout().filter((entry) => getFixtureType(entry.type).kind !== "shelf");
   assert.equal(validateFixtureLayout(withoutShelf, createRoom()).valid, true);
 
+  const withSecondRegister = [
+    ...initialLayout(),
+    { id: "register_2", type: "register_basic", gx: 9, gy: 5 },
+  ];
+  // The starter room is too tight for a second six-person line; expansions make room.
+  assert.equal(validateFixtureLayout(withSecondRegister, createRoom()).valid, false);
+  const twoRegisters = validateFixtureLayout(withSecondRegister, createRoom({ expanded: true }));
+  assert.equal(twoRegisters.valid, true, twoRegisters.reason);
+  assert.equal(twoRegisters.queuePointsById.size, 2);
+  const [lineA, lineB] = [...twoRegisters.queuePointsById.values()];
+  assert.equal(lineA.length, lineB.length);
+  // The two lines never share a spot.
+  for (const point of lineA) {
+    assert.ok(lineB.every((other) => Math.hypot(point.x - other.x, point.y - other.y) > 1),
+      "queues must not overlap");
+  }
+
   const noRegister = initialLayout().filter((entry) => entry.type !== "register_basic");
-  assert.match(validateFixtureLayout(noRegister, createRoom()).reason, /exactly one register/);
+  assert.match(validateFixtureLayout(noRegister, createRoom()).reason, /needs a register/);
   const unknownType = initialLayout();
   unknownType[0] = { ...unknownType[0], type: "nope" };
   assert.equal(validateFixtureLayout(unknownType, createRoom()).valid, false);

@@ -20,6 +20,10 @@ import { BASE_PATIENCE_MS, getPatienceMs, planShelfRoute, rollCustomerTraits } f
 import { fixtureFacing } from "./FixtureLayout.js";
 
 const SPEED = 120; // px/s
+// Giving way to another customer's crate push: step aside, then wait, then try again.
+const CRATE_YIELD_STEP_MS = 400;
+const CRATE_YIELD_WAIT_MS = 600;
+const CRATE_YIELD_STEP_SPEED = 0.6; // share of walking speed
 // Bible Step 52: each customer accepts up to this random markup over the market price.
 export const MIN_PRICE_TOLERANCE = 1.0;
 export const MAX_PRICE_TOLERANCE = 1.3;
@@ -208,14 +212,14 @@ export class Customer {
           this.enterLeaving();
           break;
         }
-        this.followPath(delta);
+        this.walk(delta);
         this.updateFacing();
         break;
       case "BROWSING":
         this.updateBrowsing(delta);
         break;
       case "QUEUEING":
-        this.followPath(delta);
+        this.walk(delta);
         // A line of people should face the counter, not their last walking direction.
         this.updateFacing("up");
         this.updatePatience(delta);
@@ -229,7 +233,7 @@ export class Customer {
           this.destroy(); // safety net -- see LEAVING_TIMEOUT_MS
           break;
         }
-        this.followPath(delta);
+        this.walk(delta);
         if (!this.isDestroyed) this.updateFacing(); // arrival may have just destroyed this
         break;
     }
@@ -528,7 +532,7 @@ export class Customer {
     }
     this.playerState.notifyListeners();
     this.reservedTarget = this.onReserveQueueSlot
-      ? this.onReserveQueueSlot()
+      ? this.onReserveQueueSlot(this)
       : this.registerPoint;
     this.setDestination(
       this.reservedTarget.x,
@@ -778,6 +782,58 @@ export class Customer {
     if (checkpoint && Math.hypot(x - checkpoint.x, y - checkpoint.y) < PROGRESS_DISTANCE) return false;
     this.progressCheckpoint = { x, y };
     return checkpoint !== null && checkpoint !== undefined;
+  }
+
+  /**
+   * One step along the path, shoving any crates in the way. While giving way to another
+   * customer's push, steps aside and then waits instead.
+   * @param {number} delta - ms
+   */
+  walk(delta) {
+    if (this.crateYield) {
+      const yieldInfo = this.crateYield;
+      yieldInfo.msLeft -= delta;
+      if (yieldInfo.msLeft <= 0) {
+        this.crateYield = null;
+        this.repathAfterYield();
+      } else {
+        const stepping = yieldInfo.msLeft > CRATE_YIELD_WAIT_MS;
+        const speed = stepping ? SPEED * CRATE_YIELD_STEP_SPEED : 0;
+        this.sprite.body.setVelocity(yieldInfo.away.x * speed, yieldInfo.away.y * speed);
+        this.scene.pushCratesForCustomer?.(this, delta, { canPush: false });
+        return;
+      }
+    }
+    this.followPath(delta);
+    if (!this.isDestroyed) this.scene.pushCratesForCustomer?.(this, delta);
+  }
+
+  /**
+   * Someone further from their destination is pushing the same crates: stop pushing, step
+   * out of the way, and try again a moment later.
+   * @param {{x: number, y: number}} away - unit direction to step aside
+   */
+  giveWayToCratePush(away) {
+    this.crateYield = { msLeft: CRATE_YIELD_STEP_MS + CRATE_YIELD_WAIT_MS, away };
+    this.sprite.body.setVelocity(0, 0);
+  }
+
+  repathAfterYield() {
+    if (!this.destination || !this.scene.findPath) return;
+    const { x, y } = this.sprite.body?.center ?? this.sprite;
+    const path = this.scene.findPath(x, y, this.destination.x, this.destination.y);
+    if (path) this.path = path;
+  }
+
+  // px still to walk: along the remaining waypoints, then on to the destination.
+  remainingWalkDistance() {
+    let { x, y } = this.sprite.body?.center ?? this.sprite;
+    let total = 0;
+    for (const point of [...(this.path ?? []), this.destination].filter(Boolean)) {
+      total += Math.hypot(point.x - x, point.y - y);
+      ({ x, y } = point);
+    }
+    return total;
   }
 
   // Walks the path waypoint by waypoint, then directly to the exact destination (which may

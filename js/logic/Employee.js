@@ -11,7 +11,10 @@ import { PLAYER_BODY_HEIGHT, PLAYER_BODY_WIDTH } from "./Player.js";
 const WALK_SPEED = 120;
 const JOB_RETRY_MS = 1000;
 const BREAK_CHECK_MS = 100;
-const REGISTER_SERVICE_MS_PER_ITEM = 1000;
+// Scanning plus payment per cart item. Deliberately slower than a practiced player: a
+// rookie (level 1) keeps up with ~15 customers a shift and melts around 30+, so training
+// and extra registers matter (see scripts/staffing-sim.mjs).
+export const REGISTER_SERVICE_MS_PER_ITEM = 5000;
 
 export class Employee {
   constructor(scene, employeeData) {
@@ -44,7 +47,7 @@ export class Employee {
       this.retryInMs -= delta;
       if (this.clockOutRequested) {
         if (this.jobPriorities.includes("register") &&
-          this.scene.registerLine.length > 0 && this.retryInMs <= 0) {
+          this.scene.anyRegisterLineWaiting() && this.retryInMs <= 0) {
           this.startRegisterJob();
         }
         this.updateFacing();
@@ -101,18 +104,24 @@ export class Employee {
     this.walkTo(this.scene.backroomExitFront ?? this.scene.backroomDoor, "TO_BREAKROOM");
   }
 
+  // The first register with customers waiting that neither the player nor another
+  // employee is already working, or null.
   findRegisterJob() {
-    if (this.scene.operatingRegister || this.scene.registerLine.length === 0 ||
-      !this.scene.fixtures.register()) return false;
-    return !this.scene.employees.some((employee) =>
-      employee !== this && employee.currentJob?.jobId === "register",
-    );
+    return this.scene.fixtures.registers().find((register) =>
+      register.sprite &&
+      !this.scene.isPlayerOperating(register) &&
+      this.scene.lineFor(register).length > 0 &&
+      !this.scene.employees.some((employee) =>
+        employee !== this && employee.currentJob?.jobId === "register" &&
+        employee.currentJob?.register === register,
+      )) ?? null;
   }
 
   startRegisterJob() {
-    if (!this.findRegisterJob()) return false;
-    this.currentJob = { jobId: "register", customer: this.scene.registerLine[0] };
-    return this.walkTo(this.scene.getBehindRegisterPoint(), "TO_REGISTER");
+    const register = this.findRegisterJob();
+    if (!register) return false;
+    this.currentJob = { jobId: "register", register, customer: this.scene.lineFor(register)[0] };
+    return this.walkTo(this.scene.getBehindRegisterPoint(register), "TO_REGISTER");
   }
 
   findStockingJob() {
@@ -257,8 +266,9 @@ export class Employee {
   }
 
   beginRegisterService() {
-    const customer = this.scene.registerLine[0];
-    if (this.scene.operatingRegister || !customer) {
+    const register = this.currentJob?.register;
+    const customer = register ? this.scene.lineFor(register)[0] : null;
+    if (!register || this.scene.isPlayerOperating(register) || !customer) {
       this.finishTask();
       return;
     }
@@ -271,8 +281,10 @@ export class Employee {
   }
 
   updateRegisterService(delta) {
+    const register = this.currentJob?.register;
     const customer = this.currentJob?.customer;
-    if (this.scene.operatingRegister || this.scene.registerLine[0] !== customer) {
+    if (!register || this.scene.isPlayerOperating(register) ||
+      this.scene.lineFor(register)[0] !== customer) {
       this.finishTask();
       return;
     }
@@ -282,8 +294,14 @@ export class Employee {
     this.finishTask();
   }
 
-  cancelRegisterJob() {
+  /**
+   * Stops this employee's register job, optionally only when it targets one register
+   * (the one the player just stepped behind).
+   * @param {object} [register] - register fixture; omitted cancels any register job
+   */
+  cancelRegisterJob(register = null) {
     if (this.currentJob?.jobId !== "register") return;
+    if (register && this.currentJob.register !== register) return;
     this.sprite.body.setVelocity(0, 0);
     this.finishTask();
   }

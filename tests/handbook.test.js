@@ -11,10 +11,9 @@ const render = (topic, shopLevel = 1, reputation = 0) =>
 test("every handbook topic renders with its title and the topic buttons", () => {
   for (const { id, label } of HANDBOOK_TOPICS) {
     const html = render(id);
-    assert.ok(html.includes(`<h2>${label}</h2>`));
+    assert.ok(html.includes(`<h2 class="type-h2">${label}</h2>`));
     assert.match(html, new RegExp(`data-handbook-topic="${id}" aria-pressed="true"`));
-    assert.equal(html.match(/data-handbook-topic=/g).length, HANDBOOK_TOPICS.length + 1);
-    assert.match(html, new RegExp(`handbook-back-btn" data-handbook-topic="${id}"`));
+    assert.equal(html.match(/data-handbook-topic=/g).length, HANDBOOK_TOPICS.length);
     assert.doesNotMatch(html, /undefined|NaN/);
   }
 });
@@ -26,7 +25,7 @@ test("an unknown handbook topic is an error", () => {
 test("the store page shows the player's level and the next goal", () => {
   const html = render("store", 2, 20);
   assert.match(html, /Store Level 2<\/strong> with <strong>20<\/strong>/);
-  assert.match(html, /at least <strong>35<\/strong> to reach Level 3/);
+  assert.match(html, /at least <strong>39<\/strong> to reach Level 3/);
 });
 
 test("level rewards come from the game's own unlock data", () => {
@@ -63,6 +62,10 @@ test("the handbook explains paid training absences, permanent skills, and on/off
   assert.match(html, /On Shift &amp; Off Shift/);
   assert.match(html, /stay home and aren't paid/);
   assert.match(html, /not available/);
+  assert.match(html, /Prioritize Register/);
+  assert.match(html, /Prioritize Stocking/);
+  assert.match(html, /Booking new training courses is not currently available/);
+  assert.doesNotMatch(html, /select TRAIN|CONFIRM TRAINING|Use <strong>UP<\/strong>/);
   assert.doesNotMatch(html, /fire|let go|LET GO|rehir|TAKE OFF|PUT ON/i);
 });
 

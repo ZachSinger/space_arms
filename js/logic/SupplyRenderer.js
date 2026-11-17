@@ -4,7 +4,7 @@
 // HTML for the Supply tab: the player builds one order of crates for licensed items, then
 // places it, spawning physical crates on the Loading Pad to haul in by hand.
 // See also: SupplyOrder.js (order rules), GameScene.handleInteract (crate hauling).
-import { MAX_CRATES_PER_ORDER, LOADING_PAD_SPOTS, DELIVERY_FEE, getCrateOrderQuantity } from "./SupplyOrder.js";
+import { DELIVERY_FEE, getCrateOrderQuantity } from "./SupplyOrder.js";
 
 /**
  * How an item is doing on the shop's shelves, for the Supply tab's badge.
@@ -13,11 +13,11 @@ import { MAX_CRATES_PER_ORDER, LOADING_PAD_SPOTS, DELIVERY_FEE, getCrateOrderQua
  */
 export function getShelfStatus(shelf) {
   if (!shelf) return null;
-  if (shelf.quantity <= 0) return { level: "out", rank: 0, label: "SOLD OUT ON YOUR SHELVES" };
+  if (shelf.quantity <= 0) return { level: "out", rank: 0, label: "Sold out on shelves" };
   if (shelf.quantity * 2 < shelf.capacity) {
-    return { level: "low", rank: 1, label: `RUNNING LOW ON YOUR SHELVES (${shelf.quantity} left)` };
+    return { level: "low", rank: 1, label: `Running low: ${shelf.quantity} left` };
   }
-  return { level: "ok", rank: 2, label: `ON YOUR SHELVES (${shelf.quantity})` };
+  return { level: "ok", rank: 2, label: `On shelves: ${shelf.quantity}` };
 }
 
 // Shelved items first, most urgent at the top; the rest keep their catalog order.
@@ -38,61 +38,79 @@ export class SupplyRenderer {
   static generateHTML(scene, order = new Map()) {
     const entries = sortSupplyEntries(scene.getRestockableItems());
     const summary = scene.getSupplyOrderSummary(order);
-    const freePadSpots = scene.getLoadingPadSpawnPositions().length;
     const orderFull = summary.crates >= summary.maxCrates;
 
     let html = `
-      <div class="retro-slot custom-scrollbar supply-list" style="padding: 10px; display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto;">
+      <div class="supply-panel">
+        <div class="supply-panel-heading">
+          <h2 class="type-h2">Available Items</h2>
+        </div>
+        <div class="supply-panel-heading">
+          <h2 class="type-h2">Your Order</h2>
+        </div>
+        <hr class="divider-thick supply-divider">
+        <section class="supply-catalog">
+          <div class="pad-only supply-controller-hint">Press A to add a crate. Press X to remove one.</div>
+          <div class="supply-column-header">
+            <span></span>
+            <span></span>
+            <span></span>
+            <h3 class="type-h3">Order</h3>
+          </div>
+          <div class="retro-slot custom-scrollbar supply-list">
     `;
 
     if (entries.length === 0) {
-      html += `<div style="color: var(--color-text-muted); text-align: center; padding: 20px;">No Supplier Licenses signed yet -- sign one in the Contracts tab first.</div>`;
+      html += `<p class="type-description supply-empty">No items are available yet. Sign a supplier contract first.</p>`;
     } else {
-      html += `<div class="pad-only" style="color: var(--color-text-muted); font-size: 0.85em;">Press A on an item to add a crate of it to the order. Press X to take one off.</div>`;
       entries.forEach(({ item, quantity, shelf, cost }) => {
         const count = order.get(item.id) || 0;
         const status = getShelfStatus(shelf);
         const iconHTML = item.image
-          ? `<img class="item-icon" src="${item.image}" alt="" />`
-          : `<div class="item-icon"></div>`;
+          ? `<img class="item-icon supply-item-icon" src="${item.image}" alt="" />`
+          : `<div class="item-icon supply-item-icon"></div>`;
 
         html += `
-          <div class="item-card${count > 0 ? " supply-card-ordered" : ""}${status ? ` supply-card-shelf-${status.level}` : ""}" data-pad-row="${item.id}">
-            ${iconHTML}
-            <div class="item-details">
-              ${status ? `<div class="supply-shelf-badge supply-shelf-${status.level}">${status.label}</div>` : ""}
-              <div class="item-card-header">
+          <div class="item-card supply-item-row${count > 0 ? " supply-card-ordered" : ""}${status ? ` supply-card-shelf-${status.level}` : ""}" data-pad-row="${item.id}">
+            <div class="supply-item-name">
+              ${iconHTML}
+              <div class="supply-item-copy">
                 <span class="item-card-title">${item.name}</span>
-                <span class="item-card-cost">Total in shop: ${quantity}</span>
-              </div>
-              <div class="supply-card-row">
-                <span class="supply-crate-price">${cost} credits per crate of ${getCrateOrderQuantity(item)}</span>
-                <div class="supply-crate-stepper">
-                  <button class="action-btn" data-supply-remove="${item.id}" data-pad-x aria-label="Remove one ${item.name} crate"${count > 0 ? "" : " disabled"}>-</button>
-                  <span class="supply-crate-count" aria-label="${item.name} crates in order">${count}</span>
-                  <button class="action-btn" data-supply-add="${item.id}" data-pad-a aria-label="Add one ${item.name} crate"${orderFull ? " disabled" : ""}>+</button>
-                </div>
+                ${status ? `<span class="supply-shelf-badge supply-shelf-${status.level}">${status.label}</span>` : ""}
               </div>
             </div>
+            <span class="supply-item-stock">${quantity}</span>
+            <div class="supply-item-crate">
+              <strong>${cost.toLocaleString()}</strong>
+              <span>${getCrateOrderQuantity(item)} items</span>
+            </div>
+            <div class="supply-crate-stepper">
+            <button type="button" class="action-btn" data-supply-remove="${item.id}" data-pad-x aria-label="Remove one ${item.name} crate"${count > 0 ? "" : " disabled"}>-</button>
+            <span class="supply-crate-count" aria-label="${item.name} crates in order">${count}</span>
+            <button type="button" class="action-btn" data-supply-add="${item.id}" data-pad-a aria-label="Add one ${item.name} crate"${orderFull ? " disabled" : ""}>+</button>
+              </div>
           </div>
         `;
       });
     }
 
-    html += `</div>`;
-
     html += `
+          </div>
+        </section>
       <div class="supply-order-summary">
-        <div class="supply-summary-row"><span>Crates in this order</span><strong>${summary.crates} / ${MAX_CRATES_PER_ORDER}</strong></div>
-        <div class="supply-summary-row"><span>Free spots on the loading pad</span><strong>${freePadSpots} / ${LOADING_PAD_SPOTS}</strong></div>
-        <div class="supply-summary-row"><span>Stock</span><strong>${summary.stockCost} credits</strong></div>
-        <div class="supply-summary-row"><span>Delivery fee (once per order)</span><strong>${DELIVERY_FEE} credits</strong></div>
-        <div class="supply-summary-row supply-summary-total"><span>Total</span><strong>${summary.total} credits</strong></div>
-        ${summary.problem ? `<div class="supply-order-problem" role="status">${summary.problem}</div>` : ""}
+            <div class="supply-order-details">
+              <div class="supply-summary-row"><span>Items:</span><strong>${summary.crates}/${summary.maxCrates}</strong></div>
+              <div class="supply-summary-row"><span>Subtotal:</span><strong>${summary.stockCost.toLocaleString()}</strong></div>
+              <div class="supply-summary-row"><span>Fee:</span><strong>${DELIVERY_FEE}</strong></div>
+              <hr class="divider-thin">
+              <div class="supply-summary-row supply-summary-total"><span>Total</span><strong>${summary.total.toLocaleString()}</strong></div>
+              ${summary.problem ? `<div class="supply-order-problem" role="status">${summary.problem}</div>` : ""}
+            </div>
         <div class="supply-order-actions">
           <button class="action-btn" data-supply-clear${summary.crates > 0 ? "" : " disabled"}>CLEAR</button>
           <button class="action-btn" data-supply-place${summary.canPlace ? "" : " disabled"}>PLACE ORDER</button>
         </div>
+      </div>
       </div>
     `;
     return html;

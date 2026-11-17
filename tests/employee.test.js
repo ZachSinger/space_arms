@@ -11,6 +11,7 @@ import { PLAYER_BODY_HEIGHT, PLAYER_BODY_WIDTH } from "../js/logic/Player.js";
 let server;
 let cacheDirectory;
 let Employee;
+let REGISTER_SERVICE_MS_PER_ITEM;
 let EmployeeRenderer;
 let EmployeeTraining;
 
@@ -50,7 +51,7 @@ before(async () => {
       },
     }],
   });
-  ({ Employee } = await server.ssrLoadModule("/js/logic/Employee.js"));
+  ({ Employee, REGISTER_SERVICE_MS_PER_ITEM } = await server.ssrLoadModule("/js/logic/Employee.js"));
   ({ EmployeeRenderer } = await server.ssrLoadModule("/js/logic/EmployeeRenderer.js"));
   EmployeeTraining = await server.ssrLoadModule("/js/logic/EmployeeTraining.js");
 });
@@ -139,16 +140,22 @@ function makeEmployee({
   const completedSales = [];
   const eventBus = new EventBus();
   eventBus.on(GAME_EVENTS.INVENTORY_TRANSFERRED, (event) => transfers.push(event));
+  const registerFixture = hasRegister ? { id: "register", sprite: {} } : null;
+  const registerLine = [];
   const scene = {
     backroomDoor: { x: 20, y: 20 },
     backroomExitFront: { x: 20, y: 20 },
     eventBus,
     fixtures: {
       shelves: () => [shelf],
-      register: () => hasRegister ? { id: "register" } : null,
+      register: () => registerFixture,
+      registers: () => registerFixture ? [registerFixture] : [],
     },
     employees: [],
-    registerLine: [],
+    registerLine,
+    lineFor: () => registerLine,
+    anyRegisterLineWaiting: () => registerLine.length > 0,
+    isPlayerOperating: () => scene.operatingRegister,
     operatingRegister: false,
     restockCrates: [crate],
     findPath: () => [],
@@ -339,7 +346,7 @@ test("an employee on break serves customers who reach the register after closing
   assert.equal(employee.isReadyToClockOut(), false);
 
   employee.beginRegisterService();
-  employee.update(1000);
+  employee.update(REGISTER_SERVICE_MS_PER_ITEM);
   assert.deepEqual(completedSales, [{ employee, customer }]);
   assert.equal(employee.isReadyToClockOut(), true);
 });
@@ -428,7 +435,7 @@ test("the register is the first job when Tavi's priority order puts it first", (
 
   employee.beginRegisterService();
   assert.equal(employee.state, "SERVING_REGISTER");
-  employee.updateRegisterService(1000);
+  employee.updateRegisterService(REGISTER_SERVICE_MS_PER_ITEM);
   assert.equal(employee.state, "IDLE");
   assert.deepEqual(completedSales, [{ employee, customer }]);
 });
@@ -446,14 +453,15 @@ test("trained skills speed up only their own stocking trips, delivery trips, and
     assert.equal(employee.sprite.body.velocity.y, 0);
   }
   const customer = { cart: [{ itemId: "amo_01", price: 4 }, { itemId: "amo_01", price: 4 }] };
-  employee.scene.registerLine = [customer];
-  employee.currentJob = { jobId: "register", customer };
+  employee.scene.registerLine.push(customer);
+  employee.currentJob = { jobId: "register", register: employee.scene.fixtures.register(), customer };
   employee.beginRegisterService();
-  assert.equal(employee.registerServiceRemainingMs, 1000);
+  // Two items at level 5 register speed (2.0x): half the per-item time each.
+  assert.equal(employee.registerServiceRemainingMs, REGISTER_SERVICE_MS_PER_ITEM);
 });
 
-test("the employee panel lists its two jobs in the saved priority order", () => {
-  const html = EmployeeRenderer.generateHTML({
+test("the employee panel offers one selected priority for each saved job order", () => {
+  const options = {
     hiredEmployeeIds: ["tavi_stock_clerk"],
     activeEmployeeIds: [],
     employeeJobPriorities: {
@@ -461,9 +469,34 @@ test("the employee panel lists its two jobs in the saved priority order", () => 
     },
     credits: 1000,
     canHire: true,
-    shopLevel: 1,
+    shopLevel: 4,
+  };
+  const stocking = EmployeeRenderer.generateHTML(options);
+  assert.match(stocking, /data-employee-priority-job="register" aria-pressed="false"/);
+  assert.match(stocking, /data-employee-priority-job="stock_shelves" aria-pressed="true"/);
+  assert.match(stocking, />Prioritize Register<\/button>/);
+  assert.match(stocking, />Prioritize Stocking<\/button>/);
+
+  const register = EmployeeRenderer.generateHTML({
+    ...options, employeeJobPriorities: { tavi_stock_clerk: ["register", "stock_shelves"] },
   });
-  assert.ok(html.indexOf("1. Stock shelves") < html.indexOf("2. Run register"));
+  assert.match(register, /data-employee-priority-job="register" aria-pressed="true"/);
+  assert.match(register, /data-employee-priority-job="stock_shelves" aria-pressed="false"/);
+  const duringShift = EmployeeRenderer.generateHTML({ ...options, canHire: false });
+  assert.match(duringShift, /data-employee-priority-job="register" aria-pressed="false"\s+disabled/);
+  assert.match(duringShift, /data-employee-priority-job="stock_shelves" aria-pressed="true"\s+disabled/);
+
+  const twoEmployees = EmployeeRenderer.generateHTML({
+    ...options,
+    hiredEmployeeIds: ["tavi_stock_clerk", "sera_floor_assistant"],
+    shopLevel: 7,
+    employeeJobPriorities: {
+      tavi_stock_clerk: ["register", "stock_shelves"],
+      sera_floor_assistant: ["stock_shelves", "register"],
+    },
+  });
+  assert.match(twoEmployees, /data-employee-priority-id="tavi_stock_clerk"\s+data-employee-priority-job="register" aria-pressed="true"/);
+  assert.match(twoEmployees, /data-employee-priority-id="sera_floor_assistant"\s+data-employee-priority-job="stock_shelves" aria-pressed="true"/);
 });
 
 test("the employee panel switches staff on and off shift, only between shifts", () => {
@@ -487,34 +520,29 @@ test("the employee panel switches staff on and off shift, only between shifts", 
   const off = EmployeeRenderer.generateHTML({ ...options, offShiftEmployeeIds: ["tavi_stock_clerk"] });
   assert.match(off, /Off Shift: stays home and isn't paid/);
   assert.match(off, /data-employee-shift-on="false" aria-pressed="true"/);
-  assert.doesNotMatch(off, /data-train-employee-job="register" disabled/);
 
   const training = EmployeeRenderer.generateHTML({ ...options, employeeTraining: { tavi_stock_clerk: "register" } });
-  assert.match(training, /IN TRAINING: NOT AVAILABLE/);
+  assert.match(training, /AWAY: NOT AVAILABLE/);
+  assert.match(training, /Away next shift; wages are still paid/);
   assert.doesNotMatch(training, /data-employee-shift-id/);
 });
 
-test("the employee panel shows skill levels and training commitments", () => {
+test("the hiring and staff panels show compact levels without training controls", () => {
   const options = {
     hiredEmployeeIds: ["tavi_stock_clerk"], activeEmployeeIds: [],
     employeeJobPriorities: {}, credits: 1000, canHire: true, shopLevel: 4,
     employeeSkills: { tavi_stock_clerk: { register: 2, stock_shelves: 1 } },
   };
-  const html = EmployeeRenderer.generateHTML({
-    ...options, trainingConfirmation: { employeeId: "tavi_stock_clerk", jobId: "register" },
-  });
-  assert.match(html, /Run register: Level 2\/5/);
-  assert.match(html, /20% faster register service/);
-  assert.match(html, /375 credits now/);
-  assert.match(html, /After training, wages become 60 credits/);
-  assert.doesNotMatch(html, /Rehiring/);
-  assert.match(html, /data-confirm-employee-training/);
-  const booked = EmployeeRenderer.generateHTML({
-    ...options, employeeTraining: { tavi_stock_clerk: "register" },
-  });
-  assert.match(booked, /Away next shift; wages are still paid/);
-  assert.match(booked, /IN TRAINING/);
-  assert.match(booked, /data-train-employee-job="register" disabled/);
+  const html = EmployeeRenderer.generateHTML(options);
+  assert.ok(html.indexOf("Staff to Hire") < html.indexOf("Your Staff"));
+  assert.equal((html.match(/class="divider-thick employee-panel-divider"/g) || []).length, 1);
+  assert.ok(html.indexOf("employee-panel-divider") < html.indexOf('data-employee-scroll="hiring"'));
+  assert.match(html, /Sera<\/h3>[\s\S]*?Register:1<\/span>[\s\S]*?Stock:1<\/span>/);
+  assert.match(html, /Tavi<\/h3>[\s\S]*?Register:2<\/span>[\s\S]*?Stocking:1<\/span>/);
+  assert.match(html, /employee-candidate-wage">50<\/div>/);
+  assert.match(html, /employee-hire-cost">250<\/div>/);
+  assert.doesNotMatch(html, /Skills:|data-train-employee|data-confirm-employee-training|credits per shift/);
+  assert.doesNotMatch(html.slice(html.indexOf("Your Staff")), /On Shift: works and is paid each shift/);
 });
 
 test("skill levels speed up shelf stocking and register service", () => {
@@ -534,9 +562,8 @@ test("skill levels speed up shelf stocking and register service", () => {
       tavi_stock_clerk: { register: 3, stock_shelves: 5 },
     },
   });
-  assert.match(html, /50% faster register service/);
-  assert.match(html, /80% faster shelf stocking/);
-  assert.doesNotMatch(html, /carries|delivery-crate/i);
+  assert.match(html, /Register:3<\/span>/);
+  assert.match(html, /Stocking:5<\/span>/);
 });
 
 test("the employee panel explains the Shop Level 4 staff limit before anyone can be hired", () => {
@@ -550,8 +577,8 @@ test("the employee panel explains the Shop Level 4 staff limit before anyone can
   const locked = EmployeeRenderer.generateHTML({ ...options, shopLevel: 1 });
   assert.match(locked, /can't have employees yet/);
   assert.match(locked, /Shop Level 4/);
-  assert.match(locked, /60 store reputation/);
-  assert.match(locked, /Employees hired: 0 of 0/);
+  assert.match(locked, /72 store reputation/);
+  assert.match(locked, /Hired: 0 of 0/);
   assert.match(locked, /data-hire-employee-id="kel_supply_runner"[\s\S]*?disabled/);
   assert.match(locked, />\s*FULL\s*<\/button>/);
 
@@ -559,9 +586,15 @@ test("the employee panel explains the Shop Level 4 staff limit before anyone can
   for (const id of ["tavi_stock_clerk", "kel_supply_runner"]) {
     assert.doesNotMatch(unlocked, new RegExp(`data-hire-employee-id="${id}"[^>]*disabled`));
   }
-  assert.match(unlocked, /Hiring cost: 250 credits/);
-  assert.doesNotMatch(unlocked, /Hiring cost: (?!250 )/);
+  const hireCosts = [...unlocked.matchAll(/class="type-description employee-hire-cost">([^<]+)<\/div>/g)]
+    .map(([, cost]) => cost);
+  assert.deepEqual(hireCosts, Array(6).fill("250"));
   assert.match(unlocked, />\s*HIRE\s*<\/button>/);
+
+  const unaffordable = EmployeeRenderer.generateHTML({ ...options, shopLevel: 4, credits: 249.75 });
+  assert.match(unaffordable, /You need 0\.25 more/);
+  assert.doesNotMatch(unaffordable, /credits/i);
+  assert.match(unaffordable, /data-hire-employee-id="tavi_stock_clerk"\s+disabled/);
 });
 
 test("each staff-limit Shop Level allows one more hire", () => {

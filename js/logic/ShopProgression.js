@@ -1,8 +1,9 @@
-// Total store reputation required at shift end; tune these values after playtesting.
+// Total store reputation required at shift end; tuned for a ~100-day run to Level 30
+// (see scripts/balance-audit.mjs). Early levels stay quick; each step grows by 9.
 const SHOP_LEVEL_REPUTATION = [
-  0, 15, 35, 60, 90, 125, 165, 210, 260, 315,
-  375, 440, 510, 585, 665, 750, 840, 935, 1035, 1140,
-  1250, 1365, 1485, 1610, 1740, 1875, 2015, 2160, 2310, 2465,
+  0, 15, 39, 72, 114, 165, 225, 294, 372, 459,
+  555, 660, 774, 897, 1029, 1170, 1320, 1479, 1647, 1824,
+  2010, 2205, 2409, 2622, 2844, 3075, 3315, 3564, 3822, 4089,
 ];
 
 export const IMPLEMENTED_SHOP_REWARD_LEVELS = Object.freeze(

@@ -6,6 +6,7 @@
 import { TILE_SIZE } from "./RoomLayout.js";
 import { getFixtureType, fixtureBounds } from "./FixtureLayout.js";
 import { CRATE_FOOTER_HEIGHT_PX } from "./CrateFooter.js";
+import { clientToGamePoint, getGameScale } from "./GameViewport.js";
 
 const HIGHLIGHT_COLOR = 0x22c55e;
 // Gap kept between the slid window and the fixture, px.
@@ -107,10 +108,11 @@ export class FixtureHighlight {
       const rect = this.element.getBoundingClientRect();
       this.element.style.transition = "none";
       this.setOffset({ x: 0, y: 0 });
-      this.element.style.left = `${rect.left}px`;
-      this.element.style.top = `${rect.top}px`;
-      this.uiWindow.screenX = rect.left;
-      this.uiWindow.screenY = rect.top;
+      const position = clientToGamePoint(rect.left, rect.top);
+      this.element.style.left = `${position.x}px`;
+      this.element.style.top = `${position.y}px`;
+      this.uiWindow.screenX = position.x;
+      this.uiWindow.screenY = position.y;
       // Force a reflow so the transition change applies only after the jump.
       void this.element.offsetWidth;
       this.element.style.transition = `transform ${SLIDE_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`;
@@ -150,12 +152,14 @@ export class FixtureHighlight {
     if (!rect) return;
     this.pinnedId = fixtureId;
     this.draw(fixtureId);
+    const scale = getGameScale();
+    const viewport = document.getElementById("game-container").getBoundingClientRect();
     this.setOffset(computeSlideOffset(this.baseRect(), this.worldToClientRect(rect.x, rect.y, rect.width, rect.height), {
-      left: 0,
-      top: HUD_HEIGHT_PX,
-      right: window.innerWidth,
-      bottom: window.innerHeight - CRATE_FOOTER_HEIGHT_PX,
-    }));
+      left: viewport.left,
+      top: viewport.top + HUD_HEIGHT_PX * scale,
+      right: viewport.right,
+      bottom: viewport.bottom - CRATE_FOOTER_HEIGHT_PX * scale,
+    }, CLEARANCE_PX * scale));
   }
 
   // The window's rect as if it were not slid.
@@ -163,8 +167,9 @@ export class FixtureHighlight {
     const rect = this.element.getBoundingClientRect();
     const transform = getComputedStyle(this.element).transform;
     const matrix = transform && transform !== "none" ? new DOMMatrixReadOnly(transform) : null;
-    const dx = matrix ? matrix.m41 : 0;
-    const dy = matrix ? matrix.m42 : 0;
+    const scale = getGameScale();
+    const dx = matrix ? matrix.m41 * scale : 0;
+    const dy = matrix ? matrix.m42 * scale : 0;
     return { left: rect.left - dx, top: rect.top - dy, right: rect.right - dx, bottom: rect.bottom - dy };
   }
 
@@ -174,7 +179,10 @@ export class FixtureHighlight {
 
   setOffset(offset) {
     this.offset = offset;
-    this.element.style.transform = offset.x || offset.y ? `translate(${offset.x}px, ${offset.y}px)` : "";
+    const scale = getGameScale();
+    const x = offset.x / scale;
+    const y = offset.y / scale;
+    this.element.style.transform = x || y ? `translate(${x}px, ${y}px)` : "";
   }
 
   // Drop the highlight and slide the window home (tab switch / close).

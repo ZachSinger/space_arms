@@ -6,9 +6,10 @@ import { getBudgetShelfArtForType } from "./BudgetShelfArt.js";
 import { getShelfBoxes } from "./ShelfBoxLayout.js";
 import { getItemCrateCategory } from "./CrateCategory.js";
 import { moveShelfCrateItem } from "./LiveShelfStocking.js";
-import { adjustStorePrice, formatMoney } from "./Money.js";
+import { adjustStorePrice, formatMoneyAmount } from "./Money.js";
 import tilesetManifest from "../../data/TilesetManifest.json" with { type: "json" };
 import { getInputDevice } from "./InputDevice.js";
+import { DESIGN_HEIGHT, getGameScale } from "./GameViewport.js";
 
 const TEXTURE_PATHS = new Map(tilesetManifest.map(({ key, path }) => [key, path]));
 
@@ -29,7 +30,7 @@ export class ShelfStockingWindow {
     this.fixture = null;
     this.uiWindow = new UIWindow({
       id: "shelf-stocking-window", title: "SHELF",
-      width: "min(900px, 94vw)", height: "auto", x: 30, y: 60,
+      width: "min(900px, 94%)", height: "auto", x: 30, y: 60,
       shouldCloseOtherWindows: true,
     }, scene.windowManager);
     this.body = this.uiWindow.element.querySelector(".retro-window-body");
@@ -179,21 +180,21 @@ export class ShelfStockingWindow {
     if (!art) throw new Error("Missing close-up shelf art.");
     this.art = art;
     this.body.replaceChildren();
-    const hint = document.createElement("p");
-    hint.textContent = getInputDevice() === "gamepad"
-      ? "A: stock one from carried crates. X: take one into a crate, or clear a sold-out space. Y: pick which crate stocks next. B: close."
-      : "Hold left mouse: stock from carried crates. Hold right mouse: take into a crate. Right-click a sold-out space to clear it. Q: pick which crate stocks next. E or Esc: close.";
-    hint.textContent += " The crate that stocks next glows in your crate list on the right. A green border marks spaces for items you're carrying. Click a price sticker to change that item's price.";
     this.status = document.createElement("p");
+    this.status.className = "type-description shelf-stocking-status";
     this.status.setAttribute("role", "status");
     this.stage = document.createElement("div");
     this.stage.className = "shelf-stocking-stage";
-    this.stage.style.aspectRatio = `${art.width} / ${art.height}`;
-    this.stage.style.width = `min(100%, calc((100vh - 370px) * ${art.width / art.height}))`;
+    // Crop the empty strip above the shelf picture so the window hugs the art.
+    const visibleHeight = art.height - art.top;
+    this.stage.style.aspectRatio = `${art.width} / ${visibleHeight}`;
+    this.stage.style.width = `min(100%, calc((${DESIGN_HEIGHT}px - 370px) * ${art.width / visibleHeight}))`;
     const shelf = document.createElement("img");
     shelf.src = texturePath(getFixtureType(fixture.type).facingTextures.down);
     shelf.alt = "";
     shelf.className = "shelf-stocking-art";
+    shelf.style.height = `${art.height / visibleHeight * 100}%`;
+    shelf.style.top = `${-art.top / visibleHeight * 100}%`;
     this.stage.appendChild(shelf);
     this.cells = [];
     for (let gy = 0; gy < art.rows.length; gy++) {
@@ -205,8 +206,8 @@ export class ShelfStockingWindow {
         const [left, right] = art.columns[gx];
         const [top, bottom] = art.rows[gy];
         Object.assign(cell.style, {
-          left: `${left / art.width * 100}%`, top: `${top / art.height * 100}%`,
-          width: `${(right - left) / art.width * 100}%`, height: `${(bottom - top) / art.height * 100}%`,
+          left: `${left / art.width * 100}%`, top: `${(top - art.top) / visibleHeight * 100}%`,
+          width: `${(right - left) / art.width * 100}%`, height: `${(bottom - top) / visibleHeight * 100}%`,
         });
         cell.addEventListener("click", (event) => {
           if (event.detail !== 0) return;
@@ -230,12 +231,12 @@ export class ShelfStockingWindow {
       const gx = index % art.columns.length;
       const gy = Math.floor(index / art.columns.length);
       sticker.style.left = `${art.columns[gx][1] / art.width * 100}%`;
-      sticker.style.top = `${art.rows[gy][0] / art.height * 100}%`;
+      sticker.style.top = `${(art.rows[gy][0] - art.top) / visibleHeight * 100}%`;
       sticker.addEventListener("click", () => this.togglePriceWidget(index));
       this.stage.appendChild(sticker);
       return sticker;
     });
-    this.body.append(hint, this.status, this.stage);
+    this.body.append(this.status, this.stage);
     this.uiWindow.openWindow();
     this.refresh();
     this.refreshTimer = window.setInterval(() => this.refresh(), 100);
@@ -275,10 +276,7 @@ export class ShelfStockingWindow {
     if (!this.uiWindow.isOpen) return;
     const crates = this.scene.getCarriedCrates().filter((crate) => crate.kind === "item");
     const carriedItemIds = new Set(crates.filter((crate) => crate.quantity > 0).map((crate) => crate.itemId));
-    this.status.textContent = this.notice || (crates.length
-      ? `Carrying: ${crates.map((crate) => crate.quantity > 0
-        ? `${database.getItem(crate.itemId).name} (${crate.quantity})` : "Empty crate").join(" | ")}`
-      : "Carry a crate to stock this shelf or take items off it.");
+    this.status.textContent = this.notice || "";
     for (let index = 0; index < this.cells.length; index++) {
       const cell = this.cells[index];
       const placement = this.placementAt(index);
@@ -336,8 +334,8 @@ export class ShelfStockingWindow {
         sticker.appendChild(label);
       }
       const name = database.getItem(placement.itemId).name;
-      sticker.title = `${name} sells for ${price} credits each. Click to change the price.`;
-      sticker.setAttribute("aria-label", `${name} price: ${price} credits${soldOut ? ", sold out" : ""}. Change price`);
+      sticker.title = `${name} sells for ${price} each. Click to change the price.`;
+      sticker.setAttribute("aria-label", `${name} price: ${price}${soldOut ? ", sold out" : ""}. Change price`);
     }
     this.refreshPriceWidget();
   }
@@ -364,14 +362,14 @@ export class ShelfStockingWindow {
         <button type="button" data-price-close aria-label="Close price controls">X</button>
       </div>
       <div class="shelf-price-widget-market"></div>
-      <label class="shelf-price-widget-label">Your price, in credits
+      <label class="shelf-price-widget-label">Your price
         <input class="inventory-price-input" type="number" min="1" step="0.01" />
       </label>
       <div class="inventory-price-buttons">
         <button type="button" data-price-action="decrease"
-          title="Decrease by 10% (at least 1 credit; minimum price 1 credit)">-10%</button>
+          title="Decrease by 10% (never below 1)">-10%</button>
         <button type="button" data-price-action="increase"
-          title="Increase by 10% (at least 1 credit)">+10%</button>
+          title="Increase by 10% (at least 1)">+10%</button>
         <button type="button" data-price-action="market"
           title="Set price to today's market price">MARKET</button>
       </div>`;
@@ -421,11 +419,15 @@ export class ShelfStockingWindow {
     const { index, element } = this.priceWidget;
     const stage = this.stage.getBoundingClientRect();
     const sticker = this.stickers[index].getBoundingClientRect();
+    const scale = getGameScale();
     const width = element.offsetWidth;
     const height = element.offsetHeight;
-    const left = Math.min(Math.max(0, sticker.right - stage.left - width), Math.max(0, stage.width - width));
-    let top = sticker.bottom - stage.top + 4;
-    if (top + height > stage.height) top = Math.max(0, sticker.top - stage.top - height - 4);
+    const left = Math.min(
+      Math.max(0, (sticker.right - stage.left) / scale - width),
+      Math.max(0, stage.width / scale - width),
+    );
+    let top = (sticker.bottom - stage.top) / scale + 4;
+    if (top + height > stage.height / scale) top = Math.max(0, (sticker.top - stage.top) / scale - height - 4);
     element.style.left = `${left}px`;
     element.style.top = `${top}px`;
   }
@@ -439,7 +441,7 @@ export class ShelfStockingWindow {
       return;
     }
     element.querySelector(".shelf-price-widget-market").textContent =
-      `Market price today: ${formatMoney(this.scene.market.getPrice(itemId))}`;
+      `Market price today: ${formatMoneyAmount(this.scene.market.getPrice(itemId))}`;
     if (document.activeElement !== input) input.value = this.scene.getStorePrice(itemId);
   }
 

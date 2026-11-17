@@ -3,6 +3,7 @@
 // ==========================================
 // A retro DOM window in the #ui-layer. Open/close/focus order is coordinated by
 // WindowManager, which also forwards drag mouse events for windows created draggable.
+import { clientToGamePoint, DESIGN_HEIGHT, DESIGN_WIDTH } from "./GameViewport.js";
 
 export class UIWindow {
   /**
@@ -72,8 +73,10 @@ export class UIWindow {
       if (!this.draggable || e.target.closest(".retro-window-close")) return;
       this.isDragging = true;
       const rect = this.element.getBoundingClientRect();
-      this.dragOffsetX = e.clientX - rect.left;
-      this.dragOffsetY = e.clientY - rect.top;
+      const pointer = clientToGamePoint(e.clientX, e.clientY);
+      const windowPosition = clientToGamePoint(rect.left, rect.top);
+      this.dragOffsetX = pointer.x - windowPosition.x;
+      this.dragOffsetY = pointer.y - windowPosition.y;
       this.manager.setDraggingWindow(this);
     });
   }
@@ -86,13 +89,14 @@ export class UIWindow {
    */
   updateDragPosition(clientX, clientY) {
     if (!this.isDragging) return;
+    const pointer = clientToGamePoint(clientX, clientY);
     let newX = Math.max(
       0,
-      Math.min(window.innerWidth - 100, clientX - this.dragOffsetX),
+      Math.min(DESIGN_WIDTH - 100, pointer.x - this.dragOffsetX),
     );
     let newY = Math.max(
       0,
-      Math.min(window.innerHeight - 50, clientY - this.dragOffsetY),
+      Math.min(DESIGN_HEIGHT - 50, pointer.y - this.dragOffsetY),
     );
     this.element.style.left = `${newX}px`;
     this.element.style.top = `${newY}px`;
@@ -103,8 +107,9 @@ export class UIWindow {
     if (this.isDragging) {
       this.isDragging = false;
       const rect = this.element.getBoundingClientRect();
-      this.screenX = rect.left;
-      this.screenY = rect.top;
+      const position = clientToGamePoint(rect.left, rect.top);
+      this.screenX = position.x;
+      this.screenY = position.y;
     }
   }
 

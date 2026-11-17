@@ -20,31 +20,31 @@ them goes to the Go-Backs bin. Level 8 currently has no reward.
 | --- | --- | --- |
 | 1 | 0 | Starting shop; Basic Fixture Supply; Basic Rations & Water |
 | 2 | 15 | Supply licenses: Civilian Threads; Scrap-Yard Ballistics Contract; Standard Munitions Supplier |
-| 3 | 35 | Supply license: Scrap-Yard Armor & Melee |
-| 4 | 60 | Supply license: Salvage & Repair Tools (Nautilus); Staff limit: 1 employee hired at once |
-| 5 | 90 | Supply license: Scrap-Yard Weapon Mods; Sales Floor Expansion West (buy for 4,000 credits) |
-| 6 | 125 | Supply license: Stellaris Civilian Defense |
-| 7 | 165 | Supply license: Scatter & Breach Munitions; Staff limit: 2 employees hired at once |
-| 8 | 210 | (none) |
-| 9 | 260 | Supply license: Advanced Melee Weaponry; Sales Floor Expansion A (buy for 5,000 credits) |
-| 10 | 315 | Staff limit: 3 employees hired at once |
-| 11 | 375 | Supply license: Industrial Labor Gear; Arx Heavy Armatura |
-| 12 | 440 | Supply license: Hazard & Medical Supply |
-| 13 | 510 | Supply license: Kessler Expeditionary; Backroom Upgrade A (buy for 4,000 credits) |
-| 14 | 585 | (none) |
-| 15 | 665 | Supply license: High-Energy Munitions; Staff limit: 4 employees hired at once |
-| 16 | 750 | Supply license: Aulin NT Distributorship |
-| 17 | 840 | Supply license: Aegis Active Security; Sales Floor Expansion B (buy for 7,500 credits) |
-| 18 | 935 | Supply license: Kodiak Arsenal; Staff limit: 5 employees hired at once |
-| 19 | 1035 | Supply license: Omni-Corp Security Contract |
-| 20 | 1140 | Supply license: Zastava Magnetic Tech; Backroom Upgrade B (buy for 6,000 credits) |
-| 21 | 1250 | Supply license: Artillery & Explosives |
-| 22 | 1365 | Supply license: Kinetic-Tek Smart Systems; Quasar Diagnostics |
-| 23 | 1485 | Supply license: Antique Collector's Network; Staff limit: 6 employees hired at once |
-| 24 | 1610 | Supply license: Blackwood Ordnance; Sales Floor Expansion C (buy for 10,000 credits) |
-| 25 | 1740 | Supply license: Unrestricted Bio-Medical |
-| 26 | 1875 | Supply license: Breach-Tech Heavy Tools |
-| 27 | 2015 | Backroom Upgrade C (buy for 9,000 credits) |
-| 28 | 2160 | Supply license: Tessier-Ashpool Verified Vendor |
-| 29 | 2310 | Supply license: Vanguard Tactical License |
-| 30 | 2465 | Supply license: Exotic Ordinance; Sales Floor Expansion D (buy for 12,500 credits) |
+| 3 | 39 | Supply license: Scrap-Yard Armor & Melee |
+| 4 | 72 | Supply license: Salvage & Repair Tools (Nautilus); Staff limit: 1 employee hired at once |
+| 5 | 114 | Supply license: Scrap-Yard Weapon Mods; Sales Floor Expansion West (buy for 4,000 credits) |
+| 6 | 165 | Supply license: Stellaris Civilian Defense |
+| 7 | 225 | Supply license: Scatter & Breach Munitions; Staff limit: 2 employees hired at once |
+| 8 | 294 | (none) |
+| 9 | 372 | Supply license: Advanced Melee Weaponry; Sales Floor Expansion A (buy for 5,000 credits) |
+| 10 | 459 | Staff limit: 3 employees hired at once |
+| 11 | 555 | Supply license: Industrial Labor Gear; Arx Heavy Armatura |
+| 12 | 660 | Supply license: Hazard & Medical Supply |
+| 13 | 774 | Supply license: Kessler Expeditionary; Backroom Upgrade A (buy for 4,000 credits) |
+| 14 | 897 | (none) |
+| 15 | 1029 | Supply license: High-Energy Munitions; Staff limit: 4 employees hired at once |
+| 16 | 1170 | Supply license: Aulin NT Distributorship |
+| 17 | 1320 | Supply license: Aegis Active Security; Sales Floor Expansion B (buy for 7,500 credits) |
+| 18 | 1479 | Supply license: Kodiak Arsenal; Staff limit: 5 employees hired at once |
+| 19 | 1647 | Supply license: Omni-Corp Security Contract |
+| 20 | 1824 | Supply license: Zastava Magnetic Tech; Backroom Upgrade B (buy for 6,000 credits) |
+| 21 | 2010 | Supply license: Artillery & Explosives |
+| 22 | 2205 | Supply license: Kinetic-Tek Smart Systems; Quasar Diagnostics |
+| 23 | 2409 | Supply license: Antique Collector's Network; Staff limit: 6 employees hired at once |
+| 24 | 2622 | Supply license: Blackwood Ordnance; Sales Floor Expansion C (buy for 10,000 credits) |
+| 25 | 2844 | Supply license: Unrestricted Bio-Medical |
+| 26 | 3075 | Supply license: Breach-Tech Heavy Tools |
+| 27 | 3315 | Backroom Upgrade C (buy for 9,000 credits) |
+| 28 | 3564 | Supply license: Tessier-Ashpool Verified Vendor |
+| 29 | 3822 | Supply license: Vanguard Tactical License |
+| 30 | 4089 | Supply license: Exotic Ordinance; Sales Floor Expansion D (buy for 12,500 credits) |

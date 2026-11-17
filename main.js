@@ -39,7 +39,7 @@ function serveGameFile(request) {
   return net.fetch(pathToFileURL(filePath).toString());
 }
 
-// Resolutions offered in settings, filtered to what fits the current display (px).
+// Resolutions offered in settings, filtered to what fits the current display (physical px).
 const COMMON_RESOLUTIONS = [
   { width: 1280, height: 720 },
   { width: 1600, height: 900 },
@@ -48,19 +48,57 @@ const COMMON_RESOLUTIONS = [
   { width: 3840, height: 2160 },
 ];
 
+const displayModes = new WeakMap();
+const displayResolutions = new WeakMap();
+
+function getDisplayMode(win) {
+  return displayModes.get(win) ?? "windowed";
+}
+
+function toPhysicalSize(size, scaleFactor) {
+  return {
+    width: Math.round(size.width * scaleFactor),
+    height: Math.round(size.height * scaleFactor),
+  };
+}
+
+function getContentSizeInPixels(win, display) {
+  const [width, height] = win.getContentSize();
+  return toPhysicalSize({ width, height }, display.scaleFactor);
+}
+
+function resizeWindowContent(win, resolution, display) {
+  const [contentWidth, contentHeight] = win.getContentSize();
+  const bounds = win.getBounds();
+  const maxWidth = Math.max(1, display.workAreaSize.width - Math.max(0, bounds.width - contentWidth));
+  const maxHeight = Math.max(1, display.workAreaSize.height - Math.max(0, bounds.height - contentHeight));
+  const width = resolution.width / display.scaleFactor;
+  const height = resolution.height / display.scaleFactor;
+  const fit = Math.min(1, maxWidth / width, maxHeight / height);
+  win.setContentSize(Math.max(1, Math.round(width * fit)), Math.max(1, Math.round(height * fit)));
+  return getContentSizeInPixels(win, display);
+}
+
 /**
- * Current size, the resolutions that fit this window's display (plus the current size),
- * and the display mode.
+ * The selected resolution, available display resolutions, and the display mode.
  * @param {BrowserWindow} win
  */
 function getDisplaySettings(win) {
   const display = screen.getDisplayMatching(win.getBounds());
-  const [width, height] = win.getContentSize();
-  const resolutions = [...COMMON_RESOLUTIONS, { width, height }]
+  const displaySize = toPhysicalSize(display.size, display.scaleFactor);
+  const displayMode = getDisplayMode(win);
+  const contentSize = getContentSizeInPixels(win, display);
+  let current = displayMode === "windowed" ? contentSize : displayResolutions.get(win) ?? contentSize;
+  if (displayMode !== "windowed" &&
+    (current.width > displaySize.width || current.height > displaySize.height)) {
+    current = displaySize;
+    displayResolutions.set(win, current);
+  }
+  const resolutions = [...COMMON_RESOLUTIONS, displaySize, current]
     .filter(
       (resolution) =>
-        resolution.width <= display.workAreaSize.width &&
-        resolution.height <= display.workAreaSize.height,
+        (resolution.width <= displaySize.width && resolution.height <= displaySize.height) ||
+        (resolution.width === current.width && resolution.height === current.height),
     )
     .filter(
       (resolution, index, list) =>
@@ -73,13 +111,13 @@ function getDisplaySettings(win) {
     .sort((first, second) => first.width - second.width);
 
   return {
-    current: { width, height },
+    current,
     resolutions,
-    displayMode: getDisplayMode(win),
+    displayMode,
+    displaySize,
   };
 }
 
-const displayModes = new WeakMap();
 // Writes in flight; closing the window waits for these so a save is never cut off.
 const pendingFileWrites = new Set();
 // Serialize writes so two saves (or two captures) never interleave.
@@ -87,10 +125,6 @@ let saveQueue = Promise.resolve();
 let debugQueue = Promise.resolve();
 // One debug folder per app run, created on the first capture.
 let debugSession = null;
-
-function getDisplayMode(win) {
-  return displayModes.get(win) ?? "windowed";
-}
 
 const createWindow = () => {
   const win = new BrowserWindow({
@@ -105,6 +139,7 @@ const createWindow = () => {
   });
 
   displayModes.set(win, "fullscreen");
+  win.setMenuBarVisibility(false);
   win.on("close", (event) => {
     if (pendingFileWrites.size === 0) return;
     event.preventDefault();
@@ -124,21 +159,25 @@ ipcMain.handle("display:get-settings", (event) => {
 ipcMain.handle("display:set-resolution", (event, resolution) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   const display = screen.getDisplayMatching(win.getBounds());
+  const displaySize = toPhysicalSize(display.size, display.scaleFactor);
   const isAvailable =
+    resolution &&
     Number.isInteger(resolution.width) &&
     Number.isInteger(resolution.height) &&
     resolution.width > 0 &&
     resolution.height > 0 &&
-    resolution.width <= display.workAreaSize.width &&
-    resolution.height <= display.workAreaSize.height;
+    resolution.width <= displaySize.width &&
+    resolution.height <= displaySize.height;
 
   if (!isAvailable) {
     throw new Error("Unsupported resolution");
   }
 
-  win.setContentSize(resolution.width, resolution.height);
-  const [width, height] = win.getContentSize();
-  return { width, height };
+  const applied = getDisplayMode(win) === "windowed"
+    ? resizeWindowContent(win, resolution, display)
+    : { width: resolution.width, height: resolution.height };
+  displayResolutions.set(win, applied);
+  return getDisplaySettings(win);
 });
 
 // Borderless uses kiosk mode: screen-sized without exclusive fullscreen.
@@ -149,6 +188,7 @@ ipcMain.handle("display:set-mode", (event, mode) => {
     throw new Error("Unsupported display mode");
   }
 
+  const resolution = getDisplaySettings(win).current;
   if (mode === "windowed") {
     win.setKiosk(false);
     win.setFullScreen(false);
@@ -165,6 +205,13 @@ ipcMain.handle("display:set-mode", (event, mode) => {
   }
 
   displayModes.set(win, mode);
+  win.setMenuBarVisibility(mode === "windowed");
+  if (mode === "windowed") {
+    const display = screen.getDisplayMatching(win.getBounds());
+    displayResolutions.set(win, resizeWindowContent(win, resolution, display));
+  } else {
+    displayResolutions.set(win, resolution);
+  }
   return getDisplaySettings(win);
 });
 

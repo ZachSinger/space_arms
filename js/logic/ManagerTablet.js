@@ -5,6 +5,7 @@
 // Fixtures/Layout, and price-editing interactions. Each tab's HTML comes from its renderer.
 
 import { UIWindow } from "./UIWindow.js";
+import { DESIGN_HEIGHT, DESIGN_WIDTH } from "./GameViewport.js";
 import { InventoryRenderer } from "./InventoryRenderer.js";
 import { ContractRenderer } from "./ContractRenderer.js";
 import { SupplyRenderer } from "./SupplyRenderer.js";
@@ -15,12 +16,12 @@ import { HandbookRenderer } from "./HandbookRenderer.js";
 import { FixtureHighlight } from "./FixtureHighlight.js";
 import { playErrorBuzz } from "./Sfx.js";
 import { GAME_EVENTS } from "./EventBus.js";
-import { adjustStorePrice, formatMoney } from "./Money.js";
+import { adjustStorePrice } from "./Money.js";
 import { getFixtureResaleValue, getFixtureType } from "./FixtureLayout.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
 // The bible's full Step 40 tab list (Part 8).
-const TAB_DEFS = [
+export const TAB_DEFS = [
   { id: "inventory", label: "Inventory" },
   { id: "employee", label: "Employee" },
   { id: "contracts", label: "Contracts" },
@@ -31,9 +32,37 @@ const TAB_DEFS = [
   { id: "handbook", label: "Handbook" },
 ];
 
+// Extra tabs that only appear in the DEV UI Lab.
+export const UI_LAB_TAB_DEFS = [{ id: "textStyles", label: "Text Styles" }];
+
+/** @param {Phaser.Scene} scene @returns {{id: string, label: string}[]} */
+export function getTabDefs(scene) {
+  return scene?.lab === "ui" ? [...TAB_DEFS, ...UI_LAB_TAB_DEFS] : TAB_DEFS;
+}
+
+function renderTextStylesPage() {
+  return `
+    <div class="type-styles-page">
+      <h1 class="type-h1">H1 - Manager's Tablet</h1>
+      <h2 class="type-h2">H2 - Weekly Supply Order</h2>
+      <h3 class="type-h3">H3 - Laser Pistols</h3>
+      <p class="type-subheading">Subheading - Delivered tomorrow morning</p>
+      <p class="type-description">Description - Crates arrive at the back door at the start of the next day. Unpack them onto shelves before customers come looking.</p>
+            <p class="type-subheading">Thin divider</p>
+            <hr class="divider-thin">
+            <p class="type-subheading">Medium divider</p>
+            <hr class="divider-medium">
+            <p class="type-subheading">Thick divider</p>
+            <hr class="divider-thick">
+    </div>
+  `;
+}
+
 const PRICE_INPUT_SELECTOR = "input[data-price-item-id]";
 const PRICE_BUTTON_SELECTOR = "button[data-price-action]";
 const PRICE_CONTROL_SELECTOR = `${PRICE_INPUT_SELECTOR}, ${PRICE_BUTTON_SELECTOR}`;
+const EMPLOYEE_PRIORITY_SELECTOR = "button[data-employee-priority-id]";
+const TABLET_KEYBOARD_CONTROL_SELECTOR = `${PRICE_CONTROL_SELECTOR}, ${EMPLOYEE_PRIORITY_SELECTOR}`;
 
 /**
  * The single Tablet window; owns tab switching, the supply order being built, and
@@ -47,18 +76,22 @@ export class ManagerTablet {
     this.fixturePurchaseNotice = "";
     this.fixtureSaleConfirmation = null;
     this.handbookTopic = "store";
-    this.employeeTrainingConfirmation = null;
+    this.financesDay = null; // a finished day being reviewed, or null for today
 
-    const tabBarHTML = TAB_DEFS.map(
+    const tabDefs = getTabDefs(scene);
+    const tabBarHTML = tabDefs.map(
       ({ id, label }, index) =>
         `<button class="retro-tab-btn tablet-tab-btn${index === 0 ? " active" : ""}" data-tab="${id}">${label}</button>`,
     ).join("");
 
-    const panelsHTML = TAB_DEFS.map(({ id }, index) => {
+    const panelsHTML = tabDefs.map(({ id }, index) => {
       const hiddenClass = index === 0 ? "" : " hidden";
       return `<div class="tablet-tab-panel${hiddenClass}" data-tab-panel="${id}">${this.renderPanelContent(id)}</div>`;
     }).join("");
 
+    // 85% of the screen height, keeping the tablet's classic shape, centered both ways.
+    const tabletHeight = Math.round(DESIGN_HEIGHT * 0.85);
+    const tabletWidth = Math.round(tabletHeight * (768 / 648));
     this.uiWindow = new UIWindow(
       {
         id: "manager-tablet",
@@ -67,10 +100,10 @@ export class ManagerTablet {
           <div class="tablet-tab-bar">${tabBarHTML}</div>
           <div class="tablet-tab-content">${panelsHTML}</div>
         `,
-        width: "40vw",
-        height: "60vh",
-        x: 60,
-        y: 60,
+        width: `${tabletWidth}px`,
+        height: `${tabletHeight}px`,
+        x: Math.round((DESIGN_WIDTH - tabletWidth) / 2),
+        y: Math.round((DESIGN_HEIGHT - tabletHeight) / 2),
       },
       windowManager,
     );
@@ -80,7 +113,6 @@ export class ManagerTablet {
     this.uiWindow.onClose = () => {
       this.fixturePurchaseNotice = "";
       this.fixtureSaleConfirmation = null;
-      this.employeeTrainingConfirmation = null;
       this.fixtureHighlight.reset();
       this.scene.resumeRegisterCheckout();
     };
@@ -117,42 +149,26 @@ export class ManagerTablet {
         this.refreshEmployeePanel();
       }
 
-      const trainEmployeeButton = event.target.closest("[data-train-employee-id]");
-      if (trainEmployeeButton) {
-        const employeeId = trainEmployeeButton.dataset.trainEmployeeId;
-        const jobId = trainEmployeeButton.dataset.trainEmployeeJob;
-        const reason = this.scene.getEmployeeTrainingBlockReason(employeeId, jobId);
-        if (reason) this.scene.showShopMessage(reason);
-        else {
-          this.employeeTrainingConfirmation = { employeeId, jobId };
-          this.refreshEmployeePanel();
-          this.bodyElement.querySelector(".employee-training-confirmation")?.scrollIntoView({ block: "nearest" });
-        }
-      }
-      if (event.target.closest("[data-confirm-employee-training]")) {
-        const training = this.employeeTrainingConfirmation;
-        this.employeeTrainingConfirmation = null;
-        if (training) this.scene.trainEmployee(training.employeeId, training.jobId);
-        else this.scene.showShopMessage("Choose an employee skill to train first.");
-        this.refreshEmployeePanel();
-      }
-      if (event.target.closest("[data-cancel-employee-training]")) {
-        this.employeeTrainingConfirmation = null;
-        this.refreshEmployeePanel();
-      }
-
       if (event.target.closest("[data-end-day]") && this.scene.endDay()) this.uiWindow.close();
       if (event.target.closest("[data-finances-start-shift]")) this.scene.startNextShift();
       if (event.target.closest("[data-take-emergency-loan]")) this.scene.takeEmergencyLoan();
       if (event.target.closest("[data-pay-off-emergency-loan]")) this.scene.payOffEmergencyLoan();
 
+      const financesDayButton = event.target.closest("[data-finances-day]");
+      if (financesDayButton) {
+        const value = financesDayButton.dataset.financesDay;
+        this.financesDay = value === "today" ? null : Number(value);
+        this.refreshFinancesPanel();
+      }
+
       const priorityButton = event.target.closest("[data-employee-priority-id]");
-      if (priorityButton) {
-        this.scene.moveEmployeeJobPriority(
+      if (priorityButton && priorityButton.getAttribute("aria-pressed") !== "true") {
+        const changed = this.scene.moveEmployeeJobPriority(
           priorityButton.dataset.employeePriorityId,
           priorityButton.dataset.employeePriorityJob,
-          Number(priorityButton.dataset.employeePriorityDirection),
+          -1,
         );
+        if (!changed) this.refreshEmployeePanel();
       }
 
       const addCrateButton = event.target.closest("[data-supply-add]");
@@ -221,29 +237,36 @@ export class ManagerTablet {
       const itemId = input.dataset.priceItemId;
       if (!this.scene.setStorePrice(itemId, Number(input.value))) {
         input.value = this.scene.getStorePrice(itemId);
+      } else {
+        const entry = this.scene.getInventoryItems().find(({ item }) => item.id === itemId);
+        const profit = input.closest(".inventory-item-card")?.querySelector("[data-inventory-profit]");
+        if (entry && profit) {
+          profit.outerHTML = InventoryRenderer.generateProfitHTML(entry.storePrice, entry.unitCost);
+        }
       }
     });
     this.bodyElement.addEventListener("keydown", (event) => {
       if (event.key === "Enter" && event.target.matches(PRICE_INPUT_SELECTOR)) event.target.blur();
     });
-    // Price controls must not also drive the player or fire hotkeys (E, Space, I, P...).
+    // Focused controls must not also drive the player or fire game hotkeys.
     const keyboard = this.scene.input.keyboard;
     this.bodyElement.addEventListener("focusin", (event) => {
-      if (!event.target.matches(PRICE_CONTROL_SELECTOR)) return;
+      if (!event.target.matches(TABLET_KEYBOARD_CONTROL_SELECTOR)) return;
       if (event.target.matches(PRICE_INPUT_SELECTOR)) this.editingPrice = true;
       keyboard.enabled = false;
       keyboard.disableGlobalCapture();
       keyboard.resetKeys();
     });
     this.bodyElement.addEventListener("focusout", (event) => {
-      if (!event.target.matches(PRICE_CONTROL_SELECTOR)) return;
+      if (!event.target.matches(TABLET_KEYBOARD_CONTROL_SELECTOR)) return;
       if (event.target.matches(PRICE_INPUT_SELECTOR)) this.editingPrice = false;
-      if (!event.relatedTarget?.matches?.(PRICE_CONTROL_SELECTOR)) {
+      if (!event.relatedTarget?.matches?.(TABLET_KEYBOARD_CONTROL_SELECTOR)) {
         keyboard.enabled = true;
         keyboard.enableGlobalCapture();
       }
       // Keep the button in place until its click if focus moved there from an edited input.
-      if (this.inventoryRefreshPending && !event.relatedTarget?.matches?.(PRICE_BUTTON_SELECTOR)) {
+      if (this.inventoryRefreshPending && event.target.matches(PRICE_CONTROL_SELECTOR) &&
+        !event.relatedTarget?.matches?.(PRICE_BUTTON_SELECTOR)) {
         setTimeout(() => this.refreshInventoryPanel());
       }
     });
@@ -270,9 +293,18 @@ export class ManagerTablet {
 
   /**
    * @param {string} tabId - a TAB_DEFS id
-   * @returns {string} panel HTML, or a placeholder for unbuilt tabs
+   * @returns {string} the tab's page title followed by its body
    */
   renderPanelContent(tabId) {
+    const { label } = getTabDefs(this.scene).find((tab) => tab.id === tabId);
+    return `<h1 class="type-h1 tablet-page-title">${label}</h1>${this.renderPanelBody(tabId)}`;
+  }
+
+  /**
+   * @param {string} tabId - a TAB_DEFS id
+   * @returns {string} panel body HTML
+   */
+  renderPanelBody(tabId) {
     if (tabId === "inventory") return InventoryRenderer.generateHTML(this.scene.getInventoryItems());
     if (tabId === "employee") {
       return EmployeeRenderer.generateHTML({
@@ -284,7 +316,6 @@ export class ManagerTablet {
         canHire: this.scene.canHireEmployees(),
         employeeSkills: this.playerState.employeeSkills,
         employeeTraining: this.playerState.employeeTraining,
-        trainingConfirmation: this.employeeTrainingConfirmation,
         shopLevel: this.playerState.shopLevel,
       });
     }
@@ -298,7 +329,9 @@ export class ManagerTablet {
       );
     }
     if (tabId === "layout") return LayoutRenderer.generateHTML(this.scene);
-    if (tabId === "finances") return FinancesRenderer.generateHTML(this.scene.getFinancesView());
+    if (tabId === "finances") {
+      return FinancesRenderer.generateHTML(this.scene.getFinancesView(), this.financesDay);
+    }
     if (tabId === "handbook") {
       return HandbookRenderer.generateHTML({
         topic: this.handbookTopic,
@@ -307,6 +340,7 @@ export class ManagerTablet {
         licenses: database.getAllLicenses(),
       });
     }
+    if (tabId === "textStyles") return renderTextStylesPage();
     throw new Error(`Unknown tablet tab: ${tabId}`);
   }
 
@@ -315,7 +349,6 @@ export class ManagerTablet {
     this.fixtureHighlight.reset();
     this.fixturePurchaseNotice = "";
     this.fixtureSaleConfirmation = null;
-    this.employeeTrainingConfirmation = null;
     if (tabId === "inventory") this.refreshInventoryPanel();
     if (tabId === "employee") this.refreshEmployeePanel();
     if (tabId === "supply") this.refreshSupplyPanel();
@@ -383,14 +416,34 @@ export class ManagerTablet {
   refreshEmployeePanel() {
     const panel = this.bodyElement.querySelector('[data-tab-panel="employee"]');
     if (!panel) return;
-    const scrollTop = panel.querySelector(".employee-panel")?.scrollTop ?? 0;
+    const activeElement = document.activeElement;
+    const focusedPriority = panel.contains(activeElement) && activeElement.matches(EMPLOYEE_PRIORITY_SELECTOR)
+      ? { employeeId: activeElement.dataset.employeePriorityId, jobId: activeElement.dataset.employeePriorityJob }
+      : null;
+    const scrollPositions = Array.from(panel.querySelectorAll("[data-employee-scroll]"), (element) => ({
+      name: element.dataset.employeeScroll, top: element.scrollTop,
+    }));
     panel.innerHTML = this.renderPanelContent("employee");
-    panel.querySelector(".employee-panel").scrollTop = scrollTop;
+    for (const element of panel.querySelectorAll("[data-employee-scroll]")) {
+      const position = scrollPositions.find(({ name }) => name === element.dataset.employeeScroll);
+      if (position) element.scrollTop = position.top;
+    }
+    if (focusedPriority) {
+      const replacement = Array.from(panel.querySelectorAll(EMPLOYEE_PRIORITY_SELECTOR)).find(
+        (button) => button.dataset.employeePriorityId === focusedPriority.employeeId &&
+          button.dataset.employeePriorityJob === focusedPriority.jobId,
+      );
+      replacement?.focus({ preventScroll: true });
+    }
   }
 
   refreshFinancesPanel() {
     const panel = this.bodyElement.querySelector('[data-tab-panel="finances"]');
-    if (panel) panel.innerHTML = this.renderPanelContent("finances");
+    if (!panel) return;
+    const scrollTop = panel.querySelector(".finances-day-list")?.scrollTop ?? 0;
+    panel.innerHTML = this.renderPanelContent("finances");
+    const list = panel.querySelector(".finances-day-list");
+    if (list) list.scrollTop = scrollTop;
   }
 
   refreshHandbookPanel() {
@@ -410,7 +463,7 @@ export class ManagerTablet {
     for (const id of ["layout", "fixtures"]) {
       const panel = this.bodyElement.querySelector(`[data-tab-panel="${id}"]`);
       if (!panel) continue;
-      const positions = [".fixture-management-scroll", ".layout-fixture-list"].map((selector) => ({
+      const positions = [".fixtures-catalog-list", ".fixtures-owned-list", ".layout-expansions-list", ".layout-fixture-list"].map((selector) => ({
         selector,
         top: panel.querySelector(selector)?.scrollTop ?? 0,
       }));
@@ -462,7 +515,7 @@ export class ManagerTablet {
       this.refreshLayoutPanels();
       return;
     }
-    this.fixturePurchaseNotice = `Sold ${sale.name} for ${formatMoney(sale.value)}.`;
+    this.fixturePurchaseNotice = `Sold ${sale.name} for ${sale.value.toLocaleString()}.`;
     this.fixtureHighlight.reset();
     const sold = sale.kind === "placed"
       ? this.scene.sellFixture(sale.target.id)

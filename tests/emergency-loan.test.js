@@ -33,17 +33,18 @@ test("the Finances tab offers the loan, shows what is owed, and labels the recei
   const today = summarizeReceipt({ day: 1, openingCredits: -200, openingReputation: 0, shift: null,
     lines: [{ category: "loans", label: "Emergency loan", amount: 500, quantity: 1 }] }, 300, 0);
   const base = { day: 1, shiftRunning: false, awaitingEndDay: false, canEndDay: false,
-    pendingReputationChange: null, today, lastDay: null };
+    pendingReputationChange: null, today, receipts: [],
+    lifetime: { daysCompleted: 0, totalSales: 0, customersServed: 0 } };
 
   const offered = FinancesRenderer.generateHTML({ ...base, emergencyLoan: {
     offer: { available: true, amount: 1200, repayTotal: 1500 }, balance: 0, canPayOff: false } });
   assert.match(offered, /data-take-emergency-loan/);
-  assert.match(offered, /lend you 1,200 credits/);
+  assert.match(offered, /lend you 1,200/);
   assert.match(offered, /Emergency loan received/);
 
   const owed = FinancesRenderer.generateHTML({ ...base, emergencyLoan: {
     offer: { available: false, amount: 0, repayTotal: 0 }, balance: 625, canPayOff: false } });
-  assert.match(owed, /still owe 625 credits/);
+  assert.match(owed, /still owe 625/);
   assert.match(owed, /data-pay-off-emergency-loan\s+disabled/);
   assert.doesNotMatch(owed, /data-take-emergency-loan/);
 

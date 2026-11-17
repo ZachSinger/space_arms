@@ -4,6 +4,8 @@
 // DOM settings window for resolution, display mode, and text size. Changes preview
 // immediately; APPLY keeps them as the new cancel point, CANCEL reverts to the last one.
 // Text size persists in localStorage; display settings live in the Electron window.
+import { setGameDisplaySettings } from "./GameViewport.js";
+
 export class SettingsPanel {
   static textSizeStorageKey = "space-arms-dealer.text-size";
 
@@ -91,11 +93,17 @@ export class SettingsPanel {
       displayMode: settings.displayMode,
       textSize: SettingsPanel.getSavedTextSize(),
     };
+    this.syncDisplaySettings(settings);
+    this.textSizeSelect.value = this.settingsSnapshot.textSize;
+
+    this.element.classList.remove("hidden");
+    this.onOpen?.();
+  }
+
+  syncDisplaySettings(settings) {
     this.appliedResolution = settings.current;
     this.appliedDisplayMode = settings.displayMode;
     this.displayModeSelect.value = settings.displayMode;
-    this.textSizeSelect.value = this.settingsSnapshot.textSize;
-
     this.select.replaceChildren();
 
     for (const resolution of settings.resolutions) {
@@ -114,8 +122,7 @@ export class SettingsPanel {
     }
 
     this.status.textContent = `CURRENT: ${settings.current.width} x ${settings.current.height}`;
-    this.element.classList.remove("hidden");
-    this.onOpen?.();
+    setGameDisplaySettings(settings);
   }
 
   // ACCEPT: keep whatever is previewed and persist the text size.
@@ -141,8 +148,7 @@ export class SettingsPanel {
     }
 
     const restored = await window.desktopApi.setResolution(resolution);
-    this.appliedResolution = restored;
-    this.appliedDisplayMode = displayMode;
+    this.syncDisplaySettings(restored);
     this.textSizeSelect.value = textSize;
     SettingsPanel.applyTextSize(textSize);
     this.close();
@@ -158,9 +164,8 @@ export class SettingsPanel {
       return;
     }
 
-    const applied = await window.desktopApi.setResolution({ width, height });
-    this.appliedResolution = applied;
-    this.status.textContent = `CURRENT: ${applied.width} x ${applied.height}`;
+    const settings = await window.desktopApi.setResolution({ width, height });
+    this.syncDisplaySettings(settings);
   }
 
   async previewDisplayMode() {
@@ -171,9 +176,7 @@ export class SettingsPanel {
     }
 
     const settings = await window.desktopApi.setDisplayMode(mode);
-    this.appliedDisplayMode = settings.displayMode;
-    this.appliedResolution = settings.current;
-    this.status.textContent = `CURRENT: ${this.appliedResolution.width} x ${this.appliedResolution.height}`;
+    this.syncDisplaySettings(settings);
   }
 
   previewTextSize() {
@@ -189,9 +192,7 @@ export class SettingsPanel {
       displayMode: settings.displayMode,
       textSize: this.textSizeSelect.value,
     };
-    this.appliedResolution = settings.current;
-    this.appliedDisplayMode = settings.displayMode;
-    this.status.textContent = `CURRENT: ${settings.current.width} x ${settings.current.height}`;
+    this.syncDisplaySettings(settings);
   }
 
   static getSavedTextSize() {
@@ -204,7 +205,7 @@ export class SettingsPanel {
   }
 
   /**
-   * Apply a text size to the DOM (via CSS data attribute) and notify Phaser scenes.
+   * Apply the size to DOM text and notify the shared Phaser text-size handler.
    * @param {string} textSize - key of textSizeScales
    */
   static applyTextSize(textSize) {

@@ -11,7 +11,8 @@ import {
   CashPayment, creditCentsToScrips, formatCashAmount, splitCash,
 } from "./CashPayment.js";
 import { CHIT_DIRECTION_DIGITS, ChitPayment } from "./ChitPayment.js";
-import { sumMoney, toCents } from "./Money.js";
+import { formatMoneyAmount, sumMoney, toCents } from "./Money.js";
+import { clientToGamePoint, DESIGN_WIDTH, getGameScale } from "./GameViewport.js";
 import {
   playScanBeep,
   playKeypadClick,
@@ -27,9 +28,9 @@ const SCANNER_GAP = 12;
 const BELT_SPEED_PX_PER_S = 260;
 const SCAN_SLIDE_MS = 220;
 
-// UIWindow's x is plain px, so right-aligning a vw-wide window is computed here. This is
-// only the fallback spot; the game normally opens the window beside the register.
-const CHECKOUT_WIDTH_VW = 44;
+// The checkout window uses 44% of the fixed design width. This is only the fallback spot;
+// the game normally opens the window beside the register.
+const CHECKOUT_WIDTH_PERCENT = 44;
 const RIGHT_MARGIN_PX = 24;
 // Space (px) between the register (and the player behind it) and the window beside it.
 const REGISTER_GAP_PX = 16;
@@ -38,6 +39,9 @@ export const EXACT_PAYMENT_CHANCE = 0.25;
 export const CASH_PAYMENT_CHANCE = 0.5;
 // Wrong Explorer Chit keys allowed per order; this many and the customer leaves angry.
 export const CHIT_MISTAKES_TO_LOSE_SALE = 3;
+// Time allowed for each attempt at the Chit code; running out counts as a wrong key.
+export const CHIT_KEY_TIME_MS = 10000;
+const CHIT_TIMER_TICK_MS = 50;
 
 export function customerPaysCash(random = Math.random) {
   return random() < CASH_PAYMENT_CHANCE;
@@ -63,8 +67,8 @@ export function placeBeside({ width, height }, target, viewport, gap = REGISTER_
 }
 
 function formatCheckoutTotal(total, currency = "credits") {
-  const cents = toCents(total);
-  return formatCashAmount(currency === "m-scrips" ? creditCentsToScrips(cents) : cents, currency);
+  if (currency === "m-scrips") return formatCashAmount(creditCentsToScrips(toCents(total)), currency);
+  return formatMoneyAmount(total);
 }
 
 /**
@@ -75,14 +79,14 @@ export class CheckoutWindow {
   constructor(windowManager) {
     this.windowManager = windowManager;
     const rightAlignedX =
-      window.innerWidth - (window.innerWidth * CHECKOUT_WIDTH_VW) / 100 - RIGHT_MARGIN_PX;
+      DESIGN_WIDTH - (DESIGN_WIDTH * CHECKOUT_WIDTH_PERCENT) / 100 - RIGHT_MARGIN_PX;
 
     this.uiWindow = new UIWindow(
       {
         id: "checkout-window",
         title: "REGISTER",
         contentHTML: "",
-        width: `${CHECKOUT_WIDTH_VW}vw`,
+        width: `${(DESIGN_WIDTH * CHECKOUT_WIDTH_PERCENT) / 100}px`,
         height: "auto",
         x: Math.round(rightAlignedX),
         y: 80,
@@ -124,6 +128,7 @@ export class CheckoutWindow {
   }
 
   destroy() {
+    this.stopChitTimer();
     clearTimeout(this.beltStopTimer);
     for (const timer of this.registerTimers ?? []) clearTimeout(timer.id);
     window.removeEventListener("mousedown", this.handleMouseDown);
@@ -193,6 +198,7 @@ export class CheckoutWindow {
     this.onWrongChange = null;
     this.cashPayment = null;
     this.chitPayment = null;
+    this.stopChitTimer();
     this.removeTenderOverlay();
     this.uiWindow.close();
   }
@@ -296,6 +302,7 @@ export class CheckoutWindow {
     onChitFailed = null,
   } = {}) {
     this.mode = "checkout";
+    this.stopChitTimer();
     this.cart = cart;
     this.onComplete = onComplete;
     this.onWrongChange = onWrongChange;
@@ -457,6 +464,7 @@ export class CheckoutWindow {
   beginPayment() {
     if (!this.cashPayment && !this.chitPayment) {
       this.bodyElement.querySelector("#checkout-payment").classList.remove("hidden");
+      this.bodyElement.querySelector(".checkout-belt").classList.add("hidden");
       this.setWidth("keypad");
       return;
     }
@@ -580,6 +588,7 @@ export class CheckoutWindow {
     this.bodyElement.querySelector("#checkout-chit").classList.remove("hidden");
     this.bodyElement.querySelector(".checkout-payment-prompt").textContent = "UNLOCK THE EXPLORER CHIT";
     this.refreshChit();
+    this.restartChitTimer();
     this.bodyElement.scrollTop = 0;
     this.keepOnScreen();
   }
@@ -588,26 +597,74 @@ export class CheckoutWindow {
     if (this.paymentStage !== "chit") return;
     const result = this.chitPayment.enterDigit(digit);
     playKeypadClick();
+    this.handleChitResult(result, "WRONG KEY");
+  }
+
+  handleChitResult(result, mistakeLabel) {
     this.refreshChit();
     if (result.restarted) {
       playErrorBuzz();
       this.chitMistakes = (this.chitMistakes ?? 0) + 1;
       if (this.chitMistakes >= CHIT_MISTAKES_TO_LOSE_SALE) {
         this.paymentStage = "lost";
+        this.stopChitTimer();
         this.onChitFailed?.();
         return;
       }
       const left = CHIT_MISTAKES_TO_LOSE_SALE - this.chitMistakes;
       this.bodyElement.querySelector("#checkout-chit-feedback").textContent =
-        `WRONG KEY. START OVER. ${left === 1 ? "ONE MORE MISTAKE" : `${left} MORE MISTAKES`} AND THE CUSTOMER LEAVES.`;
+        `${mistakeLabel}. START OVER. ${left === 1 ? "ONE MORE MISTAKE" : `${left} MORE MISTAKES`} AND THE CUSTOMER LEAVES.`;
+      this.restartChitTimer();
       return;
     }
     this.bodyElement.querySelector("#checkout-chit-feedback").textContent = "";
     if (result.completed) {
       this.paymentStage = "complete";
+      this.stopChitTimer();
       playSaleComplete();
       this.onComplete?.();
     }
+  }
+
+  // Each attempt at the whole code gets a fresh 10 seconds; only a mistake starts a new
+  // attempt. The clock only runs while the player can type, so pausing the shift or
+  // stepping away from the register holds it.
+  restartChitTimer() {
+    this.stopChitTimer();
+    this.chitTimeLeftMs = CHIT_KEY_TIME_MS;
+    this.chitTimerLastTick = Date.now();
+    this.refreshChitTimer();
+    this.chitTimerId = setInterval(() => this.tickChitTimer(), CHIT_TIMER_TICK_MS);
+  }
+
+  stopChitTimer() {
+    clearInterval(this.chitTimerId);
+    this.chitTimerId = null;
+  }
+
+  tickChitTimer() {
+    const now = Date.now();
+    const elapsed = now - this.chitTimerLastTick;
+    this.chitTimerLastTick = now;
+    if (this.paymentStage !== "chit") {
+      this.stopChitTimer();
+      return;
+    }
+    if (!this.usesChitInput()) return;
+    this.chitTimeLeftMs = Math.max(0, this.chitTimeLeftMs - elapsed);
+    this.refreshChitTimer();
+    if (this.chitTimeLeftMs === 0) this.handleChitResult(this.chitPayment.timeOut(), "TOO SLOW");
+  }
+
+  refreshChitTimer() {
+    const share = this.chitTimeLeftMs / CHIT_KEY_TIME_MS;
+    const timer = this.bodyElement.querySelector("#checkout-chit-timer");
+    if (!timer) return;
+    timer.classList.toggle("low", share <= 0.5 && share > 0.2);
+    timer.classList.toggle("critical", share <= 0.2);
+    this.bodyElement.querySelector("#checkout-chit-timer-fill").style.width = `${share * 100}%`;
+    this.bodyElement.querySelector("#checkout-chit-time-left").textContent =
+      `${(this.chitTimeLeftMs / 1000).toFixed(1)}s`;
   }
 
   enterChitDirection(direction) {
@@ -665,7 +722,7 @@ export class CheckoutWindow {
     // The Manager's Tablet may have been opened while the last item was scanning.
     if (this.uiWindow.element.classList.contains("hidden")) overlay.classList.add("hidden");
     overlay.classList.toggle("checkout-paused", Boolean(this.paused));
-    document.body.appendChild(overlay);
+    document.getElementById("ui-layer").appendChild(overlay);
     this.tenderOverlay = overlay;
     this.placeTenderPanel();
   }
@@ -680,8 +737,12 @@ export class CheckoutWindow {
     panel.classList.add("cash-tender-panel-placed");
     const { width, height } = panel.getBoundingClientRect();
     const clamp = (value, min, max) => Math.max(min, Math.min(value, max));
-    panel.style.left = `${Math.round(clamp((target.left + target.right - width) / 2, viewport.left, viewport.right - width))}px`;
-    panel.style.top = `${Math.round(clamp((target.top + target.bottom - height) / 2, viewport.top, viewport.bottom - height))}px`;
+    const position = clientToGamePoint(
+      clamp((target.left + target.right - width) / 2, viewport.left, viewport.right - width),
+      clamp((target.top + target.bottom - height) / 2, viewport.top, viewport.bottom - height),
+    );
+    panel.style.left = `${Math.round(position.x)}px`;
+    panel.style.top = `${Math.round(position.y)}px`;
   }
 
   removeTenderOverlay() {
@@ -706,8 +767,11 @@ export class CheckoutWindow {
     }
     this.paymentStage = "change";
     // What the customer paid sits next to the total, in green.
+    const paid = this.cashPayment.currency === "m-scrips"
+      ? formatCashAmount(this.cashPayment.tenderUnits, "m-scrips")
+      : formatMoneyAmount(this.cashPayment.tenderUnits / 100);
     this.bodyElement.querySelector("#checkout-total-value").innerHTML =
-      `${formatCheckoutTotal(this.total, this.cashPayment.currency)} - <span class="checkout-paid">${formatCashAmount(this.cashPayment.tenderUnits, this.cashPayment.currency)}</span>`;
+      `${formatCheckoutTotal(this.total, this.cashPayment.currency)} - <span class="checkout-paid">${paid}</span>`;
     this.bodyElement.querySelector("#checkout-payment").classList.remove("hidden");
     this.bodyElement.querySelector("#checkout-payment").classList.add("counting-change");
     this.setWidth("change");
@@ -729,11 +793,12 @@ export class CheckoutWindow {
 
   moveWindowTo(left, top) {
     const element = this.uiWindow.element;
-    element.style.left = `${left}px`;
-    element.style.top = `${top}px`;
+    const position = clientToGamePoint(left, top);
+    element.style.left = `${position.x}px`;
+    element.style.top = `${position.y}px`;
     // Remembered, so stepping away and back reopens it in the same spot.
-    this.uiWindow.screenX = left;
-    this.uiWindow.screenY = top;
+    this.uiWindow.screenX = position.x;
+    this.uiWindow.screenY = position.y;
   }
 
   // Open beside the register you're at, wherever it has been placed in the shop.
@@ -741,7 +806,7 @@ export class CheckoutWindow {
     const area = this.getRegisterScreenArea?.();
     if (!area || !this.canMeasure()) return;
     const { width, height } = this.uiWindow.element.getBoundingClientRect();
-    const spot = placeBeside({ width, height }, area.target, area.viewport);
+    const spot = placeBeside({ width, height }, area.target, area.viewport, REGISTER_GAP_PX * getGameScale());
     this.side = spot.side;
     this.moveWindowTo(spot.left, spot.top);
   }

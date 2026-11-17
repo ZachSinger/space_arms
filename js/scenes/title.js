@@ -5,6 +5,7 @@
 // Continue loads and validates the saved shop before starting the game scene.
 import Phaser from "phaser";
 import { SettingsPanel } from "../logic/SettingsPanel.js";
+import { installSceneTextSize } from "../logic/GameTextSize.js";
 import { UIWindow } from "../logic/UIWindow.js";
 import { WindowManager } from "../logic/WindowManager.js";
 import { SaveManager } from "../../SaveManager.js";
@@ -20,6 +21,7 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create() {
+    installSceneTextSize(this, Phaser);
     const { width, height } = this.scale;
 
     this.selectedIndex = 0;
@@ -79,20 +81,6 @@ export class TitleScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    // Base font sizes (px), scaled by the player's text size setting.
-    this.textObjects = [
-      { object: this.titleText, fontSize: 52 },
-      { object: this.subtitleText, fontSize: 16 },
-      ...this.menuItems.map((object) => ({ object, fontSize: 24 })),
-      { object: this.statusText, fontSize: 16 },
-    ];
-    this.applyTextSize(
-      SettingsPanel.getTextSizeScale(SettingsPanel.getSavedTextSize()),
-    );
-    this.handleTextSizeChange = (event) =>
-      this.applyTextSize(event.detail.scale);
-    window.addEventListener("text-size-changed", this.handleTextSizeChange);
-
     this.input.keyboard.on("keydown-UP", () => this.selectCommand(-1));
     this.input.keyboard.on("keydown-DOWN", () => this.selectCommand(1));
     this.input.keyboard.on("keydown-ENTER", () => this.activateCommand());
@@ -124,9 +112,10 @@ export class TitleScene extends Phaser.Scene {
       id: "dev-area-chooser", title: "DEV", width: "380px", height: "auto",
       x: 80, y: 120, onClose: () => this.setMenuActive(true),
       contentHTML: `
-        <p>Pick a test area. Nothing you do in either one is saved.</p>
+        <p>Pick a test area. Nothing you do in any of them is saved.</p>
         <button class="action-btn" data-dev-crate-lab>CRATE LAB</button>
         <button class="action-btn" data-dev-shelf-room>SHELF TEST ROOM</button>
+        <button class="action-btn" data-dev-ui-lab>UI LAB</button>
         <button class="action-btn" data-dev-cancel>CANCEL</button>
       `,
     }, this.windowManager);
@@ -140,16 +129,16 @@ export class TitleScene extends Phaser.Scene {
       this.devWindow.close();
       this.scene.start("scene-game", { sandbox: true });
     });
+    devButton("[data-dev-ui-lab]", () => {
+      this.devWindow.close();
+      this.scene.start("scene-game", { sandbox: true, lab: "ui" });
+    });
     devButton("[data-dev-cancel]", () => this.devWindow.close());
     this.padInput = new GamepadInput();
     this.uiNavigator = new UINavigator();
     this.events.once("shutdown", () => {
       this.uiNavigator.destroy();
       this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
-      window.removeEventListener(
-        "text-size-changed",
-        this.handleTextSizeChange,
-      );
       this.settingsPanel.destroy();
       this.windowManager.destroy();
     });
@@ -254,12 +243,6 @@ export class TitleScene extends Phaser.Scene {
       );
       menuItem.setColor(isSelected ? "#38bdf8" : "#94a3b8");
     });
-  }
-
-  applyTextSize(scale) {
-    this.textObjects.forEach(({ object, fontSize }) =>
-      object.setFontSize(fontSize * scale),
-    );
   }
 
   showStatus(message) {

@@ -285,6 +285,13 @@ export function validateShopSave(data, database) {
     requireSave(isValidLedgerData(player.lastDayReceipt, { closed: true }) &&
       player.lastDayReceipt.day < market.day, "invalid previous day's receipt.");
   }
+  if (player.dayReceipts !== undefined) {
+    requireSave(Array.isArray(player.dayReceipts) &&
+      player.dayReceipts.every((receipt) => isValidLedgerData(receipt, { closed: true })) &&
+      player.dayReceipts.every((receipt, index) =>
+        receipt.day < market.day && (index === 0 || receipt.day > player.dayReceipts[index - 1].day)),
+    "invalid day receipt history.");
+  }
   if (player.awaitingEndDay !== undefined) {
     requireSave(typeof player.awaitingEndDay === "boolean", "invalid end-of-day state.");
   }

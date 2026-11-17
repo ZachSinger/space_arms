@@ -45,7 +45,7 @@ test("the summary explains a full loading pad or missing credits in plain words"
 
   const broke = summarizeSupplyOrder(new Map([["ammo", 1]]), context({ credits: 50 }));
   assert.equal(broke.canPlace, false);
-  assert.equal(broke.problem, `Not enough credits. This order costs ${40 + DELIVERY_FEE} credits and you have 50.`);
+  assert.equal(broke.problem, `Not enough money. This order costs ${40 + DELIVERY_FEE} and you have 50.`);
 });
 
 test("an ordered crate holds exactly one full Budget Shelf 2x2 space of its item", () => {

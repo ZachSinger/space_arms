@@ -183,7 +183,7 @@ test("backroom expansions require their level, credits, and previous purchases",
   const poor = createExpansionHarness({ shopLevel: 13, credits: 3999 });
   assert.equal(poor.scene.buyBackroomUpgrade(BACKROOM_UPGRADE_ORDER[0]), false);
   assert.equal(poor.scene.playerState.credits, 3999);
-  assert.match(poor.messages[0], /costs 4,000 credits/);
+  assert.match(poor.messages[0], /costs 4,000\./);
 
   const wrongOrder = createExpansionHarness({ shopLevel: 27, credits: 20000 });
   assert.equal(wrongOrder.scene.buyBackroomUpgrade(BACKROOM_UPGRADE_ORDER[1]), false);
@@ -324,15 +324,27 @@ function createRegisterHarness() {
     checkout.openedCarts.push(cart);
     checkout.uiWindow.openWindow();
   };
+  const registerFixture = { id: "register_1", sprite: {} };
+  const line = [];
   Object.assign(scene, {
     operatingRegister: true,
-    registerLine: [],
+    operatingRegisterFixture: registerFixture,
+    registerLine: line,
+    registerLines: new Map([[registerFixture.id, line]]),
+    fixtures: {
+      register: () => registerFixture,
+      registers: () => [registerFixture],
+      get: (id) => id === registerFixture.id ? registerFixture : undefined,
+    },
     checkoutWindow: checkout,
     windowManager: { windows: new Map([
       [tablet.id, tablet], [checkout.uiWindow.id, checkout.uiWindow],
     ]) },
     layoutRegisterLine() {},
-    beginRegisterSession() { this.operatingRegister = true; },
+    beginRegisterSession(register = registerFixture) {
+      this.operatingRegister = true;
+      this.operatingRegisterFixture = register;
+    },
     playerState: { addToGoBacks() {} },
     employees: [],
   });
@@ -411,7 +423,7 @@ test("a shift that earns multiple levels announces each implemented unlock", () 
     clearEmployees() {},
     showGameMessage: (message) => messages.push(message),
   });
-  state.addReputation(60);
+  state.addReputation(72);
   scene.endShift();
   assert.equal(state.shopLevel, 4);
   assert.match(messages[0], /Shop Level 4 reached/);
@@ -419,7 +431,7 @@ test("a shift that earns multiple levels announces each implemented unlock", () 
   assert.match(messages[0], /You can now have 1 employee hired at once \(Employee tab\)/);
 
   state.endDay(2);
-  state.addReputation(30);
+  state.addReputation(42);
   scene.endShift();
   assert.equal(state.shopLevel, 5);
   assert.match(messages[1], /Shop Level 5 reached/);
@@ -428,7 +440,7 @@ test("a shift that earns multiple levels announces each implemented unlock", () 
   assert.doesNotMatch(messages[1], /Some later level rewards are not in the game yet/);
 
   state.endDay(3);
-  state.addReputation(35);
+  state.addReputation(51);
   scene.endShift();
   assert.equal(state.shopLevel, 6);
   assert.match(messages[2], /Shop Level 6 reached/);
@@ -439,7 +451,7 @@ test("a shift that earns multiple levels announces each implemented unlock", () 
 test("a shift from Shop Level 6 to 30 announces all remaining reward types", () => {
   const state = new PlayerState();
   state.shopLevel = 6;
-  state.globalReputation = 125;
+  state.globalReputation = 165;
   const scene = Object.create(GameScene.prototype);
   const messages = [];
   Object.assign(scene, {
@@ -452,7 +464,7 @@ test("a shift from Shop Level 6 to 30 announces all remaining reward types", () 
     clearEmployees() {},
     showGameMessage: (message) => messages.push(message),
   });
-  state.addReputation(2340);
+  state.addReputation(3924);
   scene.endShift();
 
   assert.equal(state.shopLevel, 30);
@@ -481,7 +493,7 @@ test("level-up messages do not reannounce contracts or staff already owned in ol
     clearEmployees() {},
     showGameMessage: (message) => messages.push(message),
   });
-  state.addReputation(60);
+  state.addReputation(72);
   scene.endShift();
   assert.match(messages[0], /Shop Level 4 reached/);
   assert.doesNotMatch(messages[0], /Contracts unlocked|Civilian Threads|Staff unlocked/);
@@ -496,7 +508,7 @@ test("level 1 saves keep starting contracts signed before their level requiremen
   assert.equal(restored.shopLevel, 1);
   assert.ok(contracts.every((license) => restored.activeLicenses.has(license.id)));
   const html = ContractRenderer.generateHTML(contracts, restored);
-  assert.equal((html.match(/\[ PURCHASED \]/g) ?? []).length, 2);
+  assert.equal((html.match(/>PURCHASED</g) ?? []).length, 2);
   assert.doesNotMatch(html, />LOCKED</);
 });
 
@@ -513,12 +525,12 @@ test("the actual hire action explains the level lock and allows hiring after the
     requestAutosave: () => { autosaves += 1; },
   });
   assert.equal(scene.hireEmployee("tavi_stock_clerk"), false);
-  assert.match(warnings[0], /Shop Level 4.*60 store reputation/);
+  assert.match(warnings[0], /Shop Level 4.*72 store reputation/);
   assert.equal(state.credits, 1500);
   assert.equal(autosaves, 0);
 
-  state.addReputation(60);
-  state.finishShift({ customersServed: 60, customersTurnedAway: 0 });
+  state.addReputation(72);
+  state.finishShift({ customersServed: 72, customersTurnedAway: 0 });
   assert.equal(scene.hireEmployee("tavi_stock_clerk"), true);
   assert.equal(state.credits, 1250);
   assert.equal(autosaves, 1);
@@ -727,6 +739,50 @@ test("closing the tablet does not start checkout with no customers or after leav
   assert.equal(checkout.uiWindow.isOpen, false);
 });
 
+test("the register refuses a player whose hands are full of crates", () => {
+  const scene = Object.create(GameScene.prototype);
+  const register = { type: "register_basic", rotation: 0, sprite: {
+    depth: 1, body: { width: 72, height: 56, center: { x: 100, y: 100 } },
+  } };
+  const sprite = { x: 200, y: 200, depth: 2, displayWidth: 48, displayHeight: 72,
+    body: { enable: true }, setDepth(depth) { this.depth = depth; } };
+  const messages = [];
+  Object.assign(scene, {
+    fixtures: { register: () => register },
+    employees: [],
+    eventBus: { emit() {} },
+    checkoutWindow: { mode: "closed" },
+    player: { sprite, inputEnabled: true,
+      teleportTo(x, y) { sprite.x = x; sprite.y = y; }, forceFacing() {} },
+    operatingRegister: false,
+    carriedCrates: [{ id: "crate_1" }],
+    carriedCrate: { id: "crate_1" },
+    showShopMessage: (text) => messages.push(text),
+  });
+  scene.beginRegisterSession(register);
+  assert.equal(scene.operatingRegister, false);
+  assert.equal(sprite.body.enable, true);
+  assert.match(messages[0], /Put down what you're carrying/);
+
+  scene.carriedCrates = [];
+  scene.carriedCrate = null;
+  scene.beginRegisterSession(register);
+  assert.equal(scene.operatingRegister, true);
+});
+
+test("a customer arriving while the player holds crates near the register never opens checkout", () => {
+  const { scene, checkout } = createRegisterHarness();
+  delete scene.beginRegisterSession; // use the real method so its crates guard applies
+  scene.operatingRegister = false;
+  scene.operatingRegisterFixture = null;
+  scene.carriedCrates = [{ id: "crate_1" }];
+  scene.getNearbyRegisterTarget = () => scene.fixtures.register();
+  scene.showShopMessage = () => {};
+  scene.handleJoinQueue({ cart: [{ itemId: "rifle", price: 100 }] });
+  assert.equal(checkout.uiWindow.isOpen, false);
+  assert.equal(scene.operatingRegister, false);
+});
+
 test("manual save persists the current shop and confirms unchanged saves without another write", async () => {
   const { scene, writes, messages, controls } = createHarness();
   await scene.saveManually();
@@ -911,7 +967,7 @@ test("side-facing register queue and cashier align with the body box rather than
       scene.checkoutWindow = { mode: "closed" };
       scene.player = { sprite, inputEnabled: true,
         teleportTo(x, y) { sprite.x = x; sprite.y = y; }, forceFacing() {} };
-      scene.beginRegisterSession();
+      scene.beginRegisterSession(register);
       assert.equal(scene.operatingRegister, true);
       assert.equal(sprite.body.enable, false);
       assert.ok(Number.isFinite(sprite.x) && Number.isFinite(sprite.y));

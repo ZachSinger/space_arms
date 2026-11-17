@@ -46,10 +46,11 @@ function placeOneOfEachShelf(scene) {
 }
 
 /**
- * @param {Phaser.Scene} scene - the game scene, started with { sandbox: true }
- * @returns {{ noteGaveUp: (customer: object, reason: string) => void, destroy: () => void }}
+ * DEV test areas start with the top store level, a million credits, every contract signed,
+ * and every floor expansion open.
+ * @param {Phaser.Scene} scene
  */
-export function setupSandboxRoom(scene) {
+export function unlockEverything(scene) {
   const { playerState } = scene;
   playerState.shopLevel = SHOP_LEVEL_TIERS[SHOP_LEVEL_TIERS.length - 1].level;
   playerState.addCredits(SANDBOX_CREDITS, { category: "loans", label: "Test room money" });
@@ -59,6 +60,15 @@ export function setupSandboxRoom(scene) {
     if (scene.room.zones.find((zone) => zone.id === zoneId)?.locked) scene.room.unlockZone(zoneId);
   }
   scene.refreshCamera();
+}
+
+/**
+ * @param {Phaser.Scene} scene - the game scene, started with { sandbox: true }
+ * @returns {{ noteGaveUp: (customer: object, reason: string) => void, destroy: () => void }}
+ */
+export function setupSandboxRoom(scene) {
+  const { playerState } = scene;
+  unlockEverything(scene);
   placeOneOfEachShelf(scene);
   playerState.notifyListeners();
 
@@ -76,6 +86,7 @@ export function setupSandboxRoom(scene) {
     "position:fixed", "right:12px", "top:84px", "z-index:50", "width:260px",
     "padding:10px", "background:rgba(15,23,42,0.92)", "border:1px solid #38bdf8",
     "color:#e2e8f0", "font:13px monospace", "display:flex", "flex-direction:column", "gap:6px",
+    "pointer-events:auto",
   ].join(";");
   panel.innerHTML = `
     <strong style="color:#38bdf8">SHELF TEST ROOM</strong>
@@ -88,7 +99,7 @@ export function setupSandboxRoom(scene) {
     <span data-status role="status" aria-live="polite"></span>
     <ol data-trouble style="margin:0;padding-left:18px;color:#fca5a5"></ol>
   `;
-  document.body.appendChild(panel);
+  document.getElementById("ui-layer").appendChild(panel);
   const statusEl = panel.querySelector("[data-status]");
   const troubleEl = panel.querySelector("[data-trouble]");
 
@@ -148,22 +159,25 @@ export function setupSandboxRoom(scene) {
   };
   panel.addEventListener("click", onClick);
 
-  // The cashier is automatic here, so a test never stalls waiting at the register.
-  let frontWaitMs = 0;
+  // The cashier is automatic here, so a test never stalls waiting at a register.
+  const frontWaits = new Map(); // register id -> ms its front customer has stood ready
   const checkoutTimer = scene.time.addEvent({
     delay: 100,
     loop: true,
     callback: () => {
       letNextIn(100);
-      const front = scene.registerLine[0];
-      const spot = front?.queueTarget;
-      const feet = front?.sprite.body?.center ?? front?.sprite;
-      const waiting = front && front.state === "QUEUEING" && spot &&
-        Math.hypot(feet.x - spot.x, feet.y - spot.y) < 8;
-      frontWaitMs = waiting ? frontWaitMs + 100 : 0;
-      if (frontWaitMs >= AUTO_CHECKOUT_DELAY_MS) {
-        frontWaitMs = 0;
-        scene.completeSandboxCheckout(front);
+      for (const register of scene.fixtures.registers()) {
+        const front = scene.lineFor(register)[0];
+        const spot = front?.queueTarget;
+        const feet = front?.sprite.body?.center ?? front?.sprite;
+        const waiting = front && front.state === "QUEUEING" && spot &&
+          Math.hypot(feet.x - spot.x, feet.y - spot.y) < 8;
+        const waitMs = waiting ? (frontWaits.get(register.id) ?? 0) + 100 : 0;
+        frontWaits.set(register.id, waitMs);
+        if (waitMs >= AUTO_CHECKOUT_DELAY_MS) {
+          frontWaits.set(register.id, 0);
+          scene.completeSandboxCheckout(front);
+        }
       }
       render();
     },

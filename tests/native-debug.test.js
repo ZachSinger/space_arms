@@ -55,6 +55,7 @@ test("native debug captures keep numbered screenshot/report pairs and wait for w
       }
       on(name, handler) { this.handlers.set(name, handler); }
       loadURL() {}
+      setMenuBarVisibility() {}
       setEnabled(value) { this.enabled = value; }
       isDestroyed() { return this.destroyed; }
       destroy() { this.destroyed = true; }

@@ -6,7 +6,8 @@
 
 // Player speed multiplier by number of crates being pushed at once (index = count).
 export const PUSH_SPEED_BY_CRATE_COUNT = [1, 0.6, 0.4, 0.25];
-export const MAX_PUSHED_CRATES = PUSH_SPEED_BY_CRATE_COUNT.length - 1;
+// Most crates the player can move at once: everything pushed plus everything carried.
+export const MAX_MOVED_CRATES = 4;
 // px; reach() extends motion by this so touching counts as contact.
 const CONTACT_SKIN = 2;
 const EPSILON = 0.001;
@@ -67,13 +68,17 @@ function pushDirection(from, to, direction) {
  * @param {(rect:object) => boolean} options.isBlocked - true if a crate can't occupy rect
  * @param {number} [options.carriedWeight] - crates the player is carrying, added to the
  *   weight whenever anything is pushed
+ * @param {number} [options.maxMoved] - most crates moved at once, carried ones included;
+ *   customers pass Infinity since they shove anything in their way
  * @returns {{playerVelocity:{x:number,y:number}, crateVelocities: Map<any,{x:number,y:number}>}}
  */
-export function solveCratePush({ player, velocity, dt, crates, isBlocked, carriedWeight = 0 }) {
+export function solveCratePush({
+  player, velocity, dt, crates, isBlocked, carriedWeight = 0, maxMoved = MAX_MOVED_CRATES,
+}) {
   const run = (intended) => {
     const crateVelocities = new Map();
     const inChain = new Set();
-    let budget = MAX_PUSHED_CRATES;
+    let budget = maxMoved - carriedWeight;
 
     const slideAgainstStatic = (rect, v) => {
       if (!isBlocked(reach(rect, v, dt))) return v;
@@ -111,8 +116,8 @@ export function solveCratePush({ player, velocity, dt, crates, isBlocked, carrie
         const forwardShare = dot(direction, heading);
         const pushSpeed = Math.min(speed / Math.max(forwardShare, EPSILON), speed * MAX_SIDEWAYS_PUSH_SPEED);
         let achieved = 0;
-        if (!crate.locked && (crateVelocities.has(crate) || budget > 0)) {
-          if (!crateVelocities.has(crate)) budget -= 1;
+        if (!crate.locked && (crateVelocities.has(crate) || budget >= (crate.weight ?? 1))) {
+          if (!crateVelocities.has(crate)) budget -= crate.weight ?? 1;
           inChain.add(crate);
           const pushed = resolve(crate.rect, scale(direction, pushSpeed), crate);
           inChain.delete(crate);
@@ -145,7 +150,7 @@ export function solveCratePush({ player, velocity, dt, crates, isBlocked, carrie
     .filter(([, v]) => Math.hypot(v.x, v.y) > EPSILON);
   const weight = moving.reduce((sum, [crate]) => sum + (crate.weight ?? 1), 0) +
     (moving.length ? carriedWeight : 0);
-  const factor = PUSH_SPEED_BY_CRATE_COUNT[Math.min(weight, MAX_PUSHED_CRATES)];
+  const factor = PUSH_SPEED_BY_CRATE_COUNT[Math.min(weight, PUSH_SPEED_BY_CRATE_COUNT.length - 1)];
   const result = run({ x: velocity.x * factor, y: velocity.y * factor });
   const crateVelocities = new Map();
   for (const [crate, v] of result.crateVelocities) crateVelocities.set(crate.key, v);
@@ -154,6 +159,30 @@ export function solveCratePush({ player, velocity, dt, crates, isBlocked, carrie
     return !v || Math.hypot(v.x, v.y) <= EPSILON;
   });
   return { playerVelocity: keepOutOfCrates(player, result.playerVelocity, dt, still), crateVelocities };
+}
+
+// How long (ms) a customer's claim on the crates they're pushing lasts without renewal.
+export const CUSTOMER_PUSH_CLAIM_MS = 150;
+
+/**
+ * Two customers shoving the same crates: whoever is further from their destination keeps
+ * pushing. Returns the claim this customer must give way to, or null if they may push.
+ * @param {object} options
+ * @param {any} options.customer
+ * @param {number} options.distance - px this customer still has to walk
+ * @param {number} options.now - ms
+ * @param {Iterable<{customerPushClaim?: {customer:any, distance:number, time:number}}>} options.crates
+ *   the crates this customer would move this frame
+ * @param {(customer:any) => boolean} [options.isActive] - false once a claimant has left
+ */
+export function findCratePushRival({ customer, distance, now, crates, isActive = () => true }) {
+  for (const crate of crates) {
+    const claim = crate.customerPushClaim;
+    if (!claim || claim.customer === customer || !isActive(claim.customer)) continue;
+    if (now - claim.time > CUSTOMER_PUSH_CLAIM_MS) continue;
+    if (claim.distance >= distance) return claim;
+  }
+  return null;
 }
 
 // How far a rect sits inside a crate, measured along the shallower side (0 if apart).

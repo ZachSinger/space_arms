@@ -40,10 +40,11 @@ export function sumMoney(values) {
   return fromCents(values.reduce((sum, value) => sum + toCents(value), 0));
 }
 
-export function formatMoney(value) {
+/** The number part of a money amount, e.g. 1,234.50 — no currency word. */
+export function formatMoneyAmount(value) {
   const normalized = fromCents(toCents(value));
-  return `${normalized.toLocaleString("en-US", {
+  return normalized.toLocaleString("en-US", {
     minimumFractionDigits: Number.isInteger(normalized) ? 0 : 2,
     maximumFractionDigits: 2,
-  })} credits`;
+  });
 }

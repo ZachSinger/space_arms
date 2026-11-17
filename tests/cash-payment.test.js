@@ -4,15 +4,15 @@ import {
   CashPayment, CASH_DENOMINATIONS, M_SCRIP_DENOMINATIONS, creditCentsToScrips,
   formatCashAmount, splitCash,
 } from "../js/logic/CashPayment.js";
-import { formatMoney, fromCents, isMoney, roundMoney, sumMoney, toCents } from "../js/logic/Money.js";
+import { formatMoneyAmount, fromCents, isMoney, roundMoney, sumMoney, toCents } from "../js/logic/Money.js";
 
 test("money arithmetic and formatting preserve cents without floating-point drift", () => {
   assert.equal(sumMoney([0.1, 0.2]), 0.3);
   assert.equal(sumMoney(Array(10000).fill(0.01)), 100);
   assert.equal(sumMoney([1500, 1.23, -250, -25]), 1226.23);
   assert.equal(roundMoney(108.90000000000001), 108.9);
-  assert.equal(formatMoney(1234.5), "1,234.50 credits");
-  assert.equal(formatMoney(1500), "1,500 credits");
+  assert.equal(formatMoneyAmount(1234.5), "1,234.50");
+  assert.equal(formatMoneyAmount(1500), "1,500");
   for (const invalid of [NaN, Infinity, 1.001, "1.25", Number.MAX_SAFE_INTEGER]) {
     assert.equal(isMoney(invalid), false);
     assert.throws(() => toCents(invalid), /Money must/);

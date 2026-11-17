@@ -462,25 +462,24 @@ export function validateFixtureLayout(placements, {
       return invalid("Move the player or crate out of the way first.");
     }
   }
-  // Customers only support one checkout line for now.
+  // Each register runs its own checkout line.
   const registers = placements.filter((placement) => getFixtureType(placement.type).kind === "register");
-  if (registers.length !== 1) return invalid("The shop needs exactly one register.");
+  if (registers.length === 0) return invalid("The shop needs a register.");
+  const registerIds = new Set(registers.map((placement) => placement.id));
   const requirements = placements.map((placement) => {
-    const isRegister = placement === registers[0];
+    const isRegister = registerIds.has(placement.id);
     const front = fixtureAccessCells(placement);
     return {
       id: placement.id, type: placement.type, placement, isRegister, front,
       back: isRegister ? fixtureAccessCells(placement, true) : [],
     };
   });
-  const step = fixtureFacingStep(registers[0]);
   // The caller scopes this cache to a fixed room/layout snapshot.
-  const cacheKey = connectivityCache && JSON.stringify([
+  const cacheKey = connectivityCache && JSON.stringify(
     placements.map((placement) => [
       placement.id, placement.type, placement.gx, placement.gy, fixtureRotation(placement),
     ]),
-    step,
-  ]);
+  );
   if (connectivityCache?.has(cacheKey)) return connectivityCache.get(cacheKey);
   const remember = (result) => {
     connectivityCache?.set(cacheKey, result);
@@ -531,97 +530,122 @@ export function validateFixtureLayout(placements, {
     accessCells.set(id, usableFront);
   }
   if (floor.hasCutOffFloor()) return remember(invalid("This placement cuts off part of the shop."));
-  const queueStart = access.get(registers[0].id);
-  // Prefer a line in front; in tight rooms it can turn beside, but never behind, the counter.
-  // It may pass in front of shelves because customers don't block each other.
-  const queueFloor = (gx, gy) => canWalk(gx, gy) && !reservedCells.has(`${gx},${gy}`);
-  const canQueue = (gx, gy) => queueFloor(gx, gy) &&
-    (gx - queueStart.gx) * step.dx + (gy - queueStart.gy) * step.dy >= 0;
-  const isConnectedQueue = (cells) => cells.length === queueSize && cells.every((cell, index) => index === 0 ||
-    Math.abs(cell.gx - cells[index - 1].gx) + Math.abs(cell.gy - cells[index - 1].gy) === 1);
-  const bounds = fixtureBounds(registers[0]);
-  const backEdge = step.dx ? (step.dx < 0 ? bounds.right : bounds.left) :
-    (step.dy < 0 ? bounds.bottom : bounds.top);
-  const isBesideOrInFront = (gx, gy) =>
-    (step.dx ? (gx + 0.5 - backEdge) * step.dx : (gy + 0.5 - backEdge) * step.dy) >= 0;
-  const registerBounds = fixturePixelBounds(registers[0]);
-  const registerBody = {
-    width: registerBounds.right - registerBounds.left, height: registerBounds.bottom - registerBounds.top,
-    center: { x: (registerBounds.left + registerBounds.right) / 2, y: (registerBounds.top + registerBounds.bottom) / 2 },
-  };
-  const customerBody = accessBody(registers[0], false);
-  let queueReachability;
-  let queuePoints;
-  const acceptPoints = (points, clearRegister = false) => {
-    if (points.length !== queueSize || points.some((point, index) =>
-      reservedCells.has(`${Math.floor(point.x / TILE_SIZE)},${Math.floor(point.y / TILE_SIZE)}`) ||
-      points.slice(0, index).some((other) =>
-        Math.hypot(point.x - other.x, point.y - other.y) < MIN_REGISTER_QUEUE_SEPARATION) ||
-      (clearRegister && rectanglesOverlap({
-        left: point.x + customerBody.left, right: point.x + customerBody.right,
-        top: point.y + customerBody.top, bottom: point.y + customerBody.bottom,
-      }, registerBounds)))) return false;
-    const reach = getQueueReachability();
-    if (points.some((point) => !reach.reachesSpot(point, customerBody))) return false;
-    queuePoints = points;
-    return true;
-  };
-  function getQueueReachability() {
-    if (!queueReachability) {
-      const solids = placements.map((placement) => {
-        const solid = fixturePixelBounds(placement);
-        if (placement === registers[0]) {
-          if (step.dx < 0) solid.left += REGISTER_FRONT_OVERLAP;
-          else if (step.dx > 0) solid.right -= REGISTER_FRONT_OVERLAP;
-          else if (step.dy < 0) solid.top += REGISTER_FRONT_OVERLAP;
-          else solid.bottom -= REGISTER_FRONT_OVERLAP;
-        }
-        return solid;
-      });
-      queueReachability = reachableFloor(solids);
-    }
-    return queueReachability;
-  }
+
+  // One checkout line per register. Earlier registers' lines reserve their floor so the
+  // next register's line can't be planned through them.
+  const queueFloorReserved = new Set(reservedCells);
   const toWorld = ({ gx, gy }) => ({ x: (gx + 0.5) * TILE_SIZE, y: (gy + 0.5) * TILE_SIZE });
-  const acceptCells = (cells) => acceptPoints(positionRegisterQueue(cells.map(toWorld), registerBody, step));
-  let queueCells = planRegisterQueue(queueStart, step, entrance, canQueue, canWalk, queueSize, acceptCells);
-  if (!isConnectedQueue(queueCells)) {
-    const canQueueBeside = (gx, gy) => queueFloor(gx, gy) && isBesideOrInFront(gx, gy);
-    const beside = planRegisterQueue(queueStart, step, entrance, canQueueBeside, canWalk, queueSize, acceptCells);
-    if (isConnectedQueue(beside)) queueCells = beside;
-  }
-  if (!isConnectedQueue(queueCells)) {
-    const spot = fixtureStandingSpot(registers[0], queueStart);
-    const start = { gx: Math.floor(spot.x / TILE_SIZE), gy: Math.floor(spot.y / TILE_SIZE) };
-    const startKey = cellKey(start);
-    if (isWalkable(start.gx, start.gy) && !reservedCells.has(startKey)) {
-      const canQueueFromSpot = (gx, gy) => `${gx},${gy}` === startKey ||
-        (queueFloor(gx, gy) && isBesideOrInFront(gx, gy));
-      const accept = (cells) => {
-        const path = [spot, ...cells.slice(1).map(toWorld)];
-        return acceptPoints(spreadRegisterQueue(path, queueSize), true);
-      };
-      const fromSpot = planRegisterQueue(start, step, entrance, canQueueFromSpot, canWalk, queueSize, accept);
-      if (isConnectedQueue(fromSpot)) queueCells = fromSpot;
+  const planQueueFor = (register) => {
+    const queueStart = access.get(register.id);
+    const step = fixtureFacingStep(register);
+    // Prefer a line in front; in tight rooms it can turn beside, but never behind, the counter.
+    // It may pass in front of shelves because customers don't block each other.
+    const queueFloor = (gx, gy) => canWalk(gx, gy) && !queueFloorReserved.has(`${gx},${gy}`);
+    const canQueue = (gx, gy) => queueFloor(gx, gy) &&
+      (gx - queueStart.gx) * step.dx + (gy - queueStart.gy) * step.dy >= 0;
+    const isConnectedQueue = (cells) => cells.length === queueSize && cells.every((cell, index) => index === 0 ||
+      Math.abs(cell.gx - cells[index - 1].gx) + Math.abs(cell.gy - cells[index - 1].gy) === 1);
+    const bounds = fixtureBounds(register);
+    const backEdge = step.dx ? (step.dx < 0 ? bounds.right : bounds.left) :
+      (step.dy < 0 ? bounds.bottom : bounds.top);
+    const isBesideOrInFront = (gx, gy) =>
+      (step.dx ? (gx + 0.5 - backEdge) * step.dx : (gy + 0.5 - backEdge) * step.dy) >= 0;
+    const registerBounds = fixturePixelBounds(register);
+    const registerBody = {
+      width: registerBounds.right - registerBounds.left, height: registerBounds.bottom - registerBounds.top,
+      center: { x: (registerBounds.left + registerBounds.right) / 2, y: (registerBounds.top + registerBounds.bottom) / 2 },
+    };
+    const customerBody = accessBody(register, false);
+    let queueReachability;
+    let queuePoints;
+    const acceptPoints = (points, clearRegister = false) => {
+      if (points.length !== queueSize || points.some((point, index) =>
+        queueFloorReserved.has(`${Math.floor(point.x / TILE_SIZE)},${Math.floor(point.y / TILE_SIZE)}`) ||
+        points.slice(0, index).some((other) =>
+          Math.hypot(point.x - other.x, point.y - other.y) < MIN_REGISTER_QUEUE_SEPARATION) ||
+        (clearRegister && rectanglesOverlap({
+          left: point.x + customerBody.left, right: point.x + customerBody.right,
+          top: point.y + customerBody.top, bottom: point.y + customerBody.bottom,
+        }, registerBounds)))) return false;
+      const reach = getQueueReachability();
+      if (points.some((point) => !reach.reachesSpot(point, customerBody))) return false;
+      queuePoints = points;
+      return true;
+    };
+    function getQueueReachability() {
+      if (!queueReachability) {
+        const solids = placements.map((placement) => {
+          const solid = fixturePixelBounds(placement);
+          if (placement === register) {
+            if (step.dx < 0) solid.left += REGISTER_FRONT_OVERLAP;
+            else if (step.dx > 0) solid.right -= REGISTER_FRONT_OVERLAP;
+            else if (step.dy < 0) solid.top += REGISTER_FRONT_OVERLAP;
+            else solid.bottom -= REGISTER_FRONT_OVERLAP;
+          }
+          return solid;
+        });
+        queueReachability = reachableFloor(solids);
+      }
+      return queueReachability;
     }
-  }
-  if (!isConnectedQueue(queueCells)) {
-    // Whole floor squares are too coarse when the counter sits between them: trace the line
-    // over the real open floor instead.
-    const traced = traceRegisterQueue({
-      spot: fixtureStandingSpot(registers[0], queueStart), step, backEdge: backEdge * TILE_SIZE,
-      reach: getQueueReachability(), customerBody, registerBounds, reservedCells, queueSize,
-      doorSteps: stepsToEntrance(entrance, isWalkable), accept: (points) => acceptPoints(points, true),
-    });
-    if (traced) {
-      queueCells = traced.map(({ x, y }) => ({ gx: Math.floor(x / TILE_SIZE), gy: Math.floor(y / TILE_SIZE) }));
-    } else {
-      return remember(invalid("Leave room in front of the register for the customer queue."));
+    const acceptCells = (cells) => acceptPoints(positionRegisterQueue(cells.map(toWorld), registerBody, step));
+    let queueCells = planRegisterQueue(queueStart, step, entrance, canQueue, canWalk, queueSize, acceptCells);
+    if (!isConnectedQueue(queueCells)) {
+      const canQueueBeside = (gx, gy) => queueFloor(gx, gy) && isBesideOrInFront(gx, gy);
+      const beside = planRegisterQueue(queueStart, step, entrance, canQueueBeside, canWalk, queueSize, acceptCells);
+      if (isConnectedQueue(beside)) queueCells = beside;
+    }
+    if (!isConnectedQueue(queueCells)) {
+      const spot = fixtureStandingSpot(register, queueStart);
+      const start = { gx: Math.floor(spot.x / TILE_SIZE), gy: Math.floor(spot.y / TILE_SIZE) };
+      const startKey = cellKey(start);
+      if (isWalkable(start.gx, start.gy) && !queueFloorReserved.has(startKey)) {
+        const canQueueFromSpot = (gx, gy) => `${gx},${gy}` === startKey ||
+          (queueFloor(gx, gy) && isBesideOrInFront(gx, gy));
+        const accept = (cells) => {
+          const path = [spot, ...cells.slice(1).map(toWorld)];
+          return acceptPoints(spreadRegisterQueue(path, queueSize), true);
+        };
+        const fromSpot = planRegisterQueue(start, step, entrance, canQueueFromSpot, canWalk, queueSize, accept);
+        if (isConnectedQueue(fromSpot)) queueCells = fromSpot;
+      }
+    }
+    if (!isConnectedQueue(queueCells)) {
+      // Whole floor squares are too coarse when the counter sits between them: trace the line
+      // over the real open floor instead.
+      const traced = traceRegisterQueue({
+        spot: fixtureStandingSpot(register, queueStart), step, backEdge: backEdge * TILE_SIZE,
+        reach: getQueueReachability(), customerBody, registerBounds,
+        reservedCells: queueFloorReserved, queueSize,
+        doorSteps: stepsToEntrance(entrance, isWalkable), accept: (points) => acceptPoints(points, true),
+      });
+      if (traced) {
+        queueCells = traced.map(({ x, y }) => ({ gx: Math.floor(x / TILE_SIZE), gy: Math.floor(y / TILE_SIZE) }));
+      } else {
+        return null;
+      }
+    }
+    return { queueCells, queuePoints };
+  };
+
+  const queuePointsById = new Map();
+  let firstQueue = null;
+  for (const register of registers) {
+    const queue = planQueueFor(register);
+    if (!queue) {
+      return remember(invalid("Leave room in front of each register for its customer queue."));
+    }
+    queuePointsById.set(register.id, queue.queuePoints);
+    firstQueue ??= queue;
+    for (const cell of queue.queueCells) queueFloorReserved.add(cellKey(cell));
+    for (const point of queue.queuePoints) {
+      queueFloorReserved.add(`${Math.floor(point.x / TILE_SIZE)},${Math.floor(point.y / TILE_SIZE)}`);
     }
   }
   return remember({
     valid: true, reason: "Click to place. Contents stay on the fixture.",
-    blockedCells, access, accessCells, queueCells, queuePoints,
+    blockedCells, access, accessCells, queuePointsById,
+    queueCells: firstQueue.queueCells, queuePoints: firstQueue.queuePoints,
   });
 }
 

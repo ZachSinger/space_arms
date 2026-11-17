@@ -10,17 +10,37 @@ import { BootScene } from "./boot.js";
 import { ShelfLabScene } from "./shelfLab.js";
 import { CrateLabScene } from "./crateLab.js";
 import { watchKeyboardAndMouse } from "../logic/InputDevice.js";
+import {
+  DESIGN_HEIGHT,
+  DESIGN_WIDTH,
+  applyGameRenderResolution,
+  resizeGameContainer,
+  setGameDisplaySettings,
+} from "../logic/GameViewport.js";
 
 // Touching the keyboard or mouse switches on-screen prompts back from controller buttons.
 watchKeyboardAndMouse();
 
+const gameContainer = document.getElementById("game-container");
+let game;
+const resizeViewport = () => {
+  resizeGameContainer(gameContainer);
+  if (game?.canvas) {
+    game.scale.refresh();
+    applyGameRenderResolution(game);
+  }
+};
+resizeViewport();
+window.addEventListener("resize", resizeViewport);
+window.addEventListener("game-viewport-changed", resizeViewport);
+
 const config = {
   type: Phaser.AUTO,
-  parent: "game-container",
+  parent: gameContainer,
   scale: {
-    mode: Phaser.Scale.RESIZE,
-    width: "100%",
-    height: "100%",
+    mode: Phaser.Scale.NONE,
+    width: DESIGN_WIDTH,
+    height: DESIGN_HEIGHT,
   },
   physics: {
     default: "arcade",
@@ -33,4 +53,10 @@ const config = {
 };
 
 // Exposed for devtools/debugging convenience (e.g. `window.__game.scene.getScene(...)`).
-window.__game = new Phaser.Game(config);
+window.__game = game = new Phaser.Game(config);
+game.events.once("ready", () => applyGameRenderResolution(game));
+if (window.desktopApi) {
+  window.desktopApi.getDisplaySettings()
+    .then(setGameDisplaySettings)
+    .catch((error) => console.error("Could not load display settings:", error));
+}

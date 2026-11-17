@@ -32,8 +32,7 @@ export class ControlMode {
     const hasBlockingModal = openWindows.some((window) =>
       !scene.operatingRegister || !REGISTER_WINDOWS.has(window.id));
     const placementBlocked = scene.fixturePlacement?.active && (
-      openWindows.some((window) => window !== scene.fixturePlacement.uiWindow &&
-        window.element?.classList.contains("active")) ||
+      openWindows.some((window) => window.element?.classList.contains("active")) ||
       scene.uiNavigator?.hasScope?.()
     );
 

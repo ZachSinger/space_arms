@@ -28,6 +28,7 @@ test("native saves replace atomically, serialize writes, recover from errors, an
       }
       on(name, handler) { this.handlers.set(name, handler); }
       loadURL() {}
+      setMenuBarVisibility() {}
       setEnabled(value) { this.enabled = value; }
       isDestroyed() { return this.destroyed; }
       destroy() { this.destroyed = true; }

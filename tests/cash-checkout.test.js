@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { CashPayment, getCashDenominations } from "../js/logic/CashPayment.js";
 import { ChitPayment } from "../js/logic/ChitPayment.js";
-import { cashFaceValue, CheckoutRenderer } from "../js/logic/CheckoutRenderer.js";
+import { cashFaceValue, CheckoutRenderer, renderCurrentChange } from "../js/logic/CheckoutRenderer.js";
 
 let server;
 let cacheDirectory;
@@ -57,7 +57,7 @@ function harness({ cash = true, tender = 5, chit = false } = {}) {
   const element = () => {
     const classes = new Set();
     return {
-      textContent: "", innerHTML: "", dataset: {}, listeners: new Map(),
+      textContent: "", innerHTML: "", dataset: {}, listeners: new Map(), style: {},
       classList: {
         add: (name) => classes.add(name), remove: (name) => classes.delete(name),
         contains: (name) => classes.has(name),
@@ -73,6 +73,7 @@ function harness({ cash = true, tender = 5, chit = false } = {}) {
     "#checkout-payment", "#checkout-cash", "#checkout-change-current", ".checkout-belt",
     "#checkout-change-selected", "#checkout-change-pile", "#checkout-total-value",
     "#checkout-chit", "#checkout-chit-progress", "#checkout-chit-feedback",
+    "#checkout-chit-timer", "#checkout-chit-timer-fill", "#checkout-chit-time-left",
   ]) elements.set(selector, element());
   const button = element();
   button.dataset.cashUnits = "1";
@@ -200,7 +201,7 @@ test("scanning requires a click or actual mouse movement while holding the butto
   cards[2].listeners.get("mousedown")();
   assert.deepEqual(scanned, cards);
   assert.equal(payments, 1);
-  assert.equal(h.elements.get("#checkout-total-value").textContent, "6 credits");
+  assert.equal(h.elements.get("#checkout-total-value").textContent, "6");
 });
 
 test("cash customers hand over money once scanning ends, with no total to key in", (context) => {
@@ -229,7 +230,7 @@ test("cash customers hand over money once scanning ends, with no total to key in
   assert.equal(keypadPanel.classList.contains("counting-change"), true);
   assert.equal(h.checkout.uiWindow.element.classList.contains("checkout-narrow"), true);
   assert.equal(h.elements.get("#checkout-total-value").innerHTML,
-    '1.23 credits - <span class="checkout-paid">5 credits</span>');
+    '1.23 - <span class="checkout-paid">5</span>');
 });
 
 test("the held scan gesture is released before customer cash can be swept up", (context) => {
@@ -261,7 +262,7 @@ test("drawer clicks and right-clicks adjust change, and Space rejects mistakes u
   h.checkout.startTakingPayment();
   h.takeAll();
   h.button.listeners.get("click")();
-  assert.equal(h.elements.get("#checkout-change-selected").innerHTML, "0.01 <small>credits</small>");
+  assert.equal(h.elements.get("#checkout-change-selected").innerHTML, "0.01");
   const current = h.elements.get("#checkout-change-current").classList;
   assert.equal(current.contains("change-exact") || current.contains("change-over"), false);
   h.checkout.cashPayment.change = new Map([[1, 377]]);
@@ -276,7 +277,7 @@ test("drawer clicks and right-clicks adjust change, and Space rejects mistakes u
   let prevented = 0;
   h.button.listeners.get("contextmenu")({ preventDefault: () => { prevented += 1; } });
   assert.equal(h.checkout.cashPayment.changeUnits, 0);
-  assert.equal(h.elements.get("#checkout-change-selected").innerHTML, "0 <small>credits</small>");
+  assert.equal(h.elements.get("#checkout-change-selected").innerHTML, "0.00");
   const space = { key: " ", preventDefault: () => { prevented += 1; } };
   assert.equal(h.checkout.usesSpaceKey(), true);
   assert.ok(h.button.listeners.has("mousedown"));
@@ -398,6 +399,36 @@ test("a third wrong Explorer Chit key in one order loses the sale", () => {
   assert.equal(h.completed(), 0, "no more keys count once the sale is lost");
 });
 
+test("each Chit attempt gets 10 seconds; only a mistake restarts the clock", (context) => {
+  context.mock.timers.enable({ apis: ["setInterval", "Date"] });
+  const h = harness({ cash: false, chit: true });
+  let failed = 0;
+  h.checkout.onChitFailed = () => { failed += 1; };
+  h.checkout.startChitPayment();
+  const timer = h.elements.get("#checkout-chit-timer");
+  context.mock.timers.tick(5600);
+  assert.equal(h.elements.get("#checkout-chit-time-left").textContent, "4.4s");
+  assert.equal(timer.classList.contains("low"), true, "under half turns the bar amber");
+  h.checkout.enterChitDigit(3);
+  assert.equal(h.elements.get("#checkout-chit-time-left").textContent, "4.4s", "a right key keeps the clock running");
+  h.checkout.enterChitDigit(2);
+  assert.equal(h.elements.get("#checkout-chit-time-left").textContent, "10.0s", "a wrong key refills the bar");
+  assert.equal(timer.classList.contains("low"), false);
+  context.mock.timers.tick(9950);
+  assert.equal(timer.classList.contains("critical"), true, "almost out turns the bar red");
+  context.mock.timers.tick(100);
+  assert.equal(h.checkout.chitMistakes, 2, "running out counts as a mistake");
+  assert.match(h.elements.get("#checkout-chit-feedback").textContent, /TOO SLOW. START OVER. ONE MORE MISTAKE/);
+  assert.equal(h.elements.get("#checkout-chit-time-left").textContent, "10.0s");
+  h.checkout.paused = true;
+  context.mock.timers.tick(30000);
+  assert.equal(failed, 0, "the clock holds while the shift is paused");
+  h.checkout.paused = false;
+  context.mock.timers.tick(10050);
+  assert.equal(failed, 1, "the third mistake, even by running out, loses the sale");
+  assert.equal(h.checkout.paymentStage, "lost");
+});
+
 test("about half of customers pay cash, with a clear card keypad prompt", () => {
   assert.equal(CASH_PAYMENT_CHANCE, 0.5);
   assert.equal(customerPaysCash(() => 0.49), true);
@@ -424,7 +455,9 @@ test("the change drawer shows bare numbers on bills and coins, with no row headi
   const faces = [...html.matchAll(/class="cash-art"><span>([^<]*)</g)].map((match) => match[1]);
   assert.deepEqual(faces, ["1", "5", "10", "20", "1", "5", "10", "25", "50"]);
   assert.doesNotMatch(html, /HAND OVER CHANGE/);
-  assert.match(html, /3\.77 <small>credits<\/small>/);
+  assert.match(html, /CHANGE OWED<\/span><strong>3\.77<\/strong>/);
+  assert.equal(renderCurrentChange(1000, "credits"), "10.00");
+  assert.equal(renderCurrentChange(0, "credits"), "0.00");
   assert.equal((html.match(/data-cash-units=/g) ?? []).length, 9);
 });
 
@@ -459,7 +492,7 @@ test("Explorer Chit display fits a five-digit code and shows all five input spac
   assert.match(css, /\.chit-card\s*\{[^}]*min-height:\s*calc\(240px \* var\(--text-scale\)\)/s);
   assert.match(html, /class="chit-screen"/);
   assert.match(html, /EXPLORER TRAVEL CHIT/);
-  assert.match(html, /VALUE: <strong>100 credits/);
+  assert.match(html, /VALUE: <strong>100</);
   assert.match(html, /ACCESS CODE: <strong class="chit-code">3 1 4 2 1/);
   assert.match(html, /id="checkout-chit-progress">INPUT: _ _ _ _ _</);
   assert.match(html, /data-chit-digit="1" aria-label="Up, key 1"/);

@@ -5,6 +5,7 @@
 // couple of pillars to push against. Crates use the shop's controls (pick up, stack, drop,
 // throw, push). Opened from the title screen's DEV option. Nothing here touches the saved game.
 import Phaser from "phaser";
+import { installSceneTextSize } from "../logic/GameTextSize.js";
 import { TILE_SIZE } from "../logic/RoomLayout.js";
 import { getItemCrateTint } from "../logic/CrateCategory.js";
 import { Crate, CRATE_STACK_SPACING, INTERACT_RANGE } from "../logic/Crate.js";
@@ -39,6 +40,7 @@ export class CrateLabScene extends Phaser.Scene {
   }
 
   create() {
+    installSceneTextSize(this, Phaser);
     // Floor crates are named like the shop's, which Crate reads when finding a clear drop spot.
     this.restockCrates = [];
     this.carriedCrates = [];
@@ -54,7 +56,6 @@ export class CrateLabScene extends Phaser.Scene {
     this.cameras.main.setViewport(0, HEADER_HEIGHT, this.scale.width,
       this.scale.height - HEADER_HEIGHT - FOOTER_HEIGHT).setBackgroundColor("#1e1b4b");
     this.uiCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height);
-
     this.items = (this.cache.json.get("items") ?? []).filter((item) => item.boxSize > 0);
     this.roomWidth = ROOM.columns * TILE_SIZE;
     this.roomHeight = ROOM.rows * TILE_SIZE;
@@ -580,21 +581,18 @@ export class CrateLabScene extends Phaser.Scene {
   }
 
   // Loose crates get pushed when the player walks into them, as in the shop. A floor stack is
-  // as heavy as its height, and whatever you're carrying adds to the load; a full-height stack
-  // won't budge while you're carrying anything.
+  // as heavy as its height, and whatever you're carrying adds to the load; you can never move
+  // more than MAX_MOVED_CRATES in total.
   updateCratePushing(delta) {
     const body = this.player.sprite.body;
     const rectOf = (b) => ({ left: b.x, top: b.y, width: b.width, height: b.height });
     const holding = this.carriedCrates.length;
     const crates = this.restockCrates
       .filter((crate) => crate.isPushed || crate.isStationary() || crate.isSliding())
-      .map((crate) => {
-        const height = 1 + (this.floorStacks.get(crate)?.length ?? 0);
-        return {
-          key: crate, rect: rectOf(crate.sprite.body), weight: height,
-          locked: holding > 0 && height >= FLOOR_STACK_MAX,
-        };
-      });
+      .map((crate) => ({
+        key: crate, rect: rectOf(crate.sprite.body),
+        weight: 1 + (this.floorStacks.get(crate)?.length ?? 0), locked: false,
+      }));
     const { playerVelocity, crateVelocities } = solveCratePush({
       player: rectOf(body),
       velocity: body.velocity,

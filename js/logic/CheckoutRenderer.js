@@ -5,7 +5,7 @@
 import {
   creditCentsToScrips, formatCashAmount, getCashDenominations,
 } from "./CashPayment.js";
-import { formatMoney, toCents } from "./Money.js";
+import { formatMoneyAmount, toCents } from "./Money.js";
 
 // The number printed on a bill or coin; its shape shows which it is.
 export function cashFaceValue({ kind, units }, currency = "credits") {
@@ -15,6 +15,9 @@ export function cashFaceValue({ kind, units }, currency = "credits") {
 }
 
 export function renderCurrentChange(units, currency) {
+  if (currency === "credits") return (units / 100).toLocaleString("en-US", {
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  });
   const [amount, currencyName] = formatCashAmount(units, currency).split(" ");
   return `${amount} <small>${currencyName}</small>`;
 }
@@ -30,10 +33,8 @@ function renderDrawer(kind, currency) {
 }
 
 function formatCheckoutTotal(total, currency) {
-  const cents = toCents(total);
-  return currency === "m-scrips"
-    ? formatCashAmount(creditCentsToScrips(cents), currency)
-    : formatCashAmount(cents, "credits");
+  if (currency === "m-scrips") return formatCashAmount(creditCentsToScrips(toCents(total)), currency);
+  return formatMoneyAmount(total);
 }
 
 function renderChit(chitPayment) {
@@ -43,13 +44,17 @@ function renderChit(chitPayment) {
       <div class="chit-card">
         <div class="chit-screen">
           <span class="chit-title">EXPLORER TRAVEL CHIT</span>
-          <span>VALUE: <strong>${formatMoney(chitPayment.total)}</strong></span>
+          <span>VALUE: <strong>${formatMoneyAmount(chitPayment.total)}</strong></span>
           <span>ACCESS CODE: <strong class="chit-code">${chitPayment.code.split("").join(" ")}</strong></span>
         </div>
       </div>
       <div class="chit-input-help kbd-only">Enter the code with the arrow keys or click a key.</div>
       <div class="chit-input-help pad-only">Enter the code with the D-pad.</div>
       <div class="chit-progress" id="checkout-chit-progress">INPUT: ${Array.from(chitPayment.code, () => "_").join(" ")}</div>
+      <div class="chit-timer" id="checkout-chit-timer">
+        <div class="chit-timer-label"><span>TIME LEFT</span><span id="checkout-chit-time-left">10.0s</span></div>
+        <div class="chit-timer-track"><div class="chit-timer-fill" id="checkout-chit-timer-fill"></div></div>
+      </div>
       <div class="chit-keypad">
         <button type="button" data-chit-digit="1" aria-label="Up, key 1">↑ <span>1</span></button>
         <button type="button" data-chit-digit="2" aria-label="Down, key 2">↓ <span>2</span></button>

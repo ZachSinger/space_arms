@@ -36,8 +36,10 @@ function fixtureScene() {
     customerPool: { totalCustomers: 4, stockScaler: 0.5 },
     customerArrivalSchedule: [{ atMs: 2000, factionId: "mercenaries" }, { atMs: 8000, factionId: null }],
     nextScheduledArrival: 1,
-    customers: [customer], registerLine: [customer],
-    fixtures: { all: () => [fixture] },
+    customers: [customer],
+    registerLines: new Map([["register", [customer]]]),
+    lineFor: (register) => register.id === "register" ? [customer] : [],
+    fixtures: { all: () => [fixture], registers: () => [{ id: "register" }] },
     restockCrates: [{ serialize: () => ({ itemId: "ammo", quantity: 5, velocityX: NaN }) }],
     carriedCrate: null,
     room: { zones: [{ id: "sales_floor", locked: false }] },
@@ -80,7 +82,7 @@ test("debug snapshots detach raw runtime state without save validation or Phaser
   const snapshot = createDebugSnapshot(scene, () => 7, [], environment());
   assert.equal(snapshot.formatVersion, 1);
   assert.deepEqual(snapshot.player.activeFactions, ["mercenaries"]);
-  assert.deepEqual(snapshot.traffic.registerLine, [7]);
+  assert.deepEqual(snapshot.traffic.registerLines, { register: [7] });
   assert.equal(snapshot.traffic.remainingScheduledArrivals, 1);
   assert.deepEqual(snapshot.customers[0].primaryBought, ["ammo"]);
   assert.deepEqual(snapshot.customers[0].shoppingPlan.shelfIds, ["shelf_1"]);

@@ -42,7 +42,7 @@ before(async () => {
       },
       load(id) {
         if (id === "\0crate-controls-test-database") {
-          return 'export const database = { getItem: (id) => ({ id, name: "Test item", slots: id === "single" ? 1 : 2, boxSize: id === "single" ? 1 : 2, dimensions: { w: 2, h: 1 }, stackSize: 3 }), getAllItems: () => [{ id: "rifle", name: "Test rifle" }, { id: "pistol", name: "Test pistol" }] };';
+          return 'export const database = { getItem: (id) => ({ id, name: "Test item", slots: id === "single" ? 1 : 2, boxSize: id === "single" ? 1 : 2, dimensions: { w: 2, h: 1 }, stackSize: 3 }), getAllItems: () => [{ id: "rifle", name: "Test rifle", boxSize: 1 }, { id: "pistol", name: "Test pistol", boxSize: 3 }] };';
         }
       },
     }],
@@ -87,6 +87,7 @@ function createHarness({ carrying = false } = {}) {
   scene.fixtures = {
     shelves: () => [],
     register: () => null,
+    registers: () => [],
     ofKind: () => [],
     displayName: () => "SHELF",
   };
@@ -194,9 +195,11 @@ function carry(scene, crates) {
 // A register beside the player; packing the Go-Backs is counted rather than run.
 function addNearbyRegister(scene) {
   let packs = 0;
-  scene.fixtures.register = () => ({
+  const register = {
     sprite: { getBounds: () => ({ left: 80, right: 120, top: 80, bottom: 120, centerX: 100, centerY: 100 }) },
-  });
+  };
+  scene.fixtures.register = () => register;
+  scene.fixtures.registers = () => [register];
   scene.packGoBacks = () => { packs += 1; return 0; };
   return () => packs;
 }
@@ -212,7 +215,7 @@ function itemCrate(itemId, quantity, options = {}) {
   });
 }
 
-test("with empty hands, tapping E opens the fixture you face and holding E picks it up to move", () => {
+test("with empty hands, E opens the fixture you face and holding Ctrl picks it up to move", () => {
   const h = createHarness();
   // The player faces right, so a shelf facing left looks back at him.
   const shelf = { id: "shelf_1", type: "shelf_budget_2x2", gx: 3, gy: 1, rotation: 1 };
@@ -225,32 +228,31 @@ test("with empty hands, tapping E opens the fixture you face and holding E picks
   h.scene.handleInteract = () => { opened += 1; };
   h.scene.fixturePlacement = { active: false, begin: (id) => moved.push(id) };
 
-  h.scene.startInteractPress();
-  assert.equal(opened, 0, "nothing happens until E is released or held");
-  h.scene.endInteractPress();
-  assert.deepEqual([opened, moved], [1, []]);
+  // Releasing Ctrl before the hold fires moves nothing.
+  h.scene.startFixtureMovePress();
+  assert.equal(h.scene.fixtureMovePress.fixture, shelf);
+  h.scene.fixtureMovePress = null;
+  h.scene.updateFixtureMovePress();
+  assert.deepEqual(moved, []);
 
-  h.scene.startInteractPress();
+  h.scene.startFixtureMovePress();
   h.scene.time.now += HOLD_KEY_MS;
-  h.scene.updateInteractPress();
-  h.scene.endInteractPress();
-  assert.deepEqual([opened, moved], [1, ["shelf_1"]]);
+  h.scene.updateFixtureMovePress();
+  assert.deepEqual([opened, moved], [0, ["shelf_1"]]);
 
-  // A shelf he isn't looking at (behind him) is never picked up; E just opens it.
+  // A shelf he isn't looking at (behind him) is never picked up.
   shelf.rotation = 3;
-  h.scene.startInteractPress();
-  assert.equal(h.scene.interactPress, null);
-  assert.equal(opened, 2);
+  h.scene.startFixtureMovePress();
+  assert.equal(h.scene.fixtureMovePress, null);
   shelf.rotation = 1;
 
-  // Carrying a crate, or the store being open, makes E act at once like before.
+  // While the store is open, Ctrl never picks a fixture up.
   h.scene.canRearrangeFixtures = () => false;
-  h.scene.startInteractPress();
-  assert.equal(opened, 3);
-  assert.equal(h.scene.interactPress, null);
+  h.scene.startFixtureMovePress();
+  assert.equal(h.scene.fixtureMovePress, null);
 });
 
-test("with empty hands, holding E while facing the trashcan picks it up to move", () => {
+test("with empty hands, holding Ctrl while facing the trashcan picks it up to move", () => {
   const h = createHarness();
   const trashcan = { id: "trash_can_01", type: "trash_can", gx: 18, gy: 2, rotation: 0 };
   h.scene.playerInBackroom = false;
@@ -263,20 +265,13 @@ test("with empty hands, holding E while facing the trashcan picks it up to move"
   h.scene.player.currentFacing = "up";
   assert.equal(h.scene.getHoldToMoveFixture(), trashcan);
   h.scene.updateCrateHint();
-  assert.equal(h.scene.gameMessageElement.textContent, "E: Create\nE (Hold): Move");
+  assert.equal(h.scene.gameMessageElement.textContent, "E: Create\nHold Ctrl: Move");
 
-  let created = 0;
   const moved = [];
-  h.scene.takeEmptyCrateFromTrashcan = () => { created += 1; };
   h.scene.fixturePlacement.begin = (id) => moved.push(id);
-  h.scene.startInteractPress();
-  h.scene.endInteractPress();
-  assert.equal(created, 1, "tapping E creates an empty crate");
-  h.scene.startInteractPress();
+  h.scene.startFixtureMovePress();
   h.scene.time.now += HOLD_KEY_MS;
-  h.scene.updateInteractPress();
-  h.scene.endInteractPress();
-  assert.equal(created, 1, "holding E does not create an empty crate");
+  h.scene.updateFixtureMovePress();
   assert.deepEqual(moved, [trashcan.id]);
 
   h.scene.player.currentFacing = "down";
@@ -288,7 +283,7 @@ test("with empty hands, holding E while facing the trashcan picks it up to move"
 test("Space and Q wait to tell a tap from a hold, and Space leaves focused UI controls alone", () => {
   const h = createHarness();
   assert.deepEqual([...h.handlers.keys()].sort(),
-    ["keydown-CTRL", "keydown-Q", "keydown-SPACE", "keyup-Q", "keyup-SPACE"]);
+    ["keydown-CTRL", "keydown-Q", "keydown-SPACE", "keyup-CTRL", "keyup-Q", "keyup-SPACE"]);
   assert.deepEqual(h.removedCaptures, ["SPACE"]);
   const [nearby] = floorStack(h.scene, 1);
 
@@ -869,7 +864,7 @@ test("stacked crates sit tight on their base, and floor crates cover the player 
   assert.equal(base.sprite.depth, 2);
 });
 
-test("a floor stack is as heavy as its height, and a full stack won't budge while you carry anything", () => {
+test("a floor stack is as heavy as its height, and you never move more than 4 crates in total", () => {
   const h = createHarness();
   const body = {
     x: 77, y: 210, width: 22, height: 20, velocity: { x: 160, y: 0 },
@@ -899,9 +894,11 @@ test("a floor stack is as heavy as its height, and a full stack won't budge whil
   assert.ok(tallSpeed > 0 && tallSpeed < singleSpeed, `${tallSpeed} < ${singleSpeed}`);
 
   carry(h.scene, [crate()]);
-  assert.equal(push(), 0);
+  assert.ok(push() > 0, "holding 1 and pushing a stack of 3 is 4 crates");
+  carry(h.scene, [crate(), crate()]);
+  assert.equal(push(), 0, "holding 2 and pushing a stack of 3 is too many");
   h.scene.floorStacks.set(tall, [crate()]);
-  assert.ok(push() > 0, "a two-high stack still moves while carrying");
+  assert.ok(push() > 0, "a two-high stack still moves while carrying two");
 });
 
 test("carrying a crate still blocks overlapping pad crates and pushes loose crates", () => {
@@ -1112,9 +1109,11 @@ test("E opens shelves instead of picking up crates, with or without a carried cr
   h.scene.player.currentFacing = "up";
   h.scene.restockCrates.push(nearby);
   h.scene.fixtures.shelves = () => [shelf];
-  h.scene.fixtures.register = () => ({
+  const eRegister = {
     sprite: { getBounds: () => ({ left: 80, right: 120, top: 80, bottom: 120 }) },
-  });
+  };
+  h.scene.fixtures.register = () => eRegister;
+  h.scene.fixtures.registers = () => [eRegister];
   h.scene.fixtures.displayName = () => "Shelf";
   h.scene.getNearbyBackroomDoor = () => null;
   let opens = 0;
@@ -1178,9 +1177,11 @@ test("E targets the shelf whose front the player stands at, not the shelf beside
 
 test("E and Q use the register target only while the player is in range", () => {
   const h = createHarness();
-  h.scene.fixtures.register = () => ({
+  const nearbyRegister = {
     sprite: { getBounds: () => ({ left: 80, right: 120, top: 80, bottom: 120, centerX: 100, centerY: 100 }) },
-  });
+  };
+  h.scene.fixtures.register = () => nearbyRegister;
+  h.scene.fixtures.registers = () => [nearbyRegister];
   h.scene.playerState = new PlayerState();
   const hint = () => h.scene.interactables.findTarget("register", h.scene.getInteractionOrigin()).hint;
   assert.equal(hint(), "E: Activate Register", "no Go-Backs line while the bin is empty");
@@ -1205,7 +1206,9 @@ test("E and Q use the register target only while the player is in range", () => 
 test("packing the Go-Backs sets crates down by the register in stacks of at most three", () => {
   const h = createHarness();
   const registerBounds = { left: 80, right: 120, top: 80, bottom: 120, centerX: 100, centerY: 100 };
-  h.scene.fixtures.register = () => ({ sprite: { getBounds: () => registerBounds } });
+  const packRegister = { sprite: { getBounds: () => registerBounds } };
+  h.scene.fixtures.register = () => packRegister;
+  h.scene.fixtures.registers = () => [packRegister];
   h.scene.playerState = new PlayerState();
   h.scene.playerState.goBacks.add("wpn_pis_01", 25);
   h.scene.playerState.goBacks.add("wpn_pis_04", 12);
@@ -1270,7 +1273,14 @@ test("inventory totals include all carried crates and active customer carts but 
     { state: "LEAVING", cart: [{ itemId: "rifle" }] },
   ];
   scene.employees = [];
-  scene.market = { getPrice: () => 100 };
+  const supplyRequests = [];
+  scene.market = {
+    getPrice: () => 100,
+    getSupplyCost: (itemId, quantity) => {
+      supplyRequests.push([itemId, quantity]);
+      return { rifle: 81, pistol: 59 }[itemId];
+    },
+  };
   scene.getStorePrice = () => 125;
 
   const inventory = scene.getInventoryItems();
@@ -1278,6 +1288,9 @@ test("inventory totals include all carried crates and active customer carts but 
   assert.equal(inventory.find(({ item }) => item.id === "pistol").inCustomerCarts, 1);
   assert.equal(inventory.find(({ item }) => item.id === "rifle").offShelves, 5);
   assert.equal(inventory.find(({ item }) => item.id === "pistol").offShelves, 5);
+  assert.deepEqual(supplyRequests, [["rifle", 20], ["pistol", 6]]);
+  assert.equal(inventory.find(({ item }) => item.id === "rifle").unitCost, 4.05);
+  assert.equal(inventory.find(({ item }) => item.id === "pistol").unitCost, 9.83);
 });
 
 test("selling an empty placed fixture pays half, updates walkable space, and preserves the register", () => {

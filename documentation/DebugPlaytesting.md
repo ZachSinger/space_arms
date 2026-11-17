@@ -25,6 +25,16 @@ The panel in the top-right corner:
   door. The list under it says where each one was headed and where they stood, so a
   bad spot can be found on the map. In a good layout this should stay at 0.
 
+## UI Lab
+
+On the title screen, choose **DEV**, then **UI LAB**. It's a fresh shop for working on the
+game's menus: everything is unlocked, there's a million credits, and two shelves near the
+door are already stocked so the menus have something to show. Nothing in it is ever saved.
+
+The panel in the top-right corner opens the real Manager's Tablet straight to any of its
+tabs, so changes tried here are the same menus players see. **Send 1 customer** brings
+someone in, and you serve them at the register as usual.
+
 ## Capturing a session
 
 Click **Debug Info** in the top HUD at any point, including while paused or

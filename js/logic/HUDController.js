@@ -3,7 +3,7 @@
 // ==========================================
 // The persistent DOM HUD: credits, reputation, shop level, stamina, shift clock, and the
 // pause / temporary store closure / start-shift / end-day / save buttons.
-import { formatMoney } from "./Money.js";
+import { formatMoneyAmount } from "./Money.js";
 import { getNextShopLevel } from "./ShopProgression.js";
 export class HUDController {
     /**
@@ -98,7 +98,7 @@ export class HUDController {
     }
 
     render(state) {
-        this.creditsEl.innerText = formatMoney(state.credits);
+        this.creditsEl.innerText = formatMoneyAmount(state.credits);
         
         if (state.credits < 0) {
             this.creditsEl.classList.add('deficit');

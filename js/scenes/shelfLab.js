@@ -8,6 +8,7 @@
 // time from the carried crates, while pretend customers take items off. Nothing here touches
 // the saved game.
 import Phaser from "phaser";
+import { installSceneTextSize } from "../logic/GameTextSize.js";
 import { TILE_SIZE } from "../logic/RoomLayout.js";
 import { getFixtureType, getShelfDisplayGrid } from "../logic/FixtureLayout.js";
 import { getBudgetShelfArtForType } from "../logic/BudgetShelfArt.js";
@@ -20,7 +21,7 @@ import { separateOverlappingCrates } from "../logic/CrateSeparation.js";
 import { controlLabel } from "../logic/InputDevice.js";
 import { Player, PLAYER_CRATE_HOLD_OFFSET } from "../logic/Player.js";
 import { Market } from "../logic/Market.js";
-import { formatMoney } from "../logic/Money.js";
+import { formatMoneyAmount } from "../logic/Money.js";
 import { getShelfBoxes } from "../logic/ShelfBoxLayout.js";
 import {
   BOX_SIZES, canStock, canUnstock, createCrate, createSlots, getCrateItemLimit, stockOne, takeOne,
@@ -76,6 +77,7 @@ export class ShelfLabScene extends Phaser.Scene {
   }
 
   create() {
+    installSceneTextSize(this, Phaser);
     this.input.mouse?.disableContextMenu();
     this.showSlots = true;
     this.worldObjects = [];
@@ -96,7 +98,6 @@ export class ShelfLabScene extends Phaser.Scene {
     this.popupCamera = this.cameras.add(0, HEADER_HEIGHT, this.scale.width, viewHeight)
       .setBackgroundColor("rgba(2, 6, 23, 0.82)").setVisible(false);
     this.uiCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height);
-
     const items = this.cache.json.get("items") ?? [];
     this.itemsById = new Map(items.map((item) => [item.id, item]));
     this.market = new Market(items);
@@ -609,7 +610,7 @@ export class ShelfLabScene extends Phaser.Scene {
     if (!visible) return;
     text.setText([
       this.itemName(slot.itemId),
-      `Price: ${formatMoney(this.market.getPrice(slot.itemId)).replace(/ credits$/, "")}`,
+      `Price: ${formatMoneyAmount(this.market.getPrice(slot.itemId))}`,
       `Quantity: ${slot.count}`,
     ]);
     background.setSize(background.width, text.height + CARD_PADDING * 2);

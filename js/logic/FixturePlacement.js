@@ -3,8 +3,7 @@
 // ==========================================
 // Placement mode for moving an existing fixture or unpacking a fixture crate: a ghost
 // follows the cursor on the 8-pixel grid, with valid/invalid and standing-space outlines.
-// Left-click or A commits. Only allowed while the store is closed.
-import { UIWindow } from "./UIWindow.js";
+// Left-click or A commits; right-click, Esc, or X cancels. Only while the store is closed.
 import { TILE_SIZE } from "./RoomLayout.js";
 import {
   getFixtureType, fixtureAtWorldPoint, fixtureBounds, fixtureFootprint, fixtureProjectionBoxes,
@@ -46,34 +45,6 @@ export class FixturePlacement {
   constructor(scene) {
     this.scene = scene;
     this.active = false;
-    this.uiWindow = new UIWindow({
-      id: "fixture-placement-window",
-      title: "FIXTURE PLACEMENT",
-      width: "350px",
-      height: "auto",
-      x: 24,
-      y: 80,
-      contentHTML: `
-        <p data-placement-name></p>
-        <p class="fixture-stock-meta kbd-only">WASD / arrows: walk. Mouse: move fixture.
-          Left-click: place. R: turn. Right-click / Esc: cancel.</p>
-        <p class="fixture-stock-meta pad-only">Left stick / D-pad: walk. Right stick: move fixture.
-          A: place. Y: turn. X: cancel.</p>
-        <p class="fixture-stock-meta">Keep blue areas clear for people to stand.</p>
-        <p class="fixture-stock-meta hidden" data-placement-grid-hint>The fixture snaps to an 8-pixel grid.
-          Green shows where its body can be placed.</p>
-        <p data-placement-status role="status"></p>
-        <button type="button" class="action-btn" data-cancel-fixture-move>CANCEL</button>
-      `,
-    }, scene.windowManager);
-    // The controller moves the fixture, not a menu cursor, while this window is up.
-    this.uiWindow.element.setAttribute("data-pad-world", "");
-    this.bodyElement = this.uiWindow.element.querySelector(".retro-window-body");
-    this.nameElement = this.bodyElement.querySelector("[data-placement-name]");
-    this.statusElement = this.bodyElement.querySelector("[data-placement-status]");
-    this.gridHintElement = this.bodyElement.querySelector("[data-placement-grid-hint]");
-    this.bodyElement.querySelector("[data-cancel-fixture-move]").addEventListener("click", () => this.cancel());
-    this.uiWindow.onClose = () => this.finish();
     this.graphics = scene.add.graphics().setDepth(9997).setVisible(false);
     // Every other fixture's outline, so you can see what's in the way before moving there.
     this.placedGraphics = scene.add.graphics().setDepth(9995).setVisible(false);
@@ -96,12 +67,17 @@ export class FixturePlacement {
       this.rotate();
     };
     scene.input.keyboard.on("keydown-R", this.handleRotateKey);
+    // Marked consumed so the Esc that cancels placement doesn't also pause the shift.
+    this.handleEscape = (event) => {
+      if (!this.active || event.key !== "Escape" || event.repeat) return;
+      scene.windowManager.consumedEvents.add(event);
+      this.cancel();
+    };
+    document.addEventListener("keydown", this.handleEscape);
     this.handleDocumentMouseMove = (event) => {
       if (!this.active) return;
-      this.mouseClient = { x: event.clientX, y: event.clientY };
       // Real mouse movement takes over from the controller.
       if (event.isTrusted) this.padPoint = null;
-      this.updateWindowTransparency();
     };
     document.addEventListener("mousemove", this.handleDocumentMouseMove, true);
   }
@@ -112,12 +88,7 @@ export class FixturePlacement {
     const placed = this.original
       ? this.scene.moveFixture(id, gx, gy, rotation)
       : this.scene.placeFixtureFromCrate(this.fixtureCrate, gx, gy, rotation);
-    if (placed) {
-      const movedFromLayoutMenu = Boolean(this.original);
-      this.cancel();
-      // Back to the shop floor, not the Layout tab the move started from.
-      if (movedFromLayoutMenu) this.scene.managerTablet.uiWindow.close();
-    }
+    if (placed) this.cancel();
   }
 
   rotate() {
@@ -164,19 +135,6 @@ export class FixturePlacement {
     if (this.padPoint) return;
     const { w, h } = fixtureFootprint({ type: this.spec.id, rotation: this.rotation });
     this.setPadPoint((this.placement.gx + w / 2) * TILE_SIZE, (this.placement.gy + h / 2) * TILE_SIZE);
-  }
-
-  // Faded windows ignore the pointer, so hover is tested against their bounds instead.
-  updateWindowTransparency() {
-    const point = this.active ? this.mouseClient : null;
-    for (const win of this.scene.windowManager.windows.values()) {
-      let over = false;
-      if (point && win.isOpen) {
-        const rect = win.element.getBoundingClientRect();
-        over = point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom;
-      }
-      win.element.classList.toggle("placement-see-through", over);
-    }
   }
 
   /**
@@ -227,18 +185,15 @@ export class FixturePlacement {
   start(typeId, original, fixtureCrate) {
     this.cancel();
     this.scene.endRegisterSession();
+    // Placement uses the whole screen: close the tablet or anything else on top.
+    this.scene.windowManager.closeAllExcept();
     this.original = original;
     this.fixtureCrate = fixtureCrate;
     this.spec = getFixtureType(typeId);
     this.rotation = original?.rotation ?? 0;
     this.active = true;
-    if (this.original) {
-      this.original.sprite.setAlpha(0.35);
-      this.nameElement.textContent = `Moving ${this.scene.fixtures.displayName(this.original)} with its contents`;
-    } else {
-      this.fixtureCrate.sprite.setVisible(false);
-      this.nameElement.textContent = `Placing ${this.spec.name}`;
-    }
+    if (this.original) this.original.sprite.setAlpha(0.35);
+    else this.fixtureCrate.sprite.setVisible(false);
     const x = original?.x ?? fixtureCrate.sprite.x;
     const y = original?.y ?? fixtureCrate.sprite.y;
     this.ghost = this.scene.add.image(x, y, getFixtureTexture(this.spec))
@@ -246,8 +201,6 @@ export class FixturePlacement {
       .setAlpha(0.5).setDepth(9996);
     this.graphics.setVisible(true);
     this.drawPlacedFixtures();
-    this.uiWindow.openWindow();
-    this.mouseClient = null;
     this.padPoint = null;
     if (getInputDevice() === "gamepad") this.setPadPoint(x, y);
     this.refreshPreview();
@@ -298,9 +251,6 @@ export class FixturePlacement {
     const result = this.original
       ? this.scene.checkFixtureMove(id, gx, gy, rotation)
       : this.scene.checkFixturePlacement(this.spec.id, gx, gy, rotation);
-    this.statusElement.textContent = result.valid && getInputDevice() === "gamepad"
-      ? result.reason.replace(/^Click to place\./, "Press A to place.")
-      : result.reason;
     const x = gx * TILE_SIZE;
     const y = gy * TILE_SIZE;
     drawFixtureOutline(this.graphics.clear(), this.placement, result.valid ? VALID_COLOR : INVALID_COLOR, 1);
@@ -322,12 +272,10 @@ export class FixturePlacement {
     this.refreshPreview();
   }
 
-  // Leave placement mode. Doesn't close the window (it calls this from onClose).
+  // Leave placement mode and restore the moved fixture or carried crate.
   finish() {
     if (!this.active) return;
     this.active = false;
-    this.mouseClient = null;
-    this.updateWindowTransparency();
     if (this.original) this.original.sprite.setAlpha(1);
     if (this.fixtureCrate?.sprite.active) this.fixtureCrate.sprite.setVisible(true);
     this.ghost.destroy();
@@ -339,13 +287,13 @@ export class FixturePlacement {
 
   cancel() {
     this.finish();
-    this.uiWindow.close();
   }
 
   destroy() {
     this.finish();
     this.scene.input.off("pointerdown", this.handlePointerDown);
     this.scene.input.keyboard.off("keydown-R", this.handleRotateKey);
+    document.removeEventListener("keydown", this.handleEscape);
     document.removeEventListener("mousemove", this.handleDocumentMouseMove, true);
     this.graphics.destroy();
     this.placedGraphics.destroy();

@@ -76,6 +76,26 @@ test("contracts list signable ones first, locked next, and signed ones last", ()
   assert.ok(html.indexOf(list[1].name) < html.indexOf(list[2].name));
 });
 
+test("redesigned contracts retain available, unaffordable, locked, and purchased states", () => {
+  const contracts = ["lic_start_surplus", "lic_start_rations", "lic_corp_labor", "lic_fixture_basics"]
+    .map((id) => new SupplierLicense(licenseById.get(id)));
+  const html = ContractRenderer.generateHTML(contracts, {
+    shopLevel: 2,
+    globalReputation: 0,
+    factionReputation: { scavengers: 0, mercenaries: 0, explorers: 0 },
+    credits: 100,
+    activeLicenses: new Set(["lic_fixture_basics"]),
+  });
+  assert.match(html, /data-license-id="lic_start_rations"/);
+  assert.match(html, /INSUFFICIENT FUNDS/);
+  assert.match(html, /Requires Shop Level 11/);
+  assert.match(html, />LOCKED<\/button>/);
+  assert.match(html, /Purchased; stays available\./);
+  assert.match(html, /Unlocks fixtures:/);
+  assert.match(html, />PURCHASED<\/button>/);
+  assert.doesNotMatch(html, /data-license-id="lic_start_surplus"|data-license-id="lic_corp_labor"|data-license-id="lic_fixture_basics"/);
+});
+
 test("Stellaris Civilian Defense unlocks at Shop Level 6", () => {
   const license = new SupplierLicense(licenseById.get("lic_corp_stellaris"));
   const state = {
@@ -217,7 +237,7 @@ test("the starter contract covers every shelf", () => {
   }
 });
 
-test("fixture purchases explain shelving, checkout, and floor space", () => {
+test("fixture purchases list each fixture with its price and a buy button", () => {
   const html = LayoutRenderer.generateHTML({
     canRearrangeFixtures: () => true,
     fixtures: { all: () => [] },
@@ -225,11 +245,10 @@ test("fixture purchases explain shelving, checkout, and floor space", () => {
       spec, licensed: true, canAfford: true, uniqueAlreadyPlaced: false, hasDeliverySpace: true,
     })),
   }, true);
-  assert.match(html, /SHELVING - displays items for customers/);
-  assert.match(html, /CHECKOUT - serves customers/);
-  assert.match(html, /2 x 1 floor tiles/);
-  assert.match(html, /1\.625 x 1 floor tiles/);
-  assert.match(html, /PRICE 400 credits/);
+  assert.match(html, /BUDGET SHELF 2x2/);
+  assert.match(html, /fixture-sale-price">400</);
+  assert.match(html, /data-buy-fixture-id="shelf_budget_2x2"[^>]*>BUY/);
+  assert.doesNotMatch(html, /credits|floor tiles/);
 });
 
 test("fixtures tab offers resale with a clear value and a confirmation", () => {
@@ -247,19 +266,20 @@ test("fixtures tab offers resale with a clear value and a confirmation", () => {
     getFixtureCrateSaleBlockReason: () => null,
   };
   const html = LayoutRenderer.generateHTML(scene, true, "Purchase complete.", { name: "BUDGET SHELF 2x4", value: 90 });
-  assert.match(html, /Sell BUDGET SHELF 2x4 for 90 credits\?/);
+  assert.match(html, /Sell BUDGET SHELF 2x4 for 90\?/);
   assert.match(html, /data-confirm-fixture-sale/);
   assert.match(html, /data-cancel-fixture-sale/);
   assert.match(html, /data-sell-fixture-id="shelf_1"/);
   assert.match(html, /data-sell-fixture-crate="0"/);
   assert.match(html, /data-sell-fixture-crate="carried"/);
-  assert.match(html, /Loading Pad \| Resale value: 150 credits/);
-  assert.ok(html.indexOf("Purchase complete.") < html.indexOf("fixture-management-scroll"));
-  assert.ok(html.indexOf("layout-sale-confirmation") < html.indexOf("fixture-management-scroll"));
+  assert.match(html, /On the Loading Pad/);
+  assert.match(html, /Sells for: 150/);
+  assert.ok(html.indexOf("Purchase complete.") < html.indexOf("fixtures-owned-list"));
+  assert.ok(html.indexOf("layout-sale-confirmation") < html.indexOf("fixtures-owned-list"));
 
   scene.getFixtureSaleBlockReason = () => "Only empty fixtures can be sold.";
   const blocked = LayoutRenderer.generateHTML(scene, true);
-  assert.match(blocked, /<small>Only empty fixtures can be sold\.<\/small>/);
+  assert.match(blocked, /fixture-block-reason">Only empty fixtures can be sold\.<\/p>/);
   assert.match(blocked, /data-sell-fixture-id="shelf_1"[\s\S]*?disabled>SELL/);
 });
 
@@ -285,13 +305,15 @@ test("layout tab offers paid store expansions gated by shop level and purchase o
     ],
   };
   const html = LayoutRenderer.generateHTML(scene);
-  assert.match(html, /STORE EXPANSIONS/);
-  assert.match(html, /SHOP LEVEL 5 \| PRICE 4,000 credits/);
+  assert.match(html, /Sales Floor</);
+  assert.match(html, /Backroom</);
+  assert.match(html, /Shop Level 5</);
+  assert.match(html, /fixture-sale-price">4,000</);
   assert.match(html, /data-buy-expansion-id="expansion_west"[^>]*>BUY/);
   assert.match(html, /BUY PREVIOUS EXPANSION FIRST/);
-  assert.match(html, /BACKROOM EXPANSIONS/);
-  assert.match(html, /SHOP LEVEL 13 \| PRICE 4,000 credits/);
+  assert.match(html, /Shop Level 13</);
   assert.match(html, /data-buy-backroom-id="backroom_upgrade_a"[^>]*>BUY/);
+  assert.doesNotMatch(html, /credits/);
 
   const fixturesHTML = LayoutRenderer.generateHTML({
     ...scene,
@@ -299,17 +321,17 @@ test("layout tab offers paid store expansions gated by shop level and purchase o
     restockCrates: [],
     getLoadingPadSpawnPositions: () => [],
   }, true);
-  assert.doesNotMatch(fixturesHTML, /STORE EXPANSIONS/);
+  assert.doesNotMatch(fixturesHTML, /Expansion|data-buy-expansion-id|data-buy-backroom-id/);
 });
 
 test("early supplier license prices reflect the value of their item catalogs", () => {
   const expectedPrices = {
-    lic_start_rations: 25,
-    lic_start_mods: 75,
-    lic_start_apparel: 100,
-    lic_start_ammo: 100,
-    lic_start_armor_melee: 200,
-    lic_start_tools: 250,
+    lic_start_rations: 50,
+    lic_start_mods: 400,
+    lic_start_apparel: 275,
+    lic_start_ammo: 550,
+    lic_start_armor_melee: 625,
+    lic_start_tools: 350,
   };
 
   for (const [licenseId, price] of Object.entries(expectedPrices)) {

@@ -3,7 +3,7 @@ import { fromCents, toCents } from "./Money.js";
 
 const CREDIT_DENOMINATIONS = Object.freeze([
   ...[1, 5, 10, 20].map((credits) => Object.freeze({
-    units: credits * 100, kind: "bill", label: `${credits} ${credits === 1 ? "credit" : "credits"}`,
+    units: credits * 100, kind: "bill", label: `a ${credits} bill`,
   })),
   ...[1, 5, 10, 25, 50].map((units) => Object.freeze({
     units, kind: "coin", label: `${units} ${units === 1 ? "cent" : "cents"}`,
@@ -31,11 +31,10 @@ export function formatCashAmount(amount, currency = "credits") {
     throw new TypeError(`Invalid cash amount: ${amount}.`);
   }
   if (currency === "credits") {
-    const credits = fromCents(amount).toLocaleString("en-US", {
+    return fromCents(amount).toLocaleString("en-US", {
       minimumFractionDigits: amount % 100 ? 2 : 0,
       maximumFractionDigits: 2,
     });
-    return `${credits} credits`;
   }
   if (currency === "m-scrips") return `${amount.toLocaleString("en-US")} M-Scrips`;
   throw new TypeError(`Unknown cash currency: ${currency}.`);

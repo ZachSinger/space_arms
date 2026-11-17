@@ -33,6 +33,8 @@ export function getBudgetShelfArt(levels, sections) {
   return {
     width,
     height: HEIGHT,
+    // Empty source-image pixels above the visible shelf; the close-up window crops them.
+    top: LEVEL_OPENINGS[skipped][0] - LEVEL_OPENINGS[0][0],
     columns,
     rows: LEVEL_OPENINGS.slice(skipped),
     boardTops: LEVEL_BOARD_TOPS.slice(skipped),

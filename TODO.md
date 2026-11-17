@@ -4,6 +4,15 @@ Running task list. Consult this before deciding what to work on. Add to it any t
 notice something that needs doing but isn't being done right now.
 
 ## Base-loop follow-ups
+- [x] Multi-register support. Registers are buyable in any number; each needs queue space
+      on its own. One line per register with customers picking the shortest; one employee
+      can man each register at once; the player works whichever register they stand behind.
+      The last register can't be sold or packed. Staffing simulation
+      (scripts/staffing-sim.mjs) validates the design: 2 registers + 2 rookies
+      ≈ 1 maxed-register employee (~40 customers/shift); ~60/shift needs 2 registers with
+      trained staff or 3 with rookies; ~80 needs 3 registers + 3 trained. This makes
+      hire-and-build an alternative scaling path to training, so handing the store to
+      employees stays a gradual, purchased transition (key for post-base modules).
 - [ ] Add a pre-shift meal, breakfast, or another preparation choice that boosts stamina,
       carrying ability, or another character stat for that shift only. Decide the choices,
       costs, and effects before building it.
@@ -103,6 +112,14 @@ notice something that needs doing but isn't being done right now.
       thresholds, especially whether 15 is reasonable by the end of the first shift.
 
 ## Post-base-loop module concepts
+- [ ] Steam co-op multiplayer: one player hosts, a friend joins and works in the host's
+      store with most permissions (no saving, no ending the day, and similar host-only
+      actions). Host-authoritative: the host's game is the source of truth; the guest
+      sends actions and receives state updates. Use Steamworks (steamworks.js for
+      Electron) for invites/lobbies/P2P transport. Major effort: every interaction
+      (crates, shelves, register, tablet) must become a synced, host-validated message,
+      plus a second player character. Phase it: local two-window prototype first, then
+      Steam transport, then polish. Planned as a post-launch update.
 - [ ] Gunsmithing.
 - [ ] Repair for gear and weapons.
 - [ ] Vehicle sales.
@@ -146,7 +163,8 @@ notice something that needs doing but isn't being done right now.
 - [x] Walking into a resting crate pushes it (`CratePushing.js`). Dead center pushes it
       straight ahead; the further off to one side it is, the more it's pushed sideways, and
       one that only clips your path is pushed only sideways, out of the way. Each crate in the row
-      slows you more (60%, 40%, 25% speed); 4 in a row can't be pushed. A crate that hits
+      slows you more (60%, 40%, 25% speed); you can never move more than 4 crates at once,
+      counting stacks and carried crates. A crate that hits
       a wall stops you too. Loading pad crates block you like walls. An overlapping player
       can step out of a crate, but can't walk through it, including while carrying a crate.
 - [x] Improve first-shift pacing: shortened shifts from ten to five minutes,
@@ -403,7 +421,7 @@ notice something that needs doing but isn't being done right now.
       carried stack down; with the arrow on a floor crate they stack onto it instead.
       Floor stacks are up to 3 high, never on fixture crates or the Loading Pad, and
       fixture crates never stack. The player walks behind stacks, taller stacks are
-      harder to push, and a 3-high stack can't be pushed while carrying anything. A
+      harder to push, and no more than 4 crates (pushed plus carried) ever move at once. A
       96px bottom bar shows the marked crate's picture, name, and count, with one card
       per carried crate above its right end. E at a trashcan returns all held
       empty crates. Q with empty hands opens Go-Backs (later:

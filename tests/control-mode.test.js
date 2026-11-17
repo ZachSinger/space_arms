@@ -54,7 +54,6 @@ test("register windows retain register controls, while other open windows take m
 
 test("placement allows walking unless another window or controller menu has focus", () => {
   const scene = createScene();
-  const placementWindow = { id: "fixture-placement-window", isOpen: true };
   let tabletFocused = false;
   let controllerMenuOpen = false;
   const tablet = {
@@ -62,8 +61,7 @@ test("placement allows walking unless another window or controller menu has focu
     isOpen: true,
     element: { classList: { contains: () => tabletFocused } },
   };
-  scene.fixturePlacement = { active: true, uiWindow: placementWindow };
-  scene.windowManager.windows.set(placementWindow.id, placementWindow);
+  scene.fixturePlacement = { active: true };
   scene.windowManager.windows.set(tablet.id, tablet);
   scene.uiNavigator = { hasScope: () => controllerMenuOpen };
   const controls = new ControlMode(scene);

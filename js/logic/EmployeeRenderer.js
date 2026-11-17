@@ -5,10 +5,20 @@
 import employeeRoster from "../../data/Employees.json" with { type: "json" };
 import { EMPLOYEE_JOBS } from "./EmployeeJobs.js";
 import { getStaffLimit, getStaffLimitReason } from "./ShopProgression.js";
-import {
-  getEmployeeProfile, getEmployeeTrainingOffer, MAX_EMPLOYEE_SKILL_LEVEL,
-  getEmployeeJobSpeed,
-} from "./EmployeeTraining.js";
+import { getEmployeeProfile } from "./EmployeeTraining.js";
+import { formatMoneyAmount, roundMoney } from "./Money.js";
+
+const PRIORITY_LABELS = {
+  register: "Prioritize Register",
+  stock_shelves: "Prioritize Stocking",
+};
+
+function renderSkillLevels(employee, stockLabel = "Stock") {
+  return `<div class="type-description employee-skill-levels">
+    <span>Register:${employee.skillLevels.register}</span>
+    <span>${stockLabel}:${employee.skillLevels.stock_shelves}</span>
+  </div>`;
+}
 
 export class EmployeeRenderer {
   static generateHTML({
@@ -20,7 +30,6 @@ export class EmployeeRenderer {
     canHire,
     employeeSkills = {},
     employeeTraining = {},
-    trainingConfirmation = null,
     shopLevel,
   }) {
     const hired = new Set(hiredEmployeeIds);
@@ -36,24 +45,19 @@ export class EmployeeRenderer {
         const disabled = Boolean(staffLimitReason) || !canHire || !affordable;
         const buttonLabel = staffLimitReason
           ? `No staff spot is open to hire ${employee.name}`
-          : `Hire ${employee.name} for ${employee.hireCost} credits`;
-        const reason = staffLimitReason
-          ? staffLimitReason
-          : !canHire
-            ? "Hire between shifts."
-            : !affordable
-              ? `You need ${employee.hireCost - credits} more credits.`
-              : "Can run the register or take stock from the Loading Pad to matching shelf spots.";
+          : `Hire ${employee.name} for ${employee.hireCost}`;
+        const reason = !staffLimitReason && canHire && !affordable
+          ? `You need ${formatMoneyAmount(roundMoney(employee.hireCost - credits))} more.`
+          : "";
         return `
-          <div class="fixture-stock-row">
-            <div>
-              <strong>${employee.name}</strong>
-              <div class="fixture-stock-meta">${reason}</div>
-              <div class="fixture-stock-meta">Hiring cost: ${employee.hireCost} credits.
-                Wages: ${employee.wagePerShift} credits per shift.</div>
-              <div class="fixture-stock-meta">Skills:
-                ${EMPLOYEE_JOBS.map(({ id, label }) => `${label}: Level ${employee.skillLevels[id]}`).join("; ")}.</div>
+          <div class="item-card employee-candidate-row">
+            <div class="employee-candidate-name">
+              <h3 class="type-h3">${employee.name}</h3>
+              ${renderSkillLevels(employee)}
+              ${reason ? `<p class="type-description employee-candidate-reason">${reason}</p>` : ""}
             </div>
+            <div class="type-description employee-candidate-wage">${employee.wagePerShift}</div>
+            <div class="type-description employee-hire-cost">${employee.hireCost}</div>
             <button type="button" class="action-btn" data-hire-employee-id="${employee.id}"
               ${disabled ? "disabled" : ""} aria-label="${buttonLabel}">
               ${staffLimitReason ? "FULL" : "HIRE"}
@@ -66,129 +70,84 @@ export class EmployeeRenderer {
       .filter((employee) => hired.has(employee.id))
       .map((employee) => {
         const priorities = employeeJobPriorities[employee.id] ?? employee.jobPriorities;
-        const priorityRows = priorities.map((jobId, index) => {
-          const job = EMPLOYEE_JOBS.find((candidate) => candidate.id === jobId);
-          if (!job) throw new Error(`Unknown employee job: ${jobId}`);
+        if (priorities.length !== EMPLOYEE_JOBS.length ||
+          !EMPLOYEE_JOBS.every(({ id }) => priorities.includes(id))) {
+          throw new Error(`Invalid job priorities for ${employee.name}.`);
+        }
+        const priorityOptions = EMPLOYEE_JOBS.map(({ id }) => {
+          const label = PRIORITY_LABELS[id];
+          if (!label) throw new Error(`Unknown employee job: ${id}`);
           return `
-            <li class="employee-job-priority">
-              <span>${index + 1}. ${job.label}</span>
-              <span class="employee-job-priority-controls">
-                <button type="button" class="action-btn" data-employee-priority-id="${employee.id}"
-                  data-employee-priority-job="${jobId}" data-employee-priority-direction="-1"
-                  ${!canHire || index === 0 ? "disabled" : ""}
-                  aria-label="Move ${job.label} up for ${employee.name}">UP</button>
-                <button type="button" class="action-btn" data-employee-priority-id="${employee.id}"
-                  data-employee-priority-job="${jobId}" data-employee-priority-direction="1"
-                  ${!canHire || index === priorities.length - 1 ? "disabled" : ""}
-                  aria-label="Move ${job.label} down for ${employee.name}">DOWN</button>
-              </span>
-            </li>
+            <button type="button" class="action-btn" data-employee-priority-id="${employee.id}"
+              data-employee-priority-job="${id}" aria-pressed="${priorities[0] === id}"
+              ${canHire ? "" : "disabled"} aria-label="${label} for ${employee.name}">${label}</button>
           `;
         }).join("");
         const trainingJobId = employeeTraining[employee.id];
         const isOnShift = !offShift.has(employee.id);
-        const skillRows = EMPLOYEE_JOBS.map(({ id, label }) => {
-          const level = employee.skillLevels[id];
-          const bonus = Math.round((getEmployeeJobSpeed(employee.skillLevels, id) - 1) * 100);
-          const benefit = id === "register" ? "register service" : "shelf stocking";
-          const offer = getEmployeeTrainingOffer(employee.id, employee.skillLevels, id);
-          const disabled = !canHire || trainingJobId || !offer || credits < offer.cost;
-          return `
-            <div class="employee-training-row">
-              <div>
-                <strong>${label}: Level ${level}/${MAX_EMPLOYEE_SKILL_LEVEL}</strong>
-                <div class="fixture-stock-meta">${bonus ? `${bonus}% faster ${benefit}.` : `Normal ${benefit} speed.`}</div>
-                <div class="fixture-stock-meta">${trainingJobId
-                  ? trainingJobId === id && offer
-                    ? `Booked: Level ${offer.targetLevel}. Wages after training: ${offer.nextWagePerShift} credits per shift.`
-                    : "More training is available after this employee returns."
-                  : offer ? `Next level: ${offer.cost} credits. Future wages: ${offer.nextWagePerShift} credits per shift.`
-                  : "Fully trained in this skill."}</div>
-              </div>
-              ${offer ? `<button type="button" class="action-btn" data-train-employee-id="${employee.id}"
-                data-train-employee-job="${id}" ${disabled ? "disabled" : ""}
-                aria-label="Train ${employee.name}: ${label} Level ${offer.targetLevel} for ${offer.cost} credits">TRAIN</button>` : ""}
-            </div>`;
-        }).join("");
-        const confirmedOffer = canHire && !trainingJobId && trainingConfirmation?.employeeId === employee.id
-          ? getEmployeeTrainingOffer(employee.id, employee.skillLevels, trainingConfirmation.jobId)
-          : null;
-        const trainingControl = confirmedOffer ? `
-          <div class="employee-training-confirmation">
-            <div>Train ${employee.name}: ${confirmedOffer.label} Level ${confirmedOffer.targetLevel}?</div>
-            <p class="fixture-stock-meta">
-              Pay ${confirmedOffer.cost} credits now. Away for the next shift; still paid
-              ${confirmedOffer.wagePerShift} credits for that shift.
-              After training, wages become ${confirmedOffer.nextWagePerShift} credits per shift.
-              After training, ${Math.round((getEmployeeJobSpeed({
-                ...employee.skillLevels,
-                [confirmedOffer.jobId]: confirmedOffer.targetLevel,
-              }, confirmedOffer.jobId) - 1) * 100)}% faster
-              ${confirmedOffer.jobId === "register" ? "register service" : "shelf stocking"}.
-              Each course for ${employee.name} costs more than the last, whichever skill it trains.
-              Skills and higher wages are permanent.
-            </p>
-            <div class="employee-job-priority-controls">
-              <button type="button" class="action-btn" data-confirm-employee-training>CONFIRM TRAINING</button>
-              <button type="button" class="action-btn" data-cancel-employee-training>CANCEL</button>
-            </div>
-          </div>` : "";
         const shiftTitle = canHire ? "" : "Change On Shift or Off Shift between shifts.";
         const shiftButton = (on) => `
               <button type="button" class="action-btn" data-employee-shift-id="${employee.id}"
                 data-employee-shift-on="${on}" aria-pressed="${isOnShift === on}"
                 ${canHire ? "" : "disabled"}
                 aria-label="Set ${employee.name} ${on ? "On Shift" : "Off Shift"}"
-                title="${shiftTitle || (on
-                  ? "On Shift: works and is paid each shift."
-                  : "Off Shift: stays home and isn't paid.")}">
+                title="${shiftTitle || (on ? "" : "Off Shift: stays home and isn't paid.")}">
                 ${on ? "ON SHIFT" : "OFF SHIFT"}
               </button>`;
         const shiftControl = trainingJobId
-          ? `<div class="employee-shift-training">IN TRAINING: NOT AVAILABLE</div>`
+          ? `<div class="employee-shift-away">AWAY: NOT AVAILABLE</div>`
           : `<div class="employee-shift-toggle">${shiftButton(true)}${shiftButton(false)}</div>`;
         return `
-        <div class="fixture-stock-row employee-staff-row">
-          <div>
+        <div class="item-card employee-staff-row">
             <div class="employee-staff-header">
-              <strong>${employee.name}</strong>
+              <h3 class="type-h3">${employee.name}</h3>
               ${shiftControl}
             </div>
-            <div class="fixture-stock-meta">
-              ${trainingJobId
-                ? `Training: ${EMPLOYEE_JOBS.find(({ id }) => id === trainingJobId).label}.
-                  Away ${canHire ? "next" : "this"} shift; wages are still paid.`
-                : !isOnShift ? "Off Shift: stays home and isn't paid."
-                : active.has(employee.id) ? "Working this shift." : "On Shift: works and is paid each shift."}
+            ${renderSkillLevels(employee, "Stocking")}
+            ${trainingJobId
+              ? `<p class="type-description">Away ${canHire ? "next" : "this"} shift; wages are still paid.</p>`
+              : !isOnShift ? `<p class="type-description">Off Shift: stays home and isn't paid.</p>`
+              : active.has(employee.id) ? `<p class="type-description">Working this shift.</p>` : ""}
+            <p class="type-description">Wages: ${employee.wagePerShift}</p>
+            ${canHire ? "" : `<p class="type-description">Change priority or On Shift / Off Shift between shifts.</p>`}
+            <hr class="divider-thin">
+            <div class="employee-priority-options" role="group" aria-label="Job priority for ${employee.name}">
+              ${priorityOptions}
             </div>
-            <div class="fixture-stock-meta">Wages: ${employee.wagePerShift} credits per shift${isOnShift || trainingJobId ? "" : " (not paid while Off Shift)"}.</div>
-            ${canHire ? "" : `<div class="fixture-stock-meta">Change job order or On Shift / Off Shift between shifts.</div>`}
-            <div class="fixture-stock-meta">Job priority (top to bottom):</div>
-            <ol class="employee-job-priorities">${priorityRows}</ol>
-            <div class="fixture-stock-meta">JOB SKILLS &amp; TRAINING</div>
-            ${skillRows}
-            ${trainingControl}
-          </div>
         </div>
         `;
       }).join("");
 
     return `
       <div class="employee-panel">
-      <div class="fixture-stock-meta">
-        Each employee can run the register or take delivered crates straight to matching
-        shelf spots. Set their job order below. Wages are paid when a shift starts, for
-        employees who are On Shift or in training. Off Shift employees stay home unpaid.
-        Everyone starts with the same skills; training is how they improve. It takes one paid
-        shift away and permanently raises wages.
-      </div>
-      <div class="fixture-stock-meta">
-        Employees hired: ${hired.size} of ${staffLimit} your shop allows.
-      </div>
-      <div class="fixture-section-divider">STAFF TO HIRE</div>
-      ${availableRows || `<div class="fixture-empty-hint">No other staff are available to hire.</div>`}
-      <div class="fixture-section-divider">YOUR STAFF</div>
-      ${hiredRows || `<div class="fixture-empty-hint">You have not hired any staff.</div>`}
+        <div class="employee-panel-heading">
+          <h2 class="type-h2">Staff to Hire</h2>
+        </div>
+        <div class="employee-panel-heading employee-section-heading">
+          <h2 class="type-h2">Your Staff</h2>
+          <p class="type-description">Hired: ${hired.size} of ${staffLimit}</p>
+        </div>
+        <hr class="divider-thick employee-panel-divider">
+        <section class="employee-section">
+          <div class="employee-column-scroll custom-scrollbar" data-employee-scroll="hiring">
+            ${staffLimitReason ? `<p class="type-description">${staffLimitReason}</p>`
+    : !canHire ? `<p class="type-description">Staff can only be hired between shifts.</p>` : ""}
+            ${availableRows ? `
+              <div class="employee-hire-columns">
+                <h3 class="type-h3">Name</h3>
+                <h3 class="type-h3">Wages</h3>
+                <h3 class="type-h3">Hire Cost</h3>
+                <span></span>
+              </div>
+              <div class="employee-available-list">${availableRows}</div>
+            ` : `<p class="type-description employee-empty">No other staff are available to hire.</p>`}
+          </div>
+        </section>
+        <section class="employee-section employee-section-staff">
+          <div class="employee-column-scroll custom-scrollbar" data-employee-scroll="staff">
+            ${hiredRows || `<p class="type-description employee-empty">You have not hired any staff.</p>`}
+          </div>
+        </section>
       </div>
     `;
   }

@@ -26,11 +26,14 @@ export class ContractRenderer {
    */
   static generateHTML(licenses, playerState) {
     let html = `
-            <div class="retro-slot custom-scrollbar" style="padding: 10px; display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto;">
-        `;
+      <div class="contracts-panel">
+        <h2 class="type-h2">Supplier Contracts</h2>
+        <hr class="divider-thick">
+        <div class="contracts-list custom-scrollbar">
+    `;
 
     if (!licenses || licenses.length === 0) {
-      html += `<div style="color: var(--color-text-muted); text-align: center; padding: 20px;">No contracts available in database.</div>`;
+      html += `<p class="type-description contracts-empty">No contracts are available.</p>`;
     } else {
       ContractRenderer.sortLicenses(licenses, playerState).forEach((license) => {
         const isShopLevelMet =
@@ -53,17 +56,17 @@ export class ContractRenderer {
           .map((typeId) => getFixtureType(typeId)?.name)
           .filter(Boolean);
         const fixtureUnlocksHTML = fixtureNames.length
-          ? `<div class="fixture-stock-meta">Unlocks fixtures: ${fixtureNames.join(", ")}</div>`
+          ? `<p class="type-description contracts-details">Unlocks fixtures: ${fixtureNames.join(", ")}</p>`
           : "";
 
         if (isOwned) {
-          actionButtonHTML = `<button class="retro-tab-btn" disabled style="opacity: 0.6; cursor: not-allowed; width: 100%; text-align: center;">[ PURCHASED ]</button>`;
+          actionButtonHTML = `<button type="button" class="retro-tab-btn" disabled>PURCHASED</button>`;
         } else if (!isUnlocked) {
-          actionButtonHTML = `<button class="retro-tab-btn" disabled style="opacity: 0.5; cursor: not-allowed; width: 100%; text-align: center; color: var(--color-text-muted);">LOCKED</button>`;
+          actionButtonHTML = `<button type="button" class="retro-tab-btn" disabled>LOCKED</button>`;
         } else if (!canAfford) {
-          actionButtonHTML = `<button class="action-btn danger" disabled style="opacity: 0.7; cursor: not-allowed; width: 100%; font-size: var(--font-size-11);">INSUFFICIENT FUNDS</button>`;
+          actionButtonHTML = `<button type="button" class="action-btn danger" disabled>INSUFFICIENT FUNDS</button>`;
         } else {
-          actionButtonHTML = `<button class="action-btn" data-license-id="${license.id}" style="width: 100%; font-size: var(--font-size-12);">SIGN CONTRACT</button>`;
+          actionButtonHTML = `<button type="button" class="action-btn" data-license-id="${license.id}">SIGN CONTRACT</button>`;
         }
 
         const globalRepColor = isGlobalRepMet
@@ -92,28 +95,24 @@ export class ContractRenderer {
           : [levelHtml, globalHtml, factionHtml].filter(Boolean).join(" | ");
 
         html += `
-                    <div class="item-card">
-                        <div class="item-details">
-                            <div class="item-card-header">
-                                <span class="item-card-title">${license.name}</span>
-                                <span class="item-card-cost" style="color: var(--color-text-main); font-size: var(--font-size-11); padding: 2px 6px; background: rgba(255,255,255,0.1); border-radius: 2px;">Tier ${license.tier}</span>
-                            </div>
-                            <div class="item-card-flavor">"${license.description}"</div>
-                            ${fixtureUnlocksHTML}
-                            <div style="display: flex; justify-content: space-between; font-size: var(--font-size-11); margin-top: 6px; border-top: 1px dashed var(--color-border-subtle); padding-top: 6px;">
-                                <span>${requirementsHtml}</span>
-                                <span style="color: var(--color-text-main); font-weight: bold;">Cost: ${license.baseCost.toLocaleString()} credits</span>
-                            </div>
-                            <div style="margin-top: 8px;">
-                                ${actionButtonHTML}
-                            </div>
-                        </div>
-                    </div>
-                `;
+          <div class="item-card contract-card">
+            <div class="contract-information">
+              <h3 class="type-h3">${license.name}</h3>
+              <p class="type-description contracts-details">${license.description}</p>
+              ${fixtureUnlocksHTML}
+              ${requirementsHtml ? `<p class="type-description contract-requirements">${requirementsHtml}</p>` : ""}
+            </div>
+            <div class="contract-action">
+              <p class="type-description">Tier ${license.tier}</p>
+              <p class="type-description">Cost: ${license.baseCost.toLocaleString()}</p>
+              ${actionButtonHTML}
+            </div>
+          </div>
+        `;
       });
     }
 
-    html += `</div>`;
+    html += `</div></div>`;
     return html;
   }
 }

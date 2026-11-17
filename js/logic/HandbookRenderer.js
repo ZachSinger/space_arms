@@ -14,7 +14,7 @@ import {
   EMERGENCY_LOAN_TARGET_BALANCE,
 } from "./EmergencyLoan.js";
 import { controlLabel } from "./InputDevice.js";
-import { formatMoney } from "./Money.js";
+import { formatMoneyAmount } from "./Money.js";
 import {
   MAX_EMPLOYEE_SKILL_LEVEL, EMPLOYEE_MILESTONE_LEVELS, getEmployeeJobSpeed,
 } from "./EmployeeTraining.js";
@@ -40,7 +40,7 @@ function key(action) {
 }
 
 function section(title, body) {
-  return `<section class="handbook-section"><h3>${title}</h3>${body}</section>`;
+  return `<section class="handbook-section"><h3>${title}</h3><hr class="divider-medium">${body}</section>`;
 }
 
 const list = (items) => `<ul>${items.map((item) => `<li>${item}</li>`).join("")}</ul>`;
@@ -64,7 +64,7 @@ export function getLevelRewards(licenses) {
   }
   for (const zone of ZONES) {
     if (!zone.requiredShopLevel) continue;
-    add(zone.requiredShopLevel, `${zone.name} (${formatMoney(zone.cost)})`);
+    add(zone.requiredShopLevel, `${zone.name} (${formatMoneyAmount(zone.cost)})`);
   }
   return rewards;
 }
@@ -103,7 +103,7 @@ function storeTopic({ shopLevel, reputation }) {
         "<strong>Loading Pad:</strong> where every order you buy arrives, as crates.",
       ])}
       <p>To get more room, buy sales floor expansions and backroom upgrades in the
-        <strong>Layout</strong> tab. Each one needs a certain Store Level, costs credits, and
+        <strong>Layout</strong> tab. Each one needs a certain Store Level, costs money, and
         must be bought in order, between shifts.</p>`),
     section("Placing Fixtures", `
       <p>Fixtures are your shelves, register, and trashcan.</p>
@@ -116,16 +116,18 @@ function storeTopic({ shopLevel, reputation }) {
           <span class="kbd-only">click</span><span class="pad-only">press A</span> to place it.
           <span class="kbd-only">Esc or right-click</span><span class="pad-only">X</span> cancels.`,
         "Every fixture uses a Collision Box: its body box fits the visible fixture, and its blue projection box extends out in front. The register also needs a projection box behind it for the cashier. Keep blue areas free of furniture; people can walk through them. The body outline turns red if placement is blocked.",
-        "A fixture can't block a doorway or cut off part of the shop. Customers need room to line up in front of or beside the register.",
+        "A fixture can't block a doorway or cut off part of the shop. Customers need room to line up in front of or beside each register.",
       ])}
       <p>Fixtures can only be placed or moved <strong>between shifts</strong>. To move one that's
-        already placed, use <strong>MOVE</strong> in the Layout tab. Its contents move with it.</p>
+        already placed, face it with empty hands and hold
+        <span class="kbd-only">Ctrl</span><span class="pad-only">A</span>, or use
+        <strong>MOVE</strong> in the Layout tab. Its contents move with it.</p>
       <p>An empty fixture can be packed back into a crate, or sold for half of what it cost.
-        Your shop always keeps one register.</p>`),
+        Your shop always keeps at least one register.</p>`),
     section("Starting a Shift", `
       ${list([
         "Press <strong>START SHIFT</strong> on the top bar. The game saves first.",
-        "Staff wages are paid as the shift starts, even if that puts you below 0 credits.",
+        "Staff wages are paid as the shift starts, even if that takes your money below 0.",
         "The shift clock runs from 08:00 to 20:00, about 5 minutes of play.",
         "<strong>PAUSE</strong> freezes the clock and everyone in the shop.",
         "<strong>CLOSE STORE</strong> stops new customers from coming in for a while. Customers already inside keep shopping, and the clock keeps running. <strong>REOPEN STORE</strong> lets them in again.",
@@ -149,7 +151,7 @@ function orderingTopic() {
       ${list([
         "The <strong>Supply</strong> tab lists every item from the supply licenses you've signed.",
         "Each crate holds one item type, as many as fill one space on a Budget Shelf 2x2: from 20 of the smallest items down to 1 of the largest. Each item shows its crate size and price.",
-        `Every order has a ${formatMoney(DELIVERY_FEE)} delivery fee, however many crates are in it.`,
+        `Every order has a ${formatMoneyAmount(DELIVERY_FEE)} delivery fee, however many crates are in it.`,
         `The Loading Pad has ${LOADING_PAD_SPOTS} spots, so one order can't have more crates than there are free spots.`,
         "Orders arrive on the Loading Pad right away. You can order at any time, even during a shift.",
         "Each item shows how much of it is left on your shelves, so you can see what's running low.",
@@ -178,7 +180,7 @@ function stockingTopic() {
         `While walking with no arrow showing, press ${key("crate")} to throw your top crate the way you're walking. Thrown crates that hit a customer cost reputation.`,
         "Carrying two crates slows you down; a third slows you down further. Empty crates slow you less than filled crates. Your character faces the direction you move, and the crates stay straight.",
         `Press ${key("interact")} at a shelf to stock it by hand.`,
-        "Walk into a crate on the floor to push it out of the way. A taller stack is harder to push, and so is any crate while you're carrying something. A three-crate stack won't move at all while you're carrying a crate.",
+        "Walk into a crate on the floor to push it out of the way. A taller stack is harder to push, and so is any crate while you're carrying something. You can never move more than 4 crates at once, counting the ones you're carrying. Customers shove crates out of their way, no matter how heavy.",
       ])}`),
     section("Shelves", `
       ${list([
@@ -212,7 +214,7 @@ function customersTopic() {
         "If nothing they came for is in stock anywhere in the shop, you lose 1 reputation.",
         "Customers only buy an item if your price isn't too far above the market price. Each customer will pay a little more or less than the others.",
         "When your price is well below the market price, customers show they're happy about the good deal.",
-        "When they're done, they line up in front of the register. If they wait too long, they leave angry.",
+        "When they're done, they line up at a register — if you have more than one, they pick the shortest line. If they wait too long, they leave angry.",
       ])}`),
     section("Running the Register", `
       ${list([
@@ -221,7 +223,7 @@ function customersTopic() {
         "<strong>Card:</strong> type the total on the keypad and press CONFIRM TOTAL. Backspace removes the last character; CLEAR erases the whole entry.",
         `<strong>Cash:</strong> take the customer's cash, then give back their change from the drawer. The large CURRENT CHANGE amount is what you have counted out; CHANGE OWED is what the customer needs back. CURRENT CHANGE turns green when it matches exactly and red when it's too much. Press ${key("handOverChange")} to hand it over. Some customers pay the exact amount, so there's no change to give.`,
         "<strong>Scavengers:</strong> most pay in M-Scrips. 120 M-Scrips equal 1 credit; if the price doesn't convert to a whole M-Scrip, round the amount up. Their bills come in 1, 5, 10, 25, 50, 100, 500, and 1,000 M-Scrips. The sale still earns its listed price in credits, and any change is in M-Scrips.",
-        "<strong>Explorers:</strong> most pay with a travel Chit. The Chit shows its value and a code made of 2 to 5 digits, each from 1 to 4. Enter the code with the arrow keys or the on-screen buttons (up = 1, down = 2, left = 3, right = 4); on a controller, use the D-pad. A wrong direction resets the code. After three wrong directions in one sale, the Explorer gives up and leaves angry: you lose the sale and store reputation, and their items go to the Go-Backs bin. The sale completes when you enter the last digit correctly, and the Explorer takes the Chit back. No change is given.",
+        "<strong>Explorers:</strong> most pay with a travel Chit. The Chit shows its value and a code made of 2 to 5 digits, each from 1 to 4. Enter the code with the arrow keys or the on-screen buttons (up = 1, down = 2, left = 3, right = 4); on a controller, use the D-pad. You have 10 seconds to enter the whole code, and the bar under your input shows the time left. The clock starts over only after a mistake. A wrong direction, or running out of time, resets the code. After three mistakes in one sale, the Explorer gives up and leaves angry: you lose the sale and store reputation, and their items go to the Go-Backs bin. The sale completes when you enter the last digit correctly, and the Explorer takes the Chit back. No change is given.",
         "Release the mouse button after scanning. Start a new click or click-and-hold to collect the customer's cash.",
         `To step away, press ${key("interact")} again<span class="pad-only"> or B</span>. The sale waits for you exactly as you left it.`,
       ])}
@@ -233,8 +235,8 @@ function moneyTopic() {
   return [
     section("Setting Prices", `
       ${list([
-        "The <strong>Inventory</strong> tab shows each item's <strong>Market</strong> price (today's average across the galaxy) and your <strong>Price</strong>.",
-        "Type a new price, or use <strong>-10%</strong>, <strong>+10%</strong>, or <strong>MKT</strong> to match the market price.",
+        "The <strong>Inventory</strong> tab shows your <strong>Price</strong> and <strong>Profit</strong> for each item. Profit is your price minus the cost of one item in a supply crate; delivery fees are not included.",
+        "Type a new price, or use <strong>-10%</strong>, <strong>+10%</strong>, or <strong>MKT</strong> to match today's market price (the galactic average).",
         "The first time you order an item, its price starts at the market price.",
         "Market prices change every new day. Your prices stay where you set them.",
       ])}`),
@@ -246,7 +248,7 @@ function moneyTopic() {
         finished day.</p>`),
     section("Emergency Loan", `
       <p>If you have nothing left to sell and can't afford even one crate, Finances offers an
-        emergency loan that brings you up to ${formatMoney(EMERGENCY_LOAN_TARGET_BALANCE)}.</p>
+        emergency loan that brings you up to ${formatMoneyAmount(EMERGENCY_LOAN_TARGET_BALANCE)}.</p>
       ${list([
         `You pay back ${percent(EMERGENCY_LOAN_FEE_RATE)} more than you borrowed.`,
         `At the end of each day, ${percent(EMERGENCY_LOAN_REPAYMENT_RATE)} of that day's sales goes toward the loan.`,
@@ -264,7 +266,7 @@ function licensesTopic() {
       ])}
       <p>A new shop starts with Basic Fixture Supply already signed. Its first available
         supply contract is Basic Rations &amp; Water.</p>
-      <p>Sign them in the <strong>Contracts</strong> tab. Each one costs credits once, and you
+      <p>Sign them in the <strong>Contracts</strong> tab. Each one is paid for once, and you
         keep it for good.</p>`),
     section("How to Unlock Them", `
       <p>Each contract lists what it needs. Anything you're still missing is shown in red.</p>
@@ -280,10 +282,10 @@ function licensesTopic() {
 function employeesTopic() {
   return [
     section("How They Choose Their Tasks", `
-      <p>Each employee has a job list. Whenever they're free, they go down the list from the top
-        and do the <strong>first job that needs doing</strong>:</p>
+      <p>Each employee can do both jobs. When they're free, they try their priority first,
+        then do the other job if it needs doing:</p>
       ${list([
-        "<strong>Run register:</strong> a customer is in line, you aren't at the register, and no other employee is on it.",
+        "<strong>Run register:</strong> a register has customers in line and nobody — you or another employee — is working it. Each register is worked by one person at a time, so more registers let more staff ring up customers at once.",
         "<strong>Stock shelves:</strong> a crate is on the Loading Pad, and a matching shelf spot has room.",
       ])}
       <p>They take a matching crate from the Loading Pad straight to its shelf spot. They only
@@ -292,15 +294,16 @@ function employeesTopic() {
       <p>At closing time, they finish up and leave once the last customer is gone.</p>`),
     section("How to Set Priorities", `
       <p>Open the <strong>Employee</strong> tab and find the employee under <strong>YOUR STAFF</strong>.
-        Use <strong>UP</strong> and <strong>DOWN</strong> to reorder their job list. The top job
-        comes first. Each employee has their own list. You can only change it between shifts.</p>`),
+        Choose <strong>Prioritize Register</strong> or <strong>Prioritize Stocking</strong>.
+        They try that job first, but still do the other when it needs doing.
+        You can only change this between shifts.</p>`),
     section("How to Hire", `
       ${list([
         "Open the <strong>Employee</strong> tab and look under <strong>STAFF TO HIRE</strong>.",
         "Everyone starts with the same skills, hiring cost, and wages. Pick whoever you like.",
         `Your Store Level sets how many employees you can have hired at once: one at Level
           ${STAFF_LIMIT_LEVELS[0]}, then one more at Levels ${STAFF_LIMIT_LEVELS.slice(1).join(", ")}.`,
-        "Hiring costs credits once. New hires start On Shift.",
+        "Hiring is paid for once. New hires start On Shift.",
         "You can only hire between shifts. New staff start working on the next shift.",
       ])}`),
     section("On Shift &amp; Off Shift", `
@@ -315,17 +318,15 @@ function employeesTopic() {
       ${list([
         `Each employee has two separate skills: <strong>Run register</strong> and <strong>Stock shelves</strong>.
           Each starts at Level 1 and can reach Level ${MAX_EMPLOYEE_SKILL_LEVEL}.`,
-        "Between shifts, open the Employee tab, find the person under YOUR STAFF, and select TRAIN beside the skill you want to improve.",
-        "Review the price and the new wage, then select CONFIRM TRAINING.",
-        "Each course costs more than that employee's previous course, no matter which skill it trains. Ten courses cost the same whether you focus them on one skill or spread them out.",
-        "Training takes the entire next shift. That employee will not work in the shop, but you still pay their current wage when the shift starts.",
+        "Booking new training courses is not currently available.",
+        "An already-booked course takes the entire next shift. That employee will not work in the shop, but you still pay their current wage when the shift starts.",
         "The skill improves when that shift ends. The higher wage starts with the following shift.",
         `Run register gains a larger speed boost at Levels ${EMPLOYEE_MILESTONE_LEVELS.join(" and ")}:
           employees work ${Math.round((getEmployeeJobSpeed({ register: 3 }, "register") - 1) * 100)}% faster
           at Level 3 and ${getEmployeeJobSpeed({ register: 5 }, "register")} times normal speed at Level 5.`,
         "Stock shelves makes restocking trips faster with each level.",
         "Skills and higher wages are permanent.",
-        "Once training is booked, wait until the employee returns before booking another course or changing On Shift / Off Shift.",
+        "If an employee is already away training, wait until they return before changing On Shift / Off Shift.",
       ])}`),
   ].join("");
 }
@@ -360,6 +361,7 @@ function controlsTopic() {
     ["Throw your top crate (while walking, no arrow)", "Space", "X"],
     ["Put a crate down (hold: your whole stack)", "Q", "Y"],
     ["Move the green arrow one crate down", "Ctrl", "Right stick click"],
+    ["Pick up a fixture to move it (facing it, empty hands, store closed)", "Hold Ctrl", "Hold A"],
     ["Pack the Go-Backs bin into crates (at the register, empty hands)", "Q", "Y"],
     ["Manager's Tablet", "I", "Back / View"],
     ["Pause or resume the shift", "P or Esc (Esc closes an open window first)", "Start, then PAUSE"],
@@ -407,15 +409,23 @@ export class HandbookRenderer {
       <button type="button" class="retro-tab-btn handbook-topic-btn${id === topic.id ? " active" : ""}"
         data-handbook-topic="${id}" aria-pressed="${id === topic.id}">${label}</button>`).join("");
     return `
-      <div class="handbook">
-        <nav class="handbook-topics" aria-label="Handbook topics">${buttons}</nav>
-        <article class="handbook-page">
-          <h2>${topic.label}</h2>
-          <p class="handbook-scroll-hint pad-only">Right stick scrolls.</p>
-          ${TOPIC_RENDERERS[topic.id](view)}
-          <button type="button" class="retro-tab-btn handbook-back-btn" data-handbook-topic="${topic.id}">
-            Back to topics</button>
-        </article>
+      <div class="handbook-panel">
+        <div class="fixtures-panel-heading">
+          <h2 class="type-h2">Topics</h2>
+        </div>
+        <div class="fixtures-panel-heading">
+          <h2 class="type-h2">${topic.label}</h2>
+        </div>
+        <hr class="divider-thick fixtures-panel-divider">
+        <section class="fixtures-section">
+          <nav class="retro-slot custom-scrollbar handbook-topics" aria-label="Handbook topics">${buttons}</nav>
+        </section>
+        <section class="fixtures-section">
+          <article class="retro-slot custom-scrollbar handbook-page">
+            <p class="handbook-scroll-hint pad-only">Right stick scrolls.</p>
+            ${TOPIC_RENDERERS[topic.id](view)}
+          </article>
+        </section>
       </div>`;
   }
 }

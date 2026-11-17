@@ -41,6 +41,7 @@ Design is specified in detail in `documentation/` — consult it before inventin
 - Only three MVP factions exist: **Scavengers**, **Mercenaries**, **Explorers**. No "Military" faction yet (it's a documented stretch goal).
 - New UI surfaces must subclass/instantiate `UIWindow` and register with `WindowManager`; use existing CSS classes/variables in `space_dealer_window.css` (CRT scanlines, retro-window borders) rather than new styling patterns.
 - Scanlines must always render **below** text/images in z-order, never on top.
+- Scanlines are currently turned off: `--scanline-pattern` stays defined in `space_dealer_window.css` but no background uses it.
 - Body font is monospace (`"Courier New", monospace`) to match the CRT terminal look — don't remove/override this globally.
 - Code comments follow `documentation/CodeDocumentation.md` (module/class/function blocks, inline rules, ≤ 20% comment budget).
 

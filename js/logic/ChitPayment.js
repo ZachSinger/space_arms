@@ -28,13 +28,17 @@ export class ChitPayment {
       throw new TypeError(`Invalid Chit key: ${digit}.`);
     }
     if (this.completed) return { accepted: false, completed: false, restarted: false };
-    if (digit !== Number(this.code[this.progress])) {
-      this.progress = 0;
-      this.mistakes += 1;
-      return { accepted: false, completed: false, restarted: true };
-    }
+    if (digit !== Number(this.code[this.progress])) return this.timeOut();
     this.progress += 1;
     if (this.progress === this.code.length) this.completed = true;
     return { accepted: true, completed: this.completed, restarted: false };
+  }
+
+  // Too slow counts the same as a wrong key: the code starts over.
+  timeOut() {
+    if (this.completed) return { accepted: false, completed: false, restarted: false };
+    this.progress = 0;
+    this.mistakes += 1;
+    return { accepted: false, completed: false, restarted: true };
   }
 }

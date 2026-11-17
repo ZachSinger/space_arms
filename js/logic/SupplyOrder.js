@@ -54,7 +54,7 @@ export function summarizeSupplyOrder(order, { getCrateCost, credits, freePadSpot
   } else if (crates > freePadSpots) {
     problem = `Only ${freePadSpots} crate ${freePadSpots === 1 ? "spot is" : "spots are"} free on the loading pad. Remove crates from this order or clear the pad.`;
   } else if (total > credits) {
-    problem = `Not enough credits. This order costs ${total} credits and you have ${credits}.`;
+    problem = `Not enough money. This order costs ${total} and you have ${credits}.`;
   }
 
   return { crates, maxCrates, stockCost, deliveryFee, total, problem, canPlace: crates > 0 && !problem };

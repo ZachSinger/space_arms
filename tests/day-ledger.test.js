@@ -48,8 +48,8 @@ const balanceOf = (state) => state.dayLedger.openingCredits +
   state.dayLedger.lines.reduce((sum, line) => sum + line.amount, 0);
 
 function unlockStaff(state) {
-  state.addReputation(60);
-  state.finishShift({ customersServed: 60, customersTurnedAway: 0 });
+  state.addReputation(72);
+  state.finishShift({ customersServed: 72, customersTurnedAway: 0 });
   state.endDay(2);
 }
 
@@ -82,7 +82,7 @@ test("store and faction reputation changes are applied together at the end of th
   assert.deepEqual(state.factionReputation, { scavengers: 4, mercenaries: -2, explorers: 0 });
 });
 
-test("shop levels rise after a shift and the first staff spot opens at Level 4 with 60 reputation", () => {
+test("shop levels rise after a shift and the first staff spot opens at Level 4 with 72 reputation", () => {
   const state = new PlayerState();
   state.addReputation(16);
   state.subReputation(2);
@@ -103,16 +103,16 @@ test("shop levels rise after a shift and the first staff spot opens at Level 4 w
   assert.equal(state.hireEmployee("tavi_stock_clerk", 250), false);
 
   state.endDay(3);
-  state.addReputation(20);
-  state.finishShift({ customersServed: 20, customersTurnedAway: 0 });
-  assert.equal(state.globalReputation, 35);
+  state.addReputation(24);
+  state.finishShift({ customersServed: 24, customersTurnedAway: 0 });
+  assert.equal(state.globalReputation, 39);
   assert.equal(state.shopLevel, 3);
   assert.equal(state.hireEmployee("tavi_stock_clerk", 250), false);
 
   state.endDay(4);
-  state.addReputation(24);
-  state.finishShift({ customersServed: 24, customersTurnedAway: 0 });
-  assert.equal(state.globalReputation, 59);
+  state.addReputation(32);
+  state.finishShift({ customersServed: 32, customersTurnedAway: 0 });
+  assert.equal(state.globalReputation, 71);
   assert.equal(state.shopLevel, 3);
   assert.equal(state.hireEmployee("tavi_stock_clerk", 250), false);
 
@@ -120,11 +120,11 @@ test("shop levels rise after a shift and the first staff spot opens at Level 4 w
   state.addReputation(1);
   assert.equal(state.shopLevel, 3);
   state.finishShift({ customersServed: 1, customersTurnedAway: 0 });
-  assert.equal(state.globalReputation, 60);
+  assert.equal(state.globalReputation, 72);
   assert.equal(state.shopLevel, 4);
 
   state.endDay(6);
-  state.subReputation(55);
+  state.subReputation(67);
   state.finishShift({ customersServed: 0, customersTurnedAway: 0 });
   assert.equal(state.globalReputation, 5);
   assert.equal(state.shopLevel, 4);
@@ -154,7 +154,7 @@ test("older saves keep reputation and hired staff and derive their initial shop 
 test("older level-capped saves catch up to earned reputation without reducing saved levels", () => {
   const saved = new PlayerState().serialize();
   saved.shopLevel = 2;
-  saved.globalReputation = 60;
+  saved.globalReputation = 72;
   assert.equal(PlayerState.deserialize(saved).shopLevel, 4);
   saved.shopLevel = 4;
   saved.globalReputation = -5;
@@ -178,11 +178,11 @@ test("previously signed contracts and hired staff remain owned below their new u
 
 test("one shift can earn multiple levels without applying reputation early", () => {
   const state = new PlayerState();
-  state.addReputation(2465);
+  state.addReputation(4089);
   assert.equal(state.globalReputation, 0);
   assert.equal(state.shopLevel, 1);
   state.finishShift({ customersServed: 1, customersTurnedAway: 0 });
-  assert.equal(state.globalReputation, 2465);
+  assert.equal(state.globalReputation, 4089);
   assert.equal(state.shopLevel, 30);
 });
 
@@ -378,12 +378,13 @@ test("cent-priced sales, spending and receipts survive ending the day and saving
   state.endDay(3);
   const restored = PlayerState.deserialize(JSON.parse(JSON.stringify(state.serialize())));
   assert.equal(restored.credits, 1228.57);
-  assert.equal(restored.lastDayReceipt.closingCredits, 1228.57);
-  assert.equal(isValidLedgerData(restored.lastDayReceipt, { closed: true }), true);
-  assert.equal(summarizeReceipt(restored.lastDayReceipt, restored.credits, 2).totalEarned, 3.57);
+  const closedReceipt = restored.dayReceipts.at(-1);
+  assert.equal(closedReceipt.closingCredits, 1228.57);
+  assert.equal(isValidLedgerData(closedReceipt, { closed: true }), true);
+  assert.equal(summarizeReceipt(closedReceipt, restored.credits, 2).totalEarned, 3.57);
   assert.match(FinancesRenderer.generateHTML({
-    ...financesView(), today: summarizeReceipt(restored.lastDayReceipt, restored.credits, 2),
-  }), /1,228\.57 credits/);
+    ...financesView(), today: summarizeReceipt(closedReceipt, restored.credits, 2),
+  }), /1,228\.57/);
 });
 
 test("ending a day closes the receipt and starts the next day from the closing balance", () => {
@@ -398,7 +399,7 @@ test("ending a day closes the receipt and starts the next day from the closing b
   assert.equal(receipt.closingCredits, 2000);
   assert.deepEqual(receipt.shift, { customersServed: 4, customersTurnedAway: 1 });
   assert.equal(state.awaitingEndDay, false);
-  assert.equal(state.lastDayReceipt, receipt);
+  assert.deepEqual(state.dayReceipts, [receipt]);
   assert.equal(state.dayLedger.day, 2);
   assert.equal(state.dayLedger.openingCredits, 2000);
   assert.equal(state.dayLedger.openingReputation, 3);
@@ -415,7 +416,8 @@ test("receipts and the waiting-to-end-day state survive saving and loading", () 
 
   const saved = JSON.parse(JSON.stringify(state.serialize()));
   assert.equal(isValidLedgerData(saved.dayLedger), true);
-  assert.equal(isValidLedgerData(saved.lastDayReceipt, { closed: true }), true);
+  assert.equal(saved.dayReceipts.length, 1);
+  assert.equal(isValidLedgerData(saved.dayReceipts[0], { closed: true }), true);
   const restored = PlayerState.deserialize(saved);
   assert.deepEqual(restored.serialize(), state.serialize());
   assert.equal(restored.awaitingEndDay, true);
@@ -424,15 +426,27 @@ test("receipts and the waiting-to-end-day state survive saving and loading", () 
 test("saves from before receipts start today's receipt from the loaded balance", () => {
   const saved = new PlayerState().serialize();
   delete saved.dayLedger;
-  delete saved.lastDayReceipt;
+  delete saved.dayReceipts;
   delete saved.awaitingEndDay;
   saved.credits = 777;
   const state = new PlayerState();
   state.applySave(saved, { day: 6 });
   assert.equal(state.dayLedger.day, 6);
   assert.equal(state.dayLedger.openingCredits, 777);
-  assert.equal(state.lastDayReceipt, null);
+  assert.deepEqual(state.dayReceipts, []);
   assert.equal(state.awaitingEndDay, false);
+});
+
+test("saves that kept only yesterday's receipt load it as the receipt history", () => {
+  const state = new PlayerState();
+  state.addCredits(120, { category: "sales", label: "Ration Pack", quantity: 4 });
+  state.finishShift({ customersServed: 2, customersTurnedAway: 0 });
+  const receipt = state.endDay(2);
+  const saved = JSON.parse(JSON.stringify(state.serialize()));
+  delete saved.dayReceipts;
+  saved.lastDayReceipt = JSON.parse(JSON.stringify(receipt));
+  const restored = PlayerState.deserialize(saved);
+  assert.deepEqual(restored.dayReceipts, [receipt]);
 });
 
 function financesView(overrides = {}) {
@@ -449,25 +463,37 @@ function financesView(overrides = {}) {
     awaitingEndDay: true,
     canEndDay: true,
     today: summarizeReceipt(ledger.serialize(), 1105, 4),
-    lastDay: null,
+    receipts: [],
+    lifetime: { daysCompleted: 1, totalSales: 300, customersServed: 2 },
     ...overrides,
   };
 }
 
-test("the Finances tab spells out what every credit was for", () => {
+// A finished day's receipt summary, as getFinancesView lists them for the day buttons.
+function finishedDaySummary(day = 2) {
+  const ledger = new DayLedger({ day, openingCredits: 1000, openingReputation: 2 });
+  ledger.record({ category: "sales", label: "Pulse Rifle", amount: 300, quantity: 2 });
+  ledger.record({ category: "wages", label: "Tavi (Stock Clerk)", amount: -50 });
+  ledger.recordShift({ customersServed: 2, customersTurnedAway: 1 });
+  const closed = ledger.close(1250, 4);
+  return summarizeReceipt(closed, closed.closingCredits, closed.closingReputation);
+}
+
+test("the Finances tab spells out what every bit of money was for", () => {
   const html = FinancesRenderer.generateHTML(financesView());
   for (const text of [
-    "Sold Pulse Rifle (2 items)", "+300 credits",
-    "Supply: Pulse Rifle (1 crate)", "-120 credits",
+    "Sold Pulse Rifle (2 items)", "+300",
+    "Supply: Pulse Rifle (1 crate)", "-120",
     "Delivery fees (1 order)", "Wages paid to Tavi (Stock Clerk)",
-    "Credits at the start of the day", "1,000 credits",
-    "Total earned", "Total spent", "-195 credits",
-    "Credits", "1,105 credits",
+    "Money at the start of the day", "1,000",
+    "Total earned", "Total spent", "-195",
+    "Money", "1,105",
     "Customers served", "Customers turned away (store was full)",
     "END DAY 2", "moves to Day 3",
   ]) {
     assert.ok(html.includes(text), `missing "${text}"`);
   }
+  assert.doesNotMatch(html, /credits/i);
   assert.doesNotMatch(html, /data-finances-start-shift/);
 });
 
@@ -488,20 +514,44 @@ test("the receipt uses short supply and fixture labels and larger earned/spent h
 });
 
 test("all receipt totals, reputation, and customer counts use larger text", async () => {
-  const view = financesView();
-  const html = FinancesRenderer.generateHTML({ ...view, lastDay: view.today });
-  const sections = html.split('<div class="finances-totals">').slice(1);
-  assert.equal(sections.length, 2);
-  for (const section of sections) {
+  const pastDay = finishedDaySummary(2);
+  const views = [
+    FinancesRenderer.generateHTML(financesView()),
+    FinancesRenderer.generateHTML(financesView({ receipts: [pastDay] }), 2),
+  ];
+  for (const html of views) {
+    const sections = html.split('<div class="finances-totals">').slice(1);
+    assert.equal(sections.length, 1);
     for (const label of [
-      "Total earned", "Total spent", "Credits", "Store reputation change",
+      "Total earned", "Total spent", "Money", "Store reputation change",
       "Customers served", "Customers turned away (store was full)",
     ]) {
-      assert.ok(section.includes(label), `missing "${label}" from a totals section`);
+      assert.ok(sections[0].includes(label), `missing "${label}" from a totals section`);
     }
   }
   const css = await readFile(new URL("../styles/space_dealer_window.css", import.meta.url), "utf8");
   assert.match(css, /\.finances-totals\s+\.finances-row\s*\{[^}]*font-size:\s*var\(--font-size-18\)/s);
+});
+
+test("the Finances tab lists a button per day; picking one shows that day's final receipt", () => {
+  const pastDays = [finishedDaySummary(1), finishedDaySummary(2)];
+  const todayView = FinancesRenderer.generateHTML(financesView({ day: 3, receipts: pastDays }));
+  assert.match(todayView, /data-finances-day="today"[^>]*aria-pressed="true"/s);
+  assert.match(todayView, /data-finances-day="1"/);
+  assert.match(todayView, /data-finances-day="2"/);
+  // Newest finished day listed first, right under Today.
+  assert.ok(todayView.indexOf('data-finances-day="2"') < todayView.indexOf('data-finances-day="1"'));
+  assert.match(todayView, /All-Time/);
+  assert.match(todayView, /Days finished/);
+  assert.doesNotMatch(todayView, /Money at the end of the day/);
+
+  const pastView = FinancesRenderer.generateHTML(financesView({ day: 3, receipts: pastDays }), 2);
+  assert.match(pastView, /data-finances-day="2"[^>]*aria-pressed="true"/s);
+  assert.match(pastView, /Money at the end of the day/);
+  // The day's actions and loan belong to today, not to an old receipt.
+  assert.doesNotMatch(pastView, /data-end-day|data-finances-start-shift/);
+  // Each finished day's button shows what the day earned after spending (300 - 50).
+  assert.match(pastView, /\+250/);
 });
 
 test("the Finances tab offers End Day only after the shift, and Start Shift once the day is ended", () => {
@@ -509,7 +559,7 @@ test("the Finances tab offers End Day only after the shift, and Start Shift once
     shiftRunning: true, awaitingEndDay: false, pendingReputationChange: 3,
   }));
   assert.doesNotMatch(running, /data-end-day|data-finances-start-shift/);
-  assert.match(running, /SO FAR/);
+  assert.match(running, /The shift is running/);
   assert.match(running, /Reputation change at shift end/);
   assert.match(running, /\+3/);
   const loss = FinancesRenderer.generateHTML(financesView({
@@ -526,13 +576,13 @@ test("the Finances tab offers End Day only after the shift, and Start Shift once
     awaitingEndDay: false,
     today: summarizeReceipt(new DayLedger({ day: 3, openingCredits: 1105, openingReputation: 4 })
       .serialize(), 1105, 4),
-    lastDay: financesView().today,
+    receipts: [finishedDaySummary(2)],
   }));
   assert.match(ready, /data-finances-start-shift/);
   assert.doesNotMatch(ready, /data-end-day/);
   assert.match(ready, /Nothing sold yet/);
-  assert.match(ready, /DAY 2 RECEIPT \(FINAL\)/);
-  assert.match(ready, /Credits at the end of the day/);
+  assert.match(ready, /Today — Day 3/);
+  assert.match(ready, /data-finances-day="2"/);
 });
 
 test("the top bar shows PAUSE during a shift, END DAY after it, and START SHIFT before the next", (context) => {
@@ -626,7 +676,7 @@ test("a loan is received, saved, repaid from later days' sales, and paid off", (
   state.endDay(3);
   assert.equal(state.emergencyLoan.balance, 1300);
   assert.equal(state.credits, 2000);
-  const repayment = state.lastDayReceipt.lines.find((line) => line.category === "loan_repayments");
+  const repayment = state.dayReceipts.at(-1).lines.find((line) => line.category === "loan_repayments");
   assert.equal(repayment.amount, -200);
 
   const restored = PlayerState.deserialize(JSON.parse(JSON.stringify(state.serialize())));

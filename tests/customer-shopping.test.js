@@ -96,7 +96,7 @@ function makeNavigationScene(obstacles = [], register = null) {
     wallGroup: { getChildren: () => [] },
   };
   scene.obstacleGroup = { getChildren: () => obstacles };
-  scene.fixtures = { register: () => register };
+  scene.fixtures = { register: () => register, registers: () => register ? [register] : [] };
   return scene;
 }
 

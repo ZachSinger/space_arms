@@ -206,8 +206,8 @@ test("returned items collect in the Go-Backs bin and pack into crates up to thei
 
 test("hiring staff spends the fee once and keeps the hire when player state is restored", () => {
   const state = new PlayerState();
-  state.addReputation(60);
-  state.finishShift({ customersServed: 60, customersTurnedAway: 0 });
+  state.addReputation(72);
+  state.finishShift({ customersServed: 72, customersTurnedAway: 0 });
   state.endDay(2);
   assert.equal(state.hireEmployee("tavi_stock_clerk", 250), true);
   assert.equal(state.credits, 1250);

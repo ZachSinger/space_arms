@@ -62,7 +62,8 @@ export class PlayerState {
       openingCredits: this.credits,
       openingReputation: this.globalReputation,
     });
-    this.lastDayReceipt = null;
+    // Every finished day's closed receipt, oldest first, for the Finances tab history.
+    this.dayReceipts = [];
     // True from the end of a shift until the player clicks End Day.
     this.awaitingEndDay = false;
     // Outstanding emergency loan: { balance, takenOnDay }, or null when nothing is owed.
@@ -179,7 +180,7 @@ export class PlayerState {
   endDay(nextDay) {
     this.collectEmergencyLoanRepayment();
     const receipt = this.dayLedger.close(this.credits, this.globalReputation);
-    this.lastDayReceipt = receipt;
+    this.dayReceipts.push(receipt);
     this.dayLedger = new DayLedger({
       day: nextDay,
       openingCredits: this.credits,
@@ -397,9 +398,11 @@ export class PlayerState {
       customersTurnedAway: this.customersTurnedAway,
       goBacks: this.goBacks.stock.filter((entry) => entry.quantity > 0).map((entry) => ({ ...entry })),
       dayLedger: this.dayLedger.serialize(),
-      lastDayReceipt: this.lastDayReceipt
-        ? { ...this.lastDayReceipt, lines: this.lastDayReceipt.lines.map((line) => ({ ...line })) }
-        : null,
+      dayReceipts: this.dayReceipts.map((receipt) => ({
+        ...receipt,
+        lines: receipt.lines.map((line) => ({ ...line })),
+        shift: receipt.shift ? { ...receipt.shift } : null,
+      })),
       awaitingEndDay: this.awaitingEndDay,
       emergencyLoan: this.emergencyLoan ? { ...this.emergencyLoan } : null,
     };
@@ -454,9 +457,13 @@ export class PlayerState {
           openingCredits: data.credits,
           openingReputation: data.globalReputation,
         }),
-      lastDayReceipt: data.lastDayReceipt
-        ? { ...data.lastDayReceipt, lines: data.lastDayReceipt.lines.map((line) => ({ ...line })) }
-        : null,
+      // Saves from before receipt history kept only yesterday's receipt.
+      dayReceipts: (data.dayReceipts ?? (data.lastDayReceipt ? [data.lastDayReceipt] : []))
+        .map((receipt) => ({
+          ...receipt,
+          lines: receipt.lines.map((line) => ({ ...line })),
+          shift: receipt.shift ? { ...receipt.shift } : null,
+        })),
       awaitingEndDay: data.awaitingEndDay ?? false,
       emergencyLoan: data.emergencyLoan ? { ...data.emergencyLoan } : null,
     });
