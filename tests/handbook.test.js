@@ -51,6 +51,14 @@ test("handbook key names match the device in use", () => {
   assert.match(html, /<span class="kbd-only">Space<\/span><span class="pad-only">X<\/span>/);
 });
 
+test("the controls table uses the same labels as live action hints", () => {
+  const html = render("controls");
+  assert.match(html, /<td>Use or open<\/td><td>E<\/td><td>A<\/td>/);
+  assert.match(html, /<td>Put a crate down \(hold: your whole stack\)<\/td><td>Q<\/td><td>Y<\/td>/);
+  assert.match(html, /<td>Pick up a fixture to move it[^<]*<\/td><td>Hold Ctrl<\/td><td>Hold A<\/td>/);
+  assert.match(html, /<td>Manager's Tablet<\/td><td>I or Tab<\/td><td>Back \/ View<\/td>/);
+});
+
 test("the handbook explains paid training absences, permanent skills, and on/off shift", () => {
   const html = render("employees");
   assert.match(html, /Level 1 and can reach Level 5/);

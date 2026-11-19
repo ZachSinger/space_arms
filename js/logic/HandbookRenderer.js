@@ -13,7 +13,7 @@ import {
   EMERGENCY_LOAN_REPAYMENT_RATE,
   EMERGENCY_LOAN_TARGET_BALANCE,
 } from "./EmergencyLoan.js";
-import { controlLabel } from "../input/InputDevice.js";
+import { CONTROL_HELP, controlLabel } from "../input/InputDevice.js";
 import { formatMoneyAmount } from "./Money.js";
 import {
   MAX_EMPLOYEE_SKILL_LEVEL, EMPLOYEE_MILESTONE_LEVELS, getEmployeeJobSpeed,
@@ -369,24 +369,9 @@ function levelsTopic({ shopLevel, licenses }) {
 }
 
 function controlsTopic() {
-  const rows = [
-    ["Walk", "WASD or arrow keys", "Left stick or D-pad"],
-    ["Dash (uses stamina)", "Hold Shift", "Hold B or a trigger"],
-    ["Use or open", "E", "A"],
-    ["Pick up a crate (hold: the whole stack from the arrow up)", "Space", "X"],
-    ["Throw your crate (carrying just one, while walking, no arrow)", "Space", "X"],
-    ["Light up all trash on the floor (hold)", "H", "Not on controller yet"],
-    ["Put a crate down (hold: your whole stack)", "Q", "Y"],
-    ["Move the green arrow one crate down", "Ctrl", "Right stick click"],
-    ["Pick up a fixture to move it (facing it, empty hands, store closed)", "Hold Ctrl", "Hold A"],
-    ["Manager's Tablet", "I or Tab", "Back / View"],
-    ["Pause or resume the shift", "P or Esc (when not paused, Esc closes an open window first)", "Start, then PAUSE; Start to resume"],
-    ["Zoom", "Page Up / Page Down", "LB / RB"],
-    ["Move a fixture while placing it", "Mouse", "Right stick"],
-    ["Turn a fixture or shelf item", "R", "Y"],
-    ["Cancel fixture placement", "Esc or right-click", "X"],
-    ["Cancel other actions", "Esc or right-click", "B"],
-  ].map(([action, keyboard, pad]) => `<tr><td>${action}</td><td>${keyboard}</td><td>${pad}</td></tr>`).join("");
+  const rows = CONTROL_HELP
+    .map(({ label, keyboard, gamepad }) => `<tr><td>${label}</td><td>${keyboard}</td><td>${gamepad}</td></tr>`)
+    .join("");
   return [
     section("Controls", `
       <table class="handbook-table">

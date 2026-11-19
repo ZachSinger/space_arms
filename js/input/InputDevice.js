@@ -12,8 +12,11 @@ const KEYBOARD_LABELS = Object.freeze({
   crate: "Space",
   putDown: "Q",
   nextCrate: "Ctrl",
+  moveFixture: "Ctrl",
+  dash: "Shift",
+  highlightTrash: "H",
   goBacks: "Q",
-  tablet: "I",
+  tablet: "I or Tab",
   rotate: "R",
   cancel: "Esc",
   handOverChange: "Space",
@@ -24,12 +27,41 @@ const GAMEPAD_LABELS = Object.freeze({
   crate: "X",
   putDown: "Y",
   nextCrate: "Right stick click",
+  moveFixture: "A",
+  dash: "B or a trigger",
+  highlightTrash: "Not on controller yet",
   goBacks: "Y",
-  tablet: "Back",
+  tablet: "Back / View",
   rotate: "Y",
   cancel: "B",
   handOverChange: "Y",
 });
+
+const controlHelp = (label, keyboard, gamepad) => Object.freeze({ label, keyboard, gamepad });
+
+export const CONTROL_HELP = Object.freeze([
+  controlHelp("Walk", "WASD or arrow keys", "Left stick or D-pad"),
+  controlHelp("Dash (uses stamina)", `Hold ${controlLabel("dash", "keyboard")}`, `Hold ${controlLabel("dash", "gamepad")}`),
+  controlHelp("Use or open", controlLabel("interact", "keyboard"), controlLabel("interact", "gamepad")),
+  controlHelp("Pick up a crate (hold: the whole stack from the arrow up)", controlLabel("crate", "keyboard"), controlLabel("crate", "gamepad")),
+  controlHelp("Throw your crate (carrying just one, while walking, no arrow)", controlLabel("crate", "keyboard"), controlLabel("crate", "gamepad")),
+  controlHelp("Light up all trash on the floor (hold)", controlLabel("highlightTrash", "keyboard"), controlLabel("highlightTrash", "gamepad")),
+  controlHelp("Put a crate down (hold: your whole stack)", controlLabel("putDown", "keyboard"), controlLabel("putDown", "gamepad")),
+  controlHelp("Move the green arrow one crate down", controlLabel("nextCrate", "keyboard"), controlLabel("nextCrate", "gamepad")),
+  controlHelp(
+    "Pick up a fixture to move it (facing it, empty hands, store closed)",
+    `Hold ${controlLabel("moveFixture", "keyboard")}`,
+    `Hold ${controlLabel("moveFixture", "gamepad")}`,
+  ),
+  controlHelp("Manager's Tablet", controlLabel("tablet", "keyboard"), controlLabel("tablet", "gamepad")),
+  controlHelp("Pause or resume the shift", "P or Esc (when not paused, Esc closes an open window first)",
+    "Start, then PAUSE; Start to resume"),
+  controlHelp("Zoom", "Page Up / Page Down", "LB / RB"),
+  controlHelp("Move a fixture while placing it", "Mouse", "Right stick"),
+  controlHelp("Turn a fixture or shelf item", controlLabel("rotate", "keyboard"), controlLabel("rotate", "gamepad")),
+  controlHelp("Cancel fixture placement", "Esc or right-click", "X"),
+  controlHelp("Cancel other actions", "Esc or right-click", controlLabel("cancel", "gamepad")),
+]);
 
 export function getInputDevice() {
   return currentDevice;

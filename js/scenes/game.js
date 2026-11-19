@@ -59,7 +59,7 @@ import { CleaningSystem } from "../modules/cleaning/CleaningSystem.js";
 import { CheckoutWindow } from "../logic/CheckoutWindow.js";
 import { GamepadInput, PAD } from "../input/GamepadInput.js";
 import { UINavigator } from "../logic/UINavigator.js";
-import { controlLabel, getInputDevice, setInputDevice } from "../input/InputDevice.js";
+import { controlLabel, setInputDevice } from "../input/InputDevice.js";
 import { SaveManager } from "../../SaveManager.js";
 import { database } from "./boot.js"; // the exported DatabaseManager singleton
 import { installSceneTextSize } from "../logic/GameTextSize.js";
@@ -1289,9 +1289,7 @@ export class GameScene extends Phaser.Scene {
   getFixtureMoveAction() {
     const fixture = this.getHoldToMoveFixture();
     if (!fixture) return null;
-    const moveKey = getInputDevice() === "gamepad"
-      ? controlLabel("interact")
-      : controlLabel("nextCrate");
+    const moveKey = controlLabel("moveFixture");
     const hint = getFixtureType(fixture.type).kind === "trash"
       ? `Hold ${moveKey}: Move`
       : `Hold ${moveKey}: Move this ${this.fixtures.displayName(fixture)}`;
