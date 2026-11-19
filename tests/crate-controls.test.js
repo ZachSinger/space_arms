@@ -20,6 +20,7 @@ let cacheDirectory;
 let GameScene;
 let ShelfFixture;
 let GameState;
+let Messages;
 const originalPhaser = globalThis.Phaser;
 
 before(async () => {
@@ -50,6 +51,7 @@ before(async () => {
   ({ GameScene } = await server.ssrLoadModule("/js/scenes/game.js"));
   ({ ShelfFixture } = await server.ssrLoadModule("/js/logic/ShelfFixture.js"));
   ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));
+  ({ Messages } = await server.ssrLoadModule("/js/world/Messages.js"));
 });
 
 after(async () => {
@@ -100,7 +102,7 @@ function createHarness({ carrying = false } = {}) {
   };
   scene.carriedCrate = carrying ? {} : null;
   const classes = new Set(["hidden"]);
-  scene.gameMessageElement = {
+  scene.messages = new Messages(scene, {
     textContent: "",
     style: { setProperty(name, value) { this[name] = value; } },
     classList: {
@@ -109,9 +111,7 @@ function createHarness({ carrying = false } = {}) {
       toggle(name, force) { if (force) classes.add(name); else classes.delete(name); },
       contains(name) { return classes.has(name); },
     },
-  };
-  scene.gameMessageActive = false;
-  scene.crateHint = "";
+  });
   const messages = [];
   scene.showGameMessage = (text) => messages.push(text);
   scene.input = { keyboard: {
@@ -295,7 +295,7 @@ test("with empty hands, holding Ctrl while facing the trashcan picks it up to mo
   h.scene.player.currentFacing = "up";
   assert.equal(h.scene.getHoldToMoveFixture(), trashcan);
   h.scene.updateCrateHint();
-  assert.equal(h.scene.gameMessageElement.textContent, "E: Create\nHold Ctrl: Move");
+  assert.equal(h.scene.messages.element.textContent, "E: Create\nHold Ctrl: Move");
 
   const moved = [];
   h.scene.fixturePlacement.begin = (id) => moved.push(id);
@@ -307,7 +307,7 @@ test("with empty hands, holding Ctrl while facing the trashcan picks it up to mo
   h.scene.player.currentFacing = "down";
   assert.equal(h.scene.getHoldToMoveFixture(), null, "not while looking away from it");
   h.scene.updateCrateHint();
-  assert.equal(h.scene.gameMessageElement.textContent, "",
+  assert.equal(h.scene.messages.element.textContent, "",
     "facing away from the trashcan, it offers nothing at all");
 });
 
@@ -406,7 +406,7 @@ test("picking up a crate of the item you hold pours as much as fits into yours a
   h.scene.restockCrates.push(floor);
 
   h.scene.updateCrateHint();
-  assert.match(h.scene.crateHint, /Space: Move all 2 .* from this crate into yours/);
+  assert.match(h.scene.messages.hint, /Space: Move all 2 .* from this crate into yours/);
   tap(h);
   assert.equal(held.quantity, limit - 1);
   assert.equal(floor.quantity, 0);
@@ -415,7 +415,7 @@ test("picking up a crate of the item you hold pours as much as fits into yours a
 
   floor.add("wpn_pis_01", 5);
   h.scene.updateCrateHint();
-  assert.match(h.scene.crateHint, /Move 1 of the 5 .* \(that's all that fits\)/);
+  assert.match(h.scene.messages.hint, /Move 1 of the 5 .* \(that's all that fits\)/);
   tap(h);
   assert.equal(held.quantity, limit);
   assert.equal(floor.quantity, 4);
@@ -793,7 +793,7 @@ test("E supplies one free empty crate only with empty hands", () => {
 
 test("the context lines say what each crate button does right now", () => {
   const h = createHarness();
-  const element = h.scene.gameMessageElement;
+  const element = h.scene.messages.element;
   const [bottom] = floorStack(h.scene, 2);
   h.scene.updateCrateHint();
   assert.equal(element.textContent, [
@@ -857,14 +857,14 @@ for (const state of ["nothingNearby", "moving", "placement", "startingShift", "l
   test(`crate hint is hidden during ${state}`, () => {
     const h = createHarness();
     h.scene.restockCrates = [crate()];
-    h.scene.gameMessageElement.classList.remove("hidden");
+    h.scene.messages.element.classList.remove("hidden");
     if (state === "nothingNearby") h.scene.restockCrates = [crate({ distance: 57 })];
     else if (state === "moving") h.scene.restockCrates = [crate({ stationary: false })];
     else if (state === "placement") h.scene.fixturePlacement.active = true;
     else if (state === "menu") h.scene.windowManager.windows.set("inventory", { id: "inventory", isOpen: true });
     else h.scene[state] = true;
     h.scene.updateCrateHint();
-    assert.equal(h.scene.gameMessageElement.classList.contains("hidden"), true);
+    assert.equal(h.scene.messages.element.classList.contains("hidden"), true);
   });
 }
 
@@ -873,7 +873,7 @@ test("behind the counter the hint always offers the way out", () => {
   h.scene.restockCrates = [crate()];
   h.scene.operatingRegister = true;
   h.scene.updateCrateHint();
-  const element = h.scene.gameMessageElement;
+  const element = h.scene.messages.element;
   assert.equal(element.textContent, "E: Leave the register");
   assert.equal(element.classList.contains("hidden"), false);
 });
@@ -889,8 +889,8 @@ test("warnings take priority over crate hints and restore the current hint after
   const target = crate();
   h.scene.restockCrates = [target];
   h.scene.updateCrateHint();
-  const element = h.scene.gameMessageElement;
-  GameScene.prototype.showGameMessage.call(h.scene, "Not enough credits.");
+  const element = h.scene.messages.element;
+  h.scene.messages.show("Not enough credits.");
   assert.equal(element.classList.contains("context-message"), false);
   target.quantity = 3;
   h.scene.updateCrateHint();
@@ -905,7 +905,7 @@ test("warnings take priority over crate hints and restore the current hint after
   assert.equal(element.classList.contains("fading"), false);
   assert.equal(element.classList.contains("hidden"), false);
 
-  GameScene.prototype.showGameMessage.call(h.scene, "Another warning");
+  h.scene.messages.show("Another warning");
   h.scene.restockCrates = [];
   h.scene.updateCrateHint();
   assert.equal(element.textContent, "Another warning");
@@ -1105,15 +1105,15 @@ test("a backroom door and the register explain themselves in the bottom bar's he
   scene.player.currentFacing = "up";
   scene.interactables = { findTarget: (action) => action === "register" ? { hint: "E: Activate Register" } : null };
   scene.updateCrateHint();
-  assert.match(scene.gameMessageElement.textContent, /^E: Go into the backroom$/m);
+  assert.match(scene.messages.element.textContent, /^E: Go into the backroom$/m);
   scene.playerInBackroom = true;
   Object.assign(scene.player.sprite, { x: 145, y: 6464 });
   scene.updateCrateHint();
-  assert.match(scene.gameMessageElement.textContent, /^E: Go back out to the shop$/m);
+  assert.match(scene.messages.element.textContent, /^E: Go back out to the shop$/m);
   scene.playerInBackroom = false;
   Object.assign(scene.player.sprite, { x: 900, y: 900 });
   scene.updateCrateHint();
-  assert.match(scene.gameMessageElement.textContent, /^E: Activate Register$/m);
+  assert.match(scene.messages.element.textContent, /^E: Activate Register$/m);
 });
 
 test("E opens hands-on shelves with a carried stack instead of bulk-delivering it", () => {

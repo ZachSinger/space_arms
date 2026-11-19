@@ -74,6 +74,7 @@ import {
   UPSET_REPUTATION_LOSS, WALK_OUT_REPUTATION_LOSS, getCleanlinessMax, getCleanlinessScore,
 } from "../logic/Litter.js";
 import { UIWindow } from "../logic/UIWindow.js";
+import { Messages, SHOP_MESSAGE_COLOR } from "../world/Messages.js";
 import { GamepadInput, PAD } from "../logic/GamepadInput.js";
 import { UINavigator } from "../logic/UINavigator.js";
 import { controlLabel, getInputDevice, setInputDevice } from "../logic/InputDevice.js";
@@ -242,19 +243,12 @@ export class GameScene extends Phaser.Scene {
     this.loadFailed = false;
     this.autosaveBlocked = false;
     this.saveInProgress = null;
-    this.saveErrorWindow = null;
     this.autosaveQueued = false;
     this.lastSavedSnapshot = null;
     this.saveStatus = "Not saved yet";
-    this.gameMessageElement = document.getElementById("game-message");
-    if (!this.gameMessageElement) throw new Error("Missing game message element");
-    this.gameMessageTimeout = null;
-    this.gameMessageActive = false;
-    this.crateHint = "";
+    this.messages = new Messages(this, document.getElementById("game-message"));
     this.events.once("shutdown", () => {
-      clearTimeout(this.gameMessageTimeout);
-      this.gameMessageTimeout = null;
-      this.gameMessageElement.classList.add("hidden");
+      this.messages.destroy();
       this.shiftClosingOverlay?.remove();
       this.shiftClosingOverlay = null;
     });
@@ -1764,7 +1758,7 @@ export class GameScene extends Phaser.Scene {
       this.showingSave = true;
       await this.saveOffShift();
       this.autosaveBlocked = false;
-      this.saveErrorWindow?.close();
+      this.messages.closeSaveError();
       this.setSaveStatus("Saved. Autosaves while the store is closed.");
       this.showShopMessage("Game saved.");
     } catch (error) {
@@ -1793,7 +1787,7 @@ export class GameScene extends Phaser.Scene {
       this.lastSavedSnapshot = snapshot;
       this.autosaveBlocked = false;
       this.setSaveStatus("Saved. Autosaves while the store is closed.");
-      this.saveErrorWindow?.close();
+      this.messages.closeSaveError();
     } finally {
       this.saveInProgress = null;
       this.updateSaveControls();
@@ -1821,43 +1815,11 @@ export class GameScene extends Phaser.Scene {
   // --- On-screen messages and save errors ---
 
   showShopMessage(message) {
-    this.showGameMessage(message, "#f59e0b");
+    this.messages.show(message, SHOP_MESSAGE_COLOR);
   }
 
-  /**
-   * Shows a temporary message (2250 ms, then a 250 ms fade), after which the current
-   * context hint returns.
-   * @param {string} message
-   * @param {string} color - CSS color
-   */
-  showGameMessage(message, color = "#f59e0b") {
-    const element = this.gameMessageElement;
-    if (!element) throw new Error("Game message element is not initialized");
-    clearTimeout(this.gameMessageTimeout);
-    this.gameMessageActive = true;
-    element.textContent = message;
-    element.style.setProperty("--game-message-color", color);
-    element.classList.remove("hidden", "fading", "context-message");
-    this.gameMessageTimeout = setTimeout(() => {
-      element.classList.add("fading");
-      this.gameMessageTimeout = setTimeout(() => {
-        this.gameMessageTimeout = null;
-        this.gameMessageActive = false;
-        this.renderContextMessage();
-      }, 250);
-    }, 2250);
-  }
-
-  renderContextMessage() {
-    // Temporary warnings take priority; restore the current hint when they expire.
-    if (this.gameMessageActive) return;
-    const element = this.gameMessageElement;
-    if (element.textContent !== this.crateHint) element.textContent = this.crateHint;
-    element.style.setProperty("--game-message-color", "#38bdf8");
-    element.classList.remove("fading");
-    element.classList.add("context-message");
-    element.classList.toggle("crowded", this.crateHint.split("\n").length > 3);
-    element.classList.toggle("hidden", !this.crateHint);
+  showGameMessage(message, color = SHOP_MESSAGE_COLOR) {
+    this.messages.show(message, color);
   }
 
   // Reloading the page (rather than switching scenes) guarantees a completely fresh start
@@ -1890,25 +1852,17 @@ export class GameScene extends Phaser.Scene {
     console.error(this.loadFailed ? "Could not load game" : "Could not save game", error);
     this.autosaveBlocked = true;
     this.setSaveStatus(`Not saved: ${error.message}`);
-    if (!this.saveErrorWindow) {
-      this.saveErrorWindow = new UIWindow({
-        id: "save-error-window", title: "SAVE / LOAD ERROR", width: "400px", height: "auto",
-        x: 80, y: 120, shouldCloseOtherWindows: true,
-        contentHTML: '<p data-save-error role="alert"></p><button class="action-btn" data-save-retry></button>',
-      }, this.windowManager);
-      this.saveErrorWindow.element.querySelector("[data-save-retry]").addEventListener("click", () => {
+    this.messages.showSaveError({
+      text: `${this.loadFailed ? "Your saved game could not be loaded. It has not been overwritten." : "Your progress could not be saved."} ${error.message}`,
+      buttonLabel: this.loadFailed ? "RETURN TO TITLE" : "RETRY SAVE",
+      onButton: () => {
         if (this.loadFailed) this.scene.start("scene-title");
         else {
           this.autosaveBlocked = false;
           this.saveOffShift().catch((failure) => this.handlePersistenceError(failure));
         }
-      });
-    }
-    this.saveErrorWindow.element.querySelector("[data-save-error]").textContent =
-      `${this.loadFailed ? "Your saved game could not be loaded. It has not been overwritten." : "Your progress could not be saved."} ${error.message}`;
-    this.saveErrorWindow.element.querySelector("[data-save-retry]").textContent =
-      this.loadFailed ? "RETURN TO TITLE" : "RETRY SAVE";
-    this.saveErrorWindow.openWindow();
+      },
+    });
   }
 
   // --- Pathfinding ---
@@ -3106,8 +3060,7 @@ export class GameScene extends Phaser.Scene {
           : `Hold ${moveKey}: Move this ${this.fixtures.displayName(movable)}`);
       }
     }
-    this.crateHint = [...new Set(lines)].join("\n");
-    this.renderContextMessage();
+    this.messages.setHint([...new Set(lines)].join("\n"));
   }
 
   // The green arrow over the marked crate, plus the bottom bar and holding cards.
@@ -3529,39 +3482,8 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
-  /**
-   * Brief world-space confirmation text. It holds still for 900 ms before floating up and
-   * fading over 900 ms, since it spawns where the player is least likely to be looking.
-   * @param {number} x - px
-   * @param {number} y - px
-   * @param {string} text
-   * @param {string} color - CSS color
-   */
   showFloatingText(x, y, text, color) {
-    this.debugInfo?.record("game-message", { x, y, text, color });
-    const scale = this.getPopupScale(x, y);
-    const label = this.add
-      .text(x, y, text, {
-        fontFamily: '"Courier New", monospace',
-        fontSize: "18px",
-        fontStyle: "bold",
-        color,
-        stroke: "#000000",
-        strokeThickness: 4,
-      })
-      .setOrigin(0.5, 1)
-      .setDepth(9999)
-      .setScale(scale);
-
-    this.tweens.add({
-      targets: label,
-      y: y - 36 * scale,
-      alpha: 0,
-      duration: 900,
-      delay: 900,
-      ease: "Cubic.easeOut",
-      onComplete: () => label.destroy(),
-    });
+    this.messages.floatText(x, y, text, color);
   }
 
   // --- Fixture sprites ---

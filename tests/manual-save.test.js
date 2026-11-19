@@ -87,6 +87,7 @@ function createHarness(write = async () => true) {
     hud: { renderSaveState: (state) => controls.push(state) },
     serialize: () => ({ credits: scene.credits }),
     showShopMessage: (message) => messages.push(message),
+    messages: { closeSaveError() {} },
     handlePersistenceError: (error) => {
       errors.push(error);
       scene.autosaveBlocked = true;
