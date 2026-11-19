@@ -16,6 +16,7 @@ let ManagerTablet;
 let SupplyTab;
 let EmployeeTab;
 let FixturesTab;
+let LayoutTab;
 let GameState;
 let cacheDirectory;
 const originalDocument = globalThis.document;
@@ -65,6 +66,7 @@ before(async () => {
   ({ SupplyTab } = await server.ssrLoadModule("/js/logic/SupplyTab.js"));
   ({ EmployeeTab } = await server.ssrLoadModule("/js/logic/EmployeeTab.js"));
   ({ FixturesTab } = await server.ssrLoadModule("/js/logic/FixturesTab.js"));
+  ({ LayoutTab } = await server.ssrLoadModule("/js/logic/LayoutTab.js"));
   ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));
 });
 
@@ -117,6 +119,12 @@ function createHarness() {
       this.markup = markup;
       for (const list of Object.values(fixtureLists)) list.scrollTop = 0;
     },
+  };
+  const layoutList = { scrollTop: 23 };
+  const layoutPanel = {
+    contains: (element) => element !== null,
+    querySelector: (selector) => selector === ".layout-expansions-list" ? layoutList : null,
+    set innerHTML(_markup) { layoutList.scrollTop = 0; },
   };
   const document = { activeElement: null };
   globalThis.document = document;
@@ -208,6 +216,7 @@ function createHarness() {
     if (selector === '[data-tab-panel="contracts"]') return contractsPanel;
     if (selector === '[data-tab-panel="supply"]') return supplyPanel;
     if (selector === '[data-tab-panel="fixtures"]') return fixturesPanel;
+    if (selector === '[data-tab-panel="layout"]') return layoutPanel;
     return null;
   };
   body.querySelectorAll = () => [];
@@ -459,6 +468,29 @@ test("Fixtures tab routes purchase, move, and crate actions", () => {
     ["crate", "fixture-1"],
   ]);
   assert.match(tablet.fixturesTab.purchaseNotice, /Bought BUDGET SHELF 2x2/);
+});
+
+test("Layout tab routes floor and backroom expansion purchases", () => {
+  const { body, scene } = createHarness();
+  const calls = [];
+  scene.fixtureSystem.buyExpansion = (expansionId) => calls.push(["floor", expansionId]);
+  scene.fixtureSystem.buyBackroomUpgrade = (upgradeId) => calls.push(["backroom", upgradeId]);
+  const control = (attribute, key, value) => Object.assign(new TestElement(), {
+    dataset: { [key]: value },
+    closest(selector) { return selector === attribute ? this : null; },
+  });
+
+  body.emit("click", {
+    target: control("[data-buy-expansion-id]", "buyExpansionId", "expansion_west"),
+  });
+  body.emit("click", {
+    target: control("[data-buy-backroom-id]", "buyBackroomId", "backroom_a"),
+  });
+
+  assert.deepEqual(calls, [
+    ["floor", "expansion_west"],
+    ["backroom", "backroom_a"],
+  ]);
 });
 
 test("opening the tablet hides checkout and closing it resumes register work", () => {
@@ -759,6 +791,9 @@ test("refreshing fixture panels preserves list scroll positions", () => {
   tablet.fixturesTab = new FixturesTab({});
   tablet.fixturesTab.panel = fixtures;
   tablet.fixturesTab.renderPanel = () => "";
+  tablet.layoutTab = new LayoutTab({});
+  tablet.layoutTab.panel = layout;
+  tablet.layoutTab.renderPanel = () => "";
   tablet.bodyElement = {
     querySelector: (selector) => selector.includes('"fixtures"') ? fixtures : layout,
   };

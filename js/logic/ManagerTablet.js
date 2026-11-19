@@ -10,7 +10,7 @@ import { EmployeeTab, EMPLOYEE_PRIORITY_SELECTOR } from "./EmployeeTab.js";
 import { ContractsTab } from "./ContractsTab.js";
 import { SupplyTab } from "./SupplyTab.js";
 import { FixturesTab } from "./FixturesTab.js";
-import { LayoutRenderer } from "./LayoutRenderer.js";
+import { LayoutTab } from "./LayoutTab.js";
 import { FinancesRenderer } from "./FinancesRenderer.js";
 import { HandbookRenderer } from "./HandbookRenderer.js";
 import { FixtureHighlight } from "./FixtureHighlight.js";
@@ -75,6 +75,7 @@ export class ManagerTablet {
     );
     this.supplyTab = new SupplyTab(scene);
     this.fixturesTab = new FixturesTab(scene);
+    this.layoutTab = new LayoutTab(scene);
     this.handbookTopic = "store";
     this.financesDay = null; // a finished day being reviewed, or null for today
 
@@ -152,6 +153,15 @@ export class ManagerTablet {
         },
       },
     );
+    this.layoutTab.bind(
+      this.bodyElement.querySelector('[data-tab-panel="layout"]'),
+      this.bodyElement,
+      () => this.renderPanelContent("layout"),
+      {
+        buyExpansion: (expansionId) => this.scene.fixtureSystem.buyExpansion(expansionId),
+        buyBackroomUpgrade: (upgradeId) => this.scene.fixtureSystem.buyBackroomUpgrade(upgradeId),
+      },
+    );
     this.fixtureHighlight = new FixtureHighlight(scene, this.uiWindow);
     this.uiWindow.onClose = () => {
       this.fixturesTab.purchaseNotice = "";
@@ -183,12 +193,6 @@ export class ManagerTablet {
         this.financesDay = value === "today" ? null : Number(value);
         this.refreshFinancesPanel();
       }
-
-      const buyExpansionButton = event.target.closest("[data-buy-expansion-id]");
-      if (buyExpansionButton) this.scene.fixtureSystem.buyExpansion(buyExpansionButton.dataset.buyExpansionId);
-
-      const buyBackroomButton = event.target.closest("[data-buy-backroom-id]");
-      if (buyBackroomButton) this.scene.fixtureSystem.buyBackroomUpgrade(buyBackroomButton.dataset.buyBackroomId);
 
     });
     // Focused controls must not also drive the player or fire game hotkeys.
@@ -246,7 +250,7 @@ export class ManagerTablet {
     if (tabId === "contracts") return this.contractsTab.draw();
     if (tabId === "supply") return this.supplyTab.draw();
     if (tabId === "fixtures") return this.fixturesTab.draw();
-    if (tabId === "layout") return LayoutRenderer.generateHTML(this.scene);
+    if (tabId === "layout") return this.layoutTab.draw();
     if (tabId === "finances") {
       return FinancesRenderer.generateHTML(this.scene.shift.financesView(), this.financesDay);
     }
@@ -316,23 +320,8 @@ export class ManagerTablet {
   }
 
   refreshLayoutPanels() {
-    for (const id of ["layout", "fixtures"]) {
-      const panel = this.bodyElement.querySelector(`[data-tab-panel="${id}"]`);
-      if (!panel) continue;
-      const positions = [".fixtures-catalog-list", ".fixtures-owned-list", ".layout-expansions-list"].map((selector) => ({
-        selector,
-        top: panel.querySelector(selector)?.scrollTop ?? 0,
-      }));
-      if (id === "fixtures") {
-        this.fixturesTab.redraw();
-        continue;
-      }
-      panel.innerHTML = this.renderPanelContent(id);
-      for (const { selector, top } of positions) {
-        const list = panel.querySelector(selector);
-        if (list) list.scrollTop = top;
-      }
-    }
+    this.layoutTab.redraw();
+    this.fixturesTab.redraw();
     this.updateSaveStatus();
   }
 
