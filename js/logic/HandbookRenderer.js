@@ -18,6 +18,7 @@ import { formatMoneyAmount } from "./Money.js";
 import {
   MAX_EMPLOYEE_SKILL_LEVEL, EMPLOYEE_MILESTONE_LEVELS, getEmployeeJobSpeed,
 } from "./EmployeeTraining.js";
+import { html, raw } from "../core/html.js";
 
 export const HANDBOOK_TOPICS = Object.freeze([
   { id: "store", label: "Running the Store" },
@@ -35,15 +36,17 @@ const percent = (rate) => `${Math.round(rate * 100)}%`;
 
 // The key or button for an action; CSS shows whichever matches the device in use.
 function key(action) {
-  return `<span class="kbd-only">${controlLabel(action, "keyboard")}</span>` +
-    `<span class="pad-only">${controlLabel(action, "gamepad")}</span>`;
+  return html`<span class="kbd-only">${controlLabel(action, "keyboard")}</span><span class="pad-only">${controlLabel(action, "gamepad")}</span>`;
 }
 
+// Topic fragments are authored markup; dynamic game and control values are escaped when built.
 function section(title, body) {
-  return `<section class="handbook-section"><h3>${title}</h3><hr class="divider-medium">${body}</section>`;
+  return String(html`
+    <section class="handbook-section"><h3>${title}</h3><hr class="divider-medium">${raw(body)}</section>
+  `);
 }
 
-const list = (items) => `<ul>${items.map((item) => `<li>${item}</li>`).join("")}</ul>`;
+const list = (items) => String(html`<ul>${items.map((item) => raw(`<li>${item}</li>`))}</ul>`);
 
 /**
  * Everything each Store Level unlocks, from the same data the game uses.
@@ -72,9 +75,9 @@ export function getLevelRewards(licenses) {
 function storeTopic({ shopLevel, reputation }) {
   const next = getNextShopLevel(shopLevel);
   const progress = next
-    ? `You are at <strong>Store Level ${shopLevel}</strong> with <strong>${reputation}</strong> store
-       reputation. Finish a shift with at least <strong>${next.reputation}</strong> to reach Level ${next.level}.`
-    : `You are at <strong>Store Level ${shopLevel}</strong>, the highest level.`;
+    ? String(html`You are at <strong>Store Level ${shopLevel}</strong> with <strong>${reputation}</strong> store
+       reputation. Finish a shift with at least <strong>${next.reputation}</strong> to reach Level ${next.level}.`)
+    : String(html`You are at <strong>Store Level ${shopLevel}</strong>, the highest level.`);
   return [
     section("Store Level", `
       <p class="handbook-callout">${progress}</p>
@@ -322,7 +325,7 @@ function employeesTopic() {
         "Hiring is paid for once. New hires start On Shift.",
         "You can only hire between shifts. New staff start working on the next shift.",
       ])}`),
-    section("On Shift &amp; Off Shift", `
+    section("On Shift & Off Shift", `
       ${list([
         "Each person under <strong>YOUR STAFF</strong> has an <strong>ON SHIFT</strong> and an <strong>OFF SHIFT</strong> button. The lit one is their current setting.",
         "<strong>On Shift:</strong> they come to work, and you pay their wages when each shift starts.",
@@ -330,7 +333,7 @@ function employeesTopic() {
         "You can change the setting between shifts. Everyone you've hired can be On Shift at the same time.",
         "An employee away training is <strong>not available</strong> for that shift, whatever their setting. Their wage for that shift is still paid. After training, they go back to their usual setting.",
       ])}`),
-    section("Job Levels &amp; Training", `
+    section("Job Levels & Training", `
       ${list([
         `Each employee has two separate skills: <strong>Run register</strong> and <strong>Stock shelves</strong>.
           Each starts at Level 1 and can reach Level ${MAX_EMPLOYEE_SKILL_LEVEL}.`,
@@ -352,12 +355,15 @@ function levelsTopic({ shopLevel, licenses }) {
   const rows = SHOP_LEVEL_TIERS.filter(({ level }) => level > 1).map(({ level, reputation }) => {
     const reached = level <= shopLevel;
     const unlocks = rewards.get(level);
-    return `
+    const unlockMarkup = unlocks.map((unlock, index) => html`
+      ${unlock}${index < unlocks.length - 1 ? raw("<br>") : null}
+    `);
+    return String(html`
       <tr class="${reached ? "handbook-level-reached" : ""}">
-        <td>${level}${reached ? " &#10003;" : ""}</td>
+        <td>${level}${reached ? raw(" &#10003;") : null}</td>
         <td>${reputation}</td>
-        <td>${unlocks.length ? unlocks.join("<br>") : "&mdash;"}</td>
-      </tr>`;
+        <td>${unlocks.length ? unlockMarkup : raw("&mdash;")}</td>
+      </tr>`);
   }).join("");
   return section("What Each Level Unlocks", `
     <p>Finish a shift with at least the listed store reputation to reach that level. Levels
@@ -370,7 +376,9 @@ function levelsTopic({ shopLevel, licenses }) {
 
 function controlsTopic() {
   const rows = CONTROL_HELP
-    .map(({ label, keyboard, gamepad }) => `<tr><td>${label}</td><td>${keyboard}</td><td>${gamepad}</td></tr>`)
+    .map(({ label, keyboard, gamepad }) => String(html`
+      <tr><td>${label}</td><td>${keyboard}</td><td>${gamepad}</td></tr>
+    `))
     .join("");
   return [
     section("Controls", `
@@ -406,10 +414,11 @@ export class HandbookRenderer {
   static generateHTML(view) {
     const topic = HANDBOOK_TOPICS.find(({ id }) => id === view.topic);
     if (!topic) throw new Error(`Unknown handbook topic: ${view.topic}`);
-    const buttons = HANDBOOK_TOPICS.map(({ id, label }) => `
+    const buttons = HANDBOOK_TOPICS.map(({ id, label }) => String(html`
       <button type="button" class="retro-tab-btn handbook-topic-btn${id === topic.id ? " active" : ""}"
-        data-handbook-topic="${id}" aria-pressed="${id === topic.id}">${label}</button>`).join("");
-    return `
+        data-handbook-topic="${id}" aria-pressed="${String(id === topic.id)}">${label}</button>
+    `)).join("");
+    return String(html`
       <div class="handbook-panel">
         <div class="fixtures-panel-heading">
           <h2 class="type-h2">Topics</h2>
@@ -419,14 +428,14 @@ export class HandbookRenderer {
         </div>
         <hr class="divider-thick fixtures-panel-divider">
         <section class="fixtures-section">
-          <nav class="retro-slot custom-scrollbar handbook-topics" aria-label="Handbook topics">${buttons}</nav>
+          <nav class="retro-slot custom-scrollbar handbook-topics" aria-label="Handbook topics">${raw(buttons)}</nav>
         </section>
         <section class="fixtures-section">
           <article class="retro-slot custom-scrollbar handbook-page">
             <p class="handbook-scroll-hint pad-only">Right stick scrolls.</p>
-            ${TOPIC_RENDERERS[topic.id](view)}
+            ${raw(TOPIC_RENDERERS[topic.id](view))}
           </article>
         </section>
-      </div>`;
+      </div>`);
   }
 }

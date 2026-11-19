@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import licenseData from "../data/Licenses.json" with { type: "json" };
 import { SupplierLicense } from "../js/logic/Licenses.js";
 import { HANDBOOK_TOPICS, HandbookRenderer, getLevelRewards } from "../js/logic/HandbookRenderer.js";
+import { escapeHtml } from "../js/core/html.js";
 
 const licenses = licenseData.map((data) => new SupplierLicense(data));
 const render = (topic, shopLevel = 1, reputation = 0) =>
@@ -11,11 +12,27 @@ const render = (topic, shopLevel = 1, reputation = 0) =>
 test("every handbook topic renders with its title and the topic buttons", () => {
   for (const { id, label } of HANDBOOK_TOPICS) {
     const html = render(id);
-    assert.ok(html.includes(`<h2 class="type-h2">${label}</h2>`));
+    assert.ok(html.includes(`<h2 class="type-h2">${escapeHtml(label)}</h2>`));
     assert.match(html, new RegExp(`data-handbook-topic="${id}" aria-pressed="true"`));
     assert.equal(html.match(/data-handbook-topic=/g).length, HANDBOOK_TOPICS.length);
     assert.doesNotMatch(html, /undefined|NaN/);
   }
+});
+
+test("handbook level rewards escape license names", () => {
+  const html = HandbookRenderer.generateHTML({
+    topic: "levels",
+    shopLevel: 1,
+    reputation: 0,
+    licenses: [{
+      name: '<img src=x onerror="run()">',
+      requiredShopLevel: 2,
+      unlocksFixtures: [],
+    }],
+  });
+
+  assert.match(html, /Supply license: &lt;img src=x onerror=&quot;run\(\)&quot;&gt;/);
+  assert.doesNotMatch(html, /<img src=x/);
 });
 
 test("an unknown handbook topic is an error", () => {
@@ -56,7 +73,7 @@ test("the controls table uses the same labels as live action hints", () => {
   assert.match(html, /<td>Use or open<\/td><td>E<\/td><td>A<\/td>/);
   assert.match(html, /<td>Put a crate down \(hold: your whole stack\)<\/td><td>Q<\/td><td>Y<\/td>/);
   assert.match(html, /<td>Pick up a fixture to move it[^<]*<\/td><td>Hold Ctrl<\/td><td>Hold A<\/td>/);
-  assert.match(html, /<td>Manager's Tablet<\/td><td>I or Tab<\/td><td>Back \/ View<\/td>/);
+  assert.match(html, /<td>Manager&#39;s Tablet<\/td><td>I or Tab<\/td><td>Back \/ View<\/td>/);
 });
 
 test("the handbook explains paid training absences, permanent skills, and on/off shift", () => {

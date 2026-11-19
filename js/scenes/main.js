@@ -7,6 +7,7 @@ import "../../styles/windows/contracts.css";
 import "../../styles/windows/employee.css";
 import "../../styles/windows/fixture-layout.css";
 import "../../styles/windows/finances.css";
+import "../../styles/windows/handbook.css";
 import "../../styles/windows/inventory.css";
 import "../../styles/windows/supply.css";
 import Phaser from "phaser";

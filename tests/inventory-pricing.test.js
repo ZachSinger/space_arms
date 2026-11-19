@@ -132,6 +132,10 @@ function createHarness() {
     querySelector: (selector) => selector === ".finances-day-list" ? financesDayList : null,
     set innerHTML(_markup) { financesDayList.scrollTop = 0; },
   };
+  const handbookPanel = {
+    contains: (element) => element !== null,
+    set innerHTML(markup) { this.markup = markup; },
+  };
   const document = { activeElement: null };
   globalThis.document = document;
 
@@ -224,6 +228,7 @@ function createHarness() {
     if (selector === '[data-tab-panel="fixtures"]') return fixturesPanel;
     if (selector === '[data-tab-panel="layout"]') return layoutPanel;
     if (selector === '[data-tab-panel="finances"]') return financesPanel;
+    if (selector === '[data-tab-panel="handbook"]') return handbookPanel;
     return null;
   };
   body.querySelectorAll = () => [];
@@ -525,6 +530,19 @@ test("Finances tab routes day selection and shift and loan actions", () => {
   click("[data-pay-off-emergency-loan]");
 
   assert.deepEqual(calls, ["start", "end-day", "close", "take-loan", "pay-off-loan"]);
+});
+
+test("Handbook tab routes topic selection and redraws its content", () => {
+  const { body, tablet } = createHarness();
+  const topicButton = Object.assign(new TestElement(), {
+    dataset: { handbookTopic: "levels" },
+    closest(selector) { return selector === "[data-handbook-topic]" ? this : null; },
+  });
+
+  body.emit("click", { target: topicButton });
+
+  assert.equal(tablet.handbookTab.topic, "levels");
+  assert.match(tablet.handbookTab.panel.markup, /What Each Level Unlocks/);
 });
 
 test("refreshing Finances preserves the day list scroll position", () => {

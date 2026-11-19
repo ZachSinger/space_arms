@@ -12,7 +12,7 @@ import { SupplyTab } from "./SupplyTab.js";
 import { FixturesTab } from "./FixturesTab.js";
 import { LayoutTab } from "./LayoutTab.js";
 import { FinancesTab } from "./FinancesTab.js";
-import { HandbookRenderer } from "./HandbookRenderer.js";
+import { HandbookTab } from "./HandbookTab.js";
 import { FixtureHighlight } from "./FixtureHighlight.js";
 import { GAME_EVENTS } from "../core/Events.js";
 import { getFixtureResaleValue, getFixtureType } from "./FixtureLayout.js";
@@ -77,7 +77,7 @@ export class ManagerTablet {
     this.fixturesTab = new FixturesTab(scene);
     this.layoutTab = new LayoutTab(scene);
     this.financesTab = new FinancesTab(scene);
-    this.handbookTopic = "store";
+    this.handbookTab = new HandbookTab(gameState, () => database.getAllLicenses());
 
     const tabDefs = getTabDefs(scene);
     const tabBarHTML = tabDefs.map(
@@ -179,6 +179,11 @@ export class ManagerTablet {
         payOffLoan: () => this.scene.shift.payOffLoan(),
       },
     );
+    this.handbookTab.bind(
+      this.bodyElement.querySelector('[data-tab-panel="handbook"]'),
+      this.bodyElement,
+      () => this.renderPanelContent("handbook"),
+    );
     this.fixtureHighlight = new FixtureHighlight(scene, this.uiWindow);
     this.uiWindow.onClose = () => {
       this.fixturesTab.purchaseNotice = "";
@@ -191,15 +196,6 @@ export class ManagerTablet {
       if (button) this.switchTab(button.dataset.tab);
     });
 
-    // Delegated, since panel innerHTML is fully replaced on every game state change.
-    this.bodyElement.addEventListener("click", (event) => {
-      const handbookTopicButton = event.target.closest("[data-handbook-topic]");
-      if (handbookTopicButton) {
-        this.handbookTopic = handbookTopicButton.dataset.handbookTopic;
-        this.refreshHandbookPanel();
-      }
-
-    });
     // Focused controls must not also drive the player or fire game hotkeys.
     const keyboard = this.scene.input.keyboard;
     this.bodyElement.addEventListener("focusin", (event) => {
@@ -257,14 +253,7 @@ export class ManagerTablet {
     if (tabId === "fixtures") return this.fixturesTab.draw();
     if (tabId === "layout") return this.layoutTab.draw();
     if (tabId === "finances") return this.financesTab.draw();
-    if (tabId === "handbook") {
-      return HandbookRenderer.generateHTML({
-        topic: this.handbookTopic,
-        shopLevel: this.gameState.reputation.shopLevel,
-        reputation: this.gameState.reputation.global,
-        licenses: database.getAllLicenses(),
-      });
-    }
+    if (tabId === "handbook") return this.handbookTab.draw();
     if (tabId === "textStyles") return renderTextStylesPage();
     throw new Error(`Unknown tablet tab: ${tabId}`);
   }
@@ -309,8 +298,7 @@ export class ManagerTablet {
   }
 
   refreshHandbookPanel() {
-    const panel = this.bodyElement.querySelector('[data-tab-panel="handbook"]');
-    if (panel) panel.innerHTML = this.renderPanelContent("handbook");
+    this.handbookTab.redraw();
   }
 
   refreshSupplyPanel() {
