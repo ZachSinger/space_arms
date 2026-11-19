@@ -837,7 +837,7 @@
   "loading_pad",
   "sales_floor"
  ],
- "layoutVersion": 10,
+ "layoutVersion": 11,
  "crates": [
   {
    "kind": "item",
@@ -852,14 +852,17 @@
     {
      "kind": "item",
      "itemId": "srv_02",
-     "quantity": 1
+     "quantity": 1,
+     "id": "crate-2"
     },
     {
      "kind": "item",
      "itemId": "srv_06",
-     "quantity": 2
+     "quantity": 2,
+     "id": "crate-3"
     }
-   ]
+   ],
+   "id": "crate-1"
   },
   {
    "kind": "item",
@@ -869,7 +872,8 @@
    "x": 96,
    "y": 6560,
    "velocityX": 0,
-   "velocityY": 0
+   "velocityY": 0,
+   "id": "crate-4"
   },
   {
    "kind": "item",
@@ -884,9 +888,11 @@
     {
      "kind": "item",
      "itemId": "amo_01",
-     "quantity": 2
+     "quantity": 2,
+     "id": "crate-6"
     }
-   ]
+   ],
+   "id": "crate-5"
   },
   {
    "kind": "item",
@@ -896,7 +902,8 @@
    "x": 96,
    "y": 6624,
    "velocityX": 0,
-   "velocityY": 0
+   "velocityY": 0,
+   "id": "crate-7"
   },
   {
    "kind": "item",
@@ -906,7 +913,8 @@
    "x": 88,
    "y": 6680,
    "velocityX": 0,
-   "velocityY": 0
+   "velocityY": 0,
+   "id": "crate-8"
   },
   {
    "kind": "item",
@@ -916,7 +924,8 @@
    "x": 128,
    "y": 6680,
    "velocityX": 0,
-   "velocityY": 0
+   "velocityY": 0,
+   "id": "crate-9"
   },
   {
    "kind": "item",
@@ -926,7 +935,8 @@
    "x": 168,
    "y": 6680,
    "velocityX": 0,
-   "velocityY": 0
+   "velocityY": 0,
+   "id": "crate-10"
   }
  ],
  "carriedCrate": null,
@@ -937,5 +947,6 @@
    "x": 1044.6985245562319,
    "y": 136.93620328987717
   }
- ]
+ ],
+ "nextCrateId": 11
 }

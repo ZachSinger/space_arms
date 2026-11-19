@@ -26,6 +26,7 @@ let SupplySystem;
 let FixtureSystem;
 let FixtureViews;
 let CheckoutSystem;
+let CrateSystem;
 let CrateWorld;
 const originalPhaser = globalThis.Phaser;
 
@@ -62,6 +63,7 @@ before(async () => {
   ({ FixtureSystem } = await server.ssrLoadModule("/js/systems/FixtureSystem.js"));
   ({ FixtureViews } = await server.ssrLoadModule("/js/world/FixtureViews.js"));
   ({ CheckoutSystem } = await server.ssrLoadModule("/js/systems/CheckoutSystem.js"));
+  ({ CrateSystem } = await server.ssrLoadModule("/js/systems/CrateSystem.js"));
   ({ CrateWorld } = await server.ssrLoadModule("/js/world/CrateWorld.js"));
 });
 
@@ -71,6 +73,19 @@ after(async () => {
   if (originalPhaser === undefined) delete globalThis.Phaser;
   else globalThis.Phaser = originalPhaser;
 });
+
+function bindCrateSystem(scene) {
+  scene.crateSystem = new CrateSystem(scene);
+  for (const property of [
+    "restockCrates", "carriedCrate", "carriedCrates", "floorStacks", "markedStackBase", "markedFromTop",
+  ]) {
+    Object.defineProperty(scene, property, {
+      configurable: true,
+      get: () => scene.crateSystem[property],
+      set: (value) => { scene.crateSystem[property] = value; },
+    });
+  }
+}
 
 // Areas without door sprites; tests add the portals they need.
 function testAreas(scene, portals = []) {
@@ -101,6 +116,7 @@ function createHarness({ carrying = false } = {}) {
     get top() { return playerSprite.y - 10; }, get bottom() { return playerSprite.y + 10; },
   };
   scene.gameState = new GameState({ items: [] });
+  bindCrateSystem(scene);
   scene.restockCrates = [];
   scene.supply = new SupplySystem(scene, null);
   scene.areas = testAreas(scene);
@@ -122,6 +138,7 @@ function createHarness({ carrying = false } = {}) {
   scene.fixtureSystem = new FixtureSystem(scene);
   scene.checkoutSystem = new CheckoutSystem(scene);
   scene.carriedCrate = carrying ? {} : null;
+  scene.carriedCrates = carrying ? [scene.carriedCrate] : [];
   const classes = new Set(["hidden"]);
   scene.messages = new Messages(scene, {
     textContent: "",
@@ -1579,6 +1596,7 @@ test("inventory totals include all carried crates and active customer carts but 
     goBacks: { stock: [{ itemId: "rifle", quantity: 1 }] },
     catalog: { licenses: new Set([undefined]), owns: () => true },
   };
+  bindCrateSystem(scene);
   const padCrate = { itemId: "rifle", quantity: 2, kind: "item" };
   const stackBase = { itemId: "rifle", quantity: 3, kind: "item" };
   const stackTop = { itemId: "rifle", quantity: 4, kind: "item" };
@@ -1748,6 +1766,7 @@ test("fixture crates can be sold on the loading pad or while carried, only once 
   };
   scene.restockCrates = [padCrate];
   scene.carriedCrate = carried;
+  scene.carriedCrates = [carried];
   closed = false;
   assert.equal(scene.fixtureSystem.sellCrate(padCrate), false);
   assert.match(messages.at(-1), /while the store is closed/);

@@ -22,10 +22,9 @@ import { isMoney, roundMoney } from "../logic/Money.js";
 import { CUSTOMER_TRAITS } from "../logic/CustomerTraits.js";
 import { getLicensedFactionIds } from "../logic/CustomerPooling.js";
 import { Player, PLAYER_CRATE_HOLD_OFFSET } from "../logic/Player.js";
-import { Crate, CRATE_STACK_SPACING } from "../logic/Crate.js";
-import { getItemCrateTint } from "../logic/CrateCategory.js";
+import { CRATE_STACK_SPACING } from "../logic/Crate.js";
 import {
-  FLOOR_STACK_MAX, HOLD_KEY_MS, MAX_CARRIED_CRATES, isInFacingCone, isSquarelyInFront,
+  FLOOR_STACK_MAX, HOLD_KEY_MS, MAX_CARRIED_CRATES,
 } from "../logic/CrateStack.js";
 import { CrateFooter } from "../logic/CrateFooter.js";
 import { getCrateOrderQuantity } from "../logic/SupplyOrder.js";
@@ -57,6 +56,7 @@ import { FixtureSystem } from "../systems/FixtureSystem.js";
 import { SupplySystem } from "../systems/SupplySystem.js";
 import { CustomerFlow } from "../systems/CustomerFlow.js";
 import { CheckoutSystem } from "../systems/CheckoutSystem.js";
+import { CrateSystem } from "../systems/CrateSystem.js";
 import { CrateWorld } from "../world/CrateWorld.js";
 import { CheckoutWindow } from "../logic/CheckoutWindow.js";
 import { GamepadInput, PAD } from "../logic/GamepadInput.js";
@@ -194,6 +194,17 @@ export class GameScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.syncCarriedCrate, this);
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.syncFloorStacks, this);
     this.gameState = new GameState({ items: database.getAllItems(), events: this.eventBus });
+    this.crateSystem = new CrateSystem(this);
+    for (const property of [
+      "restockCrates", "carriedCrate", "carriedCrates", "floorStacks", "markedStackBase", "markedFromTop",
+    ]) {
+      Object.defineProperty(this, property, {
+        configurable: true,
+        enumerable: true,
+        get: () => this.crateSystem[property],
+        set: (value) => { this.crateSystem[property] = value; },
+      });
+    }
     this.recalculateActiveFactions();
     this.shiftClock = new ShiftClock();
     this.customerFlow = new CustomerFlow(this);
@@ -652,32 +663,19 @@ export class GameScene extends Phaser.Scene {
   }
 
   getCarriedCrates() {
-    if (Array.isArray(this.carriedCrates)) return this.carriedCrates;
-    return this.carriedCrate ? [this.carriedCrate] : [];
+    return this.crateSystem.getCarriedCrates();
   }
 
   addCarriedCrate(crate) {
-    const stack = this.getCarriedCrates();
-    stack.push(crate);
-    this.carriedCrates = stack;
-    this.carriedCrate = crate;
-    this.syncCarriedCrate();
+    this.crateSystem.addCarriedCrate(crate);
   }
 
   removeCarriedCrate(crate) {
-    const stack = this.getCarriedCrates();
-    const index = stack.indexOf(crate);
-    if (index < 0) return false;
-    stack.splice(index, 1);
-    this.carriedCrates = stack;
-    if (this.carriedCrate === crate) this.carriedCrate = stack.at(-1) ?? null;
-    this.syncCarriedCrate();
-    return true;
+    return this.crateSystem.removeCarriedCrate(crate);
   }
 
   createItemCrate(itemId, quantity, x, y) {
-    const item = database.getItem(itemId);
-    return new Crate(this, itemId, quantity, x, y, { tint: getItemCrateTint(item?.tags) });
+    return this.crateSystem.createItemCrate(itemId, quantity, x, y);
   }
 
   registerInteractableSources() {
@@ -892,18 +890,10 @@ export class GameScene extends Phaser.Scene {
   // --- Saving and loading ---
 
   serialize() {
+    const crates = this.crateSystem.serialize();
     const snapshot = {
       ...this.gameState.toSave(),
-      crates: this.restockCrates.map((crate) => {
-        const above = this.floorStacks.get(crate) ?? [];
-        return above.length
-          ? { ...crate.serialize(), stack: above.map((stacked) => stacked.serializePayload()) }
-          : crate.serialize();
-      }),
-      carriedCrate: this.carriedCrate ? {
-        ...this.carriedCrate.serializePayload(),
-      } : null,
-      carriedCrates: this.getCarriedCrates().map((crate) => crate.serializePayload()),
+      ...crates,
       ...(this.trash ? { trash: this.serializeTrash() } : {}),
     };
     return validateShopSave(snapshot, database);
@@ -955,45 +945,8 @@ export class GameScene extends Phaser.Scene {
     this.areas.playerArea = AREA.SHOP;
     this.player.teleportTo(this.storeDoor.x, this.storeDoor.y + TILE_SIZE);
     this.cameraRig.refresh();
-    for (const crate of this.getFloorCrates()) crate.destroy();
-    this.floorStacks = new Map();
-    this.markedStackBase = null;
     this.cratePress = null;
-    this.restockCrates = data.crates.map((entry) => {
-      const crate = entry.kind === "fixture"
-        ? new Crate(this, entry.itemId, entry.quantity, entry.x, entry.y, { kind: "fixture", typeId: entry.typeId })
-        : this.createItemCrate(entry.itemId, entry.quantity, entry.x, entry.y);
-      crate.applySave(entry);
-      // Older saves have no onPad flag: anything resting on the pad was a delivery.
-      const onPad = entry.onPad ?? this.supply.padRect.contains(entry.x, entry.y);
-      if (onPad) crate.lockToPad();
-      if (entry.stack?.length) {
-        this.floorStacks.set(crate, entry.stack.map((stacked) => {
-          const above = this.createItemCrate(stacked.itemId, stacked.quantity, entry.x, entry.y);
-          above.pickUp(crate.sprite);
-          return above;
-        }));
-      }
-      return crate;
-    });
-    this.syncFloorStacks();
-    for (const crate of this.getCarriedCrates()) crate.destroy();
-    if (this.carriedCrate && !this.getCarriedCrates().includes(this.carriedCrate)) this.carriedCrate.destroy();
-    this.carriedCrate = null;
-    this.carriedCrates = [];
-    const carriedEntries = Array.isArray(data.carriedCrates)
-      ? data.carriedCrates
-      : data.carriedCrate ? [data.carriedCrate] : [];
-    for (const entry of carriedEntries) {
-      const crate = entry.kind === "fixture"
-        ? new Crate(this, entry.itemId, entry.quantity, this.player.sprite.x, this.player.sprite.y,
-          { kind: "fixture", typeId: entry.typeId })
-        : this.createItemCrate(entry.itemId, entry.quantity, this.player.sprite.x, this.player.sprite.y);
-      crate.pickUp(this.player.sprite);
-      this.carriedCrates.push(crate);
-    }
-    this.carriedCrate = this.carriedCrates.at(-1) ?? null;
-    this.syncCarriedCrate();
+    this.crateSystem.load(data);
     this.heldTrash?.sprite.destroy();
     this.heldTrash = null;
     this.trash?.load(data.trash ?? []);
@@ -1530,7 +1483,7 @@ export class GameScene extends Phaser.Scene {
       this.removeCarriedCrate(crate);
       crate.destroy();
     }
-    this.gameState.shop.changed();
+    this.gameState.crates.changed();
     this.showGameMessage(empties.length === 1
       ? "Empty crate put in the trashcan."
       : `${empties.length} empty crates put in the trashcan.`, "#10b981");
@@ -1656,7 +1609,7 @@ export class GameScene extends Phaser.Scene {
       throw new Error("A newly supplied empty crate could not be picked up.");
     }
     this.addCarriedCrate(crate);
-    this.gameState.shop.changed();
+    this.gameState.crates.changed();
     this.showGameMessage("Took a free empty crate.", "#10b981");
     return true;
   }
@@ -1690,60 +1643,29 @@ export class GameScene extends Phaser.Scene {
 
   // Every crate on the floor: loose crates, plus the crates stacked on them.
   getFloorCrates() {
-    return [...this.restockCrates, ...[...this.floorStacks.values()].flat()];
+    return this.crateSystem.getFloorCrates();
   }
 
   /**
    * The closest floor crate within half a floor square of the player, in a wide cone around
    * the way he faces, so distant stacks don't take over the put-down action.
    * @param {{ moving?: boolean }} [options] - moving: find a crate still flying or rolling instead
-   * @returns {Crate | null}
+   * @returns {import("../logic/Crate.js").Crate | null}
    */
   findCrateInFront({ moving = false } = {}) {
-    const { center } = this.player.sprite.body;
-    let best = null;
-    let bestDistance = TILE_SIZE / 2;
-    for (const crate of this.restockCrates) {
-      if (crate.canPickUp() === moving) continue;
-      if (!isInFacingCone(center, crate.sprite, this.player.currentFacing)) continue;
-      if (!moving && !isSquarelyInFront(this.player.sprite.body, crate.getFloorBounds(),
-        this.player.currentFacing)) continue;
-      const { left, right, top, bottom } = crate.sprite.getBounds();
-      const dx = Math.max(left - center.x, 0, center.x - right);
-      const dy = Math.max(top - center.y, 0, center.y - bottom);
-      const distance = Math.hypot(dx, dy);
-      if (distance <= bestDistance) {
-        best = crate;
-        bestDistance = distance;
-      }
-    }
-    return best;
+    return this.crateSystem.findCrateInFront({ moving });
   }
 
   // The floor stack in reach (bottom crate first) and the crate its green arrow points at.
   // The arrow starts on the top crate whenever the player reaches a different stack.
   markedFloorStack() {
-    const base = this.findCrateInFront();
-    if (!base) {
-      this.markedStackBase = null;
-      return null;
-    }
-    const crates = [base, ...(this.floorStacks.get(base) ?? [])];
-    if (base !== this.markedStackBase) {
-      this.markedStackBase = base;
-      this.markedFromTop = 0;
-    }
-    this.markedFromTop = Math.min(this.markedFromTop, crates.length - 1);
-    return { base, crates, marked: crates[crates.length - 1 - this.markedFromTop] };
+    return this.crateSystem.markedFloorStack();
   }
 
   // Ctrl / right stick click: moves the green arrow one crate down the stack, looping back to
   // the top after the bottom.
   markNextCrateDown() {
-    if (!this.controlMode.allows("crate") || this.checkoutSystem.operatingRegister) return;
-    const stack = this.markedFloorStack();
-    if (!stack || stack.crates.length < 2) return;
-    this.markedFromTop = (this.markedFromTop + 1) % stack.crates.length;
+    this.crateSystem.markNextCrateDown();
   }
 
   /**
@@ -1988,64 +1910,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   emitCratePickedUp(crate) {
-    this.eventBus.emit(GAME_EVENTS.CRATE_PICKED_UP, {
-      kind: crate.kind, itemId: crate.itemId, typeId: crate.typeId, quantity: crate.quantity,
-    });
+    this.crateSystem.emitCratePickedUp(crate);
   }
 
   emitCrateDropped(crate, { x, y }, thrown) {
-    this.eventBus.emit(GAME_EVENTS.CRATE_DROPPED, {
-      kind: crate.kind, itemId: crate.itemId, typeId: crate.typeId, quantity: crate.quantity, thrown, x, y,
-    });
+    this.crateSystem.emitCrateDropped(crate, { x, y }, thrown);
   }
 
   // Adds the marked crate to the top of what you're carrying, and with withAbove every crate
   // above it too. Without withAbove the floor stack closes the gap.
   pickUpFromStack({ base, crates, marked }, withAbove) {
-    const lifted = withAbove ? crates.slice(crates.indexOf(marked)) : [marked];
-    const above = this.floorStacks.get(base) ?? [];
-    if (marked === base) {
-      const { x, y } = base.sprite;
-      if (!base.pickUp(this.player.sprite)) {
-        this.showGameMessage("Wait for crate to stop", "#f59e0b");
-        return false;
-      }
-      this.restockCrates = this.restockCrates.filter((crate) => crate !== base);
-      this.floorStacks.delete(base);
-      // The next crate up settles onto the floor in the bottom crate's place.
-      const [newBase, ...rest] = withAbove ? [] : above;
-      if (newBase) {
-        newBase.drop(x, y, 0, 0, this.crateMotionPaused);
-        this.restockCrates.push(newBase);
-        if (rest.length) this.floorStacks.set(newBase, rest);
-      }
-    } else {
-      const remaining = above.filter((crate) => !lifted.includes(crate));
-      if (remaining.length) this.floorStacks.set(base, remaining);
-      else this.floorStacks.delete(base);
-    }
-    for (const crate of lifted) this.addCarriedCrate(crate);
-    this.markedStackBase = null;
-    this.syncFloorStacks();
-    this.gameState.shop.changed();
-    for (const crate of lifted) this.emitCratePickedUp(crate);
-    return true;
+    return this.crateSystem.pickUpFromStack({ base, crates, marked }, withAbove);
   }
 
   // Moves `count` crates from the top of what you're carrying onto the floor stack, keeping
   // their order; the rest stay in your hands.
   setCratesOnStack({ base }, count) {
-    const stack = this.getCarriedCrates();
-    const placed = stack.slice(-count);
-    this.carriedCrates = stack.slice(0, -count);
-    this.carriedCrate = this.carriedCrates.at(-1) ?? null;
-    this.floorStacks.set(base, [...(this.floorStacks.get(base) ?? []), ...placed]);
-    this.markedStackBase = null;
-    this.syncCarriedCrate();
-    this.syncFloorStacks();
-    this.gameState.shop.changed();
-    for (const crate of placed) this.emitCrateDropped(crate, base.sprite, false);
-    return true;
+    return this.crateSystem.setCratesOnStack({ base }, count);
   }
 
   // People (player, customers, staff) are drawn lower-on-screen in front: a customer walking
@@ -2161,25 +2042,7 @@ export class GameScene extends Phaser.Scene {
   // Tap Q: your top crate goes on the floor in front of you. With throwing, it's thrown the
   // way you're walking instead.
   dropTopCrate(throwing = false) {
-    const crate = this.carriedCrate;
-    if (!crate) return false;
-    const { x, y } = this.player.sprite;
-    const { x: velocityX, y: velocityY } = this.player.sprite.body.velocity;
-    const position = throwing
-      ? crate.findThrowPosition(this.player.sprite, velocityX, velocityY)
-      : crate.findDropPosition(x, y, this.player.sprite, [], undefined, this.player.currentFacing);
-    if (!position) {
-      this.showGameMessage(throwing ? "No room to throw crate" : "No room to drop crate", "#94a3b8");
-      return false;
-    }
-    if (throwing) crate.startThrow(this.player.sprite, velocityX, velocityY);
-    else crate.drop(position.x, position.y, 0, 0, this.crateMotionPaused);
-    this.restockCrates.push(crate);
-    this.removeCarriedCrate(crate);
-    this.syncFloorStacks();
-    this.gameState.shop.changed();
-    this.emitCrateDropped(crate, position, throwing);
-    return true;
+    return this.crateSystem.dropTopCrate(throwing);
   }
 
   // The pick-up button with no green arrow: throws your top crate the way you're walking.
@@ -2194,24 +2057,7 @@ export class GameScene extends Phaser.Scene {
 
   // Hold Q: everything you're carrying goes on the floor in front of you as one stack.
   dropWholeStack() {
-    const [bottom, ...rest] = this.getCarriedCrates();
-    if (!bottom) return false;
-    const position = bottom.findDropPosition(this.player.sprite.x, this.player.sprite.y,
-      this.player.sprite, [], undefined, this.player.currentFacing);
-    if (!position) {
-      this.showGameMessage("No room to set the stack down", "#94a3b8");
-      return false;
-    }
-    bottom.drop(position.x, position.y, 0, 0, this.crateMotionPaused);
-    this.restockCrates.push(bottom);
-    if (rest.length) this.floorStacks.set(bottom, rest);
-    this.carriedCrates = [];
-    this.carriedCrate = null;
-    this.syncCarriedCrate();
-    this.syncFloorStacks();
-    this.gameState.shop.changed();
-    for (const crate of [bottom, ...rest]) this.emitCrateDropped(crate, position, false);
-    return true;
+    return this.crateSystem.dropWholeStack();
   }
 
   // Keyboard equivalent of clicking the register: steps behind the counter if close enough,

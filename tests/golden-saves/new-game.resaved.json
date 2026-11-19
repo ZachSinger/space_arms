@@ -557,9 +557,10 @@
   "loading_pad",
   "sales_floor"
  ],
- "layoutVersion": 10,
+ "layoutVersion": 11,
  "crates": [],
  "carriedCrate": null,
  "carriedCrates": [],
- "trash": []
+ "trash": [],
+ "nextCrateId": 1
 }

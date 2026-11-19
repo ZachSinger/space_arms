@@ -191,8 +191,18 @@ export function checkShopSave(data, database) {
     data.unlockedZones.every((id) => ZONES.some((zone) => zone.id === id)) &&
     ZONES.filter((zone) => !zone.locked).every((zone) => data.unlockedZones.includes(zone.id)),
   "invalid unlocked rooms.");
-  const validateCrateContents = (crate) => {
+  const seenCrateIds = new Set();
+  let maximumCrateId = 0;
+  const validateCrateContents = (crate, { registerId = true } = {}) => {
     requireSave(isRecord(crate), "invalid crate contents.");
+    requireSave(typeof crate.id === "string" && /^crate-[1-9]\d*$/.test(crate.id),
+      "invalid crate id.");
+    const crateId = Number(crate.id.slice("crate-".length));
+    maximumCrateId = Math.max(maximumCrateId, crateId);
+    if (registerId) {
+      requireSave(!seenCrateIds.has(crate.id), "duplicate crate id.");
+      seenCrateIds.add(crate.id);
+    }
     const kind = crate.kind ?? "item";
     if (kind === "fixture") {
       requireSave(getFixtureType(crate.typeId), "unknown fixture crate.");
@@ -239,7 +249,7 @@ export function checkShopSave(data, database) {
     }
   }
   requireSave(data.carriedCrate === null || isRecord(data.carriedCrate), "invalid carried crate.");
-  if (data.carriedCrate) validateCrateContents(data.carriedCrate);
+  if (data.carriedCrate) validateCrateContents(data.carriedCrate, { registerId: false });
   if (data.carriedCrates !== undefined) {
     requireSave(Array.isArray(data.carriedCrates) && data.carriedCrates.length <= MAX_CARRIED_CRATES,
       "invalid carried crate stack.");
@@ -254,10 +264,13 @@ export function checkShopSave(data, database) {
       const top = data.carriedCrates.at(-1);
       const single = data.carriedCrate;
       requireSave((top.kind ?? "item") === (single.kind ?? "item") &&
-        top.itemId === single.itemId && top.typeId === single.typeId && top.quantity === single.quantity,
+        top.id === single.id && top.itemId === single.itemId && top.typeId === single.typeId &&
+        top.quantity === single.quantity,
       "carried crate stack does not match its top crate.");
     }
   }
+  requireSave(Number.isSafeInteger(data.nextCrateId) && data.nextCrateId > maximumCrateId,
+    "invalid next crate id.");
   // Optional: saves from before trash existed have a clean floor.
   if (data.trash !== undefined) {
     requireSave(isValidTrashList(data.trash, { width: gridW * TILE_SIZE, height: gridH * TILE_SIZE }),

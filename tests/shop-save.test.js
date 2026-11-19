@@ -32,8 +32,9 @@ function snapshot() {
       }] } : {}),
     })),
     unlockedZones: ["storeroom", "sales_floor", "loading_pad"],
-    crates: [{ itemId: "wpn_rif_01", quantity: 5, x: 132, y: 6656, velocityX: 120, velocityY: 0 }],
-    carriedCrate: { itemId: "srv_01", quantity: 2 },
+    crates: [{ id: "crate-1", itemId: "wpn_rif_01", quantity: 5, x: 132, y: 6656, velocityX: 120, velocityY: 0 }],
+    carriedCrate: { id: "crate-2", itemId: "srv_01", quantity: 2 },
+    nextCrateId: 3,
     layoutVersion: SHOP_LAYOUT_VERSION,
   };
 }
@@ -48,9 +49,10 @@ test("hands-on shelves and empty carried or dropped crates survive save validati
     ],
   };
   data.fixtures.push(shelf);
-  data.carriedCrate = { kind: "item", itemId: null, quantity: 0 };
+  data.carriedCrate = { id: "crate-3", kind: "item", itemId: null, quantity: 0 };
   data.carriedCrates = [data.carriedCrate];
-  data.crates.push({ ...data.carriedCrate, x: 180, y: 6656, velocityX: 0, velocityY: 0 });
+  data.crates.push({ ...data.carriedCrate, id: "crate-4", x: 180, y: 6656, velocityX: 0, velocityY: 0 });
+  data.nextCrateId = 5;
   assert.deepEqual(validateShopSave(data, database), data);
   shelf.placements[1].quantity = 2;
   assert.throws(() => validateShopSave(data, database), /shelf stack does not fit/);
@@ -96,11 +98,12 @@ test("shop saves preserve layout, all inventory locations, prices, factions, and
 
 test("shop saves preserve three carried crates in order and reject stacks over the limit", async () => {
   const data = snapshot();
-  const lower = { kind: "item", itemId: "amo_01", quantity: 2 };
-  const middle = { kind: "item", itemId: "srv_01", quantity: 1 };
-  const top = { kind: "item", itemId: "wpn_rif_01", quantity: 1 };
+  const lower = { id: "crate-3", kind: "item", itemId: "amo_01", quantity: 2 };
+  const middle = { id: "crate-4", kind: "item", itemId: "srv_01", quantity: 1 };
+  const top = { id: "crate-5", kind: "item", itemId: "wpn_rif_01", quantity: 1 };
   data.carriedCrates = [lower, middle];
   data.carriedCrate = middle;
+  data.nextCrateId = 6;
   assert.deepEqual(validateShopSave(data, database), data);
 
   data.carriedCrates.push(top);
@@ -119,9 +122,10 @@ test("shop saves preserve three carried crates in order and reject stacks over t
   assert.deepEqual(validateShopSave(applied, database).carriedCrates, [lower, middle, top]);
   assert.deepEqual(applied.carriedCrate, top);
 
-  const fourth = { kind: "item", itemId: "amo_01", quantity: 1 };
+  const fourth = { id: "crate-6", kind: "item", itemId: "amo_01", quantity: 1 };
   data.carriedCrates.push(fourth);
   data.carriedCrate = fourth;
+  data.nextCrateId = 7;
   assert.throws(() => validateShopSave(data, database), /invalid carried crate stack/);
 });
 
@@ -171,9 +175,10 @@ test("old saves lose retired shelves, contracts, and the hovercart for a refund,
       { itemId: "amo_01", gx: 2, gy: 0, w: 1, h: 1, rotated: false, quantity: 6 },
     ],
   });
-  data.crates.push({ kind: "fixture", typeId: "shelf_showcase", x: 320, y: 640, velocityX: 0, velocityY: 0 });
-  data.carriedCrate = { kind: "fixture", typeId: "shelf_bulk" };
+  data.crates.push({ id: "crate-3", kind: "fixture", typeId: "shelf_showcase", x: 320, y: 640, velocityX: 0, velocityY: 0 });
+  data.carriedCrate = { id: "crate-4", kind: "fixture", typeId: "shelf_bulk" };
   data.carriedCrates = [data.carriedCrate];
+  data.nextCrateId = 5;
   data.playerState.activeLicenses.push("lic_fixture_expanded");
   data.playerState.hovercart = { capacity: 25, stock: [{ itemId: "amo_01", quantity: 4 }, { itemId: "srv_01", quantity: 2 }] };
 
@@ -239,23 +244,30 @@ test("saved falling crates preserve their height and reject invalid flight state
 
 test("saved floor stacks keep up to two item crates on an item crate, off the Loading Pad", () => {
   const data = snapshot();
-  const stack = [{ kind: "item", itemId: "amo_01", quantity: 2 }, { kind: "item", itemId: null, quantity: 0 }];
+  const stack = [
+    { id: "crate-3", kind: "item", itemId: "amo_01", quantity: 2 },
+    { id: "crate-4", kind: "item", itemId: null, quantity: 0 },
+  ];
   data.crates[0] = { ...data.crates[0], kind: "item", onPad: false, stack };
+  data.nextCrateId = 5;
   assert.deepEqual(validateShopSave(structuredClone(data), database).crates[0].stack, stack);
   for (const corrupt of [
     (crate) => { crate.stack = []; },
-    (crate) => { crate.stack.push({ kind: "item", itemId: "amo_01", quantity: 1 }); },
+    (crate, save) => {
+      crate.stack.push({ id: "crate-5", kind: "item", itemId: "amo_01", quantity: 1 });
+      save.nextCrateId = 6;
+    },
     (crate) => { crate.onPad = true; },
     (crate) => { Object.assign(crate, { kind: "fixture", typeId: "shelf_budget_2x2" }); },
     (crate) => { crate.launch = { remainingMs: 80, accelerationX: 1500, accelerationY: 0, maxSpeed: 400 }; },
     (crate) => { crate.flight = { height: 48, fallSpeed: 120 }; },
   ]) {
     const invalid = structuredClone(data);
-    corrupt(invalid.crates[0]);
+    corrupt(invalid.crates[0], invalid);
     assert.throws(() => validateShopSave(invalid, database), /invalid crate stack/);
   }
   const fixtureOnTop = structuredClone(data);
-  fixtureOnTop.crates[0].stack[1] = { kind: "fixture", typeId: "shelf_budget_2x2" };
+  fixtureOnTop.crates[0].stack[1] = { id: "crate-4", kind: "fixture", typeId: "shelf_budget_2x2" };
   assert.throws(() => validateShopSave(fixtureOnTop, database), /only item crates can be stacked/);
 });
 
@@ -470,13 +482,66 @@ test("fixtures between floor squares save at valid positions", () => {
 test("fixture crates can be saved on the floor or carried", () => {
   const data = snapshot();
   data.crates.push({
+    id: "crate-3",
     kind: "fixture", typeId: "shelf_budget_3x4", x: 320, y: 640, velocityX: 0, velocityY: 0,
   });
-  data.carriedCrate = { kind: "fixture", typeId: "shelf_budget_2x4" };
+  data.carriedCrate = { id: "crate-4", kind: "fixture", typeId: "shelf_budget_2x4" };
+  data.nextCrateId = 5;
   assert.deepEqual(validateShopSave(data, database), data);
 
   data.carriedCrate.typeId = "unknown";
   assert.throws(() => validateShopSave(data, database), /unknown fixture crate/);
+});
+
+test("older saves gain stable unique crate IDs and a future ID counter", () => {
+  const data = snapshot();
+  data.layoutVersion = 10;
+  data.crates[0].stack = [{ itemId: "amo_01", quantity: 3 }];
+  data.carriedCrates = [
+    { kind: "item", itemId: "srv_01", quantity: 1 },
+    { kind: "item", itemId: "amo_01", quantity: 2 },
+  ];
+  data.carriedCrate = { ...data.carriedCrates.at(-1) };
+  for (const crate of [...data.crates[0].stack, ...data.carriedCrates, data.carriedCrate]) {
+    delete crate.id;
+  }
+  delete data.nextCrateId;
+
+  const migrated = validateShopSave(data, database);
+  const ids = [
+    migrated.crates[0].id,
+    migrated.crates[0].stack[0].id,
+    ...migrated.carriedCrates.map((crate) => crate.id),
+  ];
+  assert.deepEqual(ids, ["crate-1", "crate-2", "crate-3", "crate-4"]);
+  assert.equal(migrated.carriedCrate.id, "crate-4");
+  assert.equal(migrated.nextCrateId, 5);
+  assert.equal(data.crates[0].id, "crate-1", "the base save already has its original ID");
+  assert.equal(data.crates[0].stack[0].id, undefined, "migration leaves stacked source data untouched");
+
+  const duplicate = snapshot();
+  duplicate.carriedCrates = [{ ...duplicate.carriedCrate, id: "crate-1" }];
+  assert.throws(() => validateShopSave(duplicate, database), /duplicate crate id/);
+  const reused = snapshot();
+  reused.nextCrateId = 1;
+  assert.throws(() => validateShopSave(reused, database), /invalid next crate id/);
+});
+
+test("crate ID migration does not repair malformed crate save fields", () => {
+  const missingCrates = snapshot();
+  missingCrates.layoutVersion = 10;
+  delete missingCrates.crates;
+  assert.throws(() => validateShopSave(missingCrates, database), /missing crates/);
+
+  const invalidStack = snapshot();
+  invalidStack.layoutVersion = 10;
+  invalidStack.carriedCrates = null;
+  assert.throws(() => validateShopSave(invalidStack, database), /invalid carried crate stack/);
+
+  const invalidCounter = snapshot();
+  invalidCounter.layoutVersion = 10;
+  invalidCounter.nextCrateId = null;
+  assert.throws(() => validateShopSave(invalidCounter, database), /invalid next crate id/);
 });
 
 test("older shelf saves still load stacks within the legacy depth rule", () => {

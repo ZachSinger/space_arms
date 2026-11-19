@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseManager } from "../js/logic/DatabaseManager.js";
 import { validateShopSave } from "../js/logic/ShopSave.js";
+import { SHOP_LAYOUT_VERSION } from "../js/state/migrations/index.js";
 import { upgradeContractSplit } from "../js/state/migrations/contractSplit.js";
 
 const dir = new URL("./golden-saves/", import.meta.url);
@@ -57,7 +58,7 @@ test("the contract split only adds follow-up contracts to saves from before it",
 test("older layout save refunds retired equipment and drops it", () => {
   const raw = read("older-layout.json");
   const loaded = validateShopSave(read("older-layout.json"), database);
-  assert.equal(loaded.layoutVersion, 10);
+  assert.equal(loaded.layoutVersion, SHOP_LAYOUT_VERSION);
   assert.ok(loaded.playerState.credits > raw.playerState.credits);
   assert.ok(!loaded.fixtures.some((fixture) => fixture.type === "shelf_bulk"));
   assert.ok(!loaded.crates.some((crate) => crate.typeId === "locker_single"));

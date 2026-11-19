@@ -14,11 +14,14 @@ import { Staff } from "./slices/Staff.js";
 import { Calendar } from "./slices/Calendar.js";
 import { GoBacks } from "./slices/GoBacks.js";
 import { Shop } from "./slices/Shop.js";
+import { Crates } from "./slices/Crates.js";
 import { Market } from "../logic/Market.js";
 import { getStaffLimit } from "../logic/ShopProgression.js";
 import { gameRandom } from "../core/Random.js";
 
-const SLICE_NAMES = Object.freeze(["economy", "reputation", "catalog", "staff", "calendar", "market", "goBacks", "shop"]);
+const SLICE_NAMES = Object.freeze([
+  "economy", "reputation", "catalog", "staff", "calendar", "market", "goBacks", "shop", "crates",
+]);
 
 export class GameState {
   /**
@@ -41,6 +44,7 @@ export class GameState {
     this.market = new Market(items, random, market ?? null);
     this.goBacks = saved ? GoBacks.fromSave(player, events) : new GoBacks(events);
     this.shop = saved ? Shop.fromSave(saved) : Shop.newGame();
+    this.crates = saved ? Crates.fromSave(saved) : new Crates();
     this.listeners = new Set();
     for (const name of SLICE_NAMES) this[name].attach(() => this.#notify());
   }
@@ -144,6 +148,7 @@ export class GameState {
       },
       market: { day: this.calendar.day, ...this.market.serialize() },
       ...this.shop.toSave(),
+      ...this.crates.toSave(),
     };
   }
 

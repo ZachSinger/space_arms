@@ -55,8 +55,9 @@ function carrierFootprint(carrierSprite, margin = 4) {
  * Created by deliveries and fixture crating. Hand-stocked crates stay around when empty.
  */
 export class Crate {
-  constructor(scene, itemId, quantity, x, y, { kind = "item", typeId = null, tint = null } = {}) {
+  constructor(scene, itemId, quantity, x, y, { id = null, kind = "item", typeId = null, tint = null } = {}) {
     this.scene = scene;
+    this.id = id ?? scene.crateSystem?.createId?.() ?? null;
     this.kind = kind;
     this.typeId = kind === "fixture" ? typeId : null;
     this.itemId = kind === "item" ? itemId : null;
@@ -538,12 +539,14 @@ export class Crate {
   }
 
   serializePayload() {
-    return this.kind === "fixture"
+    const payload = this.kind === "fixture"
       ? { kind: "fixture", typeId: this.typeId }
       : { kind: "item", itemId: this.itemId, quantity: this.quantity };
+    return this.id ? { id: this.id, ...payload } : payload;
   }
 
   applySave(data) {
+    this.id = data.id ?? this.id;
     // drop() re-applies the throw multiplier, so undo it on the saved velocity.
     this.drop(data.x, data.y, data.velocityX / CRATE_THROW_MULTIPLIER,
       data.velocityY / CRATE_THROW_MULTIPLIER, false);
