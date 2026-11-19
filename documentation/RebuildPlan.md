@@ -305,6 +305,13 @@ Order: least connected first.
 **After 3.7, stop and re-estimate.** It's the first step that moves saved map data. How long
 it took tells us whether the rest of the plan's sizes are right.
 
+> **Re-estimate after 3.7:** 3.1?3.7 took about as long as planned, and 3.7 (the first saved map
+> data move) went through with old saves loading and resaving exactly as before. `game.js` is down
+> to about 3,300 lines. The steps left in Phase 3 are the biggest pieces still in it (customers,
+> the register, crates), so Phase 3 stays at the top of its range. The total stays about
+> **32?34 sessions**. Feel check owed for 3.5?3.7: walking in and out of the backroom, zoom, moving
+> a fixture, and buying an expansion.
+
 **Done when:** `game.js` only creates and connects systems (target under 500 lines), and
 tests don't need to fake the whole shop.
 
