@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
-import { ControlMode } from "../js/logic/ControlMode.js";
+import { ControlMode } from "../js/input/ControlMode.js";
 import { HUDController } from "../js/logic/HUDController.js";
 
 let server;

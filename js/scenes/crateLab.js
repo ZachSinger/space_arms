@@ -13,7 +13,7 @@ import {
   FLOOR_STACK_MAX, HOLD_KEY_MS, MAX_CARRIED_CRATES, isInFacingCone, isSquarelyInFront,
 } from "../logic/CrateStack.js";
 import { CrateWorld } from "../world/CrateWorld.js";
-import { controlLabel } from "../logic/InputDevice.js";
+import { controlLabel } from "../input/InputDevice.js";
 import { Player, PLAYER_CRATE_HOLD_OFFSET } from "../logic/Player.js";
 
 const HEADER_HEIGHT = 100;

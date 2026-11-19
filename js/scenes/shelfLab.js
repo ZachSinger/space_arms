@@ -17,7 +17,7 @@ import { ITEM_CRATE_TINTS, getItemCrateCategory } from "../logic/CrateCategory.j
 import { Crate, INTERACT_RANGE } from "../logic/Crate.js";
 import { MAX_CARRIED_CRATES } from "../logic/CrateStack.js";
 import { CrateWorld } from "../world/CrateWorld.js";
-import { controlLabel } from "../logic/InputDevice.js";
+import { controlLabel } from "../input/InputDevice.js";
 import { Player, PLAYER_CRATE_HOLD_OFFSET } from "../logic/Player.js";
 import { Market } from "../logic/Market.js";
 import { formatMoneyAmount } from "../logic/Money.js";

@@ -5,14 +5,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
-import { ControlMode } from "../js/logic/ControlMode.js";
+import { ControlMode } from "../js/input/ControlMode.js";
 import { Events, GAME_EVENTS } from "../js/core/Events.js";
 import { InteractableRegistry } from "../js/logic/InteractableRegistry.js";
 import { Crate, CRATE_STACK_SPACING, INTERACT_RANGE } from "../js/logic/Crate.js";
 import { HOLD_KEY_MS, MAX_CARRIED_CRATES, isSquarelyInFront } from "../js/logic/CrateStack.js";
 import { fixtureBounds, fixtureFootprint, getFixtureType } from "../js/logic/FixtureLayout.js";
 import { FixtureRegistry } from "../js/logic/FixtureRegistry.js";
-import { PAD } from "../js/logic/GamepadInput.js";
+import { PAD } from "../js/input/GamepadInput.js";
 import { TILE_SIZE } from "../js/logic/RoomLayout.js";
 import { AREA, Areas } from "../js/world/Areas.js";
 

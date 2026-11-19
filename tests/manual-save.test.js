@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { HUDController } from "../js/logic/HUDController.js";
 import { SaveManager } from "../SaveManager.js";
-import { ControlMode } from "../js/logic/ControlMode.js";
+import { ControlMode } from "../js/input/ControlMode.js";
 import { GAME_EVENTS } from "../js/core/Events.js";
 import { SupplierLicense } from "../js/logic/Licenses.js";
 import { ContractRenderer } from "../js/logic/ContractRenderer.js";

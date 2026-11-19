@@ -13,8 +13,8 @@
 //   data-pad-world      on a window: the controller drives the world instead (placement)
 //   data-pad-back="world"  on a window: B goes to the game instead of acting as Esc
 //   "pad-alt" event     cancelable; call preventDefault() when the screen used it
-import { PAD } from "./GamepadInput.js";
-import { getInputDevice } from "./InputDevice.js";
+import { PAD } from "../input/GamepadInput.js";
+import { getInputDevice } from "../input/InputDevice.js";
 import { pickNearest, pickNeighbor } from "./PadNavigation.js";
 
 const TARGET_SELECTOR = [

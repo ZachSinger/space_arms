@@ -12,7 +12,7 @@ import { HUDController } from "../logic/HUDController.js";
 import { DebugInfo } from "../debug/DebugInfo.js";
 import { DebugTools } from "../debug/DebugTools.js";
 import { Events, GAME_EVENTS } from "../core/Events.js";
-import { ControlMode, CONTROL_MODES } from "../logic/ControlMode.js";
+import { ControlMode, CONTROL_MODES } from "../input/ControlMode.js";
 import { InteractableRegistry } from "../logic/InteractableRegistry.js";
 /** @typedef {import("../logic/ShelfFixture.js").ShelfFixture} ShelfFixture */
 import { SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT } from "../logic/Customer.js";
@@ -57,9 +57,9 @@ import { CrateWorld } from "../world/CrateWorld.js";
 import { Navigation } from "../world/Navigation.js";
 import { CleaningSystem } from "../modules/cleaning/CleaningSystem.js";
 import { CheckoutWindow } from "../logic/CheckoutWindow.js";
-import { GamepadInput, PAD } from "../logic/GamepadInput.js";
+import { GamepadInput, PAD } from "../input/GamepadInput.js";
 import { UINavigator } from "../logic/UINavigator.js";
-import { controlLabel, getInputDevice, setInputDevice } from "../logic/InputDevice.js";
+import { controlLabel, getInputDevice, setInputDevice } from "../input/InputDevice.js";
 import { SaveManager } from "../../SaveManager.js";
 import { database } from "./boot.js"; // the exported DatabaseManager singleton
 import { installSceneTextSize } from "../logic/GameTextSize.js";

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ControlMode, CONTROL_MODES } from "../js/logic/ControlMode.js";
+import { ControlMode, CONTROL_MODES } from "../js/input/ControlMode.js";
 
 function createScene() {
   return {

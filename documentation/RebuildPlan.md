@@ -343,6 +343,9 @@ match what the button does.
 1. `input/`: contexts (walking, menu, placing, register, paused), held modifiers, and tap
    vs. hold, with today's timings. Decide the Gear Modifier's buttons here, including the
    conflict with dash (Shift) and zoom (left bumper). This is a design question for the owner
+   **Default:** keep the planned Shift / left bumper bindings. They act as the Gear Modifier
+   only when combined with a crate action while a parked hovercart is in reach; otherwise
+   Shift remains dash and the bumpers remain zoom. This is a design question for the owner
    before the code starts.
 2. `interaction/`: `getActions(player, input)` per interactable, with target choice per
    action (an action can target something other than what you're facing, such as the

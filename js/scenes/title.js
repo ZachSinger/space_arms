@@ -11,9 +11,9 @@ import { WindowManager } from "../logic/WindowManager.js";
 import { SaveManager } from "../../SaveManager.js";
 import { validateShopSave } from "../logic/ShopSave.js";
 import { database } from "./boot.js";
-import { GamepadInput, PAD } from "../logic/GamepadInput.js";
+import { GamepadInput, PAD } from "../input/GamepadInput.js";
 import { UINavigator } from "../logic/UINavigator.js";
-import { setInputDevice } from "../logic/InputDevice.js";
+import { setInputDevice } from "../input/InputDevice.js";
 
 export class TitleScene extends Phaser.Scene {
   constructor() {

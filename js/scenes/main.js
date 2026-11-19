@@ -9,7 +9,7 @@ import { GameScene } from "./game.js";
 import { BootScene } from "./boot.js";
 import { ShelfLabScene } from "./shelfLab.js";
 import { CrateLabScene } from "./crateLab.js";
-import { watchKeyboardAndMouse } from "../logic/InputDevice.js";
+import { watchKeyboardAndMouse } from "../input/InputDevice.js";
 import {
   DESIGN_HEIGHT,
   DESIGN_WIDTH,

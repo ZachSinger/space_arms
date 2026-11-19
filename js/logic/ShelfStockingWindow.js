@@ -8,7 +8,7 @@ import { getItemCrateCategory } from "./CrateCategory.js";
 import { moveShelfCrateItem } from "./LiveShelfStocking.js";
 import { adjustStorePrice, formatMoneyAmount } from "./Money.js";
 import tilesetManifest from "../../data/TilesetManifest.json" with { type: "json" };
-import { getInputDevice } from "./InputDevice.js";
+import { getInputDevice } from "../input/InputDevice.js";
 import { DESIGN_HEIGHT, getGameScale } from "./GameViewport.js";
 
 const TEXTURE_PATHS = new Map(tilesetManifest.map(({ key, path }) => [key, path]));

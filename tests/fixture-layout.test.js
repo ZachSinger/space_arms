@@ -3,8 +3,8 @@ import test from "node:test";
 import { STARTING_FIXTURES, FIXTURE_POSITION_STEP, FIXTURE_SNAP_STEP, FIXTURE_FRONT_CLEARANCE, fixtureAccessCells, fixtureAtWorldPoint, fixtureBounds, fixtureCells, fixtureFacing, fixtureFacingStep, fixtureFootprint, fixtureFrontClearance, fixtureProjectionBoxes, fixturesOverlap, fixtureStandingSpot, cellKey, getFixtureType, isFixturePosition, migrateFixtureEntry, planRegisterQueue, snapFixturePosition, validateFixtureLayout, fixtureInteractionDistance } from "../js/logic/FixtureLayout.js";
 import { FixturePlacement } from "../js/logic/FixturePlacement.js";
 import { FixturePlacementGrid } from "../js/logic/FixturePlacementGrid.js";
-import { PAD } from "../js/logic/GamepadInput.js";
-import { getInputDevice, setInputDevice } from "../js/logic/InputDevice.js";
+import { PAD } from "../js/input/GamepadInput.js";
+import { getInputDevice, setInputDevice } from "../js/input/InputDevice.js";
 import { TileRoom } from "../js/logic/TileRoom.js";
 import { findGridPath } from "../js/world/Navigation.js";
 import {

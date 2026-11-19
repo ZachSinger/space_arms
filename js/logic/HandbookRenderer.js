@@ -13,7 +13,7 @@ import {
   EMERGENCY_LOAN_REPAYMENT_RATE,
   EMERGENCY_LOAN_TARGET_BALANCE,
 } from "./EmergencyLoan.js";
-import { controlLabel } from "./InputDevice.js";
+import { controlLabel } from "../input/InputDevice.js";
 import { formatMoneyAmount } from "./Money.js";
 import {
   MAX_EMPLOYEE_SKILL_LEVEL, EMPLOYEE_MILESTONE_LEVELS, getEmployeeJobSpeed,

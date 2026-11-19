@@ -10,8 +10,8 @@ import {
   getFixtureType, fixtureAtWorldPoint, fixtureBounds, fixtureFootprint, fixtureProjectionBoxes,
 } from "./FixtureLayout.js";
 import { getFixtureTexture, hasFacingTextures } from "./FixtureTexture.js";
-import { PAD } from "./GamepadInput.js";
-import { getInputDevice } from "./InputDevice.js";
+import { PAD } from "../input/GamepadInput.js";
+import { getInputDevice } from "../input/InputDevice.js";
 
 const PAD_CURSOR_SPEED = 240;
 const VALID_COLOR = 0x10b981;

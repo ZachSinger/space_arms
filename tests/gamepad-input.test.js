@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { GamepadInput, PAD, applyDeadzone } from "../js/logic/GamepadInput.js";
+import { GamepadInput, PAD, applyDeadzone } from "../js/input/GamepadInput.js";
 import { pickNeighbor, pickNearest } from "../js/logic/PadNavigation.js";
-import { controlLabel, getInputDevice, setInputDevice, watchKeyboardAndMouse } from "../js/logic/InputDevice.js";
+import { controlLabel, getInputDevice, setInputDevice, watchKeyboardAndMouse } from "../js/input/InputDevice.js";
 
 function fakePad() {
   const state = { buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })), axes: [0, 0, 0, 0] };
