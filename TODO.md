@@ -3,6 +3,10 @@
 Running task list. Consult this before deciding what to work on. Add to it any time we
 notice something that needs doing but isn't being done right now.
 
+## Rebuild (current focus)
+- [ ] Rebuild the code in place, following documentation/RebuildPlan.md (Phases 0–9).
+      No gameplay changes during the rebuild; features wait for the phase they depend on.
+
 ## Base-loop follow-ups
 - [x] Multi-register support. Registers are buyable in any number; each needs queue space
       on its own. One line per register with customers picking the shortest; one employee
@@ -128,6 +132,21 @@ notice something that needs doing but isn't being done right now.
       can leave the shop** (until then, there's little for a thief to exploit).
 - [ ] Ways to customize the shop.
   - [ ] Add customizable tinting plans so players can decorate their shop.
+- [ ] Shooting Range: paid lanes for customers, firearm tuning, stairs down to the range.
+      See [documentation/modules/ShootingRange.md](documentation/modules/ShootingRange.md).
+- [ ] Drone Deliveries: remote orders packed into special mixed-item crates and shipped from a
+      terminal pad. See [documentation/modules/DroneDeliveries.md](documentation/modules/DroneDeliveries.md).
+- [ ] Cleaning: trash and dirt, a cleanliness level, mop and trashcan cleanup, customer
+      tolerances. See [documentation/modules/Cleaning.md](documentation/modules/Cleaning.md).
+  - [x] Slice 1: customers drop trash, carry it to a trashcan, cleanliness in the top bar,
+        customers get upset or walk out, trash is saved.
+  - [ ] Slice 2: dirt marks, the Mop Bucket fixture, and mopping.
+  - [ ] Employees who clean.
+- [ ] Hovercart (new design, Store Level 7): follows the player carrying crate stacks,
+      Gear Modifier button, charging station. See [documentation/modules/Hovercart.md](documentation/modules/Hovercart.md).
+- [ ] Presentation Level: decorations that customers expect; low presentation blocks
+      reputation gain. See [documentation/modules/Presentation.md](documentation/modules/Presentation.md)
+      (notes unfinished).
 
 ## Playtest follow-ups
 - [x] Cash drawer mockup: all customers pay cash, with unlimited 1/5/10/20 credit bills
@@ -168,7 +187,8 @@ notice something that needs doing but isn't being done right now.
       a wall stops you too. Loading pad crates block you like walls. An overlapping player
       can step out of a crate, but can't walk through it, including while carrying a crate.
 - [x] Improve first-shift pacing: shortened shifts from ten to five minutes,
-      keeping the same customer pool and doubling arrival frequency.
+      keeping the same customer pool and doubling arrival frequency. (Later lengthened to
+      seven minutes with customers walking about 17% slower, so the player can leave the register.)
 - [x] Start with a much smaller shelf: a two-tile 2x1 starter shelf. (Superseded: new games now start with no shelves; the compact shelf is bought from the Fixtures tab. Placement checks preserve customer access to the register and both sides of the backroom entrance.)
 - [x] Let players turn fixtures: press R while placing or moving any fixture, including the register. Its front, keep-clear squares, customer line, and cashier spot turn with it, so shelves can line the bottom and side walls. Shelves use temporary, tile-sized overhead graphics with dark stock surfaces and a light front edge, including in placement previews. Registers still reuse rotated art until direction-specific art exists.
 - [x] Freer fixture placement, stage 1: fixtures move on an 8-pixel grid with the mouse or controller, and saves keep their positions. A fixture facing down can tuck its back up to half a tile into the wall behind it. Placement still checks floor-square access and shoppers stand half a tile from the fixture's front, lined up with it.
@@ -191,6 +211,32 @@ notice something that needs doing but isn't being done right now.
     fee, with a warning banner and error buzz. Leave the order unchanged.
   - If an order can't be placed, the reason is written in the summary (pad full, not
     enough credits) instead of a popup message.
+
+## Playtest follow-ups (employees, stock, pacing)
+- [ ] Bug reports: let players send a bug report from inside the game, and tell them how to
+      contact the developer.
+- [ ] Explore adding Steam achievements.
+- [x] Employee art: arms-up versions of employee sprites so they look right carrying crates,
+      like the player does.
+- [x] Employees carry leftover stock to an existing stack before using an empty floor spot.
+      Loading Pad crates are put away in the backroom when space is available; empty crates
+      go to the nearest reachable trashcan instead.
+- [x] A way to see how many of each item you own in total: the Inventory tab now has
+      "On Shelves" and "In Crates" columns (crates anywhere, including ones being carried).
+- [ ] Employee training: bring it back after the menu cleanup (design talk first).
+- [x] Employees wear matching orange-sleeved staff uniforms instead of a green tint,
+      keeping their own faces and matching raised-arm carrying poses.
+- [ ] Cleanliness: replaced by the fuller Cleaning module design. See
+      [documentation/modules/Cleaning.md](documentation/modules/Cleaning.md).
+- [x] Contract pacing: split the big contracts into about 70 small ones (2–5 products each);
+      Store Levels 1–5 now offer 15 products instead of 55. Old saves keep everything they owned.
+- [ ] Shift pacing: the player is stuck on the register all shift. Talk through day length,
+      time speed, and customer flow.
+- [ ] Revamp pricing and its effects on customers. Right now the only point of setting
+      prices is remembering to press "Mkt price" on each item once before each shift. Pricing
+      should be a real decision with clear trade-offs (design talk first).
+- [ ] Highlight trash on a controller. Keyboard holds H; every controller button is already
+      used, so this needs a button chosen.
 
 ## Saving
 - [x] HUD SAVE button: manually save while the store is closed, with explicit success

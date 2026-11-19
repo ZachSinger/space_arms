@@ -1,0 +1,44 @@
+[
+  {
+    "id": "tavi_stock_clerk",
+    "key": "employee_tavi",
+    "path": "img/Icons_Extracted/Tileset/Characters/Employees/tavi.png",
+    "carryPath": "img/Icons_Extracted/Tileset/Characters/Employees/tavi_carry.png",
+    "source": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/mascyouth1.png"
+  },
+  {
+    "id": "sera_floor_assistant",
+    "key": "employee_sera",
+    "path": "img/Icons_Extracted/Tileset/Characters/Employees/sera.png",
+    "carryPath": "img/Icons_Extracted/Tileset/Characters/Employees/sera_carry.png",
+    "source": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/racersnakev3.png"
+  },
+  {
+    "id": "dax_stock_clerk",
+    "key": "employee_dax",
+    "path": "img/Icons_Extracted/Tileset/Characters/Employees/dax.png",
+    "carryPath": "img/Icons_Extracted/Tileset/Characters/Employees/dax_carry.png",
+    "source": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/herofem2b.png"
+  },
+  {
+    "id": "ivo_shop_assistant",
+    "key": "employee_ivo",
+    "path": "img/Icons_Extracted/Tileset/Characters/Employees/ivo.png",
+    "carryPath": "img/Icons_Extracted/Tileset/Characters/Employees/ivo_carry.png",
+    "source": "img/Icons_Extracted/Tileset/Characters/Customers/mercenary/femstreetsamurai1.png"
+  },
+  {
+    "id": "rhea_senior_clerk",
+    "key": "employee_rhea",
+    "path": "img/Icons_Extracted/Tileset/Characters/Employees/rhea.png",
+    "carryPath": "img/Icons_Extracted/Tileset/Characters/Employees/rhea_carry.png",
+    "source": "img/Icons_Extracted/Tileset/Characters/Customers/explorer/hirov3.png"
+  },
+  {
+    "id": "kel_supply_runner",
+    "key": "employee_kel",
+    "path": "img/Icons_Extracted/Tileset/Characters/Employees/kel.png",
+    "carryPath": "img/Icons_Extracted/Tileset/Characters/Employees/kel_carry.png",
+    "source": "img/Icons_Extracted/Tileset/Characters/Customers/mercenary/specopsmasc1.png"
+  }
+]

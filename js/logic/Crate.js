@@ -22,6 +22,7 @@ export const FIXTURE_CRATE_SPRITE = Object.freeze({
 // Each crate in a stack (on the floor or in someone's hands) sits this many pixels above the
 // one below, so its bottom edge lands where the lower crate's side turns from light to dark.
 export const CRATE_STACK_SPACING = 10;
+const CRATE_BASE_HEIGHT = 18;
 const CRATE_THROW_MULTIPLIER = 1.5;
 const CRATE_DRAG = 480;
 const CRATE_BOUNCE = 0.6;
@@ -30,22 +31,23 @@ const THROW_RELEASE_GAP = 4;
 // A throw accelerates for this long (ms) up to the peak multiple of walking speed.
 export const THROW_ACCELERATION_MS = 160;
 const THROW_PEAK_MULTIPLIER = 2.5;
+const THROW_FALL_GRAVITY = 900;
 
 // Player-to-crate/fixture interaction distance (px): forgiving, but not across the room.
 export const INTERACT_RANGE = 56;
-const DROP_SEARCH_RADIUS = INTERACT_RANGE - DROP_SEARCH_STEP;
+// Put-down spots may sit a little past arm's reach, so tight aisles still find room.
+const DROP_SEARCH_RADIUS = INTERACT_RANGE + 2 * DROP_SEARCH_STEP;
 const FACING_DIRECTIONS = Object.freeze({
   up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
 });
 
-// The space a set-down crate must keep clear of: the carrier's art side to side, but only his
-// feet (physics body) top to bottom, so he can set a crate down close to a wall in front of
-// him even though his head and the crates he holds reach up past it.
-function carrierFootprint(carrierSprite) {
+// The space a set-down crate must keep clear of: the carrier's feet (physics body) with a
+// small margin, so crates can be set down right beside him; art overlap is depth-sorted.
+function carrierFootprint(carrierSprite, margin = 4) {
   const art = carrierSprite.getBounds();
   const feet = carrierSprite.body;
   if (!feet) return art;
-  return { left: art.left, right: art.right, top: feet.top, bottom: feet.bottom };
+  return { left: feet.left - margin, right: feet.right + margin, top: feet.top - margin, bottom: feet.bottom + margin };
 }
 
 /**
@@ -64,6 +66,7 @@ export class Crate {
     this.isPushed = false;
     this.lockedToPad = false;
     this.launch = null;
+    this.flight = null;
     this.throwCarrier = null;
     this.hitCustomers = new Set();
 
@@ -76,24 +79,27 @@ export class Crate {
 
     scene.crateGroup.add(this.sprite);
     this.sprite.body
+      .setSize(art.width / this.sprite.scaleX, CRATE_BASE_HEIGHT / this.sprite.scaleY, false)
       .setAllowGravity(false)
       .setAllowRotation(false)
       .setBounce(CRATE_BOUNCE)
       .setBoundsRectangle(scene.crateBounds)
       .setCollideWorldBounds(true);
+    this.setThrowHeight(0);
+    this.sprite.body.updateFromGameObject();
   }
 
   // --- Carrying and dropping ---
 
   isStationary() {
     const { x, y } = this.sprite.body.velocity;
-    return x === 0 && y === 0;
+    return !this.flight && x === 0 && y === 0;
   }
 
   // A thrown crate becomes "sliding" once its launch boost ends (normally after it clears the
   // thrower): from then on the player bumps into it and can pick it up, like a pushed crate.
   isSliding() {
-    return !this.isCarried && !this.lockedToPad && !this.launch &&
+    return !this.isCarried && !this.lockedToPad && !this.launch && !this.flight &&
       this.sprite.body.enable && !this.isStationary();
   }
 
@@ -122,6 +128,11 @@ export class Crate {
   remove(itemId, quantity) {
     const removed = Math.min(this.getAvailableUnitsFor(itemId), quantity);
     this.quantity -= removed;
+    // The last item out turns it back into a plain, uncolored empty crate.
+    if (removed > 0 && this.quantity === 0) {
+      this.itemId = null;
+      this.sprite?.clearTint?.();
+    }
     return removed;
   }
 
@@ -135,6 +146,8 @@ export class Crate {
     this.isCarried = true;
     this.isThrown = false;
     this.isPushed = false;
+    this.flight = null;
+    this.setThrowHeight(0);
     this.stopThrowAcceleration();
     this.throwCarrier = null;
     this.lockedToPad = false;
@@ -151,35 +164,45 @@ export class Crate {
    * @param {number} x
    * @param {number} y
    * @param {Phaser.GameObjects.Sprite | null} [carrierSprite]
+   * @param {number} [clearance] - extra px of empty space required around the crate when
+   *   checking the pad and other bodies, for spots with nothing near them
    */
-  isDropPositionClear(x, y, carrierSprite = null) {
-    const { width, height } = this.sprite.body;
-    const left = x - width / 2;
-    const top = y - height / 2;
-    const right = left + width;
-    const bottom = top + height;
+  isDropPositionClear(x, y, carrierSprite = null, clearance = 0, carrierMargin = 4) {
+    const { left, top, right, bottom } = this.getFloorBounds(x, y);
     const bounds = this.scene.crateBounds;
     if (left < bounds.left || right > bounds.right || top < bounds.top || bottom > bounds.bottom) {
       return false;
     }
 
+    // The grown rectangle keeps the required empty margin; walls don't count against it.
+    const clearLeft = left - clearance;
+    const clearRight = right + clearance;
+    const clearTop = top - clearance;
+    const clearBottom = bottom + clearance;
     const pad = this.scene.loadingPadRect;
-    if (pad && left < pad.right && right > pad.left && top < pad.bottom && bottom > pad.top) {
+    if (pad && clearLeft < pad.right && clearRight > pad.left && clearTop < pad.bottom && clearBottom > pad.top) {
       return false;
     }
     if (carrierSprite) {
-      const carrier = carrierFootprint(carrierSprite);
+      const carrier = carrierFootprint(carrierSprite, carrierMargin);
       if (left < carrier.right && right > carrier.left && top < carrier.bottom && bottom > carrier.top) {
         return false;
       }
     }
 
     const bodies = [
-      ...this.scene.physics.overlapRect(left, top, width, height, false, true),
+      ...this.scene.physics.overlapRect(
+        clearLeft, clearTop, clearRight - clearLeft, clearBottom - clearTop, false, true),
       ...(this.scene.restockCrates ?? []).filter((crate) => crate !== this).map((crate) => crate.sprite.body),
     ];
     return !bodies.some((body) => body.enable &&
-      left < body.right && right > body.left && top < body.bottom && bottom > body.top);
+      clearLeft < body.right && clearRight > body.left && clearTop < body.bottom && clearBottom > body.top);
+  }
+
+  getFloorBounds(x = this.sprite.x, y = this.sprite.y) {
+    const { width, height } = this.sprite.body;
+    const bottom = y + this.sprite.displayHeight / 2;
+    return { left: x - width / 2, right: x + width / 2, top: bottom - height, bottom };
   }
 
   /**
@@ -204,8 +227,9 @@ export class Crate {
       if (carrierSprite) {
         const carrier = carrierFootprint(carrierSprite);
         const edge = { up: y - carrier.top, down: carrier.bottom - y, left: x - carrier.left, right: carrier.right - x }[facing];
-        const half = (ahead.x ? this.sprite.body.width : this.sprite.body.height) / 2;
-        reach = Math.max(reach, Math.ceil((edge + half) / DROP_SEARCH_STEP) * DROP_SEARCH_STEP);
+        const base = this.getFloorBounds(0, 0);
+        const extent = { up: base.bottom, down: -base.top, left: base.right, right: -base.left }[facing];
+        reach = Math.max(reach, Math.ceil((edge + extent) / DROP_SEARCH_STEP) * DROP_SEARCH_STEP);
       }
       for (let distance = 0; distance <= reach; distance += DROP_SEARCH_STEP) {
         offsets.push({ dx: ahead.x * distance, dy: ahead.y * distance, distanceSquared: -1 });
@@ -214,6 +238,9 @@ export class Crate {
     for (let dx = -searchRadius; dx <= searchRadius; dx += DROP_SEARCH_STEP) {
       for (let dy = -searchRadius; dy <= searchRadius; dy += DROP_SEARCH_STEP) {
         const distanceSquared = dx * dx + dy * dy;
+        // With a facing, spots behind the carrier's back are never considered: a crate that
+        // can't go down in front or beside just doesn't go down.
+        if (ahead && dx * ahead.x + dy * ahead.y < 0) continue;
         if (distanceSquared <= searchRadius * searchRadius && !(ahead && dx * ahead.y === dy * ahead.x &&
           dx * ahead.x + dy * ahead.y >= 0)) {
           offsets.push({ dx, dy, distanceSquared });
@@ -223,15 +250,27 @@ export class Crate {
     // Straight-ahead spots are -1, so the stable sort keeps them first, nearest to farthest.
     offsets.sort((a, b) => a.distanceSquared - b.distanceSquared);
 
+    // First choice: right against the front of the carrier's feet. This is exactly where a
+    // crate he just walked up to and picked up was sitting, so it always fits back there.
+    const feet = carrierSprite?.body;
+    if (ahead && feet) {
+      const base = this.getFloorBounds(0, 0);
+      const flush = {
+        up: { x, y: feet.top - base.bottom },
+        down: { x, y: feet.bottom - base.top },
+        left: { x: feet.left - base.right, y },
+        right: { x: feet.right - base.left, y },
+      }[facing];
+      const rect = this.getFloorBounds(flush.x, flush.y);
+      const reserved = reservedRectangles.some((r) =>
+        rect.left < r.right && rect.right > r.left && rect.top < r.bottom && rect.bottom > r.top);
+      if (!reserved && this.isDropPositionClear(flush.x, flush.y, carrierSprite, 0, 0)) return flush;
+    }
+
     for (const { dx, dy } of offsets) {
       const dropX = x + dx;
       const dropY = y + dy;
-      const rect = {
-        left: dropX - this.sprite.body.width / 2,
-        right: dropX + this.sprite.body.width / 2,
-        top: dropY - this.sprite.body.height / 2,
-        bottom: dropY + this.sprite.body.height / 2,
-      };
+      const rect = this.getFloorBounds(dropX, dropY);
       if (reservedRectangles.some((reserved) =>
         rect.left < reserved.right && rect.right > reserved.left &&
         rect.top < reserved.bottom && rect.bottom > reserved.top)) continue;
@@ -254,12 +293,13 @@ export class Crate {
     if (!speed) return null;
     const dx = velocityX / speed;
     const dy = velocityY / speed;
-    const { x, y } = this.sprite;
+    const x = this.sprite.x;
+    const y = this.throwGroundY(carrierSprite);
     if (!this.isDropPositionClear(x, y)) return null;
-    const carrier = carrierSprite.getBounds();
-    const { width, height } = this.sprite.body;
-    const clearanceX = (dx > 0 ? carrier.right - x : x - carrier.left) + width / 2;
-    const clearanceY = (dy > 0 ? carrier.bottom - y : y - carrier.top) + height / 2;
+    const carrier = carrierFootprint(carrierSprite);
+    const base = this.getFloorBounds(x, y);
+    const clearanceX = dx > 0 ? carrier.right - base.left : base.right - carrier.left;
+    const clearanceY = dy > 0 ? carrier.bottom - base.top : base.bottom - carrier.top;
     const distance = Math.min(
       dx ? clearanceX / Math.abs(dx) : Infinity,
       dy ? clearanceY / Math.abs(dy) : Infinity,
@@ -282,8 +322,11 @@ export class Crate {
   startThrow(carrierSprite, velocityX, velocityY) {
     const speed = Math.hypot(velocityX, velocityY);
     if (!speed) throw new Error("A throw requires a nonzero movement speed");
-    // Keep the held position and inherited walking velocity: no forward teleport.
-    this.drop(this.sprite.x, this.sprite.y, 0, 0, false);
+    const groundY = this.throwGroundY(carrierSprite);
+    const height = Math.max(0, groundY - this.sprite.y);
+    this.drop(this.sprite.x, groundY, 0, 0, false);
+    this.flight = height > 0 ? { height, fallSpeed: 0 } : null;
+    this.setThrowHeight(height);
     this.isThrown = true;
     this.sprite.body.setVelocity(velocityX, velocityY);
     this.throwCarrier = carrierSprite;
@@ -295,6 +338,18 @@ export class Crate {
       accelerationY: velocityY * (THROW_PEAK_MULTIPLIER - 1) / duration,
       maxSpeed: speed * THROW_PEAK_MULTIPLIER,
     });
+  }
+
+  throwGroundY(carrierSprite) {
+    const feet = carrierSprite.body ?? carrierSprite.getBounds();
+    return feet.bottom - this.sprite.displayHeight / 2;
+  }
+
+  // Lift only the artwork; the matching body offset keeps collisions on the floor.
+  setThrowHeight(height) {
+    this.sprite.setOrigin(0.5, 0.5 + height / this.sprite.displayHeight);
+    this.sprite.body.setOffset(0,
+      (this.sprite.displayHeight - CRATE_BASE_HEIGHT + height) / this.sprite.scaleY);
   }
 
   startThrowAcceleration(launch) {
@@ -310,12 +365,20 @@ export class Crate {
   }
 
   /**
-   * Per-frame: end the launch boost on timeout/collision; restore depth once clear of thrower.
+   * Per-frame: lower the artwork, end the launch boost, and restore depth clear of the thrower.
    * @param {number} delta - ms
    */
   updateThrow(delta) {
     const body = this.sprite.body;
     if (!body.enable || !body.moves) return;
+    if (this.flight) {
+      const seconds = delta / 1000;
+      this.flight.height = Math.max(0, this.flight.height -
+        this.flight.fallSpeed * seconds - THROW_FALL_GRAVITY * seconds * seconds / 2);
+      this.flight.fallSpeed += THROW_FALL_GRAVITY * seconds;
+      this.setThrowHeight(this.flight.height);
+      if (this.flight.height === 0) this.flight = null;
+    }
     if (this.throwCarrier) {
       const carrier = this.throwCarrier.getBounds();
       const crate = this.sprite.getBounds();
@@ -347,10 +410,16 @@ export class Crate {
     this.isCarried = false;
     this.isPushed = false;
     this.throwCarrier = null;
+    this.flight = null;
+    this.setThrowHeight(0);
     this.sprite.setAngle?.(0);
     this.sprite.setDepth(2);
     const body = this.sprite.body;
     body.reset(x, y);
+    body.updateFromGameObject();
+    body.prev.copy(body.position);
+    body.prevFrame.copy(body.position);
+    body.autoFrame.copy(body.position);
     body.moves = !paused;
     body.enable = true;
     body.setImmovable(false);
@@ -464,6 +533,7 @@ export class Crate {
       velocityX: this.isPushed ? 0 : this.sprite.body.velocity.x,
       velocityY: this.isPushed ? 0 : this.sprite.body.velocity.y,
       ...(this.launch ? { launch: { ...this.launch } } : {}),
+      ...(this.flight ? { flight: { ...this.flight } } : {}),
     };
   }
 
@@ -478,6 +548,11 @@ export class Crate {
     this.drop(data.x, data.y, data.velocityX / CRATE_THROW_MULTIPLIER,
       data.velocityY / CRATE_THROW_MULTIPLIER, false);
     if (data.launch) this.startThrowAcceleration(data.launch);
+    if (data.flight) {
+      this.flight = { ...data.flight };
+      this.isThrown = true;
+      this.setThrowHeight(this.flight.height);
+    }
   }
 
   /**

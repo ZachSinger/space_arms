@@ -1,5 +1,6 @@
 export const CONTROL_MODES = Object.freeze({
   LOADING: "loading",
+  PAUSED: "paused",
   PLACING: "placing",
   MODAL: "modal",
   REGISTER: "register",
@@ -11,6 +12,7 @@ const REGISTER_WINDOWS = new Set(["checkout-window", "go-backs-window"]);
 
 const CONTROL_PROFILES = Object.freeze({
   [CONTROL_MODES.LOADING]: new Set(),
+  [CONTROL_MODES.PAUSED]: new Set(["pause"]),
   [CONTROL_MODES.PLACING]: new Set(["move", "rotateFixture", "cameraZoom", "debugGrid"]),
   [CONTROL_MODES.MODAL]: new Set(),
   [CONTROL_MODES.REGISTER]: new Set(["interact", "crate", "goBacks", "tablet", "debug", "debugGrid", "pause", "cameraZoom"]),
@@ -38,6 +40,7 @@ export class ControlMode {
 
     let nextMode = CONTROL_MODES.WALKING;
     if (scene.loadFailed || scene.startingShift) nextMode = CONTROL_MODES.LOADING;
+    else if (scene.shiftClock?.started && scene.shiftClock.isPaused) nextMode = CONTROL_MODES.PAUSED;
     else if (scene.fixturePlacement?.active && !placementBlocked) nextMode = CONTROL_MODES.PLACING;
     else if (scene.fixturePlacement?.active) nextMode = CONTROL_MODES.MODAL;
     else if (hasBlockingModal) nextMode = CONTROL_MODES.MODAL;

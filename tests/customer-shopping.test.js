@@ -117,6 +117,20 @@ test("the public door remains a route through the wall while its blocker opens o
   assert.deepEqual(scene.findAreaPath(32, 96, 224, 96), []);
 });
 
+test("staff routes avoid the public door even while a customer holds it open", () => {
+  const blocker = { body: { x: 80, y: 60, width: 80, height: 72, enable: true } };
+  const scene = makeNavigationScene([blocker]);
+  scene.storeDoorAnimation = { door: { blocker } };
+  for (const enabled of [true, false]) {
+    blocker.body.enable = enabled;
+    const path = scene.findAreaPath(32, 96, 224, 96, {
+      width: 22, height: 20, avoidStoreDoor: true,
+    });
+    assert.ok(path && path.length > 0, "staff must go around, not wait for a customer to open the door");
+    assert.deepEqual(scene.findAreaPath(32, 96, 224, 96), []);
+  }
+});
+
 test("shoppers fit any passage wider than their feet, which the old whole-body box could not", () => {
   const scene = makeNavigationScene([
     { body: { x: 0, y: 0, width: 256, height: 80 } },
@@ -192,7 +206,7 @@ test("customer movement uses the current physics position, not the sprite from t
   customer.setDestination(102, 100, () => { arrived = true; });
   assert.deepEqual(calls, [[100, 100, 102, 100]]);
   customer.moveToward(102, 100, () => { arrived = true; }, 1000 / 60, 0.0001);
-  assert.ok(Math.abs(velocity.x - 120) < 0.0001);
+  assert.ok(Math.abs(velocity.x - 100) < 0.0001);
   customer.sprite.body.center.x = 102;
   customer.moveToward(102, 100, () => { arrived = true; }, 1000 / 60, 0.0001);
   assert.equal(arrived, true);
@@ -852,4 +866,44 @@ test("neutral customers explain when there are no products to browse", () => {
   customer.finishShoppingPhase();
 
   assert.match(floatingText[0][2], /no products are on the shelves/i);
+});
+
+test("customers decide about cleanliness once, before taking anything, and a filthy store sends them out", () => {
+  const visit = (percent) => {
+    const verdicts = [];
+    const customer = Object.create(Customer.prototype);
+    Object.assign(customer, {
+      cleanlinessTolerance: { upsetBelow: 70, walkOutBelow: 30 },
+      cleanlinessJudged: false,
+      cleanlinessTimerMs: 0,
+      state: "SEEK_SHELF",
+      cart: [],
+      phaseItemIds: ["wpn_rif_01"],
+      fixture: { placements: [{ itemId: "wpn_rif_01", quantity: 3 }] },
+      scene: {
+        getCleanlinessPercent: () => percent,
+        reportCleanlinessVerdict: (_customer, verdict) => verdicts.push(verdict),
+      },
+      left: false,
+      showReaction() {},
+      clearPatience() {},
+      enterLeaving() { this.left = true; },
+      shopped: false,
+      getRemainingUnitsFor() { this.shopped = true; return 0; },
+      visitNextShelfStop() {},
+    });
+    customer.shopAtCurrentShelf();
+    return { customer, verdicts };
+  };
+  const filthy = visit(10);
+  assert.deepEqual(filthy.verdicts, ["walk-out"]);
+  assert.equal(filthy.customer.left, true);
+  assert.equal(filthy.customer.shopped, false, "they leave without looking at the shelf");
+
+  const dirty = visit(50);
+  assert.deepEqual(dirty.verdicts, ["upset"]);
+  assert.equal(dirty.customer.left, false);
+  assert.equal(dirty.customer.shopped, true, "upset customers keep shopping");
+  assert.equal(dirty.customer.judgeStoreCleanliness(), null, "they never judge twice");
+  assert.deepEqual(dirty.verdicts, ["upset"]);
 });

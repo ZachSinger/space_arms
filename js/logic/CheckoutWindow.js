@@ -11,7 +11,7 @@ import {
   CashPayment, creditCentsToScrips, formatCashAmount, splitCash,
 } from "./CashPayment.js";
 import { CHIT_DIRECTION_DIGITS, ChitPayment } from "./ChitPayment.js";
-import { formatMoneyAmount, sumMoney, toCents } from "./Money.js";
+import { formatTransactionTotal, sumMoney, toCents } from "./Money.js";
 import { clientToGamePoint, DESIGN_WIDTH, getGameScale } from "./GameViewport.js";
 import {
   playScanBeep,
@@ -68,7 +68,7 @@ export function placeBeside({ width, height }, target, viewport, gap = REGISTER_
 
 function formatCheckoutTotal(total, currency = "credits") {
   if (currency === "m-scrips") return formatCashAmount(creditCentsToScrips(toCents(total)), currency);
-  return formatMoneyAmount(total);
+  return formatTransactionTotal(total);
 }
 
 /**
@@ -525,7 +525,9 @@ export class CheckoutWindow {
     this.confirmPayment = () => {
       if (this.paymentStage !== "total") return;
       if (this.cashPayment) return;
-      if (this.paymentBuffer !== "" && toCents(Number(this.paymentBuffer)) === toCents(this.total)) {
+      // The cents are always keyed in, even when they're .00.
+      const fullAmount = /^\d+\.\d{2}$/.test(this.paymentBuffer);
+      if (fullAmount && toCents(Number(this.paymentBuffer)) === toCents(this.total)) {
         this.paymentStage = "complete";
         playSaleComplete();
         // Don't close here: the caller either re-renders for the next queued customer or
@@ -769,7 +771,7 @@ export class CheckoutWindow {
     // What the customer paid sits next to the total, in green.
     const paid = this.cashPayment.currency === "m-scrips"
       ? formatCashAmount(this.cashPayment.tenderUnits, "m-scrips")
-      : formatMoneyAmount(this.cashPayment.tenderUnits / 100);
+      : formatTransactionTotal(this.cashPayment.tenderUnits / 100);
     this.bodyElement.querySelector("#checkout-total-value").innerHTML =
       `${formatCheckoutTotal(this.total, this.cashPayment.currency)} - <span class="checkout-paid">${paid}</span>`;
     this.bodyElement.querySelector("#checkout-payment").classList.remove("hidden");

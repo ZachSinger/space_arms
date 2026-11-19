@@ -17,18 +17,17 @@ export class LayoutRenderer {
     if (includePurchases) {
       return LayoutRenderer.generateFixturesTabHTML(scene, purchaseNotice, saleConfirmation);
     }
-    const enabled = scene.canRearrangeFixtures();
-    const { fixtures } = scene;
+    const enabled = scene.canExpandStore();
 
     const expansionCards = (options, buyAttribute) => options.map(
       ({ zone, isPurchased, isNext, levelMet, canAfford }) => {
         const canBuy = enabled && !isPurchased && isNext && levelMet && canAfford;
         const status = isPurchased
           ? "OPEN"
-          : !isNext
-            ? "BUY PREVIOUS EXPANSION FIRST"
-            : !levelMet
-              ? `REACH SHOP LEVEL ${zone.requiredShopLevel}`
+          : !levelMet
+            ? "LOCKED"
+            : !isNext
+              ? "BUY PREVIOUS EXPANSION FIRST"
               : !canAfford
                 ? "INSUFFICIENT FUNDS"
                 : !enabled
@@ -42,36 +41,17 @@ export class LayoutRenderer {
             </div>
             <div class="fixture-sale-action">
               <p class="type-description fixture-sale-price">${zone.cost.toLocaleString()}</p>
-              <button type="button" class="action-btn" ${buyAttribute}="${zone.id}"
+              <button type="button" class="${!isPurchased && !levelMet ? "retro-tab-btn" : "action-btn"}" ${buyAttribute}="${zone.id}"
                 ${canBuy ? "" : "disabled"}>${status}</button>
             </div>
           </div>
         `;
       }).join("");
 
-    const moveCards = fixtures.all().map((fixture) => {
-      const moveBlockReason = scene.getFixtureMoveAreaBlockReason?.(fixture) ?? null;
-      const canMove = enabled && !moveBlockReason;
-      return `
-        <div class="item-card fixture-owned-card" data-fixture-row-id="${fixture.id}">
-          <div class="fixture-owned-header">
-            <h3 class="type-h3">${fixtures.displayName(fixture)}</h3>
-            <button type="button" class="action-btn" data-move-fixture-id="${fixture.id}"
-              title="${moveBlockReason || "Move this fixture"}"
-              ${canMove ? "" : "disabled"}>MOVE</button>
-          </div>
-          ${enabled && moveBlockReason ? `<p class="type-description fixture-block-reason">${moveBlockReason}</p>` : ""}
-        </div>
-      `;
-    }).join("");
-
     return `
-      <div class="fixtures-panel">
+      <div class="fixtures-panel fixtures-panel-single">
         <div class="fixtures-panel-heading">
           <h2 class="type-h2">Expansions</h2>
-        </div>
-        <div class="fixtures-panel-heading">
-          <h2 class="type-h2">Move Fixtures</h2>
         </div>
         <hr class="divider-thick fixtures-panel-divider">
         <section class="fixtures-section">
@@ -80,11 +60,6 @@ export class LayoutRenderer {
             ${expansionCards(scene.getExpansionPurchaseOptions(), "data-buy-expansion-id")}
             <h3 class="type-h3 layout-zone-heading">Backroom</h3>
             ${expansionCards(scene.getBackroomPurchaseOptions(), "data-buy-backroom-id")}
-          </div>
-        </section>
-        <section class="fixtures-section">
-          <div class="retro-slot custom-scrollbar layout-fixture-list">
-            ${moveCards || `<p class="type-description fixtures-empty">No fixtures are placed in your shop.</p>`}
           </div>
         </section>
       </div>

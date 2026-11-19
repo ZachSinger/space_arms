@@ -13,18 +13,19 @@ export class InventoryRenderer {
 
   /**
    * Render just the Inventory tab's content; the hosting window owns the tab chrome.
-   * @param {{ item: object, stock: number, unitCost: number, storePrice: number }[]} entries - prices in credits
+   * @param {{ item: object, stock: number, offShelves: number, unitCost: number, storePrice: number }[]} entries - stock is on shelves, offShelves is in crates; prices in credits
    * @returns {string}
    */
   static generateHTML(entries) {
-    const rows = entries.map(({ item, stock, unitCost, storePrice }, index) => {
+    const rows = entries.map(({ item, stock, offShelves = 0, unitCost, storePrice }, index) => {
       const iconHTML = item.image
         ? `<img class="item-icon" src="${item.image}" alt="" />`
         : `<div class="item-icon"></div>`;
       return `
         <div class="item-card inventory-item-card" data-index="${index}" data-item-id="${item.id}">
           <div class="inventory-name">${iconHTML}<span class="item-card-title">${item.name}</span></div>
-          <span class="inventory-quantity" data-inventory-stock>${stock}</span>
+          <span class="inventory-quantity" data-inventory-stock title="${item.name} on your shop's shelves">${stock}</span>
+          <span class="inventory-quantity" data-inventory-crates title="${item.name} still packed in crates (floor, backroom, loading pad, or being carried)">${offShelves}</span>
           <div class="inventory-price-controls">
             <input class="inventory-price-input" type="number" min="1" step="0.01" value="${storePrice}"
               data-price-item-id="${item.id}" aria-label="Store price for ${item.name}" />
@@ -47,7 +48,8 @@ export class InventoryRenderer {
     return `
       <div class="inventory-column-header">
         <h3 class="type-h3">Name</h3>
-        <h3 class="type-h3">Stock</h3>
+        <h3 class="type-h3">On Shelves</h3>
+        <h3 class="type-h3">In Crates</h3>
         <h3 class="type-h3">Price</h3>
         <h3 class="type-h3">Profit</h3>
       </div>

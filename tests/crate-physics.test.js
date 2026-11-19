@@ -17,6 +17,26 @@ function createScene(obstacles = []) {
           drag: { x: 0, y: 0 },
           acceleration: { x: 0, y: 0 },
           maxSpeed: -1,
+          offset: { x: 0, y: 0 },
+          prev: { copy() {} },
+          prevFrame: { copy() {} },
+          autoFrame: { copy() {} },
+          setSize(width, height) {
+            this.width = width * sprite.scaleX;
+            this.height = height * sprite.scaleY;
+            return this;
+          },
+          updateFromGameObject() {
+            this.left = sprite.x - sprite.width / 2;
+            this.top = sprite.y - sprite.height * sprite.originY + this.offset.y * sprite.scaleY;
+            this.right = this.left + this.width;
+            this.bottom = this.top + this.height;
+            this.position = { x: this.left, y: this.top };
+          },
+          setOffset(x, y) {
+            this.offset = { x, y };
+            return this;
+          },
           blocked: { none: true },
           touching: { none: true },
           setAcceleration(x, y) {
@@ -75,9 +95,17 @@ function createScene(obstacles = []) {
         return {
           x,
           y,
+          originY: 0.5,
+          scaleX: 1,
+          scaleY: 1,
+          setOrigin(x, y) {
+            this.originY = y;
+            return this;
+          },
           setDisplaySize(width, height) {
             this.width = width;
             this.height = height;
+            this.displayHeight = height;
             return this;
           },
           setDepth(depth) {
@@ -96,7 +124,8 @@ function createScene(obstacles = []) {
           getBounds() {
             return {
               left: this.x - this.width / 2, right: this.x + this.width / 2,
-              top: this.y - this.height / 2, bottom: this.y + this.height / 2,
+              top: this.y - this.height * this.originY,
+              bottom: this.y + this.height * (1 - this.originY),
             };
           },
         };
@@ -312,9 +341,9 @@ function carrierAt(x = 250, y = 250) {
 
 function assertClearOfCarrier(crate, position, carrier) {
   const bounds = carrier.getBounds();
-  const { width, height } = crate.sprite.body;
-  assert.ok(position.x + width / 2 <= bounds.left || position.x - width / 2 >= bounds.right ||
-    position.y + height / 2 <= bounds.top || position.y - height / 2 >= bounds.bottom,
+  const base = crate.getFloorBounds(position.x, position.y);
+  assert.ok(base.right <= bounds.left || base.left >= bounds.right ||
+    base.bottom <= bounds.top || base.top >= bounds.bottom,
     `Crate at ${JSON.stringify(position)} overlaps player at ${JSON.stringify(bounds)}`);
 }
 
@@ -337,6 +366,79 @@ function advanceThrow(crate, milliseconds) {
   crate.updateThrow(milliseconds);
 }
 
+test("sideways throws fall to the thrower's original feet level, including the top of a stack", () => {
+  for (const direction of [-1, 1]) {
+    for (const stackIndex of [0, 2]) {
+      const crate = new Crate(createScene(), "item", 5, 0, 0);
+      const carrier = {
+        ...carrierAt(),
+        body: { left: 239, right: 261, top: 250, bottom: 270 },
+      };
+      crate.pickUp(carrier);
+      crate.followCarrier(carrier, stackIndex, 42);
+      const held = crate.sprite.getBounds();
+      crate.startThrow(carrier, direction * 160, 0);
+      assert.deepEqual(crate.sprite.getBounds(), held);
+      const groundY = crate.sprite.y;
+      assert.equal(crate.getFloorBounds().bottom, 270);
+      const initialHeight = crate.flight.height;
+      carrier.y += 80;
+      carrier.body.bottom += 80;
+      advanceThrow(crate, 100);
+      assert.ok(crate.flight.height > 0 && crate.flight.height < initialHeight);
+      assert.equal(crate.sprite.y, groundY, "falling must not move the floor collision position");
+      const baseInset = crate.sprite.displayHeight - crate.sprite.body.height;
+      assert.equal(crate.sprite.body.offset.y, (baseInset + crate.flight.height) / crate.sprite.scaleY);
+      for (let elapsed = 100; elapsed < 600; elapsed += 10) advanceThrow(crate, 10);
+      assert.equal(crate.flight, null);
+      assert.equal(crate.sprite.getBounds().bottom, 270, "land at the original feet level, not the moving player");
+      assert.deepEqual(crate.sprite.body.offset, { x: 0, y: baseInset / crate.sprite.scaleY });
+    }
+  }
+});
+
+test("throw checks ignore overhead wall overlap but still block the crate's floor path", () => {
+  const overheadWall = { enable: true, left: 0, right: 500, top: 0, bottom: 242 };
+  const scene = createScene([overheadWall]);
+  const crate = new Crate(scene, "item", 5, 0, 0);
+  const carrier = { ...carrierAt(), body: { left: 239, right: 261, top: 250, bottom: 270 } };
+  crate.pickUp(carrier);
+  crate.followCarrier(carrier, 2, 42);
+  assert.ok(crate.sprite.getBounds().bottom < overheadWall.bottom, "held artwork overlaps the wall");
+  assert.ok(crate.findThrowPosition(carrier, -160, 0));
+  assert.ok(crate.findThrowPosition(carrier, 160, 0));
+  assert.equal(crate.findThrowPosition(carrier, 0, -160), null, "cannot throw through the wall above");
+  scene.restockCrates = [{
+    sprite: { body: { enable: true, left: 275, right: 307, top: 250, bottom: 278 } },
+  }];
+  assert.equal(crate.findThrowPosition(carrier, 160, 0), null, "a floor crate still blocks release");
+  assert.ok(crate.findThrowPosition(carrier, -160, 0));
+});
+
+test("falling continues after a collision stops the launch and survives saving", () => {
+  const crate = new Crate(createScene(), "item", 5, 0, 0);
+  const carrier = carrierAt();
+  crate.pickUp(carrier);
+  crate.startThrow(carrier, 160, 0);
+  crate.sprite.body.blocked.none = false;
+  crate.sprite.body.stop();
+  crate.updateThrow(50);
+  assert.equal(crate.launch, null);
+  assert.ok(crate.flight);
+  assert.equal(crate.canPickUp(), false);
+  const saved = crate.serialize();
+  const restored = new Crate(createScene(), "item", 5, 0, 0);
+  restored.applySave(saved);
+  assert.deepEqual(restored.serialize(), saved);
+  assert.equal(restored.isThrown, crate.isThrown);
+  assert.deepEqual(restored.sprite.getBounds(), crate.sprite.getBounds());
+  crate.updateThrow(1000);
+  restored.updateThrow(1000);
+  assert.equal(restored.flight, null);
+  assert.deepEqual(restored.serialize(), crate.serialize());
+  assert.equal(restored.canPickUp(), true);
+});
+
 for (const kind of ["item", "fixture"]) {
   test(`${kind} throws inherit walking speed without teleporting, accelerate, then decelerate in all eight directions`, () => {
     for (const [x, y] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
@@ -348,12 +450,13 @@ for (const kind of ["item", "fixture"]) {
       const vy = y / length * speed;
       crate.pickUp(carrier);
       const start = { x: crate.sprite.x, y: crate.sprite.y };
+      const heldBounds = crate.sprite.getBounds();
       const position = crate.findThrowPosition(carrier, vx, vy);
       assert.ok(position);
       assertClearOfCarrier(crate, position, carrier);
       crate.startThrow(carrier, vx, vy);
       const body = crate.sprite.body;
-      assert.deepEqual({ x: crate.sprite.x, y: crate.sprite.y }, start);
+      assert.deepEqual(crate.sprite.getBounds(), heldBounds, "the artwork must not teleport on release");
       assert.deepEqual(body.velocity, { x: vx, y: vy });
       assert.equal(crate.sprite.depth, carrier.depth + 1);
       let previousSpeed = speed;
@@ -442,7 +545,19 @@ test("a set-down crate goes straight ahead of the facing direction first", () =>
   const nearWall = new Crate(createScene([wallAtHead]), "item", 5, 0, 0);
   const atWall = nearWall.findDropPosition(player.x, player.y, player, [], undefined, "up");
   assert.ok(atWall && atWall.x === player.x && atWall.y < player.y, `near a wall: ${JSON.stringify(atWall)}`);
-  assert.ok(atWall.y + nearWall.sprite.body.height / 2 <= player.body.top, "never on his feet");
+  assert.ok(nearWall.getFloorBounds(atWall.x, atWall.y).bottom <= player.body.top, "never on his feet");
+
+  // Exactly one crate base of room between his feet and the wall: the spot a crate he just
+  // walked up to and picked up was sitting in. It goes right back there.
+  const snug = new Crate(createScene(), "item", 5, 0, 0);
+  const baseHeight = snug.getFloorBounds(0, 0).bottom - snug.getFloorBounds(0, 0).top;
+  const wallSnug = { enable: true, left: 0, right: 500, top: 0, bottom: player.body.top - baseHeight };
+  const tight = new Crate(createScene([wallSnug]), "item", 5, 0, 0);
+  const back = tight.findDropPosition(player.x, player.y, player, [], undefined, "up");
+  assert.ok(back && back.x === player.x, `snug against a wall: ${JSON.stringify(back)}`);
+  const backBase = tight.getFloorBounds(back.x, back.y);
+  assert.equal(backBase.top, wallSnug.bottom);
+  assert.equal(backBase.bottom, player.body.top);
 });
 
 test("forward releases cannot skip through obstacles, other crates, or the loading pad", () => {
@@ -547,8 +662,8 @@ test("drop position avoids corners and world bounds, or reports no room", () => 
   const crate = new Crate(createScene(walls), "item", 1, 200, 200);
   const corner = crate.findDropPosition(111, 111);
   assert.ok(corner);
-  // The 32x28 crate's edges stay clear of both walls.
-  assert.ok(corner.x >= 116 && corner.y >= 114);
+  const cornerBase = crate.getFloorBounds(corner.x, corner.y);
+  assert.ok(cornerBase.left >= 100 && cornerBase.top >= 100);
   assert.ok(Math.hypot(corner.x - 111, corner.y - 111) <= INTERACT_RANGE);
 
   const clearCrate = new Crate(createScene(), "item", 1, 200, 200);
@@ -567,9 +682,8 @@ test("drop position never lands on another crate", () => {
   const carried = new Crate(scene, "item", 1, 0, 0);
   const position = carried.findDropPosition(200, 200);
   assert.ok(position);
-  const half = carried.sprite.body.width / 2;
-  const clear = position.x - half >= 220 || position.x + half <= 180 ||
-    position.y - half >= 220 || position.y + half <= 180;
+  const base = carried.getFloorBounds(position.x, position.y);
+  const clear = base.left >= 220 || base.right <= 180 || base.top >= 220 || base.bottom <= 180;
   assert.ok(clear, JSON.stringify(position));
 });
 
@@ -604,8 +718,31 @@ test("a carried crate can't be dropped onto the loading pad", () => {
   const scene = createScene();
   scene.loadingPadRect = { left: 200, top: 200, right: 336, bottom: 328 };
   const crate = new Crate(scene, "item", 5, 0, 0);
-  const position = crate.findDropPosition(268, 264);
+  const position = crate.findDropPosition(268, 264, null, [], 48);
   assert.equal(position, null);
   const nearEdge = crate.findDropPosition(268, 175);
-  assert.ok(nearEdge.y + 20 <= 200);
+  assert.ok(crate.getFloorBounds(nearEdge.x, nearEdge.y).bottom <= 200);
 });
+
+for (const kind of ["item", "fixture"]) {
+  test(`${kind} crate tops overlap an upper wall by 10 pixels while the base stays outside`, () => {
+    const wall = { enable: true, left: 0, right: 500, top: 0, bottom: 200 };
+    const scene = createScene([wall]);
+    const crate = new Crate(scene, "item", 1, 200, 250, { kind, typeId: "shelf_budget_3x4" });
+    assert.equal(crate.isDropPositionClear(200, 204), true);
+    assert.equal(crate.isDropPositionClear(200, 203), false, "the base cannot enter the wall");
+    const position = crate.findDropPosition(200, 204);
+    assert.deepEqual(position, { x: 200, y: 204 }, "no unnecessary displacement away from the wall");
+    crate.drop(position.x, position.y, 0, 0, false);
+    assert.equal(crate.sprite.getBounds().top, 190);
+    assert.equal(crate.sprite.body.top, 200);
+    assert.equal(crate.sprite.body.bottom, crate.sprite.getBounds().bottom);
+    assert.equal(crate.isDropPositionClear(10, 204), false, "side walls still block the full width");
+
+    const saved = crate.serialize();
+    const restored = new Crate(scene, "item", 1, 0, 0, { kind, typeId: "shelf_budget_3x4" });
+    restored.applySave(saved);
+    assert.deepEqual(restored.serialize(), saved);
+    assert.equal(restored.sprite.body.top, 200);
+  });
+}

@@ -3,14 +3,19 @@
 // ==========================================
 // A hired employee who serves the register and stocks shelves from delivered crates.
 import { transferItems } from "./InventoryTransfer.js";
-import { addCharacterSprite, pickRandomCustomerCharacter, showCharacterFacing } from "./CustomerSprites.js";
+import { addCharacterSprite } from "./CustomerSprites.js";
+import { employeeTextureFor, showEmployeeFacing, EMPLOYEE_CRATE_HOLD_OFFSET } from "./EmployeeSprites.js";
 import { EMPLOYEE_JOB_IDS } from "./EmployeeJobs.js";
 import { getEmployeeJobSpeed } from "./EmployeeTraining.js";
+import { fixtureFootprint } from "./FixtureLayout.js";
 import { PLAYER_BODY_HEIGHT, PLAYER_BODY_WIDTH } from "./Player.js";
+import { FLOOR_STACK_MAX } from "./CrateStack.js";
+import { isBackroomRow, TILE_SIZE } from "./RoomLayout.js";
 
 const WALK_SPEED = 120;
 const JOB_RETRY_MS = 1000;
 const BREAK_CHECK_MS = 100;
+const WALK_BODY = { width: PLAYER_BODY_WIDTH, height: PLAYER_BODY_HEIGHT, avoidStoreDoor: true };
 // Scanning plus payment per cart item. Deliberately slower than a practiced player: a
 // rookie (level 1) keeps up with ~15 customers a shift and melts around 30+, so training
 // and extra registers matter (see scripts/staffing-sim.mjs).
@@ -29,20 +34,25 @@ export class Employee {
     this.retryInMs = 0;
     this.clockOutRequested = false;
     this.isDestroyed = false;
+    this.pathRetryMs = 0;
 
-    const character = pickRandomCustomerCharacter();
     this.currentFacing = "down";
     const spawn = scene.backroomExitFront ?? scene.backroomDoor;
     this.sprite = addCharacterSprite(
-      scene, spawn.x, spawn.y, character.textureKey, PLAYER_BODY_WIDTH, PLAYER_BODY_HEIGHT,
+      scene, spawn.x, spawn.y, employeeTextureFor(employeeData.id), PLAYER_BODY_WIDTH, PLAYER_BODY_HEIGHT,
     )
-      .setTint(0x4ade80)
       .setDepth(3);
     scene.employeeGroup.add(this.sprite);
   }
 
   update(delta = 0) {
     if (this.isDestroyed) return;
+    if (this.state === "WAITING_CRATE_RETURN") {
+      this.retryInMs -= delta;
+      if (this.retryInMs <= 0) this.returnCrate();
+      this.updateFacing();
+      return;
+    }
     if (this.state === "IDLE" || this.state === "ON_BREAK") {
       this.retryInMs -= delta;
       if (this.clockOutRequested) {
@@ -67,13 +77,18 @@ export class Employee {
     }
     if (this.state === "SERVING_REGISTER") {
       this.updateRegisterService(delta);
-    } else if (["TO_SHELF", "TO_CRATE", "TO_REGISTER", "TO_BREAKROOM"].includes(this.state)) {
-      if (this.state === "TO_SHELF" && this.currentJob.crate.isCarried) {
-        this.currentJob.crate.followCarrier(this.sprite);
+    } else if ([
+      "TO_SHELF", "TO_CRATE", "TO_RETURN_CRATE", "TO_TRASHCAN",
+      "TO_REGISTER", "TO_BREAKROOM",
+    ].includes(this.state)) {
+      if (["TO_SHELF", "TO_RETURN_CRATE", "TO_TRASHCAN"].includes(this.state) &&
+        this.currentJob.crate.isCarried) {
+        this.currentJob.crate.followCarrier(this.sprite, 0, EMPLOYEE_CRATE_HOLD_OFFSET);
       }
-      this.followPath();
-      if (this.state === "TO_SHELF" && this.currentJob?.crate.isCarried) {
-        this.currentJob.crate.followCarrier(this.sprite);
+      this.followPath(delta);
+      if (["TO_SHELF", "TO_RETURN_CRATE", "TO_TRASHCAN"].includes(this.state) &&
+        this.currentJob?.crate.isCarried) {
+        this.currentJob.crate.followCarrier(this.sprite, 0, EMPLOYEE_CRATE_HOLD_OFFSET);
       }
     }
     if (!this.isDestroyed) this.updateFacing();
@@ -90,7 +105,7 @@ export class Employee {
         const job = this.findStockingJob();
         if (job) {
           this.currentJob = { ...job, jobId };
-          this.walkTo({ x: job.crate.sprite.x, y: job.crate.sprite.y }, "TO_CRATE");
+          this.walkToCrate(job.base ?? job.crate, "TO_CRATE");
           return;
         }
       } else if (!EMPLOYEE_JOB_IDS.includes(jobId)) {
@@ -131,26 +146,67 @@ export class Employee {
       .map((employee) => employee.currentJob?.crate)
       .filter(Boolean));
 
-    for (const crate of this.scene.restockCrates) {
-      if (crate.kind !== "item" || !crate.lockedToPad || crate.quantity <= 0 ||
+    // Items that are sold out on every shelf come first, then the emptiest shelf spots.
+    const onShelves = (itemId) => this.scene.fixtures.shelves()
+      .flatMap((shelf) => shelf.placements)
+      .reduce((sum, entry) => sum + (entry.itemId === itemId ? entry.quantity : 0), 0);
+    let best = null;
+    for (const base of this.scene.restockCrates) {
+      // Stacked crates are taken from the top; a lone crate is its own top. Any resting
+      // crate anywhere in the shop or backroom is fair game. A stack's top crate rides the
+      // one below it (flagged as carried), which doesn't make it someone's load.
+      const top = this.scene.floorStacks?.get(base)?.at(-1);
+      const crate = top ?? base;
+      const fromPad = Boolean(base.lockedToPad);
+      if (crate.kind !== "item" || crate.quantity <= 0 || (!top && crate.isCarried) ||
         reservedCrates.has(crate)) continue;
+      const soldOut = onShelves(crate.itemId) === 0;
       for (const shelf of this.scene.fixtures.shelves()) {
-        const placement = shelf.placements.find((entry) =>
-          entry.itemId === crate.itemId && !reserved.has(entry) &&
-          shelf.getRemainingUnitsFor(crate.itemId, entry) > 0,
-        );
-        if (placement) {
-          return {
-            crate,
-            cratePosition: { x: crate.sprite.x, y: crate.sprite.y },
-            shelf,
-            placement,
-            itemId: crate.itemId,
+        for (const placement of shelf.placements) {
+          if (placement.itemId !== crate.itemId || reserved.has(placement)) continue;
+          const room = shelf.getRemainingUnitsFor(crate.itemId, placement);
+          if (room <= 0) continue;
+          const fullness = placement.quantity / (placement.quantity + room);
+          const score = (soldOut ? 0 : 1) + fullness;
+          if (best && best.score <= score) continue;
+          best = {
+            score,
+            job: {
+              crate,
+              base,
+              fromPad,
+              cratePosition: { x: crate.sprite.x, y: crate.sprite.y },
+              shelf,
+              placement,
+              itemId: crate.itemId,
+            },
           };
         }
       }
     }
-    return null;
+    return best?.job ?? null;
+  }
+
+  // Lifts the job's crate out of the world lists so it can be carried: a lone crate leaves
+  // restockCrates; a stack's top crate leaves its stack. Anything buried or changed is refused.
+  detachCrateForPickup(crate) {
+    if (crate.quantity <= 0) return false;
+    const scene = this.scene;
+    if (scene.restockCrates.includes(crate)) {
+      if (crate.isCarried) return false;
+      if (scene.floorStacks?.get(crate)?.length) return false; // something is stacked on it now
+      scene.restockCrates = scene.restockCrates.filter((candidate) => candidate !== crate);
+      return true;
+    }
+    for (const [base, above] of scene.floorStacks ?? []) {
+      if (above.at(-1) === crate) {
+        above.pop();
+        if (above.length === 0) scene.floorStacks.delete(base);
+        return true;
+      }
+      if (above.includes(crate)) return false; // buried mid-stack
+    }
+    return false;
   }
 
   getReservedShelfPlacements() {
@@ -161,10 +217,92 @@ export class Employee {
   }
 
   walkTo(point, nextState) {
-    const path = this.scene.findPath(this.sprite.x, this.sprite.y, point.x, point.y, {
-      width: PLAYER_BODY_WIDTH,
-      height: PLAYER_BODY_HEIGHT,
+    const from = this.sprite.body.center ?? this.sprite;
+    const path = this.scene.findPath(from.x, from.y, point.x, point.y, WALK_BODY);
+    return this.startPath(point, path, nextState);
+  }
+
+  /**
+   * Walks to whichever side of the crate (below, above, left, right) is quickest to reach.
+   * Its middle is never a goal: a crate pushed against a wall leaves no room to stand there.
+   * @param {Crate} base - the crate on the floor (a stack's bottom crate)
+   */
+  walkToCrate(base, nextState) {
+    const bounds = base.getFloorBounds?.();
+    if (!bounds) return this.walkTo({ x: base.sprite.x, y: base.sprite.y }, nextState);
+    const reachX = PLAYER_BODY_WIDTH / 2 + 2;
+    const reachY = PLAYER_BODY_HEIGHT / 2 + 2;
+    const midX = (bounds.left + bounds.right) / 2;
+    const midY = (bounds.top + bounds.bottom) / 2;
+    return this.walkToClosestSpot([
+      { x: midX, y: bounds.bottom + reachY }, { x: midX, y: bounds.top - reachY },
+      { x: bounds.left - reachX, y: midY }, { x: bounds.right + reachX, y: midY },
+    ], nextState);
+  }
+
+  walkToClosestSpot(spots, nextState) {
+    const best = this.findClosestSpot(spots);
+    if (!best) return false;
+    return this.startPath(best.spot, best.path, nextState);
+  }
+
+  walkToCratePosition(crate, position, nextState) {
+    const bounds = crate.getFloorBounds?.();
+    if (!bounds) return this.walkTo(position, nextState);
+    const reachX = PLAYER_BODY_WIDTH / 2 + 2;
+    const reachY = PLAYER_BODY_HEIGHT / 2 + 2;
+    const left = position.x + bounds.left - crate.sprite.x;
+    const right = position.x + bounds.right - crate.sprite.x;
+    const top = position.y + bounds.top - crate.sprite.y;
+    const bottom = position.y + bounds.bottom - crate.sprite.y;
+    const midX = (left + right) / 2;
+    const midY = (top + bottom) / 2;
+    return this.walkToClosestSpot([
+      { x: midX, y: bottom + reachY }, { x: midX, y: top - reachY },
+      { x: left - reachX, y: midY }, { x: right + reachX, y: midY },
+    ], nextState);
+  }
+
+  walkToTrashcan() {
+    const reachX = PLAYER_BODY_WIDTH / 2 + 2;
+    const reachY = PLAYER_BODY_HEIGHT / 2 + 2;
+    const spots = this.scene.fixtures.ofKind("trash").flatMap((fixture) => {
+      const { w, h } = fixtureFootprint(fixture);
+      const left = fixture.gx * TILE_SIZE;
+      const top = fixture.gy * TILE_SIZE;
+      const right = left + w * TILE_SIZE;
+      const bottom = top + h * TILE_SIZE;
+      const midX = (left + right) / 2;
+      const midY = (top + bottom) / 2;
+      return [
+        { x: midX, y: bottom + reachY }, { x: midX, y: top - reachY },
+        { x: left - reachX, y: midY }, { x: right + reachX, y: midY },
+      ].map((spot) => ({ ...spot, fixture }));
     });
+    const closest = this.findClosestSpot(spots);
+    if (!closest) return false;
+    this.currentJob.trashcan = closest.spot.fixture;
+    return this.startPath(closest.spot, closest.path, "TO_TRASHCAN");
+  }
+
+  findClosestSpot(spots) {
+    const position = this.sprite.body.center ?? this.sprite;
+    let best = null;
+    for (const spot of spots) {
+      const path = this.scene.findPath(position.x, position.y, spot.x, spot.y, WALK_BODY);
+      if (!path) continue;
+      let length = 0;
+      let from = position;
+      for (const waypoint of [...path, spot]) {
+        length += Math.hypot(waypoint.x - from.x, waypoint.y - from.y);
+        from = waypoint.teleportTo ?? waypoint;
+      }
+      if (!best || length < best.length) best = { spot, path, length };
+    }
+    return best;
+  }
+
+  startPath(point, path, nextState) {
     if (path === null) {
       this.currentJob = null;
       this.state = this.state === "ON_BREAK" ? "ON_BREAK" : "IDLE";
@@ -174,19 +312,38 @@ export class Employee {
     }
     this.destination = { x: point.x, y: point.y };
     this.path = path;
+    this.pathRetryMs = 0;
     this.state = nextState;
     this.sprite.setVisible(true);
     return true;
   }
 
-  followPath() {
-    const waypoint = this.path[0] || this.destination;
+  followPath(delta = 1000 / 60) {
+    this.pathRetryMs = Math.max(0, this.pathRetryMs - delta);
+    let waypoint = this.path[0] || this.destination;
     if (!waypoint) throw new Error(`Employee ${this.data.id} has no movement target.`);
 
-    const dx = waypoint.x - this.sprite.x;
-    const dy = waypoint.y - this.sprite.y;
+    const position = this.sprite.body.center ?? this.sprite;
+    const { blocked, touching } = this.sprite.body;
+    const hitting = (direction) => blocked?.[direction] || touching?.[direction];
+    if (this.pathRetryMs === 0 &&
+      ((waypoint.x > position.x && hitting("right")) || (waypoint.x < position.x && hitting("left")) ||
+       (waypoint.y > position.y && hitting("down")) || (waypoint.y < position.y && hitting("up")))) {
+      this.pathRetryMs = 200;
+      const path = this.scene.findPath(position.x, position.y, this.destination.x, this.destination.y, WALK_BODY);
+      if (path === null) {
+        this.sprite.body.setVelocity(0, 0);
+        if (["TO_TRASHCAN", "TO_RETURN_CRATE"].includes(this.state)) this.returnCrate();
+        return;
+      }
+      this.path = path;
+      waypoint = this.path[0] || this.destination;
+    }
+    const dx = waypoint.x - position.x;
+    const dy = waypoint.y - position.y;
     const distance = Math.hypot(dx, dy);
-    if (distance < 6) {
+    // Reach corners exactly, rather than turning early into the fixture beside the path.
+    if (distance < (this.path.length > 0 ? 0.0001 : 6)) {
       this.sprite.body.setVelocity(0, 0);
       if (this.path.length > 0) {
         this.path.shift();
@@ -197,8 +354,11 @@ export class Employee {
       this.arriveAtDestination();
       return;
     }
-    const jobId = ["TO_SHELF", "TO_CRATE"].includes(this.state) ? "stock_shelves" : null;
-    const speed = WALK_SPEED * (jobId ? getEmployeeJobSpeed(this.data.skillLevels, jobId) : 1);
+    const jobId = ["TO_SHELF", "TO_CRATE", "TO_RETURN_CRATE", "TO_TRASHCAN"].includes(this.state)
+      ? "stock_shelves"
+      : null;
+    const maxSpeed = WALK_SPEED * (jobId ? getEmployeeJobSpeed(this.data.skillLevels, jobId) : 1);
+    const speed = delta > 0 ? Math.min(maxSpeed, distance / (Math.max(delta, 1000 / 60) / 1000)) : 0;
     this.sprite.body.setVelocity((dx / distance) * speed, (dy / distance) * speed);
   }
 
@@ -210,19 +370,23 @@ export class Employee {
       this.retryInMs = BREAK_CHECK_MS;
     } else if (this.state === "TO_CRATE") {
       const { crate, cratePosition } = this.currentJob;
-      if (!crate.lockedToPad || crate.quantity <= 0 || !crate.pickUp(this.sprite)) {
+      if (!this.detachCrateForPickup(crate) || !crate.pickUp(this.sprite)) {
         this.finishTask();
         return;
       }
-      this.scene.restockCrates = this.scene.restockCrates.filter((candidate) => candidate !== crate);
       this.currentJob.cratePosition = cratePosition;
+      crate.followCarrier(this.sprite, 0, EMPLOYEE_CRATE_HOLD_OFFSET);
       const job = this.currentJob;
       if (!this.walkTo(job.shelf.standPoint, "TO_SHELF")) {
         this.currentJob = job;
-        this.returnCrateToPad();
+        this.returnCrate();
       }
     } else if (this.state === "TO_SHELF") {
       this.stockCrateOnShelf();
+    } else if (this.state === "TO_RETURN_CRATE") {
+      this.finishReturningCrate();
+    } else if (this.state === "TO_TRASHCAN") {
+      this.discardEmptyCrate();
     } else if (this.state === "TO_REGISTER") {
       this.beginRegisterService();
     }
@@ -235,7 +399,7 @@ export class Employee {
       crate.getAvailableUnitsFor(itemId),
     );
     if (quantity <= 0) {
-      this.returnCrateToPad();
+      this.returnCrate();
       return;
     }
 
@@ -249,19 +413,112 @@ export class Employee {
     this.scene.playerState.notifyListeners();
 
     if (crate.quantity <= 0) {
-      this.scene.restockCrates = this.scene.restockCrates.filter((candidate) => candidate !== crate);
-      crate.destroy();
+      if (!this.walkToTrashcan()) this.returnCrate();
+      return;
+    }
+    this.returnCrate();
+  }
+
+  // Fill an existing stack before taking floor space. Deliveries leave the Loading Pad free.
+  returnCrate() {
+    const { crate, base: originalBase, fromPad, cratePosition } = this.currentJob;
+    const scene = this.scene;
+    const others = scene.employees.filter((employee) => employee !== this);
+    const availableStacks = scene.restockCrates.filter((base) =>
+      base.kind === "item" && !base.lockedToPad && !base.isCarried && base.isStationary() &&
+      (scene.floorStacks.get(base)?.length ?? 0) + 1 < FLOOR_STACK_MAX &&
+      !others.some((employee) =>
+        employee.currentJob?.base === base || employee.currentJob?.returnBase === base),
+    ).sort((a, b) => {
+      const priority = (candidate) => fromPad
+        ? (isBackroomRow(Math.floor(candidate.sprite.y / TILE_SIZE)) ? 0 : 1)
+        : (candidate === originalBase ? 0 : 1);
+      return priority(a) - priority(b) ||
+        Math.hypot(a.sprite.x - this.sprite.x, a.sprite.y - this.sprite.y) -
+        Math.hypot(b.sprite.x - this.sprite.x, b.sprite.y - this.sprite.y);
+    });
+    for (const base of availableStacks) {
+      if (!this.walkToCratePosition(crate, base.sprite, "TO_RETURN_CRATE")) continue;
+      this.currentJob.returnBase = base;
+      this.currentJob.returnPosition = { x: base.sprite.x, y: base.sprite.y };
+      return;
+    }
+    this.currentJob.returnBase = null;
+    const reserved = [
+      ...scene.goBacksReservedRectangles(),
+      ...others.flatMap((employee) => employee.currentJob?.returnPosition
+        ? [this.returnSpace(employee.currentJob.returnPosition)] : []),
+    ];
+    const overlapsReserved = (position) => reserved.some((rect) => {
+      const bounds = crate.getFloorBounds(position.x, position.y);
+      return bounds.left < rect.right && bounds.right > rect.left &&
+        bounds.top < rect.bottom && bounds.bottom > rect.top;
+    });
+    if (!fromPad && !overlapsReserved(cratePosition) &&
+      crate.isDropPositionClear(cratePosition.x, cratePosition.y, scene.player.sprite) &&
+      this.walkToCratePosition(crate, cratePosition, "TO_RETURN_CRATE")) {
+      this.currentJob.returnPosition = { ...cratePosition };
+      return;
+    }
+    let spot = scene.findGoBacksSpot(crate, reserved);
+    while (spot) {
+      if (this.walkToCratePosition(crate, spot, "TO_RETURN_CRATE")) {
+        this.currentJob.returnPosition = { x: spot.x, y: spot.y };
+        return;
+      }
+      reserved.push(this.returnSpace(spot));
+      spot = scene.findGoBacksSpot(crate, reserved);
+    }
+    this.currentJob.returnPosition = null;
+    this.sprite.body.setVelocity(0, 0);
+    if (this.state !== "WAITING_CRATE_RETURN") {
+      scene.showShopMessage("Staff need clear floor space to put down a crate.");
+    }
+    this.state = "WAITING_CRATE_RETURN";
+    this.retryInMs = JOB_RETRY_MS;
+  }
+
+  returnSpace({ x, y }) {
+    return {
+      left: x - TILE_SIZE / 2, right: x + TILE_SIZE / 2,
+      top: y - TILE_SIZE / 2, bottom: y + TILE_SIZE / 2,
+    };
+  }
+
+  finishReturningCrate() {
+    const { crate, returnBase: base, returnPosition } = this.currentJob;
+    const scene = this.scene;
+    if (base) {
+      if (!scene.restockCrates.includes(base) || base.lockedToPad || !base.isStationary() ||
+        (scene.floorStacks.get(base)?.length ?? 0) + 1 >= FLOOR_STACK_MAX ||
+        base.sprite.x !== returnPosition.x || base.sprite.y !== returnPosition.y) {
+        this.returnCrate();
+        return;
+      }
+      const stack = scene.floorStacks.get(base) ?? [];
+      crate.pickUp(base.sprite);
+      stack.push(crate);
+      scene.floorStacks.set(base, stack);
+      scene.syncFloorStacks();
       this.finishTask();
       return;
     }
-    this.returnCrateToPad();
+    if (!crate.isDropPositionClear(returnPosition.x, returnPosition.y, scene.player.sprite)) {
+      this.returnCrate();
+      return;
+    }
+    crate.drop(returnPosition.x, returnPosition.y, 0, 0, scene.crateMotionPaused);
+    scene.restockCrates.push(crate);
+    this.finishTask();
   }
 
-  returnCrateToPad() {
-    const { crate, cratePosition } = this.currentJob;
-    crate.drop(cratePosition.x, cratePosition.y, 0, 0, this.scene.crateMotionPaused);
-    crate.lockToPad();
-    this.scene.restockCrates.push(crate);
+  discardEmptyCrate() {
+    const { crate, trashcan } = this.currentJob;
+    if (!this.scene.fixtures.ofKind("trash").includes(trashcan)) {
+      this.returnCrate();
+      return;
+    }
+    crate.destroy();
     this.finishTask();
   }
 
@@ -331,13 +588,22 @@ export class Employee {
         : (y < 0 ? "up" : "down");
       this.sprite.anims.timeScale = Math.hypot(x, y) / WALK_SPEED;
     }
-    showCharacterFacing(this.sprite, this.currentFacing, moving);
+    showEmployeeFacing(
+      this.sprite, this.data.id, this.currentFacing, moving, this.isCarryingCrate(),
+    );
+  }
+
+  isCarryingCrate() {
+    return ["TO_SHELF", "TO_RETURN_CRATE", "TO_TRASHCAN", "WAITING_CRATE_RETURN"].includes(this.state) &&
+      Boolean(this.currentJob?.crate.isCarried);
   }
 
   standStill() {
     if (this.isDestroyed) return;
     this.sprite.body.setVelocity(0, 0);
-    showCharacterFacing(this.sprite, this.currentFacing, false);
+    showEmployeeFacing(
+      this.sprite, this.data.id, this.currentFacing, false, this.isCarryingCrate(),
+    );
   }
 
   destroy() {

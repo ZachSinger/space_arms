@@ -118,28 +118,29 @@ function storeTopic({ shopLevel, reputation }) {
         "Every fixture uses a Collision Box: its body box fits the visible fixture, and its blue projection box extends out in front. The register also needs a projection box behind it for the cashier. Keep blue areas free of furniture; people can walk through them. The body outline turns red if placement is blocked.",
         "A fixture can't block a doorway or cut off part of the shop. Customers need room to line up in front of or beside each register.",
       ])}
-      <p>Fixtures can only be placed or moved <strong>between shifts</strong>. To move one that's
-        already placed, face it with empty hands and hold
+      <p>Fixtures can be placed or moved whenever the store is <strong>closed</strong>,
+        including after pressing <strong>CLOSE STORE</strong> during a shift. To move one that's
+        already placed (including the register), face it with empty hands and hold
         <span class="kbd-only">Ctrl</span><span class="pad-only">A</span>, or use
-        <strong>MOVE</strong> in the Layout tab. Its contents move with it.</p>
+        <strong>MOVE</strong> in the Fixtures tab. Its contents move with it.</p>
       <p>An empty fixture can be packed back into a crate, or sold for half of what it cost.
         Your shop always keeps at least one register.</p>`),
     section("Starting a Shift", `
       ${list([
         "Press <strong>START SHIFT</strong> on the top bar. The game saves first.",
         "Staff wages are paid as the shift starts, even if that takes your money below 0.",
-        "The shift clock runs from 08:00 to 20:00, about 5 minutes of play.",
-        "<strong>PAUSE</strong> freezes the clock and everyone in the shop.",
+        "The shift clock runs from 08:00 to 20:00, about 7 minutes of play.",
+        "<strong>PAUSE</strong> freezes the clock and everyone in the shop. All controls and menus are locked until you resume. Press P, Esc, controller Start, or <strong>RESUME</strong> to continue.",
         "<strong>CLOSE STORE</strong> stops new customers from coming in for a while. Customers already inside keep shopping, and the clock keeps running. <strong>REOPEN STORE</strong> lets them in again.",
       ])}
       <p>Some things can only be done between shifts: hiring staff, changing their job order,
-        placing or moving fixtures, buying more space, and saving.</p>`),
+        buying more space, and saving.</p>`),
     section("Ending a Shift", `
       ${list([
         "At 20:00 the doors close to new customers. Everyone already inside can still finish shopping and pay.",
         "The shift ends when the last customer leaves. A <strong>SHOP CLOSED</strong> message shows how many customers you served and turned away.",
         "Your reputation change counts now. If you reached a new Store Level, a message lists what it unlocked.",
-        "Press <strong>END DAY</strong> on the top bar. It opens Finances with today's receipt. Press <strong>END DAY</strong> there to start the next day.",
+        "Press <strong>END DAY</strong> on the top bar to start the next day immediately. You can review past receipts in Finances.",
         "A new day brings new market prices. Then <strong>START SHIFT</strong> appears again.",
       ])}`),
   ].join("");
@@ -175,9 +176,12 @@ function stockingTopic() {
         "A green arrow points at the crate you're facing that you can reach. The bar at the bottom of the screen shows what's in that crate, and cards above the bar's right side show the crates in your hands, top crate first.",
         `Tap ${key("crate")} to pick up the crate the arrow points at. Hold ${key("crate")} to pick up that crate and every crate stacked on it. You can carry up to three crates; the newest one is on top.`,
         `Press ${key("nextCrate")} to move the arrow one crate down a stack, so you can pick up a lower crate.`,
+        `If you're holding a crate and the arrow points at a crate of the same item, ${key("crate")} moves as many of its items as fit into your crate instead of picking it up. Anything that doesn't fit stays in the crate on the floor; if everything fits, that crate is left empty on the floor.`,
         `Tap ${key("putDown")} to put your top crate down in front of you. Hold ${key("putDown")} to set everything you're carrying down as one stack.`,
         `When the arrow points at a crate on the floor, ${key("putDown")} puts your crates on top of it instead: tap for one, hold for as many as fit. Stacks on the floor can be up to three crates high. Nothing can be stacked on a fixture crate or on the Loading Pad, and fixture crates are never stacked.`,
-        `While walking with no arrow showing, press ${key("crate")} to throw your top crate the way you're walking. Thrown crates that hit a customer cost reputation.`,
+        `While walking with no arrow showing, press ${key("crate")} to throw your crate the way you're walking. You can only throw when you're carrying just one crate. Thrown crates that hit a customer cost reputation.`,
+        "Thrown crates fall from your hands to the floor. A sideways throw lands level with where your feet were when you threw it. Walls block the crate's floor position, not its raised artwork.",
+        "Only the lower part of a crate blocks movement, so its top can overlap a wall above it while its base stays on the floor.",
         "Carrying two crates slows you down; a third slows you down further. Empty crates slow you less than filled crates. Your character faces the direction you move, and the crates stay straight.",
         `Press ${key("interact")} at a shelf to stock it by hand.`,
         "Walk into a crate on the floor to push it out of the way. A taller stack is harder to push, and so is any crate while you're carrying something. You can never move more than 4 crates at once, counting the ones you're carrying. Customers shove crates out of their way, no matter how heavy.",
@@ -198,10 +202,14 @@ function stockingTopic() {
       ])}`),
     section("Go-Backs", `
       <p>When a customer gives up and leaves, the items they were holding go into the Go-Backs
-        bin at the register. A yellow "!" above your character means something is waiting in it.
-        With empty hands, press ${key("goBacks")} at the register to pack them into crates. The crates are
-        set down near the register, stacked up to three high, without blocking the customer line. If there
-        isn't room for all of them, the rest stay in the bin. Nothing can be put into the bin.</p>`),
+        bin. A yellow "!" above your character means something is waiting in it. The Go-Backs pack
+        themselves right away: first into any crate that already holds the same item and has room
+        (on the floor, on the Loading Pad, or in your arms), then into empty crates. Anything still
+        left is packed into new
+        crates, stacked up to three high. The new crates go to the backroom when it has room;
+        otherwise they're set down on the shop floor near the register, out of everyone's way. If
+        there isn't floor space yet, the rest wait in the bin and are packed as soon as room opens
+        up. Nothing can be put into the bin.</p>`),
   ].join("");
 }
 
@@ -235,7 +243,7 @@ function moneyTopic() {
   return [
     section("Setting Prices", `
       ${list([
-        "The <strong>Inventory</strong> tab shows your <strong>Price</strong> and <strong>Profit</strong> for each item. Profit is your price minus the cost of one item in a supply crate; delivery fees are not included.",
+        "The <strong>Inventory</strong> tab shows how many of each item you own: <strong>On Shelves</strong> is what customers can buy right now, and <strong>In Crates</strong> is what's still packed in crates anywhere in the shop, backroom, or loading pad. It also shows your <strong>Price</strong> and <strong>Profit</strong> for each item. Profit is your price minus the cost of one item in a supply crate; delivery fees are not included.",
         "Type a new price, or use <strong>-10%</strong>, <strong>+10%</strong>, or <strong>MKT</strong> to match today's market price (the galactic average).",
         "The first time you order an item, its price starts at the market price.",
         "Market prices change every new day. Your prices stay where you set them.",
@@ -286,11 +294,19 @@ function employeesTopic() {
         then do the other job if it needs doing:</p>
       ${list([
         "<strong>Run register:</strong> a register has customers in line and nobody — you or another employee — is working it. Each register is worked by one person at a time, so more registers let more staff ring up customers at once.",
-        "<strong>Stock shelves:</strong> a crate is on the Loading Pad, and a matching shelf spot has room.",
+        "<strong>Stock shelves:</strong> a crate anywhere in the shop or backroom has items, and a matching shelf spot has room.",
       ])}
-      <p>They take a matching crate from the Loading Pad straight to its shelf spot. They only
+      <p>They take a matching crate — from the Loading Pad, the backroom, or the shop floor,
+        top of a stack first — straight to its shelf spot. They only
         stock items that already have a spot on a shelf. With nothing to do, they take a break in the backroom and
         check again soon.</p>
+      <p>After stocking, they carry leftover stock to an existing crate stack with room
+        before taking more floor space. Deliveries are put away in the backroom when it has room,
+        leaving the Loading Pad free. If no stack has room, loose crates from elsewhere
+        go back to their original spot when it is still clear.
+        When a crate is empty, they carry it to the nearest reachable trashcan.</p>
+      <p>Staff wear orange sleeves and dark work aprons. When carrying a crate,
+        they hold it above their head with both arms raised.</p>
       <p>At closing time, they finish up and leave once the last customer is gone.</p>`),
     section("How to Set Priorities", `
       <p>Open the <strong>Employee</strong> tab and find the employee under <strong>YOUR STAFF</strong>.
@@ -358,13 +374,13 @@ function controlsTopic() {
     ["Dash (uses stamina)", "Hold Shift", "Hold B or a trigger"],
     ["Use or open", "E", "A"],
     ["Pick up a crate (hold: the whole stack from the arrow up)", "Space", "X"],
-    ["Throw your top crate (while walking, no arrow)", "Space", "X"],
+    ["Throw your crate (carrying just one, while walking, no arrow)", "Space", "X"],
+    ["Light up all trash on the floor (hold)", "H", "Not on controller yet"],
     ["Put a crate down (hold: your whole stack)", "Q", "Y"],
     ["Move the green arrow one crate down", "Ctrl", "Right stick click"],
     ["Pick up a fixture to move it (facing it, empty hands, store closed)", "Hold Ctrl", "Hold A"],
-    ["Pack the Go-Backs bin into crates (at the register, empty hands)", "Q", "Y"],
-    ["Manager's Tablet", "I", "Back / View"],
-    ["Pause or resume the shift", "P or Esc (Esc closes an open window first)", "Start, then PAUSE"],
+    ["Manager's Tablet", "I or Tab", "Back / View"],
+    ["Pause or resume the shift", "P or Esc (when not paused, Esc closes an open window first)", "Start, then PAUSE; Start to resume"],
     ["Zoom", "Page Up / Page Down", "LB / RB"],
     ["Move a fixture while placing it", "Mouse", "Right stick"],
     ["Turn a fixture or shelf item", "R", "Y"],

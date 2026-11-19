@@ -148,18 +148,19 @@ test("arrival schedule preserves every customer and varies their evenly spaced t
   assert.ok(new Set(intervals).size > 1);
 });
 
-test("five-minute shifts halve arrival delays without changing the customer pool", () => {
+test("seven-minute shifts spread the same customer pool over the longer day", () => {
   const customers = Array.from({ length: 18 }, (_, index) =>
     [null, "scavengers", "mercenaries", "explorers"][index % 4],
   );
-  const previous = createCustomerArrivalSchedule(customers, 600_000, () => 0.5);
+  const previous = createCustomerArrivalSchedule(customers, 300_000, () => 0.5);
   const current = createCustomerArrivalSchedule(customers, SHIFT_DURATION_MS, () => 0.5);
 
-  assert.equal(SHIFT_DURATION_MS, 300_000);
+  assert.equal(SHIFT_DURATION_MS, 420_000);
   assert.equal(current.length, 18);
-  assert.deepEqual(current, previous.map((arrival) => ({
-    ...arrival, atMs: arrival.atMs / 2,
-  })));
+  assert.deepEqual(
+    current.map((arrival) => ({ ...arrival, atMs: Math.round(arrival.atMs) })),
+    previous.map((arrival) => ({ ...arrival, atMs: Math.round(arrival.atMs * 1.4) })),
+  );
 });
 
 test("stocking shelves mid-shift grows the pool over the remaining shift only", () => {

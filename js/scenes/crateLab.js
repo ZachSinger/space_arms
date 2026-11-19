@@ -9,7 +9,9 @@ import { installSceneTextSize } from "../logic/GameTextSize.js";
 import { TILE_SIZE } from "../logic/RoomLayout.js";
 import { getItemCrateTint } from "../logic/CrateCategory.js";
 import { Crate, CRATE_STACK_SPACING, INTERACT_RANGE } from "../logic/Crate.js";
-import { FLOOR_STACK_MAX, HOLD_KEY_MS, MAX_CARRIED_CRATES, isInFacingCone } from "../logic/CrateStack.js";
+import {
+  FLOOR_STACK_MAX, HOLD_KEY_MS, MAX_CARRIED_CRATES, isInFacingCone, isSquarelyInFront,
+} from "../logic/CrateStack.js";
 import { solveCratePush } from "../logic/CratePushing.js";
 import { separateOverlappingCrates } from "../logic/CrateSeparation.js";
 import { controlLabel } from "../logic/InputDevice.js";
@@ -502,6 +504,7 @@ export class CrateLabScene extends Phaser.Scene {
     for (const crate of this.restockCrates) {
       if (!crate.canPickUp()) continue;
       if (!isInFacingCone(center, crate.sprite, this.player.currentFacing)) continue;
+      if (!isSquarelyInFront(this.player.sprite.body, crate.getFloorBounds(), this.player.currentFacing)) continue;
       const { left, right, top, bottom } = crate.sprite.getBounds();
       const dx = Math.max(left - center.x, 0, center.x - right);
       const dy = Math.max(top - center.y, 0, center.y - bottom);

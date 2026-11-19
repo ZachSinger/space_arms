@@ -15,6 +15,7 @@ import { isValidLedgerData } from "./DayLedger.js";
 import { isMoney, roundMoney } from "./Money.js";
 import { isKnownShopLevel } from "./ShopProgression.js";
 import { CUSTOMER_FACTION_IDS } from "./CustomerBuyLists.js";
+import { isValidTrashList } from "./Litter.js";
 
 // Older saves used "slot depth 12 ÷ stackSize". Stacks valid under that rule still load;
 // trimShelfOverflow() then moves anything over the current cap to the Go-Backs bin.
@@ -384,12 +385,18 @@ export function validateShopSave(data, database) {
         Number.isFinite(launch.maxSpeed) && launch.maxSpeed > 0 &&
         crate.onPad !== true, "invalid crate launch.");
     }
+    if (crate.flight !== undefined) {
+      const flight = crate.flight;
+      requireSave(isRecord(flight) && Number.isFinite(flight.height) && flight.height > 0 &&
+        Number.isFinite(flight.fallSpeed) && flight.fallSpeed >= 0 &&
+        crate.onPad !== true, "invalid crate flight.");
+    }
     // Item crates stacked on this one on the floor. Fixture crates never stack, and nothing
     // stacks on the Loading Pad or on a crate in flight.
     if (crate.stack !== undefined) {
       requireSave(Array.isArray(crate.stack) && crate.stack.length >= 1 &&
         crate.stack.length <= FLOOR_STACK_MAX - 1 && (crate.kind ?? "item") === "item" &&
-        crate.onPad !== true && crate.launch === undefined, "invalid crate stack.");
+        crate.onPad !== true && crate.launch === undefined && crate.flight === undefined, "invalid crate stack.");
       for (const stacked of crate.stack) {
         validateCrateContents(stacked);
         requireSave((stacked.kind ?? "item") === "item", "only item crates can be stacked.");
@@ -420,6 +427,11 @@ export function validateShopSave(data, database) {
     const goBacks = new Map((player.goBacks ?? []).map((entry) => [entry.itemId, entry.quantity]));
     for (const [itemId, quantity] of shelfOverflow) goBacks.set(itemId, (goBacks.get(itemId) ?? 0) + quantity);
     data.playerState = { ...player, goBacks: [...goBacks].map(([itemId, quantity]) => ({ itemId, quantity })) };
+  }
+  // Optional: saves from before trash existed have a clean floor.
+  if (data.trash !== undefined) {
+    requireSave(isValidTrashList(data.trash, { width: gridW * TILE_SIZE, height: gridH * TILE_SIZE }),
+      "invalid trash on the floor.");
   }
   return data;
 }

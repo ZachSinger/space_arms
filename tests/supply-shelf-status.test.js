@@ -25,7 +25,8 @@ test("the Supply tab keeps crate ordering and cost details in its split-panel la
   const item = { id: "rations", name: "Basic Rations", image: null, stackSize: 10, boxSize: 1 };
   const scene = {
     getRestockableItems: () => [{
-      item, quantity: 0, shelf: { quantity: 0, capacity: 10 }, cost: 25,
+      item, ownedQuantity: 60,
+      shelf: { quantity: 0, capacity: 10 }, cost: 25,
     }],
     getSupplyOrderSummary: () => ({
       crates: 2, maxCrates: 9, stockCost: 50, deliveryFee: 25, total: 75,
@@ -41,6 +42,7 @@ test("the Supply tab keeps crate ordering and cost details in its split-panel la
   assert.match(html, />Order</);
   assert.doesNotMatch(html, /In Shop|Per Crate|credits/);
   assert.match(html, /Sold out on shelves/);
+  assert.match(html, /Own: 60/);
   assert.match(html, /<strong>25<\/strong>/);
   assert.match(html, /20 items/);
   assert.match(html, /data-supply-remove="rations"/);

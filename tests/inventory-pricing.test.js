@@ -229,6 +229,7 @@ function createHarness() {
     getSupplyOrderSummary: () => ({ crates: 0, maxCrates: 9, stockCost: 0, deliveryFee: 0, total: 0, problem: null, canPlace: false }),
     getLoadingPadSpawnPositions: () => [],
     canRearrangeFixtures: () => false,
+    canExpandStore: () => false,
     getFixturePurchaseOptions: () => [],
     getExpansionPurchaseOptions: () => [],
     getBackroomPurchaseOptions: () => [],
@@ -257,21 +258,22 @@ function createHarness() {
 
 test("inventory calculates profit per item from supplier cost, not market price", () => {
   const html = InventoryRenderer.generateHTML([
-    { item: { id: "rifle", name: "Rifle" }, stock: 3, marketPrice: 20.88, unitCost: 12.34, storePrice: 30.56 },
+    { item: { id: "rifle", name: "Rifle" }, stock: 3, offShelves: 7, marketPrice: 20.88, unitCost: 12.34, storePrice: 30.56 },
     { item: { id: "pistol", name: "Pistol" }, stock: 2, marketPrice: 12, unitCost: 15.10, storePrice: 10.05 },
     { item: { id: "kit", name: "Kit" }, stock: 1, marketPrice: 7, unitCost: 10, storePrice: 10 },
   ]);
 
   assert.deepEqual(
     [...html.matchAll(/<h3 class="type-h3">([^<]+)<\/h3>/g)].map(([, label]) => label),
-    ["Name", "Stock", "Price", "Profit"],
+    ["Name", "On Shelves", "In Crates", "Price", "Profit"],
   );
-  assert.match(html, /data-inventory-stock>3</);
+  assert.match(html, /data-inventory-stock[^>]*>3</);
+  assert.match(html, /data-inventory-crates[^>]*>7</);
   assert.match(html, /inventory-profit positive" data-inventory-profit[^>]*>18\.22</);
   assert.match(html, /inventory-profit negative" data-inventory-profit[^>]*>-5\.05</);
   assert.match(html, /inventory-profit neutral" data-inventory-profit[^>]*>0</);
   assert.match(html, /Delivery fees are not included/);
-  assert.doesNotMatch(html, /Off Shelves|In Carts|data-inventory-off-shelves|data-inventory-carts|data-inventory-market/);
+  assert.doesNotMatch(html, /Off Shelves|In Carts|data-inventory-carts|data-inventory-market/);
 });
 
 test("price buttons update the displayed value and retain keyboard focus", () => {
@@ -351,10 +353,10 @@ test("contract signing enforces each shop level without spending credits early",
   assert.equal(state.activeLicenses.has("lic_start_apparel"), false);
   assert.match(warnings[0], /locked.*requirements/i);
 
-  state.shopLevel = 2;
+  state.shopLevel = 6;
   state.globalReputation = -5;
   tablet.handleSignContract("lic_start_apparel");
-  assert.equal(state.credits, 1225);
+  assert.equal(state.credits, 1425);
   assert.equal(state.activeLicenses.has("lic_start_apparel"), true);
   assert.deepEqual(entries.map((entry) => entry.category), ["licenses"]);
 });
@@ -619,7 +621,7 @@ test("refreshing fixture panels preserves list scroll positions", () => {
     };
   };
   const fixtures = makePanel({ ".fixtures-catalog-list": 137, ".fixtures-owned-list": 61 });
-  const layout = makePanel({ ".layout-fixture-list": 23 });
+  const layout = makePanel({ ".layout-expansions-list": 23 });
   const tablet = Object.create(ManagerTablet.prototype);
   tablet.bodyElement = {
     querySelector: (selector) => selector.includes('"fixtures"') ? fixtures : layout,
@@ -629,5 +631,5 @@ test("refreshing fixture panels preserves list scroll positions", () => {
   tablet.refreshLayoutPanels();
   assert.equal(fixtures.querySelector(".fixtures-catalog-list").scrollTop, 137);
   assert.equal(fixtures.querySelector(".fixtures-owned-list").scrollTop, 61);
-  assert.equal(layout.querySelector(".layout-fixture-list").scrollTop, 23);
+  assert.equal(layout.querySelector(".layout-expansions-list").scrollTop, 23);
 });

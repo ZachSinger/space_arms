@@ -48,3 +48,8 @@ export function formatMoneyAmount(value) {
     maximumFractionDigits: 2,
   });
 }
+
+/** A transaction total, always with cents, e.g. 112.00. */
+export function formatTransactionTotal(value) {
+  return fromCents(toCents(value)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}

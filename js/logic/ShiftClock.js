@@ -5,13 +5,13 @@
 // pause). At hour 12 the store soft-closes to new foot traffic; the scene ends the shift
 // once everyone inside has been served. The clock only tracks time and the soft-close flag.
 const SHIFT_LENGTH_HOURS = 12;
-const REAL_SECONDS_PER_GTC_HOUR = 25; // a 12-hour shift is 5 minutes of unpaused play
+const REAL_SECONDS_PER_GTC_HOUR = 35; // a 12-hour shift is 7 minutes of unpaused play
 export const SHIFT_DURATION_MS = SHIFT_LENGTH_HOURS * REAL_SECONDS_PER_GTC_HOUR * 1000;
 const SHIFT_START_HOUR = 8; // cosmetic: the displayed clock starts at 08:00
 
 export class ShiftClock {
   constructor() {
-    this.elapsedHours = 0;
+    this.elapsedMs = 0;
     // The first shift must be explicitly started from GameScene's pre-shift window.
     this.isPaused = true;
     this.started = false;
@@ -22,18 +22,22 @@ export class ShiftClock {
   update(deltaMs) {
     if (this.isPaused || this.softClosed) return;
 
-    const deltaHours = deltaMs / 1000 / REAL_SECONDS_PER_GTC_HOUR;
-    this.elapsedHours = Math.min(SHIFT_LENGTH_HOURS, this.elapsedHours + deltaHours);
+    this.elapsedMs = Math.min(SHIFT_DURATION_MS, this.elapsedMs + deltaMs);
 
-    if (this.elapsedHours >= SHIFT_LENGTH_HOURS) {
+    if (this.elapsedMs >= SHIFT_DURATION_MS) {
       this.softClosed = true;
     }
 
     this.notifyListeners();
   }
 
+  // Time is counted in whole milliseconds so the shift ends exactly on schedule.
+  get elapsedHours() {
+    return this.elapsedMs / 1000 / REAL_SECONDS_PER_GTC_HOUR;
+  }
+
   getElapsedMs() {
-    return this.elapsedHours * REAL_SECONDS_PER_GTC_HOUR * 1000;
+    return this.elapsedMs;
   }
 
   // Freeze or resume time. Ignored until the first shift starts, so the HUD button
@@ -47,7 +51,7 @@ export class ShiftClock {
   // Called when the player starts the next shift (or dismisses the first pre-shift window),
   // after the scene confirms the previous one has fully ended.
   startNewShift() {
-    this.elapsedHours = 0;
+    this.elapsedMs = 0;
     this.isPaused = false;
     this.started = true;
     this.softClosed = false;

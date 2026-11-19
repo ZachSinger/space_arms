@@ -201,7 +201,7 @@ test("scanning requires a click or actual mouse movement while holding the butto
   cards[2].listeners.get("mousedown")();
   assert.deepEqual(scanned, cards);
   assert.equal(payments, 1);
-  assert.equal(h.elements.get("#checkout-total-value").textContent, "6");
+  assert.equal(h.elements.get("#checkout-total-value").textContent, "6.00");
 });
 
 test("cash customers hand over money once scanning ends, with no total to key in", (context) => {
@@ -230,7 +230,7 @@ test("cash customers hand over money once scanning ends, with no total to key in
   assert.equal(keypadPanel.classList.contains("counting-change"), true);
   assert.equal(h.checkout.uiWindow.element.classList.contains("checkout-narrow"), true);
   assert.equal(h.elements.get("#checkout-total-value").innerHTML,
-    '1.23 - <span class="checkout-paid">5</span>');
+    '1.23 - <span class="checkout-paid">5.00</span>');
 });
 
 test("the held scan gesture is released before customer cash can be swept up", (context) => {
@@ -321,6 +321,17 @@ test("cashless checkout still completes after entering the decimal total", () =>
   assert.equal(h.elements.get("#checkout-payment").classList.contains("hidden"), false);
   for (const digit of "1.23") h.checkout.appendDigit(digit);
   h.checkout.confirmPayment();
+  h.checkout.confirmPayment();
+  assert.equal(h.completed(), 1);
+});
+
+test("a card total ending in .00 still needs the cents keyed in", () => {
+  const h = harness({ cash: false });
+  h.checkout.total = 25;
+  for (const digit of "25") h.checkout.appendDigit(digit);
+  h.checkout.confirmPayment();
+  assert.equal(h.completed(), 0);
+  for (const digit of "25.00") h.checkout.appendDigit(digit);
   h.checkout.confirmPayment();
   assert.equal(h.completed(), 1);
 });
@@ -492,7 +503,7 @@ test("Explorer Chit display fits a five-digit code and shows all five input spac
   assert.match(css, /\.chit-card\s*\{[^}]*min-height:\s*calc\(240px \* var\(--text-scale\)\)/s);
   assert.match(html, /class="chit-screen"/);
   assert.match(html, /EXPLORER TRAVEL CHIT/);
-  assert.match(html, /VALUE: <strong>100</);
+  assert.match(html, /VALUE: <strong>100\.00</);
   assert.match(html, /ACCESS CODE: <strong class="chit-code">3 1 4 2 1/);
   assert.match(html, /id="checkout-chit-progress">INPUT: _ _ _ _ _</);
   assert.match(html, /data-chit-digit="1" aria-label="Up, key 1"/);

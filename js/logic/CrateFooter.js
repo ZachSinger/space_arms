@@ -14,8 +14,6 @@
 // The bar's height on screen; must match #crate-footer's height in the CSS.
 export const CRATE_FOOTER_HEIGHT_PX = 96;
 
-const EMPTY_FOOTER_TEXT = "Walk up to a crate to see what's inside.";
-
 export class CrateFooter {
   /**
    * @param {Document} [doc]
@@ -43,9 +41,9 @@ export class CrateFooter {
     const footerKey = JSON.stringify(marked);
     if (footerKey !== this.footerKey) {
       this.footerKey = footerKey;
-      this.label.textContent = marked?.label ?? "CRATE";
-      this.name.textContent = marked?.name ?? EMPTY_FOOTER_TEXT;
-      this.name.classList.toggle("crate-footer-empty", !marked);
+      // With nothing marked, the bar stays quiet: no heading, no helper text.
+      this.label.textContent = marked ? marked.label ?? "CRATE" : "";
+      this.name.textContent = marked?.name ?? "";
       this.count.textContent = marked?.count ?? "";
       this.image.classList.toggle("hidden", !marked?.image);
       if (marked?.image) this.image.src = marked.image;

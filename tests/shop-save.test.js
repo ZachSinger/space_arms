@@ -221,6 +221,21 @@ test("saved launch acceleration is preserved, and malformed launch states are re
   }
 });
 
+test("saved falling crates preserve their height and reject invalid flight states", () => {
+  const data = snapshot();
+  data.crates[0].flight = { height: 48, fallSpeed: 120 };
+  assert.deepEqual(validateShopSave(data, database).crates[0].flight, data.crates[0].flight);
+  for (const flight of [null, {}, { height: 0, fallSpeed: 120 },
+    { height: 48, fallSpeed: -1 }, { height: Infinity, fallSpeed: 120 }]) {
+    const invalid = structuredClone(data);
+    invalid.crates[0].flight = flight;
+    assert.throws(() => validateShopSave(invalid, database), /invalid crate flight/);
+  }
+  const onPad = structuredClone(data);
+  onPad.crates[0].onPad = true;
+  assert.throws(() => validateShopSave(onPad, database), /invalid crate flight/);
+});
+
 test("saved floor stacks keep up to two item crates on an item crate, off the Loading Pad", () => {
   const data = snapshot();
   const stack = [{ kind: "item", itemId: "amo_01", quantity: 2 }, { kind: "item", itemId: null, quantity: 0 }];
@@ -232,6 +247,7 @@ test("saved floor stacks keep up to two item crates on an item crate, off the Lo
     (crate) => { crate.onPad = true; },
     (crate) => { Object.assign(crate, { kind: "fixture", typeId: "shelf_budget_2x2" }); },
     (crate) => { crate.launch = { remainingMs: 80, accelerationX: 1500, accelerationY: 0, maxSpeed: 400 }; },
+    (crate) => { crate.flight = { height: 48, fallSpeed: 120 }; },
   ]) {
     const invalid = structuredClone(data);
     corrupt(invalid.crates[0]);
@@ -494,4 +510,13 @@ test("the smallest Budget Shelf validates against its two-by-two grid", () => {
 
   data.fixtures[0].placements[0].gx = 2;
   assert.throws(() => validateShopSave(data, database), /shelf stack does not fit/);
+});
+
+test("trash on the floor is saved, and unknown or off-map trash is rejected", () => {
+  const save = { ...snapshot(), trash: [{ kind: "can", x: 600, y: 400 }, { kind: "paper", x: 700, y: 420 }] };
+  assert.deepEqual(validateShopSave(structuredClone(save), database).trash, save.trash);
+  assert.throws(() => validateShopSave({ ...snapshot(), trash: [{ kind: "banana", x: 600, y: 400 }] }, database),
+    /invalid trash/);
+  assert.throws(() => validateShopSave({ ...snapshot(), trash: [{ kind: "can", x: -5, y: 400 }] }, database),
+    /invalid trash/);
 });

@@ -11,7 +11,7 @@ export class HUDController {
      * @param {ShiftClock | null} shiftClock - omit to skip the clock and shift buttons
      * @param {() => void} onStartShift
      * @param {() => void} onSave
-     * @param {() => void} onEndDay - opens the Finances tab once a shift is over
+     * @param {() => void} onEndDay - finishes the day once a shift is over
      * @param {() => void} onToggleStore - temporarily stops or resumes customer arrivals
      * @param {() => void} onMainMenu - asks to leave the game for the title screen
      */
@@ -19,6 +19,7 @@ export class HUDController {
         this.creditsEl = document.getElementById('hud-credits');
         this.repEl = document.getElementById('hud-rep');
         this.shopLevelEl = document.getElementById('hud-shop-level');
+        this.cleanlinessEl = document.getElementById('hud-cleanliness');
         this.staminaEl = document.getElementById('hud-stamina');
         this.staminaFillEl = document.getElementById('hud-stamina-fill');
         this.staminaValueEl = document.getElementById('hud-stamina-value');
@@ -97,6 +98,20 @@ export class HUDController {
         this.staminaEl.classList.toggle('exhausted', exhausted);
     }
 
+    renderCleanliness({ score, max, trashCount }) {
+        const key = `${score}/${max}/${trashCount}`;
+        if (!this.cleanlinessEl || key === this.cleanlinessKey) return;
+        this.cleanlinessKey = key;
+        this.cleanlinessEl.textContent = `${score}/${max}`;
+        const ratio = score / max;
+        this.cleanlinessEl.classList.toggle('clean-warn', ratio < 0.75 && ratio >= 0.5);
+        this.cleanlinessEl.classList.toggle('clean-bad', ratio < 0.5);
+        const pieces = trashCount === 1 ? '1 piece of trash' : `${trashCount} pieces of trash`;
+        this.cleanlinessEl.title = `Store cleanliness. ${pieces} on the floor right now. ` +
+            'Customers drop trash; pick it up and put it in a trashcan. Hold H to light up every piece, even behind shelves. ' +
+            'Customers who find the store too dirty cost you store reputation, and very dirty stores make them walk out.';
+    }
+
     render(state) {
         this.creditsEl.innerText = formatMoneyAmount(state.credits);
         
@@ -126,7 +141,7 @@ export class HUDController {
         this.pauseBtn.innerText = clock.isPaused ? 'RESUME' : 'PAUSE';
         this.pauseBtn.classList.toggle('active', clock.isPaused);
         // After soft close the clock has already stopped, so pausing means nothing.
-        this.pauseBtn.disabled = clock.softClosed;
+        this.pauseBtn.disabled = clock.softClosed && !clock.isPaused;
         this.renderShiftButtons();
     }
 

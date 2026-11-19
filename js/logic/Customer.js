@@ -18,8 +18,11 @@ import { transferItems } from "./InventoryTransfer.js";
 import { sumMoney } from "./Money.js";
 import { BASE_PATIENCE_MS, getPatienceMs, planShelfRoute, rollCustomerTraits } from "./CustomerTraits.js";
 import { fixtureFacing } from "./FixtureLayout.js";
+import {
+  CLEANLINESS_JUDGE_MS, TRASH_DROP_CHANCE, TRASH_DROP_WALK_MS, judgeCleanliness, rollCleanlinessTolerance,
+} from "./Litter.js";
 
-const SPEED = 120; // px/s
+const SPEED = 100; // px/s
 // Giving way to another customer's crate push: step aside, then wait, then try again.
 const CRATE_YIELD_STEP_MS = 400;
 const CRATE_YIELD_WAIT_MS = 600;
@@ -147,6 +150,13 @@ export class Customer {
     this.factionId = character.factionId;
     this.traits = rollCustomerTraits(this.factionId, Math.random, getStoreConditions?.());
     this.maxPatienceMs = getPatienceMs(this.traits);
+    this.cleanlinessTolerance = rollCleanlinessTolerance(this.factionId);
+    this.cleanlinessJudged = false;
+    this.cleanlinessTimerMs = 0;
+    this.trashDropAtWalkMs = Math.random() < TRASH_DROP_CHANCE
+      ? TRASH_DROP_WALK_MS[0] + Math.random() * (TRASH_DROP_WALK_MS[1] - TRASH_DROP_WALK_MS[0])
+      : null;
+    this.trashWalkMs = 0;
     this.shoppingPlan = getShoppingPlan
       ? getShoppingPlan(this.factionId, this.traits)
       : createCustomerBuyList(this.factionId, [], () => null);
@@ -192,9 +202,15 @@ export class Customer {
       return;
     }
 
+    if (this.cleanlinessTolerance && !this.cleanlinessJudged && this.state !== "LEAVING") {
+      this.cleanlinessTimerMs += delta;
+      if (this.cleanlinessTimerMs >= CLEANLINESS_JUDGE_MS && this.judgeStoreCleanliness() === "walk-out") return;
+    }
+
     switch (this.state) {
       case "SEEK_SHELF":
       case "SEEK_REGISTER":
+        this.updateTrashDrop(delta);
         if (this.state === "SEEK_SHELF" && this.fixture && !this.fixture.findAvailableSlot()) {
           this.sprite.body.setVelocity(0, 0);
           this.onArriveAtDestination();
@@ -225,6 +241,7 @@ export class Customer {
         this.updatePatience(delta);
         break;
       case "LEAVING":
+        this.updateTrashDrop(delta);
         this.leavingTimer += delta;
         if (this.madeWalkingProgress(delta)) this.leavingTimer = 0;
         if (this.leavingTimer > LEAVING_TIMEOUT_MS || this.walkingMs > MAX_WALK_MS) {
@@ -407,6 +424,8 @@ export class Customer {
 
   // Fill each wanted quantity from this shelf before trying the next shelf.
   shopAtCurrentShelf() {
+    // Nobody takes an item before deciding whether the store is clean enough.
+    if (this.judgeStoreCleanliness() === "walk-out") return;
     for (const itemId of this.phaseItemIds) {
       if (this.shoppingPhase === "bonus") this.bonusAttempted.add(itemId);
       const placements = this.fixture.placements.filter((placement) =>
@@ -698,6 +717,37 @@ export class Customer {
       this.reactionBubble.destroy();
       this.reactionBubble = null;
     }
+  }
+
+  /**
+   * Decides once how clean the store is. Upset customers keep shopping; disgusted ones leave.
+   * @returns {"fine" | "upset" | "walk-out" | null} null if already decided
+   */
+  judgeStoreCleanliness() {
+    if (this.cleanlinessJudged || !this.cleanlinessTolerance) return null;
+    this.cleanlinessJudged = true;
+    const percent = this.scene.getCleanlinessPercent?.();
+    if (percent == null) return "fine";
+    const verdict = judgeCleanliness(percent, this.cleanlinessTolerance);
+    if (verdict === "fine") return verdict;
+    this.showReaction("cleanliness", verdict === "walk-out" ? "angry" : "disappointed");
+    this.scene.reportCleanlinessVerdict?.(this, verdict);
+    if (verdict === "walk-out") {
+      this.clearPatience();
+      this.enterLeaving();
+    }
+    return verdict;
+  }
+
+  // At most one piece of trash per customer, dropped partway through their walking.
+  updateTrashDrop(delta) {
+    if (this.trashDropAtWalkMs == null) return;
+    this.trashWalkMs += delta;
+    if (this.trashWalkMs < this.trashDropAtWalkMs) return;
+    const body = this.sprite.body;
+    if (this.scene.dropTrash?.(this.sprite.x, body?.bottom ?? this.sprite.y)) this.trashDropAtWalkMs = null;
+    // Not a good spot (e.g. the doorway): try again a moment later.
+    else this.trashDropAtWalkMs += 500;
   }
 
   // Bible Steps 12/51: abandons the cart for the scene to process, then leaves.

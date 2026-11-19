@@ -7,6 +7,7 @@ import Phaser from "phaser";
 import { DatabaseManager } from "../logic/DatabaseManager.js";
 import tilesetManifest from "../../data/TilesetManifest.json";
 import { loadCustomerCharacters, registerCustomerAnimations } from "../logic/CustomerSprites.js";
+import { loadEmployeeCharacters, registerEmployeeAnimations } from "../logic/EmployeeSprites.js";
 import { installSceneTextSize } from "../logic/GameTextSize.js";
 import { SHOP_TILE_ASSETS } from "../logic/ShopTiles.js";
 import { BACKROOM_TILE_ASSETS } from "../logic/BackroomTiles.js";
@@ -44,6 +45,7 @@ export class BootScene extends Phaser.Scene {
 
     // Every customer walk sheet (one character each); see CustomerSprites.js.
     loadCustomerCharacters(this.load);
+    loadEmployeeCharacters(this.load);
   }
 
   create() {
@@ -56,6 +58,7 @@ export class BootScene extends Phaser.Scene {
     }
     registerPlayerAnimations(this.anims);
     registerCustomerAnimations(this.textures, this.anims);
+    registerEmployeeAnimations(this.textures, this.anims);
     for (const { key } of tilesetManifest) {
       if (key.startsWith("shelf_") || key.startsWith("register_basic_")) {
         this.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);

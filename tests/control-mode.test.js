@@ -97,3 +97,29 @@ test("each mode exposes only its declared actions", () => {
   assert.equal(controls.allows("pause"), false);
   assert.equal(controls.allows("debugGrid"), false);
 });
+
+test("manual pause overrides register, placement and menus and allows only resume", () => {
+  const scene = createScene();
+  scene.shiftClock = { started: true, isPaused: true };
+  scene.operatingRegister = true;
+  scene.fixturePlacement.active = true;
+  scene.windowManager.windows.set("manager-tablet", { id: "manager-tablet", isOpen: true });
+  const controls = new ControlMode(scene);
+  assert.equal(controls.getMode(), CONTROL_MODES.PAUSED);
+  assert.equal(controls.allows("pause"), true);
+  for (const action of ["move", "interact", "crate", "goBacks", "tablet", "debug", "debugGrid", "cameraZoom", "rotateFixture"]) {
+    assert.equal(controls.allows(action), false, action);
+  }
+  scene.shiftClock.isPaused = false;
+  assert.equal(controls.getMode(), CONTROL_MODES.PLACING);
+});
+
+test("a stopped pre-shift clock does not lock store management", () => {
+  const scene = createScene();
+  scene.shiftClock = { started: false, isPaused: true };
+  const controls = new ControlMode(scene);
+  assert.equal(controls.getMode(), CONTROL_MODES.WALKING);
+  assert.equal(controls.allows("tablet"), true);
+  scene.fixturePlacement.active = true;
+  assert.equal(controls.allows("rotateFixture"), true);
+});

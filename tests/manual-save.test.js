@@ -99,6 +99,65 @@ function createHarness(write = async () => true) {
   return { scene, messages, errors, writes, controls };
 }
 
+test("fixtures can be placed during a closed mid-shift without unlocking saving or expansions", () => {
+  const { scene } = createHarness();
+  assert.equal(scene.canRearrangeFixtures(), true);
+  Object.assign(scene.shiftClock, { started: true, isPaused: false, softClosed: false });
+  scene.customers.push({});
+  assert.equal(scene.canRearrangeFixtures(), false);
+  scene.storeTemporarilyClosed = true;
+  assert.equal(scene.canRearrangeFixtures(), true);
+  assert.equal(scene.canSaveOffShift(), false);
+  assert.equal(scene.canExpandStore(), false);
+  scene.shiftClock.isPaused = true;
+  assert.equal(scene.canRearrangeFixtures(), false);
+  scene.shiftClock.isPaused = false;
+  scene.startingShift = true;
+  assert.equal(scene.canRearrangeFixtures(), false);
+  scene.startingShift = false;
+  scene.storeTemporarilyClosed = false;
+  scene.shiftClock.softClosed = true;
+  assert.equal(scene.canRearrangeFixtures(), true);
+});
+
+test("pause consumes menu, mouse and keyboard actions, leaving only resume available", () => {
+  const { scene } = createHarness();
+  scene.shiftClock.started = true;
+  scene.shiftClock.isPaused = true;
+  scene.shiftClock.togglePause = () => { scene.shiftClock.isPaused = !scene.shiftClock.isPaused; };
+  scene.controlMode = new ControlMode(scene);
+  const event = (type, options = {}) => ({
+    type, blocked: false, prevented: false,
+    preventDefault() { this.prevented = true; },
+    stopImmediatePropagation() { this.blocked = true; },
+    ...options,
+  });
+  for (const input of [
+    event("keydown", { code: "KeyE" }),
+    event("keydown", { code: "Tab" }),
+    event("keydown", { code: "KeyP", repeat: true }),
+    ...["pointerdown", "mousedown", "click", "dblclick", "wheel", "contextmenu", "touchstart", "touchmove", "pointermove"].map((type) => event(type)),
+  ]) {
+    scene.handlePausedInput(input);
+    assert.equal(input.blocked, true, input.type);
+    assert.equal(input.prevented, true, input.type);
+    assert.equal(scene.shiftClock.isPaused, true);
+  }
+  const resumeClick = event("click", { target: { closest: () => ({}) } });
+  scene.handlePausedInput(resumeClick);
+  assert.equal(resumeClick.blocked, false);
+  for (const key of [{ code: "KeyP" }, { key: "Escape" }]) {
+    scene.shiftClock.isPaused = true;
+    const resumeKey = event("keydown", key);
+    scene.handlePausedInput(resumeKey);
+    assert.equal(resumeKey.blocked, true, "resume must not also close an open window");
+    assert.equal(scene.shiftClock.isPaused, false);
+  }
+  const normalClick = event("click");
+  scene.handlePausedInput(normalClick);
+  assert.equal(normalClick.blocked, false);
+});
+
 function createExpansionHarness({ shopLevel, credits }) {
   const scene = Object.create(GameScene.prototype);
   const playerState = new PlayerState();
@@ -404,7 +463,7 @@ test("the shift-end event, receipt, and save observers see the applied reputatio
   assert.equal(savedStates[0].globalReputation, 15);
   assert.equal(savedStates[0].shopLevel, 2);
   assert.match(messages[0], /Shop Level 2 reached/);
-  assert.match(messages[0], /Civilian Threads.*Contracts tab/);
+  assert.match(messages[0], /Frontier Survival Kit.*Contracts tab/);
   assert.doesNotMatch(messages[0], /Staff unlocked|Employee tab/);
 });
 
@@ -427,7 +486,7 @@ test("a shift that earns multiple levels announces each implemented unlock", () 
   scene.endShift();
   assert.equal(state.shopLevel, 4);
   assert.match(messages[0], /Shop Level 4 reached/);
-  assert.match(messages[0], /Civilian Threads/);
+  assert.match(messages[0], /Standard Pistol Ammo/);
   assert.match(messages[0], /You can now have 1 employee hired at once \(Employee tab\)/);
 
   state.endDay(2);
@@ -444,7 +503,7 @@ test("a shift that earns multiple levels announces each implemented unlock", () 
   scene.endShift();
   assert.equal(state.shopLevel, 6);
   assert.match(messages[2], /Shop Level 6 reached/);
-  assert.match(messages[2], /Stellaris Civilian Defense.*Contracts tab/);
+  assert.match(messages[2], /Lyra Casual Wear.*Contracts tab/);
   assert.doesNotMatch(messages[2], /Some later level rewards are not in the game yet/);
 });
 
@@ -469,7 +528,7 @@ test("a shift from Shop Level 6 to 30 announces all remaining reward types", () 
 
   assert.equal(state.shopLevel, 30);
   assert.match(messages[0], /You can now have 6 employees hired at once/);
-  assert.match(messages[0], /Hazard & Medical Supply/);
+  assert.match(messages[0], /Breach-Tech Heavy Tools/);
   assert.match(messages[0], /Sales-floor expansions available to buy/);
   assert.match(messages[0], /Backroom expansions available to buy/);
   assert.doesNotMatch(messages[0], /Some later level rewards are not in the game yet/);
@@ -477,9 +536,9 @@ test("a shift from Shop Level 6 to 30 announces all remaining reward types", () 
 
 test("level-up messages do not reannounce contracts or staff already owned in older saves", () => {
   const state = new PlayerState();
-  state.activeLicenses.add("lic_start_apparel");
-  state.activeLicenses.add("lic_start_surplus");
-  state.activeLicenses.add("lic_start_ammo");
+  for (const id of ["lic_start_survival", "lic_start_surplus", "lic_start_ammo"]) {
+    state.activeLicenses.add(id);
+  }
   state.hiredEmployees.push("tavi_stock_clerk");
   const scene = Object.create(GameScene.prototype);
   const messages = [];
@@ -496,7 +555,7 @@ test("level-up messages do not reannounce contracts or staff already owned in ol
   state.addReputation(72);
   scene.endShift();
   assert.match(messages[0], /Shop Level 4 reached/);
-  assert.doesNotMatch(messages[0], /Contracts unlocked|Civilian Threads|Staff unlocked/);
+  assert.doesNotMatch(messages[0], /Contracts unlocked|Standard Pistol Ammo|Staff unlocked/);
 });
 
 test("level 1 saves keep starting contracts signed before their level requirement changed", () => {
@@ -510,6 +569,21 @@ test("level 1 saves keep starting contracts signed before their level requiremen
   const html = ContractRenderer.generateHTML(contracts, restored);
   assert.equal((html.match(/>PURCHASED</g) ?? []).length, 2);
   assert.doesNotMatch(html, />LOCKED</);
+});
+
+test("saves from before contracts were split keep every product they could already order", () => {
+  const state = new PlayerState();
+  state.signLicense("lic_start_ammo");
+  const { contractsSplit, ...oldSave } = state.serialize();
+  assert.equal(contractsSplit, true);
+  const restored = PlayerState.deserialize(oldSave);
+  assert.ok(restored.activeLicenses.has("lic_start_ammo"));
+  assert.ok(restored.activeLicenses.has("lic_start_rifle_ammo"));
+  assert.equal(restored.activeLicenses.has("lic_start_survival"), false);
+
+  const current = PlayerState.deserialize(state.serialize());
+  assert.equal(current.activeLicenses.has("lic_start_rifle_ammo"), false,
+    "new saves do not get the follow-up contract for free");
 });
 
 test("the actual hire action explains the level lock and allows hiring after the unlock", () => {
@@ -743,12 +817,14 @@ test("the register refuses a player whose hands are full of crates", () => {
   const scene = Object.create(GameScene.prototype);
   const register = { type: "register_basic", rotation: 0, sprite: {
     depth: 1, body: { width: 72, height: 56, center: { x: 100, y: 100 } },
+    setDepth(depth) { this.depth = depth; },
   } };
   const sprite = { x: 200, y: 200, depth: 2, displayWidth: 48, displayHeight: 72,
     body: { enable: true }, setDepth(depth) { this.depth = depth; } };
   const messages = [];
   Object.assign(scene, {
     fixtures: { register: () => register },
+    customers: [],
     employees: [],
     eventBus: { emit() {} },
     checkoutWindow: { mode: "closed" },
@@ -958,10 +1034,12 @@ test("side-facing register queue and cashier align with the body box rather than
       const scene = Object.create(GameScene.prototype);
       const register = { type: "register_basic", rotation, sprite: {
         depth: 1, body: { width: 72, height: 56, center: { x: 100, y: 100 } },
+        setDepth(depth) { this.depth = depth; },
       } };
       const sprite = { x: 200, y: 200, depth: 2, displayWidth: 48, displayHeight: 72,
         body: { enable: true }, setDepth(depth) { this.depth = depth; } };
       scene.fixtures = { register: () => register };
+      scene.customers = [];
       scene.employees = [];
       scene.eventBus = { emit() {} };
       scene.checkoutWindow = { mode: "closed" };
@@ -976,6 +1054,7 @@ test("side-facing register queue and cashier align with the body box rather than
       assert.equal(sprite.body.enable, true);
       assert.equal(scene.player.inputEnabled, true);
       assert.deepEqual({ x: sprite.x, y: sprite.y, depth: sprite.depth }, { x: 200, y: 200, depth: 2 });
+      assert.equal(register.sprite.depth, 1, "the counter is back at its normal depth");
     }
   });
 });

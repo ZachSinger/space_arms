@@ -36,7 +36,11 @@ before(async () => {
           return "export const database = { getItem: (id) => ({ id, slots: 1 }) };";
         }
         if (id === "\0employee-test-sprites") {
-          return `export const pickRandomCustomerCharacter = () => ({ textureKey: "customer_test" });
+          return `export const CHARACTER_ORIGIN_Y = 50 / 64;
+            export const CHARACTER_DISPLAY_SIZE = 64;
+            export const standingFrame = (facing) => ({ down: 1, left: 4, right: 7, up: 10 })[facing];
+            export const loadCharacterSheets = () => {};
+            export const registerCharacterAnimations = () => {};
             export const showCharacterFacing = (sprite, facing, moving) => {
               sprite.shown = { facing, moving };
             };
@@ -97,6 +101,11 @@ function makeDeliveryCrate(quantity = 5) {
     lockedToPad: true,
     isCarried: false,
     sprite: { x: 40, y: 40 },
+    isStationary: () => true,
+    isDropPositionClear: () => true,
+    getFloorBounds(x = this.sprite.x, y = this.sprite.y) {
+      return { left: x - 16, right: x + 16, top: y - 4, bottom: y + 14 };
+    },
     getAvailableUnitsFor(itemId) {
       return itemId === this.itemId ? this.quantity : 0;
     },
@@ -133,6 +142,7 @@ function makeEmployee({
   crateQuantity = 5,
   jobPriorities = ["register", "stock_shelves"],
   hasRegister = false,
+  trashcans = [{ id: "trash-near", type: "trash_can", gx: 2, gy: 1 }],
 } = {}) {
   const shelf = makeShelf(shelfQuantity, shelfCapacity, shelfPlacementCount);
   const crate = makeDeliveryCrate(crateQuantity);
@@ -150,6 +160,7 @@ function makeEmployee({
       shelves: () => [shelf],
       register: () => registerFixture,
       registers: () => registerFixture ? [registerFixture] : [],
+      ofKind: (kind) => kind === "trash" ? trashcans : [],
     },
     employees: [],
     registerLine,
@@ -158,6 +169,14 @@ function makeEmployee({
     isPlayerOperating: () => scene.operatingRegister,
     operatingRegister: false,
     restockCrates: [crate],
+    floorStacks: new Map(),
+    syncFloorStacks() {},
+    player: { sprite: {} },
+    goBacksReservedRectangles: () => [],
+    findGoBacksSpot: (crate, reserved) => reserved.some((rect) =>
+      rect.left < 96 && rect.right > 96 && rect.top < 6560 && rect.bottom > 6560)
+      ? null : { x: 96, y: 6560, inBackroom: true },
+    showShopMessage() {},
     findPath: () => [],
     getBehindRegisterPoint: () => ({ x: 80, y: 80 }),
     completeEmployeeCheckout(employee, customer) {
@@ -170,10 +189,12 @@ function makeEmployee({
     },
     refreshShelfStockDisplay() {},
     add: {
-      sprite: (x, y) => ({
+      sprite: (x, y, textureKey) => ({
         x,
         y,
-        anims: {},
+        texture: { key: textureKey },
+        anims: { stop() {} },
+        setTexture(key, frame) { this.texture.key = key; this.frame = frame; return this; },
         setTint() { return this; },
         setDepth() { return this; },
         setVisible(visible) { this.visible = visible; return this; },
@@ -213,7 +234,41 @@ test("employees request routes sized for their own collision bodies", () => {
   assert.deepEqual(requestedBodySize, {
     width: PLAYER_BODY_WIDTH,
     height: PLAYER_BODY_HEIGHT,
+    avoidStoreDoor: true,
   });
+});
+
+test("staff keep their own uniform and raise their arms only while carrying a crate", () => {
+  const { employee, crate } = makeEmployee();
+  assert.equal(employee.sprite.texture.key, "employee_tavi");
+  employee.startNextTask();
+  employee.updateFacing();
+  assert.equal(employee.sprite.texture.key, "employee_tavi");
+  employee.arriveAtDestination();
+  employee.updateFacing();
+  assert.equal(employee.sprite.texture.key, "employee_tavi_carry");
+  employee.currentFacing = "left";
+  employee.sprite.body.setVelocity(-120, 0);
+  employee.updateFacing();
+  assert.deepEqual(employee.sprite.shown, { facing: "left", moving: true });
+  employee.stockCrateOnShelf();
+  employee.standStill();
+  assert.equal(employee.sprite.texture.key, "employee_tavi_carry");
+  employee.arriveAtDestination();
+  assert.equal(crate.isCarried, false);
+  employee.updateFacing();
+  assert.equal(employee.sprite.texture.key, "employee_tavi");
+});
+
+test("a stock clerk stocks a sold-out item before topping up one that's still on the shelf", () => {
+  const { employee, shelf, crate } = makeEmployee({ shelfQuantity: 1, shelfPlacementCount: 2 });
+  shelf.placements[1].itemId = "amo_02";
+  shelf.placements[1].quantity = 0;
+  const soldOutCrate = Object.assign(makeDeliveryCrate(5), { itemId: "amo_02" });
+  employee.scene.restockCrates = [crate, soldOutCrate];
+  const job = employee.findStockingJob();
+  assert.equal(job.crate, soldOutCrate);
+  assert.equal(job.placement, shelf.placements[1]);
 });
 
 test("a stock clerk takes a delivery crate straight to its matching shelf spot", () => {
@@ -228,7 +283,10 @@ test("a stock clerk takes a delivery crate straight to its matching shelf spot",
   employee.stockCrateOnShelf();
   assert.equal(shelf.placements[0].quantity, 3);
   assert.equal(crate.quantity, 2);
-  assert.equal(crate.lockedToPad, true);
+  assert.equal(employee.state, "TO_RETURN_CRATE");
+  assert.equal(crate.isCarried, true);
+  employee.arriveAtDestination();
+  assert.equal(crate.lockedToPad, false);
   assert.equal(employee.state, "IDLE");
   assert.deepEqual(transfers, [
     {
@@ -252,7 +310,9 @@ test("a stock clerk returns a partly used crate and takes it to another open she
   employee.stockCrateOnShelf();
   assert.equal(shelf.placements[0].quantity, 3);
   assert.equal(crate.quantity, 3);
-  assert.equal(crate.lockedToPad, true);
+  assert.equal(employee.state, "TO_RETURN_CRATE");
+  employee.arriveAtDestination();
+  assert.equal(crate.lockedToPad, false);
 
   employee.startNextTask();
   assert.equal(employee.currentJob.placement, shelf.placements[1]);
@@ -260,6 +320,8 @@ test("a stock clerk returns a partly used crate and takes it to another open she
   employee.stockCrateOnShelf();
 
   assert.deepEqual(shelf.placements.map(({ quantity }) => quantity), [3, 3]);
+  assert.equal(employee.state, "TO_TRASHCAN");
+  employee.arriveAtDestination();
   assert.equal(crate.destroyed, true);
 });
 
@@ -277,6 +339,45 @@ test("a stock clerk does not take stock for a shelf slot reserved by another emp
   employee.arriveAtDestination();
   assert.equal(employee.currentJob.placement, shelf.placements[0]);
   assert.equal(employee.state, "TO_SHELF");
+});
+
+test("a stock clerk stocks from loose crates resting anywhere, returned loose", () => {
+  const { employee, shelf, crate } = makeEmployee();
+  crate.lockedToPad = false;
+  employee.startNextTask();
+  assert.equal(employee.state, "TO_CRATE");
+  employee.arriveAtDestination();
+  assert.equal(employee.state, "TO_SHELF");
+  employee.stockCrateOnShelf();
+  assert.equal(shelf.placements[0].quantity, 3);
+  assert.equal(employee.state, "TO_RETURN_CRATE");
+  employee.arriveAtDestination();
+  assert.equal(crate.lockedToPad, false, "a loose crate is set back down loose, not pad-locked");
+});
+
+test("a stock clerk unstacks a pile from the top and restacks the leftover", () => {
+  const { employee, shelf, crate: base } = makeEmployee({ crateQuantity: 9 });
+  base.lockedToPad = false;
+  const top = makeDeliveryCrate(5);
+  top.lockedToPad = false;
+  top.isCarried = true; // a crate on a pile rides the crate below it
+  const scene = employee.scene;
+  scene.floorStacks = new Map([[base, [top]]]);
+  scene.syncFloorStacks = () => {};
+
+  employee.startNextTask();
+  assert.equal(employee.currentJob.crate, top, "the pile is taken from the top");
+  employee.arriveAtDestination();
+  assert.equal(employee.state, "TO_SHELF");
+  assert.equal(scene.floorStacks.has(base), false, "the top crate left its pile");
+
+  employee.stockCrateOnShelf(); // shelf fits 3 of its 5, so 2 come back
+  assert.equal(shelf.placements[0].quantity, 3);
+  assert.equal(top.quantity, 2);
+  assert.equal(employee.state, "TO_RETURN_CRATE");
+  employee.arriveAtDestination();
+  assert.deepEqual(scene.floorStacks.get(base), [top], "the leftover goes back on its pile");
+  assert.equal(top.lockedToPad, false);
 });
 
 test("a stock clerk waits when no matching delivery crate or shelf space is available", () => {
@@ -411,7 +512,7 @@ test("an employee heading to break does not start new stocking work after closin
   assert.equal(crate.quantity, 5);
 });
 
-test("clocking out returns a partly stocked crate to its Loading Pad spot", () => {
+test("clocking out carries a partly stocked delivery into the backroom, freeing the Loading Pad", () => {
   const { employee, shelf, crate } = makeEmployee();
   employee.startNextTask();
   employee.arriveAtDestination();
@@ -419,9 +520,140 @@ test("clocking out returns a partly stocked crate to its Loading Pad spot", () =
   employee.stockCrateOnShelf();
   assert.equal(shelf.placements[0].quantity, 3);
   assert.equal(crate.quantity, 2);
-  assert.deepEqual(crate.sprite, { x: 40, y: 40 });
-  assert.equal(crate.lockedToPad, true);
+  assert.equal(employee.state, "TO_RETURN_CRATE");
+  assert.equal(employee.isReadyToClockOut(), false);
+  employee.arriveAtDestination();
+  assert.deepEqual(crate.sprite, { x: 96, y: 6560 });
+  assert.equal(crate.lockedToPad, false);
   assert.equal(employee.isReadyToClockOut(), true);
+});
+
+test("a stock clerk carries an empty crate to the nearest trashcan", () => {
+  const far = { id: "trash-far", type: "trash_can", gx: 10, gy: 1 };
+  const near = { id: "trash-near", type: "trash_can", gx: 2, gy: 1 };
+  const { employee, crate } = makeEmployee({ crateQuantity: 3, trashcans: [far, near] });
+  employee.startNextTask();
+  employee.arriveAtDestination();
+  employee.stockCrateOnShelf();
+
+  assert.equal(employee.state, "TO_TRASHCAN");
+  assert.equal(employee.currentJob.trashcan, near);
+  assert.equal(crate.isCarried, true);
+  employee.arriveAtDestination();
+  assert.equal(crate.destroyed, true);
+  assert.equal(employee.state, "IDLE");
+});
+
+test("employees reach tight corners before turning and cap their final movement step", () => {
+  const { employee } = makeEmployee();
+  employee.state = "TO_TRASHCAN";
+  employee.destination = { x: 28, y: 100 };
+  employee.path = [{ x: 28, y: 20 }];
+  employee.followPath(100);
+  assert.equal(employee.path.length, 1, "an 8px-away corner is not skipped");
+  assert.equal(employee.sprite.body.velocity.x, 80, "cannot overshoot the corner on a long frame");
+  assert.equal(employee.sprite.body.velocity.y, 0);
+  employee.sprite.x = 24;
+  employee.followPath(100);
+  assert.equal(employee.path.length, 1, "even a corner within 6px must be reached");
+  assert.equal(employee.sprite.body.velocity.x, 40);
+  employee.sprite.x = 28;
+  employee.followPath(16);
+  assert.equal(employee.path.length, 0);
+});
+
+test("a blocked employee promptly replans from its actual physics position", () => {
+  const { employee } = makeEmployee();
+  employee.state = "TO_TRASHCAN";
+  employee.destination = { x: 100, y: 100 };
+  employee.path = [];
+  employee.sprite.body.center = { x: 30, y: 25 };
+  employee.sprite.body.blocked = { right: true };
+  const calls = [];
+  employee.scene.findPath = (...args) => { calls.push(args); return [{ x: 30, y: 80 }]; };
+  employee.followPath(16);
+  assert.deepEqual(calls[0], [30, 25, 100, 100, {
+    width: PLAYER_BODY_WIDTH, height: PLAYER_BODY_HEIGHT, avoidStoreDoor: true,
+  }]);
+  assert.equal(employee.sprite.body.velocity.x, 0);
+  assert.equal(employee.sprite.body.velocity.y, 120);
+});
+
+test("delivery leftovers fill a backroom stack before using an empty floor spot", () => {
+  const { employee, crate } = makeEmployee();
+  const base = makeDeliveryCrate(9);
+  base.lockedToPad = false;
+  base.sprite = { x: 96, y: 6560 };
+  employee.scene.restockCrates.push(base);
+  employee.scene.findGoBacksSpot = () => assert.fail("Stacking must be attempted before empty floor");
+  employee.startNextTask();
+  employee.arriveAtDestination();
+  employee.stockCrateOnShelf();
+  assert.equal(employee.currentJob.returnBase, base);
+  employee.arriveAtDestination();
+  assert.deepEqual(employee.scene.floorStacks.get(base), [crate]);
+  assert.equal(crate.isCarried, true);
+  assert.equal(employee.scene.restockCrates.includes(crate), false);
+});
+
+test("full stacks and Loading Pad crates cannot be return targets", () => {
+  const { employee, crate } = makeEmployee();
+  const fullBase = makeDeliveryCrate(9);
+  fullBase.lockedToPad = false;
+  const padCrate = makeDeliveryCrate(9);
+  employee.scene.restockCrates.push(fullBase, padCrate);
+  employee.scene.floorStacks.set(fullBase, [makeDeliveryCrate(), makeDeliveryCrate()]);
+  employee.startNextTask();
+  employee.arriveAtDestination();
+  employee.stockCrateOnShelf();
+  assert.equal(employee.currentJob.returnBase, null);
+  assert.deepEqual(employee.currentJob.returnPosition, { x: 96, y: 6560 });
+  employee.arriveAtDestination();
+  assert.equal(employee.scene.floorStacks.get(fullBase).length, 2);
+  assert.equal(crate.lockedToPad, false);
+});
+
+test("an employee replans a return if the chosen stack fills while they are carrying", () => {
+  const { employee, crate } = makeEmployee();
+  const base = makeDeliveryCrate(9);
+  base.lockedToPad = false;
+  employee.scene.restockCrates.push(base);
+  employee.startNextTask();
+  employee.arriveAtDestination();
+  employee.stockCrateOnShelf();
+  employee.scene.floorStacks.set(base, [makeDeliveryCrate(), makeDeliveryCrate()]);
+  employee.arriveAtDestination();
+  assert.equal(employee.state, "TO_RETURN_CRATE");
+  assert.equal(crate.isCarried, true);
+  assert.equal(employee.currentJob.returnBase, null);
+  employee.arriveAtDestination();
+  assert.equal(employee.scene.restockCrates.includes(crate), true);
+});
+
+test("a full backroom and sales floor never make staff drop a crate on their own feet", () => {
+  const { employee, crate } = makeEmployee();
+  employee.scene.findGoBacksSpot = () => null;
+  employee.startNextTask();
+  employee.arriveAtDestination();
+  employee.stockCrateOnShelf();
+  assert.equal(employee.state, "WAITING_CRATE_RETURN");
+  assert.equal(crate.isCarried, true);
+  assert.equal(employee.isCarryingCrate(), true);
+  assert.equal(employee.isReadyToClockOut(), false);
+  employee.scene.findGoBacksSpot = () => ({ x: 96, y: 6560, inBackroom: true });
+  employee.update(1000);
+  assert.equal(employee.state, "TO_RETURN_CRATE");
+});
+
+test("unreachable return spots keep the crate with its employee until a safe route opens", () => {
+  const { employee, crate } = makeEmployee();
+  employee.startNextTask();
+  employee.arriveAtDestination();
+  employee.scene.findPath = () => null;
+  employee.stockCrateOnShelf();
+  assert.equal(employee.state, "WAITING_CRATE_RETURN");
+  assert.equal(employee.currentJob.crate, crate);
+  assert.equal(crate.isCarried, true);
 });
 
 test("the register is the first job when Tavi's priority order puts it first", () => {

@@ -9,6 +9,7 @@ import { createServer } from "vite";
 let server;
 let cacheDirectory;
 let sprites;
+let employeeSprites;
 const manifest = JSON.parse(await readFile(
   new URL("../data/CustomerCharacterManifest.json", import.meta.url), "utf8",
 ));
@@ -28,6 +29,7 @@ before(async () => {
     Textures: { FilterMode: { NEAREST: "nearest" } },
   };
   sprites = await server.ssrLoadModule("/js/logic/CustomerSprites.js");
+  employeeSprites = await server.ssrLoadModule("/js/logic/EmployeeSprites.js");
 });
 
 after(async () => {
@@ -47,6 +49,7 @@ function makeSprite() {
     },
     play(key) { this.playing = key; this.anims.isPlaying = true; return this; },
     setFrame(frame) { this.frame = frame; return this; },
+    setTexture(key, frame) { this.texture = { key }; this.frame = frame; return this; },
   };
 }
 
@@ -86,6 +89,40 @@ test("characters walk while moving and hold the standing pose when stopped", () 
   sprites.showCharacterFacing(sprite, "right", false);
   assert.equal(sprite.anims.isPlaying, false);
   assert.equal(sprite.frame, 7);
+});
+
+test("every hired worker has staff-only walking and raised-arm sheets in every direction", async () => {
+  const employees = JSON.parse(await readFile(new URL("../data/Employees.json", import.meta.url), "utf8"));
+  const loaded = [];
+  employeeSprites.loadEmployeeCharacters({
+    spritesheet: (key, path) => loaded.push({ key, path }),
+  });
+  const created = new Map();
+  employeeSprites.registerEmployeeAnimations(
+    { get: () => ({ setFilter() {} }) },
+    { exists: (key) => created.has(key), create: (config) => created.set(config.key, config) },
+  );
+  for (const employee of employees) {
+    for (const carrying of [false, true]) {
+      const key = employeeSprites.employeeTextureFor(employee.id, carrying);
+      assert.match(key, /^employee_/);
+      const sheet = loaded.find((entry) => entry.key === key);
+      assert.ok(sheet);
+      const png = await readFile(new URL(`../${sheet.path}`, import.meta.url));
+      assert.equal(png.readUInt32BE(16), 288);
+      assert.equal(png.readUInt32BE(20), 384);
+      for (const facing of ["down", "left", "right", "up"]) {
+        assert.ok(created.has(`${key}_walk_${facing}`));
+        const sprite = makeSprite();
+        employeeSprites.showEmployeeFacing(sprite, employee.id, facing, true, carrying);
+        assert.equal(sprite.playing, `${key}_walk_${facing}`);
+        employeeSprites.showEmployeeFacing(sprite, employee.id, facing, false, !carrying);
+        assert.equal(sprite.texture.key, employeeSprites.employeeTextureFor(employee.id, !carrying));
+        assert.equal(sprite.frame, sprites.standingFrame(facing));
+      }
+    }
+  }
+  assert.throws(() => employeeSprites.employeeTextureFor("missing"), /No employee artwork/);
 });
 
 test("character collision box stays centered and leaves slack inside the planning size", () => {

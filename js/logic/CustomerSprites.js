@@ -37,13 +37,21 @@ for (const { key, faction } of customerCharacterManifest) {
 }
 
 export function loadCustomerCharacters(load) {
-  for (const { key, path } of customerCharacterManifest) {
+  loadCharacterSheets(load, customerCharacterManifest);
+}
+
+export function loadCharacterSheets(load, sheets) {
+  for (const { key, path } of sheets) {
     load.spritesheet(key, path, { frameWidth: FRAME_SIZE, frameHeight: FRAME_SIZE });
   }
 }
 
 export function registerCustomerAnimations(textures, anims) {
-  for (const { key } of customerCharacterManifest) {
+  registerCharacterAnimations(textures, anims, customerCharacterManifest);
+}
+
+export function registerCharacterAnimations(textures, anims, sheets) {
+  for (const { key } of sheets) {
     textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);
     for (const [facing, row] of Object.entries(FACING_ROWS)) {
       const animKey = walkAnimationKey(key, facing);
@@ -127,4 +135,15 @@ export function pickRandomCustomerCharacter(factionId) {
     factionId: factionId === undefined ? FACTION_IDS[entry.faction] : factionId,
     textureKey: entry.key,
   };
+}
+
+/**
+ * The same look every time for one name (an employee keeps their face from shift to shift).
+ * @param {string} seed - e.g. an employee id
+ * @returns {string} texture key
+ */
+export function characterTextureFor(seed) {
+  let hash = 0;
+  for (const char of String(seed)) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return customerCharacterManifest[hash % customerCharacterManifest.length].key;
 }

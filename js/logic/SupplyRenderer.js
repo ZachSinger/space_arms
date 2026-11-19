@@ -63,7 +63,7 @@ export class SupplyRenderer {
     if (entries.length === 0) {
       html += `<p class="type-description supply-empty">No items are available yet. Sign a supplier contract first.</p>`;
     } else {
-      entries.forEach(({ item, quantity, shelf, cost }) => {
+      entries.forEach(({ item, ownedQuantity = 0, shelf, cost }) => {
         const count = order.get(item.id) || 0;
         const status = getShelfStatus(shelf);
         const iconHTML = item.image
@@ -79,7 +79,7 @@ export class SupplyRenderer {
                 ${status ? `<span class="supply-shelf-badge supply-shelf-${status.level}">${status.label}</span>` : ""}
               </div>
             </div>
-            <span class="supply-item-stock">${quantity}</span>
+            <span class="supply-item-stock" title="Total items you own across shelves and crates">Own: ${ownedQuantity}</span>
             <div class="supply-item-crate">
               <strong>${cost.toLocaleString()}</strong>
               <span>${getCrateOrderQuantity(item)} items</span>

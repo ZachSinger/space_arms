@@ -200,6 +200,8 @@ export class Player {
    */
   teleportTo(x, y) {
     this.sprite.body.reset(x, y);
+    // reset() omits the feet offset until the next physics step, which the register disables.
+    this.sprite.body.updateFromGameObject();
     this.forceFacing(this.currentFacing);
   }
 

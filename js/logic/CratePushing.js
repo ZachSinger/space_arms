@@ -81,9 +81,22 @@ export function solveCratePush({
     let budget = maxMoved - carriedWeight;
 
     const slideAgainstStatic = (rect, v) => {
-      if (!isBlocked(reach(rect, v, dt))) return v;
-      if (v.x && !isBlocked(reach(rect, { x: v.x, y: 0 }, dt))) return { x: v.x, y: 0 };
-      if (v.y && !isBlocked(reach(rect, { x: 0, y: v.y }, dt))) return { x: 0, y: v.y };
+      const fits = (candidate) => !isBlocked(reach(rect, candidate, dt));
+      if (fits(v)) return v;
+      // Creep in smaller steps so a crate finishes flush against a wall instead of
+      // stopping a whole step early.
+      for (const fraction of [0.5, 0.25, 0.125]) {
+        const crept = scale(v, fraction);
+        if (fits(crept)) return crept;
+      }
+      for (const axis of [v.x && { x: v.x, y: 0 }, v.y && { x: 0, y: v.y }]) {
+        if (!axis) continue;
+        if (fits(axis)) return axis;
+        for (const fraction of [0.5, 0.25, 0.125]) {
+          const crept = scale(axis, fraction);
+          if (fits(crept)) return crept;
+        }
+      }
       return { x: 0, y: 0 };
     };
 

@@ -142,9 +142,9 @@ Apply the same employee scaler once to the total pool:
 
 ## Arrivals
 
-- A shift lasts five minutes of unpaused real time (12 GTC hours). The same
-  per-shift pool is spread over this duration; shortening a shift increases
-  arrival frequency without increasing per-shift customer demand.
+- A shift lasts seven minutes of unpaused real time (12 GTC hours). The same
+  per-shift pool is spread over this duration; changing shift length changes
+  arrival frequency without changing per-shift customer demand.
 - Calculate the pool at shift start. Reputation and staffing changes during the
   shift affect the next shift's pool.
 - Shelf stock is re-checked about once a second during the shift (until soft

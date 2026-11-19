@@ -47,6 +47,10 @@ function createPlayer() {
     setOffset(x, y) { this.offset = { x, y }; },
     setVelocity(x, y) { this.velocity = { x, y }; },
     reset(x, y) { sprite.x = x; sprite.y = y; this.setVelocity(0, 0); },
+    updateFromGameObject() {
+      this.x = sprite.x - sprite.displayWidth * sprite.originX + this.offset.x * sprite.scaleX;
+      this.y = sprite.y - sprite.displayHeight * sprite.originY + this.offset.y * sprite.scaleY;
+    },
   };
   const sprite = {
     body, scaleX: 1, scaleY: 1,
@@ -196,6 +200,8 @@ test("forcing a facing or teleporting stops the walk cycle immediately", () => {
   assert.deepEqual(body.velocity, { x: 0, y: 0 });
   assert.equal(sprite.x, 100);
   assert.equal(sprite.y, 200);
+  assert.equal(body.x, 89, "teleport immediately applies the narrow feet offset");
+  assert.equal(body.y, 200, "feet stay at the destination even if physics is disabled next");
   assert.equal(sprite.anims.isPlaying, false);
   assert.equal(sprite.frame, 4);
 });

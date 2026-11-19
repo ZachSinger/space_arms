@@ -5,7 +5,7 @@
 import {
   creditCentsToScrips, formatCashAmount, getCashDenominations,
 } from "./CashPayment.js";
-import { formatMoneyAmount, toCents } from "./Money.js";
+import { formatTransactionTotal, toCents } from "./Money.js";
 
 // The number printed on a bill or coin; its shape shows which it is.
 export function cashFaceValue({ kind, units }, currency = "credits") {
@@ -34,7 +34,7 @@ function renderDrawer(kind, currency) {
 
 function formatCheckoutTotal(total, currency) {
   if (currency === "m-scrips") return formatCashAmount(creditCentsToScrips(toCents(total)), currency);
-  return formatMoneyAmount(total);
+  return formatTransactionTotal(total);
 }
 
 function renderChit(chitPayment) {
@@ -44,7 +44,7 @@ function renderChit(chitPayment) {
       <div class="chit-card">
         <div class="chit-screen">
           <span class="chit-title">EXPLORER TRAVEL CHIT</span>
-          <span>VALUE: <strong>${formatMoneyAmount(chitPayment.total)}</strong></span>
+          <span>VALUE: <strong>${formatTransactionTotal(chitPayment.total)}</strong></span>
           <span>ACCESS CODE: <strong class="chit-code">${chitPayment.code.split("").join(" ")}</strong></span>
         </div>
       </div>

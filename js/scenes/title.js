@@ -28,6 +28,8 @@ export class TitleScene extends Phaser.Scene {
     this.loadingSave = false;
     this.saveManager = new SaveManager();
     this.commands = [
+      // A clean playthrough: starts fresh right away and the game hides every debug tool.
+      { label: "REAL", action: () => this.startRealGame() },
       { label: "NEW GAME", action: () => this.confirmNewGame() },
       {
         label: "CONTINUE",
@@ -173,6 +175,12 @@ export class TitleScene extends Phaser.Scene {
     if (this.loadingSave) return;
     this.setMenuActive(false);
     this.newGameWindow.openWindow();
+  }
+
+  // REAL skips the save-overwrite question and starts a debug-free fresh game.
+  startRealGame() {
+    if (this.loadingSave) return;
+    this.scene.start("scene-game", { real: true });
   }
 
   openDevChooser() {

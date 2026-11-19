@@ -30,9 +30,10 @@ test("the store page shows the player's level and the next goal", () => {
 
 test("level rewards come from the game's own unlock data", () => {
   const rewards = getLevelRewards(licenses);
-  assert.ok(rewards.get(2).some((text) => text.startsWith("Supply license: Civilian Threads")));
-  assert.ok(rewards.get(3).includes("Supply license: Scrap-Yard Armor & Melee"));
-  assert.ok(rewards.get(14).length === 0);
+  assert.ok(rewards.get(2).some((text) => text.startsWith("Supply license: Frontier Survival Kit")));
+  assert.ok(rewards.get(4).some((text) => text.startsWith("Supply license: Standard Pistol Ammo")));
+  assert.ok(rewards.get(5).includes("Supply license: Scrap-Yard Melee"));
+  assert.ok(rewards.get(30).some((text) => text.startsWith("Supply license: Exotic Ordinance")));
   assert.ok(rewards.get(4).includes("Staff limit: up to 1 employee hired at once"));
   assert.ok(rewards.get(23).includes("Staff limit: up to 6 employees hired at once"));
   assert.ok(rewards.get(5).some((text) => text.includes("Sales Floor Expansion West")));
@@ -58,6 +59,9 @@ test("the handbook explains paid training absences, permanent skills, and on/off
   assert.match(html, /work\s+50% faster\s+at Level 3/);
   assert.match(html, /2 times normal speed at Level 5/);
   assert.match(html, /Stock shelves makes restocking trips faster with each level/);
+  assert.match(html, /existing crate stack with room/);
+  assert.match(html, /Deliveries are put away in the backroom/);
+  assert.match(html, /carry it to the nearest reachable trashcan/);
   assert.match(html, /Skills and higher wages are permanent/);
   assert.match(html, /On Shift &amp; Off Shift/);
   assert.match(html, /stay home and aren't paid/);

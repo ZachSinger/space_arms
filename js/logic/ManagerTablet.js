@@ -463,7 +463,7 @@ export class ManagerTablet {
     for (const id of ["layout", "fixtures"]) {
       const panel = this.bodyElement.querySelector(`[data-tab-panel="${id}"]`);
       if (!panel) continue;
-      const positions = [".fixtures-catalog-list", ".fixtures-owned-list", ".layout-expansions-list", ".layout-fixture-list"].map((selector) => ({
+      const positions = [".fixtures-catalog-list", ".fixtures-owned-list", ".layout-expansions-list"].map((selector) => ({
         selector,
         top: panel.querySelector(selector)?.scrollTop ?? 0,
       }));

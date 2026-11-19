@@ -845,7 +845,7 @@ button {
 .inventory-item-card,
 .inventory-column-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 64px minmax(132px, 160px) 118px;
+  grid-template-columns: minmax(0, 1fr) 124px 124px minmax(132px, 160px) 118px;
   gap: 8px;
   align-items: center;
 }
@@ -905,7 +905,7 @@ button {
   display: grid;
   grid-template-columns:
     minmax(0, 1fr)
-    calc(46px + 8px * var(--text-scale))
+    calc(70px + 10px * var(--text-scale))
     calc(76px + 10px * var(--text-scale))
     calc(88px + 10px * var(--text-scale));
   align-items: center;
@@ -1110,6 +1110,10 @@ button {
   grid-template-columns: minmax(0, 0.55fr) minmax(0, 1.45fr);
 }
 
+.fixtures-panel-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .fixtures-panel-heading {
   min-width: 0;
   display: flex;
@@ -1264,6 +1268,18 @@ button {
   border-color: var(--color-border-active);
 }
 
+/* Prices are typed, never nudged with arrow buttons. */
+.inventory-price-input {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.inventory-price-input::-webkit-inner-spin-button,
+.inventory-price-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 .inventory-column-header {
   padding: 10px 20px;
   color: var(--color-text-main);
@@ -1271,6 +1287,7 @@ button {
 
 .inventory-column-header > :nth-child(n + 2) {
   text-align: center;
+  white-space: nowrap;
 }
 
 .inventory-item-card > .inventory-quantity,
@@ -2337,11 +2354,6 @@ button {
   text-align: center;
 }
 
-.crate-footer-name.crate-footer-empty {
-  color: #64748b;
-  font-size: var(--font-size-16);
-}
-
 .crate-footer-count {
   color: var(--color-text-main);
   font-size: var(--font-size-40);
@@ -2460,6 +2472,16 @@ button {
 .hud-value.rep {
   color: #fbbf24; /* Luminous Gold */
   text-shadow: 0 0 5px rgba(251, 191, 36, 0.5);
+}
+
+.hud-value.clean-warn {
+  color: #f59e0b;
+  text-shadow: 0 0 5px rgba(245, 158, 11, 0.5);
+}
+
+.hud-value.clean-bad {
+  color: #ef4444;
+  text-shadow: 0 0 5px rgba(239, 68, 68, 0.5);
 }
 
 .hud-value.time {
@@ -2707,7 +2729,7 @@ button {
   line-height: 1.1;
 }
 
-/* Five or more lines step down a size so they all fit in the bar. */
+/* Four or more lines step down a size so they all fit in the bar. */
 .game-message.context-message.crowded {
   font-size: var(--font-size-16);
   line-height: 1.05;
