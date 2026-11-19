@@ -30,13 +30,13 @@ test("queue shuffling follows a new obstacle-aware path instead of cutting throu
       return [...waypoints];
     } };
     customer.updateFacing = () => {};
-    customer.moveToward = (x, y, onArrive) => {
+    customer.setQueueTarget(160, 96);
+    customer.mover.moveToward = (x, y, onArrive) => {
       visited.push({ x, y });
       customer.sprite.x = x;
       customer.sprite.y = y;
       onArrive();
     };
-    customer.setQueueTarget(160, 96);
     for (let i = 0; i <= waypoints.length; i += 1) customer.update(16);
     assert.deepEqual(calls, [[96, 96, 160, 96]]);
     assert.deepEqual(visited.slice(0, waypoints.length), waypoints);

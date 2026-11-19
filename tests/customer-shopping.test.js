@@ -574,9 +574,8 @@ test("customers do not walk through obstacles when a shelf has no route", () => 
   customer.exitPoint = { x: 900, y: 900 };
   customer.onReserveExitSlot = () => customer.exitPoint;
   customer.sprite.body = { setVelocity() {} };
-  customer.moveToward = () => { moved = true; };
-
   customer.visitNextShelf("primary");
+  customer.mover.moveToward = () => { moved = true; };
   assert.equal(customer.path, null);
   customer.update(16);
 

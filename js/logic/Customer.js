@@ -18,6 +18,7 @@ import { transferItems } from "./InventoryTransfer.js";
 import { sumMoney } from "./Money.js";
 import { BASE_PATIENCE_MS, getPatienceMs, planShelfRoute, rollCustomerTraits } from "./CustomerTraits.js";
 import { fixtureFacing } from "./FixtureLayout.js";
+import { Mover } from "../world/Mover.js";
 import {
   CLEANLINESS_JUDGE_MS, TRASH_DROP_CHANCE, TRASH_DROP_WALK_MS, judgeCleanliness, rollCleanlinessTolerance,
 } from "../modules/cleaning/Litter.js";
@@ -174,6 +175,7 @@ export class Customer {
     this.sprite = addCharacterSprite(
       scene, spawnX, spawnY, character.textureKey, SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT,
     ).setDepth(2);
+    this.mover = this.createMover();
 
     this.visitNextShelf("primary");
   }
@@ -187,19 +189,7 @@ export class Customer {
     if (this.isDestroyed) return; // guards against being updated the same frame it self-destructed
 
     if (this.path === null) {
-      this.sprite.body?.setVelocity(0, 0);
-      this.scene.debugInfo?.recordCustomer("customer-path-unavailable", this);
-      this.scene.noteCustomerGaveUp?.(this, "found no way through");
-      const onPathUnavailable = this.onPathUnavailable;
-      this.path = [];
-      this.onPathUnavailable = null;
-      if (onPathUnavailable) {
-        onPathUnavailable();
-      } else if (this.state === "LEAVING") {
-        this.destroy();
-      } else {
-        this.enterLeaving();
-      }
+      this.getMover().handlePathUnavailable();
       return;
     }
 
@@ -801,6 +791,40 @@ export class Customer {
 
   // --- Movement ---
 
+  createMover() {
+    return new Mover(this, {
+      findPath: (fromX, fromY, toX, toY) => this.scene.findPath?.(fromX, fromY, toX, toY),
+      canFindPath: () => Boolean(this.scene.findPath),
+      getSpeed: () => SPEED,
+      replanIntervalMs: 200,
+      waypointArrivalDistance: 0.0001,
+      destinationArrivalDistance: 6,
+      onReroute: () => this.scene.debugInfo?.recordCustomer("customer-collision-reroute", this),
+      onPortal: ({ x, y }) => this.sprite.body.reset(x, y),
+      onPathUnavailable: () => this.handlePathUnavailable(),
+    });
+  }
+
+  getMover() {
+    if (!this.mover) this.mover = this.createMover();
+    return this.mover;
+  }
+
+  handlePathUnavailable() {
+    this.scene.debugInfo?.recordCustomer("customer-path-unavailable", this);
+    this.scene.noteCustomerGaveUp?.(this, "found no way through");
+    const onPathUnavailable = this.onPathUnavailable;
+    this.path = [];
+    this.onPathUnavailable = null;
+    if (onPathUnavailable) {
+      onPathUnavailable();
+    } else if (this.state === "LEAVING") {
+      this.destroy();
+    } else {
+      this.enterLeaving();
+    }
+  }
+
   /**
    * Path to a new target via the scene's pathfinder.
    * @param {number} targetX
@@ -809,17 +833,7 @@ export class Customer {
    * @param {() => void} [onPathUnavailable]
    */
   setDestination(targetX, targetY, onArrive, onPathUnavailable) {
-    this.destination = { x: targetX, y: targetY };
-    this.onArriveAtDestination = onArrive;
-    this.seekingTimer = 0;
-    this.walkingMs = 0;
-    this.progressCheckpoint = null;
-    this.pathRetryMs = 0;
-
-    const { x, y } = this.sprite.body?.center ?? this.sprite;
-    const path = this.scene.findPath?.(x, y, targetX, targetY);
-    this.path = path === null ? null : path || [];
-    this.onPathUnavailable = onPathUnavailable;
+    this.getMover().setDestination(targetX, targetY, onArrive, onPathUnavailable);
   }
 
   /**
@@ -871,55 +885,18 @@ export class Customer {
   }
 
   repathAfterYield() {
-    if (!this.destination || !this.scene.findPath) return;
-    const { x, y } = this.sprite.body?.center ?? this.sprite;
-    const path = this.scene.findPath(x, y, this.destination.x, this.destination.y);
-    if (path) this.path = path;
+    this.getMover().repathAfterYield();
   }
 
   // px still to walk: along the remaining waypoints, then on to the destination.
   remainingWalkDistance() {
-    let { x, y } = this.sprite.body?.center ?? this.sprite;
-    let total = 0;
-    for (const point of [...(this.path ?? []), this.destination].filter(Boolean)) {
-      total += Math.hypot(point.x - x, point.y - y);
-      ({ x, y } = point);
-    }
-    return total;
+    return this.getMover().remainingWalkDistance();
   }
 
   // Walks the path waypoint by waypoint, then directly to the exact destination (which may
   // not sit on a grid-cell center) before firing the arrival callback.
   followPath(delta = 1000 / 60) {
-    this.pathRetryMs = Math.max(0, (this.pathRetryMs ?? 0) - delta);
-    const target = this.path[0] ?? this.destination;
-    const { blocked, touching } = this.sprite.body ?? {};
-    const { x, y } = this.sprite.body?.center ?? this.sprite;
-    const hitting = (direction) => blocked?.[direction] || touching?.[direction];
-    const dx = target.x - x;
-    const dy = target.y - y;
-    if (this.pathRetryMs === 0 && this.scene.findPath &&
-        ((dx > 0.1 && hitting("right")) || (dx < -0.1 && hitting("left")) ||
-         (dy > 0.1 && hitting("down")) || (dy < -0.1 && hitting("up")))) {
-      this.pathRetryMs = 200;
-      this.path = this.scene.findPath(
-        x, y, this.destination.x, this.destination.y,
-      );
-      this.scene.debugInfo?.recordCustomer("customer-collision-reroute", this);
-      if (this.path === null) {
-        this.sprite.body.setVelocity(0, 0);
-        return;
-      }
-    }
-    if (this.path.length > 0) {
-      const waypoint = this.path[0];
-      // Corner waypoints must be reached before turning; the destination's 6px tolerance
-      // would cut across nearby shelves. Capped velocity below prevents overshooting.
-      this.moveToward(waypoint.x, waypoint.y, () => this.path.shift(), delta, 0.0001);
-      return;
-    }
-
-    this.moveToward(this.destination.x, this.destination.y, () => this.onArriveAtDestination(), delta);
+    this.getMover().followPath(delta);
   }
 
   /**
@@ -930,20 +907,7 @@ export class Customer {
    * @param {number} arrivalDistance - px; corners use a tighter tolerance than destinations
    */
   moveToward(targetX, targetY, onArrive, delta = 1000 / 60, arrivalDistance = 6) {
-    // Physics has already moved the body; the drawn sprite catches up after scene update.
-    const { x, y } = this.sprite.body?.center ?? this.sprite;
-    const distance = Phaser.Math.Distance.Between(x, y, targetX, targetY);
-
-    if (distance < arrivalDistance) {
-      this.sprite.body.setVelocity(0, 0);
-      onArrive();
-      return;
-    }
-
-    const angle = Phaser.Math.Angle.Between(x, y, targetX, targetY);
-    const stepMs = Math.max(delta, 1000 / 60);
-    const speed = delta > 0 ? Math.min(SPEED, distance / (stepMs / 1000)) : 0;
-    this.sprite.body.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    this.getMover().moveToward(targetX, targetY, onArrive, delta, arrivalDistance);
   }
 
   /**
