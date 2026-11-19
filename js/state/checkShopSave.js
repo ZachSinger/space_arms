@@ -148,6 +148,7 @@ export function checkShopSave(data, database) {
   }
 
   const fixtureIds = new Set();
+  const placementIds = new Set();
   for (const entry of data.fixtures) {
     const spec = getFixtureType(entry?.type);
     requireSave(spec && typeof entry.id === "string" && !fixtureIds.has(entry.id) &&
@@ -156,6 +157,8 @@ export function checkShopSave(data, database) {
     "invalid fixture position.");
     fixtureIds.add(entry.id);
     if (spec.kind === "shelf") {
+      requireSave(entry.nextPlacementId === undefined || integer(entry.nextPlacementId, 1),
+        "invalid shelf placement ID counter.");
       const handsOn = spec.artLayout === "budget";
       requireSave(entry.stockingVersion === undefined || handsOn && entry.stockingVersion === 1,
         "unknown shelf stocking version.");
@@ -164,6 +167,11 @@ export function checkShopSave(data, database) {
       requireSave(Array.isArray(entry.placements), "missing shelf contents.");
       const occupied = new Set();
       for (const placement of entry.placements) {
+        if (placement?.id !== undefined) {
+          requireSave(typeof placement.id === "string" && placement.id.length > 0 &&
+            !placementIds.has(placement.id), "invalid or duplicate shelf placement ID.");
+          placementIds.add(placement.id);
+        }
         const item = itemById.get(placement?.itemId);
         requireSave(item && typeof placement.rotated === "boolean" &&
           integer(placement.gx, 0) && integer(placement.gy, 0) &&

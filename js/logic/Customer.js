@@ -49,6 +49,7 @@ const WANDER_CHANCE = 0.3;
 const WANDER_LOOK_MS = Object.freeze([1000, 2500]);
 const LOOK_AROUND_FACINGS = Object.freeze(["left", "right", "up", "down"]);
 const FACING_TOWARD_FIXTURE = Object.freeze({ down: "up", up: "down", left: "right", right: "left" });
+let nextCustomerId = 1;
 
 function getCustomerItemNames(store, itemIds) {
   return itemIds.map((itemId) => {
@@ -87,6 +88,7 @@ export const SPRITE_DISPLAY_HEIGHT = CUSTOMER_COLLISION_HEIGHT;
  */
 export class Customer {
   constructor({
+    id = null,
     store,
     getShoppingPlan,
     getStoreConditions,
@@ -106,6 +108,7 @@ export class Customer {
     if (!store || typeof store.findPath !== "function") {
       throw new Error("Customer requires a store interface with findPath.");
     }
+    this.id = id ?? `customer-${nextCustomerId++}`;
     this.store = store;
     this.registerPoint = registerPoint;
     this.exitPoint = exitPoint || { x: registerPoint.x, y: registerPoint.y };

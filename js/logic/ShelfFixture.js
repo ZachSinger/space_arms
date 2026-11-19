@@ -8,9 +8,11 @@
 import { database } from "../scenes/boot.js";
 import { getShelfSlotCapacity, getShelfItemFootprint } from "./FixtureLayout.js";
 
+let nextGeneratedFixtureId = 1;
+
 export class ShelfFixture {
   constructor(data) {
-    this.id = data.id;
+    this.id = data.id ?? `shelf-${nextGeneratedFixtureId++}`;
     this.displayType = data.displayType;
     this.x = data.x;
     this.y = data.y;
@@ -18,8 +20,37 @@ export class ShelfFixture {
     this.displayGrid = data.displayGrid;
     this.stackDepth = data.stackDepth;
     this.handsOn = data.handsOn === true;
-    // [{ itemId, gx, gy, w, h, rotated, quantity }]; gx/gy = top-left cell.
-    this.placements = data.placements || [];
+    this.nextPlacementId = data.nextPlacementId ?? 1;
+    if (!Number.isSafeInteger(this.nextPlacementId) || this.nextPlacementId < 1) {
+      throw new RangeError("Shelf placement ID counter must be a positive safe integer.");
+    }
+    // Each placement is a stable stock slot; gx/gy = top-left cell.
+    const placementIds = new Set();
+    this.placements = (data.placements || []).map((placement) => {
+      const slot = { ...placement };
+      if (slot.id === undefined) slot.id = this.createPlacementId();
+      if (typeof slot.id !== "string" || slot.id.length === 0 || placementIds.has(slot.id)) {
+        throw new TypeError("Shelf placements require unique, non-empty IDs.");
+      }
+      placementIds.add(slot.id);
+      this.advancePlacementId(slot.id);
+      return slot;
+    });
+  }
+
+  createPlacementId() {
+    const id = `shelf-slot:${this.id}:${this.nextPlacementId}`;
+    this.nextPlacementId += 1;
+    return id;
+  }
+
+  advancePlacementId(id) {
+    const prefix = `shelf-slot:${this.id}:`;
+    if (!id.startsWith(prefix)) return;
+    const sequence = Number(id.slice(prefix.length));
+    if (Number.isSafeInteger(sequence) && sequence >= this.nextPlacementId) {
+      this.nextPlacementId = sequence + 1;
+    }
   }
 
   // Same shape as InventoryPool.stock for shared inventory displays.
@@ -92,7 +123,7 @@ export class ShelfFixture {
     const { w, h } = getShelfItemFootprint(item, rotated, this.handsOn);
     if (!this.canPlaceAt(gx, gy, w, h)) return null;
 
-    const placement = { itemId, gx, gy, w, h, rotated, quantity };
+    const placement = { id: this.createPlacementId(), itemId, gx, gy, w, h, rotated, quantity };
     if (this.getPlacementCapacity(placement) < Math.max(quantity, 1)) return null;
     this.placements.push(placement);
     return placement;

@@ -254,7 +254,7 @@ export const scenarios = {
     return failures;
   },
 
-  async "golden saves load and resave the same as before the rebuild"(h) {
+  async "golden saves load and preserve previous data"(h) {
     const failures = [];
     const files = (await readdir(GOLDEN)).filter((file) => file.endsWith(".resaved.json"));
     for (const file of files) {
@@ -263,7 +263,15 @@ export const scenarios = {
       const expected = JSON.parse(await readFile(new URL(file, GOLDEN), "utf8"));
       await h.loadSave(save);
       const actual = await h.game((scene) => JSON.parse(scene.lastSavedSnapshot));
-      const diff = firstDifference(expected, actual);
+      for (const fixture of actual.fixtures ?? []) {
+        if (!Array.isArray(fixture.placements)) continue;
+        if (!Number.isSafeInteger(fixture.nextPlacementId) ||
+          fixture.placements.some((placement) => typeof placement.id !== "string" || !placement.id)) {
+          failures.push(`${name}: shelf stock slots did not receive stable IDs`);
+          break;
+        }
+      }
+      const diff = firstDifference(withoutShelfSlotIds(expected), withoutShelfSlotIds(actual));
       if (diff) failures.push(`${name}: ${diff}`);
     }
     return failures;
@@ -272,6 +280,25 @@ export const scenarios = {
 
 // A crate still flying when the game saved keeps moving for a frame or two after loading.
 const MOVING = /^save\.crates\.\d+\.(x|y|velocityX|velocityY|launch|flight)\b/;
+
+function withoutShelfSlotIds(save) {
+  return {
+    ...save,
+    fixtures: save.fixtures?.map((fixture) => {
+      if (!Array.isArray(fixture.placements)) return fixture;
+      const withoutCounter = { ...fixture };
+      delete withoutCounter.nextPlacementId;
+      return {
+        ...withoutCounter,
+        placements: fixture.placements.map((placement) => {
+          const withoutId = { ...placement };
+          delete withoutId.id;
+          return withoutId;
+        }),
+      };
+    }),
+  };
+}
 
 function firstDifference(expected, actual, path = "save") {
   if (Object.is(expected, actual)) return null;

@@ -68,6 +68,37 @@ test("sold-out shelf slots keep their spot until deliberately removed while empt
   assert.deepEqual(shelf.placements, []);
 });
 
+test("shelf slot IDs survive moving and saving, and new slots get unused IDs", () => {
+  const shelf = new ShelfFixture({
+    id: "shelf-stable",
+    displayGrid: { w: 2, h: 1 },
+    stackDepth: 4,
+  });
+  const slot = shelf.placeItem("amo_01", 0, 0);
+  const slotId = slot.id;
+  shelf.detachPlacement(slot);
+  assert.equal(shelf.attachPlacement(slot, 1, 0, false), true);
+
+  const restored = new ShelfFixture({
+    id: shelf.id,
+    displayGrid: shelf.displayGrid,
+    stackDepth: shelf.stackDepth,
+    placements: shelf.placements,
+    nextPlacementId: shelf.nextPlacementId,
+  });
+  assert.equal(restored.placements[0].id, slotId);
+  assert.notEqual(restored.placeItem("amo_01", 0, 0).id, slotId);
+
+  const legacy = new ShelfFixture({
+    id: "shelf-legacy",
+    displayGrid: { w: 2, h: 1 },
+    stackDepth: 4,
+    placements: [{ itemId: "amo_01", gx: 0, gy: 0, w: 1, h: 1, rotated: false, quantity: 0 }],
+  });
+  assert.equal(legacy.placements[0].id, "shelf-slot:shelf-legacy:1");
+  assert.equal(legacy.placeItem("amo_01", 1, 0).id, "shelf-slot:shelf-legacy:2");
+});
+
 function itemCrate(itemId, quantity) {
   return Object.assign(Object.create(Crate.prototype), { kind: "item", itemId, quantity });
 }
@@ -295,9 +326,11 @@ test("shared transfers stock a specific shelf slot and return items to an invent
   const shelf = new ShelfFixture({ displayGrid: { w: 2, h: 1 }, stackDepth: 4 });
   const slot = shelf.placeItem("amo_01", 0, 0, false, 0);
   const pool = new InventoryPool({
+    id: "test-stock-pool",
     capacity: 3,
     stock: [{ itemId: "amo_01", quantity: 2 }],
   });
+  assert.equal(pool.id, "test-stock-pool");
 
   assert.equal(transferItems(pool, shelf, "amo_01", 1, {
     destinationEntry: slot,

@@ -15,7 +15,9 @@ import { SHOP_LAYOUT_VERSION } from "../migrations/index.js";
  * A fixture model at its saved cell. Shelves start empty; a save fills in their stock.
  * @param {{ id: string, type: string, gx: number, gy: number, rotation?: number }} entry - gx/gy is the top-left cell
  */
-export function createFixtureModel({ id, type, gx, gy, rotation = 0 }) {
+export function createFixtureModel({
+  id, type, gx, gy, rotation = 0, placements = [], nextPlacementId,
+}) {
   const spec = getFixtureType(type);
   if (!spec) throw new Error(`Unknown fixture type: ${type}`);
   const footprint = fixtureFootprint({ type, rotation });
@@ -34,7 +36,8 @@ export function createFixtureModel({ id, type, gx, gy, rotation = 0 }) {
       // Per-placement slot cap, not a shared pool -- see ShelfFixture.getPlacementCapacity.
       stackDepth: spec.stackDepth,
       handsOn: spec.artLayout === "budget",
-      placements: [],
+      placements,
+      nextPlacementId,
     })
     : { ...base };
   return Object.assign(fixture, { type, gx, gy, rotation });
@@ -87,7 +90,12 @@ export class Shop extends Slice {
         const entry = { id: fixture.id, type: fixture.type, gx: fixture.gx, gy: fixture.gy, rotation: fixtureRotation(fixture) };
         if (fixture instanceof ShelfFixture) {
           const placements = fixture.placements.map((stack) => ({ ...stack }));
-          return { ...entry, placements, ...(fixture.handsOn ? { stockingVersion: 1 } : {}) };
+          return {
+            ...entry,
+            placements,
+            nextPlacementId: fixture.nextPlacementId,
+            ...(fixture.handsOn ? { stockingVersion: 1 } : {}),
+          };
         }
         return entry;
       }),
@@ -102,8 +110,7 @@ export class Shop extends Slice {
     const shop = new Shop();
     for (const id of data.unlockedZones ?? []) shop.unlockedZones.add(id);
     for (const entry of data.fixtures ?? []) {
-      const fixture = shop.fixtures.add(createFixtureModel(entry));
-      if (fixture instanceof ShelfFixture) fixture.placements = entry.placements.map((stack) => ({ ...stack }));
+      shop.fixtures.add(createFixtureModel(entry));
     }
     return shop;
   }

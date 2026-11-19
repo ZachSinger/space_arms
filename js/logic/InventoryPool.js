@@ -4,8 +4,11 @@
 // Capacity-pool stock model used by Go-Backs and customer carts.
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
+let nextPoolId = 1;
+
 export class InventoryPool {
-  constructor({ capacity, stock } = {}) {
+  constructor({ id = null, capacity, stock } = {}) {
+    this.id = id ?? `inventory-pool-${nextPoolId++}`;
     this.capacity = capacity;
     this.stock = stock || []; // [{ itemId, quantity }]
   }

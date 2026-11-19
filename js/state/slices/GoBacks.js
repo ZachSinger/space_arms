@@ -12,7 +12,7 @@ export class GoBacks extends Slice {
   constructor(events = null) {
     super();
     this.events = events;
-    this.pool = new InventoryPool({ capacity: Infinity, stock: [] });
+    this.pool = new InventoryPool({ id: "go-backs", capacity: Infinity, stock: [] });
   }
 
   /** @returns {{ itemId: string, quantity: number }[]} */
@@ -108,7 +108,11 @@ export class GoBacks extends Slice {
    */
   static fromSave(data, events) {
     const goBacks = new GoBacks(events);
-    goBacks.pool = new InventoryPool({ capacity: Infinity, stock: (data.goBacks || []).map((entry) => ({ ...entry })) });
+    goBacks.pool = new InventoryPool({
+      id: "go-backs",
+      capacity: Infinity,
+      stock: (data.goBacks || []).map((entry) => ({ ...entry })),
+    });
     return goBacks;
   }
 }
