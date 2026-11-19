@@ -58,11 +58,11 @@ export class CheckoutSystem {
             }]
             : [
               { action: "register", hint: `${controlLabel("interact")}: Activate Register` },
-              {
+              ...(shop.getCarriedCrates().length === 0 && !shop.heldTrash ? [{
                 action: "interact",
                 hint: `${controlLabel("interact")}: Activate Register`,
                 perform: () => shop.tryOpenRegister(),
-              },
+              }] : []),
             ]),
         ],
         distanceFrom: (origin) => shop.feetReachTo(origin, fixture.sprite.getBounds()),

@@ -14,6 +14,7 @@ import { DebugTools } from "../debug/DebugTools.js";
 import { Events, GAME_EVENTS } from "../core/Events.js";
 import { ControlMode, CONTROL_MODES } from "../input/ControlMode.js";
 import { InteractableRegistry } from "../interaction/InteractableRegistry.js";
+import { InteractionSystem } from "../interaction/InteractionSystem.js";
 /** @typedef {import("../logic/ShelfFixture.js").ShelfFixture} ShelfFixture */
 import { SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT } from "../logic/Customer.js";
 import { Employee } from "../logic/Employee.js";
@@ -347,6 +348,7 @@ export class GameScene extends Phaser.Scene {
     this.fixturePlacement = new FixturePlacement(this);
     this.input.mouse.disableContextMenu();
     this.controlMode = new ControlMode(this);
+    this.interactionSystem = new InteractionSystem(this);
     this.bindPauseInputGuard();
 
     // E opens fixtures or delivers/places crates; holding Ctrl facing a fixture picks it up
@@ -1194,7 +1196,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   getFixtureMoveAction() {
-    return this.fixtureSystem.getMoveAction();
+    return this.interactables.findTarget(
+      "moveFixture",
+      this.getInteractionOrigin(),
+      null,
+      this.player,
+      this.input,
+      "fixture-move",
+    );
   }
 
   /**
@@ -1252,75 +1261,7 @@ export class GameScene extends Phaser.Scene {
 
   // E delivers/places a carried crate, opens a nearby fixture, or toggles register operation.
   handleInteract() {
-    if (!this.controlMode.allows("interact")) return;
-    // Pressing E behind the counter always steps away, whatever is in hand.
-    if (this.checkoutSystem.operatingRegister) {
-      const action = this.getRegisterInteractionAction();
-      if (action?.perform) action.perform();
-      else this.checkoutSystem.endRegisterSession();
-      return;
-    }
-    // Doors come first so a carried crate goes through with the player, not onto the floor.
-    const portalAction = this.getPortalInteractionAction();
-    if (portalAction) {
-      portalAction.perform();
-      return;
-    }
-    const cleaningAction = this.interactables.findTarget("interact", this.getInteractionOrigin());
-    if (cleaningAction?.kind === "trash" || cleaningAction?.kind === "trashcan") {
-      cleaningAction.perform();
-      return;
-    }
-    if (this.heldTrash) {
-      if (this.isNearTrashcan()) this.throwAwayHeldTrash();
-      else this.showGameMessage(`Face a trashcan and press ${controlLabel("interact")} to throw the trash away, ` +
-        `or press ${controlLabel("putDown")} to drop it.`, "#94a3b8");
-      return;
-    }
-    if (this.carriedCrate) {
-      if (this.carriedCrate.kind === "fixture") {
-        const nearby = this.getNearbyFixture();
-        this.fixturePlacement.beginFromCrate(this.carriedCrate);
-        return;
-      }
-      const nearby = this.getNearbyFixture();
-      if (nearby) {
-        const action = this.interactables.findTarget(
-          "interact",
-          this.getInteractionOrigin(),
-          nearby,
-        );
-        if (!action?.perform) {
-          throw new Error(`Fixture "${nearby.id}" has no interaction action.`);
-        }
-        action.perform();
-        return;
-      }
-      if (this.isNearTrashcan()) {
-        this.showGameMessage("Only empty crates go in the trashcan.", "#94a3b8");
-        return;
-      }
-      this.showGameMessage("Too far from a shelf", "#94a3b8");
-      return;
-    }
-
-    const target = this.interactables.findTarget("interact", this.getInteractionOrigin());
-    if (target?.perform) {
-      target.perform();
-      return;
-    }
-    if (target?.kind === "fixture") {
-      this.tryOpenFixtureWindow(target.target);
-      return;
-    }
-
-    // Pressing E again behind the counter leaves it (handled above before anything else).
-    if (target?.kind === "register") {
-      this.tryOpenRegister();
-      return;
-    }
-
-    this.showGameMessage("Nothing nearby to interact with", "#94a3b8");
+    return this.interactionSystem.handleInteract();
   }
 
   getRegisterInteractionAction() {
@@ -1563,51 +1504,7 @@ export class GameScene extends Phaser.Scene {
 
   // The help lines on the right of the bottom bar: what each button does right now.
   updateCrateHint() {
-    const lines = [];
-    const mode = this.controlMode.getMode();
-    if (this.checkoutWindow?.usesSpaceKey()) {
-      lines.push(`${controlLabel("handOverChange")}: Hand over change`);
-    } else if (mode === CONTROL_MODES.REGISTER) {
-      const action = this.getRegisterInteractionAction();
-      lines.push(action?.hint ?? `${controlLabel("interact")}: Leave the register`);
-    } else if (mode === CONTROL_MODES.WALKING || mode === CONTROL_MODES.CARRYING) {
-      const interactKey = controlLabel("interact");
-      const portalAction = this.getPortalInteractionAction();
-      if (portalAction) {
-        lines.push(portalAction.hint);
-      } else if (mode === CONTROL_MODES.WALKING && !this.heldTrash && !this.findTrashInFront()) {
-        const interactable = this.interactables?.findTarget?.("interact", this.getInteractionOrigin());
-        if (interactable?.hint && interactable.kind !== "trash" && interactable.kind !== "trashcan") {
-          lines.push(...interactable.hint.split("\n"));
-        }
-      }
-      const holding = this.getCarriedCrates().length;
-      const stack = this.markedFloorStack();
-      const nearTrashcan = this.isNearTrashcan();
-      const availableActions = this.interactables.getActions(
-        this.player,
-        this.input,
-        this.getInteractionOrigin(),
-      );
-      const cleaningActions = availableActions.filter((action) => action.kind === "trash" || action.kind === "trashcan");
-      const crateActions = availableActions.filter((action) => action.kind === "crate-control");
-      for (const action of cleaningActions) lines.push(action.hint);
-      for (const action of crateActions) {
-        if (action.hint) lines.push(...action.hint.split("\n"));
-      }
-      if (stack?.crates.length > 1) lines.push(`${controlLabel("nextCrate")}: Move the arrow one crate down`);
-      const trashcanTakesE = nearTrashcan && this.heldEmptyCrates().length > 0;
-      if (!trashcanTakesE && this.carriedCrate?.kind === "item") {
-        const nearby = this.getNearbyFixture();
-        if (nearby) {
-          const action = this.interactables.findTarget("interact", this.getInteractionOrigin(), nearby);
-          if (action) lines.push(action.hint);
-        }
-      } else if (!trashcanTakesE && this.carriedCrate?.kind === "fixture") lines.push(`${interactKey}: Place the fixture`);
-      const moveAction = holding === 0 ? this.getFixtureMoveAction() : null;
-      if (moveAction) lines.push(moveAction.hint);
-    }
-    this.messages.setHint([...new Set(lines)].join("\n"));
+    return this.interactionSystem.updateHint();
   }
 
   // The green arrow over the marked crate, plus the bottom bar and holding cards.

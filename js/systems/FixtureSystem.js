@@ -58,6 +58,36 @@ export class FixtureSystem {
           }[fixtureFacing(fixture)]);
         },
       })));
+    shop.interactables.registerProvider("fixture-move", () => [{
+      id: "fixture-move",
+      kind: "fixture-move",
+      isAvailable: () => shop.controlMode?.allows("interact") &&
+          shop.getCarriedCrates().length === 0 && !shop.heldTrash &&
+          !shop.checkoutSystem?.operatingRegister && this.canRearrange(),
+      range: 0,
+      distanceFrom: () => 0,
+      getActions: () => {
+        const action = this.getMoveAction();
+        return action ? [action] : [];
+      },
+    }]);
+    shop.interactables.registerProvider("fixture-placement", () => {
+      const crate = shop.carriedCrate;
+      if (crate?.kind !== "fixture") return [];
+      return [{
+        id: `fixture-placement:${crate.id}`,
+        kind: "fixture-placement",
+        target: crate,
+        priority: 9,
+        range: 0,
+        distanceFrom: () => 0,
+        getActions: () => [{
+          action: "interact",
+          hint: `${controlLabel("interact")}: Place the fixture`,
+          perform: () => shop.fixturePlacement.beginFromCrate(crate),
+        }],
+      }];
+    });
   }
 
   getHoldToMoveFixture() {
@@ -72,6 +102,7 @@ export class FixtureSystem {
       shop.player,
       shop.input,
       "fixture",
+      { excludeProvider: "fixture-move" },
     ) ?? shop.interactables.findTarget(
       "interact",
       origin,
@@ -79,6 +110,7 @@ export class FixtureSystem {
       shop.player,
       shop.input,
       "register",
+      { excludeProvider: "fixture-move" },
     );
     let fixture = null;
     if (target?.kind === "fixture" && shop.isPlayerFacingFixture(target.target)) fixture = target.target;

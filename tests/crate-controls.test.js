@@ -8,6 +8,7 @@ import { createServer } from "vite";
 import { ControlMode } from "../js/input/ControlMode.js";
 import { Events, GAME_EVENTS } from "../js/core/Events.js";
 import { InteractableRegistry } from "../js/interaction/InteractableRegistry.js";
+import { InteractionSystem } from "../js/interaction/InteractionSystem.js";
 import { Crate, CRATE_STACK_SPACING, INTERACT_RANGE } from "../js/logic/Crate.js";
 import { HOLD_KEY_MS, MAX_CARRIED_CRATES, isSquarelyInFront } from "../js/logic/CrateStack.js";
 import { fixtureBounds, fixtureFootprint, getFixtureType } from "../js/logic/FixtureLayout.js";
@@ -165,6 +166,8 @@ function createHarness({ carrying = false } = {}) {
   const removedCaptures = [];
   const scene = Object.create(GameScene.prototype);
   scene.shift = { starting: false, ended: false };
+  scene.shiftClock = { started: false, isPaused: false, softClosed: false };
+  scene.canSaveOffShift = () => true;
   scene.loadFailed = false;
   scene.fixturePlacement = { active: false };
   scene.windowManager = { windows: new Map() };
@@ -206,6 +209,7 @@ function createHarness({ carrying = false } = {}) {
   scene.fixtureViews = new FixtureViews(scene);
   scene.fixtureSystem = new FixtureSystem(scene);
   scene.checkoutSystem = new CheckoutSystem(scene);
+  scene.interactionSystem = new InteractionSystem(scene);
   scene.carriedCrate = carrying ? {} : null;
   scene.carriedCrates = carrying ? [scene.carriedCrate] : [];
   const classes = new Set(["hidden"]);
@@ -512,6 +516,10 @@ test("supply orders source delivered stock into crates through inventory rules",
 function addNearbyRegister(scene) {
   let packs = 0;
   const register = {
+    id: "test-register",
+    type: "register_basic",
+    gx: 2,
+    gy: 2,
     sprite: { getBounds: () => ({ left: 80, right: 120, top: 80, bottom: 120, centerX: 100, centerY: 100 }) },
   };
   scene.fixtures.register = () => register;
@@ -539,7 +547,11 @@ test("with empty hands, E opens the fixture you face and holding Ctrl picks it u
   const shelf = { id: "shelf_1", type: "shelf_budget_2x2", gx: 3, gy: 1, rotation: 1 };
   let opened = 0;
   const moved = [];
-  h.scene.interactables = { findTarget: () => ({ kind: "fixture", target: shelf }) };
+  h.scene.interactables = {
+    findTarget: (action) => action === "moveFixture"
+      ? h.scene.fixtureSystem.getMoveAction()
+      : { kind: "fixture", target: shelf },
+  };
   h.scene.fixtureSystem.canRearrange = () => true;
   h.scene.fixtureSystem.moveAreaBlockReason = () => null;
   h.scene.handleInteract = () => { opened += 1; };
@@ -573,7 +585,11 @@ test("with empty hands, holding Ctrl at the register picks it up to move", () =>
   const h = createHarness();
   const register = { id: "register_1", type: "register_basic", gx: 26, gy: 3, rotation: 0 };
   const moved = [];
-  h.scene.interactables = { findTarget: () => ({ kind: "register", target: register }) };
+  h.scene.interactables = {
+    findTarget: (action) => action === "moveFixture"
+      ? h.scene.fixtureSystem.getMoveAction()
+      : { kind: "register", target: register },
+  };
   h.scene.fixtureSystem.canRearrange = () => true;
   h.scene.fixtureSystem.moveAreaBlockReason = () => null;
   h.scene.fixturePlacement = { active: false, begin: (id) => moved.push(id) };
@@ -593,8 +609,11 @@ test("with empty hands, holding Ctrl while facing the trashcan picks it up to mo
   const trashcan = { id: "trash_can_01", type: "trash_can", gx: 18, gy: 2, rotation: 0 };
   h.scene.areas.playerArea = AREA.SHOP;
   h.scene.interactables = {
-    findTarget: () => null,
-    getActions: (...args) => h.scene.cleaningSystem.getActions(...args),
+    findTarget: (action) => action === "moveFixture" ? h.scene.fixtureSystem.getMoveAction() : null,
+    getActions: (...args) => [
+      ...h.scene.cleaningSystem.getActions(...args),
+      h.scene.fixtureSystem.getMoveAction(),
+    ].filter(Boolean),
   };
   h.scene.fixtures.ofKind = (kind) => kind === "trash" ? [trashcan] : [];
   h.scene.fixtureSystem.canRearrange = () => true;
@@ -620,6 +639,35 @@ test("with empty hands, holding Ctrl while facing the trashcan picks it up to mo
   h.scene.updateCrateHint();
   assert.equal(h.scene.messages.element.textContent, "",
     "facing away from the trashcan, it offers nothing at all");
+});
+
+test("the registered fixture-move action supplies the hint and moves its target", () => {
+  const { scene } = createHarness();
+  const shelf = { id: "shelf_1", type: "shelf_budget_2x2", gx: 3, gy: 1, rotation: 1 };
+  const bounds = fixtureBounds(shelf);
+  scene.fixtures.shelves = () => [shelf];
+  scene.player.sprite.x = bounds.left * TILE_SIZE - 19;
+  scene.player.sprite.y = (bounds.top + bounds.bottom) * TILE_SIZE / 2;
+  scene.player.currentFacing = "right";
+  scene.fixtureSystem.canRearrange = () => true;
+  scene.fixtureSystem.moveAreaBlockReason = () => null;
+  const moved = [];
+  scene.fixturePlacement.begin = (id) => moved.push(id);
+
+  const action = scene.interactables.findTarget(
+    "moveFixture",
+    scene.getInteractionOrigin(),
+    null,
+    scene.player,
+    scene.input,
+    "fixture-move",
+  );
+  scene.updateCrateHint();
+
+  assert.equal(action.target, shelf);
+  assert.ok(scene.messages.element.textContent.includes(action.hint));
+  action.perform();
+  assert.deepEqual(moved, [shelf.id]);
 });
 
 test("fixture movement prefers the faced shelf when a trashcan is also nearby", () => {
@@ -1730,6 +1778,10 @@ test("E targets the shelf whose front the player stands at, not the shelf beside
 test("E uses the register target only while the player is in range", () => {
   const h = createHarness();
   const nearbyRegister = {
+    id: "test-register",
+    type: "register_basic",
+    gx: 2,
+    gy: 2,
     sprite: { getBounds: () => ({ left: 80, right: 120, top: 80, bottom: 120, centerX: 100, centerY: 100 }) },
   };
   h.scene.fixtures.register = () => nearbyRegister;

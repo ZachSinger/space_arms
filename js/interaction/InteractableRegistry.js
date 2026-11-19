@@ -15,10 +15,10 @@ export class InteractableRegistry {
     };
   }
 
-  getActions(player, input, origin = null, { excludeProvider = null } = {}) {
+  getActions(player, input, origin = null, { excludeProvider = null, excludeProviders = [] } = {}) {
     const available = [];
     for (const [providerId, getCandidates] of this.providers) {
-      if (providerId === excludeProvider) continue;
+      if (providerId === excludeProvider || excludeProviders.includes(providerId)) continue;
       for (const candidate of getCandidates()) {
         if (candidate.isAvailable && !candidate.isAvailable()) continue;
         if (!candidate.getActions && !Array.isArray(candidate.actions)) {

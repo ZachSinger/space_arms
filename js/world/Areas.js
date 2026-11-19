@@ -134,7 +134,7 @@ export class Areas {
         player,
         shop.input,
         "fixture",
-        { excludeProvider: "portals" },
+        { excludeProviders: ["portals", "fixture-move"] },
       );
       if (target?.kind === "fixture" && Math.abs(x - target.target.x) < Math.abs(x - door.x)) return null;
       return portal;
