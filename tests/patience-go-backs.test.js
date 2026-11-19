@@ -176,6 +176,7 @@ test("returned items collect in the Go-Backs bin and pack into crates up to thei
 
   const crate = (limit) => ({
     itemId: null, quantity: 0,
+    canPut() { return true; },
     getRemainingUnitsFor(itemId) {
       return this.quantity > 0 && this.itemId !== itemId ? 0 : limit - this.quantity;
     },

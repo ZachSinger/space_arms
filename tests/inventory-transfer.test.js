@@ -15,6 +15,12 @@ function container(quantity, capacity, addLimit = Infinity) {
     getRemainingUnitsFor() {
       return this.capacity - this.quantity;
     },
+    canTake() {
+      return true;
+    },
+    canPut() {
+      return true;
+    },
     remove(_itemId, requested) {
       const removed = Math.min(requested, this.quantity);
       this.quantity -= removed;
@@ -65,6 +71,59 @@ test("restores unaccepted units and leaves stock unchanged when no transfer is p
   assert.deepEqual(blocked, { moved: 0, remaining: 1, reason: "destination-full" });
   assert.equal(source.quantity, 3);
   assert.equal(fullDestination.quantity, 2);
+});
+
+test("enforces source and destination permissions with the transfer context", () => {
+  const context = { operation: "drone-reset" };
+  const source = container(5, 10);
+  const destination = container(0, 10);
+  let sourceContext;
+  let destinationContext;
+  source.canTake = (_itemId, receivedContext) => {
+    sourceContext = receivedContext;
+    return false;
+  };
+  destination.canPut = (_itemId, receivedContext) => {
+    destinationContext = receivedContext;
+    return false;
+  };
+
+  assert.deepEqual(transferItems(source, destination, "ammo", 2, { context }), {
+    moved: 0,
+    remaining: 2,
+    reason: "source-locked",
+  });
+  assert.equal(sourceContext, context);
+  assert.equal(source.quantity, 5);
+  assert.equal(destination.quantity, 0);
+
+  source.canTake = () => true;
+  assert.deepEqual(transferItems(source, destination, "ammo", 2, { context }), {
+    moved: 0,
+    remaining: 2,
+    reason: "destination-locked",
+  });
+  assert.equal(destinationContext, context);
+  assert.equal(source.quantity, 5);
+  assert.equal(destination.quantity, 0);
+});
+
+test("locked Loading Pad crates cannot be transfer sources", () => {
+  const crate = Object.assign(Object.create(Crate.prototype), {
+    kind: "item",
+    itemId: "ammo",
+    quantity: 5,
+    lockedToPad: true,
+  });
+  const destination = container(0, 10);
+
+  assert.deepEqual(transferItems(crate, destination, "ammo", 2), {
+    moved: 0,
+    remaining: 2,
+    reason: "source-locked",
+  });
+  assert.equal(crate.quantity, 5);
+  assert.equal(destination.quantity, 0);
 });
 
 test("item crates can transfer stock without losing the units the destination cannot hold", () => {

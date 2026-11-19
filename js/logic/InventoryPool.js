@@ -14,6 +14,14 @@ export class InventoryPool {
     return this.stock.find((entry) => entry.itemId === itemId) || null;
   }
 
+  canTake() {
+    return true;
+  }
+
+  canPut() {
+    return true;
+  }
+
   getAvailableUnitsFor(itemId) {
     return this.findStockEntry(itemId)?.quantity ?? 0;
   }
@@ -63,6 +71,7 @@ export class InventoryPool {
    * @returns {number} units actually accepted
    */
   add(itemId, quantity) {
+    if (!this.canPut(itemId)) return 0;
     const accepted = Math.min(this.getRemainingUnitsFor(itemId), quantity);
     if (accepted <= 0) return 0;
 
@@ -81,6 +90,7 @@ export class InventoryPool {
    * @returns {number} units actually removed (capped by what's stocked)
    */
   remove(itemId, quantity) {
+    if (!this.canTake(itemId)) return 0;
     const entry = this.findStockEntry(itemId);
     if (!entry) return 0;
 

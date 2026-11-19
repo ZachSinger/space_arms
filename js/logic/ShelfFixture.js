@@ -31,6 +31,14 @@ export class ShelfFixture {
     return this.placements.find((p) => p.itemId === itemId) || null;
   }
 
+  canTake(_itemId, _context, placement = null) {
+    return placement === null || this.placements.includes(placement);
+  }
+
+  canPut(_itemId, _context, placement = null) {
+    return placement === null || this.placements.includes(placement);
+  }
+
   getPlacementCapacity(placement) {
     return getShelfSlotCapacity(this.stackDepth, database.getItem(placement.itemId), this.handsOn);
   }
@@ -174,6 +182,7 @@ export class ShelfFixture {
    * @param {number} quantity
    */
   add(itemId, quantity, placement = null) {
+    if (!this.canPut(itemId, null, placement)) return 0;
     if (placement) {
       const accepted = Math.min(this.getRemainingUnitsFor(itemId, placement), quantity);
       placement.quantity += accepted;
@@ -195,6 +204,7 @@ export class ShelfFixture {
   }
 
   remove(itemId, quantity, placement = null) {
+    if (!this.canTake(itemId, null, placement)) return 0;
     if (placement) {
       const removed = Math.min(this.getAvailableUnitsFor(itemId, placement), quantity);
       placement.quantity -= removed;

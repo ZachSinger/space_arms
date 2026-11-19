@@ -81,6 +81,12 @@ function makeShelf(quantity = 0, capacity = 3, placementCount = 1) {
     type: "shelf_budget_2x4",
     standPoint: { x: 100, y: 100 },
     placements,
+    canTake() {
+      return true;
+    },
+    canPut() {
+      return true;
+    },
     getRemainingUnitsFor(itemId, entry) {
       return this.placements
         .filter((placement) => itemId === placement.itemId &&
@@ -110,6 +116,12 @@ function makeDeliveryCrate(quantity = 5) {
     sprite: { x: 40, y: 40 },
     isStationary: () => true,
     isDropPositionClear: () => true,
+    canTake() {
+      return true;
+    },
+    canPut() {
+      return true;
+    },
     getFloorBounds(x = this.sprite.x, y = this.sprite.y) {
       return { left: x - 16, right: x + 16, top: y - 4, bottom: y + 14 };
     },

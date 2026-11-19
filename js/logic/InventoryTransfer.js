@@ -2,12 +2,23 @@ import { GAME_EVENTS } from "../core/Events.js";
 
 const isValidUnits = (units) => units === Infinity || (Number.isInteger(units) && units >= 0);
 
+/**
+ * Transfers stock only when the source and destination permit it and have room.
+ * Containers implement canTake(itemId, context, entry) and canPut(itemId, context, entry).
+ * @param {object} from
+ * @param {object} to
+ * @param {string} itemId
+ * @param {number} quantity
+ * @param {{ sourceEntry?: object | null, destinationEntry?: object | null, eventBus?: object | null,
+ *   sourceName?: string, destinationName?: string, context?: object | null }} [options]
+ */
 export function transferItems(from, to, itemId, quantity, {
   sourceEntry = null,
   destinationEntry = null,
   eventBus = null,
   sourceName = "container",
   destinationName = "container",
+  context = null,
 } = {}) {
   if (!from || !to || from === to) throw new TypeError("Transfer requires two different containers.");
   if (!Number.isInteger(quantity) || quantity <= 0) {
@@ -15,14 +26,23 @@ export function transferItems(from, to, itemId, quantity, {
   }
   for (const [container, method] of [
     [from, "getAvailableUnitsFor"],
+    [from, "canTake"],
     [from, "remove"],
     [from, "add"],
     [to, "getRemainingUnitsFor"],
+    [to, "canPut"],
     [to, "add"],
   ]) {
     if (typeof container[method] !== "function") {
       throw new TypeError(`Transfer container is missing ${method}().`);
     }
+  }
+
+  if (!from.canTake(itemId, context, sourceEntry)) {
+    return { moved: 0, remaining: quantity, reason: "source-locked" };
+  }
+  if (!to.canPut(itemId, context, destinationEntry)) {
+    return { moved: 0, remaining: quantity, reason: "destination-locked" };
   }
 
   const available = from.getAvailableUnitsFor(itemId, sourceEntry);

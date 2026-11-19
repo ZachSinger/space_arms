@@ -77,6 +77,12 @@ function fixture(standPoint, placements) {
     findAvailableSlot() {
       return this.placements.find((placement) => placement.quantity > 0) || null;
     },
+    canTake() {
+      return true;
+    },
+    canPut() {
+      return true;
+    },
     getAvailableUnitsFor(itemId, placement) {
       return this.placements.includes(placement) && placement.itemId === itemId
         ? placement.quantity

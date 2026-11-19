@@ -108,12 +108,20 @@ export class Crate {
     return this.isPushed || this.isStationary() || this.isSliding();
   }
 
+  canTake() {
+    return this.kind === "item" && !this.lockedToPad;
+  }
+
+  canPut(itemId) {
+    return this.kind === "item" && (this.quantity === 0 || this.itemId === itemId);
+  }
+
   getAvailableUnitsFor(itemId) {
-    return this.kind === "item" && this.itemId === itemId ? this.quantity : 0;
+    return this.canTake() && this.itemId === itemId ? this.quantity : 0;
   }
 
   add(itemId, quantity) {
-    if (this.kind !== "item" || (this.quantity > 0 && this.itemId !== itemId)) return 0;
+    if (!this.canPut(itemId)) return 0;
     this.itemId = itemId;
     const tint = getItemCrateTint(ITEMS_BY_ID.get(itemId)?.tags);
     if (tint !== null) this.sprite?.setTint?.(tint);
@@ -122,7 +130,7 @@ export class Crate {
   }
 
   getRemainingUnitsFor(itemId) {
-    if (this.kind !== "item" || (this.quantity > 0 && this.itemId !== itemId)) return 0;
+    if (!this.canPut(itemId)) return 0;
     return Math.max(0, getCrateItemLimit(ITEMS_BY_ID.get(itemId)?.boxSize) - this.quantity);
   }
 

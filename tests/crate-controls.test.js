@@ -383,6 +383,8 @@ function addNearbyRegister(scene) {
 function itemCrate(itemId, quantity, options = {}) {
   return Object.assign(crate({ quantity, ...options }), {
     itemId: quantity > 0 ? itemId : null,
+    canTake: Crate.prototype.canTake,
+    canPut: Crate.prototype.canPut,
     getAvailableUnitsFor: Crate.prototype.getAvailableUnitsFor,
     getRemainingUnitsFor: Crate.prototype.getRemainingUnitsFor,
     add: Crate.prototype.add,

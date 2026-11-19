@@ -267,7 +267,12 @@ export class Customer {
     return Math.max(0, wanted - pickedUp);
   }
 
+  canPut() {
+    return true;
+  }
+
   add(itemId, quantity) {
+    if (!this.canPut(itemId)) return 0;
     const accepted = Math.min(quantity, this.getRemainingUnitsFor(itemId));
     for (let index = 0; index < accepted; index += 1) {
       this.cart.push({ itemId, price: this.store.getStorePrice(itemId) });
