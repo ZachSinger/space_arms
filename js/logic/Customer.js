@@ -21,6 +21,7 @@ import { fixtureFacing } from "./FixtureLayout.js";
 import {
   CLEANLINESS_JUDGE_MS, TRASH_DROP_CHANCE, TRASH_DROP_WALK_MS, judgeCleanliness, rollCleanlinessTolerance,
 } from "./Litter.js";
+import { gameRandom } from "../core/Random.js";
 
 const SPEED = 100; // px/s
 // Giving way to another customer's crate push: step aside, then wait, then try again.
@@ -119,7 +120,7 @@ export class Customer {
 
     this.state = "SEEK_SHELF";
     this.cart = []; // [{ itemId, price }]
-    this.priceTolerance = Phaser.Math.FloatBetween(MIN_PRICE_TOLERANCE, MAX_PRICE_TOLERANCE);
+    this.priceTolerance = gameRandom.float(MIN_PRICE_TOLERANCE, MAX_PRICE_TOLERANCE);
     this.queueTarget = null; // set by the scene once this customer has a spot in line
     this.patienceRemainingMs = null; // only ticks once queued
     this.patienceBubble = null;
@@ -143,18 +144,18 @@ export class Customer {
 
     // World (not viewport) px: the camera may show only part of a larger room (RoomLayout.js).
     const bounds = spawnBounds || { xMin: 40, xMax: 120, yMin: 80, yMax: scene.scale.height - 80 };
-    const spawnX = Phaser.Math.Between(bounds.xMin, bounds.xMax);
-    const spawnY = Phaser.Math.Between(bounds.yMin, bounds.yMax);
+    const spawnX = gameRandom.int(bounds.xMin, bounds.xMax);
+    const spawnY = gameRandom.int(bounds.yMin, bounds.yMax);
 
     const character = pickRandomCustomerCharacter(factionId);
     this.factionId = character.factionId;
-    this.traits = rollCustomerTraits(this.factionId, Math.random, getStoreConditions?.());
+    this.traits = rollCustomerTraits(this.factionId, gameRandom, getStoreConditions?.());
     this.maxPatienceMs = getPatienceMs(this.traits);
     this.cleanlinessTolerance = rollCleanlinessTolerance(this.factionId);
     this.cleanlinessJudged = false;
     this.cleanlinessTimerMs = 0;
-    this.trashDropAtWalkMs = Math.random() < TRASH_DROP_CHANCE
-      ? TRASH_DROP_WALK_MS[0] + Math.random() * (TRASH_DROP_WALK_MS[1] - TRASH_DROP_WALK_MS[0])
+    this.trashDropAtWalkMs = gameRandom() < TRASH_DROP_CHANCE
+      ? TRASH_DROP_WALK_MS[0] + gameRandom() * (TRASH_DROP_WALK_MS[1] - TRASH_DROP_WALK_MS[0])
       : null;
     this.trashWalkMs = 0;
     this.shoppingPlan = getShoppingPlan
@@ -364,7 +365,7 @@ export class Customer {
    * @returns {boolean} true if the customer is wandering and will call `then` afterward
    */
   maybeWander(then, nextShelf) {
-    if (!this.wanderChance || Math.random() >= this.wanderChance) return false;
+    if (!this.wanderChance || gameRandom() >= this.wanderChance) return false;
     const fixture = this.scene.getRandomBrowseShelf(nextShelf);
     if (!fixture) return false;
     this.fixture = fixture;
@@ -395,7 +396,7 @@ export class Customer {
     }
     const [min, max] = durationRange;
     this.state = "BROWSING";
-    this.browseRemainingMs = min + Math.random() * (max - min);
+    this.browseRemainingMs = min + gameRandom() * (max - min);
     this.browseFacing = facing;
     this.browseLookTimerMs = 0;
     this.onBrowseDone = onDone;
@@ -409,9 +410,9 @@ export class Customer {
     } else {
       this.browseLookTimerMs -= delta;
       if (this.browseLookTimerMs <= 0) {
-        this.browseLookTimerMs = 600 + Math.random() * 600;
+        this.browseLookTimerMs = 600 + gameRandom() * 600;
         const options = LOOK_AROUND_FACINGS.filter((facing) => facing !== this.currentFacing);
-        this.updateFacing(options[Math.floor(Math.random() * options.length)]);
+        this.updateFacing(gameRandom.pick(options));
       }
     }
     this.browseRemainingMs -= delta;

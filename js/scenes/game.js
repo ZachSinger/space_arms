@@ -82,6 +82,7 @@ import { controlLabel, getInputDevice, setInputDevice } from "../logic/InputDevi
 import { SaveManager } from "../../SaveManager.js";
 import { database } from "./boot.js"; // the exported DatabaseManager singleton
 import { installSceneTextSize } from "../logic/GameTextSize.js";
+import { gameRandom, randomSeed } from "../core/Random.js";
 
 // Most customers inside the store at once. When full, the next arrival is lost for good,
 // so a backed-up dealer really does lose that sale.
@@ -220,19 +221,21 @@ export class GameScene extends Phaser.Scene {
   preload() {}
 
   /**
-   * @param {{ savedShopData?: object, sandbox?: boolean, lab?: "ui", real?: boolean }} data -
+   * @param {{ savedShopData?: object, sandbox?: boolean, lab?: "ui", real?: boolean, seed?: number }} data -
    *   save to load, or none for a new shop; sandbox starts a DEV test area, which never saves:
    *   the Shelf Test Room, or the UI Lab when lab is "ui"; real starts a fresh game with every
-   *   debug tool removed
+   *   debug tool removed; seed fixes every gameplay dice roll so a session can be replayed
    */
   init(data = {}) {
     this.savedShopData = data.savedShopData ?? null;
     this.sandbox = data.sandbox === true;
     this.lab = this.sandbox && data.lab === "ui" ? "ui" : null;
     this.realMode = data.real === true;
+    this.seed = Number.isInteger(data.seed) ? data.seed : randomSeed();
   }
 
   create() {
+    gameRandom.reseed(this.seed);
     installSceneTextSize(this, Phaser);
     this.eventBus = new Events({ strict: true });
     this.debugInfo = null;
@@ -1949,7 +1952,7 @@ export class GameScene extends Phaser.Scene {
     const shelves = this.fixtures.shelves().filter((shelf) =>
       shelf !== excludedShelf && shelf.findAvailableSlot(),
     );
-    return shelves.length ? shelves[Math.floor(Math.random() * shelves.length)] : null;
+    return shelves.length ? gameRandom.pick(shelves) : null;
   }
 
   getNavigationObstacles(bodySize = { width: SPRITE_DISPLAY_WIDTH, height: SPRITE_DISPLAY_HEIGHT }) {

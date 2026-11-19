@@ -5,6 +5,7 @@
 // price, never shown. The market price random-walks once per day from the previous day's
 // price, clamped to a band around the hidden base so it can't drift off forever.
 import { roundMoney } from "./Money.js";
+import { gameRandom } from "../core/Random.js";
 
 // Daily random-walk swing (fraction of price) and the clamp band (multiples of base).
 export const DAILY_SWING = 0.1;
@@ -16,7 +17,7 @@ export const MIN_SUPPLY_RATIO = 0.4;
 export const MAX_SUPPLY_RATIO = 0.6;
 
 export class Market {
-  constructor(items, random = Math.random) {
+  constructor(items, random = gameRandom) {
     this.random = random;
     this.day = 1;
     this.basePrices = new Map(items.map((item) => [item.id, item.baseCost]));

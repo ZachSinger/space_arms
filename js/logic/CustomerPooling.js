@@ -5,6 +5,7 @@
 // neutral and faction groups, and when each one arrives.
 // See also: documentation/CustomerPooling.md (design and formulas).
 import { CUSTOMER_FACTION_IDS, factionMatches } from "./CustomerBuyLists.js";
+import { gameRandom } from "../core/Random.js";
 
 // First-pass tuning values; see CustomerPooling.md before changing them.
 export const CUSTOMER_POOL_TUNING = Object.freeze({
@@ -278,7 +279,7 @@ export function growCustomerArrivalSchedule({
   nextPool,
   elapsedMs,
   shiftDurationMs,
-  random = Math.random,
+  random = gameRandom,
 }) {
   const remainingMs = shiftDurationMs - elapsedMs;
   if (remainingMs <= 0 || nextPool.totalCustomers <= currentPool.totalCustomers) {
@@ -321,7 +322,7 @@ export function growCustomerArrivalSchedule({
 export function createCustomerArrivalSchedule(
   customerFactionIds,
   shiftDurationMs,
-  random = Math.random,
+  random = gameRandom,
 ) {
   const shuffled = shuffle([...customerFactionIds], random);
   if (shuffled.length === 0) return [];

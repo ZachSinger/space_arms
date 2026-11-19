@@ -4,6 +4,7 @@
 // Loose trash on the shop floor (documentation/modules/Cleaning.md): the pieces, their
 // pictures, and moving them off spots a fixture now covers.
 import { TRASH_KINDS } from "./Litter.js";
+import { gameRandom } from "../core/Random.js";
 
 export const TRASH_DEPTH = 0.9; // just above the floor (0): under walls, crates, fixtures, and people
 const TRASH_SCALE = 1.5;
@@ -180,6 +181,6 @@ export class TrashField {
   }
 }
 
-export function randomTrashKind(random = Math.random) {
+export function randomTrashKind(random = gameRandom) {
   return TRASH_KINDS[Math.floor(random() * TRASH_KINDS.length)];
 }

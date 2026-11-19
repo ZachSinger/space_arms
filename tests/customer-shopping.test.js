@@ -11,6 +11,7 @@ let server;
 let cacheDirectory;
 let Customer;
 let GameScene;
+let gameRandom;
 const originalPhaser = globalThis.Phaser;
 
 before(async () => {
@@ -49,6 +50,7 @@ before(async () => {
     }],
   });
   ({ Customer } = await server.ssrLoadModule("/js/logic/Customer.js"));
+  ({ gameRandom } = await server.ssrLoadModule("/js/core/Random.js"));
   ({ GameScene } = await server.ssrLoadModule("/js/scenes/game.js"));
 });
 
@@ -404,7 +406,7 @@ test("random browsing chooses only stocked shelves other than the next stop", ()
 });
 
 test("wanderer routes include stocked shelves while keeping sold-out wants for reporting", (t) => {
-  t.mock.method(Math, "random", () => 0);
+  t.after(gameRandom.override(() => 0));
   const soldOut = fixture({ x: 100, y: 100 }, [{ itemId: "missing", quantity: 0 }]);
   const stocked = fixture({ x: 200, y: 100 }, [{ itemId: "available", quantity: 2 }]);
   const empty = fixture({ x: 300, y: 100 }, []);
@@ -558,7 +560,7 @@ test("a shelf that sells out while a customer approaches is skipped and reported
 });
 
 test("a browsing detour reserves a stocked shelf and skips it if it sells out on the way", (t) => {
-  t.mock.method(Math, "random", () => 0);
+  t.after(gameRandom.override(() => 0));
   const wanted = fixture({ x: 100, y: 100 }, [{ itemId: "wanted", quantity: 1 }]);
   const detour = fixture({ x: 200, y: 100 }, [{ itemId: "other", quantity: 1 }]);
   const plan = {
@@ -599,7 +601,7 @@ test("a browsing detour reserves a stocked shelf and skips it if it sells out on
 });
 
 test("a customer changes course as soon as a browsing destination sells out", (t) => {
-  t.mock.method(Math, "random", () => 0);
+  t.after(gameRandom.override(() => 0));
   const wanted = fixture({ x: 100, y: 100 }, [{ itemId: "wanted", quantity: 1 }]);
   const detour = fixture({ x: 200, y: 100 }, [{ itemId: "other", quantity: 1 }]);
   const plan = {

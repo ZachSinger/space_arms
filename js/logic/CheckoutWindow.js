@@ -24,6 +24,7 @@ import { database } from "../scenes/boot.js"; // the exported DatabaseManager si
 
 // Belt layout (px) and animation speeds.
 const CARD_SIZE = 72;
+import { gameRandom } from "../core/Random.js";
 const CARD_GAP = 8;
 const SCANNER_GAP = 12;
 const BELT_SPEED_PX_PER_S = 260;
@@ -44,7 +45,7 @@ export const CHIT_MISTAKES_TO_LOSE_SALE = 3;
 export const CHIT_KEY_TIME_MS = 10000;
 const CHIT_TIMER_TICK_MS = 50;
 
-export function customerPaysCash(random = Math.random) {
+export function customerPaysCash(random = gameRandom) {
   return random() < CASH_PAYMENT_CHANCE;
 }
 
@@ -296,7 +297,7 @@ export class CheckoutWindow {
     this.currency = this.paymentType === "m-scrips" ? "m-scrips" : "credits";
     // Some customers count out the exact amount, coins included, so no change is owed.
     const usesCash = this.paymentType === "cash" || this.paymentType === "m-scrips";
-    const isExact = usesCash && (exact ?? Math.random() < EXACT_PAYMENT_CHANCE);
+    const isExact = usesCash && (exact ?? gameRandom() < EXACT_PAYMENT_CHANCE);
     const exactTender = this.currency === "m-scrips"
       ? creditCentsToScrips(toCents(this.total))
       : this.total;

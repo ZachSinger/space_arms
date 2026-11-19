@@ -1,3 +1,4 @@
+import { gameRandom } from "../core/Random.js";
 // ==========================================
 // FILE: Litter.js
 // ==========================================
@@ -47,7 +48,7 @@ export function getCleanlinessScore(max, trashCount, dirtCount = 0) {
  * @param {() => number} [random]
  * @returns {{ upsetBelow: number, walkOutBelow: number }} percents
  */
-export function rollCleanlinessTolerance(factionId, random = Math.random) {
+export function rollCleanlinessTolerance(factionId, random = gameRandom) {
   const ranges = CLEANLINESS_TOLERANCES[factionId] ?? CLEANLINESS_TOLERANCES.civilian;
   const roll = ([min, max]) => min + random() * (max - min);
   return { upsetBelow: roll(ranges.upset), walkOutBelow: roll(ranges.walkOut) };

@@ -78,6 +78,34 @@ export async function startGame({ port = 5391, headless = true } = {}) {
       }, [fn.toString(), arg]);
     },
     wait: (ms) => page.waitForTimeout(ms),
+    /**
+     * Stops the game's own loop and plays `steps` equal-size game steps by hand, `perFrame` of
+     * them per browser frame. More per frame is fast-forward; every step is still normal size,
+     * so movement and physics behave the same. `window.__onStep(index)` runs before each step.
+     * The loop stays stopped afterwards (so results can be read untouched) until `resumeLoop`.
+     */
+    async step(steps, { perFrame = 1, stepMs = 1000 / 60 } = {}) {
+      await page.evaluate(async ({ steps, perFrame, stepMs }) => {
+        const game = window.__game;
+        if (game.loop.running) game.loop.sleep();
+        window.__stepIndex ??= 0;
+        for (let done = 0; done < steps;) {
+          for (let inFrame = 0; inFrame < perFrame && done < steps; inFrame += 1, done += 1) {
+            window.__onStep?.(window.__stepIndex);
+            window.__stepIndex += 1;
+            game.headlessStep(1e6 + window.__stepIndex * stepMs, stepMs);
+          }
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      }, { steps, perFrame, stepMs });
+    },
+    async resumeLoop() {
+      await page.evaluate(() => {
+        window.__stepIndex = 0;
+        window.__onStep = null;
+        if (!window.__game.loop.running) window.__game.loop.wake();
+      });
+    },
     async close() {
       await browser.close();
       await server.close();

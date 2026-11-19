@@ -2,13 +2,14 @@
 // FILE: run-checks.mjs
 // ==========================================
 // Every browser check in one go (npm run check:game): two scripted shifts (no staff, two
-// staff), the targeted scenarios, and the busy-shop speed test. Needs the local art in img/.
+// staff), the targeted scenarios, the seeded replay, and the busy-shop speed test. Needs the local art in img/.
 //   node scripts/browser/run-checks.mjs                 everything
-//   node scripts/browser/run-checks.mjs --only=scenarios  just one part (shift | scenarios | speed)
+//   node scripts/browser/run-checks.mjs --only=scenarios  just one part (shift | scenarios | replay | speed)
 //   node scripts/browser/run-checks.mjs --quick          shorter shifts, for quick re-checks
 import { startGame } from "./harness.mjs";
 import { runScriptedShift, checkScriptedShift } from "./scripted-shift.mjs";
 import { runScenarios } from "./scenarios.mjs";
+import { runReplayCheck } from "./replay.mjs";
 
 const args = process.argv.slice(2);
 const only = args.find((arg) => arg.startsWith("--only="))?.slice(7) ?? null;
@@ -98,6 +99,12 @@ try {
   }
   if (!only || only === "scenarios") {
     for (const { name, failures } of await runScenarios(h)) record(name, failures);
+  }
+  if (!only || only === "replay") {
+    const errorsBefore = h.errors().length;
+    const { name, failures, detail } = await runReplayCheck(h, { gameSeconds: quick ? 30 : 60 });
+    failures.push(...h.errors().slice(errorsBefore).map((problem) => `${problem.type}: ${problem.text}`));
+    record(name, failures, detail);
   }
   if (!only || only === "speed") {
     const errorsBefore = h.errors().length;

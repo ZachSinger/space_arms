@@ -1,3 +1,4 @@
+import { gameRandom } from "../core/Random.js";
 // ==========================================
 // FILE: CustomerTraits.js
 // ==========================================
@@ -33,7 +34,7 @@ const PERSONALITY_TRAITS = Object.values(CUSTOMER_TRAITS).filter((trait) => !tra
  * @param {{ shelfCount?: number, itemVariety?: number }} [store] - for appearance conditions
  * @returns {string[]} trait ids, group first
  */
-export function rollCustomerTraits(groupId, random = Math.random, store = {}) {
+export function rollCustomerTraits(groupId, random = gameRandom, store = {}) {
   const traits = groupId && CUSTOMER_TRAITS[groupId]?.group ? [groupId] : [];
   for (const trait of PERSONALITY_TRAITS) {
     if (trait.appearsWhen && !trait.appearsWhen(store)) continue;
@@ -60,7 +61,7 @@ export function getPatienceMs(traitIds) {
  * @param {() => number} [random]
  * @returns {object[]}
  */
-export function planShelfRoute(wantedStops, allStops, traitIds, random = Math.random) {
+export function planShelfRoute(wantedStops, allStops, traitIds, random = gameRandom) {
   const share = traitIds.reduce((total, id) => total + (CUSTOMER_TRAITS[id]?.browseShare ?? 0), 0);
   if (share <= 0) return wantedStops;
   const wanted = new Set(wantedStops.map(({ fixture }) => fixture));
@@ -78,7 +79,7 @@ export function planShelfRoute(wantedStops, allStops, traitIds, random = Math.ra
  * @param {() => number} [random]
  * @returns {string[]}
  */
-export function addTraitBonusItems(buyList, shelfItemIds, traitIds, random = Math.random) {
+export function addTraitBonusItems(buyList, shelfItemIds, traitIds, random = gameRandom) {
   const extraCount = traitIds.reduce((total, id) =>
     total + (CUSTOMER_TRAITS[id]?.extraBonusItems ?? 0), 0);
   if (extraCount <= 0) return buyList.bonusItemIds;

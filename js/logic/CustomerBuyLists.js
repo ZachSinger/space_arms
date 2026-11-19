@@ -1,3 +1,4 @@
+import { gameRandom } from "../core/Random.js";
 // ==========================================
 // FILE: CustomerBuyLists.js
 // ==========================================
@@ -23,7 +24,7 @@ export const BARGAIN_PRICE_RATIO = 0.9;
 export const DISCOUNT_BONUS_CHANCE = 0.5;
 
 // Most wants are one unit; larger purchases give identical stock a reason to be stacked.
-export function createCustomerItemQuantities(itemIds, random = Math.random) {
+export function createCustomerItemQuantities(itemIds, random = gameRandom) {
   return Object.fromEntries([...new Set(itemIds)].map((itemId) => {
     const roll = random();
     return [itemId, roll < 0.5 ? 1 : roll < 0.85 ? 2 : 3];
@@ -84,7 +85,7 @@ function takeRandomItems(candidates, count, random, { uniqueWeaponTypes = false 
  * @param {() => number} [random]
  * @returns {{ primaryItemIds: string[], bonusItemIds: string[], matchingAmmoIdsByFirearm: Object<string, string[]> }}
  */
-export function createCustomerBuyList(factionId, shelfItemIds, getItem, random = Math.random) {
+export function createCustomerBuyList(factionId, shelfItemIds, getItem, random = gameRandom) {
   const shelfItems = [...new Set(shelfItemIds)].map(getItem).filter(Boolean);
   const factionItems = shelfItems.filter((item) => factionMatches(item, factionId));
   const primaryCount = CUSTOMER_BUY_LIST_TUNING.primaryCount[factionId] ??
@@ -150,7 +151,7 @@ export function createCustomerBuyList(factionId, shelfItemIds, getItem, random =
  * @param {() => number} [random]
  * @returns {string[]} the updated bonus list
  */
-export function addDiscountBonusItem(buyList, shelfItemIds, isBargain, random = Math.random) {
+export function addDiscountBonusItem(buyList, shelfItemIds, isBargain, random = gameRandom) {
   const wanted = new Set([...buyList.primaryItemIds, ...buyList.bonusItemIds]);
   const candidates = [...new Set(shelfItemIds)].filter((id) => !wanted.has(id) && isBargain(id));
   if (candidates.length === 0 || random() >= DISCOUNT_BONUS_CHANCE) {
