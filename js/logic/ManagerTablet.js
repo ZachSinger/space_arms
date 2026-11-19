@@ -6,10 +6,10 @@
 import { UIWindow } from "./UIWindow.js";
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from "./GameViewport.js";
 import { InventoryTab, INVENTORY_PRICE_CONTROL_SELECTOR } from "./InventoryTab.js";
+import { EmployeeTab, EMPLOYEE_PRIORITY_SELECTOR } from "./EmployeeTab.js";
 import { ContractRenderer } from "./ContractRenderer.js";
 import { SupplyTab } from "./SupplyTab.js";
 import { LayoutRenderer } from "./LayoutRenderer.js";
-import { EmployeeRenderer } from "./EmployeeRenderer.js";
 import { FinancesRenderer } from "./FinancesRenderer.js";
 import { HandbookRenderer } from "./HandbookRenderer.js";
 import { FixtureHighlight } from "./FixtureHighlight.js";
@@ -55,7 +55,6 @@ function renderTextStylesPage() {
   `;
 }
 
-const EMPLOYEE_PRIORITY_SELECTOR = "button[data-employee-priority-id]";
 const TABLET_KEYBOARD_CONTROL_SELECTOR =
   `${INVENTORY_PRICE_CONTROL_SELECTOR}, ${EMPLOYEE_PRIORITY_SELECTOR}`;
 
@@ -67,6 +66,7 @@ export class ManagerTablet {
     this.gameState = gameState;
     this.scene = scene;
     this.inventoryTab = new InventoryTab(scene);
+    this.employeeTab = new EmployeeTab(scene, gameState);
     this.supplyTab = new SupplyTab(scene);
     this.fixturePurchaseNotice = "";
     this.fixtureSaleConfirmation = null;
@@ -110,6 +110,11 @@ export class ManagerTablet {
       this.bodyElement,
       () => this.renderPanelContent("inventory"),
     );
+    this.employeeTab.bind(
+      this.bodyElement.querySelector('[data-tab-panel="employee"]'),
+      this.bodyElement,
+      () => this.renderPanelContent("employee"),
+    );
     this.supplyTab.bind(
       this.bodyElement.querySelector('[data-tab-panel="supply"]'),
       () => this.renderPanelContent("supply"),
@@ -137,19 +142,6 @@ export class ManagerTablet {
       const signButton = event.target.closest("[data-license-id]");
       if (signButton) this.handleSignContract(signButton.dataset.licenseId);
 
-      const hireEmployeeButton = event.target.closest("[data-hire-employee-id]");
-      if (hireEmployeeButton) {
-        this.scene.hireEmployee(hireEmployeeButton.dataset.hireEmployeeId);
-      }
-
-      const shiftButton = event.target.closest("[data-employee-shift-id]");
-      if (shiftButton) {
-        this.scene.setEmployeeOnShift(
-          shiftButton.dataset.employeeShiftId, shiftButton.dataset.employeeShiftOn === "true",
-        );
-        this.refreshEmployeePanel();
-      }
-
       if (event.target.closest("[data-end-day]") && this.scene.shift.endDay()) this.uiWindow.close();
       if (event.target.closest("[data-finances-start-shift]")) this.scene.shift.start();
       if (event.target.closest("[data-take-emergency-loan]")) this.scene.shift.takeLoan();
@@ -160,16 +152,6 @@ export class ManagerTablet {
         const value = financesDayButton.dataset.financesDay;
         this.financesDay = value === "today" ? null : Number(value);
         this.refreshFinancesPanel();
-      }
-
-      const priorityButton = event.target.closest("[data-employee-priority-id]");
-      if (priorityButton && priorityButton.getAttribute("aria-pressed") !== "true") {
-        const changed = this.scene.moveEmployeeJobPriority(
-          priorityButton.dataset.employeePriorityId,
-          priorityButton.dataset.employeePriorityJob,
-          -1,
-        );
-        if (!changed) this.refreshEmployeePanel();
       }
 
       const moveButton = event.target.closest("[data-move-fixture-id]");
@@ -234,7 +216,7 @@ export class ManagerTablet {
     // change elsewhere (sales, deliveries, reputation), so re-render on every state change.
     this.gameState.subscribe(() => {
       this.inventoryTab.redraw();
-      this.refreshEmployeePanel();
+      this.employeeTab.redraw();
       this.refreshContractsPanel();
       this.refreshSupplyPanel();
       this.refreshLayoutPanels();
@@ -265,19 +247,7 @@ export class ManagerTablet {
    */
   renderPanelBody(tabId) {
     if (tabId === "inventory") return this.inventoryTab.draw();
-    if (tabId === "employee") {
-      return EmployeeRenderer.generateHTML({
-        hiredEmployeeIds: this.gameState.staff.hired,
-        offShiftEmployeeIds: this.gameState.staff.offShift,
-        activeEmployeeIds: this.scene.employees.map((employee) => employee.data.id),
-        employeeJobPriorities: this.gameState.staff.jobPriorities,
-        credits: this.gameState.economy.credits,
-        canHire: this.scene.canHireEmployees(),
-        employeeSkills: this.gameState.staff.skills,
-        employeeTraining: this.gameState.staff.training,
-        shopLevel: this.gameState.reputation.shopLevel,
-      });
-    }
+    if (tabId === "employee") return this.employeeTab.draw();
     if (tabId === "contracts") {
       return ContractRenderer.generateHTML(database.getAllLicenses(), this.gameState);
     }
@@ -309,7 +279,7 @@ export class ManagerTablet {
     this.fixturePurchaseNotice = "";
     this.fixtureSaleConfirmation = null;
     if (tabId === "inventory") this.inventoryTab.redraw();
-    if (tabId === "employee") this.refreshEmployeePanel();
+    if (tabId === "employee") this.employeeTab.redraw();
     if (tabId === "supply") this.refreshSupplyPanel();
     if (tabId === "layout" || tabId === "fixtures") this.refreshLayoutPanels();
     if (tabId === "finances") this.refreshFinancesPanel();
@@ -335,27 +305,7 @@ export class ManagerTablet {
   }
 
   refreshEmployeePanel() {
-    const panel = this.bodyElement.querySelector('[data-tab-panel="employee"]');
-    if (!panel) return;
-    const activeElement = document.activeElement;
-    const focusedPriority = panel.contains(activeElement) && activeElement.matches(EMPLOYEE_PRIORITY_SELECTOR)
-      ? { employeeId: activeElement.dataset.employeePriorityId, jobId: activeElement.dataset.employeePriorityJob }
-      : null;
-    const scrollPositions = Array.from(panel.querySelectorAll("[data-employee-scroll]"), (element) => ({
-      name: element.dataset.employeeScroll, top: element.scrollTop,
-    }));
-    panel.innerHTML = this.renderPanelContent("employee");
-    for (const element of panel.querySelectorAll("[data-employee-scroll]")) {
-      const position = scrollPositions.find(({ name }) => name === element.dataset.employeeScroll);
-      if (position) element.scrollTop = position.top;
-    }
-    if (focusedPriority) {
-      const replacement = Array.from(panel.querySelectorAll(EMPLOYEE_PRIORITY_SELECTOR)).find(
-        (button) => button.dataset.employeePriorityId === focusedPriority.employeeId &&
-          button.dataset.employeePriorityJob === focusedPriority.jobId,
-      );
-      replacement?.focus({ preventScroll: true });
-    }
+    this.employeeTab.redraw();
   }
 
   refreshFinancesPanel() {

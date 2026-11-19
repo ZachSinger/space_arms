@@ -3,6 +3,7 @@
 // ==========================================
 // The Employee tab's hiring roster and current staff list.
 import employeeRoster from "../../data/Employees.json" with { type: "json" };
+import { html } from "../core/html.js";
 import { EMPLOYEE_JOBS } from "./EmployeeJobs.js";
 import { getStaffLimit, getStaffLimitReason } from "./ShopProgression.js";
 import { getEmployeeProfile } from "./EmployeeTraining.js";
@@ -14,7 +15,7 @@ const PRIORITY_LABELS = {
 };
 
 function renderSkillLevels(employee, stockLabel = "Stock") {
-  return `<div class="type-description employee-skill-levels">
+  return html`<div class="type-description employee-skill-levels">
     <span>Register:${employee.skillLevels.register}</span>
     <span>${stockLabel}:${employee.skillLevels.stock_shelves}</span>
   </div>`;
@@ -48,13 +49,13 @@ export class EmployeeRenderer {
           : `Hire ${employee.name} for ${employee.hireCost}`;
         const reason = !staffLimitReason && canHire && !affordable
           ? `You need ${formatMoneyAmount(roundMoney(employee.hireCost - credits))} more.`
-          : "";
-        return `
+          : null;
+        return html`
           <div class="item-card employee-candidate-row">
             <div class="employee-candidate-name">
               <h3 class="type-h3">${employee.name}</h3>
               ${renderSkillLevels(employee)}
-              ${reason ? `<p class="type-description employee-candidate-reason">${reason}</p>` : ""}
+              ${reason ? html`<p class="type-description employee-candidate-reason">${reason}</p>` : null}
             </div>
             <div class="type-description employee-candidate-wage">${employee.wagePerShift}</div>
             <div class="type-description employee-hire-cost">${employee.hireCost}</div>
@@ -64,7 +65,7 @@ export class EmployeeRenderer {
             </button>
           </div>
         `;
-      }).join("");
+      });
 
     const hiredRows = roster
       .filter((employee) => hired.has(employee.id))
@@ -77,48 +78,69 @@ export class EmployeeRenderer {
         const priorityOptions = EMPLOYEE_JOBS.map(({ id }) => {
           const label = PRIORITY_LABELS[id];
           if (!label) throw new Error(`Unknown employee job: ${id}`);
-          return `
+          return html`
             <button type="button" class="action-btn" data-employee-priority-id="${employee.id}"
-              data-employee-priority-job="${id}" aria-pressed="${priorities[0] === id}"
+              data-employee-priority-job="${id}" aria-pressed="${String(priorities[0] === id)}"
               ${canHire ? "" : "disabled"} aria-label="${label} for ${employee.name}">${label}</button>
           `;
-        }).join("");
+        });
         const trainingJobId = employeeTraining[employee.id];
         const isOnShift = !offShift.has(employee.id);
         const shiftTitle = canHire ? "" : "Change On Shift or Off Shift between shifts.";
-        const shiftButton = (on) => `
+        const shiftButton = (on) => html`
               <button type="button" class="action-btn" data-employee-shift-id="${employee.id}"
-                data-employee-shift-on="${on}" aria-pressed="${isOnShift === on}"
+                data-employee-shift-on="${String(on)}" aria-pressed="${String(isOnShift === on)}"
                 ${canHire ? "" : "disabled"}
                 aria-label="Set ${employee.name} ${on ? "On Shift" : "Off Shift"}"
                 title="${shiftTitle || (on ? "" : "Off Shift: stays home and isn't paid.")}">
                 ${on ? "ON SHIFT" : "OFF SHIFT"}
               </button>`;
         const shiftControl = trainingJobId
-          ? `<div class="employee-shift-away">AWAY: NOT AVAILABLE</div>`
-          : `<div class="employee-shift-toggle">${shiftButton(true)}${shiftButton(false)}</div>`;
-        return `
-        <div class="item-card employee-staff-row">
+          ? html`<div class="employee-shift-away">AWAY: NOT AVAILABLE</div>`
+          : html`<div class="employee-shift-toggle">${shiftButton(true)}${shiftButton(false)}</div>`;
+        const status = trainingJobId
+          ? html`<p class="type-description">Away ${canHire ? "next" : "this"} shift; wages are still paid.</p>`
+          : !isOnShift
+            ? html`<p class="type-description">Off Shift: stays home and isn't paid.</p>`
+            : active.has(employee.id)
+              ? html`<p class="type-description">Working this shift.</p>`
+              : null;
+        return html`
+          <div class="item-card employee-staff-row">
             <div class="employee-staff-header">
               <h3 class="type-h3">${employee.name}</h3>
               ${shiftControl}
             </div>
             ${renderSkillLevels(employee, "Stocking")}
-            ${trainingJobId
-              ? `<p class="type-description">Away ${canHire ? "next" : "this"} shift; wages are still paid.</p>`
-              : !isOnShift ? `<p class="type-description">Off Shift: stays home and isn't paid.</p>`
-              : active.has(employee.id) ? `<p class="type-description">Working this shift.</p>` : ""}
+            ${status}
             <p class="type-description">Wages: ${employee.wagePerShift}</p>
-            ${canHire ? "" : `<p class="type-description">Change priority or On Shift / Off Shift between shifts.</p>`}
+            ${canHire ? null : html`<p class="type-description">Change priority or On Shift / Off Shift between shifts.</p>`}
             <hr class="divider-thin">
             <div class="employee-priority-options" role="group" aria-label="Job priority for ${employee.name}">
               ${priorityOptions}
             </div>
-        </div>
+          </div>
         `;
-      }).join("");
+      });
 
-    return `
+    const hiringNotice = staffLimitReason
+      ? html`<p class="type-description">${staffLimitReason}</p>`
+      : !canHire
+        ? html`<p class="type-description">Staff can only be hired between shifts.</p>`
+        : null;
+    const availableContent = availableRows.length > 0
+      ? html`
+          <div class="employee-hire-columns">
+            <h3 class="type-h3">Name</h3>
+            <h3 class="type-h3">Wages</h3>
+            <h3 class="type-h3">Hire Cost</h3>
+            <span></span>
+          </div>
+          <div class="employee-available-list">${availableRows}</div>
+        `
+      : html`<p class="type-description employee-empty">No other staff are available to hire.</p>`;
+
+    return String(html`
       <div class="employee-panel">
         <div class="employee-panel-heading">
           <h2 class="type-h2">Staff to Hire</h2>
@@ -130,25 +152,16 @@ export class EmployeeRenderer {
         <hr class="divider-thick employee-panel-divider">
         <section class="employee-section">
           <div class="employee-column-scroll custom-scrollbar" data-employee-scroll="hiring">
-            ${staffLimitReason ? `<p class="type-description">${staffLimitReason}</p>`
-    : !canHire ? `<p class="type-description">Staff can only be hired between shifts.</p>` : ""}
-            ${availableRows ? `
-              <div class="employee-hire-columns">
-                <h3 class="type-h3">Name</h3>
-                <h3 class="type-h3">Wages</h3>
-                <h3 class="type-h3">Hire Cost</h3>
-                <span></span>
-              </div>
-              <div class="employee-available-list">${availableRows}</div>
-            ` : `<p class="type-description employee-empty">No other staff are available to hire.</p>`}
+            ${hiringNotice}
+            ${availableContent}
           </div>
         </section>
         <section class="employee-section employee-section-staff">
           <div class="employee-column-scroll custom-scrollbar" data-employee-scroll="staff">
-            ${hiredRows || `<p class="type-description employee-empty">You have not hired any staff.</p>`}
+            ${hiredRows.length > 0 ? hiredRows : html`<p class="type-description employee-empty">You have not hired any staff.</p>`}
           </div>
         </section>
       </div>
-    `;
+    `);
   }
 }

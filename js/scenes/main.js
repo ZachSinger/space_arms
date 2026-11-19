@@ -3,6 +3,7 @@
 // ==========================================
 // Renderer entry point: global styles plus the Phaser game config and scene list.
 import "../../styles/space_dealer_window.css";
+import "../../styles/windows/employee.css";
 import "../../styles/windows/inventory.css";
 import "../../styles/windows/supply.css";
 import Phaser from "phaser";

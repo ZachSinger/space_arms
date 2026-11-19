@@ -1,0 +1,187 @@
+.employee-panel {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  column-gap: calc(var(--line-break) * 2);
+  row-gap: var(--line-break);
+  overflow: hidden;
+}
+
+.employee-section,
+.employee-available-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--line-break);
+}
+
+.employee-section {
+  min-width: 0;
+  min-height: 0;
+}
+
+.employee-section-staff {
+  border-left: 1px solid var(--color-border-subtle);
+  padding-left: var(--line-break);
+}
+
+.employee-panel-heading {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+}
+
+.employee-panel-divider {
+  grid-column: 1 / -1;
+}
+
+.employee-column-scroll {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--line-break);
+  padding: 0 4px var(--line-break) 0;
+  overflow-y: auto;
+}
+
+.employee-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--line-break);
+}
+
+.employee-empty,
+.employee-skill-levels {
+  color: var(--color-text-muted);
+}
+
+.employee-skill-levels {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--line-break);
+}
+
+.employee-candidate-name .employee-skill-levels {
+  flex-direction: column;
+}
+
+.employee-hire-columns,
+.employee-candidate-row {
+  display: grid;
+  grid-template-columns: minmax(calc(56px * var(--text-scale)), calc(86px * var(--text-scale))) minmax(calc(54px * var(--text-scale)), 1fr) minmax(calc(40px * var(--text-scale)), calc(118px * var(--text-scale))) calc(46px * var(--text-scale));
+  align-items: center;
+  gap: 8px;
+}
+
+.employee-hire-columns {
+  align-items: end;
+  padding: 0 11px;
+}
+
+.employee-hire-columns > :nth-child(2),
+.employee-hire-columns > :nth-child(3),
+.employee-candidate-wage,
+.employee-hire-cost {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.employee-candidate-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.employee-candidate-reason {
+  color: #facc15;
+}
+
+.employee-candidate-row > .action-btn {
+  min-width: 0;
+  padding: 6px 2px;
+  font-size: var(--font-size-11);
+}
+
+.employee-staff-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--line-break);
+}
+
+.employee-priority-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.employee-priority-options .action-btn {
+  padding: 5px 8px;
+  font-size: var(--font-size-12);
+  text-align: left;
+  text-transform: none;
+}
+
+.employee-priority-options .action-btn[aria-pressed="false"] {
+  --bg-color: #1f2937;
+  border-color: #374151;
+  color: var(--color-text-main);
+}
+
+.employee-priority-options .action-btn[aria-pressed="false"]:hover:not(:disabled) {
+  --bg-color: #374151;
+}
+
+[data-hire-employee-id]:disabled,
+[data-employee-priority-id]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.employee-staff-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.employee-shift-toggle {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.employee-shift-toggle .action-btn {
+  padding: 4px 8px;
+  font-size: var(--font-size-11);
+}
+
+.employee-shift-toggle .action-btn[aria-pressed="false"] {
+  --bg-color: #1f2937;
+  border-color: #374151;
+  color: #9ca3af;
+}
+
+.employee-shift-toggle .action-btn[aria-pressed="false"]:hover:not(:disabled) {
+  --bg-color: #374151;
+  color: #e5e7eb;
+}
+
+.employee-shift-toggle .action-btn:disabled {
+  cursor: not-allowed;
+}
+
+.employee-shift-toggle .action-btn[aria-pressed="false"]:disabled {
+  opacity: 0.4;
+}
+
+.employee-shift-away {
+  flex-shrink: 0;
+  font-size: var(--font-size-12);
+  text-align: right;
+  color: #facc15;
+}

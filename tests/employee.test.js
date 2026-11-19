@@ -873,7 +873,7 @@ test("the employee panel explains the Shop Level 4 staff limit before anyone can
     canHire: true,
   };
   const locked = EmployeeRenderer.generateHTML({ ...options, shopLevel: 1 });
-  assert.match(locked, /can't have employees yet/);
+  assert.match(locked, /can(?:'|&#39;)t have employees yet/);
   assert.match(locked, /Shop Level 4/);
   assert.match(locked, /72 store reputation/);
   assert.match(locked, /Hired: 0 of 0/);

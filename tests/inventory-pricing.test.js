@@ -14,6 +14,7 @@ import { SupplierLicense } from "../js/logic/Licenses.js";
 let server;
 let ManagerTablet;
 let SupplyTab;
+let EmployeeTab;
 let GameState;
 let cacheDirectory;
 const originalDocument = globalThis.document;
@@ -61,6 +62,7 @@ before(async () => {
   });
   ({ ManagerTablet } = await server.ssrLoadModule("/js/logic/ManagerTablet.js"));
   ({ SupplyTab } = await server.ssrLoadModule("/js/logic/SupplyTab.js"));
+  ({ EmployeeTab } = await server.ssrLoadModule("/js/logic/EmployeeTab.js"));
   ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));
 });
 
@@ -93,6 +95,11 @@ function createHarness() {
   const supplyList = { scrollTop: 0 };
   const supplyPanel = events();
   supplyPanel.querySelector = (selector) => selector === ".supply-list" ? supplyList : null;
+  const employeePanel = {
+    contains: (element) => element !== null,
+    querySelectorAll: () => [],
+    set innerHTML(markup) { this.markup = markup; },
+  };
   const document = { activeElement: null };
   globalThis.document = document;
 
@@ -179,6 +186,7 @@ function createHarness() {
   body.querySelector = (selector) => {
     if (selector === ".tablet-tab-bar") return tabBar;
     if (selector === '[data-tab-panel="inventory"]') return panel;
+    if (selector === '[data-tab-panel="employee"]') return employeePanel;
     if (selector === '[data-tab-panel="supply"]') return supplyPanel;
     return null;
   };
@@ -422,10 +430,10 @@ test("employee priority choices select the other job and ignore the selected job
   const { body, scene, tablet } = createHarness();
   const calls = [];
   scene.moveEmployeeJobPriority = (...args) => { calls.push(args); return true; };
-  const choice = (pressed) => ({
+  const choice = (pressed) => Object.assign(new TestElement(), {
     dataset: { employeePriorityId: "tavi_stock_clerk", employeePriorityJob: "stock_shelves" },
     getAttribute: () => String(pressed),
-    closest(selector) { return selector === "[data-employee-priority-id]" ? this : null; },
+    closest(selector) { return selector === "button[data-employee-priority-id]" ? this : null; },
   });
   body.emit("click", { target: choice(false) });
   assert.deepEqual(calls, [["tavi_stock_clerk", "stock_shelves", -1]]);
@@ -434,12 +442,40 @@ test("employee priority choices select the other job and ignore the selected job
 
   let refreshed = 0;
   scene.moveEmployeeJobPriority = () => false;
-  tablet.refreshEmployeePanel = () => { refreshed += 1; };
+  tablet.employeeTab.redraw = () => { refreshed += 1; };
   body.emit("click", { target: choice(false) });
   assert.equal(refreshed, 1);
 });
 
-test("employee panel refresh preserves each column's scroll and priority focus", () => {
+test("employee tab routes hiring and shift actions to the scene", () => {
+  const { body, scene, tablet } = createHarness();
+  const calls = [];
+  scene.hireEmployee = (employeeId) => calls.push(["hire", employeeId]);
+  scene.setEmployeeOnShift = (employeeId, onShift) => calls.push(["shift", employeeId, onShift]);
+  tablet.employeeTab.redraw = () => calls.push(["redraw"]);
+  const control = (attribute, dataset) => Object.assign(new TestElement(), {
+    dataset,
+    closest(selector) { return selector === attribute ? this : null; },
+  });
+
+  body.emit("click", {
+    target: control("[data-hire-employee-id]", { hireEmployeeId: "tavi_stock_clerk" }),
+  });
+  body.emit("click", {
+    target: control("[data-employee-shift-id]", {
+      employeeShiftId: "tavi_stock_clerk",
+      employeeShiftOn: "false",
+    }),
+  });
+
+  assert.deepEqual(calls, [
+    ["hire", "tavi_stock_clerk"],
+    ["shift", "tavi_stock_clerk", false],
+    ["redraw"],
+  ]);
+});
+
+test("employee tab refresh preserves each column's scroll and priority focus", () => {
   const previousDocument = globalThis.document;
   const oldButton = {
     dataset: { employeePriorityId: "tavi_stock_clerk", employeePriorityJob: "register" },
@@ -461,12 +497,12 @@ test("employee panel refresh preserves each column's scroll and priority focus",
     },
     set innerHTML(markup) { rendered = Boolean(markup); },
   };
-  const tablet = Object.create(ManagerTablet.prototype);
-  tablet.bodyElement = { querySelector: () => panel };
-  tablet.renderPanelContent = () => "updated";
+  const employeeTab = new EmployeeTab({}, {});
+  employeeTab.panel = panel;
+  employeeTab.renderPanel = () => "updated";
   globalThis.document = { activeElement: oldButton };
   try {
-    tablet.refreshEmployeePanel();
+    employeeTab.redraw();
     assert.deepEqual(after.map(({ scrollTop }) => scrollTop), [140, 72]);
     assert.deepEqual(newButton.focusOptions, { preventScroll: true });
   } finally {
