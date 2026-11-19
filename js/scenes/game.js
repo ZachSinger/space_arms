@@ -24,7 +24,7 @@ import { getLicensedFactionIds } from "../logic/CustomerPooling.js";
 import { Player, PLAYER_CRATE_HOLD_OFFSET } from "../logic/Player.js";
 import { CRATE_STACK_SPACING } from "../logic/Crate.js";
 import {
-  FLOOR_STACK_MAX, HOLD_KEY_MS, MAX_CARRIED_CRATES,
+  HOLD_KEY_MS, MAX_CARRIED_CRATES,
 } from "../logic/CrateStack.js";
 import { CrateFooter } from "../logic/CrateFooter.js";
 import { getCrateOrderQuantity } from "../logic/SupplyOrder.js";
@@ -1342,6 +1342,17 @@ export class GameScene extends Phaser.Scene {
     );
   }
 
+  getCrateControlAction(which) {
+    return this.interactables.findTarget(
+      which,
+      this.getInteractionOrigin(),
+      null,
+      this.player,
+      this.input,
+      "crate-control",
+    );
+  }
+
   isNearTrashcan() {
     return this.cleaningSystem.isNearTrashcan();
   }
@@ -1500,143 +1511,6 @@ export class GameScene extends Phaser.Scene {
     this.crateSystem.markNextCrateDown();
   }
 
-  /**
-   * What the pick-up (Space / X) and put-down (Q / Y) buttons do right now. Each has a `tap`
-   * and, if holding the button does something different, a `hold`. The same descriptor supplies
-   * the action's target, behavior, and on-screen hint.
-   * @returns {{ pickUp?: object, putDown?: object }}
-   */
-  getCrateActions() {
-    const say = (message, color = "#94a3b8") => () => this.showGameMessage(message, color);
-    const holding = this.getCarriedCrates().length;
-    const top = this.carriedCrate;
-    if (this.checkoutSystem.operatingRegister) {
-      return this.addCrateActionHints({
-        pickUp: { tap: say("Leave the register to pick up a crate") },
-        putDown: holding ? { tap: say("Leave the register to put down a crate") } : undefined,
-      }, null, holding);
-    }
-    if (this.heldTrash) {
-      const reason = "You can't pick up crates while holding trash";
-      return this.addCrateActionHints({
-        pickUp: { tap: say(reason, "#f59e0b"), blocked: true },
-        putDown: { tap: () => this.dropHeldTrash(), trash: true },
-      }, null, holding);
-    }
-
-    const actions = {};
-    const stack = this.markedFloorStack();
-    if (stack) {
-      const lifted = stack.crates.length - stack.crates.indexOf(stack.marked);
-      if (stack.marked.kind === "fixture" && holding > 0) {
-        actions.pickUp = { tap: say("Put your crates down before picking up a fixture crate"), blocked: true };
-      } else if (top?.kind === "fixture") {
-        actions.pickUp = { tap: say("Put the fixture crate down before picking up another crate"), blocked: true };
-      } else if (this.combinableUnits(stack.marked) > 0) {
-        // Same item as a crate you hold: tapping pours as much as fits into yours instead.
-        actions.pickUp = {
-          tap: () => this.combineIntoCarried(stack.marked),
-          hold: () => this.combineIntoCarried(stack.marked),
-          combines: this.combinableUnits(stack.marked),
-        };
-      } else {
-        const tooMany = (count) => say(`You can only carry ${MAX_CARRIED_CRATES} crates. You're holding ` +
-          `${holding}, so you can't pick up ${count === 1 ? "another one" : `${count} more`}.`, "#f59e0b");
-        actions.pickUp = {
-          tap: holding + 1 <= MAX_CARRIED_CRATES ? () => this.pickUpFromStack(stack, false) : tooMany(1),
-          hold: holding + lifted <= MAX_CARRIED_CRATES ? () => this.pickUpFromStack(stack, true) : tooMany(lifted),
-          lifted,
-        };
-      }
-    } else if (holding === 1) {
-      // With no green arrow, the pick-up button throws your crate while you're walking.
-      actions.pickUp = { tap: () => this.throwTopCrate(), throws: true };
-    } else if (holding > 1) {
-      actions.pickUp = { tap: say("You can only throw a crate when you're holding just one.", "#94a3b8") };
-    } else {
-      actions.pickUp = {
-        tap: this.findCrateInFront({ moving: true })
-          ? say("Wait for crate to stop", "#f59e0b")
-          : say("No crate nearby"),
-      };
-    }
-
-    if (holding === 0) {
-      // Nothing to put down.
-    } else if (stack && top.kind !== "fixture") {
-      const room = FLOOR_STACK_MAX - stack.crates.length;
-      let reason = null;
-      if (stack.base.kind === "fixture") reason = "Crates can't be stacked on a fixture crate";
-      else if (stack.base.lockedToPad) reason = "Crates can't be stacked on the Loading Pad";
-      else if (room <= 0) reason = `You can't stack any higher. Stacks can only be ${FLOOR_STACK_MAX} crates high.`;
-      actions.putDown = reason
-        ? { tap: say(reason, "#f59e0b"), hold: say(reason, "#f59e0b"), blocked: true, full: room <= 0, reason }
-        : {
-          tap: () => this.setCratesOnStack(stack, 1),
-          hold: () => this.setCratesOnStack(stack, Math.min(room, holding)),
-          onStack: true,
-        };
-    } else {
-      actions.putDown = { tap: () => this.dropTopCrate(), hold: () => this.dropWholeStack() };
-    }
-    return this.addCrateActionHints(actions, stack, holding);
-  }
-
-  addCrateActionHints(actions, stack, holding) {
-    const pickKey = controlLabel("crate");
-    const putKey = controlLabel("putDown");
-    const handsFull = `Your hands are full (${MAX_CARRIED_CRATES} crates max)`;
-    const pickUp = actions.pickUp;
-    const putDown = actions.putDown;
-    const pickUpHints = [];
-    const putDownHints = [];
-
-    if (pickUp?.throws) {
-      const { x, y } = this.player.sprite.body.velocity;
-      if (x !== 0 || y !== 0) pickUpHints.push(`${pickKey}: Throw your crate`);
-    } else if (stack && pickUp?.combines) {
-      const name = database.getItem(stack.marked.itemId)?.name ?? "items";
-      pickUpHints.push(pickUp.combines === stack.marked.quantity
-        ? `${pickKey}: Move all ${pickUp.combines} ${name} from this crate into yours`
-        : `${pickKey}: Move ${pickUp.combines} of the ${stack.marked.quantity} ${name} from this crate into yours (that's all that fits)`);
-    } else if (stack && pickUp && !pickUp.blocked) {
-      pickUpHints.push(holding >= MAX_CARRIED_CRATES
-        ? handsFull
-        : `Tap ${pickKey}: Pick up ${this.describeCrate(stack.marked)}`);
-      if (pickUp.lifted > 1 && holding + pickUp.lifted <= MAX_CARRIED_CRATES) {
-        pickUpHints.push(`Hold ${pickKey}: Pick up ${pickUp.lifted} crates (this one and the ones above it)`);
-      }
-    }
-
-    if (putDown?.trash) {
-      putDownHints.push(`${putKey}: Drop the trash on the floor`);
-    } else if (putDown?.blocked) {
-      putDownHints.push(putDown.reason);
-    } else if (putDown?.onStack) {
-      putDownHints.push(`Tap ${putKey}: Set your top crate on this stack`);
-      if (holding > 1) putDownHints.push(`Hold ${putKey}: Set as many of your crates on this stack as fit`);
-    } else if (putDown) {
-      putDownHints.push(`Tap ${putKey}: Put your top crate down`);
-      if (holding > 1) putDownHints.push(`Hold ${putKey}: Set all ${holding} crates down as a stack`);
-    }
-
-    if (pickUp) {
-      pickUp.action = "pickUp";
-      pickUp.kind = "crate-control";
-      pickUp.target = stack?.marked ?? (pickUp.throws ? this.carriedCrate : null);
-      pickUp.perform = pickUp.tap;
-      pickUp.hint = pickUpHints.join("\n");
-    }
-    if (putDown) {
-      putDown.action = "putDown";
-      putDown.kind = "crate-control";
-      putDown.target = stack?.base ?? this.carriedCrate;
-      putDown.perform = putDown.tap;
-      putDown.hint = putDownHints.join("\n");
-    }
-    return actions;
-  }
-
   // Held crates of the same item as `floorCrate` that still have room, top crate first.
   combineTargets(floorCrate) {
     if (floorCrate.kind !== "item" || floorCrate.quantity <= 0) return [];
@@ -1708,17 +1582,18 @@ export class GameScene extends Phaser.Scene {
         }
       }
       const holding = this.getCarriedCrates().length;
-      const { pickUp, putDown } = this.getCrateActions();
       const stack = this.markedFloorStack();
       const nearTrashcan = this.isNearTrashcan();
-      const cleaningActions = this.interactables.getActions(
+      const availableActions = this.interactables.getActions(
         this.player,
         this.input,
         this.getInteractionOrigin(),
-      ).filter((action) => action.kind === "trash" || action.kind === "trashcan");
+      );
+      const cleaningActions = availableActions.filter((action) => action.kind === "trash" || action.kind === "trashcan");
+      const crateActions = availableActions.filter((action) => action.kind === "crate-control");
       for (const action of cleaningActions) lines.push(action.hint);
-      for (const action of [pickUp, putDown]) {
-        if (action?.hint) lines.push(...action.hint.split("\n"));
+      for (const action of crateActions) {
+        if (action.hint) lines.push(...action.hint.split("\n"));
       }
       if (stack?.crates.length > 1) lines.push(`${controlLabel("nextCrate")}: Move the arrow one crate down`);
       const trashcanTakesE = nearTrashcan && this.heldEmptyCrates().length > 0;
@@ -1863,7 +1738,7 @@ export class GameScene extends Phaser.Scene {
    */
   startCratePress(which, { button = null } = {}) {
     if (!this.allowsCrateAction(which)) return;
-    const action = this.getCrateActions()[which];
+    const action = this.getCrateControlAction(which);
     if (!action) return;
     if (!action.hold) {
       this.cratePress = null;
@@ -1879,7 +1754,7 @@ export class GameScene extends Phaser.Scene {
     if (press?.which !== which) return;
     this.cratePress = null;
     if (press.fired || !this.allowsCrateAction(which)) return;
-    this.getCrateActions()[which]?.perform();
+    this.getCrateControlAction(which)?.perform();
   }
 
   // Each frame: ends controller presses on release, and fires a hold once it's long enough.
@@ -1893,7 +1768,7 @@ export class GameScene extends Phaser.Scene {
     if (press.fired || this.time.now - press.startedAt < HOLD_KEY_MS) return;
     press.fired = true;
     if (!this.allowsCrateAction(press.which)) return;
-    const action = this.getCrateActions()[press.which];
+    const action = this.getCrateControlAction(press.which);
     (action?.hold ?? action?.perform)?.();
   }
 

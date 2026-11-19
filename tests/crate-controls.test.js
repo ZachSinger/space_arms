@@ -1201,6 +1201,27 @@ test("the context lines say what each crate button does right now", () => {
   ].join("\n"));
 });
 
+test("the registered crate action is both advertised in the hint and performed by the button", () => {
+  const { scene } = createHarness();
+  const floorCrate = crate();
+  scene.restockCrates = [floorCrate];
+  const action = scene.interactables.findTarget(
+    "pickUp",
+    scene.getInteractionOrigin(),
+    null,
+    scene.player,
+    scene.input,
+    "crate-control",
+  );
+
+  scene.updateCrateHint();
+  assert.equal(action.target, floorCrate);
+  assert.ok(scene.messages.element.textContent.includes(action.hint));
+  scene.startCratePress("pickUp");
+  scene.endCratePress("pickUp");
+  assert.equal(scene.getCarriedCrates()[0], floorCrate);
+});
+
 for (const state of ["nothingNearby", "moving", "placement", "startingShift", "loadFailed", "menu"]) {
   test(`crate hint is hidden during ${state}`, () => {
     const h = createHarness();
