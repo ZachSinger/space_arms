@@ -126,11 +126,11 @@ export function createDebugSnapshot(scene, identifyCustomer, recentEvents, envir
     },
     traffic: {
       tuning: CUSTOMER_POOL_TUNING,
-      poolAtShiftStart: scene.customerPoolAtShiftStart ?? scene.customerPool,
-      currentPool: scene.customerPool,
-      arrivalSchedule: scene.customerArrivalSchedule,
-      nextScheduledArrival: scene.nextScheduledArrival,
-      remainingScheduledArrivals: scene.customerArrivalSchedule.length - scene.nextScheduledArrival,
+      poolAtShiftStart: scene.customerFlow.poolAtShiftStart ?? scene.customerFlow.pool,
+      currentPool: scene.customerFlow.pool,
+      arrivalSchedule: scene.customerFlow.schedule,
+      nextScheduledArrival: scene.customerFlow.nextArrival,
+      remainingScheduledArrivals: scene.customerFlow.schedule.length - scene.customerFlow.nextArrival,
       registerLines: Object.fromEntries(scene.fixtures.registers().map((register) =>
         [register.id, scene.lineFor(register).map(identifyCustomer)])),
     },

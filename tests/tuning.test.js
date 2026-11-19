@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadTuning } from "../js/core/Tuning.js";
+import customerTuning from "../data/tuning/customers.json" with { type: "json" };
 
 const entry = (value, extra = {}) => ({ value, min: 0, max: 10, description: "A number.", ...extra });
 
@@ -18,4 +19,12 @@ test("tuning rejects out-of-range, fractional, missing, and undescribed numbers 
   assert.throws(() => loadTuning("shop", { doors: entry("2") }), /must be a number/);
   assert.throws(() => loadTuning("shop", { doors: entry(2, { description: " " }) }), /needs a description/);
   assert.throws(() => loadTuning("shop", { doors: entry(2, { min: 5, max: 1 }) }), /min and max/);
+});
+
+// Numbers moved out of the code during the rebuild keep exactly the values they had.
+test("moved tuning numbers keep their old values", () => {
+  assert.deepEqual({ ...loadTuning("customers", customerTuning) }, {
+    maxCustomersInStore: 6,
+    poolRefreshIntervalMs: 1000,
+  });
 });

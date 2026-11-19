@@ -1196,8 +1196,7 @@ test("three carried crates stay straight while the player moves and reverses dir
     positionGoBacksBadge() {},
     updateCrateHint() {},
     updateCrateMarker() {},
-    refreshCustomerPool() {},
-    spawnScheduledCustomers() {},
+    customerFlow: { refreshPool() {}, spawnScheduled() {} },
     customers: [],
     employees: [],
   });
@@ -1239,8 +1238,7 @@ test("the game updates player and crate movement during placement without unfree
     positionGoBacksBadge() {},
     updateCrateHint() {},
     updateCrateMarker() {},
-    refreshCustomerPool() {},
-    spawnScheduledCustomers() {},
+    customerFlow: { refreshPool() {}, spawnScheduled() {} },
     customers: [{ update() { customerUpdates += 1; }, standStill() { customerStops += 1; } }],
     employees: [],
   });

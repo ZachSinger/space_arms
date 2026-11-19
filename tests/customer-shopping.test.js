@@ -11,6 +11,7 @@ let server;
 let cacheDirectory;
 let Customer;
 let GameScene;
+let CustomerFlow;
 let gameRandom;
 const originalPhaser = globalThis.Phaser;
 
@@ -52,6 +53,7 @@ before(async () => {
   ({ Customer } = await server.ssrLoadModule("/js/logic/Customer.js"));
   ({ gameRandom } = await server.ssrLoadModule("/js/core/Random.js"));
   ({ GameScene } = await server.ssrLoadModule("/js/scenes/game.js"));
+  ({ CustomerFlow } = await server.ssrLoadModule("/js/systems/CustomerFlow.js"));
 });
 
 after(async () => {
@@ -413,8 +415,8 @@ test("wanderer routes include stocked shelves while keeping sold-out wants for r
   const soldOut = fixture({ x: 100, y: 100 }, [{ itemId: "missing", quantity: 0 }]);
   const stocked = fixture({ x: 200, y: 100 }, [{ itemId: "available", quantity: 2 }]);
   const empty = fixture({ x: 300, y: 100 }, []);
-  const plan = makeShelfScene([soldOut, stocked, empty])
-    .createCustomerShoppingPlan(null, ["wanderer"]);
+  const plan = new CustomerFlow(makeShelfScene([soldOut, stocked, empty]))
+    .shoppingPlan(null, ["wanderer"]);
 
   assert.deepEqual(plan.primaryItemIds, ["missing"]);
   assert.deepEqual(plan.shelfStops.map((stop) => stop.fixture), [soldOut]);

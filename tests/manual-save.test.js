@@ -26,6 +26,7 @@ let DebugTools;
 let ShiftSystem;
 let FixtureSystem;
 let FixtureViews;
+let CustomerFlow;
 const originalPhaser = globalThis.Phaser;
 
 before(async () => {
@@ -62,6 +63,7 @@ before(async () => {
   ({ ShiftSystem } = await server.ssrLoadModule("/js/systems/ShiftSystem.js"));
   ({ FixtureSystem } = await server.ssrLoadModule("/js/systems/FixtureSystem.js"));
   ({ FixtureViews } = await server.ssrLoadModule("/js/world/FixtureViews.js"));
+  ({ CustomerFlow } = await server.ssrLoadModule("/js/systems/CustomerFlow.js"));
   ({ CHARACTER_ART_WIDTH, CHARACTER_FEET_DROP } = await server.ssrLoadModule("/js/logic/CustomerSprites.js"));
 });
 
@@ -100,6 +102,7 @@ function createHarness(write = async () => true) {
     },
   });
   scene.fixtureSystem = new FixtureSystem(scene);
+  scene.customerFlow = new CustomerFlow(scene);
   scene.saveManager = new SaveManager({ shop: scene }, {
     write: async (payload) => {
       writes.push(payload);
@@ -115,7 +118,7 @@ test("fixtures can be placed during a closed mid-shift without unlocking saving 
   Object.assign(scene.shiftClock, { started: true, isPaused: false, softClosed: false });
   scene.customers.push({});
   assert.equal(scene.fixtureSystem.canRearrange(), false);
-  scene.storeTemporarilyClosed = true;
+  scene.customerFlow.temporarilyClosed = true;
   assert.equal(scene.fixtureSystem.canRearrange(), true);
   assert.equal(scene.canSaveOffShift(), false);
   assert.equal(scene.fixtureSystem.canExpand(), false);
@@ -125,7 +128,7 @@ test("fixtures can be placed during a closed mid-shift without unlocking saving 
   scene.shift.starting = true;
   assert.equal(scene.fixtureSystem.canRearrange(), false);
   scene.shift.starting = false;
-  scene.storeTemporarilyClosed = false;
+  scene.customerFlow.temporarilyClosed = false;
   scene.shiftClock.softClosed = true;
   assert.equal(scene.fixtureSystem.canRearrange(), true);
 });
@@ -344,40 +347,38 @@ test("temporarily closing the store pauses arrivals and reschedules them on reop
   const messages = [];
   const scene = Object.create(GameScene.prototype);
   Object.assign(scene, {
-    storeTemporarilyClosed: false,
-    storeTemporarilyClosedSinceMs: null,
     shiftClock: {
       started: true,
       softClosed: false,
       isPaused: false,
       getElapsedMs: () => elapsedMs,
     },
-    customerArrivalSchedule: [
-      { factionId: "mercenaries", atMs: 1000 },
-      { factionId: "explorers", atMs: 5000 },
-    ],
-    nextScheduledArrival: 0,
-    spawnCustomer: (factionId) => spawned.push(factionId),
     hud: { renderStoreStatus: (closed) => storeStates.push(closed) },
     showGameMessage: (message) => messages.push(message),
   });
+  const flow = new CustomerFlow(scene);
+  flow.schedule = [
+    { factionId: "mercenaries", atMs: 1000 },
+    { factionId: "explorers", atMs: 5000 },
+  ];
+  flow.spawn = (factionId) => spawned.push(factionId);
 
-  assert.equal(scene.toggleTemporaryStoreClosure(), true);
+  assert.equal(flow.toggleTemporaryClosure(), true);
   elapsedMs = 3000;
-  scene.spawnScheduledCustomers();
+  flow.spawnScheduled();
   assert.deepEqual(spawned, []);
-  assert.equal(scene.nextScheduledArrival, 0);
+  assert.equal(flow.nextArrival, 0);
   assert.equal(scene.shiftClock.isPaused, false);
 
-  assert.equal(scene.toggleTemporaryStoreClosure(), true);
-  assert.deepEqual(scene.customerArrivalSchedule.map(({ atMs }) => atMs), [4000, 8000]);
+  assert.equal(flow.toggleTemporaryClosure(), true);
+  assert.deepEqual(flow.schedule.map(({ atMs }) => atMs), [4000, 8000]);
   assert.deepEqual(storeStates, [true, false]);
   assert.match(messages[0], /Customers inside can finish shopping/);
 
   elapsedMs = 4000;
-  scene.spawnScheduledCustomers();
+  flow.spawnScheduled();
   elapsedMs = 8000;
-  scene.spawnScheduledCustomers();
+  flow.spawnScheduled();
   assert.deepEqual(spawned, ["mercenaries", "explorers"]);
 });
 
@@ -447,6 +448,7 @@ test("the shift-end event, receipt, and save observers see the applied reputatio
     showGameMessage: (message) => messages.push(message),
   });
   scene.shift = new ShiftSystem(scene);
+  scene.customerFlow = new CustomerFlow(scene);
   scene.shift.customersServed = 16;
   scene.shift.loanOffer = () => ({ available: false, amount: 0, repayTotal: 0 });
   state.subscribe((current) => {
@@ -496,6 +498,7 @@ test("a shift that earns multiple levels announces each implemented unlock", () 
     showGameMessage: (message) => messages.push(message),
   });
   scene.shift = new ShiftSystem(scene);
+  scene.customerFlow = new CustomerFlow(scene);
   scene.shift.customersServed = 60;
   state.reputation.gain(72);
   scene.shift.end();
@@ -538,6 +541,7 @@ test("a shift from Shop Level 6 to 30 announces all remaining reward types", () 
     showGameMessage: (message) => messages.push(message),
   });
   scene.shift = new ShiftSystem(scene);
+  scene.customerFlow = new CustomerFlow(scene);
   scene.shift.customersServed = 60;
   state.reputation.gain(3924);
   scene.shift.end();
@@ -566,6 +570,7 @@ test("level-up messages do not reannounce contracts or staff already owned in ol
     showGameMessage: (message) => messages.push(message),
   });
   scene.shift = new ShiftSystem(scene);
+  scene.customerFlow = new CustomerFlow(scene);
   scene.shift.customersServed = 60;
   state.reputation.gain(72);
   scene.shift.end();

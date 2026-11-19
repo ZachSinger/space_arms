@@ -40,8 +40,8 @@ export async function runScriptedShift(harness, { employees = [], playSeconds = 
   await h.game((scene) => scene.shift.start());
   await h.page.waitForFunction(() => window.__game.scene.getScene("scene-game").shiftClock.started, null, { timeout: 30000 });
   await h.game((scene) => {
-    const spawn = scene.spawnCustomer.bind(scene);
-    scene.spawnCustomer = (...args) => {
+    const spawn = scene.customerFlow.spawn.bind(scene.customerFlow);
+    scene.customerFlow.spawn = (...args) => {
       const before = scene.customers.length;
       const result = spawn(...args);
       if (scene.customers.length > before) window.__shiftLog.spawned += 1;

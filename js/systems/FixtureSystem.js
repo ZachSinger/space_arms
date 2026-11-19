@@ -105,7 +105,7 @@ export class FixtureSystem {
     if (scene.loadFailed || scene.shift.starting ||
       (scene.shiftClock.started && scene.shiftClock.isPaused)) return false;
     return scene.canSaveOffShift() ||
-      (scene.shiftClock.started && (scene.storeTemporarilyClosed || scene.shiftClock.softClosed));
+      (scene.shiftClock.started && (scene.customerFlow.temporarilyClosed || scene.shiftClock.softClosed));
   }
 
   canExpand() {

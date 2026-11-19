@@ -31,7 +31,7 @@ export class DebugTools {
     scene.bindControlKey("keydown-BACK_SLASH", "debugGrid", (event) => {
       if (!event.repeat) this.toggleGrid(8, 0x00ff00, 1);
     });
-    scene.bindControlKey("keydown-Y", "debug", () => scene.spawnCustomer(null));
+    scene.bindControlKey("keydown-Y", "debug", () => scene.customerFlow.spawn(null));
     scene.bindControlKey("keydown-K", "debug", () => this.quickstart());
 
     this.buttons = [

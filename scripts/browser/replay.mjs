@@ -28,15 +28,15 @@ async function playSeededShift(h, { perFrame, steps }) {
     const log = { sales: 0, spawned: 0 };
     window.__replayLog = log;
     scene.eventBus.on("customer-sale-completed", () => { log.sales += 1; });
-    const spawn = scene.spawnCustomer.bind(scene);
-    scene.spawnCustomer = (...args) => {
+    const spawn = scene.customerFlow.spawn.bind(scene.customerFlow);
+    scene.customerFlow.spawn = (...args) => {
       const before = scene.customers.length;
       const result = spawn(...args);
       if (scene.customers.length > before) log.spawned += 1;
       return result;
     };
     window.__onStep = (index) => {
-      if (scene.shiftClock.started && index % 240 === 0) scene.spawnCustomer();
+      if (scene.shiftClock.started && index % 240 === 0) scene.customerFlow.spawn();
     };
   });
   await h.step(steps, { perFrame });

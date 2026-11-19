@@ -62,7 +62,7 @@ export const scenarios = {
       let hits = 0;
       scene.eventBus.on("customer-hit-by-crate", () => { hits += 1; });
       window.__hits = () => hits;
-      scene.spawnCustomer();
+      scene.customerFlow.spawn();
       // Reputation changes wait in a pending tally until End Day.
       return scene.gameState.reputation.pending.global;
     });

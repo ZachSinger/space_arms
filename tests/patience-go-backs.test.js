@@ -68,7 +68,7 @@ function queuedCustomer({ serving = () => false, storeTemporarilyClosed = false 
   customer.reactionBubble = null;
   customer.reactionRemainingMs = 0;
   customer.scene = {
-    storeTemporarilyClosed,
+    customerFlow: { temporarilyClosed: storeTemporarilyClosed },
     isServingCustomer: serving,
     showFloatingText: (...args) => floating.push(args),
     add: {
@@ -139,7 +139,7 @@ test("queued customers do not lose patience while the store is temporarily close
   assert.equal(customer.patienceRemainingMs, PATIENCE_MS);
   assert.equal(angry.length, 0);
 
-  customer.scene.storeTemporarilyClosed = false;
+  customer.scene.customerFlow.temporarilyClosed = false;
   customer.update(PATIENCE_MS);
   assert.equal(customer.state, "LEAVING");
   assert.equal(angry.length, 1);

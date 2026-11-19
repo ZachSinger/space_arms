@@ -54,7 +54,7 @@ export async function runSpeedTest(h, seconds = 45) {
       step(time, delta);
       frames.push(performance.now() - started);
     };
-    window.__topUp = setInterval(() => scene.spawnCustomer(), 700);
+    window.__topUp = setInterval(() => scene.customerFlow.spawn(), 700);
   });
   await h.wait(seconds * 1000);
   return h.game((scene) => {

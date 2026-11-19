@@ -15,20 +15,12 @@ import { Events, GAME_EVENTS } from "../core/Events.js";
 import { ControlMode, CONTROL_MODES } from "../logic/ControlMode.js";
 import { InteractableRegistry } from "../logic/InteractableRegistry.js";
 /** @typedef {import("../logic/ShelfFixture.js").ShelfFixture} ShelfFixture */
-import { Customer, SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT } from "../logic/Customer.js";
+import { SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT } from "../logic/Customer.js";
 import { Employee } from "../logic/Employee.js";
 import { getEmployeeTrainingOffer } from "../logic/EmployeeTraining.js";
-import {
-  addDiscountBonusItem, BARGAIN_PRICE_RATIO, createCustomerBuyList, createCustomerItemQuantities,
-} from "../logic/CustomerBuyLists.js";
 import { formatTransactionTotal, isMoney, roundMoney } from "../logic/Money.js";
-import { addTraitBonusItems, CUSTOMER_TRAITS } from "../logic/CustomerTraits.js";
-import {
-  createCustomerArrivalSchedule,
-  growCustomerArrivalSchedule,
-  createCustomerPool,
-  getLicensedFactionIds,
-} from "../logic/CustomerPooling.js";
+import { CUSTOMER_TRAITS } from "../logic/CustomerTraits.js";
+import { getLicensedFactionIds } from "../logic/CustomerPooling.js";
 import { Player, PLAYER_CHARACTER_HEIGHT, PLAYER_CRATE_HOLD_OFFSET } from "../logic/Player.js";
 import { Crate, CRATE_STACK_SPACING } from "../logic/Crate.js";
 import { getItemCrateTint } from "../logic/CrateCategory.js";
@@ -48,7 +40,7 @@ import {
   TILE_SIZE, getZone, getAuthoredGridSize, getStoreDoorCell, getStoreDoorCells, EXPANSION_ORDER,
   BACKROOM_UPGRADE_ORDER, getBackroomLink, getBackroomBounds, getLoadingPadBounds, LOADING_PAD_WIDTH, LOADING_PAD_HEIGHT,
 } from "../logic/RoomLayout.js";
-import { ShiftClock, SHIFT_DURATION_MS } from "../logic/ShiftClock.js";
+import { ShiftClock } from "../logic/ShiftClock.js";
 import { findFreeWalkPath } from "../logic/Pathfinder.js";
 import { FixturePlacement } from "../logic/FixturePlacement.js";
 import { worldToClientRect } from "../logic/FixtureHighlight.js";
@@ -70,6 +62,7 @@ import { CameraRig } from "../world/CameraRig.js";
 import { FixtureViews } from "../world/FixtureViews.js";
 import { FixtureSystem } from "../systems/FixtureSystem.js";
 import { SupplySystem } from "../systems/SupplySystem.js";
+import { CustomerFlow } from "../systems/CustomerFlow.js";
 import { GamepadInput, PAD } from "../logic/GamepadInput.js";
 import { UINavigator } from "../logic/UINavigator.js";
 import { controlLabel, getInputDevice, setInputDevice } from "../logic/InputDevice.js";
@@ -78,9 +71,6 @@ import { database } from "./boot.js"; // the exported DatabaseManager singleton
 import { installSceneTextSize } from "../logic/GameTextSize.js";
 import { gameRandom, randomSeed } from "../core/Random.js";
 
-// Most customers inside the store at once. When full, the next arrival is lost for good,
-// so a backed-up dealer really does lose that sale.
-const MAX_CUSTOMERS_IN_STORE = 6;
 // Spread around the doorway's center; kept within the one-cell doorway, low enough that
 // no one's head rises above the top of the door opening.
 const CUSTOMER_EXIT_SLOT_OFFSETS = Object.freeze([
@@ -228,20 +218,14 @@ export class GameScene extends Phaser.Scene {
     this.gameState = new GameState({ items: database.getAllItems(), events: this.eventBus });
     this.recalculateActiveFactions();
     this.shiftClock = new ShiftClock();
-    this.customerArrivalSchedule = [];
-    this.nextScheduledArrival = 0;
-    this.customerPool = null;
-    this.customerPoolAtShiftStart = null;
-    this.poolRefreshCooldownMs = 0;
-    this.storeTemporarilyClosed = false;
-    this.storeTemporarilyClosedSinceMs = null;
+    this.customerFlow = new CustomerFlow(this);
     this.hud = new HUDController(
       this.gameState,
       this.shiftClock,
       () => this.shift.start(),
       () => this.saveManually(),
       () => this.shift.endDay(),
-      () => this.toggleTemporaryStoreClosure(),
+      () => this.customerFlow.toggleTemporaryClosure(),
       () => this.confirmReturnToMainMenu(),
     );
 
@@ -2813,207 +2797,7 @@ export class GameScene extends Phaser.Scene {
     this.syncFloorStacks();
   }
 
-  // --- Customer arrivals ---
-
-  // Fixes the shift's customer pool and arrival times from the store as it stands now.
-  prepareCustomerSchedule() {
-    this.customerPool = this.calculateCustomerPool();
-    this.customerPoolAtShiftStart = this.customerPool;
-    this.customerArrivalSchedule = createCustomerArrivalSchedule(
-      this.customerPool.customerFactionIds,
-      SHIFT_DURATION_MS,
-    );
-    this.nextScheduledArrival = 0;
-    this.poolRefreshCooldownMs = 0;
-  }
-
-  calculateCustomerPool() {
-    const shelfPlacements = this.fixtures.shelves().flatMap((shelf) =>
-      shelf.placements.map((placement) => ({ ...placement })),
-    );
-    return createCustomerPool({
-      storeReputation: this.gameState.reputation.global,
-      factionReputation: this.gameState.reputation.factions,
-      activeFactions: this.gameState.catalog.activeFactions,
-      shelfPlacements,
-      getItem: (itemId) => database.getItem(itemId),
-      employeeCount: this.gameState.staff.working().length,
-      tieBreakOffset: this.gameState.calendar.day,
-    });
-  }
-
-  /**
-   * Once per 1000 ms of play, adds late arrivals if restocking mid-shift grew the pool.
-   * The pool never shrinks mid-shift.
-   * @param {number} delta - ms since last frame
-   */
-  refreshCustomerPool(delta) {
-    if (!this.shiftClock.started || this.shiftClock.softClosed ||
-      this.storeTemporarilyClosed || !this.customerPool) return;
-    this.poolRefreshCooldownMs -= delta;
-    if (this.poolRefreshCooldownMs > 0) return;
-    this.poolRefreshCooldownMs = 1000;
-
-    const result = growCustomerArrivalSchedule({
-      schedule: this.customerArrivalSchedule,
-      currentPool: this.customerPool,
-      nextPool: this.calculateCustomerPool(),
-      elapsedMs: this.shiftClock.getElapsedMs(),
-      shiftDurationMs: SHIFT_DURATION_MS,
-    });
-    if (result.addedFactionIds.length === 0) return;
-    this.customerPool = result.pool;
-    this.customerArrivalSchedule = result.schedule;
-    this.debugInfo?.record("customer-pool-grew", {
-      added: result.addedFactionIds.length,
-      totalCustomers: result.pool.totalCustomers,
-      shelfStockUnits: result.pool.calculation.shelfStockUnits,
-    });
-  }
-
-  spawnScheduledCustomers() {
-    if (!this.shiftClock.started || this.shiftClock.softClosed ||
-      this.storeTemporarilyClosed || !this.customerArrivalSchedule) return;
-
-    const elapsedMs = this.shiftClock.getElapsedMs();
-    while (
-      this.nextScheduledArrival < this.customerArrivalSchedule.length &&
-      this.customerArrivalSchedule[this.nextScheduledArrival].atMs <= elapsedMs
-    ) {
-      const { factionId } = this.customerArrivalSchedule[this.nextScheduledArrival];
-      this.nextScheduledArrival += 1;
-      this.spawnCustomer(factionId);
-    }
-  }
-
-  hasRoomForCustomer() {
-    return this.customers.length < MAX_CUSTOMERS_IN_STORE;
-  }
-
-  /**
-   * Lets one customer in unless arrivals are closed or the store is full.
-   * @param {string | null} factionId
-   */
-  spawnCustomer(factionId = null) {
-    if (this.storeTemporarilyClosed || this.shiftClock.softClosed) return;
-    if (this.customers.length >= MAX_CUSTOMERS_IN_STORE) {
-      this.gameState.reputation.turnAwayCustomer();
-      this.debugInfo?.record("customer-turned-away", { factionId, reason: "store-at-capacity" });
-      return;
-    }
-
-    const customer = new Customer({
-      scene: this,
-      factionId,
-      getShoppingPlan: (factionId, traits) => this.createCustomerShoppingPlan(factionId, traits),
-      getStoreConditions: () => this.getCustomerTraitConditions(),
-      registerPoint: this.fixtures.register()?.queuePoints?.[0],
-      exitPoint: this.exitPoint,
-      onReserveShelfSlot: (shelf, arrivingCustomer) =>
-        this.reserveShelfSlot(shelf, arrivingCustomer),
-      onReserveQueueSlot: (queueingCustomer) => this.reserveQueueSlot(queueingCustomer),
-      onReserveExitSlot: () => this.reserveExitSlot(),
-      gameState: this.gameState,
-      spawnBounds: this.customerSpawnBounds,
-      onJoinQueue: (arrivingCustomer) => this.handleJoinQueue(arrivingCustomer),
-      onLeaveAngry: (angryCustomer, cart) => {
-        this.eventBus.emit(GAME_EVENTS.CUSTOMER_LEFT_ANGRY, {
-          customer: angryCustomer,
-          cart,
-        });
-      },
-      onMissingPrimary: (customer, itemIds, itemNames) => {
-        this.eventBus.emit(GAME_EVENTS.CUSTOMER_MISSING_PRIMARY, { customer, itemIds, itemNames });
-      },
-      onComplete: (completedCustomer) => {
-        this.debugInfo?.recordCustomer("customer-exited", completedCustomer);
-        this.customers = this.customers.filter(
-          (candidate) => candidate !== completedCustomer,
-        );
-      },
-    });
-    this.customerGroup.add(customer.sprite);
-    this.customers.push(customer);
-    this.storeDoorAnimation.letIn(customer.sprite);
-    this.debugInfo?.recordCustomer("customer-entered", customer);
-  }
-
-  toggleTemporaryStoreClosure() {
-    if (!this.shiftClock.started || this.shiftClock.softClosed || this.shiftClock.isPaused) return false;
-
-    if (this.storeTemporarilyClosed) {
-      const closedDuration = Math.max(
-        0,
-        this.shiftClock.getElapsedMs() - this.storeTemporarilyClosedSinceMs,
-      );
-      this.customerArrivalSchedule = this.customerArrivalSchedule.map((arrival, index) =>
-        index < this.nextScheduledArrival
-          ? arrival
-          : { ...arrival, atMs: arrival.atMs + closedDuration });
-      this.storeTemporarilyClosed = false;
-      this.storeTemporarilyClosedSinceMs = null;
-      this.hud.renderStoreStatus(false);
-      this.showGameMessage("Store reopened. Customer arrivals have resumed.", "#38bdf8");
-    } else {
-      this.storeTemporarilyClosed = true;
-      this.storeTemporarilyClosedSinceMs = this.shiftClock.getElapsedMs();
-      this.hud.renderStoreStatus(true);
-      this.showGameMessage(
-        "Store temporarily closed. Customers inside can finish shopping; new arrivals are paused.",
-        "#f59e0b",
-      );
-    }
-    return true;
-  }
-
-  // What trait appearance conditions (CustomerTraits.js) can check about the store.
-  getCustomerTraitConditions() {
-    const shelves = this.fixtures.shelves();
-    const itemIds = new Set(shelves.flatMap((shelf) =>
-      shelf.placements.map((placement) => placement.itemId),
-    ));
-    return { shelfCount: shelves.length, itemVariety: itemIds.size };
-  }
-
-  /**
-   * A buy list from what's on the shelves, plus the shelves worth visiting for it.
-   * @param {string | null} factionId
-   * @param {string[]} [traits]
-   */
-  createCustomerShoppingPlan(factionId, traits = []) {
-    const shelves = this.fixtures.shelves();
-    const shelfItemIds = shelves.flatMap((shelf) =>
-      shelf.placements.map((placement) => placement.itemId),
-    );
-    const buyList = createCustomerBuyList(
-      factionId,
-      shelfItemIds,
-      (itemId) => database.getItem(itemId),
-    );
-    buyList.bonusItemIds = addDiscountBonusItem(
-      buyList,
-      shelfItemIds,
-      (itemId) => this.getStorePrice(itemId) <=
-        this.gameState.market.getPrice(itemId) * BARGAIN_PRICE_RATIO,
-    );
-    buyList.bonusItemIds = addTraitBonusItems(buyList, shelfItemIds, traits);
-    const targetIds = new Set([
-      ...buyList.primaryItemIds,
-      ...buyList.bonusItemIds,
-      ...Object.values(buyList.matchingAmmoIdsByFirearm).flat(),
-    ]);
-    const shelfStops = shelves.map((fixture) => ({ fixture, standPoint: fixture.standPoint })).filter(({ fixture }) =>
-      fixture.placements.some((placement) => targetIds.has(placement.itemId)),
-    );
-    const allShelfStops = shelves.filter((fixture) => fixture.findAvailableSlot())
-      .map((fixture) => ({ fixture, standPoint: fixture.standPoint }));
-    return {
-      ...buyList,
-      itemQuantities: createCustomerItemQuantities([...targetIds]),
-      shelfStops,
-      allShelfStops,
-    };
-  }
+  // --- Customer arrivals: systems/CustomerFlow.js ---
 
   getItem(itemId) {
     return database.getItem(itemId);
@@ -3276,8 +3060,8 @@ export class GameScene extends Phaser.Scene {
       fixture.stockDisplay?.update(time);
       fixture.facingLight?.update(time);
     }
-    this.refreshCustomerPool(delta);
-    this.spawnScheduledCustomers();
+    this.customerFlow.refreshPool(delta);
+    this.customerFlow.spawnScheduled();
     if (!movementFrozen && !this.fixturePlacement.active) this.autoPackGoBacks(time);
     this.shift.update();
   }

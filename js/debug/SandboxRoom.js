@@ -116,9 +116,9 @@ export function setupSandboxRoom(scene) {
   // Customers wait outside until the shop has room, then walk in a little apart.
   const letNextIn = (delta) => {
     sinceLastSendMs += delta;
-    if (waitingOutside === 0 || sinceLastSendMs < SEND_GAP_MS || !scene.hasRoomForCustomer()) return;
+    if (waitingOutside === 0 || sinceLastSendMs < SEND_GAP_MS || !scene.customerFlow.hasRoom()) return;
     const before = scene.customers.length;
-    scene.spawnCustomer(null);
+    scene.customerFlow.spawn(null);
     if (scene.customers.length === before) return;
     sent += 1;
     waitingOutside -= 1;

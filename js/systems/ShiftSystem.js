@@ -68,9 +68,8 @@ export class ShiftSystem {
       shop.handlePersistenceError(error);
       return;
     }
-    shop.prepareCustomerSchedule();
-    shop.storeTemporarilyClosed = false;
-    shop.storeTemporarilyClosedSinceMs = null;
+    shop.customerFlow.prepareSchedule();
+    shop.customerFlow.clearTemporaryClosure();
     shop.hud.renderStoreStatus(false);
     const wages = shop.payEmployeeWages();
     if (wages > 0) {
@@ -84,7 +83,7 @@ export class ShiftSystem {
     shop.setSaveStatus("Checkpoint saved. Autosaving resumes after this shift.");
     this.customersServed = 0;
     gameState.reputation.startShift();
-    shop.eventBus.emit(GAME_EVENTS.SHIFT_STARTED, { pool: shop.customerPool });
+    shop.eventBus.emit(GAME_EVENTS.SHIFT_STARTED, { pool: shop.customerFlow.pool });
     shop.managerTablet.refreshLayoutPanels();
     shop.managerTablet.refreshEmployeePanel();
   }
@@ -112,8 +111,7 @@ export class ShiftSystem {
     shop.shiftClock.started = false;
     shop.shiftClock.isPaused = true;
     shop.shiftClock.notifyListeners();
-    shop.storeTemporarilyClosed = false;
-    shop.storeTemporarilyClosedSinceMs = null;
+    shop.customerFlow.clearTemporaryClosure();
     shop.hud.renderStoreStatus(false);
     gameState.finishShift({
       customersServed: this.customersServed,
