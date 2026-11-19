@@ -96,7 +96,10 @@ function queuedCustomer({ serving = () => false, storeTemporarilyClosed = false 
   customer.store = customer.scene;
   customer.followPath = () => {};
   customer.updateFacing = () => {};
-  customer.onLeaveAngry = (who, cart) => angry.push({ who, cart });
+  customer.onLeaveAngry = (who, cart) => {
+    angry.push({ who, cart });
+    for (const { itemId } of cart) who.remove(itemId, 1);
+  };
   customer.enterLeaving = () => { customer.state = "LEAVING"; };
   customer.resetPatience();
   return { customer, angry, floating, bubble, reactionGraphics };
@@ -152,9 +155,32 @@ test("returned items collect in the Go-Backs bin and pack into crates up to thei
   const state = new GameState({
     items: ITEMS, events: { emit: (event, payload) => transfers.push({ event, payload }) },
   });
-  state.goBacks.addCart([{ itemId: "big" }, { itemId: "big" }, { itemId: "big" }, { itemId: "amo_01" }]);
+  const customer = {
+    id: "customer-cart-return",
+    location: { kind: "customer-cart", customerId: "customer-cart-return" },
+    cart: [
+      { itemId: "big" }, { itemId: "big" }, { itemId: "big" }, { itemId: "amo_01" },
+    ],
+    getContainerId() { return this.id; },
+    getLocation() { return this.location; },
+    getAvailableUnitsFor(itemId) { return this.cart.filter((entry) => entry.itemId === itemId).length; },
+    canTake(itemId) { return this.getAvailableUnitsFor(itemId) > 0; },
+    remove(itemId, quantity) {
+      let removed = 0;
+      for (let index = this.cart.length - 1; index >= 0 && removed < quantity; index -= 1) {
+        if (this.cart[index].itemId !== itemId) continue;
+        this.cart.splice(index, 1);
+        removed += 1;
+      }
+      return removed;
+    },
+    add(itemId, quantity) {
+      for (let index = 0; index < quantity; index += 1) this.cart.push({ itemId });
+      return quantity;
+    },
+  };
+  state.goBacks.addCart(customer);
   assert.equal(state.goBacks.pool.findStockEntry("big").quantity, 3);
-  const customerCartId = transfers[0].payload.sourceId;
   assert.deepEqual(transfers.slice(0, 2), [
     {
       event: GAME_EVENTS.INVENTORY_TRANSFERRED,
@@ -163,9 +189,9 @@ test("returned items collect in the Go-Backs bin and pack into crates up to thei
         quantity: 3,
         source: "customer-cart",
         destination: "go-backs",
-        sourceId: customerCartId,
+        sourceId: customer.id,
         destinationId: "go-backs",
-        sourceLocation: { kind: "customer-cart", containerId: customerCartId },
+        sourceLocation: customer.location,
         destinationLocation: { kind: "go-backs", containerId: "go-backs" },
       },
     },
@@ -176,13 +202,14 @@ test("returned items collect in the Go-Backs bin and pack into crates up to thei
         quantity: 1,
         source: "customer-cart",
         destination: "go-backs",
-        sourceId: customerCartId,
+        sourceId: customer.id,
         destinationId: "go-backs",
-        sourceLocation: { kind: "customer-cart", containerId: customerCartId },
+        sourceLocation: customer.location,
         destinationLocation: { kind: "go-backs", containerId: "go-backs" },
       },
     },
   ]);
+  assert.deepEqual(customer.cart, []);
 
   const crate = (limit) => ({
     id: `test-crate-${nextTestCrateId++}`,

@@ -782,8 +782,7 @@ export class Customer {
   // Bible Steps 12/51: abandons the cart for the scene to process, then leaves.
   leaveAngry() {
     this.showReaction("left-angry", "angry");
-    const cart = this.cart;
-    this.cart = [];
+    const cart = this.cart.map((entry) => ({ ...entry }));
     this.clearPatience();
     this.onLeaveAngry?.(this, cart);
     this.enterLeaving();

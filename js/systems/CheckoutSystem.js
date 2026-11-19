@@ -310,7 +310,7 @@ export class CheckoutSystem {
     shop.debugInfo?.record("customer-left-angry", {
       customerId: shop.debugInfo.identifyCustomer(customer), cart,
     });
-    shop.gameState.goBacks.addCart(cart);
+    shop.gameState.goBacks.addCart(customer);
     const spot = this.findCustomerLine(customer);
     if (!spot) return;
     spot.line.splice(spot.index, 1);

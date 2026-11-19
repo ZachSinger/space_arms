@@ -7,8 +7,6 @@ import { Slice } from "../Slice.js";
 import { InventoryPool } from "../../logic/InventoryPool.js";
 import { sinkItems, sourceItems, transferItems } from "../../logic/InventoryTransfer.js";
 
-let nextReturnedCartId = 1;
-
 export class GoBacks extends Slice {
   /** @param {object | null} [events] - announces each transfer */
   constructor(events = null) {
@@ -69,23 +67,12 @@ export class GoBacks extends Slice {
     return result.moved;
   }
 
-  /** @param {{ itemId: string }[]} cart - one entry per unit, as a customer carries them */
-  addCart(cart) {
-    const stock = [];
-    for (const { itemId } of cart) {
-      const entry = stock.find((candidate) => candidate.itemId === itemId);
-      if (entry) entry.quantity += 1;
-      else stock.push({ itemId, quantity: 1 });
-    }
-    const id = `customer-cart-${nextReturnedCartId++}`;
-    const customerCart = new InventoryPool({
-      id,
-      location: { kind: "customer-cart", containerId: id },
-      capacity: Infinity,
-      stock,
-    });
-    for (const { itemId, quantity } of stock) {
-      const result = transferItems(customerCart, this.pool, itemId, quantity, {
+  /** @param {import("../../logic/Customer.js").Customer} customer */
+  addCart(customer) {
+    const itemIds = [...new Set(customer.cart.map(({ itemId }) => itemId))];
+    for (const itemId of itemIds) {
+      const quantity = customer.getAvailableUnitsFor(itemId);
+      const result = transferItems(customer, this.pool, itemId, quantity, {
         eventBus: this.events, sourceName: "customer-cart", destinationName: "go-backs",
       });
       if (result.moved !== quantity) throw new Error(`Could not return ${itemId} to Go-Backs: ${result.reason}.`);
