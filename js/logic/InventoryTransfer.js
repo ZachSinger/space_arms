@@ -1,4 +1,4 @@
-import { GAME_EVENTS } from "./EventBus.js";
+import { GAME_EVENTS } from "../core/Events.js";
 
 const isValidUnits = (units) => units === Infinity || (Number.isInteger(units) && units >= 0);
 

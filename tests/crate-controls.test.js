@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { ControlMode } from "../js/logic/ControlMode.js";
-import { EventBus, GAME_EVENTS } from "../js/logic/EventBus.js";
+import { Events, GAME_EVENTS } from "../js/core/Events.js";
 import { InteractableRegistry } from "../js/logic/InteractableRegistry.js";
 import { Crate, CRATE_STACK_SPACING, INTERACT_RANGE } from "../js/logic/Crate.js";
 import { HOLD_KEY_MS, MAX_CARRIED_CRATES, isSquarelyInFront } from "../js/logic/CrateStack.js";
@@ -68,7 +68,7 @@ function createHarness({ carrying = false } = {}) {
   scene.operatingRegister = false;
   scene.fixturePlacement = { active: false };
   scene.windowManager = { windows: new Map() };
-  scene.eventBus = new EventBus();
+  scene.eventBus = new Events();
   scene.interactables = new InteractableRegistry();
   scene.controlMode = new ControlMode(scene);
   // Facing right, so crates made by crate() below are in front of him.

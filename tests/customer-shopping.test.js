@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { EventBus, GAME_EVENTS } from "../js/logic/EventBus.js";
+import { Events, GAME_EVENTS } from "../js/core/Events.js";
 import { createServer } from "vite";
 
 let server;
@@ -310,7 +310,7 @@ function makeCustomer({ factionId = "scavengers", plan }) {
     reactionGraphics.push(graphic);
     return graphic;
   };
-  const eventBus = new EventBus();
+  const eventBus = new Events();
   eventBus.on(GAME_EVENTS.INVENTORY_TRANSFERRED, (event) => inventoryTransfers.push(event));
   const customer = Object.create(Customer.prototype);
   customer.scene = {

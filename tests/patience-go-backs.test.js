@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
-import { GAME_EVENTS } from "../js/logic/EventBus.js";
+import { GAME_EVENTS } from "../js/core/Events.js";
 
 let server;
 let cacheDirectory;

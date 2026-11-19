@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Crate } from "../js/logic/Crate.js";
-import { EventBus } from "../js/logic/EventBus.js";
+import { Events } from "../js/core/Events.js";
 import { transferItems } from "../js/logic/InventoryTransfer.js";
 
 function container(quantity, capacity, addLimit = Infinity) {
@@ -31,7 +31,7 @@ function container(quantity, capacity, addLimit = Infinity) {
 test("moves only what fits and publishes one inventory-transfer event", () => {
   const source = container(5, 10);
   const destination = container(0, 3);
-  const eventBus = new EventBus();
+  const eventBus = new Events();
   const events = [];
   eventBus.on("inventory-transferred", (event) => events.push(event));
 

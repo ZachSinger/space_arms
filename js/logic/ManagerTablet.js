@@ -15,7 +15,7 @@ import { FinancesRenderer } from "./FinancesRenderer.js";
 import { HandbookRenderer } from "./HandbookRenderer.js";
 import { FixtureHighlight } from "./FixtureHighlight.js";
 import { playErrorBuzz } from "./Sfx.js";
-import { GAME_EVENTS } from "./EventBus.js";
+import { GAME_EVENTS } from "../core/Events.js";
 import { adjustStorePrice } from "./Money.js";
 import { getFixtureResaleValue, getFixtureType } from "./FixtureLayout.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton

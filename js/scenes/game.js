@@ -12,7 +12,7 @@ import {
 } from "../logic/ShopProgression.js";
 import { HUDController } from "../logic/HUDController.js";
 import { DebugInfo } from "../logic/DebugInfo.js";
-import { EventBus, GAME_EVENTS } from "../logic/EventBus.js";
+import { Events, GAME_EVENTS } from "../core/Events.js";
 import { ControlMode, CONTROL_MODES } from "../logic/ControlMode.js";
 import { InteractableRegistry } from "../logic/InteractableRegistry.js";
 import { transferItems } from "../logic/InventoryTransfer.js";
@@ -234,7 +234,7 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     installSceneTextSize(this, Phaser);
-    this.eventBus = new EventBus();
+    this.eventBus = new Events({ strict: true });
     this.debugInfo = null;
     this.debugGridOverlays = new Map();
     this.debugPlacementGrid = null;

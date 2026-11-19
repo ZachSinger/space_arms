@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "vite";
 import { summarizeSupplyOrder, DELIVERY_FEE } from "../js/logic/SupplyOrder.js";
-import { GAME_EVENTS } from "../js/logic/EventBus.js";
+import { GAME_EVENTS } from "../js/core/Events.js";
 import { isMoney } from "../js/logic/Money.js";
 import { InventoryRenderer } from "../js/logic/InventoryRenderer.js";
 import { SupplierLicense } from "../js/logic/Licenses.js";
