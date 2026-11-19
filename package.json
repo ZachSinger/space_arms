@@ -9,7 +9,12 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "electron .",
-    "package": "vite build && electron-builder"
+    "package": "vite build && electron-builder",
+    "test": "node --test tests/",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json",
+    "check": "npm run typecheck && npm run lint",
+    "check:game": "node scripts/browser/run-checks.mjs"
   },
   "build": {
     "appId": "com.zachsinger.spacearmsdealer",
@@ -29,9 +34,15 @@
     }
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.6",
     "electron": "^32.0.0",
     "electron-builder": "^26.18.0",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
     "phaser": "^3.80.1",
+    "playwright-core": "^1.65.1",
+    "typescript": "^7.0.2",
     "vite": "^5.4.1"
   },
   "allowScripts": {

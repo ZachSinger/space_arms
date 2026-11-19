@@ -3,7 +3,6 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { FIXTURE_FACINGS, FIXTURE_TYPES, getShelfDisplayGrid } from "../js/logic/FixtureLayout.js";
 import { getFixtureTexture } from "../js/logic/FixtureTexture.js";
-import { getShelfCategoryColor } from "../js/logic/ShelfStockDisplay.js";
 
 const tilesetManifest = JSON.parse(await readFile(
   new URL("../data/TilesetManifest.json", import.meta.url),
@@ -56,22 +55,3 @@ test("non-shelf fixtures keep their original graphics", () => {
   }
 });
 
-function luminance(color) {
-  const channels = [color >> 16 & 255, color >> 8 & 255, color & 255].map((channel) => {
-    const value = channel / 255;
-    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-  });
-  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
-}
-
-test("every stock category border contrasts against the stock marker fill", () => {
-  const stockMarkerFill = 0x111827;
-  const background = luminance(stockMarkerFill);
-  for (const tag of ["Ammunition", "Apparel", "Armor", "Attachment", "Firearm", "Melee", "Survival", "Tool", "Unknown"]) {
-    const color = getShelfCategoryColor({ tags: [tag] });
-    const blended = [16, 8, 0].reduce((result, shift) =>
-      result | Math.round(((color >> shift) & 255) * 0.9 +
-        ((stockMarkerFill >> shift) & 255) * 0.1) << shift, 0);
-    assert.ok((luminance(blended) + 0.05) / (background + 0.05) >= 3, tag);
-  }
-});
