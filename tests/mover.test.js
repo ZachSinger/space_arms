@@ -2,20 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Mover } from "../js/world/Mover.js";
 
-function installPhaser(t) {
-  const previous = globalThis.Phaser;
-  globalThis.Phaser = {
-    Math: {
-      Distance: { Between: (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1) },
-      Angle: { Between: (x1, y1, x2, y2) => Math.atan2(y2 - y1, x2 - x1) },
-    },
-  };
-  t.after(() => {
-    if (previous === undefined) delete globalThis.Phaser;
-    else globalThis.Phaser = previous;
-  });
-}
-
 function createCharacter() {
   const velocity = { x: 0, y: 0 };
   const character = {
@@ -39,17 +25,18 @@ function moverOptions(overrides = {}) {
     canFindPath: () => true,
     getSpeed: () => 100,
     replanIntervalMs: 200,
+    collisionTolerance: 0.1,
     waypointArrivalDistance: 0.0001,
     destinationArrivalDistance: 6,
     onReroute() {},
+    onRerouteUnavailable() {},
     onPortal() {},
     onPathUnavailable() {},
     ...overrides,
   };
 }
 
-test("mover uses portal hooks at waypoints and arrives only at the destination", (t) => {
-  installPhaser(t);
+test("mover uses portal hooks at waypoints and arrives only at the destination", () => {
   const { character } = createCharacter();
   const events = [];
   const portal = { x: 20, y: 0 };
@@ -73,8 +60,7 @@ test("mover uses portal hooks at waypoints and arrives only at the destination",
   assert.deepEqual(events, ["portal", "arrive"]);
 });
 
-test("mover stops and reports a route that cannot be found", (t) => {
-  installPhaser(t);
+test("mover stops and reports a route that cannot be found", () => {
   const { character, velocity } = createCharacter();
   let failures = 0;
   const mover = new Mover(character, moverOptions({

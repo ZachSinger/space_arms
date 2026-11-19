@@ -797,9 +797,11 @@ export class Customer {
       canFindPath: () => Boolean(this.scene.findPath),
       getSpeed: () => SPEED,
       replanIntervalMs: 200,
+      collisionTolerance: 0.1,
       waypointArrivalDistance: 0.0001,
       destinationArrivalDistance: 6,
       onReroute: () => this.scene.debugInfo?.recordCustomer("customer-collision-reroute", this),
+      onRerouteUnavailable() {},
       onPortal: ({ x, y }) => this.sprite.body.reset(x, y),
       onPathUnavailable: () => this.handlePathUnavailable(),
     });

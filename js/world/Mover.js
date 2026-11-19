@@ -8,9 +8,11 @@ export class Mover {
     canFindPath,
     getSpeed,
     replanIntervalMs,
+    collisionTolerance,
     waypointArrivalDistance,
     destinationArrivalDistance,
     onReroute,
+    onRerouteUnavailable,
     onPortal,
     onPathUnavailable,
   }) {
@@ -19,9 +21,11 @@ export class Mover {
     this.canFindPath = canFindPath;
     this.getSpeed = getSpeed;
     this.replanIntervalMs = replanIntervalMs;
+    this.collisionTolerance = collisionTolerance;
     this.waypointArrivalDistance = waypointArrivalDistance;
     this.destinationArrivalDistance = destinationArrivalDistance;
     this.onReroute = onReroute;
+    this.onRerouteUnavailable = onRerouteUnavailable;
     this.onPortal = onPortal;
     this.onPathUnavailable = onPathUnavailable;
   }
@@ -75,12 +79,16 @@ export class Mover {
     const dx = target.x - x;
     const dy = target.y - y;
     if (character.pathRetryMs === 0 && this.canFindPath() &&
-        ((dx > 0.1 && hitting("right")) || (dx < -0.1 && hitting("left")) ||
-         (dy > 0.1 && hitting("down")) || (dy < -0.1 && hitting("up")))) {
+        ((dx > this.collisionTolerance && hitting("right")) ||
+         (dx < -this.collisionTolerance && hitting("left")) ||
+         (dy > this.collisionTolerance && hitting("down")) ||
+         (dy < -this.collisionTolerance && hitting("up")))) {
       character.pathRetryMs = this.replanIntervalMs;
+      const previousPath = character.path;
       character.path = this.findPath(x, y, character.destination.x, character.destination.y);
       this.onReroute();
       if (character.path === null) {
+        this.onRerouteUnavailable(previousPath);
         character.sprite.body.setVelocity(0, 0);
         return;
       }
@@ -104,7 +112,7 @@ export class Mover {
     const character = this.character;
     // Physics has already moved the body; the drawn sprite catches up after scene update.
     const { x, y } = character.sprite.body?.center ?? character.sprite;
-    const distance = Phaser.Math.Distance.Between(x, y, targetX, targetY);
+    const distance = Math.hypot(targetX - x, targetY - y);
 
     if (distance < arrivalDistance) {
       character.sprite.body.setVelocity(0, 0);
@@ -112,10 +120,12 @@ export class Mover {
       return;
     }
 
-    const angle = Phaser.Math.Angle.Between(x, y, targetX, targetY);
     const stepMs = Math.max(delta, 1000 / 60);
     const speed = delta > 0 ? Math.min(this.getSpeed(), distance / (stepMs / 1000)) : 0;
-    character.sprite.body.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    character.sprite.body.setVelocity(
+      ((targetX - x) / distance) * speed,
+      ((targetY - y) / distance) * speed,
+    );
   }
 
   reachWaypoint(waypoint) {

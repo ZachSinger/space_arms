@@ -12,6 +12,7 @@ import { PLAYER_BODY_HEIGHT, PLAYER_BODY_WIDTH } from "./Player.js";
 import { FLOOR_STACK_MAX } from "./CrateStack.js";
 import { TILE_SIZE } from "./RoomLayout.js";
 import { AREA, areaAt } from "../world/Areas.js";
+import { Mover } from "../world/Mover.js";
 
 const WALK_SPEED = 120;
 const JOB_RETRY_MS = 1000;
@@ -44,6 +45,7 @@ export class Employee {
     )
       .setDepth(3);
     scene.employeeGroup.add(this.sprite);
+    this.mover = this.createMover();
   }
 
   update(delta = 0) {
@@ -314,53 +316,49 @@ export class Employee {
     this.destination = { x: point.x, y: point.y };
     this.path = path;
     this.pathRetryMs = 0;
+    this.onArriveAtDestination = () => this.arriveAtDestination();
     this.state = nextState;
     this.sprite.setVisible(true);
     return true;
   }
 
-  followPath(delta = 1000 / 60) {
-    this.pathRetryMs = Math.max(0, this.pathRetryMs - delta);
-    let waypoint = this.path[0] || this.destination;
-    if (!waypoint) throw new Error(`Employee ${this.data.id} has no movement target.`);
-
-    const position = this.sprite.body.center ?? this.sprite;
-    const { blocked, touching } = this.sprite.body;
-    const hitting = (direction) => blocked?.[direction] || touching?.[direction];
-    if (this.pathRetryMs === 0 &&
-      ((waypoint.x > position.x && hitting("right")) || (waypoint.x < position.x && hitting("left")) ||
-       (waypoint.y > position.y && hitting("down")) || (waypoint.y < position.y && hitting("up")))) {
-      this.pathRetryMs = 200;
-      const path = this.scene.findPath(position.x, position.y, this.destination.x, this.destination.y, WALK_BODY);
-      if (path === null) {
-        this.sprite.body.setVelocity(0, 0);
+  createMover() {
+    return new Mover(this, {
+      findPath: (fromX, fromY, toX, toY) =>
+        this.scene.findPath(fromX, fromY, toX, toY, WALK_BODY),
+      canFindPath: () => Boolean(this.scene.findPath),
+      getSpeed: () => this.getWalkSpeed(),
+      replanIntervalMs: 200,
+      collisionTolerance: 0,
+      waypointArrivalDistance: 0.0001,
+      destinationArrivalDistance: 6,
+      onReroute() {},
+      onRerouteUnavailable: (previousPath) => {
+        this.path = previousPath;
         if (["TO_TRASHCAN", "TO_RETURN_CRATE"].includes(this.state)) this.returnCrate();
-        return;
-      }
-      this.path = path;
-      waypoint = this.path[0] || this.destination;
-    }
-    const dx = waypoint.x - position.x;
-    const dy = waypoint.y - position.y;
-    const distance = Math.hypot(dx, dy);
-    // Reach corners exactly, rather than turning early into the fixture beside the path.
-    if (distance < (this.path.length > 0 ? 0.0001 : 6)) {
-      this.sprite.body.setVelocity(0, 0);
-      if (this.path.length > 0) {
-        this.path.shift();
-        // Reaching a door: step through to the floor just inside the other one.
-        if (waypoint.teleportTo) this.sprite.body.reset(waypoint.teleportTo.x, waypoint.teleportTo.y);
-        return;
-      }
-      this.arriveAtDestination();
-      return;
-    }
+      },
+      onPortal: ({ x, y }) => this.sprite.body.reset(x, y),
+      onPathUnavailable() {},
+    });
+  }
+
+  getMover() {
+    if (!this.mover) this.mover = this.createMover();
+    return this.mover;
+  }
+
+  getWalkSpeed() {
     const jobId = ["TO_SHELF", "TO_CRATE", "TO_RETURN_CRATE", "TO_TRASHCAN"].includes(this.state)
       ? "stock_shelves"
       : null;
-    const maxSpeed = WALK_SPEED * (jobId ? getEmployeeJobSpeed(this.data.skillLevels, jobId) : 1);
-    const speed = delta > 0 ? Math.min(maxSpeed, distance / (Math.max(delta, 1000 / 60) / 1000)) : 0;
-    this.sprite.body.setVelocity((dx / distance) * speed, (dy / distance) * speed);
+    return WALK_SPEED * (jobId ? getEmployeeJobSpeed(this.data.skillLevels, jobId) : 1);
+  }
+
+  followPath(delta = 1000 / 60) {
+    if (!this.path[0] && !this.destination) {
+      throw new Error(`Employee ${this.data.id} has no movement target.`);
+    }
+    this.getMover().followPath(delta);
   }
 
   arriveAtDestination() {
