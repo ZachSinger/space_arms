@@ -1,12 +1,11 @@
 // ==========================================
 // FILE: ManagerTablet.js
 // ==========================================
-// The Manager's Tablet window (bible Part 8): tab chrome plus the Contracts, Supply,
-// Fixtures/Layout, and price-editing interactions. Each tab's HTML comes from its renderer.
+// The Manager's Tablet window (bible Part 8): tab chrome and shared routing for tablet actions.
 
 import { UIWindow } from "./UIWindow.js";
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from "./GameViewport.js";
-import { InventoryRenderer } from "./InventoryRenderer.js";
+import { InventoryTab, INVENTORY_PRICE_CONTROL_SELECTOR } from "./InventoryTab.js";
 import { ContractRenderer } from "./ContractRenderer.js";
 import { SupplyTab } from "./SupplyTab.js";
 import { LayoutRenderer } from "./LayoutRenderer.js";
@@ -15,7 +14,6 @@ import { FinancesRenderer } from "./FinancesRenderer.js";
 import { HandbookRenderer } from "./HandbookRenderer.js";
 import { FixtureHighlight } from "./FixtureHighlight.js";
 import { GAME_EVENTS } from "../core/Events.js";
-import { adjustStorePrice } from "./Money.js";
 import { getFixtureResaleValue, getFixtureType } from "./FixtureLayout.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
@@ -57,11 +55,9 @@ function renderTextStylesPage() {
   `;
 }
 
-const PRICE_INPUT_SELECTOR = "input[data-price-item-id]";
-const PRICE_BUTTON_SELECTOR = "button[data-price-action]";
-const PRICE_CONTROL_SELECTOR = `${PRICE_INPUT_SELECTOR}, ${PRICE_BUTTON_SELECTOR}`;
 const EMPLOYEE_PRIORITY_SELECTOR = "button[data-employee-priority-id]";
-const TABLET_KEYBOARD_CONTROL_SELECTOR = `${PRICE_CONTROL_SELECTOR}, ${EMPLOYEE_PRIORITY_SELECTOR}`;
+const TABLET_KEYBOARD_CONTROL_SELECTOR =
+  `${INVENTORY_PRICE_CONTROL_SELECTOR}, ${EMPLOYEE_PRIORITY_SELECTOR}`;
 
 /**
  * The single Tablet window; owns tab switching and refreshes panels when game state changes.
@@ -69,7 +65,8 @@ const TABLET_KEYBOARD_CONTROL_SELECTOR = `${PRICE_CONTROL_SELECTOR}, ${EMPLOYEE_
 export class ManagerTablet {
   constructor(windowManager, gameState, scene) {
     this.gameState = gameState;
-    this.scene = scene; // needed by the Supply tab to read/order fixture stock
+    this.scene = scene;
+    this.inventoryTab = new InventoryTab(scene);
     this.supplyTab = new SupplyTab(scene);
     this.fixturePurchaseNotice = "";
     this.fixtureSaleConfirmation = null;
@@ -107,6 +104,12 @@ export class ManagerTablet {
     );
 
     this.bodyElement = this.uiWindow.element.querySelector(".retro-window-body");
+    this.inventoryTab.bind(
+      this.bodyElement.querySelector('[data-tab-panel="inventory"]'),
+      this.uiWindow.element,
+      this.bodyElement,
+      () => this.renderPanelContent("inventory"),
+    );
     this.supplyTab.bind(
       this.bodyElement.querySelector('[data-tab-panel="supply"]'),
       () => this.renderPanelContent("supply"),
@@ -118,10 +121,6 @@ export class ManagerTablet {
       this.fixtureHighlight.reset();
       this.scene.checkoutSystem.resumeRegisterCheckout();
     };
-    this.disableInventoryNavigation = InventoryRenderer.enableListNavigation(
-      this.uiWindow.element,
-    );
-
     this.bodyElement.querySelector(".tablet-tab-bar").addEventListener("click", (event) => {
       const button = event.target.closest("[data-tab]");
       if (button) this.switchTab(button.dataset.tab);
@@ -214,59 +213,27 @@ export class ManagerTablet {
         this.refreshLayoutPanels();
       }
 
-      const priceButton = event.target.closest(PRICE_BUTTON_SELECTOR);
-      if (priceButton) {
-        this.handlePriceAdjustment(
-          priceButton.dataset.priceItemId,
-          priceButton.dataset.priceAction,
-        );
-      }
-    });
-
-    this.bodyElement.addEventListener("change", (event) => {
-      const input = event.target.closest(PRICE_INPUT_SELECTOR);
-      if (!input) return;
-      const itemId = input.dataset.priceItemId;
-      if (!this.scene.setStorePrice(itemId, Number(input.value))) {
-        input.value = this.scene.getStorePrice(itemId);
-      } else {
-        const entry = this.scene.getInventoryItems().find(({ item }) => item.id === itemId);
-        const profit = input.closest(".inventory-item-card")?.querySelector("[data-inventory-profit]");
-        if (entry && profit) {
-          profit.outerHTML = InventoryRenderer.generateProfitHTML(entry.storePrice, entry.unitCost);
-        }
-      }
-    });
-    this.bodyElement.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && event.target.matches(PRICE_INPUT_SELECTOR)) event.target.blur();
     });
     // Focused controls must not also drive the player or fire game hotkeys.
     const keyboard = this.scene.input.keyboard;
     this.bodyElement.addEventListener("focusin", (event) => {
       if (!event.target.matches(TABLET_KEYBOARD_CONTROL_SELECTOR)) return;
-      if (event.target.matches(PRICE_INPUT_SELECTOR)) this.editingPrice = true;
       keyboard.enabled = false;
       keyboard.disableGlobalCapture();
       keyboard.resetKeys();
     });
     this.bodyElement.addEventListener("focusout", (event) => {
       if (!event.target.matches(TABLET_KEYBOARD_CONTROL_SELECTOR)) return;
-      if (event.target.matches(PRICE_INPUT_SELECTOR)) this.editingPrice = false;
       if (!event.relatedTarget?.matches?.(TABLET_KEYBOARD_CONTROL_SELECTOR)) {
         keyboard.enabled = true;
         keyboard.enableGlobalCapture();
-      }
-      // Keep the button in place until its click if focus moved there from an edited input.
-      if (this.inventoryRefreshPending && event.target.matches(PRICE_CONTROL_SELECTOR) &&
-        !event.relatedTarget?.matches?.(PRICE_BUTTON_SELECTOR)) {
-        setTimeout(() => this.refreshInventoryPanel());
       }
     });
 
     // License availability, supply affordability, shelf counts, and inventory totals all
     // change elsewhere (sales, deliveries, reputation), so re-render on every state change.
     this.gameState.subscribe(() => {
-      this.refreshInventoryPanel();
+      this.inventoryTab.redraw();
       this.refreshEmployeePanel();
       this.refreshContractsPanel();
       this.refreshSupplyPanel();
@@ -274,10 +241,10 @@ export class ManagerTablet {
       this.refreshFinancesPanel();
     });
     this.scene.eventBus.on(GAME_EVENTS.INVENTORY_TRANSFERRED, ({ destination }) => {
-      if (destination === "customer-cart") this.refreshInventoryPanel();
+      if (destination === "customer-cart") this.inventoryTab.redraw();
     });
     this.scene.eventBus.on(GAME_EVENTS.CUSTOMER_SALE_COMPLETED, () => {
-      this.refreshInventoryPanel();
+      this.inventoryTab.redraw();
     });
   }
 
@@ -297,7 +264,7 @@ export class ManagerTablet {
    * @returns {string} panel body HTML
    */
   renderPanelBody(tabId) {
-    if (tabId === "inventory") return InventoryRenderer.generateHTML(this.scene.getInventoryItems());
+    if (tabId === "inventory") return this.inventoryTab.draw();
     if (tabId === "employee") {
       return EmployeeRenderer.generateHTML({
         hiredEmployeeIds: this.gameState.staff.hired,
@@ -341,7 +308,7 @@ export class ManagerTablet {
     this.fixtureHighlight.reset();
     this.fixturePurchaseNotice = "";
     this.fixtureSaleConfirmation = null;
-    if (tabId === "inventory") this.refreshInventoryPanel();
+    if (tabId === "inventory") this.inventoryTab.redraw();
     if (tabId === "employee") this.refreshEmployeePanel();
     if (tabId === "supply") this.refreshSupplyPanel();
     if (tabId === "layout" || tabId === "fixtures") this.refreshLayoutPanels();
@@ -359,45 +326,7 @@ export class ManagerTablet {
     if (!database.getItem(itemId)) throw new Error(`Unknown inventory item: ${itemId}`);
     this.openWindow();
     this.switchTab("inventory");
-    this.disableInventoryNavigation();
-    this.disableInventoryNavigation = InventoryRenderer.enableListNavigation(this.uiWindow.element, itemId);
-    const input = [...this.bodyElement.querySelectorAll(PRICE_INPUT_SELECTOR)]
-      .find((element) => element.dataset.priceItemId === itemId);
-    input?.focus();
-    input?.select();
-  }
-
-  // Re-renders while preserving selection, scroll, and focus on a price button.
-  refreshInventoryPanel() {
-    const panel = this.bodyElement.querySelector('[data-tab-panel="inventory"]');
-    if (!panel) return;
-    // Re-rendering would wipe a price the player is mid-way through typing.
-    if (this.editingPrice) {
-      this.inventoryRefreshPending = true;
-      return;
-    }
-    this.inventoryRefreshPending = false;
-    const activeElement = document.activeElement;
-    const focusedButton = panel.contains(activeElement) && activeElement.matches(PRICE_BUTTON_SELECTOR)
-      ? { itemId: activeElement.dataset.priceItemId, action: activeElement.dataset.priceAction }
-      : null;
-    const selectedItemId = panel.querySelector(".item-card.selected")?.dataset.itemId;
-    const scrollTop = panel.querySelector(".inventory-list").scrollTop;
-    this.disableInventoryNavigation();
-    panel.innerHTML = this.renderPanelContent("inventory");
-    this.disableInventoryNavigation = InventoryRenderer.enableListNavigation(
-      this.uiWindow.element,
-      selectedItemId,
-    );
-    panel.querySelector(".inventory-list").scrollTop = scrollTop;
-    if (focusedButton) {
-      const replacement = Array.from(panel.querySelectorAll(PRICE_BUTTON_SELECTOR)).find(
-        (button) =>
-          button.dataset.priceItemId === focusedButton.itemId &&
-          button.dataset.priceAction === focusedButton.action,
-      );
-      replacement?.focus({ preventScroll: true });
-    }
+    this.inventoryTab.focusItem(itemId);
   }
 
   refreshContractsPanel() {
@@ -514,19 +443,7 @@ export class ManagerTablet {
     }
   }
 
-  // --- Prices, contracts, and supply orders ---
-
-  /**
-   * Step a store price: roughly Â±10% (at least 1 credit), or reset to market.
-   * @param {string} itemId
-   * @param {"decrease" | "increase" | "market"} action
-   */
-  handlePriceAdjustment(itemId, action) {
-    const nextPrice = adjustStorePrice(
-      this.scene.getStorePrice(itemId), this.scene.gameState.market.getPrice(itemId), action,
-    );
-    if (nextPrice !== null) this.scene.setStorePrice(itemId, nextPrice);
-  }
+  // --- Contracts and shared tablet actions ---
 
   handleSignContract(licenseId) {
     const license = database.getLicense(licenseId);
@@ -548,7 +465,7 @@ export class ManagerTablet {
 
   openWindow() {
     if (this.scene.shift.starting || this.scene.fixturePlacement?.active || this.scene.loadFailed) return;
-    this.refreshInventoryPanel();
+    this.inventoryTab.redraw();
     this.refreshEmployeePanel();
     this.refreshSupplyPanel(); // loading pad spots free up without any game state change
     this.refreshLayoutPanels();

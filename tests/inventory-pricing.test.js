@@ -17,8 +17,12 @@ let SupplyTab;
 let GameState;
 let cacheDirectory;
 const originalDocument = globalThis.document;
+const originalElement = globalThis.Element;
+
+class TestElement {}
 
 before(async () => {
+  globalThis.Element = TestElement;
   cacheDirectory = await mkdtemp(join(tmpdir(), "space-arms-pricing-test-"));
   server = await createServer({
     root: fileURLToPath(new URL("..", import.meta.url)),
@@ -63,6 +67,8 @@ before(async () => {
 after(async () => {
   if (originalDocument === undefined) delete globalThis.document;
   else globalThis.document = originalDocument;
+  if (originalElement === undefined) delete globalThis.Element;
+  else globalThis.Element = originalElement;
   delete globalThis.__inventoryTestWindow;
   delete globalThis.__supplyErrorBuzzes;
   delete globalThis.__inventoryTestLicenses;
@@ -97,7 +103,7 @@ function createHarness() {
     document.activeElement = next;
     if (next) body.emit("focusin", { target: next, relatedTarget: previous });
   };
-  const control = (kind, itemId, action, value) => ({
+  const control = (kind, itemId, action, value) => Object.assign(new TestElement(), {
     kind,
     dataset: { priceItemId: itemId, priceAction: action },
     value,
@@ -132,7 +138,12 @@ function createHarness() {
       if (selector === ".inventory-list") return list;
       return null;
     },
-    querySelectorAll() { return this.controls.filter((item) => item.kind === "button"); },
+    querySelectorAll(selector) {
+      if (selector === "input[data-price-item-id]") {
+        return this.controls.filter((item) => item.kind === "input");
+      }
+      return this.controls.filter((item) => item.kind === "button");
+    },
     set innerHTML(markup) {
       if (this.contains(document.activeElement)) focus(null);
       this.renderCount += 1;
@@ -280,6 +291,26 @@ test("inventory calculates profit per item from supplier cost, not market price"
   assert.match(html, /inventory-profit neutral" data-inventory-profit[^>]*>0</);
   assert.match(html, /Delivery fees are not included/);
   assert.doesNotMatch(html, /Off Shelves|In Carts|data-inventory-carts|data-inventory-market/);
+});
+
+test("the Inventory tab escapes item data in text and attributes", () => {
+  const markup = InventoryRenderer.generateHTML([{
+    item: {
+      id: 'rifle" onclick="run()',
+      name: '<img src=x onerror="run()"> & Supply',
+      image: 'images/" onerror="run()',
+    },
+    stock: 0,
+    offShelves: 0,
+    unitCost: 1,
+    storePrice: 2,
+  }]);
+
+  assert.match(markup, /&lt;img src=x onerror=&quot;run\(\)&quot;&gt; &amp; Supply/);
+  assert.match(markup, /data-item-id="rifle&quot; onclick=&quot;run\(\)"/);
+  assert.match(markup, /src="images\/&quot; onerror=&quot;run\(\)"/);
+  assert.doesNotMatch(markup, /<img src=x onerror=/);
+  assert.doesNotMatch(markup, /data-item-id="rifle" onclick=/);
 });
 
 test("price buttons update the displayed value and retain keyboard focus", () => {
@@ -466,7 +497,7 @@ test("a typed price commits before a subsequent button click", async () => {
   h.focus(input);
   input.value = "200";
   h.body.emit("change", { target: input });
-  assert.equal(h.tablet.inventoryRefreshPending, true);
+  assert.equal(h.tablet.inventoryTab.refreshPending, true);
 
   const renders = h.panel.renderCount;
   const button = h.panel.button("rifle", "increase");
@@ -478,7 +509,7 @@ test("a typed price commits before a subsequent button click", async () => {
   h.body.emit("click", { target: button });
   assert.equal(h.panel.input("rifle").value, "220");
   assert.equal(h.scene.getStorePrice("rifle"), 220);
-  assert.equal(h.tablet.inventoryRefreshPending, false);
+  assert.equal(h.tablet.inventoryTab.refreshPending, false);
   h.focus(null);
 });
 
@@ -502,11 +533,11 @@ test("pending changes refresh when leaving price controls", async () => {
   h.focus(h.panel.input("rifle"));
   h.scene.offShelves = 5;
   h.scene.gameState.shop.changed();
-  assert.equal(h.tablet.inventoryRefreshPending, true);
+  assert.equal(h.tablet.inventoryTab.refreshPending, true);
   h.focus(h.panel.button("rifle", "market"));
   h.focus(null);
   await new Promise((resolve) => setTimeout(resolve, 10));
-  assert.equal(h.tablet.inventoryRefreshPending, false);
+  assert.equal(h.tablet.inventoryTab.refreshPending, false);
   assert.doesNotMatch(h.panel.markup, /data-inventory-off-shelves/);
   assert.equal(h.keyboard.enabled, true);
 });

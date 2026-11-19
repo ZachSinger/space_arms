@@ -476,7 +476,7 @@ export class GameScene extends Phaser.Scene {
       this.debugTools?.destroy();
       this.fixturePlacement.destroy();
       this.managerTablet.uiWindow.onClose = null;
-      this.managerTablet.disableInventoryNavigation();
+      this.managerTablet.inventoryTab.destroy();
       this.managerTablet.fixtureHighlight.destroy();
       this.autosaveTimer.remove();
       this.storeDoorAnimation.destroy();
