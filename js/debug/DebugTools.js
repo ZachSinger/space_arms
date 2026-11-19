@@ -8,6 +8,7 @@ import { TILE_SIZE, getTotalGridSize, getStoreDoorCell, EXPANSION_ORDER, BACKROO
 import { FixturePlacementGrid } from "../logic/FixturePlacementGrid.js";
 import { getFixtureType, validateFixtureLayout } from "../logic/FixtureLayout.js";
 import { DELIVERY_FEE, getCrateOrderQuantity } from "../logic/SupplyOrder.js";
+import { sourceItems } from "../logic/InventoryTransfer.js";
 
 const DEBUG_BUTTON_IDS = ["hud-debug-info-btn", "hud-debug-shop-upgrade-btn",
   "hud-debug-backroom-upgrade-btn", "hud-debug-quickstart-btn"];
@@ -159,7 +160,20 @@ export class DebugTools {
       gameState.economy.spend(scene.supply.crateCost(item) * crates, {
         category: "stock_orders", label: item.name, quantity: crates,
       });
-      placement.quantity = capacity;
+      const sourceQuantity = capacity - placement.quantity;
+      if (sourceQuantity > 0) {
+        const result = sourceItems(shelf, item.id, sourceQuantity, {
+          sourceId: `quickstart-${gameState.calendar.day}-${index}`,
+          sourceLocation: { kind: "debug-quickstart", day: gameState.calendar.day },
+          destinationEntry: placement,
+          eventBus: scene.eventBus,
+          sourceName: "quickstart",
+          destinationName: "shelf",
+        });
+        if (result.moved !== sourceQuantity) {
+          throw new Error(`Quickstart could not fill the ${item.name} shelf slot.`);
+        }
+      }
       gameState.goBacks.add(item.id, crates * getCrateOrderQuantity(item) - capacity);
       gameState.catalog.priceIfUnset(item.id, gameState.market.getPrice(item.id));
     });

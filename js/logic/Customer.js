@@ -271,6 +271,10 @@ export class Customer {
     return Math.max(0, wanted - pickedUp);
   }
 
+  getAvailableUnitsFor(itemId) {
+    return this.cart.filter((entry) => entry.itemId === itemId).length;
+  }
+
   getLocation() {
     return this.location;
   }
@@ -283,6 +287,10 @@ export class Customer {
     return true;
   }
 
+  canTake(itemId) {
+    return this.getAvailableUnitsFor(itemId) > 0;
+  }
+
   add(itemId, quantity) {
     if (!this.canPut(itemId)) return 0;
     const accepted = Math.min(quantity, this.getRemainingUnitsFor(itemId));
@@ -290,6 +298,16 @@ export class Customer {
       this.cart.push({ itemId, price: this.store.getStorePrice(itemId) });
     }
     return accepted;
+  }
+
+  remove(itemId, quantity) {
+    let removed = 0;
+    for (let index = this.cart.length - 1; index >= 0 && removed < quantity; index -= 1) {
+      if (this.cart[index].itemId !== itemId) continue;
+      this.cart.splice(index, 1);
+      removed += 1;
+    }
+    return removed;
   }
 
   /**

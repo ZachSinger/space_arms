@@ -8,6 +8,7 @@ import { database } from "../scenes/boot.js";
 import { EXPANSION_ORDER, BACKROOM_GRID_Y } from "../logic/RoomLayout.js";
 import { FIXTURE_SNAP_STEP, FIXTURE_TYPES, validateFixtureLayout } from "../logic/FixtureLayout.js";
 import { SHOP_LEVEL_TIERS } from "../logic/ShopProgression.js";
+import { sourceItems } from "../logic/InventoryTransfer.js";
 
 const SANDBOX_CREDITS = 1000000;
 const SEND_GAP_MS = 700;
@@ -128,7 +129,21 @@ export function setupSandboxRoom(scene) {
   const fillShelves = () => {
     const items = database.getAllItems();
     for (const shelf of scene.fixtures.shelves()) {
-      for (const placement of shelf.placements) placement.quantity = shelf.getPlacementCapacity(placement);
+      for (const placement of shelf.placements) {
+        const quantity = shelf.getPlacementCapacity(placement) - placement.quantity;
+        if (quantity <= 0) continue;
+        const result = sourceItems(shelf, placement.itemId, quantity, {
+          sourceId: `sandbox-stock-${placement.id}`,
+          sourceLocation: { kind: "sandbox-stock", slotId: placement.id },
+          destinationEntry: placement,
+          eventBus: scene.eventBus,
+          sourceName: "sandbox",
+          destinationName: "shelf",
+        });
+        if (result.moved !== quantity) {
+          throw new Error(`Sandbox could not fill shelf slot ${placement.id}.`);
+        }
+      }
       for (let gy = 0; gy < shelf.displayGrid.h; gy += 1) {
         for (let gx = 0; gx < shelf.displayGrid.w; gx += 1) {
           if (!shelf.canPlaceAt(gx, gy, 1, 1)) continue;
@@ -137,7 +152,18 @@ export function setupSandboxRoom(scene) {
             const item = items[(start + offset) % items.length];
             const placement = shelf.placeItem(item.id, gx, gy, false, 0);
             if (!placement) continue;
-            placement.quantity = shelf.getPlacementCapacity(placement);
+            const quantity = shelf.getPlacementCapacity(placement);
+            const result = sourceItems(shelf, item.id, quantity, {
+              sourceId: `sandbox-stock-${placement.id}`,
+              sourceLocation: { kind: "sandbox-stock", slotId: placement.id },
+              destinationEntry: placement,
+              eventBus: scene.eventBus,
+              sourceName: "sandbox",
+              destinationName: "shelf",
+            });
+            if (result.moved !== quantity) {
+              throw new Error(`Sandbox could not fill shelf slot ${placement.id}.`);
+            }
             gameState.catalog.priceIfUnset(item.id, gameState.market.getPrice(item.id));
             break;
           }

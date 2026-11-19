@@ -1,7 +1,7 @@
 // ==========================================
 // FILE: ShelfAttentionHighlight.js
 // ==========================================
-// A pulsing outline around a shop-floor shelf that holds an item the player is carrying, so
+// A pulsing outline around a shop-floor shelf that holds an item the player can stock from, so
 // the player can see where their crates go. Sold-out spaces count: they're saved for that item.
 // It follows the shelf's footprint, so it works in every facing.
 import { TILE_SIZE } from "./RoomLayout.js";
@@ -15,13 +15,13 @@ const GAP = 2;
 
 /**
  * @param {import("./ShelfFixture.js").ShelfFixture} shelf
- * @param {Array<{itemId: string|null, quantity: number}>} carriedCrates
- * @returns {boolean} true if any space on the shelf is for an item in a carried crate
+ * @param {Array<{itemId: string|null, quantity: number}>} stockableCrates
+ * @returns {boolean} true if any space on the shelf is for an item in a stockable crate
  */
-export function shelfMatchesCarried(shelf, carriedCrates) {
-  const carried = new Set(carriedCrates.filter((crate) => crate.quantity > 0).map((crate) => crate.itemId));
-  if (carried.size === 0) return false;
-  return shelf.placements.some((placement) => carried.has(placement.itemId));
+export function shelfMatchesStockable(shelf, stockableCrates) {
+  const stockable = new Set(stockableCrates.filter((crate) => crate.quantity > 0).map((crate) => crate.itemId));
+  if (stockable.size === 0) return false;
+  return shelf.placements.some((placement) => stockable.has(placement.itemId));
 }
 
 /**
@@ -47,7 +47,7 @@ export class ShelfAttentionHighlight {
   setAngle() {}
 
   sync() {
-    this.active = shelfMatchesCarried(this.fixture, this.scene.getCarriedCrates?.() ?? []);
+    this.active = shelfMatchesStockable(this.fixture, this.scene.getStockableCrates?.() ?? []);
     if (!this.active) this.graphics.clear().setVisible(false);
   }
 

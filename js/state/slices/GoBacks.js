@@ -5,7 +5,7 @@
 // into crates. It has unlimited room.
 import { Slice } from "../Slice.js";
 import { InventoryPool } from "../../logic/InventoryPool.js";
-import { transferItems } from "../../logic/InventoryTransfer.js";
+import { sinkItems, sourceItems, transferItems } from "../../logic/InventoryTransfer.js";
 
 let nextReturnedCartId = 1;
 
@@ -41,8 +41,16 @@ export class GoBacks extends Slice {
    * @param {number} quantity
    */
   add(itemId, quantity) {
-    this.pool.add(itemId, quantity);
-    this.changed();
+     if (quantity === 0) return 0;
+    const result = sourceItems(this.pool, itemId, quantity, {
+      sourceId: "go-backs-external-source",
+      sourceLocation: { kind: "go-backs-source" },
+      eventBus: this.events,
+      sourceName: "source",
+      destinationName: "go-backs",
+    });
+    if (result.moved) this.changed();
+    return result.moved;
   }
 
   /**
@@ -50,8 +58,15 @@ export class GoBacks extends Slice {
    * @param {number} quantity
    */
   remove(itemId, quantity) {
-    this.pool.remove(itemId, quantity);
-    this.changed();
+    const result = sinkItems(this.pool, itemId, quantity, {
+      sinkId: "go-backs-external-sink",
+      sinkLocation: { kind: "go-backs-sink" },
+      eventBus: this.events,
+      sourceName: "go-backs",
+      sinkName: "sink",
+    });
+    if (result.moved) this.changed();
+    return result.moved;
   }
 
   /** @param {{ itemId: string }[]} cart - one entry per unit, as a customer carries them */

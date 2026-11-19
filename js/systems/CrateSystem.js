@@ -33,6 +33,10 @@ export class CrateSystem {
     return this.carriedCrate ? [this.carriedCrate] : [];
   }
 
+  getStockableCrates() {
+    return this.getCarriedCrates();
+  }
+
   addCarriedCrate(crate) {
     crate.setCarriedBy("player");
     const stack = this.getCarriedCrates();

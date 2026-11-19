@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Crate } from "../js/logic/Crate.js";
 import { Events } from "../js/core/Events.js";
-import { transferItems } from "../js/logic/InventoryTransfer.js";
+import { sinkItems, sourceItems, transferItems } from "../js/logic/InventoryTransfer.js";
 
 let nextContainerId = 1;
 
@@ -69,6 +69,36 @@ test("moves only what fits and publishes one inventory-transfer event", () => {
     sourceLocation: { kind: "test-container", containerId: source.id },
     destinationLocation: { kind: "test-container", containerId: destination.id },
   }]);
+});
+
+test("sources and sinks record external inventory changes", () => {
+  const source = container(5, 10);
+  const destination = container(0, 3);
+  const eventBus = new Events();
+  const events = [];
+  eventBus.on("inventory-transferred", (event) => events.push(event));
+
+  assert.deepEqual(sourceItems(destination, "ammo", 4, {
+    sourceId: "delivery-1",
+    sourceLocation: { kind: "supply-delivery", deliveryId: "delivery-1" },
+    eventBus,
+  }), { moved: 3, remaining: 1, reason: "destination-full" });
+  assert.equal(destination.quantity, 3);
+
+  assert.deepEqual(sinkItems(source, "ammo", 3, {
+    sinkId: "sale-1",
+    sinkLocation: { kind: "sales", saleId: "sale-1" },
+    eventBus,
+  }), { moved: 3, remaining: 0, reason: null });
+  assert.equal(source.quantity, 2);
+  assert.deepEqual(events.map(({ sourceId, destinationId, quantity }) => ({
+    sourceId,
+    destinationId,
+    quantity,
+  })), [
+    { sourceId: "delivery-1", destinationId: destination.id, quantity: 3 },
+    { sourceId: source.id, destinationId: "sale-1", quantity: 3 },
+  ]);
 });
 
 test("restores unaccepted units and leaves stock unchanged when no transfer is possible", () => {
@@ -197,4 +227,47 @@ test("rejects duplicate IDs and containers without a location", () => {
   destination.id = "different-container";
   destination.getLocation = () => null;
   assert.throws(() => transferItems(source, destination, "ammo", 1), /valid location/);
+});
+
+test("thousands of transfers, sources, and sinks preserve the inventory ledger", () => {
+  const containers = Array.from({ length: 8 }, (_, index) => container(index * 2, 40));
+  const events = [];
+  const eventBus = { emit: (_event, payload) => events.push(payload) };
+  let seed = 0x5eed1234;
+  const random = () => {
+    seed = (1664525 * seed + 1013904223) >>> 0;
+    return seed / 0x100000000;
+  };
+  const total = () => containers.reduce((sum, entry) => sum + entry.quantity, 0);
+  const initialTotal = total();
+  let sourced = 0;
+  let sunk = 0;
+
+  for (let step = 0; step < 5000; step += 1) {
+    const operation = random();
+    const index = Math.floor(random() * containers.length);
+    const amount = 1 + Math.floor(random() * 6);
+    if (operation < 0.6) {
+      const destinationIndex = (index + 1 + Math.floor(random() * (containers.length - 1))) % containers.length;
+      transferItems(containers[index], containers[destinationIndex], "ammo", amount, { eventBus });
+    } else if (operation < 0.8) {
+      const result = sourceItems(containers[index], "ammo", amount, {
+        sourceId: `source-${step}`,
+        sourceLocation: { kind: "random-source", operation: step },
+        eventBus,
+      });
+      sourced += result.moved;
+    } else {
+      const result = sinkItems(containers[index], "ammo", amount, {
+        sinkId: `sink-${step}`,
+        sinkLocation: { kind: "random-sink", operation: step },
+        eventBus,
+      });
+      sunk += result.moved;
+    }
+    assert.equal(total(), initialTotal + sourced - sunk, `inventory ledger diverged at operation ${step}`);
+  }
+
+  assert.ok(events.length > 1000, "the randomized run should exercise successful inventory changes");
+  assert.ok(events.every((event) => Number.isInteger(event.quantity) && event.quantity > 0));
 });

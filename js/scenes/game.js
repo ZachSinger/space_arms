@@ -28,6 +28,7 @@ import {
 } from "../logic/CrateStack.js";
 import { CrateFooter } from "../logic/CrateFooter.js";
 import { getCrateOrderQuantity } from "../logic/SupplyOrder.js";
+import { transferItems } from "../logic/InventoryTransfer.js";
 import { TileRoom } from "../logic/TileRoom.js";
 import { SlidingDoor } from "../logic/SlidingDoor.js";
 import {
@@ -644,6 +645,10 @@ export class GameScene extends Phaser.Scene {
 
   getCarriedCrates() {
     return this.crateSystem.getCarriedCrates();
+  }
+
+  getStockableCrates() {
+    return this.crateSystem.getStockableCrates();
   }
 
   addCarriedCrate(crate) {
@@ -1641,9 +1646,12 @@ export class GameScene extends Phaser.Scene {
     const name = database.getItem(itemId)?.name ?? "items";
     let moved = 0;
     for (const held of this.combineTargets(floorCrate)) {
-      const taken = floorCrate.remove(itemId, held.getRemainingUnitsFor(itemId));
-      held.add(itemId, taken);
-      moved += taken;
+      const result = transferItems(floorCrate, held, itemId, held.getRemainingUnitsFor(itemId), {
+        eventBus: this.eventBus,
+        sourceName: "crate",
+        destinationName: "crate",
+      });
+      moved += result.moved;
     }
     if (moved === 0) return 0;
     const left = floorCrate.quantity;

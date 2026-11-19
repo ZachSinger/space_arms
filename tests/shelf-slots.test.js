@@ -166,7 +166,7 @@ test("Q in the shelf window picks which carried crate stocks an empty space next
   const crates = [bottom, empty, top];
   const view = Object.assign(Object.create(ShelfStockingWindow.prototype), {
     uiWindow: { isOpen: true },
-    scene: { getCarriedCrates: () => crates },
+    scene: { getStockableCrates: () => crates },
     refresh() {},
   });
   assert.equal(view.getStockingCrate(), top);
@@ -209,7 +209,7 @@ test("the shelf window marks every space matching carried items and updates as c
   });
   const view = Object.assign(Object.create(ShelfStockingWindow.prototype), {
     uiWindow: { isOpen: true },
-    scene: { getCarriedCrates: () => crates },
+    scene: { getStockableCrates: () => crates },
     fixture: shelf,
     art: getBudgetShelfArt(2, 3),
     selected: null,
@@ -217,7 +217,7 @@ test("the shelf window marks every space matching carried items and updates as c
     status: {},
     stickers: [],
   });
-  const marked = () => cells.map((cell) => cell.classList.contains("matches-carried"));
+  const marked = () => cells.map((cell) => cell.classList.contains("matches-stockable"));
   const originalDocument = globalThis.document;
   globalThis.document = { createElement: () => ({ style: {} }) };
   try {
@@ -270,7 +270,7 @@ test("shelf price stickers show each stocked space's price, turn sold out, and h
   const stickers = Array.from({ length: 6 }, fakeElement);
   const view = Object.assign(Object.create(ShelfStockingWindow.prototype), {
     uiWindow: { isOpen: true },
-    scene: { getCarriedCrates: () => [], getStorePrice: (itemId) => prices[itemId] },
+    scene: { getStockableCrates: () => [], getStorePrice: (itemId) => prices[itemId] },
     fixture: shelf,
     art: getBudgetShelfArt(2, 3),
     selected: null,

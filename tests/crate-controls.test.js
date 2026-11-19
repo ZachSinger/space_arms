@@ -28,6 +28,7 @@ let FixtureViews;
 let CheckoutSystem;
 let CrateSystem;
 let CrateWorld;
+let ShiftSystem;
 let nextTestCrateId = 1;
 const originalPhaser = globalThis.Phaser;
 
@@ -66,6 +67,7 @@ before(async () => {
   ({ CheckoutSystem } = await server.ssrLoadModule("/js/systems/CheckoutSystem.js"));
   ({ CrateSystem } = await server.ssrLoadModule("/js/systems/CrateSystem.js"));
   ({ CrateWorld } = await server.ssrLoadModule("/js/world/CrateWorld.js"));
+  ({ ShiftSystem } = await server.ssrLoadModule("/js/systems/ShiftSystem.js"));
 });
 
 after(async () => {
@@ -376,6 +378,133 @@ function carry(scene, crates) {
   scene.carriedCrates = [...crates];
   scene.carriedCrate = crates.at(-1) ?? null;
 }
+
+test("combining crate stock records a container transfer", () => {
+  const { scene } = createHarness();
+  const floorCrate = crate({ quantity: 7 });
+  const heldCrate = crate({ quantity: 2 });
+  const transfers = [];
+  scene.eventBus.on(GAME_EVENTS.INVENTORY_TRANSFERRED, (event) => transfers.push(event));
+  for (const stockCrate of [floorCrate, heldCrate]) {
+    stockCrate.getAvailableUnitsFor = (itemId) =>
+      itemId === stockCrate.itemId ? stockCrate.quantity : 0;
+    stockCrate.canTake = () => true;
+    stockCrate.canPut = () => true;
+    stockCrate.remove = (_itemId, quantity) => {
+      const removed = Math.min(stockCrate.quantity, quantity);
+      stockCrate.quantity -= removed;
+      return removed;
+    };
+    stockCrate.add = (_itemId, quantity) => {
+      stockCrate.quantity += quantity;
+      return quantity;
+    };
+  }
+  heldCrate.getRemainingUnitsFor = () => 3;
+  carry(scene, [heldCrate]);
+
+  assert.equal(scene.combineIntoCarried(floorCrate), 3);
+  assert.equal(floorCrate.quantity, 4);
+  assert.equal(heldCrate.quantity, 5);
+  assert.equal(transfers.length, 1);
+  assert.equal(transfers[0].sourceId, floorCrate.id);
+  assert.equal(transfers[0].destinationId, heldCrate.id);
+  assert.deepEqual(transfers[0].destinationLocation, {
+    kind: "carried",
+    holderId: "player",
+  });
+});
+
+test("completed sales sink customer-cart stock before recording revenue", () => {
+  const eventBus = new Events();
+  const transfers = [];
+  const revenue = [];
+  eventBus.on(GAME_EVENTS.INVENTORY_TRANSFERRED, (event) => transfers.push(event));
+  const customer = {
+    id: "customer-sale-test",
+    location: { kind: "customer-cart", customerId: "customer-sale-test" },
+    cart: [
+      { itemId: "rifle", price: 20 },
+      { itemId: "rifle", price: 20 },
+      { itemId: "pistol", price: 10 },
+    ],
+    getContainerId() { return this.id; },
+    getLocation() { return this.location; },
+    getAvailableUnitsFor(itemId) { return this.cart.filter((entry) => entry.itemId === itemId).length; },
+    canTake(itemId) { return this.getAvailableUnitsFor(itemId) > 0; },
+    remove(itemId, quantity) {
+      let removed = 0;
+      for (let index = this.cart.length - 1; index >= 0 && removed < quantity; index -= 1) {
+        if (this.cart[index].itemId !== itemId) continue;
+        this.cart.splice(index, 1);
+        removed += 1;
+      }
+      return removed;
+    },
+  };
+  const shift = Object.assign(Object.create(ShiftSystem.prototype), {
+    shop: { eventBus, gameState: { economy: { add: (...entry) => revenue.push(entry) } } },
+  });
+
+  shift.recordSale(customer);
+
+  assert.deepEqual(revenue, [
+    [40, { category: "sales", label: "Test item", quantity: 2 }],
+    [10, { category: "sales", label: "Test item", quantity: 1 }],
+  ]);
+  assert.deepEqual(customer.cart, []);
+  assert.deepEqual(transfers.map(({ quantity, sourceId, destinationId, destination }) => ({
+    quantity, sourceId, destinationId, destination,
+  })), [
+    { quantity: 2, sourceId: customer.id, destinationId: `sale-${customer.id}`, destination: "sales" },
+    { quantity: 1, sourceId: customer.id, destinationId: `sale-${customer.id}`, destination: "sales" },
+  ]);
+});
+
+test("supply orders source delivered stock into crates through inventory rules", () => {
+  const { scene } = createHarness();
+  const deliveries = [];
+  const transfers = [];
+  scene.gameState.catalog.owns = () => true;
+  scene.gameState.catalog.priceIfUnset = () => {};
+  scene.gameState.market.getPrice = () => 10;
+  scene.gameState.economy.spend = () => {};
+  scene.gameState.shop.changed = () => {};
+  scene.createItemCrate = (itemId, quantity, x, y) => {
+    const stockCrate = crate({ quantity });
+    stockCrate.itemId = itemId;
+    stockCrate.quantity = quantity;
+    stockCrate.sprite.x = x;
+    stockCrate.sprite.y = y;
+    stockCrate.getRemainingUnitsFor = (requestedItemId) =>
+      requestedItemId === stockCrate.itemId ? 20 - stockCrate.quantity : 0;
+    stockCrate.canPut = (requestedItemId) =>
+      stockCrate.quantity === 0 || stockCrate.itemId === requestedItemId;
+    stockCrate.add = (requestedItemId, amount) => {
+      stockCrate.itemId = requestedItemId;
+      stockCrate.quantity += amount;
+      return amount;
+    };
+    return stockCrate;
+  };
+  scene.supply.orderSummary = () => ({ canPlace: true, deliveryFee: 25 });
+  scene.supply.takePadSpots = (count) =>
+    Array.from({ length: count }, (_, index) => ({ x: index * 40, y: 0 }));
+  scene.supply.deliver = (stockCrate) => deliveries.push(stockCrate);
+  scene.supply.freePlayerFromPad = () => {};
+  scene.eventBus.on(GAME_EVENTS.INVENTORY_TRANSFERRED, (event) => transfers.push(event));
+
+  assert.equal(scene.supply.placeOrder(new Map([["rifle", 1]])), true);
+
+  assert.equal(deliveries.length, 1);
+  assert.ok(deliveries[0].quantity > 0);
+  assert.equal(transfers.length, 1);
+  assert.equal(transfers[0].quantity, deliveries[0].quantity);
+  assert.equal(transfers[0].source, "supply");
+  assert.equal(transfers[0].destination, "crate");
+  assert.equal(transfers[0].destinationId, deliveries[0].id);
+  assert.equal(transfers[0].sourceLocation.kind, "supply-delivery");
+});
 
 // A register beside the player; packing the Go-Backs is counted rather than run.
 function addNearbyRegister(scene) {

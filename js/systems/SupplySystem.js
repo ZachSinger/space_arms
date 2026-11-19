@@ -7,6 +7,7 @@
 import { database } from "../scenes/boot.js";
 import { FIXTURE_CRATE_SPRITE, ITEM_CRATE_SPRITE } from "../logic/Crate.js";
 import { getCrateOrderQuantity, summarizeSupplyOrder } from "../logic/SupplyOrder.js";
+import { sourceItems } from "../logic/InventoryTransfer.js";
 import { canLeaveLoadingPad } from "../logic/LoadingPadEscape.js";
 import {
   getBackroomBounds, getBackroomInteriorBounds, LOADING_PAD_HEIGHT, LOADING_PAD_WIDTH,
@@ -17,6 +18,7 @@ const LOADING_PAD_SPOT_SIZE = 32;
 const LOADING_PAD_SPOT_SPACING = 40;
 // How far (px) a crate may overhang a neighboring spot before that spot counts as taken.
 const LOADING_PAD_OVERHANG_ALLOWANCE = 6;
+let nextSupplyDeliveryId = 1;
 
 export class SupplySystem {
   /**
@@ -209,6 +211,7 @@ export class SupplySystem {
     const spots = this.takePadSpots(
       [...order.values()].reduce((sum, count) => sum + Math.max(0, count), 0),
     );
+    const deliveryId = `delivery-${gameState.calendar.day}-${nextSupplyDeliveryId++}`;
     for (const [itemId, count] of order) {
       if (count <= 0) continue;
       const item = database.getItem(itemId);
@@ -227,7 +230,19 @@ export class SupplySystem {
       if (count > 0) gameState.catalog.priceIfUnset(itemId, gameState.market.getPrice(itemId));
       for (let index = 0; index < count; index += 1) {
         const spawn = spots.shift();
-        this.deliver(this.shop.createItemCrate(itemId, getCrateOrderQuantity(database.getItem(itemId)), spawn.x, spawn.y));
+        const quantity = getCrateOrderQuantity(database.getItem(itemId));
+        const crate = this.shop.createItemCrate(itemId, 0, spawn.x, spawn.y);
+        const result = sourceItems(crate, itemId, quantity, {
+          sourceId: deliveryId,
+          sourceLocation: { kind: "supply-delivery", deliveryId, day: gameState.calendar.day },
+          eventBus: this.shop.eventBus,
+          sourceName: "supply",
+          destinationName: "crate",
+        });
+        if (result.moved !== quantity) {
+          throw new Error(`Supply delivery could not fill its ${itemId} crate: ${result.reason}.`);
+        }
+        this.deliver(crate);
       }
     }
     this.freePlayerFromPad();

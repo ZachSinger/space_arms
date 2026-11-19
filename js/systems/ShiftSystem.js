@@ -11,6 +11,7 @@ import { getEmergencyLoanOffer } from "../logic/EmergencyLoan.js";
 import { DELIVERY_FEE } from "../logic/SupplyOrder.js";
 import { summarizeReceipt } from "../logic/DayLedger.js";
 import { formatMoneyAmount, sumMoney } from "../logic/Money.js";
+import { sinkItems } from "../logic/InventoryTransfer.js";
 
 export class ShiftSystem {
   constructor(shop) {
@@ -27,7 +28,7 @@ export class ShiftSystem {
   // Every completed sale goes on today's receipt and counts toward the shift's summary.
   listen(eventBus) {
     eventBus.on(GAME_EVENTS.CUSTOMER_SALE_COMPLETED, ({ customer }) => {
-      this.recordSale(customer.cart);
+      this.recordSale(customer);
       this.shop.gameState.reputation.gain(1, customer.factionId);
       this.customersServed += 1;
       this.shop.debugInfo?.recordCustomer("customer-sale-completed", customer);
@@ -195,10 +196,11 @@ export class ShiftSystem {
   }
 
   /**
-   * Adds a sold cart to today's receipt, one line per item.
-   * @param {{ itemId: string, price: number }[]} cart
+   * Sinks a sold cart and adds it to today's receipt, one line per item.
+   * @param {import("../logic/Customer.js").Customer} customer
    */
-  recordSale(cart) {
+  recordSale(customer) {
+    const cart = customer.cart.map((entry) => ({ ...entry }));
     const sold = new Map();
     for (const { itemId, price } of cart) {
       const line = sold.get(itemId) ?? { amount: 0, quantity: 0 };
@@ -207,6 +209,16 @@ export class ShiftSystem {
       sold.set(itemId, line);
     }
     for (const [itemId, { amount, quantity }] of sold) {
+      const result = sinkItems(customer, itemId, quantity, {
+        sinkId: `sale-${customer.id}`,
+        sinkLocation: { kind: "sales", customerId: customer.id },
+        eventBus: this.shop.eventBus,
+        sourceName: "customer-cart",
+        sinkName: "sales",
+      });
+      if (result.moved !== quantity) {
+        throw new Error(`Could not sink the sold ${itemId} from customer ${customer.id}.`);
+      }
       this.shop.gameState.economy.add(amount, {
         category: "sales",
         label: database.getItem(itemId).name,
