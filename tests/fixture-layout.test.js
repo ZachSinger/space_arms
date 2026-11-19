@@ -291,7 +291,7 @@ test("controller walking and dashing leave the fixture cursor free for the right
   let confirmed = 0;
   Object.assign(placement, {
     active: true,
-    scene: { cameras: { main: camera }, areas: { playerArea: "shop" } },
+    scene: { cameras: { main: camera }, cameraRig: { cameraFor: () => camera }, areas: { playerArea: "shop" } },
     spec: getFixtureType("shelf_budget_2x2"),
     rotation: 0,
     padPoint: { x: 100, y: 100 },
@@ -451,7 +451,7 @@ test("the body coverage follows real placement rules around the default register
   const finishAndCompare = () => {
     finishPlacementGrid(grid);
     assert.ok(validBodies.length > 0, "there is at least one valid placement");
-    const activeView = scene.areas.playerArea === "backroom" ? scene.backroomCamera.worldView : view;
+    const activeView = scene.areas.playerArea === "backroom" ? scene.cameraRig.backroomCamera.worldView : view;
     for (let y = activeView.y + 8; y < activeView.bottom; y += 16) {
       for (let x = activeView.x + 8; x < activeView.right; x += 16) {
         const covered = validBodies.some((body) =>

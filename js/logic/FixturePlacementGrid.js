@@ -93,7 +93,7 @@ export class FixturePlacementGrid {
       return;
     }
     const inBackroom = scene.areas.playerArea === AREA.BACKROOM;
-    const camera = inBackroom ? scene.backroomCamera : scene.cameras.main;
+    const camera = inBackroom ? scene.cameraRig.backroomCamera : scene.cameras.main;
     const view = camera.worldView;
     const zones = scene.room.zones.filter((zone) =>
       !zone.locked && (inBackroom ? zone.backroom : zone.salesFloor));

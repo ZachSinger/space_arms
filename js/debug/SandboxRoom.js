@@ -59,7 +59,7 @@ export function unlockEverything(scene) {
   for (const zoneId of EXPANSION_ORDER) {
     if (scene.room.zones.find((zone) => zone.id === zoneId)?.locked) scene.room.unlockZone(zoneId);
   }
-  scene.refreshCamera();
+  scene.cameraRig.refresh();
 }
 
 /**

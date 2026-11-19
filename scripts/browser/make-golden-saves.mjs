@@ -49,7 +49,7 @@ try {
   // Every expansion open.
   await h.game((scene) => {
     for (const zone of scene.room.zones) if (zone.locked) scene.room.unlockZone(zone.id);
-    scene.refreshCamera();
+    scene.cameraRig.refresh();
   });
   saves["expanded-shop"] = await serialize(h);
 

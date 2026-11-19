@@ -71,7 +71,8 @@ import {
 import { UIWindow } from "../logic/UIWindow.js";
 import { Messages, SHOP_MESSAGE_COLOR } from "../world/Messages.js";
 import { ShiftSystem } from "../systems/ShiftSystem.js";
-import { AREA, Areas, areaAt, areaAtRow } from "../world/Areas.js";
+import { AREA, Areas, areaAtRow } from "../world/Areas.js";
+import { CameraRig } from "../world/CameraRig.js";
 import { SupplySystem } from "../systems/SupplySystem.js";
 import { GamepadInput, PAD } from "../logic/GamepadInput.js";
 import { UINavigator } from "../logic/UINavigator.js";
@@ -130,21 +131,6 @@ function segmentIntersectsRectangle(from, to, rectangle) {
   return clip(from.x, to.x - from.x, left, right) &&
     clip(from.y, to.y - from.y, top, bottom);
 }
-
-// Screen space kept clear when fitting the map: the top status bar (36px + 2px border),
-// the bottom crate bar (#crate-footer, 96px), and a small margin around the map.
-const MAP_SCREEN_TOP = 38;
-const MAP_SCREEN_BOTTOM = CRATE_FOOTER_HEIGHT_PX;
-const MAP_SCREEN_MARGIN = 8;
-// Closest zoom-in still shows this many tile rows top to bottom.
-const CAMERA_MIN_VISIBLE_ROWS = 8;
-const CAMERA_ZOOM_STEP = 1.15;
-// The backroom window: at most this share of the screen below the status bar, tiles never
-// drawn larger than this zoom, and a title strip above the window's map.
-const BACKROOM_WINDOW_SHARE = 0.9;
-const BACKROOM_MAX_ZOOM = 1.25;
-const BACKROOM_TITLE_HEIGHT = 26;
-const BACKROOM_FRAME_BORDER = 3;
 
 // Reputation lost when a thrown crate hits a customer.
 const CRATE_HIT_REPUTATION_PENALTY = 1;
@@ -268,7 +254,7 @@ export class GameScene extends Phaser.Scene {
 
     // Shop map: the authored tile room (see RoomLayout.js).
     this.room = new TileRoom(this);
-    this.setupCamera();
+    this.cameraRig = new CameraRig(this);
 
     // Static obstacles besides the room's own walls (shelves and other fixtures).
     this.obstacleGroup = this.physics.add.staticGroup();
@@ -295,7 +281,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.areas = new Areas(this);
-    this.setupBackroomWindow();
+    this.cameraRig.createBackroomWindow();
     // Every placed fixture lives in this registry.
     this.fixtures = new FixtureRegistry();
     // The register's body is solid to the player and crates only: customers queue almost
@@ -343,7 +329,7 @@ export class GameScene extends Phaser.Scene {
     // The player spawns in open floor clear of the shelf and register. Like customers,
     // the player passes through customers.
     this.player = new Player(this, zonePixelX + zonePixelW * 0.5, zonePixelY + zonePixelH * 0.75);
-    this.refreshCamera();
+    this.cameraRig.refresh();
     this.physics.add.collider(this.player.sprite, this.room.wallGroup);
     this.physics.add.collider(this.player.sprite, this.obstacleGroup);
     // The register is its own group so customers (who share obstacleGroup) can queue
@@ -527,8 +513,8 @@ export class GameScene extends Phaser.Scene {
     this.events.once("shutdown", () => document.removeEventListener("keydown", this.handleTabletKey));
 
     // The shop camera: PageUp zooms in, PageDown zooms out (never past the whole shop).
-    this.bindControlKey("keydown-PAGE_UP", "cameraZoom", () => this.zoomCamera(1));
-    this.bindControlKey("keydown-PAGE_DOWN", "cameraZoom", () => this.zoomCamera(-1));
+    this.bindControlKey("keydown-PAGE_UP", "cameraZoom", () => this.cameraRig.zoomBy(1));
+    this.bindControlKey("keydown-PAGE_DOWN", "cameraZoom", () => this.cameraRig.zoomBy(-1));
 
     // Debug tools are keyboard shortcuts plus HUD buttons; REAL games remove them all.
     DebugTools.showButtons(!this.realMode);
@@ -709,7 +695,7 @@ export class GameScene extends Phaser.Scene {
   handleUnusedMenuButton(button) {
     if (button === PAD.B && this.operatingRegister) this.endRegisterSession();
     if ((button === PAD.LB || button === PAD.RB) && this.controlMode.allows("cameraZoom")) {
-      this.zoomCamera(button === PAD.RB ? 1 : -1);
+      this.cameraRig.zoomBy(button === PAD.RB ? 1 : -1);
     }
   }
 
@@ -720,178 +706,6 @@ export class GameScene extends Phaser.Scene {
   getPadMovement() {
     if (!this.padInput?.connected || this.uiNavigator?.hasScope()) return null;
     return { ...this.padInput.moveVector(), dash: this.padInput.wantsDash() };
-  }
-
-  // The camera starts zoomed so the shop the player owns fills the screen. PageUp/PageDown
-  // zoom in and out; the furthest zoom-out always shows the whole owned shop. Buying an
-  // expansion keeps the current zoom, so the camera follows the player whenever the shop
-  // is bigger than the screen.
-  setupCamera() {
-    if (!this.cameraResizeListening) {
-      this.cameraResizeListening = true;
-      this.scale.on(Phaser.Scale.Events.RESIZE, this.handleCameraResize, this);
-      this.events.once("shutdown", () => {
-        this.scale.off(Phaser.Scale.Events.RESIZE, this.handleCameraResize, this);
-        this.cameraResizeListening = false;
-      });
-    }
-    this.cameraZoom = null;
-    this.cameraViewHeight = null;
-    this.refreshCamera();
-  }
-
-  // Keeps the same amount of shop visible when the window or resolution changes.
-  handleCameraResize() {
-    const viewH = Math.max(1, this.scale.height - MAP_SCREEN_TOP - MAP_SCREEN_BOTTOM);
-    if (this.cameraZoom && this.cameraViewHeight) this.cameraZoom *= viewH / this.cameraViewHeight;
-    this.refreshCamera();
-  }
-
-  getCameraZoomRange() {
-    const viewW = Math.max(1, this.scale.width);
-    const viewH = Math.max(1, this.scale.height - MAP_SCREEN_TOP - MAP_SCREEN_BOTTOM);
-    const shop = this.room.getCameraBounds();
-    const fitZoom = Math.min(
-      Math.max(1, viewW - 2 * MAP_SCREEN_MARGIN) / shop.width,
-      Math.max(1, viewH - 2 * MAP_SCREEN_MARGIN) / shop.height,
-    );
-    const closestZoom = viewH / (CAMERA_MIN_VISIBLE_ROWS * TILE_SIZE);
-    return { min: fitZoom, max: Math.max(fitZoom, closestZoom) };
-  }
-
-  // Pop-ups drawn in the map (prompts, labels, customer bubbles) use this scale so they
-  // stay the same size on screen no matter how far the camera showing them is zoomed.
-  getPopupScale(worldX, worldY) {
-    return 1 / (this.cameraAt(worldX, worldY)?.zoom || 1);
-  }
-
-  /**
-   * The camera that draws a world point: the backroom window's for backroom points while
-   * it's open, otherwise the shop camera. With no point, the shop camera.
-   * @param {number} [worldX]
-   * @param {number} [worldY]
-   */
-  cameraAt(worldX, worldY) {
-    const backroom = this.backroomCamera;
-    if (backroom?.visible && Number.isFinite(worldY) && areaAt(worldY) === AREA.BACKROOM) {
-      return backroom;
-    }
-    return this.cameras?.main;
-  }
-
-  /**
-   * Screen position to world position, through whichever camera is drawn there.
-   * @param {number} screenX
-   * @param {number} screenY
-   */
-  screenToWorld(screenX, screenY) {
-    const backroom = this.backroomCamera;
-    const overBackroom = backroom?.visible &&
-      Phaser.Geom.Rectangle.Contains(new Phaser.Geom.Rectangle(backroom.x, backroom.y, backroom.width, backroom.height), screenX, screenY);
-    return (overBackroom ? backroom : this.cameras.main).getWorldPoint(screenX, screenY);
-  }
-
-  zoomCamera(direction) {
-    this.cameraZoom = (this.cameraZoom ?? this.cameras.main.zoom) * CAMERA_ZOOM_STEP ** direction;
-    this.refreshCamera();
-  }
-
-  refreshCamera() {
-    const camera = this.cameras.main;
-    const viewW = Math.max(1, this.scale.width);
-    const viewH = Math.max(1, this.scale.height - MAP_SCREEN_TOP - MAP_SCREEN_BOTTOM);
-    // The map is drawn only between the top status bar and the bottom crate bar.
-    camera.setViewport(0, MAP_SCREEN_TOP, viewW, viewH);
-
-    const { min, max } = this.getCameraZoomRange();
-    const zoom = Phaser.Math.Clamp(this.cameraZoom ?? min, min, max);
-    this.cameraZoom = zoom;
-    this.cameraViewHeight = viewH;
-    camera.setZoom(zoom);
-
-    // Pad the shop's edges with a small margin, and widen any side shorter than the
-    // screen so the shop sits centered instead of stuck to one edge.
-    const shop = this.room.getCameraBounds();
-    const margin = MAP_SCREEN_MARGIN / zoom;
-    const visibleW = viewW / zoom;
-    const visibleH = viewH / zoom;
-    const boundsW = Math.max(shop.width + 2 * margin, visibleW);
-    const boundsH = Math.max(shop.height + 2 * margin, visibleH);
-    camera.setBounds(
-      shop.x + shop.width / 2 - boundsW / 2,
-      shop.y + shop.height / 2 - boundsH / 2,
-      boundsW,
-      boundsH,
-    );
-
-    // In the backroom the shop view holds still where the player left it.
-    if (this.player?.sprite && this.areas.playerArea !== AREA.BACKROOM) {
-      camera.startFollow(this.player.sprite, true);
-    } else if (this.player?.sprite) {
-      camera.stopFollow();
-    } else {
-      camera.centerOn(shop.x + shop.width / 2, shop.y + shop.height / 2);
-    }
-    this.refreshBackroomWindow();
-  }
-
-  // --- Backroom window ---
-
-  // The backroom has its own camera, drawn as a framed window over the middle of the shop
-  // while the player is inside. The shop keeps running behind it.
-  setupBackroomWindow() {
-    this.backroomCamera = this.cameras.add(0, 0, 1, 1, false, "backroom")
-      .setBackgroundColor("#05080f")
-      .setVisible(false);
-    const frame = document.createElement("div");
-    frame.id = "backroom-window";
-    frame.className = "backroom-window hidden";
-    frame.innerHTML = '<div class="backroom-window-title">BACKROOM</div>';
-    document.getElementById("ui-layer")?.appendChild(frame);
-    this.backroomFrame = frame;
-    this.events.once("shutdown", () => {
-      frame.remove();
-      this.backroomFrame = null;
-    });
-    this.refreshBackroomWindow();
-  }
-
-  // Sizes the window to fit the backroom the player owns: buying a backroom upgrade makes
-  // both the room and its window bigger.
-  refreshBackroomWindow() {
-    const camera = this.backroomCamera;
-    if (!camera) return;
-    const open = this.areas.playerArea === AREA.BACKROOM;
-    camera.setVisible(open);
-    this.backroomFrame?.classList.toggle("hidden", !open);
-    if (!open) return;
-
-    const screenW = Math.max(1, this.scale.width);
-    const screenH = Math.max(1, this.scale.height - MAP_SCREEN_TOP - MAP_SCREEN_BOTTOM);
-    const room = this.room.getCameraBounds("backroom");
-    const zoom = Math.min(
-      (screenW * BACKROOM_WINDOW_SHARE) / room.width,
-      (screenH * BACKROOM_WINDOW_SHARE - BACKROOM_TITLE_HEIGHT) / room.height,
-      BACKROOM_MAX_ZOOM,
-    );
-    const width = Math.round(room.width * zoom);
-    const height = Math.round(room.height * zoom);
-    const x = Math.round((screenW - width) / 2);
-    const y = Math.round(MAP_SCREEN_TOP + (screenH - height + BACKROOM_TITLE_HEIGHT) / 2);
-    camera.setViewport(x, y, width, height).setZoom(zoom);
-    camera.setBounds(room.x, room.y, room.width, room.height);
-    camera.centerOn(room.x + room.width / 2, room.y + room.height / 2);
-
-    const frame = this.backroomFrame;
-    if (!frame) return;
-    const border = BACKROOM_FRAME_BORDER;
-    Object.assign(frame.style, {
-      left: `${x - border}px`,
-      top: `${y - BACKROOM_TITLE_HEIGHT - border}px`,
-      width: `${width}px`,
-      height: `${height + BACKROOM_TITLE_HEIGHT}px`,
-      borderWidth: `${border}px`,
-    });
   }
 
   syncCarriedCrate() {
@@ -1354,7 +1168,7 @@ export class GameScene extends Phaser.Scene {
 
     this.gameState.economy.spend(zone.cost, { category: "expansions", label: zone.name });
     this.room.unlockZone(zoneId);
-    this.refreshCamera();
+    this.cameraRig.refresh();
     this.gameState.shop.changed();
     this.requestAutosave();
     this.showShopMessage(`${zone.name} is open.`);
@@ -1394,7 +1208,7 @@ export class GameScene extends Phaser.Scene {
 
     this.gameState.economy.spend(zone.cost, { category: "expansions", label: zone.name });
     this.room.unlockZone(zoneId);
-    this.refreshCamera();
+    this.cameraRig.refresh();
     this.gameState.shop.changed();
     this.requestAutosave();
     this.showShopMessage(`${zone.name} is open.`);
@@ -1558,7 +1372,7 @@ export class GameScene extends Phaser.Scene {
     if (!result.valid) throw new Error(`Invalid saved layout: ${result.reason}`);
     this.gameState.replaceWith(next, () => this.rebuildShopFromSave(data, result));
     this.shift.resetStartingTotals();
-    this.setupCamera();
+    this.cameraRig.reset();
     this.lastSavedSnapshot = JSON.stringify(this.serialize());
     this.setSaveStatus("Saved. Autosaves while the store is closed.");
   }
@@ -1578,7 +1392,7 @@ export class GameScene extends Phaser.Scene {
     this.applyFixtureLayout(data.fixtures, layout);
     this.areas.playerArea = AREA.SHOP;
     this.player.teleportTo(this.storeDoor.x, this.storeDoor.y + TILE_SIZE);
-    this.refreshCamera();
+    this.cameraRig.refresh();
     for (const crate of this.getFloorCrates()) crate.destroy();
     this.floorStacks = new Map();
     this.markedStackBase = null;
@@ -3237,7 +3051,7 @@ export class GameScene extends Phaser.Scene {
   positionGoBacksBadge() {
     if (!this.goBacksBadge?.visible || !this.player?.sprite) return;
     const bounds = this.player.sprite.getBounds();
-    this.goBacksBadge.setScale(this.getPopupScale()).setPosition(bounds.centerX, bounds.top - 2);
+    this.goBacksBadge.setScale(this.cameraRig.popupScale()).setPosition(bounds.centerX, bounds.top - 2);
   }
 
   /**

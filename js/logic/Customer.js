@@ -636,7 +636,7 @@ export class Customer {
       this.patienceBubble = this.scene.add.container(x, y, [background, glyph]).setDepth(9000);
     }
     this.patienceBubble.setPosition(x, y);
-    this.patienceBubble.setScale?.(this.scene.getPopupScale?.() ?? 1);
+    this.patienceBubble.setScale?.(this.scene.cameraRig?.popupScale() ?? 1);
 
     // Only restyle when the level changes.
     const level = getPatienceLevel(this.patienceRemainingMs / (this.maxPatienceMs ?? PATIENCE_MS));
@@ -704,7 +704,7 @@ export class Customer {
       this.sprite.x + CHARACTER_ART_WIDTH / 2,
       this.sprite.y - CHARACTER_HEAD_HEIGHT - 12,
     );
-    this.reactionBubble.setScale?.(this.scene.getPopupScale?.() ?? 1);
+    this.reactionBubble.setScale?.(this.scene.cameraRig?.popupScale() ?? 1);
   }
 
   updateReaction(delta) {

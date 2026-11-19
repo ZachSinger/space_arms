@@ -78,7 +78,7 @@ export class Messages {
   floatText(x, y, text, color) {
     const { scene } = this;
     scene.debugInfo?.record("game-message", { x, y, text, color });
-    const scale = scene.getPopupScale(x, y);
+    const scale = scene.cameraRig?.popupScale(x, y) ?? 1;
     const label = scene.add
       .text(x, y, text, {
         fontFamily: '"Courier New", monospace',

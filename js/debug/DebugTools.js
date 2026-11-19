@@ -97,7 +97,7 @@ export class DebugTools {
       return false;
     }
     scene.room.unlockZone(zone.id);
-    scene.refreshCamera();
+    scene.cameraRig.refresh();
     scene.gameState.shop.changed();
     scene.requestAutosave();
     scene.showShopMessage(`Debug: ${zone.name} is open.`);

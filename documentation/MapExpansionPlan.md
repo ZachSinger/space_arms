@@ -8,7 +8,7 @@ PageDown zooms out, never further than the point where the whole owned shop
 fits. When the shop doesn't fit at the chosen zoom, the camera follows the
 player, kept within the owned rooms. Buying an expansion keeps the current zoom;
 the player can zoom out to see more if they want. Resizing the window keeps the
-same amount of shop visible. See `GameScene.refreshCamera()`.
+same amount of shop visible. See `CameraRig.refresh()` (js/world/CameraRig.js).
 
 The whole shop, every expansion included, is limited to **39 by 21 tiles**, so
 it always fits on one 1920×1080 screen with tiles displayed at about 48 pixels

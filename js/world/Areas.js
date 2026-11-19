@@ -121,7 +121,7 @@ export class Areas {
     shop.player.teleportTo(arrival.x, arrival.y);
     shop.player.forceFacing("down");
     shop.syncCarriedCrate();
-    shop.refreshCamera();
+    shop.cameraRig.refresh();
     shop.debugInfo?.record(portal.to === AREA.BACKROOM ? "entered-backroom" : "left-backroom", {});
   }
 

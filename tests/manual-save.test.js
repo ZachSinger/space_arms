@@ -190,7 +190,7 @@ function createExpansionHarness({ shopLevel, credits }) {
         zone.locked = false;
       },
     },
-    refreshCamera() { cameraRefreshes++; },
+    cameraRig: { refresh() { cameraRefreshes++; }, reset() { cameraRefreshes++; } },
     requestAutosave() { autosaves++; },
     showShopMessage(message) { messages.push(message); },
   });

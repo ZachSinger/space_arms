@@ -168,7 +168,7 @@ export const scenarios = {
         scene.handleInteract();
         const crate = scene.getCarriedCrates()[0];
         const { x, y } = scene.player.sprite;
-        return { found, area: scene.areas.playerArea, window: scene.backroomCamera.visible,
+        return { found, area: scene.areas.playerArea, window: scene.cameraRig.backroomCamera.visible,
           crateFollowed: Boolean(crate) && Math.hypot(crate.sprite.x - x, crate.sprite.y - y) < 80 };
       };
       return { inward: goThrough("shop"), outward: goThrough("backroom") };

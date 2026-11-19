@@ -119,7 +119,7 @@ export class FixturePlacement {
   }
 
   getPlacementCamera() {
-    return this.scene.areas.playerArea === AREA.BACKROOM ? this.scene.backroomCamera : this.scene.cameras.main;
+    return this.scene.cameraRig.cameraFor(this.scene.areas.playerArea);
   }
 
   setPadPoint(worldX, worldY) {
@@ -233,7 +233,7 @@ export class FixturePlacement {
    * @param {Phaser.Input.Pointer} pointer
    */
   updatePreview(pointer) {
-    const world = this.scene.screenToWorld?.(pointer.x, pointer.y) ?? this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const world = this.scene.cameraRig?.screenToWorld(pointer.x, pointer.y) ?? this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
     this.updatePreviewAt(world.x, world.y);
   }
 
