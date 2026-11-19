@@ -27,6 +27,7 @@ let ShiftSystem;
 let FixtureSystem;
 let FixtureViews;
 let CustomerFlow;
+let CheckoutSystem;
 const originalPhaser = globalThis.Phaser;
 
 before(async () => {
@@ -64,6 +65,7 @@ before(async () => {
   ({ FixtureSystem } = await server.ssrLoadModule("/js/systems/FixtureSystem.js"));
   ({ FixtureViews } = await server.ssrLoadModule("/js/world/FixtureViews.js"));
   ({ CustomerFlow } = await server.ssrLoadModule("/js/systems/CustomerFlow.js"));
+  ({ CheckoutSystem } = await server.ssrLoadModule("/js/systems/CheckoutSystem.js"));
   ({ CHARACTER_ART_WIDTH, CHARACTER_FEET_DROP } = await server.ssrLoadModule("/js/logic/CustomerSprites.js"));
 });
 
@@ -404,10 +406,6 @@ function createRegisterHarness() {
   const registerFixture = { id: "register_1", sprite: {} };
   const line = [];
   Object.assign(scene, {
-    operatingRegister: true,
-    operatingRegisterFixture: registerFixture,
-    registerLine: line,
-    registerLines: new Map([[registerFixture.id, line]]),
     fixtures: {
       register: () => registerFixture,
       registers: () => [registerFixture],
@@ -417,15 +415,15 @@ function createRegisterHarness() {
     windowManager: { windows: new Map([
       [tablet.id, tablet], [checkout.uiWindow.id, checkout.uiWindow],
     ]) },
-    layoutRegisterLine() {},
-    beginRegisterSession(register = registerFixture) {
-      this.operatingRegister = true;
-      this.operatingRegisterFixture = register;
-    },
     gameState: { goBacks: { addCart() {} } },
     employees: [],
   });
   scene.controlMode = new ControlMode(scene);
+  scene.checkoutSystem = new CheckoutSystem(scene);
+  scene.checkoutSystem.operatingRegister = true;
+  scene.checkoutSystem.operatingRegisterFixture = registerFixture;
+  scene.checkoutSystem.registerLines.set(registerFixture.id, line);
+  scene.checkoutSystem.layoutRegisterLine = () => {};
   return { scene, checkout, tablet };
 }
 
@@ -719,24 +717,24 @@ test("customers queue without opening the register or freezing patience while th
   tablet.isOpen = true;
   const first = { cart: [{ itemId: "rifle", price: 100 }] };
   const second = { cart: [{ itemId: "pistol", price: 50 }] };
-  scene.handleJoinQueue(first);
-  scene.handleJoinQueue(second);
-  assert.deepEqual(scene.registerLine, [first, second]);
+  scene.checkoutSystem.handleJoinQueue(first);
+  scene.checkoutSystem.handleJoinQueue(second);
+  assert.deepEqual(scene.checkoutSystem.lineFor(scene.fixtures.register()), [first, second]);
   assert.equal(checkout.uiWindow.isOpen, false);
   assert.deepEqual(checkout.openedCarts, []);
-  assert.equal(scene.isServingCustomer(first), false);
+  assert.equal(scene.checkoutSystem.isServingCustomer(first), false);
 
   tablet.isOpen = false;
-  scene.resumeRegisterCheckout();
+  scene.checkoutSystem.resumeRegisterCheckout();
   assert.equal(checkout.uiWindow.isOpen, true);
   assert.deepEqual(checkout.openedCarts, [first.cart]);
-  assert.equal(scene.isServingCustomer(first), false, "the player's checkout never freezes patience");
+  assert.equal(scene.checkoutSystem.isServingCustomer(first), false, "the player's checkout never freezes patience");
 });
 
 test("hiding checkout for the tablet preserves scanned items and payment progress on return", () => {
   const { scene, checkout, tablet } = createRegisterHarness();
   const customer = { cart: [{ itemId: "rifle", price: 100 }] };
-  scene.handleJoinQueue(customer);
+  scene.checkoutSystem.handleJoinQueue(customer);
   const onComplete = checkout.onComplete;
   checkout.paymentBuffer = "10";
   checkout.isScanning = true;
@@ -744,12 +742,12 @@ test("hiding checkout for the tablet preserves scanned items and payment progres
   checkout.suspend();
   assert.equal(checkout.uiWindow.isOpen, false);
   assert.equal(checkout.isScanning, false);
-  assert.equal(scene.isServingCustomer(customer), false);
-  scene.resumeRegisterCheckout();
+  assert.equal(scene.checkoutSystem.isServingCustomer(customer), false);
+  scene.checkoutSystem.resumeRegisterCheckout();
   assert.equal(checkout.uiWindow.isOpen, false);
 
   tablet.isOpen = false;
-  scene.resumeRegisterCheckout();
+  scene.checkoutSystem.resumeRegisterCheckout();
   assert.equal(checkout.uiWindow.isOpen, true);
   assert.equal(checkout.onComplete, onComplete);
   assert.equal(checkout.paymentBuffer, "10");
@@ -759,10 +757,10 @@ test("hiding checkout for the tablet preserves scanned items and payment progres
 test("stepping away from the register mid-sale and coming back resumes the same sale", () => {
   const { scene, checkout } = createRegisterHarness();
   const customer = { cart: [{ itemId: "rifle", price: 100 }] };
-  scene.handleJoinQueue(customer);
+  scene.checkoutSystem.handleJoinQueue(customer);
   checkout.paymentBuffer = "10";
   checkout.suspend(); // what leaving the register does mid-sale
-  scene.startCheckout(customer);
+  scene.checkoutSystem.startCheckout(customer);
   assert.equal(checkout.uiWindow.isOpen, true);
   assert.equal(checkout.paymentBuffer, "10");
   assert.equal(checkout.openedCarts.length, 1, "not started over");
@@ -777,9 +775,9 @@ test("a customer's payment type is picked once, even if their sale is started ov
     open(cart, onComplete);
   };
   const customer = { cart: [{ itemId: "rifle", price: 100 }] };
-  scene.handleJoinQueue(customer);
+  scene.checkoutSystem.handleJoinQueue(customer);
   checkout.mode = null; // the sale was thrown away
-  scene.startCheckout(customer);
+  scene.checkoutSystem.startCheckout(customer);
   assert.equal(options.length, 2);
   assert.equal(options[1].paymentType, options[0].paymentType);
   assert.equal(options[1].exact, options[0].exact);
@@ -790,18 +788,18 @@ test("a customer leaving while the tablet is open cannot leave a stale checkout 
   const { scene, checkout, tablet } = createRegisterHarness();
   const first = { cart: [{ itemId: "rifle", price: 100 }] };
   const second = { cart: [{ itemId: "pistol", price: 50 }] };
-  scene.handleJoinQueue(first);
+  scene.checkoutSystem.handleJoinQueue(first);
   tablet.isOpen = true;
   checkout.suspend();
-  scene.handleJoinQueue(second);
-  scene.handleAngryLeave(first, first.cart);
+  scene.checkoutSystem.handleJoinQueue(second);
+  scene.checkoutSystem.handleAngryLeave(first, first.cart);
   assert.equal(checkout.mode, null);
   assert.equal(checkout.onComplete, null);
   assert.equal(checkout.uiWindow.isOpen, false);
-  assert.deepEqual(scene.registerLine, [second]);
+  assert.deepEqual(scene.checkoutSystem.lineFor(scene.fixtures.register()), [second]);
 
   tablet.isOpen = false;
-  scene.resumeRegisterCheckout();
+  scene.checkoutSystem.resumeRegisterCheckout();
   assert.deepEqual(checkout.openedCarts, [first.cart, second.cart]);
   assert.equal(checkout.uiWindow.isOpen, true);
 });
@@ -824,11 +822,11 @@ test("Escape never clears the amount typed at the register; Delete does", () => 
 
 test("closing the tablet does not start checkout with no customers or after leaving the register", () => {
   const { scene, checkout } = createRegisterHarness();
-  scene.resumeRegisterCheckout();
+  scene.checkoutSystem.resumeRegisterCheckout();
   assert.equal(checkout.uiWindow.isOpen, false);
-  scene.operatingRegister = false;
-  scene.registerLine.push({ cart: [] });
-  scene.resumeRegisterCheckout();
+  scene.checkoutSystem.operatingRegister = false;
+  scene.checkoutSystem.lineFor(scene.fixtures.register()).push({ cart: [] });
+  scene.checkoutSystem.resumeRegisterCheckout();
   assert.equal(checkout.uiWindow.isOpen, false);
 });
 
@@ -849,33 +847,32 @@ test("the register refuses a player whose hands are full of crates", () => {
     checkoutWindow: { mode: "closed" },
     player: { sprite, inputEnabled: true,
       teleportTo(x, y) { sprite.x = x; sprite.y = y; }, forceFacing() {} },
-    operatingRegister: false,
     carriedCrates: [{ id: "crate_1" }],
     carriedCrate: { id: "crate_1" },
     showShopMessage: (text) => messages.push(text),
   });
-  scene.beginRegisterSession(register);
-  assert.equal(scene.operatingRegister, false);
+  scene.checkoutSystem = new CheckoutSystem(scene);
+  scene.checkoutSystem.beginRegisterSession(register);
+  assert.equal(scene.checkoutSystem.operatingRegister, false);
   assert.equal(sprite.body.enable, true);
   assert.match(messages[0], /Put down what you're carrying/);
 
   scene.carriedCrates = [];
   scene.carriedCrate = null;
-  scene.beginRegisterSession(register);
-  assert.equal(scene.operatingRegister, true);
+  scene.checkoutSystem.beginRegisterSession(register);
+  assert.equal(scene.checkoutSystem.operatingRegister, true);
 });
 
 test("a customer arriving while the player holds crates near the register never opens checkout", () => {
   const { scene, checkout } = createRegisterHarness();
-  delete scene.beginRegisterSession; // use the real method so its crates guard applies
-  scene.operatingRegister = false;
-  scene.operatingRegisterFixture = null;
+  scene.checkoutSystem.operatingRegister = false;
+  scene.checkoutSystem.operatingRegisterFixture = null;
   scene.carriedCrates = [{ id: "crate_1" }];
-  scene.getNearbyRegisterTarget = () => scene.fixtures.register();
+  scene.checkoutSystem.getNearbyRegisterTarget = () => scene.fixtures.register();
   scene.showShopMessage = () => {};
-  scene.handleJoinQueue({ cart: [{ itemId: "rifle", price: 100 }] });
+  scene.checkoutSystem.handleJoinQueue({ cart: [{ itemId: "rifle", price: 100 }] });
   assert.equal(checkout.uiWindow.isOpen, false);
-  assert.equal(scene.operatingRegister, false);
+  assert.equal(scene.checkoutSystem.operatingRegister, false);
 });
 
 test("manual save persists the current shop and confirms unchanged saves without another write", async () => {
@@ -1035,6 +1032,7 @@ test("side-facing register queue and cashier align with the body box rather than
   const scene = Object.create(GameScene.prototype);
   const body = { width: 30, height: 68, center: { x: 100, y: 100 } };
   const register = { type: "register_basic", rotation: 1, sprite: { body } };
+  scene.checkoutSystem = new CheckoutSystem(scene);
   scene.fixtures = { register: () => register };
   scene.player = { sprite: { displayWidth: 48, displayHeight: 72 } };
   assert.deepEqual(scene.getBehindRegisterPoint(), { x: 129, y: 100 });
@@ -1058,14 +1056,15 @@ test("side-facing register queue and cashier align with the body box rather than
       scene.employees = [];
       scene.eventBus = { emit() {} };
       scene.checkoutWindow = { mode: "closed" };
+      scene.checkoutSystem = new CheckoutSystem(scene);
       scene.player = { sprite, inputEnabled: true,
         teleportTo(x, y) { sprite.x = x; sprite.y = y; }, forceFacing() {} };
-      scene.beginRegisterSession(register);
-      assert.equal(scene.operatingRegister, true);
+      scene.checkoutSystem.beginRegisterSession(register);
+      assert.equal(scene.checkoutSystem.operatingRegister, true);
       assert.equal(sprite.body.enable, false);
       assert.ok(Number.isFinite(sprite.x) && Number.isFinite(sprite.y));
-      scene.endRegisterSession();
-      assert.equal(scene.operatingRegister, false);
+      scene.checkoutSystem.endRegisterSession();
+      assert.equal(scene.checkoutSystem.operatingRegister, false);
       assert.equal(sprite.body.enable, true);
       assert.equal(scene.player.inputEnabled, true);
       assert.deepEqual({ x: sprite.x, y: sprite.y, depth: sprite.depth }, { x: 200, y: 200, depth: 2 });

@@ -12,6 +12,7 @@ let cacheDirectory;
 let Customer;
 let GameScene;
 let CustomerFlow;
+let CheckoutSystem;
 let gameRandom;
 const originalPhaser = globalThis.Phaser;
 
@@ -54,6 +55,7 @@ before(async () => {
   ({ gameRandom } = await server.ssrLoadModule("/js/core/Random.js"));
   ({ GameScene } = await server.ssrLoadModule("/js/scenes/game.js"));
   ({ CustomerFlow } = await server.ssrLoadModule("/js/systems/CustomerFlow.js"));
+  ({ CheckoutSystem } = await server.ssrLoadModule("/js/systems/CheckoutSystem.js"));
 });
 
 after(async () => {
@@ -378,9 +380,10 @@ test("departing customers use distinct spots across the entrance", () => {
   const scene = Object.create(GameScene.prototype);
   scene.exitPoint = { x: 1000, y: 96 };
   scene.customers = [];
+  scene.checkoutSystem = new CheckoutSystem(scene);
 
   const slots = Array.from({ length: 6 }, () => {
-    const slot = scene.reserveExitSlot();
+    const slot = scene.checkoutSystem.reserveExitSlot();
     scene.customers.push({ state: "LEAVING", destination: slot });
     return slot;
   });
@@ -389,7 +392,7 @@ test("departing customers use distinct spots across the entrance", () => {
   assert.ok(slots.every(({ x, y }) =>
     Math.abs(x - scene.exitPoint.x) <= 36 && Math.abs(y - scene.exitPoint.y) <= 8,
   ));
-  assert.throws(() => scene.reserveExitSlot(), /No unoccupied customer exit slot/);
+  assert.throws(() => scene.checkoutSystem.reserveExitSlot(), /No unoccupied customer exit slot/);
 });
 
 test("random browsing chooses only stocked shelves other than the next stop", () => {

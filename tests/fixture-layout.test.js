@@ -83,7 +83,7 @@ test("starting and cancelling placement keep the player and loose crates moving"
           restockCrates: [looseCrate],
           input: { keyboard: { resetKeys() { heldKey = false; } } },
           fixtures: { displayName: () => "SHELF" },
-          endRegisterSession() {},
+          checkoutSystem: { endRegisterSession() {} },
           windowManager: { closeAllExcept() {} },
           add: { image: () => ghost },
         },

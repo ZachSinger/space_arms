@@ -7,7 +7,7 @@ function createScene() {
     shift: { starting: false },
     loadFailed: false,
     fixturePlacement: { active: false },
-    operatingRegister: false,
+    checkoutSystem: { operatingRegister: false },
     carriedCrate: null,
     windowManager: { windows: new Map() },
   };
@@ -22,7 +22,7 @@ test("selects the active control mode by state priority", () => {
   assert.equal(controls.getMode(), CONTROL_MODES.CARRYING);
   assert.equal(controls.allows("move"), true);
 
-  scene.operatingRegister = true;
+  scene.checkoutSystem.operatingRegister = true;
   assert.equal(controls.getMode(), CONTROL_MODES.REGISTER);
   assert.equal(controls.allows("move"), false);
 
@@ -38,7 +38,7 @@ test("selects the active control mode by state priority", () => {
 
 test("register windows retain register controls, while other open windows take modal control", () => {
   const scene = createScene();
-  scene.operatingRegister = true;
+  scene.checkoutSystem.operatingRegister = true;
   scene.windowManager.windows.set("checkout-window", { id: "checkout-window", isOpen: true });
   const controls = new ControlMode(scene);
   assert.equal(controls.getMode(), CONTROL_MODES.REGISTER);
@@ -101,7 +101,7 @@ test("each mode exposes only its declared actions", () => {
 test("manual pause overrides register, placement and menus and allows only resume", () => {
   const scene = createScene();
   scene.shiftClock = { started: true, isPaused: true };
-  scene.operatingRegister = true;
+  scene.checkoutSystem.operatingRegister = true;
   scene.fixturePlacement.active = true;
   scene.windowManager.windows.set("manager-tablet", { id: "manager-tablet", isOpen: true });
   const controls = new ControlMode(scene);

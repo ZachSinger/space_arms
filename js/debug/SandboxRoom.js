@@ -167,7 +167,7 @@ export function setupSandboxRoom(scene) {
     callback: () => {
       letNextIn(100);
       for (const register of scene.fixtures.registers()) {
-        const front = scene.lineFor(register)[0];
+        const front = scene.checkoutSystem.lineFor(register)[0];
         const spot = front?.queueTarget;
         const feet = front?.sprite.body?.center ?? front?.sprite;
         const waiting = front && front.state === "QUEUEING" && spot &&
@@ -176,7 +176,7 @@ export function setupSandboxRoom(scene) {
         frontWaits.set(register.id, waitMs);
         if (waitMs >= AUTO_CHECKOUT_DELAY_MS) {
           frontWaits.set(register.id, 0);
-          scene.completeSandboxCheckout(front);
+          scene.checkoutSystem.completeSandboxCheckout(front);
         }
       }
       render();

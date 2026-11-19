@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadTuning } from "../js/core/Tuning.js";
 import customerTuning from "../data/tuning/customers.json" with { type: "json" };
+import checkoutTuning from "../data/tuning/checkout.json" with { type: "json" };
 
 const entry = (value, extra = {}) => ({ value, min: 0, max: 10, description: "A number.", ...extra });
 
@@ -26,5 +27,8 @@ test("moved tuning numbers keep their old values", () => {
   assert.deepEqual({ ...loadTuning("customers", customerTuning) }, {
     maxCustomersInStore: 6,
     poolRefreshIntervalMs: 1000,
+  });
+  assert.deepEqual({ ...loadTuning("checkout", checkoutTuning) }, {
+    goBackRetryIntervalMs: 5000,
   });
 });

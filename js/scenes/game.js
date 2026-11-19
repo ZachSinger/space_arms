@@ -18,37 +18,32 @@ import { InteractableRegistry } from "../logic/InteractableRegistry.js";
 import { SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT } from "../logic/Customer.js";
 import { Employee } from "../logic/Employee.js";
 import { getEmployeeTrainingOffer } from "../logic/EmployeeTraining.js";
-import { formatTransactionTotal, isMoney, roundMoney } from "../logic/Money.js";
+import { isMoney, roundMoney } from "../logic/Money.js";
 import { CUSTOMER_TRAITS } from "../logic/CustomerTraits.js";
 import { getLicensedFactionIds } from "../logic/CustomerPooling.js";
-import { Player, PLAYER_CHARACTER_HEIGHT, PLAYER_CRATE_HOLD_OFFSET } from "../logic/Player.js";
+import { Player, PLAYER_CRATE_HOLD_OFFSET } from "../logic/Player.js";
 import { Crate, CRATE_STACK_SPACING } from "../logic/Crate.js";
 import { getItemCrateTint } from "../logic/CrateCategory.js";
 import {
   FLOOR_STACK_MAX, HOLD_KEY_MS, MAX_CARRIED_CRATES, isInFacingCone, isSquarelyInFront,
 } from "../logic/CrateStack.js";
-import { getCrateItemLimit } from "../logic/ShelfSlotStocking.js";
-import { CRATE_FOOTER_HEIGHT_PX, CrateFooter } from "../logic/CrateFooter.js";
+import { CrateFooter } from "../logic/CrateFooter.js";
 import { getCrateOrderQuantity } from "../logic/SupplyOrder.js";
 import { findCratePushRival, solveCratePush } from "../logic/CratePushing.js";
 import { separateOverlappingCrates } from "../logic/CrateSeparation.js";
-import { CheckoutWindow } from "../logic/CheckoutWindow.js";
-import { chooseCustomerPayment } from "../logic/CustomerPayment.js";
 import { TileRoom } from "../logic/TileRoom.js";
 import { SlidingDoor } from "../logic/SlidingDoor.js";
 import {
   TILE_SIZE, getZone, getAuthoredGridSize, getStoreDoorCell, getStoreDoorCells, EXPANSION_ORDER,
-  BACKROOM_UPGRADE_ORDER, getBackroomLink, getBackroomBounds, getLoadingPadBounds, LOADING_PAD_WIDTH, LOADING_PAD_HEIGHT,
+  getLoadingPadBounds, LOADING_PAD_WIDTH, LOADING_PAD_HEIGHT,
 } from "../logic/RoomLayout.js";
 import { ShiftClock } from "../logic/ShiftClock.js";
 import { findFreeWalkPath } from "../logic/Pathfinder.js";
 import { FixturePlacement } from "../logic/FixturePlacement.js";
-import { worldToClientRect } from "../logic/FixtureHighlight.js";
-import { getGameScale } from "../logic/GameViewport.js";
 import { setupSandboxRoom } from "../debug/SandboxRoom.js";
 import { setupUiLab } from "../debug/UiLab.js";
 import { ShelfStockingWindow } from "../logic/ShelfStockingWindow.js";
-import { REGISTER_FRONT_OVERLAP, getFixtureType, fixtureAccessCells, fixtureFacing, fixtureFacingStep, fixtureFootprint, fixtureInteractionDistance, fixtureStandingSpot, validateFixtureLayout } from "../logic/FixtureLayout.js";
+import { REGISTER_FRONT_OVERLAP, getFixtureType, fixtureFacing, fixtureFacingStep, fixtureFootprint, fixtureInteractionDistance, validateFixtureLayout } from "../logic/FixtureLayout.js";
 import { validateShopSave } from "../logic/ShopSave.js";
 import { TrashField, randomTrashKind } from "../logic/TrashField.js";
 import {
@@ -63,6 +58,8 @@ import { FixtureViews } from "../world/FixtureViews.js";
 import { FixtureSystem } from "../systems/FixtureSystem.js";
 import { SupplySystem } from "../systems/SupplySystem.js";
 import { CustomerFlow } from "../systems/CustomerFlow.js";
+import { CheckoutSystem } from "../systems/CheckoutSystem.js";
+import { CheckoutWindow } from "../logic/CheckoutWindow.js";
 import { GamepadInput, PAD } from "../logic/GamepadInput.js";
 import { UINavigator } from "../logic/UINavigator.js";
 import { controlLabel, getInputDevice, setInputDevice } from "../logic/InputDevice.js";
@@ -71,16 +68,6 @@ import { database } from "./boot.js"; // the exported DatabaseManager singleton
 import { installSceneTextSize } from "../logic/GameTextSize.js";
 import { gameRandom, randomSeed } from "../core/Random.js";
 
-// Spread around the doorway's center; kept within the one-cell doorway, low enough that
-// no one's head rises above the top of the door opening.
-const CUSTOMER_EXIT_SLOT_OFFSETS = Object.freeze([
-  [-8, -4],
-  [0, -4],
-  [8, -4],
-  [-8, 4],
-  [0, 4],
-  [8, 4],
-].map(([dx, dy]) => Object.freeze({ dx, dy })));
 // How far below the doorway cell's center a customer's feet must be for their head to stay
 // under the top of the door opening (opening top is 24px above center, heads ~42px tall,
 // tallest art reaches 50px).
@@ -137,9 +124,6 @@ const MISSING_PRIMARY_REPUTATION_PENALTY = 1;
 const REGISTER_INTERACT_RANGE = 12;
 // How far the operating player's feet sit past the register graphic's top edge (px).
 const REGISTER_BEHIND_OVERLAP = 10;
-// Extra drop (share of the player's height) when standing behind a register from above.
-const REGISTER_ABOVE_LOWER_FRACTION = 0.3;
-const REGISTER_BELOW_RAISE_FRACTION = 0.65;
 // How far (px) the player's feet may be from a shelf's front edge to use it: a few pixels.
 const SHELF_INTERACT_RANGE = 12;
 
@@ -270,8 +254,6 @@ export class GameScene extends Phaser.Scene {
     this.fixtureViews = new FixtureViews(this);
     this.fixtureSystem = new FixtureSystem(this);
     for (const fixture of this.fixtures.all()) this.fixtureViews.show(fixture);
-    this.operatingRegister = false;
-    this.playerPositionBeforeRegister = null;
 
     // Customers spawn just inside the front door. The small jitter box keeps several quick
     // arrivals from stacking on one pixel.
@@ -285,17 +267,11 @@ export class GameScene extends Phaser.Scene {
     // Customers leave by walking back out through the same door.
     this.exitPoint = { x: doorwayPoint.x, y: this.storeDoor.y + DOORWAY_FEET_OFFSET };
 
+    this.checkoutSystem = new CheckoutSystem(this);
     this.checkoutWindow = new CheckoutWindow(this.windowManager);
-    this.checkoutWindow.onFirstScan = () => this.operatingLine()[0]?.resetPatience();
-    this.checkoutWindow.getRegisterScreenArea = () => this.getRegisterScreenArea();
+    this.checkoutWindow.onFirstScan = () => this.checkoutSystem.operatingLine()[0]?.resetPatience();
+    this.checkoutWindow.getRegisterScreenArea = () => this.checkoutSystem.getRegisterScreenArea();
     this.shelfStockingWindow = new ShelfStockingWindow(this);
-    // One customer line per register, keyed by fixture id; index 0 is being checked out.
-    // Re-laid-out by layoutRegisterLine whenever a line changes so they queue single-file.
-    this.registerLines = new Map();
-    // The register the player is standing behind, while operatingRegister is true.
-    this.operatingRegisterFixture = null;
-    // That register's normal depth while it's lifted over the player tucked behind it.
-    this.registerDepthBeforeTuck = null;
 
     // Customers collide with walls and fixtures but not the register (they queue flush
     // against it) and not each other. The pathfinder can't route around moving customers,
@@ -442,7 +418,7 @@ export class GameScene extends Phaser.Scene {
         `Left angry!\n${reputationPenaltyText(penalty, customer.factionId)}`,
         "#ef4444",
       );
-      this.handleAngryLeave(customer, cart);
+      this.checkoutSystem.handleAngryLeave(customer, cart);
     });
     this.eventBus.on(GAME_EVENTS.CUSTOMER_MISSING_PRIMARY, ({ customer, itemIds, itemNames }) => {
       const penalty = MISSING_PRIMARY_REPUTATION_PENALTY;
@@ -664,7 +640,7 @@ export class GameScene extends Phaser.Scene {
       }
       if (pad.justPressed(PAD.Y)) this.startCratePress("putDown", { button: PAD.Y });
       if (pad.justPressed(PAD.R3)) this.markNextCrateDown();
-      if (pad.justPressed(PAD.B) && this.operatingRegister) this.endRegisterSession();
+      if (pad.justPressed(PAD.B) && this.checkoutSystem.operatingRegister) this.checkoutSystem.endRegisterSession();
     }
     if (pad.justPressed(PAD.LB)) this.handleUnusedMenuButton(PAD.LB);
     if (pad.justPressed(PAD.RB)) this.handleUnusedMenuButton(PAD.RB);
@@ -672,7 +648,7 @@ export class GameScene extends Phaser.Scene {
 
   // Buttons the open screen had no use for, e.g. B or Y while ringing up a customer.
   handleUnusedMenuButton(button) {
-    if (button === PAD.B && this.operatingRegister) this.endRegisterSession();
+    if (button === PAD.B && this.checkoutSystem.operatingRegister) this.checkoutSystem.endRegisterSession();
     if ((button === PAD.LB || button === PAD.RB) && this.controlMode.allows("cameraZoom")) {
       this.cameraRig.zoomBy(button === PAD.RB ? 1 : -1);
     }
@@ -934,7 +910,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   // Just past the body box's rear edge, excluding transparent picture margins.
-  getBehindRegisterPoint(register = this.operatingRegisterFixture ?? this.fixtures.register()) {
+  getBehindRegisterPoint(register = this.checkoutSystem.operatingRegisterFixture ?? this.fixtures.register()) {
     const bounds = register.sprite.body;
     const { dx, dy } = fixtureFacingStep(register, true);
     const player = this.player.sprite;
@@ -1416,7 +1392,7 @@ export class GameScene extends Phaser.Scene {
    */
   getHoldToMoveFixture() {
     if (!this.controlMode.allows("interact") || this.getCarriedCrates().length > 0 || this.heldTrash) return null;
-    if (this.operatingRegister || this.areas.nearbyPortal()) return null;
+    if (this.checkoutSystem.operatingRegister || this.areas.nearbyPortal()) return null;
     const target = this.interactables?.findTarget("interact", this.getInteractionOrigin());
     let fixture = null;
     if (target?.kind === "fixture" && this.isPlayerFacingFixture(target.target)) fixture = target.target;
@@ -1483,8 +1459,8 @@ export class GameScene extends Phaser.Scene {
   handleInteract() {
     if (!this.controlMode.allows("interact")) return;
     // Pressing E behind the counter always steps away, whatever is in hand.
-    if (this.operatingRegister) {
-      this.endRegisterSession();
+    if (this.checkoutSystem.operatingRegister) {
+      this.checkoutSystem.endRegisterSession();
       return;
     }
     // Doors come first so a carried crate goes through with the player, not onto the floor.
@@ -1620,7 +1596,7 @@ export class GameScene extends Phaser.Scene {
 
   // The trash just ahead of his feet, the way he faces.
   findTrashInFront() {
-    if (!this.trash || this.areas.playerArea === AREA.BACKROOM || this.operatingRegister) return null;
+    if (!this.trash || this.areas.playerArea === AREA.BACKROOM || this.checkoutSystem.operatingRegister) return null;
     const step = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[this.player.currentFacing];
     if (!step) return null;
     const { center } = this.player.sprite.body;
@@ -1794,7 +1770,7 @@ export class GameScene extends Phaser.Scene {
   // Ctrl / right stick click: moves the green arrow one crate down the stack, looping back to
   // the top after the bottom.
   markNextCrateDown() {
-    if (!this.controlMode.allows("crate") || this.operatingRegister) return;
+    if (!this.controlMode.allows("crate") || this.checkoutSystem.operatingRegister) return;
     const stack = this.markedFloorStack();
     if (!stack || stack.crates.length < 2) return;
     this.markedFromTop = (this.markedFromTop + 1) % stack.crates.length;
@@ -1810,7 +1786,7 @@ export class GameScene extends Phaser.Scene {
     const say = (message, color = "#94a3b8") => () => this.showGameMessage(message, color);
     const holding = this.getCarriedCrates().length;
     const top = this.carriedCrate;
-    if (this.operatingRegister) {
+    if (this.checkoutSystem.operatingRegister) {
       return {
         pickUp: { tap: say("Leave the register to pick up a crate") },
         putDown: holding ? { tap: say("Leave the register to put down a crate") } : undefined,
@@ -2114,8 +2090,8 @@ export class GameScene extends Phaser.Scene {
       if (sprite?.active) sprite.setDepth(PEOPLE_DEPTH_BASE + (sprite.body?.bottom ?? sprite.y));
     }
     // Tucked behind the counter, the register draws just over him and hides his legs.
-    if (this.registerDepthBeforeTuck != null && this.player?.sprite) {
-      this.operatingRegisterFixture?.sprite?.setDepth(this.player.sprite.depth + 0.5);
+    if (this.checkoutSystem.registerDepthBeforeTuck != null && this.player?.sprite) {
+      this.checkoutSystem.operatingRegisterFixture?.sprite?.setDepth(this.player.sprite.depth + 0.5);
     }
   }
 
@@ -2423,8 +2399,8 @@ export class GameScene extends Phaser.Scene {
   // Keyboard equivalent of clicking the register: steps behind the counter if close enough,
   // even with no customer waiting. Returns false so handleInteract can show its fallback.
   tryOpenRegister() {
-    if (!this.isPlayerNearRegister()) return false;
-    this.openRegisterWindow();
+    if (!this.checkoutSystem.isPlayerNearRegister()) return false;
+    this.checkoutSystem.openRegisterWindow();
     return true;
   }
 
@@ -2451,354 +2427,6 @@ export class GameScene extends Phaser.Scene {
   // Clicking the register or pressing E nearby always puts the player behind the counter,
   // customer or not; only the scan window needs someone at the front of the line. A
   // customer who arrives later opens it automatically (see handleJoinQueue).
-  openRegisterWindow() {
-    if (!this.controlMode.allows("interact")) return;
-    if (!this.isPlayerNearRegister()) return;
-
-    this.beginRegisterSession(); // no-ops if already in one
-
-    const frontCustomer = this.operatingLine()[0];
-    if (frontCustomer) this.startCheckout(frontCustomer); // re-renders/refocuses if already open
-  }
-
-  resumeRegisterCheckout() {
-    if (!this.operatingRegister || !this.controlMode.allows("interact")) return;
-    const customer = this.operatingLine()[0];
-    if (!customer) return;
-    this.startCheckout(customer); // resumes the sale if it's this customer's
-  }
-
-  /**
-   * Go-Backs pack themselves: every few seconds, anything in the bin is poured into any crate
-   * that already holds the same item and has room, then into empty crates, and only then
-   * into new crates set down near the register. A message appears only when something new
-   * couldn't be packed.
-   * @param {number} time - scene time in ms
-   */
-  autoPackGoBacks(time) {
-    const stock = this.gameState.goBacks.stock.filter((entry) => entry.quantity > 0);
-    if (stock.length === 0) {
-      this.goBacksPackRetryAt = 0;
-      this.goBacksStuckKey = null;
-      return;
-    }
-    if (time < (this.goBacksPackRetryAt ?? 0)) return;
-    this.fillExistingCratesWithGoBacks();
-    const left = this.gameState.goBacks.stock.filter((entry) => entry.quantity > 0);
-    if (left.length === 0) return;
-    const key = left.map((entry) => `${entry.itemId}:${entry.quantity}`).sort().join(",");
-    const quiet = key === this.goBacksStuckKey;
-    this.packGoBacks({ quiet });
-    const stuck = this.gameState.goBacks.stock.some((entry) => entry.quantity > 0);
-    this.goBacksStuckKey = stuck ? key : null;
-    // Retry later when there's no room yet: crates or customers may move out of the way.
-    this.goBacksPackRetryAt = stuck ? time + 5000 : 0;
-  }
-
-  // Pours Go-Backs into any crate with room (on the floor, in stacks, on the Loading Pad, or in
-  // the player's arms): same-item crates first, then empty ones. Crates an employee is carrying
-  // are mid-job and left alone.
-  fillExistingCratesWithGoBacks() {
-    const crates = [
-      ...(this.restockCrates ?? [])
-        .filter((crate) => !crate.isCarried && !crate.launch)
-        .flatMap((crate) => [crate, ...(this.floorStacks?.get(crate) ?? [])]),
-      ...this.getCarriedCrates(),
-    ].filter((crate) => crate.kind === "item");
-    let moved = 0;
-    for (const entry of [...this.gameState.goBacks.stock]) {
-      const sameItem = crates.filter((crate) => crate.quantity > 0 && crate.itemId === entry.itemId);
-      for (const crate of [...sameItem, ...crates.filter((crate) => crate.quantity === 0)]) {
-        if (this.gameState.goBacks.available(entry.itemId) <= 0) break;
-        if (crate.getRemainingUnitsFor(entry.itemId) <= 0) continue;
-        moved += this.gameState.goBacks.packInto(entry.itemId, crate);
-      }
-    }
-    return moved;
-  }
-
-  /**
-   * Packs whatever is left in the Go-Backs bin into new crates and sets them down, stacked up
-   * to FLOOR_STACK_MAX high, as close to the register as they fit without blocking the customer
-   * line, the spot behind the counter, doorways, or the fronts of fixtures. Whatever doesn't fit
-   * on the floor stays in the bin.
-   * @param {{ quiet?: boolean }} [options] - quiet skips the "no room" message
-   * @returns {number} how many crates were set down
-   */
-  packGoBacks({ quiet = false } = {}) {
-    const register = this.operatingRegisterFixture ?? this.fixtures.registers()[0];
-    if (!register?.sprite) return 0;
-    const loads = [];
-    for (const entry of this.gameState.goBacks.stock) {
-      const limit = getCrateItemLimit(database.getItem(entry.itemId)?.boxSize);
-      if (entry.quantity <= 0 || limit <= 0) continue;
-      for (let left = entry.quantity; left > 0; left -= limit) loads.push(entry.itemId);
-    }
-    if (loads.length === 0) return 0;
-
-    const reserved = [
-      ...this.goBacksReservedRectangles(),
-      // Nobody gets boxed in: keep a full tile of space around every person in the shop.
-      ...[...this.customers.map((customer) => customer.sprite), ...this.employees.map((employee) => employee.sprite)]
-        .map((sprite) => {
-          const feet = sprite.body?.center ?? sprite;
-          return { left: feet.x - TILE_SIZE, right: feet.x + TILE_SIZE, top: feet.y - TILE_SIZE, bottom: feet.y + TILE_SIZE };
-        }),
-    ];
-    const { centerX, centerY } = register.sprite.getBounds();
-    let packed = 0;
-    let floorStacksPlaced = 0;
-    while (packed < loads.length) {
-      const base = this.createItemCrate(null, 0, centerX, centerY);
-      base.sprite.body.enable = false; // so it doesn't count as an obstacle while it looks for room
-      const spot = this.findGoBacksSpot(base, reserved);
-      if (!spot) {
-        base.destroy();
-        break;
-      }
-      if (!spot.inBackroom) floorStacksPlaced += 1;
-      const stack = [base];
-      while (stack.length < FLOOR_STACK_MAX && packed + stack.length < loads.length) {
-        stack.push(this.createItemCrate(null, 0, spot.x, spot.y));
-      }
-      stack.forEach((crate, index) => this.gameState.goBacks.packInto(loads[packed + index], crate));
-      base.drop(spot.x, spot.y, 0, 0, this.crateMotionPaused);
-      this.restockCrates.push(base);
-      const above = stack.slice(1);
-      for (const crate of above) crate.pickUp(base.sprite);
-      if (above.length) this.floorStacks.set(base, above);
-      packed += stack.length;
-    }
-    this.syncFloorStacks();
-    this.gameState.shop.changed();
-    const crates = (count) => `${count} ${count === 1 ? "crate" : "crates"}`;
-    if (packed === 0) {
-      if (!quiet) this.showGameMessage("No clear floor space for the Go-Backs crates. Trying again shortly.", "#f59e0b");
-    } else if (packed < loads.length) {
-      if (!quiet) {
-        this.showGameMessage(`Packed ${crates(packed)} of Go-Backs. ` +
-          "There wasn't floor space for the rest, so they're still in the bin.", "#f59e0b");
-      }
-    } else if (floorStacksPlaced === 0) {
-      this.showGameMessage(`Packed the Go-Backs into ${crates(packed)} in the backroom.`, "#10b981");
-    } else {
-      this.showGameMessage(`Packed the Go-Backs into ${crates(packed)}. ` +
-        "The backroom was full, so some crates sit out in the store.", "#10b981");
-    }
-    return packed;
-  }
-
-  // Floor the Go-Backs crates must leave clear (px): the customer line, behind the counter,
-  // doorways, and where people stand to use fixtures.
-  goBacksReservedRectangles() {
-    const tileAround = ({ x, y }) => ({
-      left: x - TILE_SIZE / 2, right: x + TILE_SIZE / 2, top: y - TILE_SIZE / 2, bottom: y + TILE_SIZE / 2,
-    });
-    const cellCenter = ({ gx, gy }) => ({ x: this.room.worldX(gx), y: this.room.worldY(gy) });
-    const link = getBackroomLink();
-    const cells = [
-      ...getStoreDoorCells().flatMap(({ gx, gy }) => [{ gx, gy }, { gx, gy: gy + 1 }]),
-      link.shop, link.backroom,
-      ...this.fixtures.shelves().flatMap((fixture) => fixture.accessCells ?? fixtureAccessCells(fixture)),
-    ];
-    return [
-      ...this.fixtures.registers().flatMap((register) => [
-        ...(register.queuePoints ?? []).map(tileAround),
-        tileAround(this.getBehindRegisterPoint(register)),
-      ]),
-      ...cells.map((cell) => tileAround(cellCenter(cell))),
-    ];
-  }
-
-  /**
-   * Where a Go-Backs crate stack can sit: a backroom tile first, then the sales floor,
-   * where spots with a whole empty tile of clearance on every side are preferred, so the
-   * crates never crowd anything. Reserved rectangles (queues, doorways, people) are
-   * skipped everywhere.
-   * @param {Crate} crate - the probing crate, body disabled
-   * @param {object[]} reserved - rectangles to keep clear
-   * @returns {{ x: number, y: number, inBackroom: boolean } | null}
-   */
-  findGoBacksSpot(crate, reserved) {
-    const half = TILE_SIZE / 2;
-    const isReserved = (x, y) => reserved.some((rect) =>
-      x - half < rect.right && x + half > rect.left && y - half < rect.bottom && y + half > rect.top);
-    const scan = (area, clearance, inBackroom) => {
-      for (let y = area.top + half; y <= area.bottom - half; y += TILE_SIZE) {
-        for (let x = area.left + half; x <= area.right - half; x += TILE_SIZE) {
-          if (isReserved(x, y)) continue;
-          if (crate.isDropPositionClear(x, y, this.player.sprite, clearance)) return { x, y, inBackroom };
-        }
-      }
-      return null;
-    };
-    const backroom = getBackroomBounds(this.room.zones);
-    const backroomSpot = scan({
-      left: backroom.x, top: backroom.y,
-      right: backroom.x + backroom.width, bottom: backroom.y + backroom.height,
-    }, 0, true);
-    if (backroomSpot) return backroomSpot;
-    const floorAreas = this.room.zones
-      .filter((zone) => !zone.locked && !BACKROOM_UPGRADE_ORDER.includes(zone.id))
-      .map((zone) => ({
-        left: zone.gridX * TILE_SIZE, top: zone.gridY * TILE_SIZE,
-        right: (zone.gridX + zone.gridW) * TILE_SIZE, bottom: (zone.gridY + zone.gridH) * TILE_SIZE,
-      }));
-    for (const clearance of [TILE_SIZE, 0]) {
-      for (const area of floorAreas) {
-        const spot = scan(area, clearance, false);
-        if (spot) return spot;
-      }
-    }
-    return null;
-  }
-
-  /**
-   * An employee ringing up the front customer holds their patience. The player's own
-   * checkout doesn't: the first scan resets patience once (see CheckoutWindow.onFirstScan).
-   * @param {Customer} customer
-   */
-  isServingCustomer(customer) {
-    return this.employees.some((employee) =>
-        employee.state === "SERVING_REGISTER" &&
-        employee.currentJob?.customer === customer &&
-        employee.currentJob?.register &&
-        this.lineFor(employee.currentJob.register)[0] === customer,
-      );
-  }
-
-  /**
-   * An angry customer's cart goes to the Go-Backs bin, and their line moves up.
-   * @param {Customer} customer
-   * @param {Array<object>} cart
-   */
-  handleAngryLeave(customer, cart) {
-    this.debugInfo?.record("customer-left-angry", {
-      customerId: this.debugInfo.identifyCustomer(customer), cart,
-    });
-    this.gameState.goBacks.addCart(cart);
-    const spot = this.findCustomerLine(customer);
-    if (!spot) return;
-    spot.line.splice(spot.index, 1);
-    this.layoutRegisterLine(spot.register);
-    if (spot.index !== 0) return;
-    if (!this.isPlayerOperating(spot.register)) return;
-    // Also drops a sale the player stepped away from, so it can't be resumed later.
-    this.checkoutWindow.close();
-    if (spot.line[0]) this.startCheckout(spot.line[0]);
-  }
-
-  // Screen area covering the operated register and the player behind it, plus the screen
-  // space between the HUD and the crate footer, for placing the register windows.
-  getRegisterScreenArea() {
-    const register = this.operatingRegisterFixture ?? this.fixtures.register();
-    if (!register) return null;
-    const { w, h } = fixtureFootprint(register);
-    const rects = [worldToClientRect(this, register.gx * TILE_SIZE, register.gy * TILE_SIZE, w * TILE_SIZE, h * TILE_SIZE)];
-    for (const sprite of [register.sprite, this.player?.sprite]) {
-      if (!sprite?.getBounds) continue;
-      const bounds = sprite.getBounds();
-      rects.push(worldToClientRect(this, bounds.x, bounds.y, bounds.width, bounds.height));
-    }
-    const hud = document.getElementById("persistent-hud")?.getBoundingClientRect().bottom ?? 0;
-    const viewport = document.getElementById("game-container").getBoundingClientRect();
-    const scale = getGameScale();
-    return {
-      target: {
-        left: Math.min(...rects.map((rect) => rect.left)),
-        top: Math.min(...rects.map((rect) => rect.top)),
-        right: Math.max(...rects.map((rect) => rect.right)),
-        bottom: Math.max(...rects.map((rect) => rect.bottom)),
-      },
-      viewport: {
-        left: viewport.left + 8 * scale,
-        top: hud + 8 * scale,
-        right: viewport.right - 8 * scale,
-        bottom: viewport.bottom - (CRATE_FOOTER_HEIGHT_PX + 8) * scale,
-      },
-    };
-  }
-
-  // Measured to the nearest edge of a register graphic, so it works from any side and
-  // follows registers wherever they're placed. Always true while already behind a counter.
-  isPlayerNearRegister() {
-    if (this.operatingRegister) return true;
-    return Boolean(this.getNearbyRegisterTarget());
-  }
-
-  // The register fixture within the player's reach, or null.
-  getNearbyRegisterTarget() {
-    return this.interactables.findTarget("register", this.getInteractionOrigin())?.target ?? null;
-  }
-
-  // Hold the player at the validated rear access point until they leave the counter.
-  beginRegisterSession(register = this.getNearbyRegisterTarget()) {
-    if (this.operatingRegister) return;
-    if (!register) return;
-    // Working the counter needs empty hands; crates would lock the player in place.
-    if (this.getCarriedCrates().length > 0) {
-      this.showShopMessage("Put down what you're carrying before working the register.");
-      return;
-    }
-
-    this.employees.forEach((employee) => employee.cancelRegisterJob(register));
-    this.operatingRegister = true;
-    this.operatingRegisterFixture = register;
-    this.playerPositionBeforeRegister = { x: this.player.sprite.x, y: this.player.sprite.y };
-    const behind = this.getBehindRegisterPoint(register);
-    // From above, the player stands tucked behind the counter, partly hidden by it.
-    if (fixtureFacingStep(register, true).dy < 0) {
-      behind.y += PLAYER_CHARACTER_HEIGHT * REGISTER_ABOVE_LOWER_FRACTION;
-      // The counter is lifted just over him (see sortPeopleByFeet) rather than sinking him
-      // under it, so he stays above every floor crate beside or behind him.
-      this.registerDepthBeforeTuck = register.sprite.depth;
-    } else if (fixtureFacingStep(register, true).dy > 0) {
-      // From below, the player stands slightly over the front of the counter.
-      behind.y -= PLAYER_CHARACTER_HEIGHT * REGISTER_BELOW_RAISE_FRACTION;
-    }
-    this.player.teleportTo(behind.x, behind.y);
-    this.player.forceFacing(fixtureFacing(register));
-    this.player.inputEnabled = false;
-    this.player.sprite.body.enable = false;
-    this.eventBus.emit(GAME_EVENTS.REGISTER_SESSION_STARTED, {
-      registerId: register.id,
-    });
-    this.sortPeopleByFeet();
-    this.syncFloorStacks();
-  }
-
-  // Returns the player to where they stood before beginRegisterSession(). Only called when
-  // the player leaves on purpose (E again), not when the checkout window closes because
-  // the line ran out.
-  endRegisterSession() {
-    if (!this.operatingRegister) return;
-
-    const register = this.operatingRegisterFixture;
-    this.operatingRegister = false;
-    this.operatingRegisterFixture = null;
-    // The scan UI can't be operated from wherever the player is teleported back to. The
-    // sale is set aside, not thrown away, so coming back can't re-roll it.
-    if (this.checkoutWindow.mode === "checkout") this.checkoutWindow.suspend();
-    this.player.sprite.body.enable = true;
-    this.player.inputEnabled = true;
-    if (this.registerDepthBeforeTuck != null) {
-      register?.sprite?.setDepth(this.registerDepthBeforeTuck);
-      this.registerDepthBeforeTuck = null;
-    }
-    this.player.teleportTo(
-      this.playerPositionBeforeRegister.x,
-      this.playerPositionBeforeRegister.y,
-    );
-    this.playerPositionBeforeRegister = null;
-    this.eventBus.emit(GAME_EVENTS.REGISTER_SESSION_ENDED, {
-      registerId: register?.id ?? null,
-    });
-    this.sortPeopleByFeet();
-    this.syncFloorStacks();
-  }
-
-  // --- Customer arrivals: systems/CustomerFlow.js ---
-
   getItem(itemId) {
     return database.getItem(itemId);
   }
@@ -2810,194 +2438,6 @@ export class GameScene extends Phaser.Scene {
    * @param {object} register - register fixture
    * @returns {Customer[]}
    */
-  lineFor(register) {
-    if (!this.registerLines.has(register.id)) this.registerLines.set(register.id, []);
-    return this.registerLines.get(register.id);
-  }
-
-  /** The line of the register the player is working, or an empty array. */
-  operatingLine() {
-    return this.operatingRegisterFixture ? this.lineFor(this.operatingRegisterFixture) : [];
-  }
-
-  /** Whether the player is working this specific register. */
-  isPlayerOperating(register) {
-    return this.operatingRegister && this.operatingRegisterFixture === register;
-  }
-
-  /** Whether any register has a customer waiting. */
-  anyRegisterLineWaiting() {
-    return this.fixtures.registers().some((register) => this.lineFor(register).length > 0);
-  }
-
-  /**
-   * The register fixture and line a queued customer belongs to, or null.
-   * @param {Customer} customer
-   */
-  findCustomerLine(customer) {
-    for (const register of this.fixtures.registers()) {
-      const line = this.lineFor(register);
-      const index = line.indexOf(customer);
-      if (index !== -1) return { register, line, index };
-    }
-    return null;
-  }
-
-  /**
-   * Only the front customer's cart shows in the checkout window; the rest wait single-file
-   * with patience bubbles (see Customer.updatePatience).
-   * @param {Customer} customer
-   */
-  handleJoinQueue(customer) {
-    this.debugInfo?.recordCustomer("customer-joined-queue", customer);
-    const register = this.fixtures.get(customer.targetRegisterId) ?? this.fixtures.register();
-    const line = this.lineFor(register);
-    line.push(customer);
-    this.layoutRegisterLine(register);
-
-    if (line.length === 1) {
-      this.startCheckout(customer);
-    }
-  }
-
-  // A distinct queue waypoint for a customer heading to a register, so two walkers never
-  // aim at the same pixel; layoutRegisterLine fixes final spots on arrival. The customer
-  // picks the shortest line, counting shoppers already walking to it. Derived fresh
-  // from live customer states rather than a counter, so a customer who gives up can't
-  // leak a reservation. The caller is still SEEK_SHELF, so it isn't counted.
-  reserveQueueSlot(customer) {
-    const registers = this.fixtures.registers();
-    const headedTo = (register) => this.customers.filter((candidate) =>
-      candidate !== customer && candidate.state === "SEEK_REGISTER" &&
-      candidate.targetRegisterId === register.id).length;
-    const register = registers.reduce((best, candidate) =>
-      this.lineFor(candidate).length + headedTo(candidate) <
-        this.lineFor(best).length + headedTo(best) ? candidate : best);
-    customer.targetRegisterId = register.id;
-    customer.registerPoint = register.queuePoints[0];
-    const index = this.lineFor(register).length + headedTo(register);
-    return register.queuePoints[Math.min(index, register.queuePoints.length - 1)];
-  }
-
-  /**
-   * Spreads shoppers heading to the same shelf across its clear front cells.
-   * @param {ShelfFixture} shelf
-   * @param {Customer | null} arrivingCustomer - excluded from the count
-   * @returns {{ x: number, y: number }} world-space waypoint
-   */
-  reserveShelfSlot(shelf, arrivingCustomer = null) {
-    const inFlight = this.customers.filter((c) =>
-      c !== arrivingCustomer && (c.state === "SEEK_SHELF" || c.state === "BROWSING") &&
-      c.fixture === shelf,
-    ).length;
-    const cells = shelf.accessCells ?? fixtureAccessCells(shelf);
-    return fixtureStandingSpot(shelf, cells[inFlight % cells.length]);
-  }
-
-  reserveExitSlot() {
-    const occupied = new Set(this.customers
-      .filter((customer) => customer.state === "LEAVING" && customer.destination)
-      .map((customer) => `${customer.destination.x},${customer.destination.y}`));
-    const offset = CUSTOMER_EXIT_SLOT_OFFSETS.find(({ dx, dy }) =>
-      !occupied.has(`${this.exitPoint.x + dx},${this.exitPoint.y + dy}`),
-    );
-    if (!offset) throw new Error("No unoccupied customer exit slot is available.");
-    return { x: this.exitPoint.x + offset.dx, y: this.exitPoint.y + offset.dy };
-  }
-
-  // Queue cells remain reachable even when a register is moved near other fixtures.
-  layoutRegisterLine(register) {
-    this.lineFor(register).forEach((customer, index) => {
-      const point = register.queuePoints[index];
-      customer.setQueueTarget(point.x, point.y);
-    });
-  }
-
-  /**
-   * Opens checkout for this customer if the player is at their register, stepping them
-   * behind the counter if needed; otherwise does nothing until openRegisterWindow retries.
-   * Each finished sale moves the line up and serves the next customer.
-   * @param {Customer} customer
-   */
-  startCheckout(customer) {
-    if (!this.controlMode.allows("interact")) return;
-    const spot = this.findCustomerLine(customer);
-    if (!spot) return;
-    // Only a player already behind this customer's register serves them. Standing near
-    // the counter never pulls the player onto it; E (openRegisterWindow) is the only way on.
-    if (!this.isPlayerOperating(spot.register)) return;
-
-    // Stepping away mid-sale and coming back picks up exactly where it was left.
-    if (this.checkoutWindow.isCheckingOut(customer.cart)) {
-      this.checkoutWindow.resume();
-      return;
-    }
-    // Decided once per customer, so restarting the sale can't change how they pay.
-    customer.checkoutPayment ??= chooseCustomerPayment(customer.factionId);
-
-    this.checkoutWindow.openForCustomer(customer.cart, () => {
-      const total = customer.completeSale();
-      this.eventBus.emit(GAME_EVENTS.CUSTOMER_SALE_COMPLETED, { customer, total });
-      const line = this.lineFor(spot.register);
-      if (line[0] === customer) line.shift();
-      this.layoutRegisterLine(spot.register); // shuffle everyone else forward one spot
-
-      const nextCustomer = line[0];
-      nextCustomer?.resetPatience(); // any sale resets the next in line's patience
-      if (nextCustomer) {
-        this.startCheckout(nextCustomer);
-      } else {
-        // Nothing left to scan: the belt closes, but the player stays at the counter.
-        this.checkoutWindow.close();
-      }
-    }, {
-      cash: ["cash", "m-scrips"].includes(customer.checkoutPayment.type),
-      exact: customer.checkoutPayment.exact,
-      currency: customer.checkoutPayment.type === "m-scrips" ? "m-scrips" : "credits",
-      paymentType: customer.checkoutPayment.type,
-      chitCode: customer.checkoutPayment.code,
-      onWrongChange: () => this.gameState.reputation.lose(1),
-      // Three Chit mistakes (wrong keys or running out of time) in one order: the customer gives up and storms out.
-      onChitFailed: () => customer.leaveAngry(),
-    });
-  }
-
-  completeEmployeeCheckout(employee, customer) {
-    const register = employee.currentJob?.register;
-    if (!register || this.isPlayerOperating(register) ||
-      employee.currentJob?.customer !== customer) return false;
-    const line = this.lineFor(register);
-    if (line[0] !== customer) return false;
-    if (this.checkoutWindow.isCheckingOut(customer.cart)) this.checkoutWindow.close();
-    const total = customer.completeSale();
-    this.eventBus.emit(GAME_EVENTS.CUSTOMER_SALE_COMPLETED, { customer, total });
-    this.showFloatingText(
-      employee.sprite.x,
-      employee.sprite.y - 50,
-      `Sale completed: ${formatTransactionTotal(total)}`,
-      "#10b981",
-    );
-    line.shift();
-    this.layoutRegisterLine(register);
-    line[0]?.resetPatience();
-    return true;
-  }
-
-  // Shelf Test Room's automatic cashier: serves the front customer like an employee would.
-  completeSandboxCheckout(customer) {
-    if (!this.sandbox) return false;
-    const spot = this.findCustomerLine(customer);
-    if (!spot || spot.index !== 0) return false;
-    if (this.checkoutWindow.isCheckingOut(customer.cart)) this.checkoutWindow.close();
-    const total = customer.completeSale();
-    this.eventBus.emit(GAME_EVENTS.CUSTOMER_SALE_COMPLETED, { customer, total });
-    spot.line.shift();
-    this.layoutRegisterLine(spot.register);
-    spot.line[0]?.resetPatience();
-    return true;
-  }
-
-  // Called by customers who couldn't reach where they were going; only the test room counts them.
   noteCustomerGaveUp(customer, reason) {
     this.sandboxRoom?.noteGaveUp(customer, reason);
   }
@@ -3062,7 +2502,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.customerFlow.refreshPool(delta);
     this.customerFlow.spawnScheduled();
-    if (!movementFrozen && !this.fixturePlacement.active) this.autoPackGoBacks(time);
+    if (!movementFrozen && !this.fixturePlacement.active) this.checkoutSystem.autoPackGoBacks(time);
     this.shift.update();
   }
 }

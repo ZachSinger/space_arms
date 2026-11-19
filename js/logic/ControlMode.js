@@ -32,7 +32,7 @@ export class ControlMode {
     const openWindows = [...(scene.windowManager?.windows?.values() ?? [])]
       .filter((window) => window.isOpen);
     const hasBlockingModal = openWindows.some((window) =>
-      !scene.operatingRegister || !REGISTER_WINDOWS.has(window.id));
+      !scene.checkoutSystem?.operatingRegister || !REGISTER_WINDOWS.has(window.id));
     const placementBlocked = scene.fixturePlacement?.active && (
       openWindows.some((window) => window.element?.classList.contains("active")) ||
       scene.uiNavigator?.hasScope?.()
@@ -44,7 +44,7 @@ export class ControlMode {
     else if (scene.fixturePlacement?.active && !placementBlocked) nextMode = CONTROL_MODES.PLACING;
     else if (scene.fixturePlacement?.active) nextMode = CONTROL_MODES.MODAL;
     else if (hasBlockingModal) nextMode = CONTROL_MODES.MODAL;
-    else if (scene.operatingRegister) nextMode = CONTROL_MODES.REGISTER;
+    else if (scene.checkoutSystem?.operatingRegister) nextMode = CONTROL_MODES.REGISTER;
     else if (scene.carriedCrate) nextMode = CONTROL_MODES.CARRYING;
 
     this.mode = nextMode;

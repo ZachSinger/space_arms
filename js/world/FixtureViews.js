@@ -132,7 +132,7 @@ export class FixtureViews {
       .setDepth(2)
       .setInteractive({ useHandCursor: true });
     sprite.on("pointerdown", (pointer) => {
-      if (pointer.event?.target === scene.game.canvas) scene.openRegisterWindow();
+      if (pointer.event?.target === scene.game.canvas) scene.checkoutSystem.openRegisterWindow();
     });
     scene.registerGroup.add(sprite); // see registerGroup in create()
     fixture.sprite = sprite;

@@ -122,7 +122,7 @@ export function createDebugSnapshot(scene, identifyCustomer, recentEvents, envir
       activeFactions: scene.gameState.catalog.activeFactions,
       sprite: spriteState(scene.player.sprite),
       inputEnabled: scene.player.inputEnabled,
-      operatingRegister: scene.operatingRegister,
+      operatingRegister: scene.checkoutSystem.operatingRegister,
     },
     traffic: {
       tuning: CUSTOMER_POOL_TUNING,
@@ -132,7 +132,7 @@ export function createDebugSnapshot(scene, identifyCustomer, recentEvents, envir
       nextScheduledArrival: scene.customerFlow.nextArrival,
       remainingScheduledArrivals: scene.customerFlow.schedule.length - scene.customerFlow.nextArrival,
       registerLines: Object.fromEntries(scene.fixtures.registers().map((register) =>
-        [register.id, scene.lineFor(register).map(identifyCustomer)])),
+        [register.id, scene.checkoutSystem.lineFor(register).map(identifyCustomer)])),
     },
     customers: scene.customers.map((customer) =>
       snapshotCustomer(customer, identifyCustomer(customer)),

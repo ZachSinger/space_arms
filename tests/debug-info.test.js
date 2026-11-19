@@ -41,8 +41,9 @@ function fixtureScene() {
       nextArrival: 1,
     },
     customers: [customer],
-    registerLines: new Map([["register", [customer]]]),
-    lineFor: (register) => register.id === "register" ? [customer] : [],
+    checkoutSystem: {
+      lineFor: (register) => register.id === "register" ? [customer] : [],
+    },
     fixtures: { all: () => [fixture], registers: () => [{ id: "register" }] },
     restockCrates: [{ serialize: () => ({ itemId: "ammo", quantity: 5, velocityX: NaN }) }],
     carriedCrate: null,

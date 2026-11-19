@@ -69,7 +69,7 @@ function queuedCustomer({ serving = () => false, storeTemporarilyClosed = false 
   customer.reactionRemainingMs = 0;
   customer.scene = {
     customerFlow: { temporarilyClosed: storeTemporarilyClosed },
-    isServingCustomer: serving,
+    checkoutSystem: { isServingCustomer: serving },
     showFloatingText: (...args) => floating.push(args),
     add: {
       graphics: () => {

@@ -185,7 +185,7 @@ export class FixturePlacement {
    */
   start(typeId, original, fixtureCrate) {
     this.cancel();
-    this.scene.endRegisterSession();
+    this.scene.checkoutSystem.endRegisterSession();
     // Placement uses the whole screen: close the tablet or anything else on top.
     this.scene.windowManager.closeAllExcept();
     this.original = original;

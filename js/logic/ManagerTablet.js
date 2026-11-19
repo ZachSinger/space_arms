@@ -114,7 +114,7 @@ export class ManagerTablet {
       this.fixturePurchaseNotice = "";
       this.fixtureSaleConfirmation = null;
       this.fixtureHighlight.reset();
-      this.scene.resumeRegisterCheckout();
+      this.scene.checkoutSystem.resumeRegisterCheckout();
     };
     this.disableInventoryNavigation = InventoryRenderer.enableListNavigation(
       this.uiWindow.element,

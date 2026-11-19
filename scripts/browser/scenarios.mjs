@@ -133,15 +133,15 @@ export const scenarios = {
       const point = scene.getBehindRegisterPoint(register);
       scene.player.teleportTo(point.x, point.y);
       const start = { x: scene.player.sprite.x, y: scene.player.sprite.y };
-      scene.beginRegisterSession(register);
-      const inside = { on: scene.operatingRegister, input: scene.player.inputEnabled,
+      scene.checkoutSystem.beginRegisterSession(register);
+      const inside = { on: scene.checkoutSystem.operatingRegister, input: scene.player.inputEnabled,
         nearX: Math.abs(scene.player.sprite.x - point.x) < 2, nearY: Math.abs(scene.player.sprite.y - point.y) < 64,
         depth: register.sprite.depth, playerDepth: scene.player.sprite.depth };
-      const depthBefore = scene.registerDepthBeforeTuck;
-      scene.endRegisterSession();
+      const depthBefore = scene.checkoutSystem.registerDepthBeforeTuck;
+      scene.checkoutSystem.endRegisterSession();
       return { id: register.id, inside, depthBefore, restoredDepth: register.sprite.depth,
         back: Math.hypot(scene.player.sprite.x - start.x, scene.player.sprite.y - start.y) < 2,
-        off: !scene.operatingRegister && scene.player.inputEnabled };
+        off: !scene.checkoutSystem.operatingRegister && scene.player.inputEnabled };
     }));
     const failures = [];
     if (!results.length) failures.push("no registers found");

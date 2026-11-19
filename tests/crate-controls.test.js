@@ -25,6 +25,7 @@ let Messages;
 let SupplySystem;
 let FixtureSystem;
 let FixtureViews;
+let CheckoutSystem;
 const originalPhaser = globalThis.Phaser;
 
 before(async () => {
@@ -59,6 +60,7 @@ before(async () => {
   ({ SupplySystem } = await server.ssrLoadModule("/js/systems/SupplySystem.js"));
   ({ FixtureSystem } = await server.ssrLoadModule("/js/systems/FixtureSystem.js"));
   ({ FixtureViews } = await server.ssrLoadModule("/js/world/FixtureViews.js"));
+  ({ CheckoutSystem } = await server.ssrLoadModule("/js/systems/CheckoutSystem.js"));
 });
 
 after(async () => {
@@ -79,7 +81,6 @@ function createHarness({ carrying = false } = {}) {
   const scene = Object.create(GameScene.prototype);
   scene.shift = { starting: false, ended: false };
   scene.loadFailed = false;
-  scene.operatingRegister = false;
   scene.fixturePlacement = { active: false };
   scene.windowManager = { windows: new Map() };
   scene.eventBus = new Events();
@@ -116,6 +117,7 @@ function createHarness({ carrying = false } = {}) {
   };
   scene.fixtureViews = new FixtureViews(scene);
   scene.fixtureSystem = new FixtureSystem(scene);
+  scene.checkoutSystem = new CheckoutSystem(scene);
   scene.carriedCrate = carrying ? {} : null;
   const classes = new Set(["hidden"]);
   scene.messages = new Messages(scene, {
@@ -226,7 +228,7 @@ function addNearbyRegister(scene) {
   };
   scene.fixtures.register = () => register;
   scene.fixtures.registers = () => [register];
-  scene.packGoBacks = () => { packs += 1; return 0; };
+  scene.checkoutSystem.packGoBacks = () => { packs += 1; return 0; };
   return () => packs;
 }
 
@@ -292,7 +294,7 @@ test("with empty hands, holding Ctrl at the register picks it up to move", () =>
   assert.deepEqual(moved, ["register_1"]);
 
   // Not while working it.
-  h.scene.operatingRegister = register;
+  h.scene.checkoutSystem.operatingRegister = true;
   assert.equal(h.scene.getHoldToMoveFixture(), null);
 });
 
@@ -632,7 +634,7 @@ test("Q never packs the Go-Backs by hand; at the register it only explains why c
   tap(h, "Q");
   assert.equal(h.scene.carriedCrate, null, "with crates in hand Q puts one down");
 
-  h.scene.operatingRegister = true;
+  h.scene.checkoutSystem.operatingRegister = true;
   tap(h, "Q");
   carry(h.scene, [crate()]);
   tap(h, "Q");
@@ -648,7 +650,7 @@ test("paused controller ignores register, tablet and menu controls; Start resume
     started: true, isPaused: true,
     togglePause() { this.isPaused = !this.isPaused; },
   };
-  scene.operatingRegister = true;
+  scene.checkoutSystem.operatingRegister = true;
   scene.padInput = { poll() {}, hadInput: false, justPressed: () => true };
   let hudClosed = false;
   scene.uiNavigator = {
@@ -657,12 +659,12 @@ test("paused controller ignores register, tablet and menu controls; Start resume
   };
   scene.padInput.justPressed = (button) => button !== PAD.START;
   scene.handleGamepad(0, 16);
-  assert.equal(scene.operatingRegister, true);
+  assert.equal(scene.checkoutSystem.operatingRegister, true);
   assert.equal(scene.shiftClock.isPaused, true);
   scene.padInput.justPressed = () => true;
   scene.handleGamepad(0, 16);
   assert.equal(scene.shiftClock.isPaused, false);
-  assert.equal(scene.operatingRegister, true);
+  assert.equal(scene.checkoutSystem.operatingRegister, true);
   assert.equal(hudClosed, true);
 });
 
@@ -885,7 +887,7 @@ for (const state of ["nothingNearby", "moving", "placement", "startingShift", "l
 test("behind the counter the hint always offers the way out", () => {
   const h = createHarness();
   h.scene.restockCrates = [crate()];
-  h.scene.operatingRegister = true;
+  h.scene.checkoutSystem.operatingRegister = true;
   h.scene.updateCrateHint();
   const element = h.scene.messages.element;
   assert.equal(element.textContent, "E: Leave the register");
@@ -1009,8 +1011,8 @@ test("behind the register the counter is lifted over the player, not the player 
   h.scene.employees = [];
   h.scene.player.sprite.active = true;
   h.scene.player.sprite.setDepth = function (depth) { this.depth = depth; return this; };
-  h.scene.operatingRegisterFixture = register;
-  h.scene.registerDepthBeforeTuck = 2;
+  h.scene.checkoutSystem.operatingRegisterFixture = register;
+  h.scene.checkoutSystem.registerDepthBeforeTuck = 2;
   const [base, ...above] = floorStack(h.scene, 3);
   h.scene.player.sprite.y = 120; // his feet are below the stack's bottom edge: it's beside/behind him
   h.scene.sortPeopleByFeet();
@@ -1260,21 +1262,25 @@ test("E behind the counter always steps away, even beside a trashcan or holding 
   let ended = 0;
   let tookCrates = 0;
   Object.assign(h.scene, {
-    operatingRegister: true,
-    endRegisterSession() { ended += 1; this.operatingRegister = false; },
     isNearTrashcan: () => true, // a trashcan within reach must not hijack E
     takeEmptyCrateFromTrashcan() { tookCrates += 1; },
   });
+  h.scene.checkoutSystem.operatingRegister = true;
+  h.scene.checkoutSystem.endRegisterSession = () => {
+    ended += 1;
+    h.scene.checkoutSystem.operatingRegister = false;
+  };
+
   h.scene.handleInteract();
   assert.equal(ended, 1, "E leaves the counter");
   assert.equal(tookCrates, 0, "the trashcan never hands a crate to the cashier");
 
   // Even holding crates (which should be impossible there), E still gets the player out.
-  h.scene.operatingRegister = true;
+  h.scene.checkoutSystem.operatingRegister = true;
   carry(h.scene, [crate()]);
   h.scene.handleInteract();
   assert.equal(ended, 2);
-  assert.equal(h.scene.operatingRegister, false);
+  assert.equal(h.scene.checkoutSystem.operatingRegister, false);
 });
 
 test("E opens shelves instead of picking up crates, with or without a carried crate", () => {
@@ -1373,16 +1379,16 @@ test("E uses the register target only while the player is in range", () => {
 
   h.scene.handleInteract();
   assert.equal(registerOpens, 1);
-  assert.equal(h.scene.isPlayerNearRegister(), true);
+  assert.equal(h.scene.checkoutSystem.isPlayerNearRegister(), true);
   h.scene.player.currentFacing = "down";
-  assert.equal(h.scene.isPlayerNearRegister(), false, "facing away from it");
+  assert.equal(h.scene.checkoutSystem.isPlayerNearRegister(), false, "facing away from it");
   h.scene.player.currentFacing = "up";
   h.scene.player.sprite.y += 9;
-  assert.equal(h.scene.isPlayerNearRegister(), false, "a step too far back");
+  assert.equal(h.scene.checkoutSystem.isPlayerNearRegister(), false, "a step too far back");
   h.scene.player.sprite.y -= 9;
 
   h.scene.player.sprite.x = 200;
-  assert.equal(h.scene.isPlayerNearRegister(), false);
+  assert.equal(h.scene.checkoutSystem.isPlayerNearRegister(), false);
 });
 
 test("packing the Go-Backs sets crate stacks of at most three on found floor spots", () => {
@@ -1396,10 +1402,10 @@ test("packing the Go-Backs sets crate stacks of at most three on found floor spo
   h.scene.gameState.goBacks.add("wpn_pis_04", 12);
   h.scene.customers = [];
   h.scene.employees = [];
-  h.scene.goBacksReservedRectangles = () => [];
+  h.scene.checkoutSystem.goBacksReservedRectangles = () => [];
   const spots = [{ x: 200, y: 100 }, { x: 260, y: 100 }];
   const searches = [];
-  h.scene.findGoBacksSpot = (probe, reserved) => {
+  h.scene.checkoutSystem.findGoBacksSpot = (probe, reserved) => {
     searches.push({ probe, reserved });
     return spots[searches.length - 1] ?? null;
   };
@@ -1412,7 +1418,7 @@ test("packing the Go-Backs sets crate stacks of at most three on found floor spo
   // Both spots are outside the (stubbed) backroom, so the message says so.
   const contents = (crates) => crates.map(({ itemId, quantity }) => [itemId, quantity]);
 
-  assert.equal(h.scene.packGoBacks(), 5);
+  assert.equal(h.scene.checkoutSystem.packGoBacks(), 5);
   assert.equal(h.scene.restockCrates.length, 2);
   const [first, second] = h.scene.restockCrates;
   assert.deepEqual(contents([first, ...h.scene.floorStacks.get(first)]),
@@ -1427,7 +1433,7 @@ test("packing the Go-Backs sets crate stacks of at most three on found floor spo
   h.scene.floorStacks.clear();
   h.scene.gameState.goBacks.add("wpn_pis_01", 45);
   searches.length = 1; // one more spot left
-  assert.equal(h.scene.packGoBacks(), 3);
+  assert.equal(h.scene.checkoutSystem.packGoBacks(), 3);
   assert.equal(h.scene.restockCrates.length, 1);
   assert.equal(h.scene.floorStacks.get(h.scene.restockCrates[0]).length, 2);
   assert.equal(h.scene.gameState.goBacks.available("wpn_pis_01"), 15);
@@ -1435,7 +1441,7 @@ test("packing the Go-Backs sets crate stacks of at most three on found floor spo
   assert.match(h.messages.at(-1), /^Packed 3 crates of Go-Backs\. .*still in the bin\.$/);
 
   h.scene.gameState.goBacks.remove("wpn_pis_01", 15);
-  assert.equal(h.scene.packGoBacks(), 0);
+  assert.equal(h.scene.checkoutSystem.packGoBacks(), 0);
 });
 
 test("Go-Backs pack themselves: same-item crates first, then empty ones, then new crates", () => {
@@ -1445,7 +1451,7 @@ test("Go-Backs pack themselves: same-item crates first, then empty ones, then ne
   h.scene.gameState = new GameState({ items: [] });
   h.scene.customers = [];
   h.scene.employees = [];
-  h.scene.goBacksReservedRectangles = () => [];
+  h.scene.checkoutSystem.goBacksReservedRectangles = () => [];
   const sameItem = itemCrate("wpn_pis_01", 6);
   const stackedSameItem = itemCrate("wpn_pis_01", 8);
   const empty = itemCrate(null, 0);
@@ -1453,11 +1459,11 @@ test("Go-Backs pack themselves: same-item crates first, then empty ones, then ne
   h.scene.restockCrates = [sameItem, empty, otherItem];
   h.scene.floorStacks.set(sameItem, [stackedSameItem]);
   let spots = [];
-  h.scene.findGoBacksSpot = () => spots.shift() ?? null;
+  h.scene.checkoutSystem.findGoBacksSpot = () => spots.shift() ?? null;
   h.scene.createItemCrate = (itemId, quantity) => itemCrate(itemId, quantity);
 
   h.scene.gameState.goBacks.add("wpn_pis_01", 9);
-  h.scene.autoPackGoBacks(0);
+  h.scene.checkoutSystem.autoPackGoBacks(0);
   assert.deepEqual([sameItem, stackedSameItem, empty, otherItem].map(({ itemId, quantity }) => [itemId, quantity]),
     [["wpn_pis_01", 10], ["wpn_pis_01", 10], ["wpn_pis_01", 3], ["wpn_pis_04", 3]]);
   assert.equal(h.scene.restockCrates.length, 3, "no new crates were needed");
@@ -1467,22 +1473,22 @@ test("Go-Backs pack themselves: same-item crates first, then empty ones, then ne
   const held = itemCrate("wpn_pis_02", 2);
   carry(h.scene, [held]);
   h.scene.gameState.goBacks.add("wpn_pis_02", 4);
-  h.scene.autoPackGoBacks(500);
+  h.scene.checkoutSystem.autoPackGoBacks(500);
   assert.equal(held.quantity, 6);
   assert.equal(h.scene.restockCrates.length, 3);
   carry(h.scene, []);
 
   // No room anywhere: one message, then quiet retries until room opens up.
   h.scene.gameState.goBacks.add("wpn_pis_04", 20);
-  h.scene.autoPackGoBacks(1000);
+  h.scene.checkoutSystem.autoPackGoBacks(1000);
   assert.equal(otherItem.quantity, 10);
   assert.equal(h.scene.gameState.goBacks.available("wpn_pis_04"), 13);
   assert.equal(h.messages.length, 1);
-  h.scene.autoPackGoBacks(2000);
-  h.scene.autoPackGoBacks(7000);
+  h.scene.checkoutSystem.autoPackGoBacks(2000);
+  h.scene.checkoutSystem.autoPackGoBacks(7000);
   assert.equal(h.messages.length, 1, "the same leftovers don't repeat the warning");
   spots = [{ x: 200, y: 100 }];
-  h.scene.autoPackGoBacks(13000);
+  h.scene.checkoutSystem.autoPackGoBacks(13000);
   assert.equal(h.scene.gameState.goBacks.available("wpn_pis_04"), 0);
   assert.equal(h.scene.restockCrates.length, 4);
 });

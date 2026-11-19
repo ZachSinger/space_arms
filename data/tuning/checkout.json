@@ -1,0 +1,9 @@
+{
+  "goBackRetryIntervalMs": {
+    "value": 5000,
+    "min": 1000,
+    "max": 30000,
+    "integer": true,
+    "description": "How long to wait before retrying to place Go-Back crates when the floor is full."
+  }
+}

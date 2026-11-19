@@ -357,7 +357,7 @@ test("opening the tablet hides checkout and closing it resumes register work", (
   const { scene, tablet } = createHarness();
   const calls = [];
   scene.checkoutWindow = { suspend: () => calls.push("suspend") };
-  scene.resumeRegisterCheckout = () => calls.push("resume");
+  scene.checkoutSystem = { resumeRegisterCheckout: () => calls.push("resume") };
   tablet.uiWindow.openWindow = () => calls.push("tablet-open");
   tablet.openWindow();
   assert.deepEqual(calls, ["tablet-open", "suspend"]);
@@ -372,7 +372,7 @@ test("opening the tablet hides checkout and closing it resumes register work", (
 test("reopening the tablet refreshes the employee panel", () => {
   const { scene, tablet } = createHarness();
   scene.checkoutWindow = { suspend() {} };
-  scene.resumeRegisterCheckout = () => {};
+  scene.checkoutSystem = { resumeRegisterCheckout() {} };
   tablet.uiWindow.openWindow = () => {};
   tablet.uiWindow.onClose();
   let refreshed = 0;

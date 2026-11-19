@@ -58,7 +58,7 @@ export class Employee {
       this.retryInMs -= delta;
       if (this.clockOutRequested) {
         if (this.jobPriorities.includes("register") &&
-          this.scene.anyRegisterLineWaiting() && this.retryInMs <= 0) {
+          this.scene.checkoutSystem.anyRegisterLineWaiting() && this.retryInMs <= 0) {
           this.startRegisterJob();
         }
         this.updateFacing();
@@ -125,8 +125,8 @@ export class Employee {
   findRegisterJob() {
     return this.scene.fixtures.registers().find((register) =>
       register.sprite &&
-      !this.scene.isPlayerOperating(register) &&
-      this.scene.lineFor(register).length > 0 &&
+      !this.scene.checkoutSystem.isPlayerOperating(register) &&
+      this.scene.checkoutSystem.lineFor(register).length > 0 &&
       !this.scene.employees.some((employee) =>
         employee !== this && employee.currentJob?.jobId === "register" &&
         employee.currentJob?.register === register,
@@ -136,7 +136,7 @@ export class Employee {
   startRegisterJob() {
     const register = this.findRegisterJob();
     if (!register) return false;
-    this.currentJob = { jobId: "register", register, customer: this.scene.lineFor(register)[0] };
+    this.currentJob = { jobId: "register", register, customer: this.scene.checkoutSystem.lineFor(register)[0] };
     return this.walkTo(this.scene.getBehindRegisterPoint(register), "TO_REGISTER");
   }
 
@@ -446,7 +446,7 @@ export class Employee {
     }
     this.currentJob.returnBase = null;
     const reserved = [
-      ...scene.goBacksReservedRectangles(),
+      ...scene.checkoutSystem.goBacksReservedRectangles(),
       ...others.flatMap((employee) => employee.currentJob?.returnPosition
         ? [this.returnSpace(employee.currentJob.returnPosition)] : []),
     ];
@@ -461,14 +461,14 @@ export class Employee {
       this.currentJob.returnPosition = { ...cratePosition };
       return;
     }
-    let spot = scene.findGoBacksSpot(crate, reserved);
+    let spot = scene.checkoutSystem.findGoBacksSpot(crate, reserved);
     while (spot) {
       if (this.walkToCratePosition(crate, spot, "TO_RETURN_CRATE")) {
         this.currentJob.returnPosition = { x: spot.x, y: spot.y };
         return;
       }
       reserved.push(this.returnSpace(spot));
-      spot = scene.findGoBacksSpot(crate, reserved);
+      spot = scene.checkoutSystem.findGoBacksSpot(crate, reserved);
     }
     this.currentJob.returnPosition = null;
     this.sprite.body.setVelocity(0, 0);
@@ -525,8 +525,8 @@ export class Employee {
 
   beginRegisterService() {
     const register = this.currentJob?.register;
-    const customer = register ? this.scene.lineFor(register)[0] : null;
-    if (!register || this.scene.isPlayerOperating(register) || !customer) {
+    const customer = register ? this.scene.checkoutSystem.lineFor(register)[0] : null;
+    if (!register || this.scene.checkoutSystem.isPlayerOperating(register) || !customer) {
       this.finishTask();
       return;
     }
@@ -541,14 +541,14 @@ export class Employee {
   updateRegisterService(delta) {
     const register = this.currentJob?.register;
     const customer = this.currentJob?.customer;
-    if (!register || this.scene.isPlayerOperating(register) ||
-      this.scene.lineFor(register)[0] !== customer) {
+    if (!register || this.scene.checkoutSystem.isPlayerOperating(register) ||
+      this.scene.checkoutSystem.lineFor(register)[0] !== customer) {
       this.finishTask();
       return;
     }
     this.registerServiceRemainingMs -= delta;
     if (this.registerServiceRemainingMs > 0) return;
-    this.scene.completeEmployeeCheckout(this, customer);
+    this.scene.checkoutSystem.completeEmployeeCheckout(this, customer);
     this.finishTask();
   }
 

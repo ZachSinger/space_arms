@@ -610,7 +610,8 @@ export class Customer {
    */
   updatePatience(delta) {
     if (this.patienceRemainingMs == null) return;
-    if (!this.scene.customerFlow.temporarilyClosed && !this.scene.isServingCustomer?.(this)) {
+    if (!this.scene.customerFlow.temporarilyClosed &&
+      !this.scene.checkoutSystem?.isServingCustomer?.(this)) {
       this.patienceRemainingMs = Math.max(0, this.patienceRemainingMs - delta);
     }
     if (this.patienceRemainingMs <= 0) {

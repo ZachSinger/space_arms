@@ -126,12 +126,13 @@ export class CustomerFlow {
       getStoreConditions: () => this.traitConditions(),
       registerPoint: shop.fixtures.register()?.queuePoints?.[0],
       exitPoint: shop.exitPoint,
-      onReserveShelfSlot: (shelf, arrivingCustomer) => shop.reserveShelfSlot(shelf, arrivingCustomer),
-      onReserveQueueSlot: (queueingCustomer) => shop.reserveQueueSlot(queueingCustomer),
-      onReserveExitSlot: () => shop.reserveExitSlot(),
+      onReserveShelfSlot: (shelf, arrivingCustomer) =>
+        shop.checkoutSystem.reserveShelfSlot(shelf, arrivingCustomer),
+      onReserveQueueSlot: (queueingCustomer) => shop.checkoutSystem.reserveQueueSlot(queueingCustomer),
+      onReserveExitSlot: () => shop.checkoutSystem.reserveExitSlot(),
       gameState: shop.gameState,
       spawnBounds: shop.customerSpawnBounds,
-      onJoinQueue: (arrivingCustomer) => shop.handleJoinQueue(arrivingCustomer),
+      onJoinQueue: (arrivingCustomer) => shop.checkoutSystem.handleJoinQueue(arrivingCustomer),
       onLeaveAngry: (angryCustomer, cart) => {
         shop.eventBus.emit(GAME_EVENTS.CUSTOMER_LEFT_ANGRY, { customer: angryCustomer, cart });
       },

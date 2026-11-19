@@ -162,26 +162,13 @@ function makeEmployee({
       ofKind: (kind) => kind === "trash" ? trashcans : [],
     },
     employees: [],
-    registerLine,
-    lineFor: () => registerLine,
-    anyRegisterLineWaiting: () => registerLine.length > 0,
-    isPlayerOperating: () => scene.operatingRegister,
-    operatingRegister: false,
     restockCrates: [crate],
     floorStacks: new Map(),
     syncFloorStacks() {},
     player: { sprite: {} },
-    goBacksReservedRectangles: () => [],
-    findGoBacksSpot: (crate, reserved) => reserved.some((rect) =>
-      rect.left < 96 && rect.right > 96 && rect.top < 6560 && rect.bottom > 6560)
-      ? null : { x: 96, y: 6560, inBackroom: true },
     showShopMessage() {},
     findPath: () => [],
     getBehindRegisterPoint: () => ({ x: 80, y: 80 }),
-    completeEmployeeCheckout(employee, customer) {
-      completedSales.push({ employee, customer });
-      return true;
-    },
     gameState: {
       staff: { jobPriorities: { tavi_stock_clerk: jobPriorities } },
       shop: { changed() {} },
@@ -212,6 +199,20 @@ function makeEmployee({
       },
     },
     employeeGroup: { add() {}, remove() {} },
+  };
+  scene.checkoutSystem = {
+    operatingRegister: false,
+    lineFor: () => registerLine,
+    anyRegisterLineWaiting: () => registerLine.length > 0,
+    isPlayerOperating: () => scene.checkoutSystem.operatingRegister,
+    goBacksReservedRectangles: () => [],
+    findGoBacksSpot: (crate, reserved) => reserved.some((rect) =>
+      rect.left < 96 && rect.right > 96 && rect.top < 6560 && rect.bottom > 6560)
+      ? null : { x: 96, y: 6560, inBackroom: true },
+    completeEmployeeCheckout(employee, customer) {
+      completedSales.push({ employee, customer });
+      return true;
+    },
   };
   const employee = new Employee(scene, {
     id: "tavi_stock_clerk",
@@ -438,7 +439,7 @@ test("an employee on break serves customers who reach the register after closing
 
   employee.requestClockOut();
   const customer = { cart: [{ itemId: "amo_01", price: 4 }] };
-  employee.scene.registerLine.push(customer);
+  employee.scene.checkoutSystem.lineFor(employee.scene.fixtures.register()).push(customer);
   employee.update(100);
   assert.equal(employee.state, "TO_REGISTER");
   assert.equal(employee.currentJob.customer, customer);
@@ -457,7 +458,7 @@ test("an employee heading to break can turn around to serve a customer after clo
   employee.startNextTask();
   employee.requestClockOut();
   const customer = { cart: [{ itemId: "amo_01", price: 4 }] };
-  employee.scene.registerLine.push(customer);
+  employee.scene.checkoutSystem.lineFor(employee.scene.fixtures.register()).push(customer);
 
   employee.update(100);
   assert.equal(employee.state, "TO_REGISTER");
@@ -470,14 +471,14 @@ test("an employee on break waits while the player is using the register", () => 
   employee.startNextTask();
   employee.update(16);
   employee.requestClockOut();
-  employee.scene.registerLine.push({ cart: [{ itemId: "amo_01", price: 4 }] });
-  employee.scene.operatingRegister = true;
+  employee.scene.checkoutSystem.lineFor(employee.scene.fixtures.register()).push({ cart: [{ itemId: "amo_01", price: 4 }] });
+  employee.scene.checkoutSystem.operatingRegister = true;
 
   employee.update(100);
   assert.equal(employee.state, "ON_BREAK");
   assert.equal(employee.sprite.visible, false);
 
-  employee.scene.operatingRegister = false;
+  employee.scene.checkoutSystem.operatingRegister = false;
   employee.update(16);
   assert.equal(employee.state, "TO_REGISTER");
   assert.equal(employee.sprite.visible, true);
@@ -584,7 +585,7 @@ test("delivery leftovers fill a backroom stack before using an empty floor spot"
   base.lockedToPad = false;
   base.sprite = { x: 96, y: 6560 };
   employee.scene.restockCrates.push(base);
-  employee.scene.findGoBacksSpot = () => assert.fail("Stacking must be attempted before empty floor");
+  employee.scene.checkoutSystem.findGoBacksSpot = () => assert.fail("Stacking must be attempted before empty floor");
   employee.startNextTask();
   employee.arriveAtDestination();
   employee.stockCrateOnShelf();
@@ -631,7 +632,7 @@ test("an employee replans a return if the chosen stack fills while they are carr
 
 test("a full backroom and sales floor never make staff drop a crate on their own feet", () => {
   const { employee, crate } = makeEmployee();
-  employee.scene.findGoBacksSpot = () => null;
+  employee.scene.checkoutSystem.findGoBacksSpot = () => null;
   employee.startNextTask();
   employee.arriveAtDestination();
   employee.stockCrateOnShelf();
@@ -639,7 +640,7 @@ test("a full backroom and sales floor never make staff drop a crate on their own
   assert.equal(crate.isCarried, true);
   assert.equal(employee.isCarryingCrate(), true);
   assert.equal(employee.isReadyToClockOut(), false);
-  employee.scene.findGoBacksSpot = () => ({ x: 96, y: 6560, inBackroom: true });
+  employee.scene.checkoutSystem.findGoBacksSpot = () => ({ x: 96, y: 6560, inBackroom: true });
   employee.update(1000);
   assert.equal(employee.state, "TO_RETURN_CRATE");
 });
@@ -658,7 +659,7 @@ test("unreachable return spots keep the crate with its employee until a safe rou
 test("the register is the first job when Tavi's priority order puts it first", () => {
   const { employee, completedSales } = makeEmployee({ hasRegister: true });
   const customer = { cart: [{ itemId: "amo_01", price: 4 }] };
-  employee.scene.registerLine.push(customer);
+  employee.scene.checkoutSystem.lineFor(employee.scene.fixtures.register()).push(customer);
 
   employee.startNextTask();
   assert.equal(employee.state, "TO_REGISTER");
@@ -684,7 +685,7 @@ test("trained skills speed up only their own stocking trips, delivery trips, and
     assert.equal(employee.sprite.body.velocity.y, 0);
   }
   const customer = { cart: [{ itemId: "amo_01", price: 4 }, { itemId: "amo_01", price: 4 }] };
-  employee.scene.registerLine.push(customer);
+  employee.scene.checkoutSystem.lineFor(employee.scene.fixtures.register()).push(customer);
   employee.currentJob = { jobId: "register", register: employee.scene.fixtures.register(), customer };
   employee.beginRegisterService();
   // Two items at level 5 register speed (2.0x): half the per-item time each.
