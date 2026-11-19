@@ -56,3 +56,32 @@ test("the Supply tab keeps crate ordering and cost details in its split-panel la
   assert.match(html, /Total<\/span><strong>75/);
   assert.match(html, /data-supply-place/);
 });
+
+test("the Supply tab escapes item data in text and attributes", () => {
+  const item = {
+    id: 'rations" onmouseover="run()',
+    name: '<img src=x onerror="run()"> & Supply',
+    image: 'images/" onerror="run()',
+    stackSize: 10,
+    boxSize: 1,
+  };
+  const scene = {
+    supply: {
+      restockableItems: () => [{
+        item, ownedQuantity: 0, shelf: null, cost: 25,
+      }],
+      orderSummary: () => ({
+        crates: 0, maxCrates: 9, stockCost: 0, deliveryFee: 25, total: 25,
+        canPlace: false, problem: null,
+      }),
+    },
+  };
+
+  const markup = SupplyRenderer.generateHTML(scene);
+
+  assert.match(markup, /&lt;img src=x onerror=&quot;run\(\)&quot;&gt; &amp; Supply/);
+  assert.match(markup, /data-pad-row="rations&quot; onmouseover=&quot;run\(\)"/);
+  assert.match(markup, /src="images\/&quot; onerror=&quot;run\(\)"/);
+  assert.doesNotMatch(markup, /<img src=x onerror=/);
+  assert.doesNotMatch(markup, /data-pad-row="rations" onmouseover=/);
+});

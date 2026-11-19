@@ -8,13 +8,12 @@ import { UIWindow } from "./UIWindow.js";
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from "./GameViewport.js";
 import { InventoryRenderer } from "./InventoryRenderer.js";
 import { ContractRenderer } from "./ContractRenderer.js";
-import { SupplyRenderer } from "./SupplyRenderer.js";
+import { SupplyTab } from "./SupplyTab.js";
 import { LayoutRenderer } from "./LayoutRenderer.js";
 import { EmployeeRenderer } from "./EmployeeRenderer.js";
 import { FinancesRenderer } from "./FinancesRenderer.js";
 import { HandbookRenderer } from "./HandbookRenderer.js";
 import { FixtureHighlight } from "./FixtureHighlight.js";
-import { playErrorBuzz } from "./Sfx.js";
 import { GAME_EVENTS } from "../core/Events.js";
 import { adjustStorePrice } from "./Money.js";
 import { getFixtureResaleValue, getFixtureType } from "./FixtureLayout.js";
@@ -65,14 +64,13 @@ const EMPLOYEE_PRIORITY_SELECTOR = "button[data-employee-priority-id]";
 const TABLET_KEYBOARD_CONTROL_SELECTOR = `${PRICE_CONTROL_SELECTOR}, ${EMPLOYEE_PRIORITY_SELECTOR}`;
 
 /**
- * The single Tablet window; owns tab switching, the supply order being built, and
- * live re-rendering of panels whenever the game state changes.
+ * The single Tablet window; owns tab switching and refreshes panels when game state changes.
  */
 export class ManagerTablet {
   constructor(windowManager, gameState, scene) {
     this.gameState = gameState;
     this.scene = scene; // needed by the Supply tab to read/order fixture stock
-    this.supplyOrder = new Map(); // item id -> crates in the order being built
+    this.supplyTab = new SupplyTab(scene);
     this.fixturePurchaseNotice = "";
     this.fixtureSaleConfirmation = null;
     this.handbookTopic = "store";
@@ -109,6 +107,10 @@ export class ManagerTablet {
     );
 
     this.bodyElement = this.uiWindow.element.querySelector(".retro-window-body");
+    this.supplyTab.bind(
+      this.bodyElement.querySelector('[data-tab-panel="supply"]'),
+      () => this.renderPanelContent("supply"),
+    );
     this.fixtureHighlight = new FixtureHighlight(scene, this.uiWindow);
     this.uiWindow.onClose = () => {
       this.fixturePurchaseNotice = "";
@@ -170,16 +172,6 @@ export class ManagerTablet {
         );
         if (!changed) this.refreshEmployeePanel();
       }
-
-      const addCrateButton = event.target.closest("[data-supply-add]");
-      if (addCrateButton) this.changeSupplyOrder(addCrateButton.dataset.supplyAdd, 1);
-      const removeCrateButton = event.target.closest("[data-supply-remove]");
-      if (removeCrateButton) this.changeSupplyOrder(removeCrateButton.dataset.supplyRemove, -1);
-      if (event.target.closest("[data-supply-clear]")) {
-        this.supplyOrder.clear();
-        this.refreshSupplyPanel();
-      }
-      if (event.target.closest("[data-supply-place]")) this.handlePlaceSupplyOrder();
 
       const moveButton = event.target.closest("[data-move-fixture-id]");
       if (moveButton) this.scene.fixturePlacement.begin(moveButton.dataset.moveFixtureId);
@@ -322,7 +314,7 @@ export class ManagerTablet {
     if (tabId === "contracts") {
       return ContractRenderer.generateHTML(database.getAllLicenses(), this.gameState);
     }
-    if (tabId === "supply") return SupplyRenderer.generateHTML(this.scene, this.supplyOrder);
+    if (tabId === "supply") return this.supplyTab.draw();
     if (tabId === "fixtures") {
       return LayoutRenderer.generateHTML(
         this.scene, true, this.fixturePurchaseNotice, this.fixtureSaleConfirmation,
@@ -452,11 +444,7 @@ export class ManagerTablet {
   }
 
   refreshSupplyPanel() {
-    const panel = this.bodyElement.querySelector('[data-tab-panel="supply"]');
-    if (!panel) return;
-    const scrollTop = panel.querySelector(".supply-list").scrollTop;
-    panel.innerHTML = this.renderPanelContent("supply");
-    panel.querySelector(".supply-list").scrollTop = scrollTop;
+    this.supplyTab.redraw();
   }
 
   refreshLayoutPanels() {
@@ -554,36 +542,6 @@ export class ManagerTablet {
     this.gameState.catalog.sign(licenseId);
     this.scene.recalculateActiveFactions();
     // The panel re-renders via the constructor's game state subscription.
-  }
-
-  /**
-   * Add or remove crates of an item, rejecting additions the order can't hold.
-   * @param {string} itemId
-   * @param {number} delta - crates
-   */
-  changeSupplyOrder(itemId, delta) {
-    const count = (this.supplyOrder.get(itemId) || 0) + delta;
-    const summary = this.scene.supply.orderSummary(this.supplyOrder);
-    if (delta > 0 && summary.crates >= summary.maxCrates) return;
-    if (delta > 0) {
-      const candidate = new Map(this.supplyOrder);
-      candidate.set(itemId, count);
-      const nextSummary = this.scene.supply.orderSummary(candidate);
-      if (!nextSummary.canPlace) {
-        this.scene.showShopMessage(nextSummary.problem);
-        playErrorBuzz();
-        return;
-      }
-    }
-    if (count > 0) this.supplyOrder.set(itemId, count);
-    else this.supplyOrder.delete(itemId);
-    this.refreshSupplyPanel();
-  }
-
-  handlePlaceSupplyOrder() {
-    // Why an order can't be placed is already shown in the summary, so no popup here.
-    if (this.scene.supply.placeOrder(this.supplyOrder)) this.supplyOrder.clear();
-    this.refreshSupplyPanel();
   }
 
   // --- Window ---

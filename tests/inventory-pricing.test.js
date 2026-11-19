@@ -13,6 +13,7 @@ import { SupplierLicense } from "../js/logic/Licenses.js";
 
 let server;
 let ManagerTablet;
+let SupplyTab;
 let GameState;
 let cacheDirectory;
 const originalDocument = globalThis.document;
@@ -55,6 +56,7 @@ before(async () => {
     }],
   });
   ({ ManagerTablet } = await server.ssrLoadModule("/js/logic/ManagerTablet.js"));
+  ({ SupplyTab } = await server.ssrLoadModule("/js/logic/SupplyTab.js"));
   ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));
 });
 
@@ -82,6 +84,9 @@ function createHarness() {
   const body = events();
   const tabBar = events();
   const list = { scrollTop: 37, querySelectorAll: () => [] };
+  const supplyList = { scrollTop: 0 };
+  const supplyPanel = events();
+  supplyPanel.querySelector = (selector) => selector === ".supply-list" ? supplyList : null;
   const document = { activeElement: null };
   globalThis.document = document;
 
@@ -163,6 +168,7 @@ function createHarness() {
   body.querySelector = (selector) => {
     if (selector === ".tablet-tab-bar") return tabBar;
     if (selector === '[data-tab-panel="inventory"]') return panel;
+    if (selector === '[data-tab-panel="supply"]') return supplyPanel;
     return null;
   };
   body.querySelectorAll = () => [];
@@ -522,14 +528,16 @@ function createSupplyHarness(credits) {
     },
     showShopMessage: (message) => warnings.push(message),
   };
-  tablet.refreshSupplyPanel = () => { refreshes += 1; };
-  return { tablet, warnings, refreshes: () => refreshes, buzzes: () => globalThis.__supplyErrorBuzzes };
+  const supplyTab = new SupplyTab(tablet.scene);
+  supplyTab.redraw = () => { refreshes += 1; };
+  tablet.supplyTab = supplyTab;
+  return { supplyTab, tablet, warnings, refreshes: () => refreshes, buzzes: () => globalThis.__supplyErrorBuzzes };
 }
 
 test("an unaffordable first crate is rejected with a warning and sound, including the delivery fee", () => {
   const h = createSupplyHarness(40 + DELIVERY_FEE - 1);
-  h.tablet.changeSupplyOrder("ammo", 1);
-  assert.deepEqual([...h.tablet.supplyOrder], []);
+  h.supplyTab.changeOrder("ammo", 1);
+  assert.deepEqual([...h.supplyTab.order], []);
   assert.match(h.warnings[0], /Not enough money/);
   assert.match(h.warnings[0], /costs 65/);
   assert.equal(h.buzzes(), 1);
@@ -538,35 +546,35 @@ test("an unaffordable first crate is rejected with a warning and sound, includin
 
 test("cart additions consider every crate already selected and allow the exact available budget", () => {
   const h = createSupplyHarness(40 + 10 + DELIVERY_FEE);
-  h.tablet.changeSupplyOrder("ammo", 1);
-  h.tablet.changeSupplyOrder("rations", 1);
-  assert.deepEqual([...h.tablet.supplyOrder], [["ammo", 1], ["rations", 1]]);
+  h.supplyTab.changeOrder("ammo", 1);
+  h.supplyTab.changeOrder("rations", 1);
+  assert.deepEqual([...h.supplyTab.order], [["ammo", 1], ["rations", 1]]);
   assert.equal(h.warnings.length, 0);
   assert.equal(h.buzzes(), 0);
   assert.equal(h.refreshes(), 2);
-  h.tablet.changeSupplyOrder("rations", 1);
-  assert.deepEqual([...h.tablet.supplyOrder], [["ammo", 1], ["rations", 1]]);
+  h.supplyTab.changeOrder("rations", 1);
+  assert.deepEqual([...h.supplyTab.order], [["ammo", 1], ["rations", 1]]);
   assert.match(h.warnings[0], /costs 85/);
   assert.equal(h.buzzes(), 1);
 });
 
 test("adding another crate of the same item cannot exceed the budget", () => {
   const h = createSupplyHarness(40 + DELIVERY_FEE);
-  h.tablet.changeSupplyOrder("ammo", 1);
-  h.tablet.changeSupplyOrder("ammo", 1);
-  assert.equal(h.tablet.supplyOrder.get("ammo"), 1);
+  h.supplyTab.changeOrder("ammo", 1);
+  h.supplyTab.changeOrder("ammo", 1);
+  assert.equal(h.supplyTab.order.get("ammo"), 1);
   assert.equal(h.buzzes(), 1);
 });
 
 test("lower funds reject additions but never prevent removing crates from the order", () => {
   const h = createSupplyHarness(1000);
-  h.tablet.changeSupplyOrder("ammo", 1);
+  h.supplyTab.changeOrder("ammo", 1);
   h.tablet.gameState.economy.credits = 0;
-  h.tablet.changeSupplyOrder("rations", 1);
-  assert.deepEqual([...h.tablet.supplyOrder], [["ammo", 1]]);
+  h.supplyTab.changeOrder("rations", 1);
+  assert.deepEqual([...h.supplyTab.order], [["ammo", 1]]);
   assert.equal(h.buzzes(), 1);
-  h.tablet.changeSupplyOrder("ammo", -1);
-  assert.equal(h.tablet.supplyOrder.size, 0);
+  h.supplyTab.changeOrder("ammo", -1);
+  assert.equal(h.supplyTab.order.size, 0);
   assert.equal(h.buzzes(), 1);
 });
 
