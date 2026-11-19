@@ -1,33 +1,40 @@
-import { gameRandom } from "../core/Random.js";
+import cleaningTuning from "../../../data/tuning/cleaning.json" with { type: "json" };
+import { gameRandom } from "../../core/Random.js";
+import { loadTuning } from "../../core/Tuning.js";
 // ==========================================
 // FILE: Litter.js
 // ==========================================
 // Store cleanliness (documentation/modules/Cleaning.md): how clean the store can be, how
 // clean it is, and how each customer judges it.
 
-export const CLEANLINESS_BASE = 20;
-export const CLEANLINESS_PER_EXPANSION = 20;
-export const CLEANLINESS_PER_LEVEL = 2;
-export const CLEANLINESS_LEVEL_FLOOR = 5;
-export const TRASH_PENALTY = 1;
-export const DIRT_PENALTY = 2;
+export const CLEANING_TUNING = loadTuning("cleaning", cleaningTuning);
+export const CLEANLINESS_BASE = CLEANING_TUNING.cleanlinessBase;
+export const CLEANLINESS_PER_EXPANSION = CLEANING_TUNING.cleanlinessPerSalesExpansion;
+export const CLEANLINESS_PER_LEVEL = CLEANING_TUNING.cleanlinessPerLevelAboveFloor;
+export const CLEANLINESS_LEVEL_FLOOR = CLEANING_TUNING.cleanlinessLevelFloor;
+export const TRASH_PENALTY = CLEANING_TUNING.trashPenalty;
+export const DIRT_PENALTY = CLEANING_TUNING.dirtPenalty;
 
 // Unpaused ms after entering before a customer decides how clean the store is.
-export const CLEANLINESS_JUDGE_MS = 3000;
+export const CLEANLINESS_JUDGE_MS = CLEANING_TUNING.cleanlinessJudgeMs;
 // Chance each customer drops one piece of trash during their visit.
-export const TRASH_DROP_CHANCE = 0.4;
+export const TRASH_DROP_CHANCE = CLEANING_TUNING.trashDropChance;
 // Range (ms of walking, including the walk out) for when that trash falls.
-export const TRASH_DROP_WALK_MS = Object.freeze([1000, 6000]);
+export const TRASH_DROP_WALK_MS = CLEANING_TUNING.trashDropWalkMs;
 export const TRASH_KINDS = Object.freeze(["can", "paper", "box"]);
-export const UPSET_REPUTATION_LOSS = 1;
-export const WALK_OUT_REPUTATION_LOSS = 2;
+export const UPSET_REPUTATION_LOSS = CLEANING_TUNING.upsetReputationLoss;
+export const WALK_OUT_REPUTATION_LOSS = CLEANING_TUNING.walkOutReputationLoss;
 
 // Percent of the maximum cleanliness below which a customer is upset / walks out.
+const tolerance = (faction) => Object.freeze({
+  upset: CLEANING_TUNING[`${faction}UpsetPercent`],
+  walkOut: CLEANING_TUNING[`${faction}WalkOutPercent`],
+});
 export const CLEANLINESS_TOLERANCES = Object.freeze({
-  scavengers: Object.freeze({ upset: [40, 60], walkOut: [10, 25] }),
-  civilian: Object.freeze({ upset: [55, 75], walkOut: [25, 40] }),
-  mercenaries: Object.freeze({ upset: [65, 85], walkOut: [35, 50] }),
-  explorers: Object.freeze({ upset: [75, 95], walkOut: [45, 60] }),
+  scavengers: tolerance("scavengers"),
+  civilian: tolerance("civilian"),
+  mercenaries: tolerance("mercenaries"),
+  explorers: tolerance("explorers"),
 });
 
 /**

@@ -279,7 +279,7 @@ export class FixtureSystem {
       register.queuePoints = result.queuePointsById?.get(register.id) ?? result.queuePoints;
     }
     if (scene.goBacksBadge) scene.refreshGoBacksBadge();
-    scene.trash?.moveOffBlockedSpots();
+    scene.cleaningSystem?.moveOffBlockedSpots();
   }
 
   /**

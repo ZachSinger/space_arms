@@ -31,7 +31,7 @@ import { getCrateOrderQuantity } from "../logic/SupplyOrder.js";
 import { TileRoom } from "../logic/TileRoom.js";
 import { SlidingDoor } from "../logic/SlidingDoor.js";
 import {
-  TILE_SIZE, getZone, getStoreDoorCell, getStoreDoorCells, EXPANSION_ORDER,
+  TILE_SIZE, getZone, getStoreDoorCell, getStoreDoorCells,
   getLoadingPadBounds, LOADING_PAD_WIDTH, LOADING_PAD_HEIGHT,
 } from "../logic/RoomLayout.js";
 import { ShiftClock } from "../logic/ShiftClock.js";
@@ -40,12 +40,8 @@ import { FixturePlacement } from "../logic/FixturePlacement.js";
 import { setupSandboxRoom } from "../debug/SandboxRoom.js";
 import { setupUiLab } from "../debug/UiLab.js";
 import { ShelfStockingWindow } from "../logic/ShelfStockingWindow.js";
-import { REGISTER_FRONT_OVERLAP, getFixtureType, fixtureFacing, fixtureFacingStep, fixtureFootprint, fixtureInteractionDistance, validateFixtureLayout } from "../logic/FixtureLayout.js";
+import { REGISTER_FRONT_OVERLAP, getFixtureType, fixtureFacing, fixtureFacingStep, fixtureInteractionDistance, validateFixtureLayout } from "../logic/FixtureLayout.js";
 import { validateShopSave } from "../logic/ShopSave.js";
-import { TrashField, randomTrashKind } from "../logic/TrashField.js";
-import {
-  UPSET_REPUTATION_LOSS, WALK_OUT_REPUTATION_LOSS, getCleanlinessMax, getCleanlinessScore,
-} from "../logic/Litter.js";
 import { UIWindow } from "../logic/UIWindow.js";
 import { Messages, SHOP_MESSAGE_COLOR } from "../world/Messages.js";
 import { ShiftSystem } from "../systems/ShiftSystem.js";
@@ -58,6 +54,7 @@ import { CustomerFlow } from "../systems/CustomerFlow.js";
 import { CheckoutSystem } from "../systems/CheckoutSystem.js";
 import { CrateSystem } from "../systems/CrateSystem.js";
 import { CrateWorld } from "../world/CrateWorld.js";
+import { CleaningSystem } from "../modules/cleaning/CleaningSystem.js";
 import { CheckoutWindow } from "../logic/CheckoutWindow.js";
 import { GamepadInput, PAD } from "../logic/GamepadInput.js";
 import { UINavigator } from "../logic/UINavigator.js";
@@ -77,12 +74,6 @@ function reputationPenaltyText(penalty, factionId) {
   if (factionId && !faction?.group) throw new Error(`Unknown customer faction: ${factionId}.`);
   return `-${penalty} store reputation${faction ? `\n-${penalty} ${faction.name} reputation` : ""}\nat shift end`;
 }
-
-// How far from a trashcan's edge (in pixels) the player can still use it.
-const TRASHCAN_REACH = 40;
-// Loose trash is picked up from this far ahead of the player's feet (px), within the reach.
-const TRASH_PICKUP_AHEAD = 22;
-const TRASH_PICKUP_REACH = 26;
 
 function segmentIntersectsRectangle(from, to, rectangle) {
   const epsilon = 0.001;
@@ -352,8 +343,15 @@ export class GameScene extends Phaser.Scene {
     });
     this.customers = [];
     this.employees = [];
-    this.trash = new TrashField(this, (x, y) => this.isOpenTrashSpot(x, y));
-    this.heldTrash = null;
+    this.cleaningSystem = new CleaningSystem(this);
+    for (const property of ["trash", "heldTrash"]) {
+      Object.defineProperty(this, property, {
+        configurable: true,
+        enumerable: true,
+        get: () => this.cleaningSystem[property],
+        set: (value) => { this.cleaningSystem[property] = value; },
+      });
+    }
     this.fixtureSystem.applyCurrentLayout();
     this.fixturePlacement = new FixturePlacement(this);
     this.input.mouse.disableContextMenu();
@@ -653,13 +651,7 @@ export class GameScene extends Phaser.Scene {
 
   // Held trash sits at his hand on the side he faces; facing away, his body hides it.
   syncHeldTrash() {
-    const sprite = this.heldTrash?.sprite;
-    if (!sprite) return;
-    const player = this.player.sprite;
-    const facing = this.player.currentFacing;
-    const side = { left: -14, right: 14, down: 12, up: -12 }[facing] ?? 12;
-    sprite.setPosition(player.x + side, player.y - 4);
-    sprite.setDepth(player.depth + (facing === "up" ? -0.5 : 0.5));
+    this.cleaningSystem.syncHeldTrash();
   }
 
   getCarriedCrates() {
@@ -901,14 +893,7 @@ export class GameScene extends Phaser.Scene {
 
   // Trash in hand is saved as lying on the shop floor where he stands (or by the backroom door).
   serializeTrash() {
-    const trash = this.trash.serialize();
-    if (this.heldTrash) {
-      const spot = this.areas.playerArea === AREA.BACKROOM
-        ? this.areas.arrivalIn(AREA.SHOP)
-        : { x: this.player.sprite.x, y: this.player.sprite.body?.bottom ?? this.player.sprite.y };
-      trash.push({ kind: this.heldTrash.kind, x: spot.x, y: spot.y });
-    }
-    return trash;
+    return this.cleaningSystem.serializeTrash();
   }
 
   /**
@@ -947,9 +932,7 @@ export class GameScene extends Phaser.Scene {
     this.cameraRig.refresh();
     this.cratePress = null;
     this.crateSystem.load(data);
-    this.heldTrash?.sprite.destroy();
-    this.heldTrash = null;
-    this.trash?.load(data.trash ?? []);
+    this.cleaningSystem.load(data.trash ?? []);
     this.moveShelfOverflowToGoBacks();
     this.refreshShelfStockDisplays();
     this.recalculateActiveFactions();
@@ -1443,26 +1426,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   isNearTrashcan() {
-    return Boolean(this.getNearbyTrashcan());
+    return this.cleaningSystem.isNearTrashcan();
   }
 
   // The trashcan the player faces, with its edge a few steps ahead, or null. Standing
   // beside a trashcan while facing something else never counts.
   getNearbyTrashcan() {
-    if (this.areas.playerArea === AREA.BACKROOM) return null;
-    const step = {
-      up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
-    }[this.player.currentFacing];
-    if (!step) return null;
-    const { x, y } = this.player.sprite;
-    const probe = { x: x + step.x * TRASHCAN_REACH, y: y + step.y * TRASHCAN_REACH };
-    return this.fixtures.ofKind("trash").find((fixture) => {
-      const { w, h } = fixtureFootprint(fixture);
-      const left = fixture.gx * TILE_SIZE;
-      const top = fixture.gy * TILE_SIZE;
-      return probe.x >= left - 6 && probe.x <= left + w * TILE_SIZE + 6 &&
-        probe.y >= top - 6 && probe.y <= top + h * TILE_SIZE + 6;
-    }) ?? null;
+    return this.cleaningSystem.getNearbyTrashcan();
   }
 
   heldEmptyCrates() {
@@ -1494,17 +1464,7 @@ export class GameScene extends Phaser.Scene {
 
   // Where loose trash may lie: open sales floor that no wall or fixture covers.
   isOpenTrashSpot(x, y) {
-    const gx = Math.floor(x / TILE_SIZE);
-    const gy = Math.floor(y / TILE_SIZE);
-    const zone = this.room.zones.find((candidate) => gx >= candidate.gridX && gx < candidate.gridX + candidate.gridW &&
-      gy >= candidate.gridY && gy < candidate.gridY + candidate.gridH);
-    if (!zone?.salesFloor || zone.locked || !this.room.isWalkable(gx, gy)) return false;
-    const margin = 8;
-    return !this.fixtures.all().some((fixture) => {
-      const { w, h } = fixtureFootprint(fixture);
-      return x >= fixture.gx * TILE_SIZE - margin && x <= (fixture.gx + w) * TILE_SIZE + margin &&
-        y >= fixture.gy * TILE_SIZE - margin && y <= (fixture.gy + h) * TILE_SIZE + margin;
-    });
+    return this.cleaningSystem.isOpenTrashSpot(x, y);
   }
 
   /**
@@ -1512,70 +1472,34 @@ export class GameScene extends Phaser.Scene {
    * @returns {boolean} whether it was dropped
    */
   dropTrash(x, y) {
-    if (!this.isOpenTrashSpot(x, y)) return false;
-    this.trash.add(randomTrashKind(), x, y);
-    return true;
+    return this.cleaningSystem.dropTrash(x, y);
   }
 
   // The trash just ahead of his feet, the way he faces.
   findTrashInFront() {
-    if (!this.trash || this.areas.playerArea === AREA.BACKROOM || this.checkoutSystem.operatingRegister) return null;
-    const step = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[this.player.currentFacing];
-    if (!step) return null;
-    const { center } = this.player.sprite.body;
-    return this.trash.findNear({ x: center.x + step[0] * TRASH_PICKUP_AHEAD, y: center.y + step[1] * TRASH_PICKUP_AHEAD },
-      TRASH_PICKUP_REACH);
+    return this.cleaningSystem.findTrashInFront();
   }
 
   pickUpTrash(piece) {
-    if (!this.trash.take(piece)) return false;
-    this.heldTrash = piece;
-    this.syncHeldTrash();
-    return true;
+    return this.cleaningSystem.pickUpTrash(piece);
   }
 
   throwAwayHeldTrash() {
-    if (!this.heldTrash) return false;
-    this.heldTrash.sprite.destroy();
-    this.heldTrash = null;
-    this.showGameMessage("Trash thrown away. The store is cleaner.", "#10b981");
-    return true;
+    return this.cleaningSystem.throwAwayHeldTrash();
   }
 
   // Q with trash in hand: it goes back on the floor just ahead of him, or at his feet.
   dropHeldTrash() {
-    const piece = this.heldTrash;
-    if (!piece) return false;
-    const { center, bottom } = this.player.sprite.body;
-    const step = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[this.player.currentFacing] ?? [0, 0];
-    const spots = [
-      { x: center.x + step[0] * TRASH_PICKUP_AHEAD, y: bottom + step[1] * TRASH_PICKUP_AHEAD },
-      { x: center.x, y: bottom },
-    ];
-    const spot = spots.find(({ x, y }) => this.isOpenTrashSpot(x, y));
-    if (!spot) {
-      this.showGameMessage(this.areas.playerArea === AREA.BACKROOM
-        ? "Trash can only be dropped out on the shop floor."
-        : "No room to drop the trash here.", "#94a3b8");
-      return false;
-    }
-    this.heldTrash = null;
-    this.trash.place(piece, spot.x, spot.y);
-    return true;
+    return this.cleaningSystem.dropHeldTrash();
   }
 
   // Trash in hand still counts against the store until it's in a trashcan.
   getCleanliness() {
-    const salesExpansions = EXPANSION_ORDER.filter((id) =>
-      this.room.zones.some((zone) => zone.id === id && !zone.locked)).length;
-    const max = getCleanlinessMax({ salesExpansions, shopLevel: this.gameState.reputation.shopLevel });
-    const trashCount = this.trash.count + (this.heldTrash ? 1 : 0);
-    return { score: getCleanlinessScore(max, trashCount), max, trashCount };
+    return this.cleaningSystem.getCleanliness();
   }
 
   getCleanlinessPercent() {
-    const { score, max } = this.getCleanliness();
-    return (score / max) * 100;
+    return this.cleaningSystem.getCleanlinessPercent();
   }
 
   /**
@@ -1584,16 +1508,7 @@ export class GameScene extends Phaser.Scene {
    * @param {"upset" | "walk-out"} verdict
    */
   reportCleanlinessVerdict(customer, verdict) {
-    const walkOut = verdict === "walk-out";
-    const penalty = walkOut ? WALK_OUT_REPUTATION_LOSS : UPSET_REPUTATION_LOSS;
-    this.gameState.reputation.lose(penalty);
-    this.showFloatingText(
-      customer.sprite.x,
-      customer.sprite.y - 50,
-      `${walkOut ? "Too dirty! Leaving." : "This store is dirty."}\n${reputationPenaltyText(penalty, null)}`,
-      walkOut ? "#ef4444" : "#f59e0b",
-    );
-    this.debugInfo?.recordCustomer(walkOut ? "customer-left-dirty-store" : "customer-upset-dirty-store", customer);
+    this.cleaningSystem.reportCleanlinessVerdict(customer, verdict);
   }
 
   takeEmptyCrateFromTrashcan() {
@@ -2146,11 +2061,8 @@ export class GameScene extends Phaser.Scene {
       this.employees.forEach((employee) => employee.update(delta));
     }
     this.hud.renderStamina(this.player);
-    if (this.trash) {
-      this.hud.renderCleanliness(this.getCleanliness());
-      this.trash.renderHighlight(Boolean(this.highlightTrashKey?.isDown) && this.controlMode.allows("crate") &&
-        this.areas.playerArea !== AREA.BACKROOM, time);
-    }
+    this.hud.renderCleanliness(this.cleaningSystem.getCleanliness());
+    this.cleaningSystem.updateHighlight(time);
 
     this.shiftClock.update(delta);
     this.positionGoBacksBadge();

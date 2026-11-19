@@ -86,6 +86,18 @@ test("loading swaps everything in, rebuilds the shop, and only then tells listen
   assert.equal(current.reputation.global, 40);
 });
 
+test("saved trash locations belong to the trash state slice", () => {
+  const items = [];
+  const state = new GameState({ items, random: () => 0.5 });
+  const pieces = [{ kind: "can", x: 96, y: 128 }, { kind: "paper", x: 160, y: 192 }];
+  state.trash.setPieces(pieces);
+
+  const saved = state.toSave();
+  assert.deepEqual(saved.trash, pieces);
+  assert.deepEqual(GameState.fromSave(saved, { items }).toSave().trash, pieces);
+  assert.notEqual(saved.trash[0], pieces[0], "saved trash is detached from the state slice");
+});
+
 test("a screen watching one part of the state stops hearing about it once it unsubscribes", () => {
   const state = new GameState({ items: [], random: () => 0.5 });
   const shown = [];

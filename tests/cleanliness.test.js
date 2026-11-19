@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   getCleanlinessMax, getCleanlinessScore, judgeCleanliness, rollCleanlinessTolerance,
-} from "../js/logic/Litter.js";
+} from "../js/modules/cleaning/Litter.js";
+import { CleaningSystem } from "../js/modules/cleaning/CleaningSystem.js";
+import { Trash } from "../js/state/slices/Trash.js";
+import { AREA } from "../js/world/Areas.js";
 
 test("cleanliness maximum grows with sales floor expansions and shop levels past 5", () => {
   assert.equal(getCleanlinessMax({ salesExpansions: 0, shopLevel: 1 }), 20);
@@ -32,4 +35,41 @@ test("a customer is fine, upset, or walks out depending on the store's cleanline
   assert.equal(judgeCleanliness(70, tolerance), "fine");
   assert.equal(judgeCleanliness(69, tolerance), "upset");
   assert.equal(judgeCleanliness(29, tolerance), "walk-out");
+});
+
+test("cleaning owns floor trash, keeps held trash in the score, and saves it at the player", () => {
+  const sprite = {
+    setScale() { return this; },
+    setDepth() { return this; },
+    setPosition(x, y) { this.x = x; this.y = y; return this; },
+    destroy() { this.destroyed = true; },
+  };
+  const shop = {
+    textures: { exists: () => true },
+    add: { image: () => ({ ...sprite }) },
+    room: {
+      zones: [{ id: "sales_floor", gridX: 0, gridY: 0, gridW: 4, gridH: 4, salesFloor: true, locked: false }],
+      isWalkable: () => true,
+    },
+    fixtures: { all: () => [], ofKind: () => [] },
+    areas: { playerArea: AREA.SHOP },
+    player: {
+      currentFacing: "down",
+      sprite: { x: 100, y: 100, depth: 2, body: { center: { x: 100, y: 100 }, bottom: 112 } },
+    },
+    checkoutSystem: { operatingRegister: false },
+    gameState: { trash: new Trash(), reputation: { shopLevel: 5 } },
+    showGameMessage() {},
+  };
+  const cleaning = new CleaningSystem(shop);
+
+  assert.equal(cleaning.dropTrash(96, 96), true);
+  const piece = cleaning.trash.pieces[0];
+  assert.equal(shop.gameState.trash.pieces.length, 1);
+  assert.equal(cleaning.pickUpTrash(piece), true);
+  assert.equal(shop.gameState.trash.pieces.length, 0);
+  assert.equal(cleaning.getCleanliness().score, 19);
+  assert.deepEqual(cleaning.serializeTrash(), [{ kind: piece.kind, x: 100, y: 112 }]);
+  assert.equal(cleaning.throwAwayHeldTrash(), true);
+  assert.equal(cleaning.getCleanliness().score, 20);
 });

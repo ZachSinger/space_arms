@@ -20,7 +20,7 @@ import { BASE_PATIENCE_MS, getPatienceMs, planShelfRoute, rollCustomerTraits } f
 import { fixtureFacing } from "./FixtureLayout.js";
 import {
   CLEANLINESS_JUDGE_MS, TRASH_DROP_CHANCE, TRASH_DROP_WALK_MS, judgeCleanliness, rollCleanlinessTolerance,
-} from "./Litter.js";
+} from "../modules/cleaning/Litter.js";
 import { gameRandom } from "../core/Random.js";
 
 const SPEED = 100; // px/s

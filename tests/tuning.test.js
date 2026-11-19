@@ -4,6 +4,7 @@ import { loadTuning } from "../js/core/Tuning.js";
 import customerTuning from "../data/tuning/customers.json" with { type: "json" };
 import checkoutTuning from "../data/tuning/checkout.json" with { type: "json" };
 import crateTuning from "../data/tuning/crates.json" with { type: "json" };
+import cleaningTuning from "../data/tuning/cleaning.json" with { type: "json" };
 
 const entry = (value, extra = {}) => ({ value, min: 0, max: 10, description: "A number.", ...extra });
 
@@ -40,5 +41,34 @@ test("moved tuning numbers keep their old values", () => {
     customerCrateStuckMs: 1000,
     customerCrateSqueezeMs: 1500,
     physicsFrameDeltaCapMs: 50,
+  });
+  assert.deepEqual({ ...loadTuning("cleaning", cleaningTuning) }, {
+    cleanlinessBase: 20,
+    cleanlinessPerSalesExpansion: 20,
+    cleanlinessPerLevelAboveFloor: 2,
+    cleanlinessLevelFloor: 5,
+    trashPenalty: 1,
+    dirtPenalty: 2,
+    cleanlinessJudgeMs: 3000,
+    trashDropChance: 0.4,
+    trashDropWalkMs: [1000, 6000],
+    upsetReputationLoss: 1,
+    walkOutReputationLoss: 2,
+    trashcanReachPx: 40,
+    trashPickupAheadPx: 22,
+    trashPickupReachPx: 26,
+    blockedSpotSearchStepPx: 16,
+    blockedSpotSearchMaxRings: 24,
+    trashDepth: 0.9,
+    trashScale: 1.5,
+    trashHighlightDepth: 8990,
+    scavengersUpsetPercent: [40, 60],
+    scavengersWalkOutPercent: [10, 25],
+    civilianUpsetPercent: [55, 75],
+    civilianWalkOutPercent: [25, 40],
+    mercenariesUpsetPercent: [65, 85],
+    mercenariesWalkOutPercent: [35, 50],
+    explorersUpsetPercent: [75, 95],
+    explorersWalkOutPercent: [45, 60],
   });
 });

@@ -10,7 +10,7 @@ import { Events, GAME_EVENTS } from "../js/core/Events.js";
 import { InteractableRegistry } from "../js/logic/InteractableRegistry.js";
 import { Crate, CRATE_STACK_SPACING, INTERACT_RANGE } from "../js/logic/Crate.js";
 import { HOLD_KEY_MS, MAX_CARRIED_CRATES, isSquarelyInFront } from "../js/logic/CrateStack.js";
-import { fixtureBounds, getFixtureType } from "../js/logic/FixtureLayout.js";
+import { fixtureBounds, fixtureFootprint, getFixtureType } from "../js/logic/FixtureLayout.js";
 import { FixtureRegistry } from "../js/logic/FixtureRegistry.js";
 import { PAD } from "../js/logic/GamepadInput.js";
 import { TILE_SIZE } from "../js/logic/RoomLayout.js";
@@ -87,6 +87,45 @@ function bindCrateSystem(scene) {
   }
 }
 
+function bindCleaningSystem(scene) {
+  const getNearbyTrashcan = () => {
+    if (scene.areas.playerArea === AREA.BACKROOM) return null;
+    const step = {
+      up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
+    }[scene.player.currentFacing];
+    if (!step) return null;
+    const { x, y } = scene.player.sprite;
+    const probe = { x: x + step.x * 40, y: y + step.y * 40 };
+    return scene.fixtures.ofKind("trash").find((fixture) => {
+      const { w, h } = fixtureFootprint(fixture);
+      const left = fixture.gx * TILE_SIZE;
+      const top = fixture.gy * TILE_SIZE;
+      return probe.x >= left - 6 && probe.x <= left + w * TILE_SIZE + 6 &&
+        probe.y >= top - 6 && probe.y <= top + h * TILE_SIZE + 6;
+    }) ?? null;
+  };
+  scene.cleaningSystem = {
+    trash: { count: 0, renderHighlight() {} },
+    getNearbyTrashcan,
+    isNearTrashcan: () => Boolean(getNearbyTrashcan()),
+    findTrashInFront: () => null,
+    isOpenTrashSpot: () => false,
+    dropTrash: () => false,
+    pickUpTrash: () => false,
+    throwAwayHeldTrash: () => false,
+    dropHeldTrash: () => false,
+    reportCleanlinessVerdict() {},
+    moveOffBlockedSpots() {},
+    syncHeldTrash() {},
+    serializeTrash: () => [],
+    getCleanliness: () => ({ score: 20, max: 20, trashCount: 0 }),
+    updateHighlight() {},
+  };
+  scene.trash = scene.cleaningSystem.trash;
+  scene.heldTrash = null;
+  scene.hud = { renderCleanliness() {} };
+}
+
 // Areas without door sprites; tests add the portals they need.
 function testAreas(scene, portals = []) {
   return Object.assign(Object.create(Areas.prototype), { shop: scene, playerArea: AREA.SHOP, portals });
@@ -134,6 +173,7 @@ function createHarness({ carrying = false } = {}) {
     ofKind: () => [],
     displayName: () => "SHELF",
   };
+  bindCleaningSystem(scene);
   scene.fixtureViews = new FixtureViews(scene);
   scene.fixtureSystem = new FixtureSystem(scene);
   scene.checkoutSystem = new CheckoutSystem(scene);
@@ -1277,7 +1317,7 @@ test("three carried crates stay straight while the player moves and reverses dir
     storeDoorAnimation: { update() {} },
     shiftClock: { isPaused: false, started: false, softClosed: false, update() {} },
     shift: { starting: false, ended: false, update() {} },
-    hud: { renderStamina() {} },
+    hud: { renderStamina() {}, renderCleanliness() {} },
     positionGoBacksBadge() {},
     updateCrateHint() {},
     updateCrateMarker() {},
@@ -1318,7 +1358,7 @@ test("the game updates player and crate movement during placement without unfree
     storeDoorAnimation: { update() {} },
     shiftClock: { isPaused: true, started: false, softClosed: false, update() {} },
     shift: { starting: false, ended: false, update() {} },
-    hud: { renderStamina() {} },
+    hud: { renderStamina() {}, renderCleanliness() {} },
     positionGoBacksBadge() {},
     updateCrateHint() {},
     updateCrateMarker() {},

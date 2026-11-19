@@ -12,7 +12,7 @@ import { isValidLedgerData } from "../logic/DayLedger.js";
 import { isMoney, roundMoney } from "../logic/Money.js";
 import { isKnownShopLevel } from "../logic/ShopProgression.js";
 import { CUSTOMER_FACTION_IDS } from "../logic/CustomerBuyLists.js";
-import { isValidTrashList } from "../logic/Litter.js";
+import { isValidTrashList } from "../modules/cleaning/Litter.js";
 import { integer, isRecord, requireSave } from "./saveHelpers.js";
 import { SHOP_LAYOUT_VERSION } from "./migrations/index.js";
 import { LEGACY_SHELF_STACK_DEPTH } from "./migrations/shelfStocking.js";

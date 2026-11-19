@@ -1,0 +1,180 @@
+{
+  "cleanlinessBase": {
+    "value": 20,
+    "min": 0,
+    "max": 100,
+    "integer": true,
+    "description": "The store's starting maximum cleanliness."
+  },
+  "cleanlinessPerSalesExpansion": {
+    "value": 20,
+    "min": 0,
+    "max": 100,
+    "integer": true,
+    "description": "Maximum cleanliness added by each sales-floor expansion."
+  },
+  "cleanlinessPerLevelAboveFloor": {
+    "value": 2,
+    "min": 0,
+    "max": 20,
+    "integer": true,
+    "description": "Maximum cleanliness added for each shop level above the level floor."
+  },
+  "cleanlinessLevelFloor": {
+    "value": 5,
+    "min": 1,
+    "max": 20,
+    "integer": true,
+    "description": "Shop levels at or below this level add no maximum cleanliness."
+  },
+  "trashPenalty": {
+    "value": 1,
+    "min": 0,
+    "max": 10,
+    "integer": true,
+    "description": "Cleanliness points lost for each piece of loose trash."
+  },
+  "dirtPenalty": {
+    "value": 2,
+    "min": 0,
+    "max": 10,
+    "integer": true,
+    "description": "Cleanliness points lost for each dirt mark."
+  },
+  "cleanlinessJudgeMs": {
+    "value": 3000,
+    "min": 100,
+    "max": 30000,
+    "integer": true,
+    "description": "Running time before a customer first judges store cleanliness."
+  },
+  "trashDropChance": {
+    "value": 0.4,
+    "min": 0,
+    "max": 1,
+    "description": "Chance a customer drops one piece of trash during their visit."
+  },
+  "trashDropWalkMs": {
+    "value": [1000, 6000],
+    "min": 0,
+    "max": 30000,
+    "integer": true,
+    "description": "Earliest and latest walking time before a customer drops trash."
+  },
+  "upsetReputationLoss": {
+    "value": 1,
+    "min": 0,
+    "max": 10,
+    "integer": true,
+    "description": "Store reputation lost when a customer is upset by cleanliness."
+  },
+  "walkOutReputationLoss": {
+    "value": 2,
+    "min": 0,
+    "max": 10,
+    "integer": true,
+    "description": "Store reputation lost when a customer leaves over cleanliness."
+  },
+  "trashcanReachPx": {
+    "value": 40,
+    "min": 0,
+    "max": 100,
+    "integer": true,
+    "description": "Distance from a trashcan edge used to test player interaction."
+  },
+  "trashPickupAheadPx": {
+    "value": 22,
+    "min": 0,
+    "max": 100,
+    "integer": true,
+    "description": "Distance ahead of the player's feet used to find loose trash."
+  },
+  "trashPickupReachPx": {
+    "value": 26,
+    "min": 0,
+    "max": 100,
+    "integer": true,
+    "description": "Maximum distance from the pickup point to loose trash."
+  },
+  "blockedSpotSearchStepPx": {
+    "value": 16,
+    "min": 1,
+    "max": 64,
+    "integer": true,
+    "description": "Distance between candidate floor spots when fixtures cover trash."
+  },
+  "blockedSpotSearchMaxRings": {
+    "value": 24,
+    "min": 1,
+    "max": 100,
+    "integer": true,
+    "description": "Maximum search rings used to move trash away from a new fixture."
+  },
+  "trashDepth": {
+    "value": 0.9,
+    "min": 0,
+    "max": 10,
+    "description": "Draw depth for loose trash so people, crates, and fixtures cover it."
+  },
+  "trashScale": {
+    "value": 1.5,
+    "min": 0.1,
+    "max": 4,
+    "description": "Display scale for loose trash sprites."
+  },
+  "trashHighlightDepth": {
+    "value": 8990,
+    "min": 0,
+    "max": 10000,
+    "integer": true,
+    "description": "Draw depth for the trash highlight above the shop floor."
+  },
+  "scavengersUpsetPercent": {
+    "value": [40, 60],
+    "min": 0,
+    "max": 100,
+    "description": "Cleanliness percentage range below which scavengers become upset."
+  },
+  "scavengersWalkOutPercent": {
+    "value": [10, 25],
+    "min": 0,
+    "max": 100,
+    "description": "Cleanliness percentage range below which scavengers leave."
+  },
+  "civilianUpsetPercent": {
+    "value": [55, 75],
+    "min": 0,
+    "max": 100,
+    "description": "Cleanliness percentage range below which regular customers become upset."
+  },
+  "civilianWalkOutPercent": {
+    "value": [25, 40],
+    "min": 0,
+    "max": 100,
+    "description": "Cleanliness percentage range below which regular customers leave."
+  },
+  "mercenariesUpsetPercent": {
+    "value": [65, 85],
+    "min": 0,
+    "max": 100,
+    "description": "Cleanliness percentage range below which mercenaries become upset."
+  },
+  "mercenariesWalkOutPercent": {
+    "value": [35, 50],
+    "min": 0,
+    "max": 100,
+    "description": "Cleanliness percentage range below which mercenaries leave."
+  },
+  "explorersUpsetPercent": {
+    "value": [75, 95],
+    "min": 0,
+    "max": 100,
+    "description": "Cleanliness percentage range below which explorers become upset."
+  },
+  "explorersWalkOutPercent": {
+    "value": [45, 60],
+    "min": 0,
+    "max": 100,
+    "description": "Cleanliness percentage range below which explorers leave."
+  }
+}

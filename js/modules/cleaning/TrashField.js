@@ -3,12 +3,12 @@
 // ==========================================
 // Loose trash on the shop floor (documentation/modules/Cleaning.md): the pieces, their
 // pictures, and moving them off spots a fixture now covers.
-import { TRASH_KINDS } from "./Litter.js";
-import { gameRandom } from "../core/Random.js";
+import { TRASH_KINDS, CLEANING_TUNING } from "./Litter.js";
+import { gameRandom } from "../../core/Random.js";
 
-export const TRASH_DEPTH = 0.9; // just above the floor (0): under walls, crates, fixtures, and people
-const TRASH_SCALE = 1.5;
-const TRASH_HIGHLIGHT_DEPTH = 8990; // over shelves and people, under speech bubbles (9000)
+export const TRASH_DEPTH = CLEANING_TUNING.trashDepth; // just above the floor (0): under walls, crates, fixtures, and people
+const TRASH_SCALE = CLEANING_TUNING.trashScale;
+const TRASH_HIGHLIGHT_DEPTH = CLEANING_TUNING.trashHighlightDepth; // over shelves and people, under speech bubbles (9000)
 
 // Small pictures drawn once: a dented can on its side, crumpled paper, a flattened box.
 function ensureTrashTextures(scene) {
@@ -145,7 +145,10 @@ export class TrashField {
   }
 
   // Trash a fixture now covers slides to the nearest open floor; with none nearby it's gone.
-  moveOffBlockedSpots(step = 16, maxRings = 24) {
+  moveOffBlockedSpots(
+    step = CLEANING_TUNING.blockedSpotSearchStepPx,
+    maxRings = CLEANING_TUNING.blockedSpotSearchMaxRings,
+  ) {
     for (const piece of [...this.pieces]) {
       if (this.isOpenFloor(piece.x, piece.y)) continue;
       const spot = this.nearestOpenSpot(piece, step, maxRings);
