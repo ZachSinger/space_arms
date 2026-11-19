@@ -15,9 +15,10 @@ export class InteractableRegistry {
     };
   }
 
-  getActions(player, input, origin = null) {
+  getActions(player, input, origin = null, { excludeProvider = null } = {}) {
     const available = [];
-    for (const getCandidates of this.providers.values()) {
+    for (const [providerId, getCandidates] of this.providers) {
+      if (providerId === excludeProvider) continue;
       for (const candidate of getCandidates()) {
         if (candidate.isAvailable && !candidate.isAvailable()) continue;
         if (!candidate.getActions && !Array.isArray(candidate.actions)) {
@@ -62,9 +63,9 @@ export class InteractableRegistry {
     return available;
   }
 
-  findTarget(action, origin, target = null, player = null, input = null, kind = null) {
+  findTarget(action, origin, target = null, player = null, input = null, kind = null, options = {}) {
     let best = null;
-    for (const candidate of this.getActions(player, input, origin)) {
+    for (const candidate of this.getActions(player, input, origin, options)) {
       if (candidate.action !== action) continue;
       if (target && candidate.target !== target) continue;
       if (kind && candidate.kind !== kind) continue;

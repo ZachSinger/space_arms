@@ -97,3 +97,28 @@ test("target selection can be limited to one interactable kind", () => {
     "shelf",
   );
 });
+
+test("target selection can skip a provider while a provider resolves competing targets", () => {
+  const registry = new InteractableRegistry();
+  let providerCalls = 0;
+  registry.registerProvider("portals", () => {
+    providerCalls += 1;
+    return [candidate({ id: "door", distance: 0, priority: 10 })];
+  });
+  registry.registerProvider("fixtures", () => [
+    { ...candidate({ id: "shelf", distance: 2, priority: 3 }), kind: "fixture" },
+  ]);
+
+  const target = registry.findTarget(
+    "interact",
+    { x: 0, y: 0 },
+    null,
+    null,
+    null,
+    "fixture",
+    { excludeProvider: "portals" },
+  );
+
+  assert.equal(target.id, "shelf");
+  assert.equal(providerCalls, 0);
+});

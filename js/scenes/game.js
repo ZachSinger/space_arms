@@ -1261,7 +1261,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     // Doors come first so a carried crate goes through with the player, not onto the floor.
-    const portalAction = this.areas.getActions(this.player, this.input)[0];
+    const portalAction = this.getPortalInteractionAction();
     if (portalAction) {
       portalAction.perform();
       return;
@@ -1329,6 +1329,17 @@ export class GameScene extends Phaser.Scene {
       this.input,
       this.getInteractionOrigin(),
     ).find((action) => action.kind === "register" && action.action === "interact");
+  }
+
+  getPortalInteractionAction() {
+    return this.interactables.findTarget(
+      "interact",
+      this.getInteractionOrigin(),
+      null,
+      this.player,
+      this.input,
+      "portal",
+    );
   }
 
   isNearTrashcan() {
@@ -1687,7 +1698,7 @@ export class GameScene extends Phaser.Scene {
       lines.push(action?.hint ?? `${controlLabel("interact")}: Leave the register`);
     } else if (mode === CONTROL_MODES.WALKING || mode === CONTROL_MODES.CARRYING) {
       const interactKey = controlLabel("interact");
-      const portalAction = this.areas.getActions(this.player, this.input)[0];
+      const portalAction = this.getPortalInteractionAction();
       if (portalAction) {
         lines.push(portalAction.hint);
       } else if (mode === CONTROL_MODES.WALKING && !this.heldTrash && !this.findTrashInFront()) {

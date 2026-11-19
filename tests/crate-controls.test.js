@@ -155,7 +155,9 @@ function bindCleaningSystem(scene) {
 
 // Areas without door sprites; tests add the portals they need.
 function testAreas(scene, portals = []) {
-  return Object.assign(Object.create(Areas.prototype), { shop: scene, playerArea: AREA.SHOP, portals });
+  const areas = Object.assign(Object.create(Areas.prototype), { shop: scene, playerArea: AREA.SHOP, portals });
+  areas.registerInteractions();
+  return areas;
 }
 
 function createHarness({ carrying = false } = {}) {
@@ -1451,13 +1453,18 @@ test("a backroom door and the register explain themselves in the bottom bar's he
     { area: AREA.SHOP, to: AREA.BACKROOM, door: { x: 500, y: 100 } },
     { area: AREA.BACKROOM, to: AREA.SHOP, door: { x: 145, y: 6432 } },
   ];
+  scene.interactables.registerProvider("test-register", () => [{
+    id: "test-register",
+    kind: "register",
+    priority: 1,
+    range: 0,
+    distanceFrom: () => 0,
+    actions: ["interact"],
+    hint: "E: Activate Register",
+    perform() {},
+  }]);
   Object.assign(scene.player.sprite, { x: 500, y: 132 });
   scene.player.currentFacing = "up";
-  scene.interactables = {
-    getActions: () => [],
-    findTarget: (action) => ["register", "interact"].includes(action)
-      ? { hint: "E: Activate Register" } : null,
-  };
   scene.updateCrateHint();
   assert.match(scene.messages.element.textContent, /^E: Go into the backroom$/m);
   let usedPortal = null;

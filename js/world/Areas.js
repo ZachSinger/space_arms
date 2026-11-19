@@ -61,6 +61,30 @@ export class Areas {
       portal(AREA.SHOP, AREA.BACKROOM, getBackroomDoorCell(), link.shop),
       portal(AREA.BACKROOM, AREA.SHOP, getBackroomExitCell(), link.backroom),
     ];
+    this.registerInteractions();
+  }
+
+  registerInteractions() {
+    const shop = this.shop;
+    shop.interactables.registerProvider("portals", () => {
+      const portal = this.nearbyPortal();
+      if (!portal) return [];
+      return [{
+        id: `door:${portal.area}`,
+        kind: "portal",
+        target: portal,
+        priority: 10,
+        range: 0,
+        distanceFrom: () => 0,
+        getActions: () => [{
+          action: "interact",
+          hint: `${controlLabel("interact")}: ${
+            portal.to === AREA.SHOP ? "Go back out to the shop" : "Go into the backroom"
+          }`,
+          perform: () => this.goThrough(portal),
+        }],
+      }];
+    });
   }
 
   /** The door in `from` that leads to `to`. */
@@ -110,26 +134,12 @@ export class Areas {
         player,
         shop.input,
         "fixture",
+        { excludeProvider: "portals" },
       );
       if (target?.kind === "fixture" && Math.abs(x - target.target.x) < Math.abs(x - door.x)) return null;
       return portal;
     }
     return null;
-  }
-
-  getActions(player = this.shop.player, input) {
-    const portal = this.nearbyPortal(player);
-    if (!portal) return [];
-    return [{
-      action: "interact",
-      id: `door:${portal.area}`,
-      kind: "portal",
-      target: portal,
-      hint: `${controlLabel("interact")}: ${
-        portal.to === AREA.SHOP ? "Go back out to the shop" : "Go into the backroom"
-      }`,
-      perform: () => this.goThrough(portal),
-    }];
   }
 
   /**
