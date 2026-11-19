@@ -22,6 +22,7 @@ let CheckoutWindow;
 let GameState;
 let CHARACTER_ART_WIDTH;
 let CHARACTER_FEET_DROP;
+let DebugTools;
 const originalPhaser = globalThis.Phaser;
 
 before(async () => {
@@ -54,6 +55,7 @@ before(async () => {
   ({ GameScene } = await server.ssrLoadModule("/js/scenes/game.js"));
   ({ CheckoutWindow } = await server.ssrLoadModule("/js/logic/CheckoutWindow.js"));
   ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));
+  ({ DebugTools } = await server.ssrLoadModule("/js/debug/DebugTools.js"));
   ({ CHARACTER_ART_WIDTH, CHARACTER_FEET_DROP } = await server.ssrLoadModule("/js/logic/CustomerSprites.js"));
 });
 
@@ -276,22 +278,22 @@ test("debug upgrade buttons open the next zone free, even at Level 1 with the st
   const harness = createExpansionHarness({ shopLevel: 1, credits: 0 });
   const { scene } = harness;
   scene.shiftClock.started = true;
+  const debugTools = new DebugTools(scene);
   for (const [order, area] of [[EXPANSION_ORDER, "sales floor"], [BACKROOM_UPGRADE_ORDER, "backroom"]]) {
     for (const id of order) {
-      assert.equal(scene.debugUnlockNextZone(order, area), true);
+      assert.equal(debugTools.unlockNextZone(order, area), true);
       assert.equal(scene.room.zones.find((zone) => zone.id === id).locked, false);
     }
-    assert.equal(scene.debugUnlockNextZone(order, area), false);
+    assert.equal(debugTools.unlockNextZone(order, area), false);
     assert.match(harness.messages.at(-1), new RegExp(`Every ${area} upgrade is already open`));
   }
   assert.equal(scene.gameState.economy.credits, 0);
 });
 
 test("the placement grid toggle stays hidden outside placement and independent of the tile grid", () => {
-  const scene = Object.create(GameScene.prototype);
+  const scene = { fixturePlacement: { active: false } };
+  const debugTools = new DebugTools(scene);
   const created = [];
-  scene.debugGridOverlays = new Map();
-  scene.fixturePlacement = { active: false };
   scene.add = {
     graphics() {
       const graphics = {
@@ -308,22 +310,22 @@ test("the placement grid toggle stays hidden outside placement and independent o
     },
   };
 
-  scene.toggleDebugGrid(8, 0x00ff00, 1);
+  debugTools.toggleGrid(8, 0x00ff00, 1);
   const fine = created[0];
   assert.equal(fine.visible, false);
-  assert.equal(scene.debugPlacementGrid.enabled, true);
+  assert.equal(debugTools.placementGrid.enabled, true);
   assert.equal(fine.depth, 9998);
 
-  scene.toggleDebugGrid();
+  debugTools.toggleGrid();
   const coarse = created[1];
   assert.equal(coarse.visible, true);
   assert.deepEqual(coarse.style, [1, 0x00ffff, 0.5]);
-  scene.toggleDebugGrid(8, 0x00ff00, 1);
+  debugTools.toggleGrid(8, 0x00ff00, 1);
   assert.equal(fine.visible, false);
-  assert.equal(scene.debugPlacementGrid.enabled, false);
+  assert.equal(debugTools.placementGrid.enabled, false);
   assert.equal(coarse.visible, true);
-  scene.toggleDebugGrid(8, 0x00ff00, 1);
-  assert.equal(scene.debugPlacementGrid.enabled, true);
+  debugTools.toggleGrid(8, 0x00ff00, 1);
+  assert.equal(debugTools.placementGrid.enabled, true);
   assert.equal(created.length, 2);
 });
 

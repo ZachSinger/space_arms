@@ -20,7 +20,7 @@ async function playSeededShift(h, { perFrame, steps }) {
   await h.game((scene) => {
     scene.gameState.reputation.shopLevel = 7;
     scene.gameState.economy.credits += 20000;
-    scene.debugQuickstart({ shelfCount: 2, itemCount: 8 });
+    scene.debugTools.quickstart({ shelfCount: 2, itemCount: 8 });
     for (const id of ["tavi_stock_clerk", "sera_floor_assistant"]) scene.gameState.hireEmployee(id);
     // Physics carries leftover frame time between steps; start both runs from none.
     scene.physics.world._elapsed = 0;

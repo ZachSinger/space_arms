@@ -5,9 +5,9 @@
 // Everything is unlocked, money is plentiful, nothing is ever saved, and a small panel can
 // send customers, fill every shelf, and count anyone who gives up on reaching somewhere.
 import { database } from "../scenes/boot.js";
-import { EXPANSION_ORDER, BACKROOM_GRID_Y } from "./RoomLayout.js";
-import { FIXTURE_SNAP_STEP, FIXTURE_TYPES, validateFixtureLayout } from "./FixtureLayout.js";
-import { SHOP_LEVEL_TIERS } from "./ShopProgression.js";
+import { EXPANSION_ORDER, BACKROOM_GRID_Y } from "../logic/RoomLayout.js";
+import { FIXTURE_SNAP_STEP, FIXTURE_TYPES, validateFixtureLayout } from "../logic/FixtureLayout.js";
+import { SHOP_LEVEL_TIERS } from "../logic/ShopProgression.js";
 
 const SANDBOX_CREDITS = 1000000;
 const SEND_GAP_MS = 700;

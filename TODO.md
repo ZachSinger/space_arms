@@ -264,7 +264,7 @@ notice something that needs doing but isn't being done right now.
 - [x] Spawn-customer debug key (Y key): lets one random customer in right away.
 - [x] Quickstart debug key (K key, before any shelf is placed): signs needed supply
       contracts, places a Budget Shelf near the door, and stocks it with four low-cost items.
-- [x] Tile-grid overlay (G key, `GameScene.toggleDebugGrid`): draws a 1px line every
+- [x] Tile-grid overlay (G key, `DebugTools.toggleGrid`): draws a 1px line every
       TILE_SIZE across the whole authored map (including locked/not-yet-built zones), on
       top of everything else. Added after discovering fixtures weren't sitting on tile boundaries -- their
       positions were computed as a fractional percentage of the zone's raw pixel

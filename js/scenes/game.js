@@ -11,7 +11,8 @@ import {
   getStaffLimit, getStaffLimitReason, hasUnimplementedShopRewardBetween, STAFF_LIMIT_LEVELS,
 } from "../logic/ShopProgression.js";
 import { HUDController } from "../logic/HUDController.js";
-import { DebugInfo } from "../logic/DebugInfo.js";
+import { DebugInfo } from "../debug/DebugInfo.js";
+import { DebugTools } from "../debug/DebugTools.js";
 import { Events, GAME_EVENTS } from "../core/Events.js";
 import { ControlMode, CONTROL_MODES } from "../logic/ControlMode.js";
 import { InteractableRegistry } from "../logic/InteractableRegistry.js";
@@ -48,7 +49,7 @@ import { chooseCustomerPayment } from "../logic/CustomerPayment.js";
 import { TileRoom } from "../logic/TileRoom.js";
 import { AnimatedDoor, BACKROOM_DOOR_SPRITE, SlidingDoor } from "../logic/SlidingDoor.js";
 import {
-  TILE_SIZE, getZone, getTotalGridSize, getAuthoredGridSize, getStoreDoorCell, getStoreDoorCells, EXPANSION_ORDER,
+  TILE_SIZE, getZone, getAuthoredGridSize, getStoreDoorCell, getStoreDoorCells, EXPANSION_ORDER,
   BACKROOM_UPGRADE_ORDER, getBackroomDoorCell, getBackroomExitCell, getBackroomLink, isBackroomRow,
   getBackroomInteriorBounds, getBackroomBounds, getLoadingPadBounds, getDoorwayClearanceBounds, LOADING_PAD_WIDTH, LOADING_PAD_HEIGHT,
 } from "../logic/RoomLayout.js";
@@ -58,9 +59,8 @@ import { findFreeWalkPath } from "../logic/Pathfinder.js";
 import { FixturePlacement } from "../logic/FixturePlacement.js";
 import { worldToClientRect } from "../logic/FixtureHighlight.js";
 import { getGameScale } from "../logic/GameViewport.js";
-import { FixturePlacementGrid } from "../logic/FixturePlacementGrid.js";
-import { setupSandboxRoom } from "../logic/SandboxRoom.js";
-import { setupUiLab } from "../logic/UiLab.js";
+import { setupSandboxRoom } from "../debug/SandboxRoom.js";
+import { setupUiLab } from "../debug/UiLab.js";
 import { ShelfAttentionHighlight } from "../logic/ShelfAttentionHighlight.js";
 import { ShelfFacingLight } from "../logic/ShelfFacingLight.js";
 import { ShelfItemDisplay } from "../logic/ShelfItemDisplay.js";
@@ -237,8 +237,7 @@ export class GameScene extends Phaser.Scene {
     installSceneTextSize(this, Phaser);
     this.eventBus = new Events({ strict: true });
     this.debugInfo = null;
-    this.debugGridOverlays = new Map();
-    this.debugPlacementGrid = null;
+    this.debugTools = null;
     this.startingShift = false;
     this.loadFailed = false;
     this.autosaveBlocked = false;
@@ -584,34 +583,9 @@ export class GameScene extends Phaser.Scene {
     this.bindControlKey("keydown-PAGE_DOWN", "cameraZoom", () => this.zoomCamera(-1));
 
     // Debug tools are keyboard shortcuts plus HUD buttons; REAL games remove them all.
-    const debugButtonIds = ["hud-debug-info-btn", "hud-debug-shop-upgrade-btn",
-      "hud-debug-backroom-upgrade-btn", "hud-debug-quickstart-btn"];
-    for (const id of debugButtonIds) {
-      document.getElementById(id)?.classList.toggle("hidden", this.realMode);
-    }
-    this.debugUpgradeButtons = [];
-    if (!this.realMode) {
-      // Debug-only: tile-grid overlay that makes off-grid fixtures obvious.
-      this.bindControlKey("keydown-G", "debug", () => this.toggleDebugGrid());
-      this.bindControlKey("keydown-BACK_SLASH", "debugGrid", (event) => {
-        if (!event.repeat) this.toggleDebugGrid(8, 0x00ff00, 1);
-      });
-
-      // Debug-only: lets one random customer in right away.
-      this.bindControlKey("keydown-Y", "debug", () => this.spawnCustomer(null));
-
-      // Debug-only: skip the opening setup with a stocked shelf.
-      this.bindControlKey("keydown-K", "debug", () => this.debugQuickstart());
-
-      // Debug-only HUD buttons: open the next sales-floor or backroom upgrade for free.
-      this.debugUpgradeButtons = [
-        ["hud-debug-shop-upgrade-btn", () => this.debugUnlockNextZone(EXPANSION_ORDER, "sales floor")],
-        ["hud-debug-backroom-upgrade-btn", () => this.debugUnlockNextZone(BACKROOM_UPGRADE_ORDER, "backroom")],
-        ["hud-debug-quickstart-btn", () => this.debugQuickstart({ shelfCount: 2, itemCount: 6 })],
-      ].map(([id, handler]) => ({ element: document.getElementById(id), handler }))
-        .filter(({ element }) => element);
-      for (const { element, handler } of this.debugUpgradeButtons) element.addEventListener("click", handler);
-    }
+    DebugTools.showButtons(!this.realMode);
+    this.debugTools = this.realMode ? null : new DebugTools(this);
+    this.debugTools?.install();
 
     // The shift clock's manual pause: freezes time entirely so the player can think.
     this.bindControlKey("keydown-P", "pause", () => this.shiftClock.togglePause());
@@ -640,11 +614,7 @@ export class GameScene extends Phaser.Scene {
       this.uiNavigator.destroy();
       this.eventBus.clear();
       this.debugInfo?.destroy();
-      for (const grid of this.debugGridOverlays.values()) grid.destroy();
-      this.debugGridOverlays.clear();
-      this.debugPlacementGrid?.destroy();
-      this.debugPlacementGrid = null;
-      for (const { element, handler } of this.debugUpgradeButtons) element.removeEventListener("click", handler);
+      this.debugTools?.destroy();
       this.fixturePlacement.destroy();
       this.managerTablet.uiWindow.onClose = null;
       this.managerTablet.disableInventoryNavigation();
@@ -2048,120 +2018,6 @@ export class GameScene extends Phaser.Scene {
         isSegmentClear: (from, to) => this.isNavigationSegmentClear(from, to, obstacles),
       },
     );
-  }
-
-  // --- Debug hooks ---
-  // World-pixel grids over the shop map, locked zones included. Depth 9998 sits
-  // just under the player (9999) so it draws over every fixture, making off-grid ones obvious.
-  toggleDebugGrid(spacing = TILE_SIZE, color = 0x00ffff, alpha = 0.5) {
-    if (spacing === 8) {
-      this.debugPlacementGrid ??= new FixturePlacementGrid(this);
-      this.debugPlacementGrid.toggle();
-      return;
-    }
-    let graphics = this.debugGridOverlays.get(spacing);
-    if (!graphics) {
-      const { gridW, gridH } = getTotalGridSize();
-      const width = gridW * TILE_SIZE;
-      const height = gridH * TILE_SIZE;
-
-      graphics = this.add.graphics().setDepth(9998);
-      graphics.lineStyle(1, color, alpha);
-      for (let x = 0; x <= width; x += spacing) {
-        graphics.lineBetween(x, 0, x, height);
-      }
-      for (let y = 0; y <= height; y += spacing) {
-        graphics.lineBetween(0, y, width, y);
-      }
-      graphics.setVisible(false);
-      this.debugGridOverlays.set(spacing, graphics);
-    }
-
-    graphics.setVisible(!graphics.visible);
-  }
-
-  // HUD debug buttons: opens the next sales-floor expansion or backroom upgrade for free,
-  // ignoring Shop Level, cost, and whether the store is open.
-  debugUnlockNextZone(order, areaName) {
-    const zone = order.map((id) => this.room.zones.find((candidate) => candidate.id === id))
-      .find((candidate) => candidate?.locked);
-    if (!zone) {
-      this.showShopMessage(`Every ${areaName} upgrade is already open.`);
-      return false;
-    }
-    this.room.unlockZone(zone.id);
-    this.refreshCamera();
-    this.gameState.shop.changed();
-    this.requestAutosave();
-    this.showShopMessage(`Debug: ${zone.name} is open.`);
-    return true;
-  }
-
-  // K key / Quickstart button: skips the opening setup for testing. Signs whatever contracts
-  // the cheapest one-spot items need, then places Budget Shelves near the door and fills
-  // one spot per item, paying for everything.
-  debugQuickstart({ shelfCount = 1, itemCount = 4 } = {}) {
-    if (this.fixtures.shelves().length > 0) {
-      this.showShopMessage("Quickstart only works before you place a shelf.");
-      return false;
-    }
-    const shelfType = "shelf_budget_2x2";
-    const shelfSpec = getFixtureType(shelfType);
-    const items = database.getAllItems()
-      .filter((item) => item.dimensions.w === 1 && item.dimensions.h === 1)
-      .filter((item) => {
-        const license = database.getLicense(item.license);
-        return this.gameState.catalog.owns(item.license) || license?.isUnlocked(this.gameState);
-      })
-      .sort((a, b) => a.baseCost - b.baseCost ||
-        (database.getLicense(a.license)?.baseCost ?? 0) - (database.getLicense(b.license)?.baseCost ?? 0))
-      .slice(0, Math.min(itemCount, shelfCount * 4));
-
-    const door = getStoreDoorCell();
-    if (!this.findNearestFixtureCell(shelfType, door)) {
-      this.showShopMessage("Quickstart couldn't find room for the shelf.");
-      return false;
-    }
-
-    for (const licenseId of new Set(items.map((item) => item.license))) {
-      if (this.gameState.catalog.owns(licenseId)) continue;
-      const license = database.getLicense(licenseId);
-      this.gameState.economy.spend(license.baseCost, { category: "licenses", label: license.name });
-      this.gameState.catalog.sign(licenseId);
-    }
-    this.recalculateActiveFactions();
-
-    const shelves = [];
-    for (let count = 0; count < shelfCount; count += 1) {
-      const shelfCell = this.findNearestFixtureCell(shelfType, door);
-      if (!shelfCell) break;
-      this.gameState.economy.spend(shelfSpec.price, { category: "fixtures", label: shelfSpec.name });
-      shelves.push(this.spawnFixture({ id: this.fixtures.nextId(shelfType), type: shelfType, ...shelfCell }));
-      const result = validateFixtureLayout(this.fixtures.layout(), this.getLayoutOptions());
-      this.applyFixtureLayout(this.fixtures.layout(), result);
-    }
-
-    // One item per shelf spot, in each 2x2 grid's reading order, filling shelves in turn.
-    const spots = [[0, 0], [1, 0], [0, 1], [1, 1]];
-    items.slice(0, shelves.length * spots.length).forEach((item, index) => {
-      const shelf = shelves[Math.floor(index / spots.length)];
-      const [gx, gy] = spots[index % spots.length];
-      const placement = shelf.placeItem(item.id, gx, gy, false, 0);
-      const capacity = shelf.getPlacementCapacity(placement);
-      const crates = Math.ceil(capacity / getCrateOrderQuantity(item));
-      this.gameState.economy.spend(this.restockCost(item) * crates, {
-        category: "stock_orders", label: item.name, quantity: crates,
-      });
-      placement.quantity = capacity;
-      this.gameState.goBacks.add(item.id, crates * getCrateOrderQuantity(item) - capacity);
-      this.gameState.catalog.priceIfUnset(item.id, this.gameState.market.getPrice(item.id));
-    });
-    this.gameState.economy.spend(DELIVERY_FEE, { category: "delivery_fees", label: "Delivery fee" });
-
-    for (const shelf of shelves) this.refreshShelfStockDisplay(shelf);
-    this.gameState.shop.changed();
-    this.showShopMessage(shelves.length > 1 ? "Quickstart: shelves stocked." : "Quickstart: shelf stocked.");
-    return true;
   }
 
   /**
@@ -4518,7 +4374,7 @@ export class GameScene extends Phaser.Scene {
   update(time, delta) {
     this.handleGamepad(time, delta);
     if (this.controlMode.getMode() !== CONTROL_MODES.PAUSED) this.fixturePlacement.update();
-    this.debugPlacementGrid?.update();
+    this.debugTools?.update();
     for (const crate of this.restockCrates) crate.updateThrow(delta);
     this.separateStuckCrates();
     // The front door opens only for customers: arrivals hold it open themselves, and

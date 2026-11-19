@@ -17,7 +17,7 @@ export async function runScriptedShift(harness, { employees = [], playSeconds = 
     // Level 7 allows two staff members.
     scene.gameState.reputation.shopLevel = 7;
     scene.gameState.economy.credits += 20000;
-    scene.debugQuickstart({ shelfCount: shelves, itemCount: items });
+    scene.debugTools.quickstart({ shelfCount: shelves, itemCount: items });
     const hired = employees.map((id) => scene.gameState.hireEmployee(id));
     const log = { sales: 0, angry: 0, missing: 0, spawned: 0, gaveUp: [] };
     window.__shiftLog = log;

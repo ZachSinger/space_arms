@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DebugInfo, createDebugSnapshot } from "../js/logic/DebugInfo.js";
+import { DebugInfo, createDebugSnapshot } from "../js/debug/DebugInfo.js";
 
 function fixtureScene() {
   const fixture = {

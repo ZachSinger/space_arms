@@ -4,8 +4,8 @@
 // The HUD "Debug Info" button: keeps a ring buffer of recent game events and errors, and
 // captures a JSON snapshot of the live scene to disk through the desktop app.
 // See also: main.js (writes captures to the debug folder).
-import { CUSTOMER_POOL_TUNING } from "./CustomerPooling.js";
-import { SHIFT_DURATION_MS } from "./ShiftClock.js";
+import { CUSTOMER_POOL_TUNING } from "../logic/CustomerPooling.js";
+import { SHIFT_DURATION_MS } from "../logic/ShiftClock.js";
 
 // Oldest events are dropped past this count.
 const MAX_RECENT_EVENTS = 200;

@@ -5,7 +5,7 @@
 // with a couple of stocked shelves so menus have something to show, and nothing is saved.
 // The panel opens the real windows directly, so any change made here is the in-game UI.
 import { unlockEverything } from "./SandboxRoom.js";
-import { getTabDefs } from "./ManagerTablet.js";
+import { getTabDefs } from "../logic/ManagerTablet.js";
 
 /**
  * @param {Phaser.Scene} scene - the game scene, started with { sandbox: true, lab: "ui" }
@@ -13,7 +13,7 @@ import { getTabDefs } from "./ManagerTablet.js";
  */
 export function setupUiLab(scene) {
   unlockEverything(scene);
-  scene.debugQuickstart({ shelfCount: 2, itemCount: 8 });
+  scene.debugTools.quickstart({ shelfCount: 2, itemCount: 8 });
   scene.gameState.shop.changed();
 
   const panel = document.createElement("div");

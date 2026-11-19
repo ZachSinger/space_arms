@@ -16,7 +16,7 @@ async function freshShop(h, { employees = [] } = {}) {
   await h.game((scene, staff) => {
     scene.gameState.reputation.shopLevel = 5;
     scene.gameState.economy.credits += 20000;
-    scene.debugQuickstart({ shelfCount: 2, itemCount: 8 });
+    scene.debugTools.quickstart({ shelfCount: 2, itemCount: 8 });
     for (const id of staff) scene.gameState.hireEmployee(id);
   }, employees);
 }

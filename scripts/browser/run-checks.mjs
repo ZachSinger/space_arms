@@ -26,7 +26,7 @@ export async function runSpeedTest(h, seconds = 45) {
     scene.gameState.economy.credits += 100000;
     for (const zone of scene.room.zones) if (zone.locked) scene.room.unlockZone(zone.id);
     scene.refreshCamera();
-    scene.debugQuickstart({ shelfCount: 6, itemCount: 20 });
+    scene.debugTools.quickstart({ shelfCount: 6, itemCount: 20 });
     for (const id of ["tavi_stock_clerk", "sera_floor_assistant", "dax_stock_clerk"]) scene.gameState.hireEmployee(id);
     const itemIds = [...new Set(scene.fixtures.shelves().flatMap((shelf) => shelf.placements.map((entry) => entry.itemId)))];
     // A messy backroom: thirty loose crates.
