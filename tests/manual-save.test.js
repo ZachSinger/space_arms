@@ -13,6 +13,7 @@ import { SupplierLicense } from "../js/logic/Licenses.js";
 import { ContractRenderer } from "../js/logic/ContractRenderer.js";
 import { BACKROOM_UPGRADE_ORDER, EXPANSION_ORDER, ZONES } from "../js/logic/RoomLayout.js";
 import { FIXTURE_TYPES, fixtureBounds, fixtureFacingStep, fixtureFootprint, positionRegisterQueue } from "../js/logic/FixtureLayout.js";
+import { upgradeContractSplit } from "../js/state/migrations/contractSplit.js";
 
 let server;
 let cacheDirectory;
@@ -576,12 +577,12 @@ test("saves from before contracts were split keep every product they could alrea
   state.signLicense("lic_start_ammo");
   const { contractsSplit, ...oldSave } = state.serialize();
   assert.equal(contractsSplit, true);
-  const restored = PlayerState.deserialize(oldSave);
+  const restored = PlayerState.deserialize(upgradeContractSplit({ playerState: oldSave }).playerState);
   assert.ok(restored.activeLicenses.has("lic_start_ammo"));
   assert.ok(restored.activeLicenses.has("lic_start_rifle_ammo"));
   assert.equal(restored.activeLicenses.has("lic_start_survival"), false);
 
-  const current = PlayerState.deserialize(state.serialize());
+  const current = PlayerState.deserialize(upgradeContractSplit({ playerState: state.serialize() }).playerState);
   assert.equal(current.activeLicenses.has("lic_start_rifle_ammo"), false,
     "new saves do not get the follow-up contract for free");
 });

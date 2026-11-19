@@ -11,8 +11,6 @@ import { getShopLevelForReputation, getStaffLimit } from "./ShopProgression.js";
 import { CUSTOMER_FACTION_IDS } from "./CustomerBuyLists.js";
 import { getDailyLoanRepayment } from "./EmergencyLoan.js";
 import employeeRoster from "../../data/Employees.json" with { type: "json" };
-// Old saves owned whole contracts that were later split into smaller ones.
-import licenseRoster from "../../data/Licenses.json" with { type: "json" };
 import { getEmployeeProfile, getEmployeeTrainingOffer } from "./EmployeeTraining.js";
 
 function emptyFactionReputation() {
@@ -446,14 +444,8 @@ export class PlayerState {
       employeeTraining: { ...(data.employeeTraining ?? {}) },
       customersTurnedAway: data.customersTurnedAway,
       activeFactions: new Set(),
-      activeLicenses: new Set([
-        ...data.activeLicenses,
-        ...licenseRoster
-          .filter((license) => license.splitFrom && data.contractsSplit !== true &&
-            data.activeLicenses.includes(license.splitFrom))
-          .map((license) => license.id),
-        "lic_fixture_basics",
-      ]),
+      // Saves are upgraded first (state/migrations), so split contracts are already listed.
+      activeLicenses: new Set([...data.activeLicenses, "lic_fixture_basics"]),
       storePrices: { ...data.storePrices },
       goBacks: new InventoryPool({
         capacity: Infinity,

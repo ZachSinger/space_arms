@@ -19,6 +19,7 @@ function snapshot() {
       hiredEmployees: [],
       activeLicenses: ["lic_corp_aulin"], storePrices: { wpn_rif_01: 123 },
       goBacks: [{ itemId: "wpn_rif_01", quantity: 40 }],
+      contractsSplit: true,
     },
     market: new Market(database.getAllItems(), () => 0.5).serialize(),
     fixtures: [

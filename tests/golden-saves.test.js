@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseManager } from "../js/logic/DatabaseManager.js";
 import { validateShopSave } from "../js/logic/ShopSave.js";
+import { upgradeContractSplit } from "../js/state/migrations/contractSplit.js";
 
 const dir = new URL("./golden-saves/", import.meta.url);
 const read = (name) => JSON.parse(readFileSync(new URL(name, dir), "utf8"));
@@ -23,14 +24,35 @@ test("golden saves exist", () => {
 
 for (const name of names) {
   test(`golden save "${name}" loads exactly as before the rebuild`, () => {
-    assert.deepEqual(validateShopSave(read(`${name}.json`), database), read(`${name}.expected.json`));
+    // The contract split used to happen while loading the player; it now happens in the save upgrade.
+    assert.deepEqual(validateShopSave(read(`${name}.json`), database),
+      upgradeContractSplit(read(`${name}.expected.json`)));
   });
 
   test(`golden save "${name}" is unchanged by a second check`, () => {
     const once = validateShopSave(read(`${name}.json`), database);
     assert.deepEqual(validateShopSave(JSON.parse(JSON.stringify(once)), database), once);
   });
+
+  test(`golden save "${name}" is never changed by upgrading it`, () => {
+    const original = read(`${name}.json`);
+    const copy = structuredClone(original);
+    validateShopSave(original, database);
+    assert.deepEqual(original, copy);
+  });
 }
+
+test("the contract split only adds follow-up contracts to saves from before it", () => {
+  const before = read("before-contract-split.json");
+  const upgraded = validateShopSave(before, database);
+  const added = upgraded.playerState.activeLicenses.filter((id) => !before.playerState.activeLicenses.includes(id));
+  assert.ok(added.length > 0);
+  assert.equal(upgraded.playerState.contractsSplit, true);
+  // A save from after the split may own a parent contract without its follow-up; leave it alone.
+  const after = { ...upgraded, playerState: { ...upgraded.playerState,
+    activeLicenses: upgraded.playerState.activeLicenses.filter((id) => !added.includes(id)) } };
+  assert.deepEqual(validateShopSave(after, database).playerState.activeLicenses, after.playerState.activeLicenses);
+});
 
 test("older layout save refunds retired equipment and drops it", () => {
   const raw = read("older-layout.json");
