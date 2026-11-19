@@ -6,6 +6,7 @@
 import { fixtureFootprint } from "../../logic/FixtureLayout.js";
 import { TILE_SIZE, EXPANSION_ORDER } from "../../logic/RoomLayout.js";
 import { AREA } from "../../world/Areas.js";
+import { controlLabel } from "../../input/InputDevice.js";
 import { CLEANING_TUNING, getCleanlinessMax, getCleanlinessScore } from "./Litter.js";
 import { randomTrashKind, TrashField } from "./TrashField.js";
 
@@ -67,6 +68,76 @@ export class CleaningSystem {
 
   isNearTrashcan() {
     return Boolean(this.getNearbyTrashcan());
+  }
+
+  getActions() {
+    const shop = this.shop;
+    const carriedCrates = shop.getCarriedCrates();
+    const trashcan = this.getNearbyTrashcan();
+
+    if (this.heldTrash) {
+      return trashcan ? [{
+        action: "interact",
+        id: `trashcan:${trashcan.id}`,
+        kind: "trashcan",
+        target: trashcan,
+        priority: 5,
+        range: 0,
+        distanceFrom: () => 0,
+        hint: `${controlLabel("interact")}: Throw the trash in the trashcan`,
+        perform: () => this.throwAwayHeldTrash(),
+      }] : [];
+    }
+
+    if (carriedCrates.length === 0) {
+      const piece = this.findTrashInFront();
+      if (piece) {
+        return [{
+          action: "interact",
+          id: `trash:${piece.id}`,
+          kind: "trash",
+          target: piece,
+          priority: 6,
+          range: 0,
+          distanceFrom: () => 0,
+          hint: `${controlLabel("interact")}: Pick up the trash`,
+          perform: () => this.pickUpTrash(piece),
+        }];
+      }
+    }
+
+    if (!trashcan) return [];
+    const emptyCrates = shop.heldEmptyCrates();
+    if (carriedCrates.length === 0) {
+      return [{
+        action: "interact",
+        id: `trashcan:${trashcan.id}`,
+        kind: "trashcan",
+        target: trashcan,
+        priority: 5,
+        range: 0,
+        distanceFrom: () => 0,
+        hint: `${controlLabel("interact")}: Create`,
+        perform: () => shop.takeEmptyCrateFromTrashcan(),
+      }];
+    }
+    if (emptyCrates.length > 0) {
+      const description = emptyCrates.length === 1
+        ? "your empty crate"
+        : `all ${emptyCrates.length} empty crates`;
+      return [{
+        action: "interact",
+        id: `trashcan:${trashcan.id}`,
+        kind: "trashcan",
+        target: trashcan,
+        priority: 5,
+        range: 0,
+        distanceFrom: () => 0,
+        hint: `${controlLabel("interact")}: Put ${description} in the trashcan`,
+        perform: () => shop.returnEmptyCratesToTrashcan(),
+      }];
+    }
+    return [];
   }
 
   findTrashInFront() {

@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { ControlMode } from "../js/input/ControlMode.js";
 import { Events, GAME_EVENTS } from "../js/core/Events.js";
-import { InteractableRegistry } from "../js/logic/InteractableRegistry.js";
+import { InteractableRegistry } from "../js/interaction/InteractableRegistry.js";
 import { Crate, CRATE_STACK_SPACING, INTERACT_RANGE } from "../js/logic/Crate.js";
 import { HOLD_KEY_MS, MAX_CARRIED_CRATES, isSquarelyInFront } from "../js/logic/CrateStack.js";
 import { fixtureBounds, fixtureFootprint, getFixtureType } from "../js/logic/FixtureLayout.js";
@@ -106,6 +106,25 @@ function bindCleaningSystem(scene) {
   };
   scene.cleaningSystem = {
     trash: { count: 0, renderHighlight() {} },
+    getActions: () => {
+      if (!scene.isNearTrashcan()) return [];
+      const carriedCrates = scene.getCarriedCrates();
+      if (carriedCrates.length > 0 && scene.heldEmptyCrates().length === 0) return [];
+      return [{
+        action: "interact",
+        kind: "trashcan",
+        range: 0,
+        distanceFrom: () => 0,
+        hint: carriedCrates.length === 0
+          ? "E: Create"
+          : `E: Put ${scene.heldEmptyCrates().length === 1 ? "your empty crate" : `all ${scene.heldEmptyCrates().length} empty crates`} in the trashcan`,
+        perform: () => {
+          if (scene.heldTrash) scene.throwAwayHeldTrash();
+          else if (carriedCrates.length === 0) scene.takeEmptyCrateFromTrashcan();
+          else scene.returnEmptyCratesToTrashcan();
+        },
+      }];
+    },
     getNearbyTrashcan,
     isNearTrashcan: () => Boolean(getNearbyTrashcan()),
     findTrashInFront: () => null,
@@ -405,7 +424,7 @@ test("with empty hands, E opens the fixture you face and holding Ctrl picks it u
 
 test("with empty hands, holding Ctrl at the register picks it up to move", () => {
   const h = createHarness();
-  const register = { id: "register_1", type: "register", gx: 26, gy: 3, rotation: 0 };
+  const register = { id: "register_1", type: "register_basic", gx: 26, gy: 3, rotation: 0 };
   const moved = [];
   h.scene.interactables = { findTarget: () => ({ kind: "register", target: register }) };
   h.scene.fixtureSystem.canRearrange = () => true;
@@ -426,13 +445,19 @@ test("with empty hands, holding Ctrl while facing the trashcan picks it up to mo
   const h = createHarness();
   const trashcan = { id: "trash_can_01", type: "trash_can", gx: 18, gy: 2, rotation: 0 };
   h.scene.areas.playerArea = AREA.SHOP;
-  h.scene.interactables = { findTarget: () => null };
+  h.scene.interactables = {
+    findTarget: () => null,
+    getActions: (...args) => h.scene.cleaningSystem.getActions(...args),
+  };
   h.scene.fixtures.ofKind = (kind) => kind === "trash" ? [trashcan] : [];
   h.scene.fixtureSystem.canRearrange = () => true;
   h.scene.fixtureSystem.moveAreaBlockReason = () => null;
   Object.assign(h.scene.player.sprite, { x: 1168, y: 176 + 30 });
   h.scene.player.currentFacing = "up";
   assert.equal(h.scene.getHoldToMoveFixture(), trashcan);
+  const action = h.scene.getFixtureMoveAction();
+  assert.equal(action.target, trashcan);
+  assert.match(action.hint, /Hold Ctrl: Move$/);
   h.scene.updateCrateHint();
   assert.equal(h.scene.messages.element.textContent, "E: Create\nHold Ctrl: Move");
 
@@ -448,6 +473,38 @@ test("with empty hands, holding Ctrl while facing the trashcan picks it up to mo
   h.scene.updateCrateHint();
   assert.equal(h.scene.messages.element.textContent, "",
     "facing away from the trashcan, it offers nothing at all");
+});
+
+test("fixture movement prefers the faced shelf when a trashcan is also nearby", () => {
+  const h = createHarness();
+  const shelf = { id: "shelf_1" };
+  const trashcan = { id: "trash_can_01" };
+  h.scene.interactables.registerProvider("overlapping-fixtures", () => [
+    {
+      id: "shelf",
+      kind: "fixture",
+      target: shelf,
+      actions: ["interact"],
+      priority: 3,
+      range: 10,
+      distanceFrom: () => 1,
+    },
+    {
+      id: "trashcan",
+      kind: "trashcan",
+      target: trashcan,
+      actions: ["interact"],
+      priority: 5,
+      range: 10,
+      distanceFrom: () => 1,
+    },
+  ]);
+  h.scene.isPlayerFacingFixture = () => true;
+  h.scene.getNearbyTrashcan = () => trashcan;
+  h.scene.fixtureSystem.canRearrange = () => true;
+  h.scene.fixtureSystem.moveAreaBlockReason = () => null;
+
+  assert.equal(h.scene.getHoldToMoveFixture(), shelf);
 });
 
 test("Space and Q wait to tell a tap from a hold, and Space leaves focused UI controls alone", () => {
@@ -1246,9 +1303,17 @@ test("a backroom door and the register explain themselves in the bottom bar's he
   ];
   Object.assign(scene.player.sprite, { x: 500, y: 132 });
   scene.player.currentFacing = "up";
-  scene.interactables = { findTarget: (action) => action === "register" ? { hint: "E: Activate Register" } : null };
+  scene.interactables = {
+    getActions: () => [],
+    findTarget: (action) => ["register", "interact"].includes(action)
+      ? { hint: "E: Activate Register" } : null,
+  };
   scene.updateCrateHint();
   assert.match(scene.messages.element.textContent, /^E: Go into the backroom$/m);
+  let usedPortal = null;
+  scene.areas.goThrough = (portal) => { usedPortal = portal; };
+  scene.handleInteract();
+  assert.equal(usedPortal, scene.areas.portals[0], "the action advertised by the hint runs on E");
   scene.areas.playerArea = AREA.BACKROOM;
   Object.assign(scene.player.sprite, { x: 145, y: 6464 });
   scene.updateCrateHint();
@@ -1266,7 +1331,11 @@ test("E opens hands-on shelves with a carried stack instead of bulk-delivering i
   scene.carriedCrate = top;
   scene.carriedCrates = [{ kind: "item", itemId: "amo_01", quantity: 5 }, top];
   scene.getNearbyFixture = () => shelf;
-  scene.interactables = { findTarget: () => ({ target: shelf }) };
+  scene.interactables = {
+    findTarget: (action) => action === "fixture"
+      ? { target: shelf }
+      : { target: shelf, perform: () => scene.tryOpenFixtureWindow(shelf) },
+  };
   let opened = 0;
   scene.shelfStockingWindow = {
     uiWindow: { isOpen: false },

@@ -13,7 +13,7 @@ import { DebugInfo } from "../debug/DebugInfo.js";
 import { DebugTools } from "../debug/DebugTools.js";
 import { Events, GAME_EVENTS } from "../core/Events.js";
 import { ControlMode, CONTROL_MODES } from "../input/ControlMode.js";
-import { InteractableRegistry } from "../logic/InteractableRegistry.js";
+import { InteractableRegistry } from "../interaction/InteractableRegistry.js";
 /** @typedef {import("../logic/ShelfFixture.js").ShelfFixture} ShelfFixture */
 import { SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT } from "../logic/Customer.js";
 import { Employee } from "../logic/Employee.js";
@@ -666,13 +666,20 @@ export class GameScene extends Phaser.Scene {
   registerInteractableSources() {
     // A shelf only answers when the player stands in front of it and looks at its front.
     this.interactables.registerProvider("stock-holders", () =>
-      this.fixtures.shelves().filter((fixture) => this.isPlayerFacingFixture(fixture)).map((fixture) => ({
+      this.fixtures.shelves().map((fixture) => ({
         id: `fixture:${fixture.id}`,
         kind: "fixture",
         target: fixture,
-        actions: ["fixture", "interact"],
         range: SHELF_INTERACT_RANGE,
         priority: 3,
+        getActions: (player) => this.isPlayerFacingFixture(fixture, player) ? [
+          { action: "fixture" },
+          {
+            action: "interact",
+            hint: `${controlLabel("interact")}: Open this shelf`,
+            perform: () => this.tryOpenFixtureWindow(fixture),
+          },
+        ] : [],
         distanceFrom: ({ feet }) => {
           // The middle of his feet' leading edge, which must be just off the shelf's front.
           const midX = (feet.left + feet.right) / 2;
@@ -689,18 +696,38 @@ export class GameScene extends Phaser.Scene {
         id: `register:${fixture.id}`,
         kind: "register",
         target: fixture,
-        actions: ["register", "interact"],
         range: REGISTER_INTERACT_RANGE,
         priority: 1,
-        hint: `${controlLabel("interact")}: Activate Register`,
+        getActions: () => [
+          ...(this.checkoutSystem.operatingRegister
+            ? [{
+              action: "interact",
+              hint: `${controlLabel("interact")}: Leave the register`,
+              perform: () => this.checkoutSystem.endRegisterSession(),
+            }]
+            : [
+              { action: "register", hint: `${controlLabel("interact")}: Activate Register` },
+              {
+                action: "interact",
+                hint: `${controlLabel("interact")}: Activate Register`,
+                perform: () => this.tryOpenRegister(),
+              },
+            ]),
+        ],
         distanceFrom: (origin) => this.feetReachTo(origin, fixture.sprite.getBounds()),
       })));
+
+    this.interactables.registerProvider("cleaning", () => [{
+      id: "cleaning",
+      kind: "cleaning",
+      getActions: () => this.cleaningSystem.getActions(),
+    }]);
   }
 
   // Whether the player looks straight at the fixture's front (it faces back at them).
-  isPlayerFacingFixture(fixture) {
+  isPlayerFacingFixture(fixture, player = this.player) {
     const opposite = { down: "up", up: "down", left: "right", right: "left" };
-    const facing = this.player?.currentFacing;
+    const facing = (player ?? this.player)?.currentFacing;
     return Boolean(facing) && opposite[facing] === fixtureFacing(fixture);
   }
 
@@ -1231,7 +1258,22 @@ export class GameScene extends Phaser.Scene {
   getHoldToMoveFixture() {
     if (!this.controlMode.allows("interact") || this.getCarriedCrates().length > 0 || this.heldTrash) return null;
     if (this.checkoutSystem.operatingRegister || this.areas.nearbyPortal()) return null;
-    const target = this.interactables?.findTarget("interact", this.getInteractionOrigin());
+    const origin = this.getInteractionOrigin();
+    const target = this.interactables?.findTarget(
+      "interact",
+      origin,
+      null,
+      this.player,
+      this.input,
+      "fixture",
+    ) ?? this.interactables?.findTarget(
+      "interact",
+      origin,
+      null,
+      this.player,
+      this.input,
+      "register",
+    );
     let fixture = null;
     if (target?.kind === "fixture" && this.isPlayerFacingFixture(target.target)) fixture = target.target;
     // The register is in reach only while you face it, from any side.
@@ -1244,6 +1286,25 @@ export class GameScene extends Phaser.Scene {
     return this.fixtureSystem.moveAreaBlockReason(fixture) ? null : fixture;
   }
 
+  getFixtureMoveAction() {
+    const fixture = this.getHoldToMoveFixture();
+    if (!fixture) return null;
+    const moveKey = getInputDevice() === "gamepad"
+      ? controlLabel("interact")
+      : controlLabel("nextCrate");
+    const hint = getFixtureType(fixture.type).kind === "trash"
+      ? `Hold ${moveKey}: Move`
+      : `Hold ${moveKey}: Move this ${this.fixtures.displayName(fixture)}`;
+    return {
+      action: "moveFixture",
+      id: `move-fixture:${fixture.id}`,
+      kind: "fixture-move",
+      target: fixture,
+      hint,
+      perform: () => this.fixturePlacement.begin(fixture.id),
+    };
+  }
+
   /**
    * A (on a controller) went down. Facing a fixture you could move, it waits to see whether
    * this is a tap (open it) or a hold (pick it up to move); otherwise it acts right away.
@@ -1251,13 +1312,13 @@ export class GameScene extends Phaser.Scene {
    */
   startInteractPress({ button = null } = {}) {
     if (!this.controlMode.allows("interact")) return;
-    const fixture = this.getHoldToMoveFixture();
-    if (!fixture) {
+    const action = this.getFixtureMoveAction();
+    if (!action) {
       this.interactPress = null;
       this.handleInteract();
       return;
     }
-    this.interactPress = { fixture, button, startedAt: this.time.now };
+    this.interactPress = { fixture: action.target, action, button, startedAt: this.time.now };
   }
 
   // Releasing before the hold fired is a tap.
@@ -1276,21 +1337,25 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.time.now - press.startedAt < HOLD_KEY_MS) return;
     this.interactPress = null;
-    if (this.getHoldToMoveFixture() === press.fixture) this.fixturePlacement.begin(press.fixture.id);
+    const action = this.getFixtureMoveAction();
+    if (action?.target === press.fixture) action.perform();
   }
 
   // Ctrl went down. Facing a fixture with empty hands while the store is closed, keeping it
   // held picks the fixture up to move; releasing sooner leaves it alone.
   startFixtureMovePress() {
-    const fixture = this.getHoldToMoveFixture();
-    this.fixtureMovePress = fixture ? { fixture, startedAt: this.time.now } : null;
+    const action = this.getFixtureMoveAction();
+    this.fixtureMovePress = action
+      ? { fixture: action.target, action, startedAt: this.time.now }
+      : null;
   }
 
   updateFixtureMovePress() {
     const press = this.fixtureMovePress;
     if (!press || this.time.now - press.startedAt < HOLD_KEY_MS) return;
     this.fixtureMovePress = null;
-    if (this.getHoldToMoveFixture() === press.fixture) this.fixturePlacement.begin(press.fixture.id);
+    const action = this.getFixtureMoveAction();
+    if (action?.target === press.fixture) action.perform();
   }
 
   // E delivers/places a carried crate, opens a nearby fixture, or toggles register operation.
@@ -1298,29 +1363,26 @@ export class GameScene extends Phaser.Scene {
     if (!this.controlMode.allows("interact")) return;
     // Pressing E behind the counter always steps away, whatever is in hand.
     if (this.checkoutSystem.operatingRegister) {
-      this.checkoutSystem.endRegisterSession();
+      const action = this.getRegisterInteractionAction();
+      if (action?.perform) action.perform();
+      else this.checkoutSystem.endRegisterSession();
       return;
     }
     // Doors come first so a carried crate goes through with the player, not onto the floor.
-    const portal = this.areas.nearbyPortal();
-    if (portal) {
-      this.areas.goThrough(portal);
+    const portalAction = this.areas.getActions(this.player, this.input)[0];
+    if (portalAction) {
+      portalAction.perform();
+      return;
+    }
+    const cleaningAction = this.interactables.findTarget("interact", this.getInteractionOrigin());
+    if (cleaningAction?.kind === "trash" || cleaningAction?.kind === "trashcan") {
+      cleaningAction.perform();
       return;
     }
     if (this.heldTrash) {
       if (this.isNearTrashcan()) this.throwAwayHeldTrash();
       else this.showGameMessage(`Face a trashcan and press ${controlLabel("interact")} to throw the trash away, ` +
         `or press ${controlLabel("putDown")} to drop it.`, "#94a3b8");
-      return;
-    }
-    if (this.getCarriedCrates().length === 0 && this.findTrashInFront()) {
-      this.pickUpTrash(this.findTrashInFront());
-      return;
-    }
-    // Full crates alone fall through so E still opens a shelf beside a trashcan.
-    if (this.isNearTrashcan() && (this.getCarriedCrates().length === 0 || this.heldEmptyCrates().length > 0)) {
-      if (this.getCarriedCrates().length === 0) this.takeEmptyCrateFromTrashcan();
-      else this.returnEmptyCratesToTrashcan();
       return;
     }
     if (this.carriedCrate) {
@@ -1331,7 +1393,15 @@ export class GameScene extends Phaser.Scene {
       }
       const nearby = this.getNearbyFixture();
       if (nearby) {
-        this.tryOpenFixtureWindow(nearby);
+        const action = this.interactables.findTarget(
+          "interact",
+          this.getInteractionOrigin(),
+          nearby,
+        );
+        if (!action?.perform) {
+          throw new Error(`Fixture "${nearby.id}" has no interaction action.`);
+        }
+        action.perform();
         return;
       }
       if (this.isNearTrashcan()) {
@@ -1343,6 +1413,10 @@ export class GameScene extends Phaser.Scene {
     }
 
     const target = this.interactables.findTarget("interact", this.getInteractionOrigin());
+    if (target?.perform) {
+      target.perform();
+      return;
+    }
     if (target?.kind === "fixture") {
       this.tryOpenFixtureWindow(target.target);
       return;
@@ -1355,6 +1429,14 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.showGameMessage("Nothing nearby to interact with", "#94a3b8");
+  }
+
+  getRegisterInteractionAction() {
+    return this.interactables.getActions(
+      this.player,
+      this.input,
+      this.getInteractionOrigin(),
+    ).find((action) => action.kind === "register" && action.action === "interact");
   }
 
   isNearTrashcan() {
@@ -1517,26 +1599,26 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * What the pick-up (Space / X) and put-down (Q / Y) buttons do right now. Each has a `tap`
-   * and, if holding the button does something different, a `hold`. Flags describe the action
-   * for the on-screen hints.
+   * and, if holding the button does something different, a `hold`. The same descriptor supplies
+   * the action's target, behavior, and on-screen hint.
    * @returns {{ pickUp?: object, putDown?: object }}
    */
-  crateActions() {
+  getCrateActions() {
     const say = (message, color = "#94a3b8") => () => this.showGameMessage(message, color);
     const holding = this.getCarriedCrates().length;
     const top = this.carriedCrate;
     if (this.checkoutSystem.operatingRegister) {
-      return {
+      return this.addCrateActionHints({
         pickUp: { tap: say("Leave the register to pick up a crate") },
         putDown: holding ? { tap: say("Leave the register to put down a crate") } : undefined,
-      };
+      }, null, holding);
     }
     if (this.heldTrash) {
       const reason = "You can't pick up crates while holding trash";
-      return {
+      return this.addCrateActionHints({
         pickUp: { tap: say(reason, "#f59e0b"), blocked: true },
         putDown: { tap: () => this.dropHeldTrash(), trash: true },
-      };
+      }, null, holding);
     }
 
     const actions = {};
@@ -1593,6 +1675,61 @@ export class GameScene extends Phaser.Scene {
         };
     } else {
       actions.putDown = { tap: () => this.dropTopCrate(), hold: () => this.dropWholeStack() };
+    }
+    return this.addCrateActionHints(actions, stack, holding);
+  }
+
+  addCrateActionHints(actions, stack, holding) {
+    const pickKey = controlLabel("crate");
+    const putKey = controlLabel("putDown");
+    const handsFull = `Your hands are full (${MAX_CARRIED_CRATES} crates max)`;
+    const pickUp = actions.pickUp;
+    const putDown = actions.putDown;
+    const pickUpHints = [];
+    const putDownHints = [];
+
+    if (pickUp?.throws) {
+      const { x, y } = this.player.sprite.body.velocity;
+      if (x !== 0 || y !== 0) pickUpHints.push(`${pickKey}: Throw your crate`);
+    } else if (stack && pickUp?.combines) {
+      const name = database.getItem(stack.marked.itemId)?.name ?? "items";
+      pickUpHints.push(pickUp.combines === stack.marked.quantity
+        ? `${pickKey}: Move all ${pickUp.combines} ${name} from this crate into yours`
+        : `${pickKey}: Move ${pickUp.combines} of the ${stack.marked.quantity} ${name} from this crate into yours (that's all that fits)`);
+    } else if (stack && pickUp && !pickUp.blocked) {
+      pickUpHints.push(holding >= MAX_CARRIED_CRATES
+        ? handsFull
+        : `Tap ${pickKey}: Pick up ${this.describeCrate(stack.marked)}`);
+      if (pickUp.lifted > 1 && holding + pickUp.lifted <= MAX_CARRIED_CRATES) {
+        pickUpHints.push(`Hold ${pickKey}: Pick up ${pickUp.lifted} crates (this one and the ones above it)`);
+      }
+    }
+
+    if (putDown?.trash) {
+      putDownHints.push(`${putKey}: Drop the trash on the floor`);
+    } else if (putDown?.blocked) {
+      putDownHints.push(putDown.reason);
+    } else if (putDown?.onStack) {
+      putDownHints.push(`Tap ${putKey}: Set your top crate on this stack`);
+      if (holding > 1) putDownHints.push(`Hold ${putKey}: Set as many of your crates on this stack as fit`);
+    } else if (putDown) {
+      putDownHints.push(`Tap ${putKey}: Put your top crate down`);
+      if (holding > 1) putDownHints.push(`Hold ${putKey}: Set all ${holding} crates down as a stack`);
+    }
+
+    if (pickUp) {
+      pickUp.action = "pickUp";
+      pickUp.kind = "crate-control";
+      pickUp.target = stack?.marked ?? (pickUp.throws ? this.carriedCrate : null);
+      pickUp.perform = pickUp.tap;
+      pickUp.hint = pickUpHints.join("\n");
+    }
+    if (putDown) {
+      putDown.action = "putDown";
+      putDown.kind = "crate-control";
+      putDown.target = stack?.base ?? this.carriedCrate;
+      putDown.perform = putDown.tap;
+      putDown.hint = putDownHints.join("\n");
     }
     return actions;
   }
@@ -1651,75 +1788,43 @@ export class GameScene extends Phaser.Scene {
     if (this.checkoutWindow?.usesSpaceKey()) {
       lines.push(`${controlLabel("handOverChange")}: Hand over change`);
     } else if (mode === CONTROL_MODES.REGISTER) {
-      lines.push(`${controlLabel("interact")}: Leave the register`);
+      const action = this.getRegisterInteractionAction();
+      lines.push(action?.hint ?? `${controlLabel("interact")}: Leave the register`);
     } else if (mode === CONTROL_MODES.WALKING || mode === CONTROL_MODES.CARRYING) {
-      const pickKey = controlLabel("crate");
-      const putKey = controlLabel("putDown");
       const interactKey = controlLabel("interact");
-      const portal = this.areas.nearbyPortal();
-      if (portal) {
-        lines.push(portal.to === AREA.SHOP ? `${interactKey}: Go back out to the shop` : `${interactKey}: Go into the backroom`);
+      const portalAction = this.areas.getActions(this.player, this.input)[0];
+      if (portalAction) {
+        lines.push(portalAction.hint);
       } else if (mode === CONTROL_MODES.WALKING && !this.heldTrash && !this.findTrashInFront()) {
-        const register = this.interactables?.findTarget?.("register", this.getInteractionOrigin());
-        if (register) lines.push(...register.hint.split("\n"));
-      }
-      const holding = this.getCarriedCrates().length;
-      const handsFull = `Your hands are full (${MAX_CARRIED_CRATES} crates max)`;
-      const { pickUp, putDown } = this.crateActions();
-      const stack = this.markedFloorStack();
-      const nearTrashcan = this.isNearTrashcan();
-      if (this.heldTrash) {
-        if (nearTrashcan) lines.push(`${interactKey}: Throw the trash in the trashcan`);
-        lines.push(`${putKey}: Drop the trash on the floor`);
-      } else if (holding === 0 && this.findTrashInFront()) {
-        lines.push(`${interactKey}: Pick up the trash`);
-      }
-      if (nearTrashcan && !this.heldTrash) {
-        const empties = this.heldEmptyCrates().length;
-        if (holding === 0) {
-          if (!this.findTrashInFront()) lines.push(`${interactKey}: Create`);
-        } else if (empties > 0) lines.push(`${interactKey}: Put ${empties === 1 ? "your empty crate" : `all ${empties} empty crates`} in the trashcan`);
-      }
-      if (pickUp?.throws) {
-        // Only promised while it can actually happen: throwing needs the player mid-stride.
-        const { x: walkX, y: walkY } = this.player.sprite.body.velocity;
-        if (walkX !== 0 || walkY !== 0) lines.push(`${pickKey}: Throw your crate`);
-      } else if (stack && pickUp?.combines) {
-        const name = database.getItem(stack.marked.itemId)?.name ?? "items";
-        lines.push(pickUp.combines === stack.marked.quantity
-          ? `${pickKey}: Move all ${pickUp.combines} ${name} from this crate into yours`
-          : `${pickKey}: Move ${pickUp.combines} of the ${stack.marked.quantity} ${name} from this crate into yours (that's all that fits)`);
-      } else if (stack && pickUp && !pickUp.blocked) {
-        lines.push(holding >= MAX_CARRIED_CRATES ? handsFull : `Tap ${pickKey}: Pick up ${this.describeCrate(stack.marked)}`);
-        if (pickUp.lifted > 1 && holding + pickUp.lifted <= MAX_CARRIED_CRATES) {
-          lines.push(`Hold ${pickKey}: Pick up ${pickUp.lifted} crates (this one and the ones above it)`);
+        const interactable = this.interactables?.findTarget?.("interact", this.getInteractionOrigin());
+        if (interactable?.hint && interactable.kind !== "trash" && interactable.kind !== "trashcan") {
+          lines.push(...interactable.hint.split("\n"));
         }
       }
-      if (putDown?.trash) {
-        // Covered by the trash lines above.
-      } else if (putDown?.blocked) {
-        lines.push(putDown.reason);
-      } else if (putDown?.onStack) {
-        lines.push(`Tap ${putKey}: Set your top crate on this stack`);
-        if (holding > 1) lines.push(`Hold ${putKey}: Set as many of your crates on this stack as fit`);
-      } else if (putDown) {
-        lines.push(`Tap ${putKey}: Put your top crate down`);
-        if (holding > 1) lines.push(`Hold ${putKey}: Set all ${holding} crates down as a stack`);
+      const holding = this.getCarriedCrates().length;
+      const { pickUp, putDown } = this.getCrateActions();
+      const stack = this.markedFloorStack();
+      const nearTrashcan = this.isNearTrashcan();
+      const cleaningActions = this.interactables.getActions(
+        this.player,
+        this.input,
+        this.getInteractionOrigin(),
+      ).filter((action) => action.kind === "trash" || action.kind === "trashcan");
+      for (const action of cleaningActions) lines.push(action.hint);
+      for (const action of [pickUp, putDown]) {
+        if (action?.hint) lines.push(...action.hint.split("\n"));
       }
       if (stack?.crates.length > 1) lines.push(`${controlLabel("nextCrate")}: Move the arrow one crate down`);
       const trashcanTakesE = nearTrashcan && this.heldEmptyCrates().length > 0;
       if (!trashcanTakesE && this.carriedCrate?.kind === "item") {
         const nearby = this.getNearbyFixture();
-        if (nearby) lines.push(`${interactKey}: Open this shelf`);
+        if (nearby) {
+          const action = this.interactables.findTarget("interact", this.getInteractionOrigin(), nearby);
+          if (action) lines.push(action.hint);
+        }
       } else if (!trashcanTakesE && this.carriedCrate?.kind === "fixture") lines.push(`${interactKey}: Place the fixture`);
-      const movable = holding === 0 ? this.getHoldToMoveFixture() : null;
-      if (movable) {
-        // Keyboard moves fixtures with held Ctrl; a controller holds A.
-        const moveKey = getInputDevice() === "gamepad" ? interactKey : controlLabel("nextCrate");
-        lines.push(getFixtureType(movable.type).kind === "trash"
-          ? `Hold ${moveKey}: Move`
-          : `Hold ${moveKey}: Move this ${this.fixtures.displayName(movable)}`);
-      }
+      const moveAction = holding === 0 ? this.getFixtureMoveAction() : null;
+      if (moveAction) lines.push(moveAction.hint);
     }
     this.messages.setHint([...new Set(lines)].join("\n"));
   }
@@ -1852,11 +1957,11 @@ export class GameScene extends Phaser.Scene {
    */
   startCratePress(which, { button = null } = {}) {
     if (!this.allowsCrateAction(which)) return;
-    const action = this.crateActions()[which];
+    const action = this.getCrateActions()[which];
     if (!action) return;
     if (!action.hold) {
       this.cratePress = null;
-      action.tap();
+      action.perform();
       return;
     }
     this.cratePress = { which, button, startedAt: this.time.now, fired: false };
@@ -1868,7 +1973,7 @@ export class GameScene extends Phaser.Scene {
     if (press?.which !== which) return;
     this.cratePress = null;
     if (press.fired || !this.allowsCrateAction(which)) return;
-    this.crateActions()[which]?.tap();
+    this.getCrateActions()[which]?.perform();
   }
 
   // Each frame: ends controller presses on release, and fires a hold once it's long enough.
@@ -1882,8 +1987,8 @@ export class GameScene extends Phaser.Scene {
     if (press.fired || this.time.now - press.startedAt < HOLD_KEY_MS) return;
     press.fired = true;
     if (!this.allowsCrateAction(press.which)) return;
-    const action = this.crateActions()[press.which];
-    (action?.hold ?? action?.tap)?.();
+    const action = this.getCrateActions()[press.which];
+    (action?.hold ?? action?.perform)?.();
   }
 
   // Tap Q: your top crate goes on the floor in front of you. With throwing, it's thrown the

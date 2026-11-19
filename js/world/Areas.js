@@ -9,6 +9,7 @@ import { AnimatedDoor, BACKROOM_DOOR_SPRITE } from "../logic/SlidingDoor.js";
 import {
   TILE_SIZE, getBackroomDoorCell, getBackroomExitCell, getBackroomLink, isBackroomRow,
 } from "../logic/RoomLayout.js";
+import { controlLabel } from "../input/InputDevice.js";
 
 // The ids match TileRoom.getCameraBounds' area names.
 export const AREA = Object.freeze({ SHOP: "shop", BACKROOM: "backroom" });
@@ -90,11 +91,11 @@ export class Areas {
    * through it.
    * @returns {Portal | null}
    */
-  nearbyPortal() {
+  nearbyPortal(player = this.shop.player) {
     const shop = this.shop;
-    if (!shop.player?.sprite) return null;
-    if (shop.player.currentFacing !== "up") return null;
-    const { x, y } = shop.player.sprite;
+    if (!player?.sprite) return null;
+    if (player.currentFacing !== "up") return null;
+    const { x, y } = player.sprite;
     for (const portal of this.portals) {
       if (portal.area !== this.playerArea) continue;
       const { door } = portal;
@@ -102,11 +103,33 @@ export class Areas {
       const below = y - door.y;
       if (Math.abs(x - door.x) >= DOOR_SIDE_REACH || below <= 0 || below > TILE_SIZE / 2 + DOOR_GAP) continue;
       // A fixture beside the door wins when the player is standing nearer to it.
-      const target = shop.interactables?.findTarget("interact", shop.getInteractionOrigin());
+      const target = shop.interactables?.findTarget(
+        "interact",
+        shop.getInteractionOrigin(),
+        null,
+        player,
+        shop.input,
+        "fixture",
+      );
       if (target?.kind === "fixture" && Math.abs(x - target.target.x) < Math.abs(x - door.x)) return null;
       return portal;
     }
     return null;
+  }
+
+  getActions(player = this.shop.player, input) {
+    const portal = this.nearbyPortal(player);
+    if (!portal) return [];
+    return [{
+      action: "interact",
+      id: `door:${portal.area}`,
+      kind: "portal",
+      target: portal,
+      hint: `${controlLabel("interact")}: ${
+        portal.to === AREA.SHOP ? "Go back out to the shop" : "Go into the backroom"
+      }`,
+      perform: () => this.goThrough(portal),
+    }];
   }
 
   /**
