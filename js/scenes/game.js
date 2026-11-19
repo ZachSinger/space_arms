@@ -50,6 +50,7 @@ import { FixtureViews } from "../world/FixtureViews.js";
 import { FixtureSystem } from "../systems/FixtureSystem.js";
 import { SupplySystem } from "../systems/SupplySystem.js";
 import { CustomerFlow } from "../systems/CustomerFlow.js";
+import { createCustomerStore, createEmployeeStore } from "../systems/CharacterStore.js";
 import { CheckoutSystem } from "../systems/CheckoutSystem.js";
 import { CrateSystem } from "../systems/CrateSystem.js";
 import { CrateWorld } from "../world/CrateWorld.js";
@@ -334,6 +335,8 @@ export class GameScene extends Phaser.Scene {
     this.customers = [];
     this.employees = [];
     this.cleaningSystem = new CleaningSystem(this);
+    this.customerStore = createCustomerStore(this);
+    this.employeeStore = createEmployeeStore(this);
     for (const property of ["trash", "heldTrash"]) {
       Object.defineProperty(this, property, {
         configurable: true,
@@ -851,7 +854,9 @@ export class GameScene extends Phaser.Scene {
 
   spawnHiredEmployees() {
     this.employees = this.gameState.staff.working()
-      .map((employeeId) => new Employee(this, this.gameState.staff.profile(employeeId)));
+      .map((employeeId) => new Employee(
+        this.gameState.staff.profile(employeeId), this.employeeStore,
+      ));
   }
 
   clearEmployees() {

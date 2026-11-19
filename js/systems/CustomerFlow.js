@@ -120,7 +120,7 @@ export class CustomerFlow {
     }
 
     const customer = new Customer({
-      scene: shop,
+      store: shop.customerStore,
       factionId,
       getShoppingPlan: (factionId, traits) => this.shoppingPlan(factionId, traits),
       getStoreConditions: () => this.traitConditions(),

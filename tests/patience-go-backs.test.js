@@ -92,6 +92,7 @@ function queuedCustomer({ serving = () => false, storeTemporarilyClosed = false 
       },
     },
   };
+  customer.store = customer.scene;
   customer.followPath = () => {};
   customer.updateFacing = () => {};
   customer.onLeaveAngry = (who, cart) => angry.push({ who, cart });

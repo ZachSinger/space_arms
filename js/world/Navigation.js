@@ -346,6 +346,9 @@ export class Navigation {
     this.getRegisterFacing = getRegisterFacing;
     this.registerFrontOverlap = registerFrontOverlap;
     this.defaultBodySize = defaultBodySize;
+    this.store = Object.freeze({
+      findPath: (...args) => this.findPath(...args),
+    });
   }
 
   getNavigationObstacles(bodySize = this.defaultBodySize) {

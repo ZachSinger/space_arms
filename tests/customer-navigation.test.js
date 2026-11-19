@@ -29,6 +29,7 @@ test("queue shuffling follows a new obstacle-aware path instead of cutting throu
       calls.push(args);
       return [...waypoints];
     } };
+    customer.store = customer.scene;
     customer.updateFacing = () => {};
     customer.setQueueTarget(160, 96);
     customer.mover.moveToward = (x, y, onArrive) => {

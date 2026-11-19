@@ -3,7 +3,6 @@
 // ==========================================
 // A hired employee who serves the register and stocks shelves from delivered crates.
 import { transferItems } from "./InventoryTransfer.js";
-import { addCharacterSprite } from "./CustomerSprites.js";
 import { employeeTextureFor, showEmployeeFacing, EMPLOYEE_CRATE_HOLD_OFFSET } from "./EmployeeSprites.js";
 import { EMPLOYEE_JOB_IDS } from "./EmployeeJobs.js";
 import { getEmployeeJobSpeed } from "./EmployeeTraining.js";
@@ -24,12 +23,15 @@ const WALK_BODY = { width: PLAYER_BODY_WIDTH, height: PLAYER_BODY_HEIGHT, avoidS
 export const REGISTER_SERVICE_MS_PER_ITEM = 5000;
 
 export class Employee {
-  constructor(scene, employeeData) {
-    this.scene = scene;
+  constructor(employeeData, store) {
+    if (!store || typeof store.findPath !== "function") {
+      throw new Error("Employee requires a store interface with findPath.");
+    }
+    this.store = store;
     this.data = employeeData;
     this.state = "IDLE";
     this.currentJob = null;
-    this.jobPriorities = [...scene.gameState.staff.jobPriorities[employeeData.id]];
+    this.jobPriorities = [...store.gameState.staff.jobPriorities[employeeData.id]];
     this.destination = null;
     this.registerServiceRemainingMs = 0;
     this.path = [];
@@ -39,12 +41,10 @@ export class Employee {
     this.pathRetryMs = 0;
 
     this.currentFacing = "down";
-    const spawn = scene.areas.arrivalIn(AREA.BACKROOM);
-    this.sprite = addCharacterSprite(
-      scene, spawn.x, spawn.y, employeeTextureFor(employeeData.id), PLAYER_BODY_WIDTH, PLAYER_BODY_HEIGHT,
-    )
-      .setDepth(3);
-    scene.employeeGroup.add(this.sprite);
+    const spawn = store.areas.arrivalIn(AREA.BACKROOM);
+    this.sprite = store.createEmployeeSprite(
+      spawn.x, spawn.y, employeeTextureFor(employeeData.id), PLAYER_BODY_WIDTH, PLAYER_BODY_HEIGHT,
+    );
     this.mover = this.createMover();
   }
 
@@ -60,7 +60,7 @@ export class Employee {
       this.retryInMs -= delta;
       if (this.clockOutRequested) {
         if (this.jobPriorities.includes("register") &&
-          this.scene.checkoutSystem.anyRegisterLineWaiting() && this.retryInMs <= 0) {
+          this.store.checkoutSystem.anyRegisterLineWaiting() && this.retryInMs <= 0) {
           this.startRegisterJob();
         }
         this.updateFacing();
@@ -119,17 +119,17 @@ export class Employee {
       this.retryInMs = BREAK_CHECK_MS;
       return;
     }
-    this.walkTo(this.scene.areas.arrivalIn(AREA.BACKROOM), "TO_BREAKROOM");
+    this.walkTo(this.store.areas.arrivalIn(AREA.BACKROOM), "TO_BREAKROOM");
   }
 
   // The first register with customers waiting that neither the player nor another
   // employee is already working, or null.
   findRegisterJob() {
-    return this.scene.fixtures.registers().find((register) =>
+    return this.store.fixtures.registers().find((register) =>
       register.sprite &&
-      !this.scene.checkoutSystem.isPlayerOperating(register) &&
-      this.scene.checkoutSystem.lineFor(register).length > 0 &&
-      !this.scene.employees.some((employee) =>
+      !this.store.checkoutSystem.isPlayerOperating(register) &&
+      this.store.checkoutSystem.lineFor(register).length > 0 &&
+      !this.store.employees.some((employee) =>
         employee !== this && employee.currentJob?.jobId === "register" &&
         employee.currentJob?.register === register,
       )) ?? null;
@@ -138,33 +138,33 @@ export class Employee {
   startRegisterJob() {
     const register = this.findRegisterJob();
     if (!register) return false;
-    this.currentJob = { jobId: "register", register, customer: this.scene.checkoutSystem.lineFor(register)[0] };
-    return this.walkTo(this.scene.getBehindRegisterPoint(register), "TO_REGISTER");
+    this.currentJob = { jobId: "register", register, customer: this.store.checkoutSystem.lineFor(register)[0] };
+    return this.walkTo(this.store.getBehindRegisterPoint(register), "TO_REGISTER");
   }
 
   findStockingJob() {
     const reserved = this.getReservedShelfPlacements();
-    const reservedCrates = new Set(this.scene.employees
+    const reservedCrates = new Set(this.store.employees
       .filter((employee) => employee !== this)
       .map((employee) => employee.currentJob?.crate)
       .filter(Boolean));
 
     // Items that are sold out on every shelf come first, then the emptiest shelf spots.
-    const onShelves = (itemId) => this.scene.fixtures.shelves()
+    const onShelves = (itemId) => this.store.fixtures.shelves()
       .flatMap((shelf) => shelf.placements)
       .reduce((sum, entry) => sum + (entry.itemId === itemId ? entry.quantity : 0), 0);
     let best = null;
-    for (const base of this.scene.restockCrates) {
+    for (const base of this.store.restockCrates) {
       // Stacked crates are taken from the top; a lone crate is its own top. Any resting
       // crate anywhere in the shop or backroom is fair game. A stack's top crate rides the
       // one below it (flagged as carried), which doesn't make it someone's load.
-      const top = this.scene.floorStacks?.get(base)?.at(-1);
+      const top = this.store.floorStacks?.get(base)?.at(-1);
       const crate = top ?? base;
       const fromPad = Boolean(base.lockedToPad);
       if (crate.kind !== "item" || crate.quantity <= 0 || (!top && crate.isCarried) ||
         reservedCrates.has(crate)) continue;
       const soldOut = onShelves(crate.itemId) === 0;
-      for (const shelf of this.scene.fixtures.shelves()) {
+      for (const shelf of this.store.fixtures.shelves()) {
         for (const placement of shelf.placements) {
           if (placement.itemId !== crate.itemId || reserved.has(placement)) continue;
           const room = shelf.getRemainingUnitsFor(crate.itemId, placement);
@@ -194,17 +194,17 @@ export class Employee {
   // restockCrates; a stack's top crate leaves its stack. Anything buried or changed is refused.
   detachCrateForPickup(crate) {
     if (crate.quantity <= 0) return false;
-    const scene = this.scene;
-    if (scene.restockCrates.includes(crate)) {
+    const store = this.store;
+    if (store.restockCrates.includes(crate)) {
       if (crate.isCarried) return false;
-      if (scene.floorStacks?.get(crate)?.length) return false; // something is stacked on it now
-      scene.restockCrates = scene.restockCrates.filter((candidate) => candidate !== crate);
+      if (store.floorStacks?.get(crate)?.length) return false; // something is stacked on it now
+      store.restockCrates = store.restockCrates.filter((candidate) => candidate !== crate);
       return true;
     }
-    for (const [base, above] of scene.floorStacks ?? []) {
+    for (const [base, above] of store.floorStacks ?? []) {
       if (above.at(-1) === crate) {
         above.pop();
-        if (above.length === 0) scene.floorStacks.delete(base);
+        if (above.length === 0) store.floorStacks.delete(base);
         return true;
       }
       if (above.includes(crate)) return false; // buried mid-stack
@@ -213,7 +213,7 @@ export class Employee {
   }
 
   getReservedShelfPlacements() {
-    return new Set(this.scene.employees
+    return new Set(this.store.employees
       .filter((employee) => employee !== this)
       .map((employee) => employee.currentJob?.placement)
       .filter(Boolean));
@@ -221,7 +221,7 @@ export class Employee {
 
   walkTo(point, nextState) {
     const from = this.sprite.body.center ?? this.sprite;
-    const path = this.scene.findPath(from.x, from.y, point.x, point.y, WALK_BODY);
+    const path = this.store.findPath(from.x, from.y, point.x, point.y, WALK_BODY);
     return this.startPath(point, path, nextState);
   }
 
@@ -269,7 +269,7 @@ export class Employee {
   walkToTrashcan() {
     const reachX = PLAYER_BODY_WIDTH / 2 + 2;
     const reachY = PLAYER_BODY_HEIGHT / 2 + 2;
-    const spots = this.scene.fixtures.ofKind("trash").flatMap((fixture) => {
+    const spots = this.store.fixtures.ofKind("trash").flatMap((fixture) => {
       const { w, h } = fixtureFootprint(fixture);
       const left = fixture.gx * TILE_SIZE;
       const top = fixture.gy * TILE_SIZE;
@@ -292,7 +292,7 @@ export class Employee {
     const position = this.sprite.body.center ?? this.sprite;
     let best = null;
     for (const spot of spots) {
-      const path = this.scene.findPath(position.x, position.y, spot.x, spot.y, WALK_BODY);
+      const path = this.store.findPath(position.x, position.y, spot.x, spot.y, WALK_BODY);
       if (!path) continue;
       let length = 0;
       let from = position;
@@ -323,10 +323,11 @@ export class Employee {
   }
 
   createMover() {
+    if (!this.store?.findPath) throw new Error("Employee requires a store route interface.");
     return new Mover(this, {
       findPath: (fromX, fromY, toX, toY) =>
-        this.scene.findPath(fromX, fromY, toX, toY, WALK_BODY),
-      canFindPath: () => Boolean(this.scene.findPath),
+        this.store.findPath(fromX, fromY, toX, toY, WALK_BODY),
+      canFindPath: () => Boolean(this.store.findPath),
       getSpeed: () => this.getWalkSpeed(),
       replanIntervalMs: 200,
       collisionTolerance: 0,
@@ -404,12 +405,12 @@ export class Employee {
 
     transferItems(crate, shelf, itemId, quantity, {
       destinationEntry: placement,
-      eventBus: this.scene.eventBus,
+      eventBus: this.store.eventBus,
       sourceName: "loading-pad",
       destinationName: "shelf",
     });
-    this.scene.refreshShelfStockDisplay(shelf);
-    this.scene.gameState.shop.changed();
+    this.store.refreshShelfStockDisplay(shelf);
+    this.store.gameState.shop.changed();
 
     if (crate.quantity <= 0) {
       if (!this.walkToTrashcan()) this.returnCrate();
@@ -421,11 +422,11 @@ export class Employee {
   // Fill an existing stack before taking floor space. Deliveries leave the Loading Pad free.
   returnCrate() {
     const { crate, base: originalBase, fromPad, cratePosition } = this.currentJob;
-    const scene = this.scene;
-    const others = scene.employees.filter((employee) => employee !== this);
-    const availableStacks = scene.restockCrates.filter((base) =>
+    const store = this.store;
+    const others = store.employees.filter((employee) => employee !== this);
+    const availableStacks = store.restockCrates.filter((base) =>
       base.kind === "item" && !base.lockedToPad && !base.isCarried && base.isStationary() &&
-      (scene.floorStacks.get(base)?.length ?? 0) + 1 < FLOOR_STACK_MAX &&
+      (store.floorStacks.get(base)?.length ?? 0) + 1 < FLOOR_STACK_MAX &&
       !others.some((employee) =>
         employee.currentJob?.base === base || employee.currentJob?.returnBase === base),
     ).sort((a, b) => {
@@ -444,7 +445,7 @@ export class Employee {
     }
     this.currentJob.returnBase = null;
     const reserved = [
-      ...scene.checkoutSystem.goBacksReservedRectangles(),
+      ...store.checkoutSystem.goBacksReservedRectangles(),
       ...others.flatMap((employee) => employee.currentJob?.returnPosition
         ? [this.returnSpace(employee.currentJob.returnPosition)] : []),
     ];
@@ -454,24 +455,24 @@ export class Employee {
         bounds.top < rect.bottom && bounds.bottom > rect.top;
     });
     if (!fromPad && !overlapsReserved(cratePosition) &&
-      crate.isDropPositionClear(cratePosition.x, cratePosition.y, scene.player.sprite) &&
+      crate.isDropPositionClear(cratePosition.x, cratePosition.y, store.player.sprite) &&
       this.walkToCratePosition(crate, cratePosition, "TO_RETURN_CRATE")) {
       this.currentJob.returnPosition = { ...cratePosition };
       return;
     }
-    let spot = scene.checkoutSystem.findGoBacksSpot(crate, reserved);
+    let spot = store.checkoutSystem.findGoBacksSpot(crate, reserved);
     while (spot) {
       if (this.walkToCratePosition(crate, spot, "TO_RETURN_CRATE")) {
         this.currentJob.returnPosition = { x: spot.x, y: spot.y };
         return;
       }
       reserved.push(this.returnSpace(spot));
-      spot = scene.checkoutSystem.findGoBacksSpot(crate, reserved);
+      spot = store.checkoutSystem.findGoBacksSpot(crate, reserved);
     }
     this.currentJob.returnPosition = null;
     this.sprite.body.setVelocity(0, 0);
     if (this.state !== "WAITING_CRATE_RETURN") {
-      scene.showShopMessage("Staff need clear floor space to put down a crate.");
+      store.showShopMessage("Staff need clear floor space to put down a crate.");
     }
     this.state = "WAITING_CRATE_RETURN";
     this.retryInMs = JOB_RETRY_MS;
@@ -486,34 +487,34 @@ export class Employee {
 
   finishReturningCrate() {
     const { crate, returnBase: base, returnPosition } = this.currentJob;
-    const scene = this.scene;
+    const store = this.store;
     if (base) {
-      if (!scene.restockCrates.includes(base) || base.lockedToPad || !base.isStationary() ||
-        (scene.floorStacks.get(base)?.length ?? 0) + 1 >= FLOOR_STACK_MAX ||
+      if (!store.restockCrates.includes(base) || base.lockedToPad || !base.isStationary() ||
+        (store.floorStacks.get(base)?.length ?? 0) + 1 >= FLOOR_STACK_MAX ||
         base.sprite.x !== returnPosition.x || base.sprite.y !== returnPosition.y) {
         this.returnCrate();
         return;
       }
-      const stack = scene.floorStacks.get(base) ?? [];
+      const stack = store.floorStacks.get(base) ?? [];
       crate.pickUp(base.sprite);
       stack.push(crate);
-      scene.floorStacks.set(base, stack);
-      scene.syncFloorStacks();
+      store.floorStacks.set(base, stack);
+      store.syncFloorStacks();
       this.finishTask();
       return;
     }
-    if (!crate.isDropPositionClear(returnPosition.x, returnPosition.y, scene.player.sprite)) {
+    if (!crate.isDropPositionClear(returnPosition.x, returnPosition.y, store.player.sprite)) {
       this.returnCrate();
       return;
     }
-    crate.drop(returnPosition.x, returnPosition.y, 0, 0, scene.crateMotionPaused);
-    scene.restockCrates.push(crate);
+    crate.drop(returnPosition.x, returnPosition.y, 0, 0, store.crateMotionPaused);
+    store.restockCrates.push(crate);
     this.finishTask();
   }
 
   discardEmptyCrate() {
     const { crate, trashcan } = this.currentJob;
-    if (!this.scene.fixtures.ofKind("trash").includes(trashcan)) {
+    if (!this.store.fixtures.ofKind("trash").includes(trashcan)) {
       this.returnCrate();
       return;
     }
@@ -523,8 +524,8 @@ export class Employee {
 
   beginRegisterService() {
     const register = this.currentJob?.register;
-    const customer = register ? this.scene.checkoutSystem.lineFor(register)[0] : null;
-    if (!register || this.scene.checkoutSystem.isPlayerOperating(register) || !customer) {
+    const customer = register ? this.store.checkoutSystem.lineFor(register)[0] : null;
+    if (!register || this.store.checkoutSystem.isPlayerOperating(register) || !customer) {
       this.finishTask();
       return;
     }
@@ -539,14 +540,14 @@ export class Employee {
   updateRegisterService(delta) {
     const register = this.currentJob?.register;
     const customer = this.currentJob?.customer;
-    if (!register || this.scene.checkoutSystem.isPlayerOperating(register) ||
-      this.scene.checkoutSystem.lineFor(register)[0] !== customer) {
+    if (!register || this.store.checkoutSystem.isPlayerOperating(register) ||
+      this.store.checkoutSystem.lineFor(register)[0] !== customer) {
       this.finishTask();
       return;
     }
     this.registerServiceRemainingMs -= delta;
     if (this.registerServiceRemainingMs > 0) return;
-    this.scene.checkoutSystem.completeEmployeeCheckout(this, customer);
+    this.store.checkoutSystem.completeEmployeeCheckout(this, customer);
     this.finishTask();
   }
 
@@ -609,7 +610,7 @@ export class Employee {
     if (this.isDestroyed) return;
     this.isDestroyed = true;
     this.sprite.body.setVelocity(0, 0);
-    this.scene.employeeGroup.remove(this.sprite, false);
+    this.store.removeEmployeeSprite(this.sprite);
     this.sprite.destroy();
   }
 }

@@ -6,7 +6,6 @@
 // See also: CustomerBuyLists.js (what they want), Navigation.js (how they route).
 
 import {
-  addCharacterSprite,
   CHARACTER_ART_WIDTH,
   CHARACTER_HEAD_HEIGHT,
   pickRandomCustomerCharacter,
@@ -51,9 +50,9 @@ const WANDER_LOOK_MS = Object.freeze([1000, 2500]);
 const LOOK_AROUND_FACINGS = Object.freeze(["left", "right", "up", "down"]);
 const FACING_TOWARD_FIXTURE = Object.freeze({ down: "up", up: "down", left: "right", right: "left" });
 
-function getCustomerItemNames(scene, itemIds) {
+function getCustomerItemNames(store, itemIds) {
   return itemIds.map((itemId) => {
-    const item = scene.getItem(itemId);
+    const item = store.getItem(itemId);
     if (!item?.name) throw new Error(`Unknown customer item: ${itemId}`);
     return item.name;
   });
@@ -84,11 +83,11 @@ export const SPRITE_DISPLAY_HEIGHT = CUSTOMER_COLLISION_HEIGHT;
 
 /**
  * One customer's sprite, shopping state machine, and patience bubble.
- * Created by the scene's spawner; destroys itself on reaching the exit.
+ * Created by the customer-flow system; destroys itself on reaching the exit.
  */
 export class Customer {
   constructor({
-    scene,
+    store,
     getShoppingPlan,
     getStoreConditions,
     registerPoint,
@@ -104,7 +103,10 @@ export class Customer {
     onMissingPrimary,
     onComplete,
   }) {
-    this.scene = scene;
+    if (!store || typeof store.findPath !== "function") {
+      throw new Error("Customer requires a store interface with findPath.");
+    }
+    this.store = store;
     this.registerPoint = registerPoint;
     this.exitPoint = exitPoint || { x: registerPoint.x, y: registerPoint.y };
     // Each claims a distinct waypoint near a shared destination so converging customers
@@ -144,7 +146,7 @@ export class Customer {
     this.onBrowseDone = null;
 
     // World (not viewport) px: the camera may show only part of a larger room (RoomLayout.js).
-    const bounds = spawnBounds || { xMin: 40, xMax: 120, yMin: 80, yMax: scene.scale.height - 80 };
+    const bounds = spawnBounds || { xMin: 40, xMax: 120, yMin: 80, yMax: store.scale.height - 80 };
     const spawnX = gameRandom.int(bounds.xMin, bounds.xMax);
     const spawnY = gameRandom.int(bounds.yMin, bounds.yMax);
 
@@ -172,8 +174,8 @@ export class Customer {
     this.bonusAttempted = new Set();
     this.purchasedFirearms = new Set();
     this.currentFacing = "down";
-    this.sprite = addCharacterSprite(
-      scene, spawnX, spawnY, character.textureKey, SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT,
+    this.sprite = store.createCustomerSprite(
+      spawnX, spawnY, character.textureKey, SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT,
     ).setDepth(2);
     this.mover = this.createMover();
 
@@ -210,8 +212,8 @@ export class Customer {
         this.seekingTimer += delta;
         if (this.madeWalkingProgress(delta)) this.seekingTimer = 0;
         if (this.seekingTimer > SEEKING_TIMEOUT_MS || this.walkingMs > MAX_WALK_MS) {
-          this.scene.debugInfo?.recordCustomer("customer-seeking-timeout", this);
-          this.scene.noteCustomerGaveUp?.(this, this.walkingMs > MAX_WALK_MS
+          this.store.debugInfo?.recordCustomer("customer-seeking-timeout", this);
+          this.store.noteCustomerGaveUp?.(this, this.walkingMs > MAX_WALK_MS
             ? "walked a full minute without arriving" : "stood stuck for 15 seconds");
           console.warn(
             `Customer gave up seeking a destination (state=${this.state}); abandoning and leaving.`,
@@ -236,8 +238,8 @@ export class Customer {
         this.leavingTimer += delta;
         if (this.madeWalkingProgress(delta)) this.leavingTimer = 0;
         if (this.leavingTimer > LEAVING_TIMEOUT_MS || this.walkingMs > MAX_WALK_MS) {
-          this.scene.debugInfo?.recordCustomer("customer-exit-timeout", this);
-          this.scene.noteCustomerGaveUp?.(this, "vanished after getting stuck on the way out");
+          this.store.debugInfo?.recordCustomer("customer-exit-timeout", this);
+          this.store.noteCustomerGaveUp?.(this, "vanished after getting stuck on the way out");
           this.destroy(); // safety net -- see LEAVING_TIMEOUT_MS
           break;
         }
@@ -255,8 +257,8 @@ export class Customer {
    * @param {string} itemId
    */
   acceptsPrice(itemId) {
-    const marketPrice = this.scene.gameState.market.getPrice(itemId);
-    return this.scene.getStorePrice(itemId) <= marketPrice * this.priceTolerance;
+    const marketPrice = this.store.gameState.market.getPrice(itemId);
+    return this.store.getStorePrice(itemId) <= marketPrice * this.priceTolerance;
   }
 
   getRemainingUnitsFor(itemId) {
@@ -268,7 +270,7 @@ export class Customer {
   add(itemId, quantity) {
     const accepted = Math.min(quantity, this.getRemainingUnitsFor(itemId));
     for (let index = 0; index < accepted; index += 1) {
-      this.cart.push({ itemId, price: this.scene.getStorePrice(itemId) });
+      this.cart.push({ itemId, price: this.store.getStorePrice(itemId) });
     }
     return accepted;
   }
@@ -337,10 +339,10 @@ export class Customer {
         ),
       );
       if (unreachableItemIds.length > 0) {
-        this.scene.showFloatingText(
+        this.store.showFloatingText(
           this.sprite.x,
           this.sprite.y - 50,
-          `Can't reach:\n${getCustomerItemNames(this.scene, unreachableItemIds).join(", ")}`,
+          `Can't reach:\n${getCustomerItemNames(this.store, unreachableItemIds).join(", ")}`,
           "#f59e0b",
         );
       }
@@ -356,7 +358,7 @@ export class Customer {
    */
   maybeWander(then, nextShelf) {
     if (!this.wanderChance || gameRandom() >= this.wanderChance) return false;
-    const fixture = this.scene.getRandomBrowseShelf(nextShelf);
+    const fixture = this.store.getRandomBrowseShelf(nextShelf);
     if (!fixture) return false;
     this.fixture = fixture;
     const spot = this.onReserveShelfSlot
@@ -427,7 +429,7 @@ export class Customer {
       // Mercenaries can buy multiples, but not a different firearm of the same type.
       if (this.shoppingPhase === "bonus" && this.factionId === "mercenaries" &&
         !this.cart.some((entry) => entry.itemId === itemId) &&
-        this.purchasedFirearms.has(this.scene.getItem(itemId)?.tags.find((tag) =>
+        this.purchasedFirearms.has(this.store.getItem(itemId)?.tags.find((tag) =>
           ["Pistol", "Rifle", "Heavy"].includes(tag),
         ))) continue;
 
@@ -443,22 +445,22 @@ export class Customer {
         if (remaining === 0) break;
         const transfer = transferItems(this.fixture, this, itemId, remaining, {
           sourceEntry: placement,
-          eventBus: this.scene.eventBus,
+          eventBus: this.store.eventBus,
           sourceName: "shelf",
           destinationName: "customer-cart",
         });
         moved += transfer.moved;
       }
       if (moved === 0) continue;
-      this.scene.refreshShelfStockDisplay?.(this.fixture);
-      if (this.scene.getStorePrice(itemId) <=
-        this.scene.gameState.market.getPrice(itemId) * BARGAIN_PRICE_RATIO) {
+      this.store.refreshShelfStockDisplay?.(this.fixture);
+      if (this.store.getStorePrice(itemId) <=
+        this.store.gameState.market.getPrice(itemId) * BARGAIN_PRICE_RATIO) {
         this.showReaction("good-deal", "happy");
       }
       if (this.shoppingPhase === "primary") this.primaryBought.add(itemId);
       else this.bonusBought.add(itemId);
 
-      const item = this.scene.getItem(itemId);
+      const item = this.store.getItem(itemId);
       if (this.factionId === "mercenaries" && item?.tags.includes("Firearm")) {
         const weaponType = item.tags.find((tag) => ["Pistol", "Rifle", "Heavy"].includes(tag));
         if (weaponType) this.purchasedFirearms.add(weaponType);
@@ -471,7 +473,7 @@ export class Customer {
   getBonusItemIds() {
     const ids = [...this.shoppingPlan.bonusItemIds];
     for (const { itemId: firearmId } of this.cart) {
-      if (!this.scene.getItem(firearmId)?.tags.includes("Firearm")) continue;
+      if (!this.store.getItem(firearmId)?.tags.includes("Firearm")) continue;
       ids.push(...(this.shoppingPlan.matchingAmmoIdsByFirearm?.[firearmId] || []));
     }
     return [...new Set(ids)].filter((id) =>
@@ -490,7 +492,7 @@ export class Customer {
         };
         const hint = this.factionId ? hints[this.factionId] : "No products are on the shelves yet.";
         if (this.factionId && !hint) throw new Error(`Unknown customer faction: ${this.factionId}`);
-        this.scene.showFloatingText(
+        this.store.showFloatingText(
           this.sprite.x,
           this.sprite.y - 50,
           hint,
@@ -549,7 +551,7 @@ export class Customer {
       this.reservedTarget.y,
       () => this.joinQueue(),
       () => {
-        this.scene.showFloatingText(
+        this.store.showFloatingText(
           this.sprite.x,
           this.sprite.y - 110,
           "Can't reach the checkout!",
@@ -563,9 +565,9 @@ export class Customer {
 
   reportPriceIssues() {
     if (this.priceRejectedItemIds.size === 0) return;
-    const names = getCustomerItemNames(this.scene, [...this.priceRejectedItemIds]);
+    const names = getCustomerItemNames(this.store, [...this.priceRejectedItemIds]);
     const offset = this.primaryMissing.size > 0 ? 100 : 40;
-    this.scene.showFloatingText(
+    this.store.showFloatingText(
       this.sprite.x,
       this.sprite.y - offset,
       `Too expensive:\n${names.join("\n")}`,
@@ -578,7 +580,7 @@ export class Customer {
   reportMissingPrimary() {
     this.showReaction("primary-item-out-of-stock", "disappointed");
     const itemIds = [...this.primaryMissing];
-    this.onMissingPrimary?.(this, itemIds, getCustomerItemNames(this.scene, itemIds));
+    this.onMissingPrimary?.(this, itemIds, getCustomerItemNames(this.store, itemIds));
   }
 
   // --- Queue and patience ---
@@ -600,8 +602,8 @@ export class Customer {
    */
   updatePatience(delta) {
     if (this.patienceRemainingMs == null) return;
-    if (!this.scene.customerFlow.temporarilyClosed &&
-      !this.scene.checkoutSystem?.isServingCustomer?.(this)) {
+    if (!this.store.customerFlow.temporarilyClosed &&
+      !this.store.checkoutSystem?.isServingCustomer?.(this)) {
       this.patienceRemainingMs = Math.max(0, this.patienceRemainingMs - delta);
     }
     if (this.patienceRemainingMs <= 0) {
@@ -615,8 +617,8 @@ export class Customer {
     const x = this.sprite.x;
     const y = this.sprite.y - CHARACTER_HEAD_HEIGHT - 14;
     if (!this.patienceBubble) {
-      const background = this.scene.add.circle(0, 0, 12, 0xffffff).setStrokeStyle(2, 0x000000);
-      const glyph = this.scene.add
+      const background = this.store.add.circle(0, 0, 12, 0xffffff).setStrokeStyle(2, 0x000000);
+      const glyph = this.store.add
         .text(0, -1, "", {
           fontFamily: '"Courier New", monospace',
           fontSize: "14px",
@@ -624,10 +626,10 @@ export class Customer {
           color: "#000000",
         })
         .setOrigin(0.5);
-      this.patienceBubble = this.scene.add.container(x, y, [background, glyph]).setDepth(9000);
+      this.patienceBubble = this.store.add.container(x, y, [background, glyph]).setDepth(9000);
     }
     this.patienceBubble.setPosition(x, y);
-    this.patienceBubble.setScale?.(this.scene.cameraRig?.popupScale() ?? 1);
+    this.patienceBubble.setScale?.(this.store.cameraRig?.popupScale() ?? 1);
 
     // Only restyle when the level changes.
     const level = getPatienceLevel(this.patienceRemainingMs / (this.maxPatienceMs ?? PATIENCE_MS));
@@ -656,7 +658,7 @@ export class Customer {
     const color = colors[mood];
     if (color === undefined) throw new RangeError(`Unknown customer reaction: ${mood}`);
 
-    const graphics = this.scene.add.graphics().setDepth(9001);
+    const graphics = this.store.add.graphics().setDepth(9001);
     graphics.fillStyle(color, 1);
     graphics.fillCircle(0, 0, 10);
     graphics.lineStyle(1.5, 0x1f2937, 1);
@@ -695,7 +697,7 @@ export class Customer {
       this.sprite.x + CHARACTER_ART_WIDTH / 2,
       this.sprite.y - CHARACTER_HEAD_HEIGHT - 12,
     );
-    this.reactionBubble.setScale?.(this.scene.cameraRig?.popupScale() ?? 1);
+    this.reactionBubble.setScale?.(this.store.cameraRig?.popupScale() ?? 1);
   }
 
   updateReaction(delta) {
@@ -718,12 +720,12 @@ export class Customer {
   judgeStoreCleanliness() {
     if (this.cleanlinessJudged || !this.cleanlinessTolerance) return null;
     this.cleanlinessJudged = true;
-    const percent = this.scene.getCleanlinessPercent?.();
+    const percent = this.store.getCleanlinessPercent?.();
     if (percent == null) return "fine";
     const verdict = judgeCleanliness(percent, this.cleanlinessTolerance);
     if (verdict === "fine") return verdict;
     this.showReaction("cleanliness", verdict === "walk-out" ? "angry" : "disappointed");
-    this.scene.reportCleanlinessVerdict?.(this, verdict);
+    this.store.reportCleanlinessVerdict?.(this, verdict);
     if (verdict === "walk-out") {
       this.clearPatience();
       this.enterLeaving();
@@ -737,7 +739,7 @@ export class Customer {
     this.trashWalkMs += delta;
     if (this.trashWalkMs < this.trashDropAtWalkMs) return;
     const body = this.sprite.body;
-    if (this.scene.dropTrash?.(this.sprite.x, body?.bottom ?? this.sprite.y)) this.trashDropAtWalkMs = null;
+    if (this.store.dropTrash?.(this.sprite.x, body?.bottom ?? this.sprite.y)) this.trashDropAtWalkMs = null;
     // Not a good spot (e.g. the doorway): try again a moment later.
     else this.trashDropAtWalkMs += 500;
   }
@@ -779,7 +781,7 @@ export class Customer {
     this.state = "LEAVING";
     this.leavingTimer = 0;
     this.setDestination(exitTarget.x, exitTarget.y, () => this.destroy(), () => {
-      this.scene.showFloatingText(
+      this.store.showFloatingText(
         this.sprite.x,
         this.sprite.y - 110,
         "Can't reach the exit!",
@@ -792,15 +794,16 @@ export class Customer {
   // --- Movement ---
 
   createMover() {
+    if (!this.store?.findPath) throw new Error("Customer requires a store route interface.");
     return new Mover(this, {
-      findPath: (fromX, fromY, toX, toY) => this.scene.findPath?.(fromX, fromY, toX, toY),
-      canFindPath: () => Boolean(this.scene.findPath),
+      findPath: (fromX, fromY, toX, toY) => this.store.findPath(fromX, fromY, toX, toY),
+      canFindPath: () => Boolean(this.store.findPath),
       getSpeed: () => SPEED,
       replanIntervalMs: 200,
       collisionTolerance: 0.1,
       waypointArrivalDistance: 0.0001,
       destinationArrivalDistance: 6,
-      onReroute: () => this.scene.debugInfo?.recordCustomer("customer-collision-reroute", this),
+      onReroute: () => this.store.debugInfo?.recordCustomer("customer-collision-reroute", this),
       onRerouteUnavailable() {},
       onPortal: ({ x, y }) => this.sprite.body.reset(x, y),
       onPathUnavailable: () => this.handlePathUnavailable(),
@@ -813,8 +816,8 @@ export class Customer {
   }
 
   handlePathUnavailable() {
-    this.scene.debugInfo?.recordCustomer("customer-path-unavailable", this);
-    this.scene.noteCustomerGaveUp?.(this, "found no way through");
+    this.store.debugInfo?.recordCustomer("customer-path-unavailable", this);
+    this.store.noteCustomerGaveUp?.(this, "found no way through");
     const onPathUnavailable = this.onPathUnavailable;
     this.path = [];
     this.onPathUnavailable = null;
@@ -868,12 +871,12 @@ export class Customer {
         const stepping = yieldInfo.msLeft > CRATE_YIELD_WAIT_MS;
         const speed = stepping ? SPEED * CRATE_YIELD_STEP_SPEED : 0;
         this.sprite.body.setVelocity(yieldInfo.away.x * speed, yieldInfo.away.y * speed);
-        this.scene.crateWorld?.pushCratesForCustomer?.(this, delta, { canPush: false });
+        this.store.crateWorld?.pushCratesForCustomer?.(this, delta, { canPush: false });
         return;
       }
     }
     this.followPath(delta);
-    if (!this.isDestroyed) this.scene.crateWorld?.pushCratesForCustomer?.(this, delta);
+    if (!this.isDestroyed) this.store.crateWorld?.pushCratesForCustomer?.(this, delta);
   }
 
   /**

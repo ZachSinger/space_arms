@@ -147,6 +147,13 @@ test("cross-area paths use matching portal approaches and a teleport waypoint", 
   ]);
 });
 
+test("customers require an injected store route interface", () => {
+  assert.throws(
+    () => new Customer({ store: {} }),
+    /Customer requires a store interface with findPath/,
+  );
+});
+
 test("characters can walk through a clear passage narrower than one floor square", () => {
   const scene = makeNavigationScene([
     { body: { x: 80, y: 0, width: 80, height: 72 } },
@@ -222,6 +229,7 @@ test("customers clear the captured door-side shelf corner before turning, even f
       let arrived = false;
       const velocity = { x: 0, y: 0 };
       customer.scene = scene;
+      customer.store = scene;
       customer.sprite = { ...start, body: {
         setVelocity(x, y) { Object.assign(velocity, { x, y }); },
       } };
@@ -249,6 +257,7 @@ test("customer movement uses the current physics position, not the sprite from t
     setVelocity(x, y) { Object.assign(velocity, { x, y }); },
   } };
   customer.scene = { findPath: (...args) => { calls.push(args); return []; } };
+  customer.store = customer.scene;
   let arrived = false;
   customer.setDestination(102, 100, () => { arrived = true; });
   assert.deepEqual(calls, [[100, 100, 102, 100]]);
@@ -265,7 +274,7 @@ test("customers on a long walk across a big shop keep going; only a stuck one gi
   const walkFor = (state, ms, stepPx) => {
     const customer = Object.create(Customer.prototype);
     Object.assign(customer, {
-      state, sprite: { x: 0, y: 0 }, path: [], scene: {}, seekingTimer: 0, leavingTimer: 0,
+      state, sprite: { x: 0, y: 0 }, path: [], store: {}, seekingTimer: 0, leavingTimer: 0,
       gaveUp: false,
       followPath() { this.sprite.x += stepPx; },
       updateFacing() {},
@@ -298,6 +307,7 @@ test("a customer hitting an obstacle reroutes immediately without resetting thei
     findPath: (...args) => { calls.push(args); return detour.map((point) => ({ ...point })); },
     debugInfo: { recordCustomer: (event) => events.push(event) },
   };
+  customer.store = customer.scene;
   customer.destination = { x: 160, y: 96 };
   customer.path = [];
   customer.seekingTimer = 1234;
@@ -372,6 +382,7 @@ function makeCustomer({ factionId = "scavengers", plan }) {
     showFloatingText: (...args) => floatingText.push(args),
     add: { graphics: addReactionGraphics },
   };
+  customer.store = customer.scene;
   customer.sprite = { x: 100, y: 100 };
   customer.factionId = factionId;
   customer.gameState = {
@@ -407,6 +418,7 @@ function makeCustomer({ factionId = "scavengers", plan }) {
   customer.onComplete = () => {};
   customer.isDestroyed = false;
   customer.scene.showFloatingText = (...args) => floatingText.push(args);
+  customer.store = customer.scene;
   return {
     customer,
     repChanges,
@@ -930,7 +942,7 @@ test("customers decide about cleanliness once, before taking anything, and a fil
       cart: [],
       phaseItemIds: ["wpn_rif_01"],
       fixture: { placements: [{ itemId: "wpn_rif_01", quantity: 3 }] },
-      scene: {
+      store: {
         getCleanlinessPercent: () => percent,
         reportCleanlinessVerdict: (_customer, verdict) => verdicts.push(verdict),
       },

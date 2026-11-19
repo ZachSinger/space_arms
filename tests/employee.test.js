@@ -65,6 +65,13 @@ after(async () => {
   if (cacheDirectory) await rm(cacheDirectory, { recursive: true, force: true });
 });
 
+test("employees require an injected store route interface", () => {
+  assert.throws(
+    () => new Employee({ id: "tavi_stock_clerk" }, null),
+    /Employee requires a store interface with findPath/,
+  );
+});
+
 function makeShelf(quantity = 0, capacity = 3, placementCount = 1) {
   const placements = Array.from({ length: placementCount }, () => ({
     itemId: "amo_01",
@@ -200,6 +207,15 @@ function makeEmployee({
     },
     employeeGroup: { add() {}, remove() {} },
   };
+  scene.createEmployeeSprite = (x, y, texture, width, height) => {
+    const sprite = scene.add.sprite(x, y, texture);
+    scene.physics.add.existing(sprite);
+    sprite.body.width = width;
+    sprite.body.height = height;
+    scene.employeeGroup.add(sprite);
+    return sprite.setDepth(3);
+  };
+  scene.removeEmployeeSprite = (sprite) => scene.employeeGroup.remove(sprite, false);
   scene.checkoutSystem = {
     operatingRegister: false,
     lineFor: () => registerLine,
@@ -214,10 +230,11 @@ function makeEmployee({
       return true;
     },
   };
-  const employee = new Employee(scene, {
+  const employee = new Employee({
     id: "tavi_stock_clerk",
     name: "Tavi",
-  });
+  }, scene);
+  employee.scene = scene;
   scene.employees = [employee];
   return { employee, shelf, crate, transfers, completedSales };
 }
