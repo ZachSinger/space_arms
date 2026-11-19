@@ -30,16 +30,15 @@ import {
   getLicensedFactionIds,
 } from "../logic/CustomerPooling.js";
 import { Player, PLAYER_CHARACTER_HEIGHT, PLAYER_CRATE_HOLD_OFFSET } from "../logic/Player.js";
-import { Crate, CRATE_STACK_SPACING, FIXTURE_CRATE_SPRITE, ITEM_CRATE_SPRITE } from "../logic/Crate.js";
+import { Crate, CRATE_STACK_SPACING } from "../logic/Crate.js";
 import { getItemCrateTint } from "../logic/CrateCategory.js";
 import {
   FLOOR_STACK_MAX, HOLD_KEY_MS, MAX_CARRIED_CRATES, isInFacingCone, isSquarelyInFront,
 } from "../logic/CrateStack.js";
 import { getCrateItemLimit } from "../logic/ShelfSlotStocking.js";
 import { CRATE_FOOTER_HEIGHT_PX, CrateFooter } from "../logic/CrateFooter.js";
-import { getCrateOrderQuantity, summarizeSupplyOrder } from "../logic/SupplyOrder.js";
+import { getCrateOrderQuantity } from "../logic/SupplyOrder.js";
 import { findCratePushRival, solveCratePush } from "../logic/CratePushing.js";
-import { canLeaveLoadingPad } from "../logic/LoadingPadEscape.js";
 import { separateOverlappingCrates } from "../logic/CrateSeparation.js";
 import { CheckoutWindow } from "../logic/CheckoutWindow.js";
 import { chooseCustomerPayment } from "../logic/CustomerPayment.js";
@@ -72,6 +71,7 @@ import {
 import { UIWindow } from "../logic/UIWindow.js";
 import { Messages, SHOP_MESSAGE_COLOR } from "../world/Messages.js";
 import { ShiftSystem } from "../systems/ShiftSystem.js";
+import { SupplySystem } from "../systems/SupplySystem.js";
 import { GamepadInput, PAD } from "../logic/GamepadInput.js";
 import { UINavigator } from "../logic/UINavigator.js";
 import { controlLabel, getInputDevice, setInputDevice } from "../logic/InputDevice.js";
@@ -162,12 +162,6 @@ const PEOPLE_DEPTH_BASE = 2000;
 const ANGRY_REPUTATION_PENALTY = 1;
 // Reputation lost once when a customer cannot find any of their primary items.
 const MISSING_PRIMARY_REPUTATION_PENALTY = 1;
-
-// Loading Pad: a 3x3 grid of crate spots, each fitting one 32px crate (all px).
-const LOADING_PAD_SPOT_SIZE = 32;
-const LOADING_PAD_SPOT_SPACING = 40;
-// How far (px) a crate may overhang a neighboring spot before that spot counts as taken.
-const LOADING_PAD_OVERHANG_ALLOWANCE = 6;
 
 // Register reach (px): the gap allowed between the player's feet and the register graphic.
 const REGISTER_INTERACT_RANGE = 12;
@@ -383,17 +377,13 @@ export class GameScene extends Phaser.Scene {
     // Loading Pad: ordered crates spawn here and must be hauled in by hand. It fills the
     // two floor rows against the backroom's bottom wall.
     const loadingPad = getLoadingPadBounds();
-    this.loadingPadSpawnPoint = {
-      x: (loadingPad.left + loadingPad.right) / 2,
-      y: (loadingPad.top + loadingPad.bottom) / 2,
-    };
-    this.drawLoadingPad();
-    this.loadingPadRect = new Phaser.Geom.Rectangle(
-      this.loadingPadSpawnPoint.x - LOADING_PAD_WIDTH / 2,
-      this.loadingPadSpawnPoint.y - LOADING_PAD_HEIGHT / 2,
+    this.supply = new SupplySystem(this, new Phaser.Geom.Rectangle(
+      (loadingPad.left + loadingPad.right) / 2 - LOADING_PAD_WIDTH / 2,
+      (loadingPad.top + loadingPad.bottom) / 2 - LOADING_PAD_HEIGHT / 2,
       LOADING_PAD_WIDTH,
       LOADING_PAD_HEIGHT,
-    );
+    ));
+    this.supply.drawPad();
     const { gridW, gridH } = getAuthoredGridSize();
     this.crateBounds = new Phaser.Geom.Rectangle(0, 0, gridW * TILE_SIZE, gridH * TILE_SIZE);
     this.crateGroup = this.physics.add.group();
@@ -408,8 +398,8 @@ export class GameScene extends Phaser.Scene {
     // Loose crates bounce off the loading pad; only the deliveries locked onto it sit inside.
     // The player and customers walk over it freely.
     const padBarrier = this.add.zone(
-      this.loadingPadRect.centerX,
-      this.loadingPadRect.centerY,
+      this.supply.padRect.centerX,
+      this.supply.padRect.centerY,
       LOADING_PAD_WIDTH,
       LOADING_PAD_HEIGHT,
     );
@@ -487,7 +477,7 @@ export class GameScene extends Phaser.Scene {
     this.highlightTrashKey = this.input.keyboard.addKey("H", false);
 
     // Constructed after the fixtures exist: its Supply tab reads their stock immediately
-    // on construction (via SupplyRenderer -> getRestockableItems()).
+    // on construction (via SupplyRenderer -> supply.restockableItems()).
     this.managerTablet = new ManagerTablet(this.windowManager, this.gameState, this);
     // REAL games run without the debug recorder; every call site uses debugInfo?.
     this.debugInfo = this.realMode ? null : new DebugInfo(this);
@@ -1658,7 +1648,7 @@ export class GameScene extends Phaser.Scene {
         : this.createItemCrate(entry.itemId, entry.quantity, entry.x, entry.y);
       crate.applySave(entry);
       // Older saves have no onPad flag: anything resting on the pad was a delivery.
-      const onPad = entry.onPad ?? this.loadingPadRect.contains(entry.x, entry.y);
+      const onPad = entry.onPad ?? this.supply.padRect.contains(entry.x, entry.y);
       if (onPad) crate.lockToPad();
       if (entry.stack?.length) {
         this.floorStacks.set(crate, entry.stack.map((stacked) => {
@@ -1992,10 +1982,6 @@ export class GameScene extends Phaser.Scene {
    * @param {object} item - catalog item
    * @returns {number} credits
    */
-  restockCost(item) {
-    return this.gameState.market.getSupplyCost(item.id, getCrateOrderQuantity(item));
-  }
-
   /**
    * The player's own price, falling back to today's market price if never set.
    * @param {string} itemId
@@ -2003,117 +1989,6 @@ export class GameScene extends Phaser.Scene {
    */
   getStorePrice(itemId) {
     return this.gameState.catalog.storePrices[itemId] ?? this.gameState.market.getPrice(itemId);
-  }
-
-  getLoadingPadSpots() {
-    const offsets = [-LOADING_PAD_SPOT_SPACING, 0, LOADING_PAD_SPOT_SPACING];
-    return offsets.flatMap((dy) => offsets.map((dx) => ({
-      x: this.loadingPadSpawnPoint.x + dx,
-      y: this.loadingPadSpawnPoint.y + dy,
-    })));
-  }
-
-  // Every Loading Pad spot a new crate could land on without overlapping an existing crate.
-  // A crate only blocks a spot it really sits on: fixture crates are drawn larger than a spot
-  // and slightly overhang their neighbors, which shouldn't count.
-  getLoadingPadSpawnPositions() {
-    return this.getLoadingPadSpots().filter((position) => !this.restockCrates.some((crate) => {
-      const reach = crate.sprite.displayWidth / 2 + LOADING_PAD_SPOT_SIZE / 2 - LOADING_PAD_OVERHANG_ALLOWANCE;
-      return Math.abs(crate.sprite.x - position.x) < reach && Math.abs(crate.sprite.y - position.y) < reach;
-    }));
-  }
-
-  // Painted floor marking: a plate with one outlined square per crate spot.
-  drawLoadingPad() {
-    const { x, y } = this.loadingPadSpawnPoint;
-    const pad = this.add.graphics().setDepth(0.5);
-    pad.fillStyle(0x0f172a, 0.55);
-    pad.fillRect(x - LOADING_PAD_WIDTH / 2, y - LOADING_PAD_HEIGHT / 2, LOADING_PAD_WIDTH, LOADING_PAD_HEIGHT);
-    pad.lineStyle(2, 0xfacc15, 0.9);
-    pad.strokeRect(x - LOADING_PAD_WIDTH / 2, y - LOADING_PAD_HEIGHT / 2, LOADING_PAD_WIDTH, LOADING_PAD_HEIGHT);
-    pad.lineStyle(1, 0xfacc15, 0.35);
-    for (const spot of this.getLoadingPadSpots()) {
-      pad.strokeRect(
-        spot.x - LOADING_PAD_SPOT_SIZE / 2,
-        spot.y - LOADING_PAD_SPOT_SIZE / 2,
-        LOADING_PAD_SPOT_SIZE,
-        LOADING_PAD_SPOT_SIZE,
-      );
-    }
-    this.add
-      .text(x, y - LOADING_PAD_HEIGHT / 2 - 4, "LOADING PAD", {
-        fontFamily: "monospace",
-        fontSize: "14px",
-        fontStyle: "bold",
-        color: "#facc15",
-      })
-      .setOrigin(0.5, 1)
-      .setAlpha(0.85)
-      .setDepth(0.5);
-  }
-
-  getLoadingPadSpawnPosition() {
-    return this.getLoadingPadSpawnPositions()[0] ?? null;
-  }
-
-  /**
-   * Whether the player could still walk off the Loading Pad, if crates also sat at extraSpots.
-   * @param {{ x: number, y: number }[]} [extraSpots]
-   */
-  canPlayerLeaveLoadingPad(extraSpots = []) {
-    const body = this.player?.sprite.body;
-    if (!body || body.y < getBackroomBounds(this.room.zones).y) return true;
-    const rectOf = (b) => ({ left: b.x, top: b.y, width: b.width, height: b.height });
-    // A crate that hasn't landed yet is sized to cover either kind of crate.
-    const width = Math.max(ITEM_CRATE_SPRITE.width, FIXTURE_CRATE_SPRITE.width);
-    const height = Math.max(ITEM_CRATE_SPRITE.height, FIXTURE_CRATE_SPRITE.height);
-    const crates = [
-      ...this.restockCrates.filter((crate) => crate.lockedToPad).map((crate) => rectOf(crate.sprite.body)),
-      ...extraSpots.map((spot) => ({ left: spot.x - width / 2, top: spot.y - height / 2, width, height })),
-    ];
-    return canLeaveLoadingPad({
-      player: rectOf(body),
-      crates,
-      pad: { top: this.loadingPadRect.top },
-      floor: getBackroomInteriorBounds(this.room.zones),
-    });
-  }
-
-  /**
-   * Free pad spots for new crates, picked so the player isn't boxed in wherever the free
-   * spots allow it.
-   * @param {number} count
-   */
-  takeLoadingPadSpawnPositions(count) {
-    const free = this.getLoadingPadSpawnPositions();
-    const chosen = [];
-    while (chosen.length < count && free.length) {
-      const index = free.findIndex((spot) => this.canPlayerLeaveLoadingPad([...chosen, spot]));
-      chosen.push(...free.splice(Math.max(0, index), 1));
-    }
-    return chosen;
-  }
-
-  // If a delivery boxed the player in anyway, he steps onto the floor just above the pad.
-  freePlayerFromLoadingPad() {
-    if (this.canPlayerLeaveLoadingPad()) return;
-    const sprite = this.player.sprite;
-    const body = sprite.body;
-    const left = this.loadingPadRect.centerX - body.width / 2;
-    const top = this.loadingPadRect.top - body.height - 2;
-    body.reset(sprite.x + left - body.x, sprite.y + top - body.y);
-  }
-
-  /**
-   * Prices and checks a supply order against the player's credits and free pad spots.
-   * @param {Map<string, number>} order - item id -> number of crates
-   */
-  getSupplyOrderSummary(order) {
-    return summarizeSupplyOrder(order, {
-      getCrateCost: (itemId) => this.restockCost(database.getItem(itemId)),
-      credits: this.gameState.economy.credits,
-      freePadSpots: this.getLoadingPadSpawnPositions().length,
-    });
   }
 
   /**
@@ -2167,40 +2042,8 @@ export class GameScene extends Phaser.Scene {
         item,
         ...totals.get(item.id),
         marketPrice: this.gameState.market.getPrice(item.id),
-        unitCost: roundMoney(this.restockCost(item) / getCrateOrderQuantity(item)),
+        unitCost: roundMoney(this.supply.crateCost(item) / getCrateOrderQuantity(item)),
         storePrice: this.getStorePrice(item.id),
-      }));
-  }
-
-  // Supply tab rows: every catalog item the player holds a Supplier License for, whether or
-  // not it's stocked anywhere yet (a new fixture starts empty). Affordability is checked
-  // per order, so unaffordable items still appear.
-  getRestockableItems() {
-    const ownedQuantityByItemId = new Map(
-      this.getInventoryItems().map(({ item, stock, offShelves }) => [
-        item.id,
-        stock + offShelves,
-      ]),
-    );
-    // Items with a shelf spot (even a sold-out one): how many are out and how many fit.
-    const shelfByItemId = new Map();
-    for (const shelf of this.fixtures.shelves()) {
-      for (const placement of shelf.placements) {
-        const totals = shelfByItemId.get(placement.itemId) || { quantity: 0, capacity: 0 };
-        totals.quantity += placement.quantity;
-        totals.capacity += shelf.getPlacementCapacity(placement);
-        shelfByItemId.set(placement.itemId, totals);
-      }
-    }
-
-    return database
-      .getAllItems()
-      .filter((item) => this.gameState.catalog.owns(item.license))
-      .map((item) => ({
-        item,
-        ownedQuantity: ownedQuantityByItemId.get(item.id) || 0,
-        shelf: shelfByItemId.get(item.id) || null,
-        cost: this.restockCost(item),
       }));
   }
 
@@ -2213,52 +2056,6 @@ export class GameScene extends Phaser.Scene {
     this.gameState.catalog.setActiveFactions(activeFactions);
   }
 
-  /**
-   * Places a whole supply order: charges the stock plus one flat delivery fee, then drops
-   * every crate onto the Loading Pad at once. Each crate is hauled to a fixture by hand.
-   * @param {Map<string, number>} order - item id -> number of crates
-   * @returns {boolean} false if unlicensed, unaffordable, or the pad lacks room
-   */
-  placeSupplyOrder(order) {
-    for (const [itemId, count] of order) {
-      const item = database.getItem(itemId);
-      if (count > 0 && (!item || !this.gameState.catalog.owns(item.license))) return false;
-    }
-    const summary = this.getSupplyOrderSummary(order);
-    if (!summary.canPlace) return false;
-
-    const spots = this.takeLoadingPadSpawnPositions(
-      [...order.values()].reduce((sum, count) => sum + Math.max(0, count), 0),
-    );
-    for (const [itemId, count] of order) {
-      if (count <= 0) continue;
-      const item = database.getItem(itemId);
-      this.gameState.economy.spend(this.restockCost(item) * count, {
-        category: "stock_orders",
-        label: item.name,
-        quantity: count,
-      });
-    }
-    this.gameState.economy.spend(summary.deliveryFee, {
-      category: "delivery_fees",
-      label: "Delivery fee",
-    });
-    for (const [itemId, count] of order) {
-      // A first-time item starts at today's market price, then stays put until repriced.
-      if (count > 0) this.gameState.catalog.priceIfUnset(itemId, this.gameState.market.getPrice(itemId));
-      for (let index = 0; index < count; index += 1) {
-        const spawn = spots.shift();
-        const crate = this.createItemCrate(itemId, getCrateOrderQuantity(database.getItem(itemId)), spawn.x, spawn.y);
-        crate.setPaused(this.crateMotionPaused);
-        crate.lockToPad();
-        this.restockCrates.push(crate);
-      }
-    }
-    this.freePlayerFromLoadingPad();
-    this.gameState.shop.changed();
-    return true;
-  }
-
   // --- Buying, crating, and placing fixtures ---
 
   // Fixture shop rows, with every reason a purchase might be blocked.
@@ -2266,7 +2063,7 @@ export class GameScene extends Phaser.Scene {
     return Object.values(FIXTURE_TYPES).map((spec) => {
       const license = database.getLicense(spec.licenseId);
       const licensed = this.gameState.catalog.owns(spec.licenseId);
-      const hasDeliverySpace = !!this.getLoadingPadSpawnPosition();
+      const hasDeliverySpace = !!this.supply.firstFreePadSpot();
       return {
         spec,
         license,
@@ -2287,15 +2084,12 @@ export class GameScene extends Phaser.Scene {
     if (!spec) throw new Error(`Unknown fixture type: ${typeId}`);
     if (!this.gameState.catalog.owns(spec.licenseId)) return false;
     if (this.gameState.economy.credits < spec.price) return false;
-    const spawn = this.takeLoadingPadSpawnPositions(1)[0];
+    const spawn = this.supply.takePadSpots(1)[0];
     if (!spawn) return false;
 
     this.gameState.economy.spend(spec.price, { category: "fixtures", label: spec.name });
-    const crate = new Crate(this, null, 1, spawn.x, spawn.y, { kind: "fixture", typeId });
-    crate.setPaused(this.crateMotionPaused);
-    crate.lockToPad();
-    this.restockCrates.push(crate);
-    this.freePlayerFromLoadingPad();
+    this.supply.deliver(new Crate(this, null, 1, spawn.x, spawn.y, { kind: "fixture", typeId }));
+    this.supply.freePlayerFromPad();
     this.gameState.shop.changed();
     return true;
   }

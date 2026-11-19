@@ -21,6 +21,7 @@ let GameScene;
 let ShelfFixture;
 let GameState;
 let Messages;
+let SupplySystem;
 const originalPhaser = globalThis.Phaser;
 
 before(async () => {
@@ -52,6 +53,7 @@ before(async () => {
   ({ ShelfFixture } = await server.ssrLoadModule("/js/logic/ShelfFixture.js"));
   ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));
   ({ Messages } = await server.ssrLoadModule("/js/world/Messages.js"));
+  ({ SupplySystem } = await server.ssrLoadModule("/js/systems/SupplySystem.js"));
 });
 
 after(async () => {
@@ -87,6 +89,7 @@ function createHarness({ carrying = false } = {}) {
   };
   scene.gameState = new GameState({ items: [] });
   scene.restockCrates = [];
+  scene.supply = new SupplySystem(scene, null);
   scene.floorStacks = new Map();
   scene.markedStackBase = null;
   scene.markedFromTop = 0;
@@ -1510,6 +1513,7 @@ test("inventory totals include all carried crates and active customer carts but 
   const stackTop = { itemId: "rifle", quantity: 4, kind: "item" };
   const employeeCrate = { itemId: "rifle", quantity: 6, kind: "item", isCarried: true };
   scene.restockCrates = [padCrate, stackBase];
+  scene.supply = new SupplySystem(scene, null);
   scene.floorStacks = new Map([[stackBase, [stackTop]]]);
   const lowerCrate = { itemId: "rifle", quantity: 2, kind: "item" };
   const middleCrate = { itemId: "pistol", quantity: 5, kind: "item" };
@@ -1544,7 +1548,7 @@ test("inventory totals include all carried crates and active customer carts but 
     stock: [{ itemId: "rifle", quantity: 2 }],
     placements: [],
   }];
-  const restockableRifle = scene.getRestockableItems()
+  const restockableRifle = scene.supply.restockableItems()
     .find(({ item }) => item.id === "rifle");
   assert.equal(restockableRifle.ownedQuantity, 23);
 });

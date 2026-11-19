@@ -36,8 +36,8 @@ export class SupplyRenderer {
    * @returns {string} HTML
    */
   static generateHTML(scene, order = new Map()) {
-    const entries = sortSupplyEntries(scene.getRestockableItems());
-    const summary = scene.getSupplyOrderSummary(order);
+    const entries = sortSupplyEntries(scene.supply.restockableItems());
+    const summary = scene.supply.orderSummary(order);
     const orderFull = summary.crates >= summary.maxCrates;
 
     let html = `

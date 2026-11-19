@@ -41,7 +41,7 @@ try {
   await h.game((scene) => {
     scene.shift.endDay();
     const itemId = scene.fixtures.shelves()[0].placements[0].itemId;
-    scene.placeSupplyOrder(new Map([[itemId, 3]]));
+    scene.supply.placeOrder(new Map([[itemId, 3]]));
   });
   saves["mid-game"] = await serialize(h);
   floorSpot = await h.game((scene) => ({ x: scene.storeDoor.x, y: scene.storeDoor.y + 64 * 4, tile: 64 }));

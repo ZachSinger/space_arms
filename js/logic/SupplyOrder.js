@@ -20,7 +20,7 @@ export function getCrateOrderQuantity(item) {
 }
 
 export const DELIVERY_FEE = 25; // credits
-// The Loading Pad has a 3x3 grid of crate spots (see GameScene.getLoadingPadSpawnPositions).
+// The Loading Pad has a 3x3 grid of crate spots (see SupplySystem.freePadSpots).
 export const LOADING_PAD_SPOTS = 9;
 // One order can always fill an empty loading pad.
 export const MAX_CRATES_PER_ORDER = LOADING_PAD_SPOTS;

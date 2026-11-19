@@ -571,7 +571,7 @@ test("forward releases cannot skip through obstacles, other crates, or the loadi
   scene.restockCrates = [{ sprite: { body: { enable: true, left: 280, right: 320, top: 230, bottom: 270 } } }];
   assert.equal(crate.findThrowPosition(carrier, 160, 0), null);
   scene.restockCrates = [];
-  scene.loadingPadRect = { left: 280, right: 416, top: 200, bottom: 328 };
+  scene.supply = { padRect: { left: 280, right: 416, top: 200, bottom: 328 } };
   assert.equal(crate.findThrowPosition(carrier, 160, 0), null);
   assert.equal(crate.findThrowPosition(carrierAt(25, 250), -160, 0), null, "must stay inside world bounds");
   assert.equal(crate.findThrowPosition(carrier, 0, 0), null);
@@ -716,7 +716,7 @@ test("a delivered crate stays locked on the loading pad until picked up", () => 
 
 test("a carried crate can't be dropped onto the loading pad", () => {
   const scene = createScene();
-  scene.loadingPadRect = { left: 200, top: 200, right: 336, bottom: 328 };
+  scene.supply = { padRect: { left: 200, top: 200, right: 336, bottom: 328 } };
   const crate = new Crate(scene, "item", 5, 0, 0);
   const position = crate.findDropPosition(268, 264, null, [], 48);
   assert.equal(position, null);

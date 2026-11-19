@@ -24,15 +24,17 @@ test("shelved items sort to the top of the Supply tab, most urgent first", () =>
 test("the Supply tab keeps crate ordering and cost details in its split-panel layout", () => {
   const item = { id: "rations", name: "Basic Rations", image: null, stackSize: 10, boxSize: 1 };
   const scene = {
-    getRestockableItems: () => [{
-      item, ownedQuantity: 60,
-      shelf: { quantity: 0, capacity: 10 }, cost: 25,
-    }],
-    getSupplyOrderSummary: () => ({
-      crates: 2, maxCrates: 9, stockCost: 50, deliveryFee: 25, total: 75,
-      canPlace: true, problem: null,
-    }),
-    getLoadingPadSpawnPositions: () => Array(9),
+    supply: {
+      restockableItems: () => [{
+        item, ownedQuantity: 60,
+        shelf: { quantity: 0, capacity: 10 }, cost: 25,
+      }],
+      orderSummary: () => ({
+        crates: 2, maxCrates: 9, stockCost: 50, deliveryFee: 25, total: 75,
+        canPlace: true, problem: null,
+      }),
+      freePadSpots: () => Array(9),
+    },
   };
   const html = SupplyRenderer.generateHTML(scene, new Map([["rations", 2]]));
 

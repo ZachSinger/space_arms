@@ -179,7 +179,7 @@ export class Crate {
     const clearRight = right + clearance;
     const clearTop = top - clearance;
     const clearBottom = bottom + clearance;
-    const pad = this.scene.loadingPadRect;
+    const pad = this.scene.supply?.padRect;
     if (pad && clearLeft < pad.right && clearRight > pad.left && clearTop < pad.bottom && clearBottom > pad.top) {
       return false;
     }

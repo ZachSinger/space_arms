@@ -158,7 +158,7 @@ export class DebugTools {
       const placement = shelf.placeItem(item.id, gx, gy, false, 0);
       const capacity = shelf.getPlacementCapacity(placement);
       const crates = Math.ceil(capacity / getCrateOrderQuantity(item));
-      gameState.economy.spend(scene.restockCost(item) * crates, {
+      gameState.economy.spend(scene.supply.crateCost(item) * crates, {
         category: "stock_orders", label: item.name, quantity: crates,
       });
       placement.quantity = capacity;

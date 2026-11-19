@@ -249,7 +249,7 @@ export class ShiftSystem {
     const shop = this.shop;
     const ownsSellableStock = shop.getInventoryItems()
       .some(({ offShelves, stock, inCustomerCarts }) => offShelves + stock + inCustomerCarts > 0);
-    const crateCosts = shop.getRestockableItems().map(({ cost }) => cost);
+    const crateCosts = shop.supply.restockableItems().map(({ cost }) => cost);
     return getEmergencyLoanOffer({
       credits: shop.gameState.economy.credits,
       hasLoan: !!shop.gameState.economy.emergencyLoan,

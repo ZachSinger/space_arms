@@ -162,7 +162,7 @@ export const scenarios = {
       const shelf = scene.fixtures.shelves()[0];
       const placement = shelf.placements[0];
       placement.quantity = 0;
-      scene.placeSupplyOrder(new Map([[placement.itemId, 1]]));
+      scene.supply.placeOrder(new Map([[placement.itemId, 1]]));
       scene.gameState.shop.changed();
       return { shelfId: shelf.id, itemId: placement.itemId };
     });

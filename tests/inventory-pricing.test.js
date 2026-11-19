@@ -221,9 +221,11 @@ function createHarness() {
         storePrice: prices.get(itemId),
       }));
     },
-    getRestockableItems: () => [],
-    getSupplyOrderSummary: () => ({ crates: 0, maxCrates: 9, stockCost: 0, deliveryFee: 0, total: 0, problem: null, canPlace: false }),
-    getLoadingPadSpawnPositions: () => [],
+    supply: {
+      restockableItems: () => [],
+      orderSummary: () => ({ crates: 0, maxCrates: 9, stockCost: 0, deliveryFee: 0, total: 0, problem: null, canPlace: false }),
+      freePadSpots: () => [],
+    },
     canRearrangeFixtures: () => false,
     canExpandStore: () => false,
     getFixturePurchaseOptions: () => [],
@@ -509,11 +511,13 @@ function createSupplyHarness(credits) {
   tablet.gameState = { economy: { credits } };
   tablet.supplyOrder = new Map();
   tablet.scene = {
-    getSupplyOrderSummary: (order) => summarizeSupplyOrder(order, {
-      getCrateCost: (id) => ({ ammo: 40, rations: 10 })[id],
-      credits: tablet.gameState.economy.credits,
-      freePadSpots: 9,
-    }),
+    supply: {
+      orderSummary: (order) => summarizeSupplyOrder(order, {
+        getCrateCost: (id) => ({ ammo: 40, rations: 10 })[id],
+        credits: tablet.gameState.economy.credits,
+        freePadSpots: 9,
+      }),
+    },
     showShopMessage: (message) => warnings.push(message),
   };
   tablet.refreshSupplyPanel = () => { refreshes += 1; };

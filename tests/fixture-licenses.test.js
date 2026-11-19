@@ -331,7 +331,7 @@ test("layout tab offers paid store expansions gated by shop level and purchase o
     ...scene,
     getFixturePurchaseOptions: () => [],
     restockCrates: [],
-    getLoadingPadSpawnPositions: () => [],
+    supply: { freePadSpots: () => [] },
   }, true);
   assert.doesNotMatch(fixturesHTML, /Expansion|data-buy-expansion-id|data-buy-backroom-id/);
 });

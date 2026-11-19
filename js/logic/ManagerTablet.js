@@ -563,12 +563,12 @@ export class ManagerTablet {
    */
   changeSupplyOrder(itemId, delta) {
     const count = (this.supplyOrder.get(itemId) || 0) + delta;
-    const summary = this.scene.getSupplyOrderSummary(this.supplyOrder);
+    const summary = this.scene.supply.orderSummary(this.supplyOrder);
     if (delta > 0 && summary.crates >= summary.maxCrates) return;
     if (delta > 0) {
       const candidate = new Map(this.supplyOrder);
       candidate.set(itemId, count);
-      const nextSummary = this.scene.getSupplyOrderSummary(candidate);
+      const nextSummary = this.scene.supply.orderSummary(candidate);
       if (!nextSummary.canPlace) {
         this.scene.showShopMessage(nextSummary.problem);
         playErrorBuzz();
@@ -582,7 +582,7 @@ export class ManagerTablet {
 
   handlePlaceSupplyOrder() {
     // Why an order can't be placed is already shown in the summary, so no popup here.
-    if (this.scene.placeSupplyOrder(this.supplyOrder)) this.supplyOrder.clear();
+    if (this.scene.supply.placeOrder(this.supplyOrder)) this.supplyOrder.clear();
     this.refreshSupplyPanel();
   }
 
