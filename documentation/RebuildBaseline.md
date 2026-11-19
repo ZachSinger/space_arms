@@ -13,7 +13,8 @@ Every rebuild step must keep these passing. See [RebuildPlan.md](./RebuildPlan.m
 
 `npm run check:game` needs the game art in `img/`, which is kept out of git. Copy the `img/`
 folder from an existing working copy (or regenerate it with the scripts in `scripts/`) before
-running it. Add `--quick` for shorter shifts, or `--only=shift`, `--only=scenarios`, `--only=speed`.
+running it. Add `--quick` for shorter shifts, or `--only=shift`, `--only=scenarios`,
+`--only=replay`, `--only=speed`.
 
 ## Browser checks
 
@@ -24,6 +25,10 @@ running it. Add `--quick` for shorter shifts, or `--only=shift`, `--only=scenari
   of a three-high stack; stepping behind each register and back out; an employee refills an empty
   shelf space and gets rid of the empty crate; trash is picked up and binned; every golden save
   loads and resaves exactly as before.
+- **Replay**: the same seeded stretch of a busy shift is played twice, once at normal pace (one game
+  step per frame) and once fast-forwarded (twelve normal-size steps per frame). Where everyone
+  stands, sales, money, and trash must match exactly. Games started with a `seed` replay their
+  dice rolls; without one, each session picks its own.
 
 ## Golden saves
 
