@@ -34,6 +34,7 @@ export class CrateSystem {
   }
 
   addCarriedCrate(crate) {
+    crate.setCarriedBy("player");
     const stack = this.getCarriedCrates();
     stack.push(crate);
     this.carriedCrates = stack;
@@ -129,6 +130,7 @@ export class CrateSystem {
       if (newBase) {
         newBase.drop(x, y, 0, 0, shop.crateMotionPaused);
         this.restockCrates.push(newBase);
+        for (const crate of rest) crate.setStackedOn(newBase.id);
         if (rest.length) this.floorStacks.set(newBase, rest);
       }
     } else {
@@ -150,6 +152,7 @@ export class CrateSystem {
     const placed = stack.slice(-count);
     this.carriedCrates = stack.slice(0, -count);
     this.carriedCrate = this.carriedCrates.at(-1) ?? null;
+    for (const crate of placed) crate.setStackedOn(base.id);
     this.floorStacks.set(base, [...(this.floorStacks.get(base) ?? []), ...placed]);
     this.markedStackBase = null;
     shop.syncCarriedCrate();
@@ -194,7 +197,10 @@ export class CrateSystem {
     }
     bottom.drop(position.x, position.y, 0, 0, shop.crateMotionPaused);
     this.restockCrates.push(bottom);
-    if (rest.length) this.floorStacks.set(bottom, rest);
+    if (rest.length) {
+      for (const crate of rest) crate.setStackedOn(bottom.id);
+      this.floorStacks.set(bottom, rest);
+    }
     this.carriedCrates = [];
     this.carriedCrate = null;
     shop.syncCarriedCrate();
@@ -240,7 +246,7 @@ export class CrateSystem {
         this.floorStacks.set(crate, entry.stack.map((stacked) => {
           const above = this.createItemCrate(stacked.itemId, stacked.quantity, entry.x, entry.y,
             { id: stacked.id });
-          above.pickUp(crate.sprite);
+          above.pickUp(crate.sprite, { stackedOnId: crate.id });
           return above;
         }));
       }
@@ -256,7 +262,7 @@ export class CrateSystem {
           { id: entry.id, kind: "fixture", typeId: entry.typeId })
         : this.createItemCrate(entry.itemId, entry.quantity, shop.player.sprite.x, shop.player.sprite.y,
           { id: entry.id });
-      crate.pickUp(shop.player.sprite);
+      crate.pickUp(shop.player.sprite, { holderId: "player" });
       return crate;
     });
     this.carriedCrate = this.carriedCrates.at(-1) ?? null;

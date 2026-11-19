@@ -40,6 +40,7 @@ const DROP_SEARCH_RADIUS = INTERACT_RANGE + 2 * DROP_SEARCH_STEP;
 const FACING_DIRECTIONS = Object.freeze({
   up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
 });
+let nextStandaloneCrateId = 1;
 
 // The space a set-down crate must keep clear of: the carrier's feet (physics body) with a
 // small margin, so crates can be set down right beside him; art overlap is depth-sorted.
@@ -57,15 +58,14 @@ function carrierFootprint(carrierSprite, margin = 4) {
 export class Crate {
   constructor(scene, itemId, quantity, x, y, { id = null, kind = "item", typeId = null, tint = null } = {}) {
     this.scene = scene;
-    this.id = id ?? scene.crateSystem?.createId?.() ?? null;
+    this.id = id ?? scene.crateSystem?.createId?.() ?? `crate-local-${nextStandaloneCrateId++}`;
     this.kind = kind;
     this.typeId = kind === "fixture" ? typeId : null;
     this.itemId = kind === "item" ? itemId : null;
     this.quantity = kind === "item" ? quantity : 1;
-    this.isCarried = false;
+    this.locationState = { kind: "world" };
     this.isThrown = false;
     this.isPushed = false;
-    this.lockedToPad = false;
     this.launch = null;
     this.flight = null;
     this.throwCarrier = null;
@@ -108,12 +108,42 @@ export class Crate {
     return this.isPushed || this.isStationary() || this.isSliding();
   }
 
+  get isCarried() {
+    return this.locationState?.kind === "carried" || this.locationState?.kind === "crate-stack";
+  }
+
+  get lockedToPad() {
+    return this.locationState?.kind === "loading-pad";
+  }
+
   canTake() {
     return this.kind === "item" && !this.lockedToPad;
   }
 
   canPut(itemId) {
     return this.kind === "item" && (this.quantity === 0 || this.itemId === itemId);
+  }
+
+  getLocation() {
+    const location = this.locationState ?? { kind: "world" };
+    if (location.kind !== "world") return { ...location };
+    return {
+      kind: "world",
+      x: this.sprite?.x ?? null,
+      y: this.sprite?.y ?? null,
+    };
+  }
+
+  getContainerId() {
+    return this.id;
+  }
+
+  setCarriedBy(holderId) {
+    if (typeof holderId !== "string" || holderId.length === 0) {
+      throw new TypeError("Carried crates require a holder ID.");
+    }
+    this.isPushed = false;
+    this.locationState = { kind: "carried", holderId };
   }
 
   getAvailableUnitsFor(itemId) {
@@ -149,23 +179,31 @@ export class Crate {
    * Resting, pushed, and sliding crates can be picked up; a crate still being launched cannot.
    * @param {Phaser.GameObjects.Sprite} carrierSprite
    */
-  pickUp(carrierSprite) {
+  pickUp(carrierSprite, { holderId = "player", stackedOnId = null } = {}) {
     if (!this.canPickUp()) return false;
 
-    this.isCarried = true;
+    if (stackedOnId !== null) this.setStackedOn(stackedOnId);
+    else this.setCarriedBy(holderId);
     this.isThrown = false;
     this.isPushed = false;
     this.flight = null;
     this.setThrowHeight(0);
     this.stopThrowAcceleration();
     this.throwCarrier = null;
-    this.lockedToPad = false;
     this.hitCustomers.clear();
     this.sprite.body.setImmovable(false);
     this.sprite.body.stop();
     this.sprite.body.enable = false;
     this.followCarrier(carrierSprite);
     return true;
+  }
+
+  setStackedOn(baseCrateId) {
+    if (typeof baseCrateId !== "string" || baseCrateId.length === 0) {
+      throw new TypeError("Stacked crates require a base crate ID.");
+    }
+    this.isPushed = false;
+    this.locationState = { kind: "crate-stack", baseCrateId };
   }
 
   /**
@@ -416,7 +454,7 @@ export class Crate {
    * @param {boolean} paused
    */
   drop(x, y, velocityX, velocityY, paused) {
-    this.isCarried = false;
+    this.locationState = { kind: "world" };
     this.isPushed = false;
     this.throwCarrier = null;
     this.flight = null;
@@ -432,8 +470,6 @@ export class Crate {
     body.moves = !paused;
     body.enable = true;
     body.setImmovable(false);
-    this.lockedToPad = false;
-
     this.isThrown = Math.hypot(velocityX, velocityY) > 0;
     this.hitCustomers.clear();
     body.setVelocity(velocityX * CRATE_THROW_MULTIPLIER, velocityY * CRATE_THROW_MULTIPLIER);
@@ -483,7 +519,8 @@ export class Crate {
   lockToPad() {
     this.stopThrowAcceleration();
     this.throwCarrier = null;
-    this.lockedToPad = true;
+    this.isPushed = false;
+    this.locationState = { kind: "loading-pad", padId: "loading-pad" };
     this.isThrown = false;
     const body = this.sprite.body;
     body.stop();
@@ -498,6 +535,7 @@ export class Crate {
   push(velocity) {
     this.stopThrowAcceleration();
     this.throwCarrier = null;
+    this.locationState = { kind: "world" };
     this.sprite.setDepth(2);
     this.isPushed = true;
     this.isThrown = false;

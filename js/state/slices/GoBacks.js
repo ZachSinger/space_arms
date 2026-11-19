@@ -7,12 +7,19 @@ import { Slice } from "../Slice.js";
 import { InventoryPool } from "../../logic/InventoryPool.js";
 import { transferItems } from "../../logic/InventoryTransfer.js";
 
+let nextReturnedCartId = 1;
+
 export class GoBacks extends Slice {
   /** @param {object | null} [events] - announces each transfer */
   constructor(events = null) {
     super();
     this.events = events;
-    this.pool = new InventoryPool({ id: "go-backs", capacity: Infinity, stock: [] });
+    this.pool = new InventoryPool({
+      id: "go-backs",
+      location: { kind: "go-backs", containerId: "go-backs" },
+      capacity: Infinity,
+      stock: [],
+    });
   }
 
   /** @returns {{ itemId: string, quantity: number }[]} */
@@ -55,7 +62,13 @@ export class GoBacks extends Slice {
       if (entry) entry.quantity += 1;
       else stock.push({ itemId, quantity: 1 });
     }
-    const customerCart = new InventoryPool({ capacity: Infinity, stock });
+    const id = `customer-cart-${nextReturnedCartId++}`;
+    const customerCart = new InventoryPool({
+      id,
+      location: { kind: "customer-cart", containerId: id },
+      capacity: Infinity,
+      stock,
+    });
     for (const { itemId, quantity } of stock) {
       const result = transferItems(customerCart, this.pool, itemId, quantity, {
         eventBus: this.events, sourceName: "customer-cart", destinationName: "go-backs",
@@ -110,6 +123,7 @@ export class GoBacks extends Slice {
     const goBacks = new GoBacks(events);
     goBacks.pool = new InventoryPool({
       id: "go-backs",
+      location: { kind: "go-backs", containerId: "go-backs" },
       capacity: Infinity,
       stock: (data.goBacks || []).map((entry) => ({ ...entry })),
     });

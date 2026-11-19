@@ -331,6 +331,7 @@ export class CrateLabScene extends Phaser.Scene {
       if (newBase) {
         newBase.drop(x, y, 0, 0, false);
         this.restockCrates.push(newBase);
+        for (const crate of rest) crate.setStackedOn(newBase.id);
         if (rest.length) this.floorStacks.set(newBase, rest);
       }
     } else {
@@ -338,6 +339,7 @@ export class CrateLabScene extends Phaser.Scene {
       if (remaining.length) this.floorStacks.set(base, remaining);
       else this.floorStacks.delete(base);
     }
+    for (const crate of lifted) crate.setCarriedBy("player");
     this.carriedCrates.push(...lifted);
     this.markedStackBase = null;
     this.syncCarriedCrates();
@@ -352,6 +354,7 @@ export class CrateLabScene extends Phaser.Scene {
   setCratesOnStack({ base }, count) {
     const placed = this.carriedCrates.slice(-count);
     this.carriedCrates = this.carriedCrates.slice(0, -count);
+    for (const crate of placed) crate.setStackedOn(base.id);
     this.floorStacks.set(base, [...(this.floorStacks.get(base) ?? []), ...placed]);
     this.markedStackBase = null;
     this.syncCarriedCrates();
@@ -571,7 +574,10 @@ export class CrateLabScene extends Phaser.Scene {
     }
     bottom.drop(position.x, position.y, 0, 0, false);
     this.restockCrates.push(bottom);
-    if (rest.length) this.floorStacks.set(bottom, rest);
+    if (rest.length) {
+      for (const crate of rest) crate.setStackedOn(bottom.id);
+      this.floorStacks.set(bottom, rest);
+    }
     this.carriedCrates = [];
     this.syncCarriedCrates();
     this.syncFloorStacks();

@@ -7,10 +7,19 @@ import { database } from "../scenes/boot.js"; // the exported DatabaseManager si
 let nextPoolId = 1;
 
 export class InventoryPool {
-  constructor({ id = null, capacity, stock } = {}) {
+  constructor({ id = null, location = null, capacity, stock } = {}) {
     this.id = id ?? `inventory-pool-${nextPoolId++}`;
+    this.location = location ?? { kind: "inventory-pool", containerId: this.id };
     this.capacity = capacity;
     this.stock = stock || []; // [{ itemId, quantity }]
+  }
+
+  getLocation() {
+    return this.location;
+  }
+
+  getContainerId() {
+    return this.id;
   }
 
   findStockEntry(itemId) {

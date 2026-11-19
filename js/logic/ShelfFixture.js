@@ -62,6 +62,18 @@ export class ShelfFixture {
     return this.placements.find((p) => p.itemId === itemId) || null;
   }
 
+  getLocation(placement = null) {
+    if (placement && !this.placements.includes(placement)) return null;
+    return placement
+      ? { kind: "shelf-slot", shelfId: this.id, slotId: placement.id }
+      : { kind: "shelf", shelfId: this.id };
+  }
+
+  getContainerId(placement = null) {
+    if (placement && !this.placements.includes(placement)) return null;
+    return placement?.id ?? this.id;
+  }
+
   canTake(_itemId, _context, placement = null) {
     return placement === null || this.placements.includes(placement);
   }

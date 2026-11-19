@@ -4,7 +4,8 @@ const isValidUnits = (units) => units === Infinity || (Number.isInteger(units) &
 
 /**
  * Transfers stock only when the source and destination permit it and have room.
- * Containers implement canTake(itemId, context, entry) and canPut(itemId, context, entry).
+ * Containers have unique IDs and locations, and implement getContainerId(entry), getLocation(entry),
+ * canTake(itemId, context, entry), and canPut(itemId, context, entry).
  * @param {object} from
  * @param {object} to
  * @param {string} itemId
@@ -26,16 +27,35 @@ export function transferItems(from, to, itemId, quantity, {
   }
   for (const [container, method] of [
     [from, "getAvailableUnitsFor"],
+    [from, "getContainerId"],
+    [from, "getLocation"],
     [from, "canTake"],
     [from, "remove"],
     [from, "add"],
     [to, "getRemainingUnitsFor"],
+    [to, "getContainerId"],
+    [to, "getLocation"],
     [to, "canPut"],
     [to, "add"],
   ]) {
     if (typeof container[method] !== "function") {
       throw new TypeError(`Transfer container is missing ${method}().`);
     }
+  }
+
+  const sourceId = from.getContainerId(sourceEntry);
+  const destinationId = to.getContainerId(destinationEntry);
+  if (typeof sourceId !== "string" || sourceId.length === 0 ||
+    typeof destinationId !== "string" || destinationId.length === 0 || sourceId === destinationId) {
+    throw new TypeError("Transfer containers require different, stable IDs.");
+  }
+
+  const sourceLocation = from.getLocation(sourceEntry);
+  const destinationLocation = to.getLocation(destinationEntry);
+  if (!sourceLocation || typeof sourceLocation.kind !== "string" || sourceLocation.kind.length === 0 ||
+    !destinationLocation || typeof destinationLocation.kind !== "string" ||
+    destinationLocation.kind.length === 0) {
+    throw new TypeError("Transfer containers must report a valid location.");
   }
 
   if (!from.canTake(itemId, context, sourceEntry)) {
@@ -82,6 +102,10 @@ export function transferItems(from, to, itemId, quantity, {
       quantity: accepted,
       source: sourceName,
       destination: destinationName,
+      sourceId,
+      destinationId,
+      sourceLocation,
+      destinationLocation,
     });
   }
   return {

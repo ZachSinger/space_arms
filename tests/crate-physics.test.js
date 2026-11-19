@@ -174,7 +174,9 @@ test("fixture crates preserve their fixture type", () => {
     kind: "fixture",
     typeId: "shelf_budget_3x4",
   });
-  assert.deepEqual(crate.serializePayload(), {
+  const payload = crate.serializePayload();
+  assert.match(payload.id, /^crate-local-[1-9]\d*$/);
+  assert.deepEqual({ kind: payload.kind, typeId: payload.typeId }, {
     kind: "fixture",
     typeId: "shelf_budget_3x4",
   });
@@ -182,7 +184,9 @@ test("fixture crates preserve their fixture type", () => {
   assert.equal(crate.pickUp({ x: 120, y: 120, depth: 1 }), true);
   crate.drop(120, 140, 80, 0, false);
   assert.equal(crate.isThrown, true);
-  assert.deepEqual(crate.serializePayload(), {
+  const afterDrop = crate.serializePayload();
+  assert.equal(afterDrop.id, payload.id);
+  assert.deepEqual({ kind: afterDrop.kind, typeId: afterDrop.typeId }, {
     kind: "fixture",
     typeId: "shelf_budget_3x4",
   });

@@ -13,6 +13,7 @@ let Customer;
 let PATIENCE_MS;
 let getPatienceLevel;
 let GameState;
+let nextTestCrateId = 1;
 
 before(async () => {
   cacheDirectory = await mkdtemp(join(tmpdir(), "space-arms-patience-test-"));
@@ -153,6 +154,7 @@ test("returned items collect in the Go-Backs bin and pack into crates up to thei
   });
   state.goBacks.addCart([{ itemId: "big" }, { itemId: "big" }, { itemId: "big" }, { itemId: "amo_01" }]);
   assert.equal(state.goBacks.pool.findStockEntry("big").quantity, 3);
+  const customerCartId = transfers[0].payload.sourceId;
   assert.deepEqual(transfers.slice(0, 2), [
     {
       event: GAME_EVENTS.INVENTORY_TRANSFERRED,
@@ -161,6 +163,10 @@ test("returned items collect in the Go-Backs bin and pack into crates up to thei
         quantity: 3,
         source: "customer-cart",
         destination: "go-backs",
+        sourceId: customerCartId,
+        destinationId: "go-backs",
+        sourceLocation: { kind: "customer-cart", containerId: customerCartId },
+        destinationLocation: { kind: "go-backs", containerId: "go-backs" },
       },
     },
     {
@@ -170,13 +176,31 @@ test("returned items collect in the Go-Backs bin and pack into crates up to thei
         quantity: 1,
         source: "customer-cart",
         destination: "go-backs",
+        sourceId: customerCartId,
+        destinationId: "go-backs",
+        sourceLocation: { kind: "customer-cart", containerId: customerCartId },
+        destinationLocation: { kind: "go-backs", containerId: "go-backs" },
       },
     },
   ]);
 
   const crate = (limit) => ({
+    id: `test-crate-${nextTestCrateId++}`,
+    getContainerId() {
+      return this.id;
+    },
+    getLocation() {
+      return { kind: "test-crate", containerId: this.id };
+    },
     itemId: null, quantity: 0,
+    canTake() { return true; },
     canPut() { return true; },
+    getAvailableUnitsFor(itemId) { return itemId === this.itemId ? this.quantity : 0; },
+    remove(itemId, quantity) {
+      const removed = Math.min(this.getAvailableUnitsFor(itemId), quantity);
+      this.quantity -= removed;
+      return removed;
+    },
     getRemainingUnitsFor(itemId) {
       return this.quantity > 0 && this.itemId !== itemId ? 0 : limit - this.quantity;
     },
@@ -186,7 +210,16 @@ test("returned items collect in the Go-Backs bin and pack into crates up to thei
   assert.equal(state.goBacks.packInto("big", first), 2);
   assert.deepEqual(transfers[2], {
     event: GAME_EVENTS.INVENTORY_TRANSFERRED,
-    payload: { itemId: "big", quantity: 2, source: "go-backs", destination: "crate" },
+    payload: {
+      itemId: "big",
+      quantity: 2,
+      source: "go-backs",
+      destination: "crate",
+      sourceId: "go-backs",
+      destinationId: first.id,
+      sourceLocation: { kind: "go-backs", containerId: "go-backs" },
+      destinationLocation: { kind: "test-crate", containerId: first.id },
+    },
   });
   assert.equal(state.goBacks.packInto("big", first), 0, "a full crate takes nothing");
   assert.equal(state.goBacks.packInto("amo_01", first), 0, "a crate holds one item type");

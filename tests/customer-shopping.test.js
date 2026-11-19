@@ -17,6 +17,9 @@ let SPRITE_DISPLAY_HEIGHT;
 let CustomerFlow;
 let CheckoutSystem;
 let gameRandom;
+let nextTestShelfId = 1;
+let nextTestShelfSlotId = 1;
+let nextTestCustomerId = 1;
 const originalPhaser = globalThis.Phaser;
 
 before(async () => {
@@ -71,9 +74,20 @@ after(async () => {
 });
 
 function fixture(standPoint, placements) {
+  const id = `test-shelf-${nextTestShelfId++}`;
+  placements.forEach((placement) => {
+    if (!placement.id) placement.id = `test-shelf-slot-${nextTestShelfSlotId++}`;
+  });
   return {
+    id,
     standPoint,
     placements,
+    getContainerId(placement = null) {
+      return placement?.id ?? id;
+    },
+    getLocation(placement) {
+      return { kind: "shelf-slot", shelfId: id, slotId: placement?.id ?? null };
+    },
     findAvailableSlot() {
       return this.placements.find((placement) => placement.quantity > 0) || null;
     },
@@ -232,6 +246,8 @@ test("customers clear the captured door-side shelf corner before turning, even f
   for (const start of [{ x: 864, y: 266 }, { x: 1046.2471345207866, y: 192 }]) {
     for (const delta of [1000 / 60, 33, 8]) {
       const customer = Object.create(Customer.prototype);
+      customer.id = `test-customer-${nextTestCustomerId++}`;
+      customer.location = { kind: "customer-cart", customerId: customer.id };
       let arrived = false;
       const velocity = { x: 0, y: 0 };
       customer.scene = scene;
@@ -376,6 +392,8 @@ function makeCustomer({ factionId = "scavengers", plan }) {
   const eventBus = new Events();
   eventBus.on(GAME_EVENTS.INVENTORY_TRANSFERRED, (event) => inventoryTransfers.push(event));
   const customer = Object.create(Customer.prototype);
+  customer.id = `test-customer-${nextTestCustomerId++}`;
+  customer.location = { kind: "customer-cart", customerId: customer.id };
   customer.scene = {
     eventBus,
     getItem: (id) => ({
@@ -542,12 +560,20 @@ test("customers report missing primary stock while continuing to buy remaining i
       quantity: 1,
       source: "shelf",
       destination: "customer-cart",
+      sourceId: inStock.placements[0].id,
+      destinationId: customer.id,
+      sourceLocation: { kind: "shelf-slot", shelfId: inStock.id, slotId: inStock.placements[0].id },
+      destinationLocation: customer.location,
     },
     {
       itemId: "bonus",
       quantity: 1,
       source: "shelf",
       destination: "customer-cart",
+      sourceId: bonusShelf.placements[0].id,
+      destinationId: customer.id,
+      sourceLocation: { kind: "shelf-slot", shelfId: bonusShelf.id, slotId: bonusShelf.placements[0].id },
+      destinationLocation: customer.location,
     },
   ]);
   assert.deepEqual(missingPrimaryEvents, [{

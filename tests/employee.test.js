@@ -11,6 +11,8 @@ import { PLAYER_BODY_HEIGHT, PLAYER_BODY_WIDTH } from "../js/logic/Player.js";
 let server;
 let cacheDirectory;
 let Employee;
+let nextTestShelfSlotId = 1;
+let nextTestCrateId = 1;
 let REGISTER_SERVICE_MS_PER_ITEM;
 let EmployeeRenderer;
 let EmployeeTraining;
@@ -74,13 +76,21 @@ test("employees require an injected store route interface", () => {
 
 function makeShelf(quantity = 0, capacity = 3, placementCount = 1) {
   const placements = Array.from({ length: placementCount }, () => ({
+    id: `test-shelf-slot-${nextTestShelfSlotId++}`,
     itemId: "amo_01",
     quantity,
   }));
   return {
+    id: "test-shelf",
     type: "shelf_budget_2x4",
     standPoint: { x: 100, y: 100 },
     placements,
+    getContainerId(placement = null) {
+      return placement?.id ?? this.id;
+    },
+    getLocation(placement) {
+      return { kind: "shelf-slot", shelfId: this.id, slotId: placement?.id ?? null };
+    },
     canTake() {
       return true;
     },
@@ -108,11 +118,30 @@ function makeShelf(quantity = 0, capacity = 3, placementCount = 1) {
 
 function makeDeliveryCrate(quantity = 5) {
   return {
+    id: `test-delivery-crate-${nextTestCrateId++}`,
     kind: "item",
     itemId: "amo_01",
     quantity,
     lockedToPad: true,
     isCarried: false,
+    getContainerId() {
+      return this.id;
+    },
+    getLocation() {
+      if (this.lockedToPad) return { kind: "loading-pad", padId: "loading-pad" };
+      if (this.stackedOnId) return { kind: "crate-stack", baseCrateId: this.stackedOnId };
+      if (this.isCarried) return { kind: "carried", holderId: this.carrierId };
+      return { kind: "world", x: this.sprite.x, y: this.sprite.y };
+    },
+    setCarriedBy(holderId) {
+      this.carrierId = holderId;
+      this.stackedOnId = null;
+    },
+    setStackedOn(baseCrateId) {
+      this.isCarried = true;
+      this.carrierId = null;
+      this.stackedOnId = baseCrateId;
+    },
     sprite: { x: 40, y: 40 },
     isStationary: () => true,
     isDropPositionClear: () => true,
@@ -138,9 +167,11 @@ function makeDeliveryCrate(quantity = 5) {
       this.quantity += amount;
       return amount;
     },
-    pickUp() {
+    pickUp(_carrier, { holderId = "test-employee", stackedOnId = null } = {}) {
       this.isCarried = true;
       this.lockedToPad = false;
+      if (stackedOnId) this.setStackedOn(stackedOnId);
+      else this.setCarriedBy(holderId);
       return true;
     },
     followCarrier() {},
@@ -148,6 +179,8 @@ function makeDeliveryCrate(quantity = 5) {
       this.sprite.x = x;
       this.sprite.y = y;
       this.isCarried = false;
+      this.carrierId = null;
+      this.stackedOnId = null;
     },
     lockToPad() { this.lockedToPad = true; },
     destroy() { this.destroyed = true; },
@@ -323,6 +356,10 @@ test("a stock clerk takes a delivery crate straight to its matching shelf spot",
       quantity: 3,
       source: "loading-pad",
       destination: "shelf",
+      sourceId: crate.id,
+      destinationId: shelf.placements[0].id,
+      sourceLocation: { kind: "carried", holderId: "tavi_stock_clerk" },
+      destinationLocation: { kind: "shelf-slot", shelfId: shelf.id, slotId: shelf.placements[0].id },
     },
   ]);
 });

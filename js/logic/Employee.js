@@ -370,7 +370,7 @@ export class Employee {
       this.retryInMs = BREAK_CHECK_MS;
     } else if (this.state === "TO_CRATE") {
       const { crate, cratePosition } = this.currentJob;
-      if (!this.detachCrateForPickup(crate) || !crate.pickUp(this.sprite)) {
+      if (!this.detachCrateForPickup(crate) || !crate.pickUp(this.sprite, { holderId: this.data.id })) {
         this.finishTask();
         return;
       }
@@ -496,7 +496,7 @@ export class Employee {
         return;
       }
       const stack = store.floorStacks.get(base) ?? [];
-      crate.pickUp(base.sprite);
+      crate.pickUp(base.sprite, { stackedOnId: base.id });
       stack.push(crate);
       store.floorStacks.set(base, stack);
       store.syncFloorStacks();

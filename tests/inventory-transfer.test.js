@@ -4,11 +4,20 @@ import { Crate } from "../js/logic/Crate.js";
 import { Events } from "../js/core/Events.js";
 import { transferItems } from "../js/logic/InventoryTransfer.js";
 
+let nextContainerId = 1;
+
 function container(quantity, capacity, addLimit = Infinity) {
   return {
+    id: `test-container-${nextContainerId++}`,
     quantity,
     capacity,
     addLimit,
+    getContainerId() {
+      return this.id;
+    },
+    getLocation() {
+      return { kind: "test-container", containerId: this.id };
+    },
     getAvailableUnitsFor() {
       return this.quantity;
     },
@@ -55,6 +64,10 @@ test("moves only what fits and publishes one inventory-transfer event", () => {
     quantity: 3,
     source: "crate",
     destination: "shelf",
+    sourceId: source.id,
+    destinationId: destination.id,
+    sourceLocation: { kind: "test-container", containerId: source.id },
+    destinationLocation: { kind: "test-container", containerId: destination.id },
   }]);
 });
 
@@ -110,10 +123,11 @@ test("enforces source and destination permissions with the transfer context", ()
 
 test("locked Loading Pad crates cannot be transfer sources", () => {
   const crate = Object.assign(Object.create(Crate.prototype), {
+    id: "crate-locked",
     kind: "item",
     itemId: "ammo",
     quantity: 5,
-    lockedToPad: true,
+    locationState: { kind: "loading-pad", padId: "loading-pad" },
   });
   const destination = container(0, 10);
 
@@ -126,8 +140,33 @@ test("locked Loading Pad crates cannot be transfer sources", () => {
   assert.equal(destination.quantity, 0);
 });
 
+test("crate locations distinguish the floor, player, holder stack, and Loading Pad", () => {
+  const crate = Object.assign(Object.create(Crate.prototype), {
+    id: "crate-location-test",
+    kind: "item",
+    itemId: "ammo",
+    quantity: 1,
+    locationState: { kind: "world" },
+    isPushed: false,
+    sprite: { x: 120, y: 80 },
+  });
+  crate.stopThrowAcceleration = () => {};
+  crate.sprite.body = { stop() {}, setImmovable() {} };
+
+  assert.deepEqual(crate.getLocation(), { kind: "world", x: 120, y: 80 });
+  crate.setCarriedBy("employee-1");
+  assert.deepEqual(crate.getLocation(), { kind: "carried", holderId: "employee-1" });
+  crate.setStackedOn("crate-base");
+  assert.deepEqual(crate.getLocation(), { kind: "crate-stack", baseCrateId: "crate-base" });
+  crate.lockToPad();
+  assert.deepEqual(crate.getLocation(), { kind: "loading-pad", padId: "loading-pad" });
+  assert.equal(crate.isCarried, false);
+  assert.equal(crate.locationState.kind, "loading-pad");
+});
+
 test("item crates can transfer stock without losing the units the destination cannot hold", () => {
   const crate = Object.assign(Object.create(Crate.prototype), {
+    id: "crate-source",
     kind: "item",
     itemId: "ammo",
     quantity: 5,
@@ -147,4 +186,15 @@ test("rejects invalid quantities and incomplete container interfaces", () => {
   const destination = container(0, 2);
   assert.throws(() => transferItems(source, destination, "ammo", 0), /positive integer/);
   assert.throws(() => transferItems(source, {}, "ammo", 1), /missing getRemainingUnitsFor/);
+});
+
+test("rejects duplicate IDs and containers without a location", () => {
+  const source = container(1, 2);
+  const destination = container(0, 2);
+  destination.id = source.id;
+  assert.throws(() => transferItems(source, destination, "ammo", 1), /stable IDs/);
+
+  destination.id = "different-container";
+  destination.getLocation = () => null;
+  assert.throws(() => transferItems(source, destination, "ammo", 1), /valid location/);
 });

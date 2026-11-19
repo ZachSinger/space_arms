@@ -28,6 +28,7 @@ let FixtureViews;
 let CheckoutSystem;
 let CrateSystem;
 let CrateWorld;
+let nextTestCrateId = 1;
 const originalPhaser = globalThis.Phaser;
 
 before(async () => {
@@ -303,14 +304,21 @@ function crate({ kind = "item", distance = 20, stationary = true, pushed = false
     setDepth(depth) { this.depth = depth; return this; },
   };
   return {
+    id: `test-crate-${nextTestCrateId++}`,
     kind,
     itemId: kind === "fixture" ? null : "item",
     typeId: kind === "fixture" ? "shelf_budget_3x4" : null,
     quantity: quantity ?? (kind === "fixture" ? 1 : 5),
     isPushed: pushed,
+    carrierId: null,
+    stackedOnId: null,
     isStationary: () => stationary,
     isSliding: () => sliding,
     canPickUp: Crate.prototype.canPickUp,
+    getContainerId: Crate.prototype.getContainerId,
+    getLocation: Crate.prototype.getLocation,
+    setCarriedBy: Crate.prototype.setCarriedBy,
+    setStackedOn: Crate.prototype.setStackedOn,
     // Plain test crates count as full, so they never pour into each other.
     getRemainingUnitsFor: () => 0,
     getFloorBounds: () => ({ left: sprite.x - 20, right: sprite.x + 20, top: sprite.y - 8, bottom: sprite.y + 10 }),
@@ -357,12 +365,14 @@ function hold(h, key = "SPACE") {
 // A floor stack: the bottom crate on the floor, the rest sitting on it.
 function floorStack(scene, count, options) {
   const crates = Array.from({ length: count }, () => crate(options));
+  for (const stacked of crates.slice(1)) stacked.setStackedOn(crates[0].id);
   scene.restockCrates.push(crates[0]);
   if (count > 1) scene.floorStacks.set(crates[0], crates.slice(1));
   return crates;
 }
 
 function carry(scene, crates) {
+  for (const crate of crates) crate.setCarriedBy("player");
   scene.carriedCrates = [...crates];
   scene.carriedCrate = crates.at(-1) ?? null;
 }
@@ -969,7 +979,12 @@ test("E supplies one free empty crate only with empty hands", () => {
     assert.equal(itemId, null);
     assert.equal(quantity, 0);
     const crate = {
+      id: `test-crate-${nextTestCrateId++}`,
       kind: "item", itemId, quantity, x, y,
+      getContainerId: Crate.prototype.getContainerId,
+      getLocation: Crate.prototype.getLocation,
+      setCarriedBy: Crate.prototype.setCarriedBy,
+      setStackedOn: Crate.prototype.setStackedOn,
       pickUp(carrier) { this.pickedUpBy = carrier; return true; },
       followCarrier() {},
     };

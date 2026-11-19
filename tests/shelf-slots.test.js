@@ -16,6 +16,7 @@ let cacheDirectory;
 let InventoryPool;
 let ShelfFixture;
 let ShelfStockingWindow;
+let nextTestCrateId = 1;
 
 before(async () => {
   cacheDirectory = await mkdtemp(join(tmpdir(), "space-arms-shelf-slots-test-"));
@@ -100,7 +101,12 @@ test("shelf slot IDs survive moving and saving, and new slots get unused IDs", (
 });
 
 function itemCrate(itemId, quantity) {
-  return Object.assign(Object.create(Crate.prototype), { kind: "item", itemId, quantity });
+  return Object.assign(Object.create(Crate.prototype), {
+    id: `test-crate-${nextTestCrateId++}`,
+    kind: "item",
+    itemId,
+    quantity,
+  });
 }
 
 test("live stocking uses twenty units per space and selects the highest matching crate", () => {

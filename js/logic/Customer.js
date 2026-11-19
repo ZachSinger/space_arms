@@ -109,6 +109,7 @@ export class Customer {
       throw new Error("Customer requires a store interface with findPath.");
     }
     this.id = id ?? `customer-${nextCustomerId++}`;
+    this.location = { kind: "customer-cart", customerId: this.id };
     this.store = store;
     this.registerPoint = registerPoint;
     this.exitPoint = exitPoint || { x: registerPoint.x, y: registerPoint.y };
@@ -268,6 +269,14 @@ export class Customer {
     const wanted = this.shoppingPlan.itemQuantities?.[itemId] ?? 1;
     const pickedUp = this.cart.filter((entry) => entry.itemId === itemId).length;
     return Math.max(0, wanted - pickedUp);
+  }
+
+  getLocation() {
+    return this.location;
+  }
+
+  getContainerId() {
+    return this.id;
   }
 
   canPut() {

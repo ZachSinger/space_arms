@@ -191,7 +191,7 @@ export class CheckoutSystem {
       base.drop(spot.x, spot.y, 0, 0, shop.crateMotionPaused);
       shop.restockCrates.push(base);
       const above = stack.slice(1);
-      for (const crate of above) crate.pickUp(base.sprite);
+      for (const crate of above) crate.pickUp(base.sprite, { stackedOnId: base.id });
       if (above.length) shop.floorStacks.set(base, above);
       packed += stack.length;
     }
