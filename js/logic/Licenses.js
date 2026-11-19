@@ -26,20 +26,21 @@ export class SupplierLicense {
 
   /**
    * Whether the player meets the shop level, store, and faction reputation requirements.
-   * @param {PlayerState} playerState
+   * @param {import('../state/GameState.js').GameState} gameState
    */
-  isUnlocked(playerState) {
-    const levelMet = playerState.shopLevel >= this.requiredShopLevel;
+  isUnlocked(gameState) {
+    const levelMet = gameState.reputation.shopLevel >= this.requiredShopLevel;
     const globalMet = this.reqReputation === null ||
-      playerState.globalReputation >= this.reqReputation;
+      gameState.reputation.global >= this.reqReputation;
     const factionMet =
       !this.reqFaction ||
-      playerState.factionReputation[this.reqFaction] >= this.reqFactionRep;
+      gameState.reputation.factions[this.reqFaction] >= this.reqFactionRep;
 
     return levelMet && globalMet && factionMet;
   }
 
-  canAfford(playerState) {
-    return playerState.credits >= this.baseCost;
+  /** @param {import('../state/GameState.js').GameState} gameState */
+  canAfford(gameState) {
+    return gameState.economy.canAfford(this.baseCost);
   }
 }

@@ -7,10 +7,10 @@ import { getFixtureType } from "./FixtureLayout.js";
 
 export class ContractRenderer {
   /** Signable contracts first, locked ones next, already-signed ones last; original order within each group. */
-  static sortLicenses(licenses, playerState) {
+  static sortLicenses(licenses, gameState) {
     const group = (license) => {
-      if (playerState.activeLicenses?.has(license.id)) return 2;
-      return license.isUnlocked(playerState) ? 0 : 1;
+      if (gameState.catalog.owns(license.id)) return 2;
+      return license.isUnlocked(gameState) ? 0 : 1;
     };
     return licenses
       .map((license, index) => ({ license, index, group: group(license) }))
@@ -21,10 +21,10 @@ export class ContractRenderer {
   /**
    * Build the tab's content only; the hosting window (ManagerTablet.js) owns the tab chrome.
    * @param {Array<SupplierLicense>} licenses
-   * @param {PlayerState} playerState
+   * @param {import('../state/GameState.js').GameState} gameState
    * @returns {string} HTML
    */
-  static generateHTML(licenses, playerState) {
+  static generateHTML(licenses, gameState) {
     let html = `
       <div class="contracts-panel">
         <h2 class="type-h2">Supplier Contracts</h2>
@@ -35,21 +35,19 @@ export class ContractRenderer {
     if (!licenses || licenses.length === 0) {
       html += `<p class="type-description contracts-empty">No contracts are available.</p>`;
     } else {
-      ContractRenderer.sortLicenses(licenses, playerState).forEach((license) => {
+      ContractRenderer.sortLicenses(licenses, gameState).forEach((license) => {
         const isShopLevelMet =
-          playerState.shopLevel >= license.requiredShopLevel;
+          gameState.reputation.shopLevel >= license.requiredShopLevel;
         const isGlobalRepMet =
           license.reqReputation === null ||
-          playerState.globalReputation >= license.reqReputation;
+          gameState.reputation.global >= license.reqReputation;
         const isFactionRepMet =
           !license.reqFaction ||
-          playerState.factionReputation[license.reqFaction] >=
+          gameState.reputation.factions[license.reqFaction] >=
             license.reqFactionRep;
-        const isUnlocked = license.isUnlocked(playerState);
-        const canAfford = license.canAfford(playerState);
-        const isOwned =
-          playerState.activeLicenses &&
-          playerState.activeLicenses.has(license.id);
+        const isUnlocked = license.isUnlocked(gameState);
+        const canAfford = license.canAfford(gameState);
+        const isOwned = gameState.catalog.owns(license.id);
 
         let actionButtonHTML = "";
         const fixtureNames = license.unlocksFixtures

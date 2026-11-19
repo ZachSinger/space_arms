@@ -12,7 +12,7 @@ let cacheDirectory;
 let Customer;
 let PATIENCE_MS;
 let getPatienceLevel;
-let PlayerState;
+let GameState;
 
 before(async () => {
   cacheDirectory = await mkdtemp(join(tmpdir(), "space-arms-patience-test-"));
@@ -39,13 +39,16 @@ before(async () => {
     }],
   });
   ({ Customer, PATIENCE_MS, getPatienceLevel } = await server.ssrLoadModule("/js/logic/Customer.js"));
-  ({ PlayerState } = await server.ssrLoadModule("/js/logic/PlayerState.js"));
+  ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));
 });
 
 after(async () => {
   if (server) await server.close();
   if (cacheDirectory) await rm(cacheDirectory, { recursive: true, force: true });
 });
+
+const ITEMS = [{ id: "amo_01", baseCost: 5 }, { id: "big", baseCost: 50 }];
+const newGame = () => new GameState({ items: ITEMS, random: () => 0.5 });
 
 function queuedCustomer({ serving = () => false, storeTemporarilyClosed = false } = {}) {
   const bubble = { list: [{ setFillStyle() {} }, { setText() {} }], setPosition() {}, destroyed: false };
@@ -58,7 +61,7 @@ function queuedCustomer({ serving = () => false, storeTemporarilyClosed = false 
   customer.state = "QUEUEING";
   customer.cart = [{ itemId: "amo_01", price: 5 }, { itemId: "big", price: 50 }];
   customer.factionId = "mercenaries";
-  customer.playerState = new PlayerState();
+  customer.gameState = newGame();
   customer.patienceBubble = bubble;
   customer.patienceLevel = -1;
   customer.reactionEventsShown = new Set();
@@ -123,8 +126,8 @@ test("queued customers drain patience, hold while served, and leave angry at zer
   assert.equal(angry.length, 1);
   assert.deepEqual(angry[0].cart.map((entry) => entry.itemId), ["amo_01", "big"]);
   assert.deepEqual(customer.cart, []);
-  assert.equal(customer.playerState.globalReputation, 0);
-  assert.equal(customer.playerState.factionReputation.mercenaries, 0);
+  assert.equal(customer.gameState.reputation.global, 0);
+  assert.equal(customer.gameState.reputation.factions.mercenaries, 0);
   assert.deepEqual(floating, []);
   assert.equal(bubble.destroyed, true);
 });
@@ -144,11 +147,11 @@ test("queued customers do not lose patience while the store is temporarily close
 
 test("returned items collect in the Go-Backs bin and pack into crates up to their capacity", () => {
   const transfers = [];
-  const state = new PlayerState({
-    emit: (event, payload) => transfers.push({ event, payload }),
+  const state = new GameState({
+    items: ITEMS, events: { emit: (event, payload) => transfers.push({ event, payload }) },
   });
-  state.addToGoBacks([{ itemId: "big" }, { itemId: "big" }, { itemId: "big" }, { itemId: "amo_01" }]);
-  assert.equal(state.goBacks.findStockEntry("big").quantity, 3);
+  state.goBacks.addCart([{ itemId: "big" }, { itemId: "big" }, { itemId: "big" }, { itemId: "amo_01" }]);
+  assert.equal(state.goBacks.pool.findStockEntry("big").quantity, 3);
   assert.deepEqual(transfers.slice(0, 2), [
     {
       event: GAME_EVENTS.INVENTORY_TRANSFERRED,
@@ -178,76 +181,73 @@ test("returned items collect in the Go-Backs bin and pack into crates up to thei
     add(itemId, quantity) { this.itemId = itemId; this.quantity += quantity; return quantity; },
   });
   const first = crate(2);
-  assert.equal(state.packGoBacksIntoCrate("big", first), 2);
+  assert.equal(state.goBacks.packInto("big", first), 2);
   assert.deepEqual(transfers[2], {
     event: GAME_EVENTS.INVENTORY_TRANSFERRED,
     payload: { itemId: "big", quantity: 2, source: "go-backs", destination: "crate" },
   });
-  assert.equal(state.packGoBacksIntoCrate("big", first), 0, "a full crate takes nothing");
-  assert.equal(state.packGoBacksIntoCrate("amo_01", first), 0, "a crate holds one item type");
-  assert.equal(state.goBacks.findStockEntry("big").quantity, 1);
+  assert.equal(state.goBacks.packInto("big", first), 0, "a full crate takes nothing");
+  assert.equal(state.goBacks.packInto("amo_01", first), 0, "a crate holds one item type");
+  assert.equal(state.goBacks.pool.findStockEntry("big").quantity, 1);
   const second = crate(2);
-  assert.equal(state.packGoBacksIntoCrate("amo_01", second), 1);
-  assert.equal(state.goBacks.findStockEntry("amo_01"), null);
-  assert.equal(state.packGoBacksIntoCrate("amo_01", crate(2)), 0);
+  assert.equal(state.goBacks.packInto("amo_01", second), 1);
+  assert.equal(state.goBacks.pool.findStockEntry("amo_01"), null);
+  assert.equal(state.goBacks.packInto("amo_01", crate(2)), 0);
   assert.deepEqual([first.itemId, first.quantity, second.itemId, second.quantity], ["big", 2, "amo_01", 1]);
 
-  assert.equal(Object.hasOwn(state.serialize(), "hovercart"), false);
-  const restored = new PlayerState();
-  restored.applySave(JSON.parse(JSON.stringify(state.serialize())));
+  const saved = JSON.parse(JSON.stringify(state.toSave()));
+  assert.equal(Object.hasOwn(saved.playerState, "hovercart"), false);
+  const restored = GameState.fromSave(saved, { items: ITEMS });
   assert.deepEqual(restored.goBacks.stock, [{ itemId: "big", quantity: 1 }]);
-  assert.equal(restored.goBacks.capacity, Infinity);
+  assert.equal(restored.goBacks.pool.capacity, Infinity);
 
-  const legacy = state.serialize();
-  delete legacy.goBacks;
-  restored.applySave(legacy);
-  assert.deepEqual(restored.goBacks.stock, []);
+  delete saved.playerState.goBacks;
+  assert.deepEqual(GameState.fromSave(saved, { items: ITEMS }).goBacks.stock, []);
 });
 
 test("hiring staff spends the fee once and keeps the hire when player state is restored", () => {
-  const state = new PlayerState();
-  state.addReputation(72);
+  const state = newGame();
+  state.reputation.gain(72);
   state.finishShift({ customersServed: 72, customersTurnedAway: 0 });
-  state.endDay(2);
-  assert.equal(state.hireEmployee("tavi_stock_clerk", 250), true);
-  assert.equal(state.credits, 1250);
-  assert.deepEqual(state.hiredEmployees, ["tavi_stock_clerk"]);
-  assert.deepEqual(state.employeeJobPriorities.tavi_stock_clerk, [
+  state.endDay();
+  assert.equal(state.hireEmployee("tavi_stock_clerk"), true);
+  assert.equal(state.economy.credits, 1250);
+  assert.deepEqual(state.staff.hired, ["tavi_stock_clerk"]);
+  assert.deepEqual(state.staff.jobPriorities.tavi_stock_clerk, [
     "register", "stock_shelves",
   ]);
-  assert.equal(state.moveEmployeeJobPriority("tavi_stock_clerk", "stock_shelves", -1), true);
-  assert.deepEqual(state.employeeJobPriorities.tavi_stock_clerk, [
+  assert.equal(state.staff.moveJobPriority("tavi_stock_clerk", "stock_shelves", -1), true);
+  assert.deepEqual(state.staff.jobPriorities.tavi_stock_clerk, [
     "stock_shelves", "register",
   ]);
-  assert.equal(state.hireEmployee("tavi_stock_clerk", 250), false);
-  assert.equal(state.credits, 1250);
+  assert.equal(state.hireEmployee("tavi_stock_clerk"), false);
+  assert.equal(state.economy.credits, 1250);
 
-  const restored = new PlayerState();
-  const saved = state.serialize();
-  restored.applySave(saved);
-  assert.deepEqual(restored.hiredEmployees, ["tavi_stock_clerk"]);
-  assert.deepEqual(restored.employeeJobPriorities.tavi_stock_clerk, [
+  const saved = JSON.parse(JSON.stringify(state.toSave()));
+  let restored = GameState.fromSave(saved, { items: ITEMS });
+  assert.deepEqual(restored.staff.hired, ["tavi_stock_clerk"]);
+  assert.deepEqual(restored.staff.jobPriorities.tavi_stock_clerk, [
     "stock_shelves", "register",
   ]);
-  assert.equal(restored.credits, 1250);
+  assert.equal(restored.economy.credits, 1250);
 
-  delete saved.employeeJobPriorities;
-  restored.applySave(saved);
-  assert.deepEqual(restored.employeeJobPriorities.tavi_stock_clerk, [
+  delete saved.playerState.employeeJobPriorities;
+  restored = GameState.fromSave(saved, { items: ITEMS });
+  assert.deepEqual(restored.staff.jobPriorities.tavi_stock_clerk, [
     "register", "stock_shelves",
   ]);
 });
 
 test("completing a sale returns proceeds without directly changing player state", () => {
   const { customer } = queuedCustomer();
-  const storeBefore = customer.playerState.globalReputation;
-  const factionBefore = customer.playerState.factionReputation.mercenaries;
-  const creditsBefore = customer.playerState.credits;
+  const storeBefore = customer.gameState.reputation.global;
+  const factionBefore = customer.gameState.reputation.factions.mercenaries;
+  const creditsBefore = customer.gameState.economy.credits;
 
   assert.equal(customer.completeSale(), 55);
-  assert.equal(customer.playerState.globalReputation, storeBefore);
-  assert.equal(customer.playerState.factionReputation.mercenaries, factionBefore);
-  assert.equal(customer.playerState.credits, creditsBefore);
+  assert.equal(customer.gameState.reputation.global, storeBefore);
+  assert.equal(customer.gameState.reputation.factions.mercenaries, factionBefore);
+  assert.equal(customer.gameState.economy.credits, creditsBefore);
   assert.equal(customer.state, "LEAVING");
 });
 

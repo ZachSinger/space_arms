@@ -19,7 +19,7 @@ let server;
 let cacheDirectory;
 let GameScene;
 let ShelfFixture;
-let PlayerState;
+let GameState;
 const originalPhaser = globalThis.Phaser;
 
 before(async () => {
@@ -49,7 +49,7 @@ before(async () => {
   });
   ({ GameScene } = await server.ssrLoadModule("/js/scenes/game.js"));
   ({ ShelfFixture } = await server.ssrLoadModule("/js/logic/ShelfFixture.js"));
-  ({ PlayerState } = await server.ssrLoadModule("/js/logic/PlayerState.js"));
+  ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));
 });
 
 after(async () => {
@@ -83,7 +83,7 @@ function createHarness({ carrying = false } = {}) {
     get left() { return playerSprite.x - 11; }, get right() { return playerSprite.x + 11; },
     get top() { return playerSprite.y - 10; }, get bottom() { return playerSprite.y + 10; },
   };
-  scene.playerState = { goBacks: { stock: [] }, notifyListeners() {} };
+  scene.gameState = new GameState({ items: [] });
   scene.restockCrates = [];
   scene.floorStacks = new Map();
   scene.markedStackBase = null;
@@ -1352,15 +1352,15 @@ test("E uses the register target only while the player is in range", () => {
   };
   h.scene.fixtures.register = () => nearbyRegister;
   h.scene.fixtures.registers = () => [nearbyRegister];
-  h.scene.playerState = new PlayerState();
+  h.scene.gameState = new GameState({ items: [] });
   // Just below the register, facing it.
   h.scene.player.sprite.y = 120 + 10 + 4;
   h.scene.player.currentFacing = "up";
   const hint = () => h.scene.interactables.findTarget("register", h.scene.getInteractionOrigin()).hint;
   assert.equal(hint(), "E: Activate Register");
-  h.scene.playerState.goBacks.add("wpn_pis_01", 1);
+  h.scene.gameState.goBacks.add("wpn_pis_01", 1);
   assert.equal(hint(), "E: Activate Register", "Go-Backs pack themselves, so there's no button for them");
-  h.scene.playerState.goBacks.remove("wpn_pis_01", 1);
+  h.scene.gameState.goBacks.remove("wpn_pis_01", 1);
   let registerOpens = 0;
   h.scene.tryOpenRegister = () => { registerOpens += 1; return true; };
 
@@ -1384,9 +1384,9 @@ test("packing the Go-Backs sets crate stacks of at most three on found floor spo
   const packRegister = { sprite: { getBounds: () => registerBounds } };
   h.scene.fixtures.register = () => packRegister;
   h.scene.fixtures.registers = () => [packRegister];
-  h.scene.playerState = new PlayerState();
-  h.scene.playerState.goBacks.add("wpn_pis_01", 25);
-  h.scene.playerState.goBacks.add("wpn_pis_04", 12);
+  h.scene.gameState = new GameState({ items: [] });
+  h.scene.gameState.goBacks.add("wpn_pis_01", 25);
+  h.scene.gameState.goBacks.add("wpn_pis_04", 12);
   h.scene.customers = [];
   h.scene.employees = [];
   h.scene.goBacksReservedRectangles = () => [];
@@ -1413,21 +1413,21 @@ test("packing the Go-Backs sets crate stacks of at most three on found floor spo
   assert.deepEqual(contents([second, ...h.scene.floorStacks.get(second)]),
     [["wpn_pis_04", 10], ["wpn_pis_04", 2]]);
   assert.deepEqual([first.dropped.x, first.dropped.y, second.dropped.x], [200, 100, 260]);
-  assert.equal(h.scene.playerState.goBacks.stock.reduce((sum, entry) => sum + entry.quantity, 0), 0);
+  assert.equal(h.scene.gameState.goBacks.stock.reduce((sum, entry) => sum + entry.quantity, 0), 0);
   assert.match(h.messages.at(-1), /^Packed the Go-Backs into 5 crates\./);
 
   h.scene.restockCrates = [];
   h.scene.floorStacks.clear();
-  h.scene.playerState.goBacks.add("wpn_pis_01", 45);
+  h.scene.gameState.goBacks.add("wpn_pis_01", 45);
   searches.length = 1; // one more spot left
   assert.equal(h.scene.packGoBacks(), 3);
   assert.equal(h.scene.restockCrates.length, 1);
   assert.equal(h.scene.floorStacks.get(h.scene.restockCrates[0]).length, 2);
-  assert.equal(h.scene.playerState.goBacks.getAvailableUnitsFor("wpn_pis_01"), 15);
+  assert.equal(h.scene.gameState.goBacks.available("wpn_pis_01"), 15);
   assert.equal(created.at(-1).destroyed, true, "the crate that found no room is thrown away");
   assert.match(h.messages.at(-1), /^Packed 3 crates of Go-Backs\. .*still in the bin\.$/);
 
-  h.scene.playerState.goBacks.remove("wpn_pis_01", 15);
+  h.scene.gameState.goBacks.remove("wpn_pis_01", 15);
   assert.equal(h.scene.packGoBacks(), 0);
 });
 
@@ -1435,7 +1435,7 @@ test("Go-Backs pack themselves: same-item crates first, then empty ones, then ne
   const h = createHarness();
   const register = { sprite: { getBounds: () => ({ left: 80, right: 120, top: 80, bottom: 120, centerX: 100, centerY: 100 }) } };
   h.scene.fixtures.registers = () => [register];
-  h.scene.playerState = new PlayerState();
+  h.scene.gameState = new GameState({ items: [] });
   h.scene.customers = [];
   h.scene.employees = [];
   h.scene.goBacksReservedRectangles = () => [];
@@ -1449,7 +1449,7 @@ test("Go-Backs pack themselves: same-item crates first, then empty ones, then ne
   h.scene.findGoBacksSpot = () => spots.shift() ?? null;
   h.scene.createItemCrate = (itemId, quantity) => itemCrate(itemId, quantity);
 
-  h.scene.playerState.goBacks.add("wpn_pis_01", 9);
+  h.scene.gameState.goBacks.add("wpn_pis_01", 9);
   h.scene.autoPackGoBacks(0);
   assert.deepEqual([sameItem, stackedSameItem, empty, otherItem].map(({ itemId, quantity }) => [itemId, quantity]),
     [["wpn_pis_01", 10], ["wpn_pis_01", 10], ["wpn_pis_01", 3], ["wpn_pis_04", 3]]);
@@ -1459,24 +1459,24 @@ test("Go-Backs pack themselves: same-item crates first, then empty ones, then ne
   // A same-item crate in the player's arms is topped up too.
   const held = itemCrate("wpn_pis_02", 2);
   carry(h.scene, [held]);
-  h.scene.playerState.goBacks.add("wpn_pis_02", 4);
+  h.scene.gameState.goBacks.add("wpn_pis_02", 4);
   h.scene.autoPackGoBacks(500);
   assert.equal(held.quantity, 6);
   assert.equal(h.scene.restockCrates.length, 3);
   carry(h.scene, []);
 
   // No room anywhere: one message, then quiet retries until room opens up.
-  h.scene.playerState.goBacks.add("wpn_pis_04", 20);
+  h.scene.gameState.goBacks.add("wpn_pis_04", 20);
   h.scene.autoPackGoBacks(1000);
   assert.equal(otherItem.quantity, 10);
-  assert.equal(h.scene.playerState.goBacks.getAvailableUnitsFor("wpn_pis_04"), 13);
+  assert.equal(h.scene.gameState.goBacks.available("wpn_pis_04"), 13);
   assert.equal(h.messages.length, 1);
   h.scene.autoPackGoBacks(2000);
   h.scene.autoPackGoBacks(7000);
   assert.equal(h.messages.length, 1, "the same leftovers don't repeat the warning");
   spots = [{ x: 200, y: 100 }];
   h.scene.autoPackGoBacks(13000);
-  assert.equal(h.scene.playerState.goBacks.getAvailableUnitsFor("wpn_pis_04"), 0);
+  assert.equal(h.scene.gameState.goBacks.available("wpn_pis_04"), 0);
   assert.equal(h.scene.restockCrates.length, 4);
 });
 
@@ -1497,9 +1497,9 @@ test("inventory totals include all carried crates and active customer carts but 
     shelves: () => [{ stock: [{ itemId: "rifle", quantity: 2 }], placements: [] }],
     ofKind: () => [],
   };
-  scene.playerState = {
+  scene.gameState = {
     goBacks: { stock: [{ itemId: "rifle", quantity: 1 }] },
-    activeLicenses: new Set([undefined]),
+    catalog: { licenses: new Set([undefined]), owns: () => true },
   };
   const padCrate = { itemId: "rifle", quantity: 2, kind: "item" };
   const stackBase = { itemId: "rifle", quantity: 3, kind: "item" };
@@ -1519,7 +1519,7 @@ test("inventory totals include all carried crates and active customer carts but 
   ];
   scene.employees = [{ currentJob: { crate: employeeCrate } }];
   const supplyRequests = [];
-  scene.market = {
+  scene.gameState.market = {
     getPrice: () => 100,
     getSupplyCost: (itemId, quantity) => {
       supplyRequests.push([itemId, quantity]);
@@ -1567,7 +1567,7 @@ test("selling an empty placed fixture pays half, updates walkable space, and pre
   scene.blockedCells = new Set(["1,1", "1,2"]);
   scene.applyFixtureLayout = (_layout, result) => { scene.blockedCells = result.blockedCells; };
   const payments = [];
-  scene.playerState.addCredits = (amount, entry) => {
+  scene.gameState.economy.add = (amount, entry) => {
     assert.equal(scene.fixtures.get("shelf"), undefined);
     payments.push({ amount, ...entry });
   };
@@ -1628,7 +1628,7 @@ test("crating an empty fixture still creates its crate and opens its floor space
   scene.crateBounds = {};
   scene.crateMotionPaused = false;
   let notifications = 0;
-  scene.playerState.notifyListeners = () => { notifications += 1; };
+  scene.gameState.shop.changed = () => { notifications += 1; };
 
   assert.equal(scene.crateFixture("shelf"), true);
   assert.equal(scene.fixtures.get("shelf"), undefined);
@@ -1655,7 +1655,7 @@ test("fixture crates can be sold on the loading pad or while carried, only once 
   const { scene } = createHarness();
   const paid = [];
   const messages = [];
-  scene.playerState.addCredits = (amount, entry) => paid.push({ amount, ...entry });
+  scene.gameState.economy.add = (amount, entry) => paid.push({ amount, ...entry });
   scene.showShopMessage = (message) => messages.push(message);
   let closed = true;
   scene.canRearrangeFixtures = () => closed;

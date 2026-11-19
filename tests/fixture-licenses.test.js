@@ -12,48 +12,57 @@ const licenses = JSON.parse(await readFile(
 ));
 const licenseById = new Map(licenses.map((license) => [license.id, license]));
 
+// Just the parts of the game state that contracts read.
+function shopState({ shopLevel, globalReputation, factionReputation, credits, activeLicenses = new Set() }) {
+  return {
+    reputation: { shopLevel, global: globalReputation, factions: factionReputation },
+    economy: { credits, canAfford(amount) { return this.credits >= amount; } },
+    catalog: { owns: (id) => activeLicenses.has(id) },
+  };
+}
+
 test("new shops can sign only the survival supply contract until Shop Level 2", () => {
-  const state = {
+  const state = shopState({
     shopLevel: 1,
     globalReputation: 0,
     factionReputation: { scavengers: 0, mercenaries: 0, explorers: 0 },
     credits: 1500,
     activeLicenses: new Set(["lic_fixture_basics"]),
-  };
+  });
   const contracts = licenses.map((data) => new SupplierLicense(data));
   const available = contracts.filter((license) =>
-    !state.activeLicenses.has(license.id) && license.isUnlocked(state) && license.canAfford(state));
+    !state.catalog.owns(license.id) && license.isUnlocked(state) && license.canAfford(state));
   assert.deepEqual(available.map((license) => license.id), ["lic_start_rations"]);
 
   const html = ContractRenderer.generateHTML(contracts, state);
   assert.deepEqual([...html.matchAll(/data-license-id="([^"]+)"/g)].map((match) => match[1]),
     ["lic_start_rations"]);
 
-  state.shopLevel = 2;
-  state.globalReputation = -1;
+  state.reputation.shopLevel = 2;
+  state.reputation.global = -1;
   const unlockedAtTwo = contracts.filter((license) => license.id !== "lic_fixture_basics" &&
     license.id !== "lic_start_rations" && license.isUnlocked(state)).map((license) => license.id);
   assert.deepEqual(unlockedAtTwo, ["lic_start_survival"], "only one new contract at Shop Level 2");
-  state.shopLevel = 4;
+  state.reputation.shopLevel = 4;
   assert.equal(contracts.find((license) => license.id === "lic_start_ammo").isUnlocked(state), true);
 });
 
 test("level rewards unlock a supply contract at 6", () => {
   const supply = new SupplierLicense(licenseById.get("lic_start_apparel"));
-  const state = {
+  const state = shopState({
     shopLevel: 5,
     globalReputation: 1000,
     factionReputation: { scavengers: 0, mercenaries: 0, explorers: 0 },
     credits: 1500,
     activeLicenses: new Set(),
-  };
+  });
   assert.equal(supply.isUnlocked(state), false);
   let html = ContractRenderer.generateHTML([supply], state);
   assert.match(html, /Shop Level 6/);
   assert.doesNotMatch(html, /data-license-id=/);
 
-  state.shopLevel = 6;
-  state.globalReputation = -5;
+  state.reputation.shopLevel = 6;
+  state.reputation.global = -5;
   assert.equal(supply.isUnlocked(state), true);
   html = ContractRenderer.generateHTML([supply], state);
   assert.match(html, /data-license-id="lic_start_apparel"/);
@@ -62,13 +71,13 @@ test("level rewards unlock a supply contract at 6", () => {
 test("contracts list signable ones first, locked next, and signed ones last", () => {
   const ids = ["lic_start_rations", "lic_corp_labor", "lic_start_apparel"];
   const list = ids.map((id) => new SupplierLicense(licenseById.get(id)));
-  const state = {
+  const state = shopState({
     shopLevel: 10,
     globalReputation: 1000,
     factionReputation: { scavengers: 0, mercenaries: 0, explorers: 0 },
     credits: 3000,
     activeLicenses: new Set(["lic_start_apparel"]),
-  };
+  });
   assert.deepEqual(
     ContractRenderer.sortLicenses(list, state).map((license) => license.id),
     ["lic_start_rations", "lic_corp_labor", "lic_start_apparel"],
@@ -81,13 +90,13 @@ test("contracts list signable ones first, locked next, and signed ones last", ()
 test("redesigned contracts retain available, unaffordable, locked, and purchased states", () => {
   const contracts = ["lic_start_ammo", "lic_start_rations", "lic_corp_labor", "lic_fixture_basics"]
     .map((id) => new SupplierLicense(licenseById.get(id)));
-  const html = ContractRenderer.generateHTML(contracts, {
+  const html = ContractRenderer.generateHTML(contracts, shopState({
     shopLevel: 4,
     globalReputation: 0,
     factionReputation: { scavengers: 0, mercenaries: 0, explorers: 0 },
     credits: 100,
     activeLicenses: new Set(["lic_fixture_basics"]),
-  });
+  }));
   assert.match(html, /data-license-id="lic_start_rations"/);
   assert.match(html, /INSUFFICIENT FUNDS/);
   assert.match(html, /Requires Shop Level 12/);
@@ -100,17 +109,17 @@ test("redesigned contracts retain available, unaffordable, locked, and purchased
 
 test("Stellaris Las-Arms unlocks at Shop Level 9", () => {
   const license = new SupplierLicense(licenseById.get("lic_corp_stellaris"));
-  const state = {
+  const state = shopState({
     shopLevel: 8,
     globalReputation: 1000,
     factionReputation: { scavengers: 0, mercenaries: 0, explorers: 0 },
     credits: 3000,
     activeLicenses: new Set(),
-  };
+  });
   assert.equal(license.isUnlocked(state), false);
   assert.match(ContractRenderer.generateHTML([license], state), /Requires Shop Level 9/);
 
-  state.shopLevel = 9;
+  state.reputation.shopLevel = 9;
   assert.equal(license.isUnlocked(state), true);
   assert.match(
     ContractRenderer.generateHTML([license], state),
@@ -128,20 +137,20 @@ test("planned supplier contracts unlock at their assigned Shop Levels", () => {
     ["lic_corp_breach", 26],
     ["lic_corp_vanguard", 29],
   ];
-  const state = {
+  const state = shopState({
     shopLevel: 1,
     globalReputation: 10000,
     factionReputation: { scavengers: 0, mercenaries: 0, explorers: 0 },
     credits: 100000,
     activeLicenses: new Set(),
-  };
+  });
   for (const [id, level] of contracts) {
     const license = new SupplierLicense(licenseById.get(id));
     assert.equal(license.requiredShopLevel, level, id);
     assert.equal(license.reqReputation, null, id);
-    state.shopLevel = level - 1;
+    state.reputation.shopLevel = level - 1;
     assert.equal(license.isUnlocked(state), false, id);
-    state.shopLevel = level;
+    state.reputation.shopLevel = level;
     assert.equal(license.isUnlocked(state), true, id);
   }
 });
@@ -167,37 +176,37 @@ test("reputation-gated supplier contracts now use Shop Levels while keeping fact
     [28, "lic_edge_tessier"],
     [30, "lic_edge_exotic"],
   ];
-  const state = {
+  const state = shopState({
     shopLevel: 1,
     globalReputation: 0,
     factionReputation: { scavengers: 100, mercenaries: 100, explorers: 100 },
     credits: 100000,
-  };
+  });
   for (const [level, id] of contracts) {
     const license = new SupplierLicense(licenseById.get(id));
     assert.equal(license.requiredShopLevel, level, id);
     assert.equal(license.reqReputation, null, id);
-    state.shopLevel = level - 1;
+    state.reputation.shopLevel = level - 1;
     assert.equal(license.isUnlocked(state), false, id);
-    state.shopLevel = level;
+    state.reputation.shopLevel = level;
     assert.equal(license.isUnlocked(state), true, id);
   }
 });
 
 test("starter contracts and existing faction reputation requirements remain available", () => {
-  const state = {
+  const state = shopState({
     shopLevel: 1,
     globalReputation: 2,
     factionReputation: { scavengers: 0, mercenaries: 0, explorers: 0 },
     credits: 1500,
-  };
+  });
   const rations = new SupplierLicense(licenseById.get("lic_start_rations"));
   const scavengerArmor = new SupplierLicense(licenseById.get("lic_start_armor_melee"));
   assert.equal(rations.isUnlocked(state), true);
   assert.equal(scavengerArmor.isUnlocked(state), false);
-  state.factionReputation.scavengers = 2;
+  state.reputation.factions.scavengers = 2;
   assert.equal(scavengerArmor.isUnlocked(state), false, "the assigned Shop Level is still required");
-  state.shopLevel = 5;
+  state.reputation.shopLevel = 5;
   assert.equal(scavengerArmor.isUnlocked(state), true);
 });
 

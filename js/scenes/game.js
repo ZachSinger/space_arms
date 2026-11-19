@@ -6,7 +6,7 @@
 // See also: TileRoom.js (map), FixtureRegistry.js (fixtures), Customer.js (shopper AI).
 import { WindowManager } from "../logic/WindowManager.js";
 import { ManagerTablet } from "../logic/ManagerTablet.js";
-import { PlayerState } from "../logic/PlayerState.js";
+import { GameState } from "../state/GameState.js";
 import {
   getStaffLimit, getStaffLimitReason, hasUnimplementedShopRewardBetween, STAFF_LIMIT_LEVELS,
 } from "../logic/ShopProgression.js";
@@ -15,7 +15,6 @@ import { DebugInfo } from "../logic/DebugInfo.js";
 import { Events, GAME_EVENTS } from "../core/Events.js";
 import { ControlMode, CONTROL_MODES } from "../logic/ControlMode.js";
 import { InteractableRegistry } from "../logic/InteractableRegistry.js";
-import { transferItems } from "../logic/InventoryTransfer.js";
 import { ShelfFixture } from "../logic/ShelfFixture.js";
 import { Customer, SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT } from "../logic/Customer.js";
 import { Employee } from "../logic/Employee.js";
@@ -55,7 +54,6 @@ import {
 } from "../logic/RoomLayout.js";
 import { ShiftClock, SHIFT_DURATION_MS } from "../logic/ShiftClock.js";
 import { summarizeReceipt } from "../logic/DayLedger.js";
-import { Market } from "../logic/Market.js";
 import { findFreeWalkPath } from "../logic/Pathfinder.js";
 import { FixturePlacement } from "../logic/FixturePlacement.js";
 import { worldToClientRect } from "../logic/FixtureHighlight.js";
@@ -264,9 +262,8 @@ export class GameScene extends Phaser.Scene {
     // Sync after Arcade Physics finalizes the player's and crates' positions for this frame.
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.syncCarriedCrate, this);
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.syncFloorStacks, this);
-    this.playerState = new PlayerState(this.eventBus);
+    this.gameState = new GameState({ items: database.getAllItems(), events: this.eventBus });
     this.recalculateActiveFactions();
-    this.market = new Market(database.getAllItems());
     this.shiftClock = new ShiftClock();
     this.customerArrivalSchedule = [];
     this.nextScheduledArrival = 0;
@@ -276,7 +273,7 @@ export class GameScene extends Phaser.Scene {
     this.storeTemporarilyClosed = false;
     this.storeTemporarilyClosedSinceMs = null;
     this.hud = new HUDController(
-      this.playerState,
+      this.gameState,
       this.shiftClock,
       () => this.startNextShift(),
       () => this.saveManually(),
@@ -288,8 +285,8 @@ export class GameScene extends Phaser.Scene {
     this.windowManager = new WindowManager();
     this.shiftEnded = false; // guards endShift() from firing more than once per shift
     this.customersServedThisShift = 0;
-    this.creditsAtShiftStart = this.playerState.credits;
-    this.reputationAtShiftStart = this.playerState.globalReputation;
+    this.creditsAtShiftStart = this.gameState.economy.credits;
+    this.reputationAtShiftStart = this.gameState.reputation.global;
 
     // Shop map: the authored tile room (see RoomLayout.js).
     this.room = new TileRoom(this);
@@ -505,12 +502,12 @@ export class GameScene extends Phaser.Scene {
 
     // Constructed after the fixtures exist: its Supply tab reads their stock immediately
     // on construction (via SupplyRenderer -> getRestockableItems()).
-    this.managerTablet = new ManagerTablet(this.windowManager, this.playerState, this);
+    this.managerTablet = new ManagerTablet(this.windowManager, this.gameState, this);
     // REAL games run without the debug recorder; every call site uses debugInfo?.
     this.debugInfo = this.realMode ? null : new DebugInfo(this);
     this.eventBus.on(GAME_EVENTS.CUSTOMER_HIT_BY_CRATE, ({ customer }) => {
       const penalty = CRATE_HIT_REPUTATION_PENALTY;
-      customer.playerState.subReputation(penalty, customer.factionId);
+      customer.gameState.reputation.lose(penalty, customer.factionId);
       this.showFloatingText(
         customer.sprite.x,
         customer.sprite.y - 50,
@@ -521,7 +518,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.eventBus.on(GAME_EVENTS.CUSTOMER_LEFT_ANGRY, ({ customer, cart }) => {
       const penalty = ANGRY_REPUTATION_PENALTY;
-      customer.playerState.subReputation(penalty, customer.factionId);
+      customer.gameState.reputation.lose(penalty, customer.factionId);
       this.showFloatingText(
         customer.sprite.x,
         customer.sprite.y - 50,
@@ -532,7 +529,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.eventBus.on(GAME_EVENTS.CUSTOMER_MISSING_PRIMARY, ({ customer, itemIds, itemNames }) => {
       const penalty = MISSING_PRIMARY_REPUTATION_PENALTY;
-      customer.playerState.subReputation(penalty, customer.factionId);
+      customer.gameState.reputation.lose(penalty, customer.factionId);
       this.showFloatingText(
         customer.sprite.x,
         customer.sprite.y - 50,
@@ -546,7 +543,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.eventBus.on(GAME_EVENTS.CUSTOMER_SALE_COMPLETED, ({ customer }) => {
       this.recordSale(customer.cart);
-      this.playerState.addReputation(1, customer.factionId);
+      this.gameState.reputation.gain(1, customer.factionId);
       this.customersServedThisShift += 1;
       this.debugInfo?.recordCustomer("customer-sale-completed", customer);
     });
@@ -693,7 +690,7 @@ export class GameScene extends Phaser.Scene {
       stroke: "#111827",
       strokeThickness: 4,
     }).setOrigin(0.5, 1).setDepth(9000).setVisible(false);
-    this.playerState.subscribe(() => {
+    this.gameState.subscribe(() => {
       this.requestAutosave();
       this.refreshShelfStockDisplays();
       this.updateSaveControls();
@@ -1275,20 +1272,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   hireEmployee(employeeId) {
-    const employee = this.playerState.getEmployeeProfile(employeeId);
+    const employee = this.gameState.staff.profile(employeeId);
     if (!this.canHireEmployees()) {
       this.showShopMessage("Staff can only be hired between shifts.");
       return false;
     }
-    if (this.playerState.hiredEmployees.includes(employeeId)) return false;
+    if (this.gameState.staff.hired.includes(employeeId)) return false;
     const staffLimitReason = getStaffLimitReason(
-      this.playerState.shopLevel, this.playerState.hiredEmployees.length,
+      this.gameState.reputation.shopLevel, this.gameState.staff.hired.length,
     );
     if (staffLimitReason) {
       this.showShopMessage(staffLimitReason);
       return false;
     }
-    if (!this.playerState.hireEmployee(employeeId)) {
+    if (!this.gameState.hireEmployee(employeeId)) {
       this.showShopMessage(`Not enough money. Hiring ${employee.name} costs ${employee.hireCost}.`);
       return false;
     }
@@ -1301,16 +1298,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   setEmployeeOnShift(employeeId, onShift) {
-    const employee = this.playerState.getEmployeeProfile(employeeId);
+    const employee = this.gameState.staff.profile(employeeId);
     if (!this.canHireEmployees()) {
       this.showShopMessage("Staff can only be set On Shift or Off Shift between shifts.");
       return false;
     }
-    if (this.playerState.employeeTraining[employeeId]) {
+    if (this.gameState.staff.training[employeeId]) {
       this.showShopMessage(`${employee.name} is away training next shift. They're available again once they return.`);
       return false;
     }
-    if (!this.playerState.setEmployeeOnShift(employeeId, onShift)) return false;
+    if (!this.gameState.staff.setOnShift(employeeId, onShift)) return false;
     this.showGameMessage(
       onShift
         ? `${employee.name} is On Shift. They'll work and be paid ${employee.wagePerShift} each shift.`
@@ -1323,13 +1320,13 @@ export class GameScene extends Phaser.Scene {
 
   getEmployeeTrainingBlockReason(employeeId, jobId) {
     const offer = getEmployeeTrainingOffer(
-      employeeId, this.playerState.employeeSkills[employeeId], jobId,
+      employeeId, this.gameState.staff.skills[employeeId], jobId,
     );
     if (!this.canHireEmployees()) return "Book employee training between shifts.";
-    if (!this.playerState.hiredEmployees.includes(employeeId)) return "Hire this employee before booking training.";
-    if (this.playerState.employeeTraining[employeeId]) return "This employee already has training booked.";
+    if (!this.gameState.staff.hired.includes(employeeId)) return "Hire this employee before booking training.";
+    if (this.gameState.staff.training[employeeId]) return "This employee already has training booked.";
     if (!offer) return "This skill is already at Level 5.";
-    if (this.playerState.credits < offer.cost) return `Training costs ${offer.cost}. You don't have enough money.`;
+    if (this.gameState.economy.credits < offer.cost) return `Training costs ${offer.cost}. You don't have enough money.`;
     return null;
   }
 
@@ -1339,11 +1336,11 @@ export class GameScene extends Phaser.Scene {
       this.showShopMessage(reason);
       return false;
     }
-    if (!this.playerState.trainEmployee(employeeId, jobId)) {
+    if (!this.gameState.trainEmployee(employeeId, jobId)) {
       this.showShopMessage("Training is no longer available. Check the employee's skill and your money.");
       return false;
     }
-    const employee = this.playerState.getEmployeeProfile(employeeId);
+    const employee = this.gameState.staff.profile(employeeId);
     this.showGameMessage(
       `${employee.name} will be away training next shift. Their wage of ${employee.wagePerShift} is still due.`,
       "#10b981",
@@ -1357,7 +1354,7 @@ export class GameScene extends Phaser.Scene {
       this.showShopMessage("Staff job priorities can only be changed between shifts.");
       return false;
     }
-    if (!this.playerState.moveEmployeeJobPriority(employeeId, jobId, direction)) return false;
+    if (!this.gameState.staff.moveJobPriority(employeeId, jobId, direction)) return false;
     this.requestAutosave();
     return true;
   }
@@ -1365,10 +1362,10 @@ export class GameScene extends Phaser.Scene {
   // Wages are paid up front, even into the red (bible Step 32), one receipt line each.
   payEmployeeWages() {
     let total = 0;
-    for (const employeeId of this.playerState.getPaidEmployees()) {
-      const employee = this.playerState.getEmployeeProfile(employeeId);
+    for (const employeeId of this.gameState.staff.paid()) {
+      const employee = this.gameState.staff.profile(employeeId);
       if (employee.wagePerShift <= 0) continue;
-      this.playerState.spendCredits(employee.wagePerShift, {
+      this.gameState.economy.spend(employee.wagePerShift, {
         category: "wages",
         label: employee.name,
       });
@@ -1378,8 +1375,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   spawnHiredEmployees() {
-    this.employees = this.playerState.getWorkingEmployees()
-      .map((employeeId) => new Employee(this, this.playerState.getEmployeeProfile(employeeId)));
+    this.employees = this.gameState.staff.working()
+      .map((employeeId) => new Employee(this, this.gameState.staff.profile(employeeId)));
   }
 
   clearEmployees() {
@@ -1419,8 +1416,8 @@ export class GameScene extends Phaser.Scene {
         zone,
         isPurchased: !zone.locked,
         isNext: id === nextId,
-        levelMet: this.playerState.shopLevel >= zone.requiredShopLevel,
-        canAfford: this.playerState.credits >= zone.cost,
+        levelMet: this.gameState.reputation.shopLevel >= zone.requiredShopLevel,
+        canAfford: this.gameState.economy.credits >= zone.cost,
       };
     });
   }
@@ -1435,8 +1432,8 @@ export class GameScene extends Phaser.Scene {
         zone,
         isPurchased: !zone.locked,
         isNext: id === nextId,
-        levelMet: this.playerState.shopLevel >= zone.requiredShopLevel,
-        canAfford: this.playerState.credits >= zone.cost,
+        levelMet: this.gameState.reputation.shopLevel >= zone.requiredShopLevel,
+        canAfford: this.gameState.economy.credits >= zone.cost,
       };
     });
   }
@@ -1461,21 +1458,21 @@ export class GameScene extends Phaser.Scene {
       this.showShopMessage("Buy sales-floor expansions in order.");
       return false;
     }
-    if (this.playerState.shopLevel < zone.requiredShopLevel) {
+    if (this.gameState.reputation.shopLevel < zone.requiredShopLevel) {
       this.showShopMessage(
         `Reach Shop Level ${zone.requiredShopLevel} to buy ${zone.name}.`,
       );
       return false;
     }
-    if (this.playerState.credits < zone.cost) {
+    if (this.gameState.economy.credits < zone.cost) {
       this.showShopMessage(`${zone.name} costs ${formatMoneyAmount(zone.cost)}.`);
       return false;
     }
 
-    this.playerState.spendCredits(zone.cost, { category: "expansions", label: zone.name });
+    this.gameState.economy.spend(zone.cost, { category: "expansions", label: zone.name });
     this.room.unlockZone(zoneId);
     this.refreshCamera();
-    this.playerState.notifyListeners();
+    this.gameState.shop.changed();
     this.requestAutosave();
     this.showShopMessage(`${zone.name} is open.`);
     return true;
@@ -1501,21 +1498,21 @@ export class GameScene extends Phaser.Scene {
       this.showShopMessage("Buy backroom expansions in order.");
       return false;
     }
-    if (this.playerState.shopLevel < zone.requiredShopLevel) {
+    if (this.gameState.reputation.shopLevel < zone.requiredShopLevel) {
       this.showShopMessage(
         `Reach Shop Level ${zone.requiredShopLevel} to buy ${zone.name}.`,
       );
       return false;
     }
-    if (this.playerState.credits < zone.cost) {
+    if (this.gameState.economy.credits < zone.cost) {
       this.showShopMessage(`${zone.name} costs ${formatMoneyAmount(zone.cost)}.`);
       return false;
     }
 
-    this.playerState.spendCredits(zone.cost, { category: "expansions", label: zone.name });
+    this.gameState.economy.spend(zone.cost, { category: "expansions", label: zone.name });
     this.room.unlockZone(zoneId);
     this.refreshCamera();
-    this.playerState.notifyListeners();
+    this.gameState.shop.changed();
     this.requestAutosave();
     this.showShopMessage(`${zone.name} is open.`);
     return true;
@@ -1575,7 +1572,7 @@ export class GameScene extends Phaser.Scene {
       return false;
     }
     this.applyFixtureLayout(this.layoutWithMove(id, gx, gy, rotation), result);
-    this.playerState.notifyListeners();
+    this.gameState.shop.changed();
     return true;
   }
 
@@ -1626,8 +1623,7 @@ export class GameScene extends Phaser.Scene {
 
   serialize() {
     const snapshot = {
-      playerState: this.playerState.serialize(),
-      market: this.market.serialize(),
+      ...this.gameState.toSave(),
       fixtures: this.fixtures.all().map((fixture) => {
         const entry = { id: fixture.id, type: fixture.type, gx: fixture.gx, gy: fixture.gy, rotation: fixtureRotation(fixture) };
         if (fixture instanceof ShelfFixture) {
@@ -1671,17 +1667,33 @@ export class GameScene extends Phaser.Scene {
    */
   applySave(saved) {
     const data = validateShopSave(saved, database);
+    // Staged: the whole new game state is built and checked off to the side first.
+    const next = GameState.fromSave(data, { items: database.getAllItems(), events: this.eventBus });
     for (const id of data.unlockedZones) this.room.unlockZone(id);
     // Saves from before the sales-floor rule still load; the misplaced fixture can then be moved out.
     const result = validateFixtureLayout(data.fixtures, { ...this.getLayoutOptions(), requireSalesFloor: false });
     if (!result.valid) throw new Error(`Invalid saved layout: ${result.reason}`);
+    this.gameState.replaceWith(next, () => this.rebuildShopFromSave(data, result));
+    this.creditsAtShiftStart = this.gameState.economy.credits;
+    this.reputationAtShiftStart = this.gameState.reputation.global;
+    this.setupCamera();
+    this.lastSavedSnapshot = JSON.stringify(this.serialize());
+    this.setSaveStatus("Saved. Autosaves while the store is closed.");
+  }
+
+  /**
+   * Puts the saved shop back on the map. Runs after the new game state is swapped in and before
+   * any screen hears about it.
+   * @param {object} data - an upgraded, checked save
+   * @param {object} layout - the checked fixture layout
+   */
+  rebuildShopFromSave(data, layout) {
     this.despawnAllFixtures();
     for (const entry of data.fixtures) {
       const fixture = this.spawnFixture(entry);
       if (fixture instanceof ShelfFixture) fixture.placements = entry.placements.map((stack) => ({ ...stack }));
     }
-    this.applyFixtureLayout(data.fixtures, result);
-    this.market.applySave(data.market);
+    this.applyFixtureLayout(data.fixtures, layout);
     this.playerInBackroom = false;
     this.player.teleportTo(this.storeDoor.x, this.storeDoor.y + TILE_SIZE);
     this.refreshCamera();
@@ -1727,37 +1739,24 @@ export class GameScene extends Phaser.Scene {
     this.heldTrash?.sprite.destroy();
     this.heldTrash = null;
     this.trash?.load(data.trash ?? []);
-    this.playerState.applySave(data.playerState, { day: this.market.day });
     this.moveShelfOverflowToGoBacks();
     this.refreshShelfStockDisplays();
     this.recalculateActiveFactions();
-    this.creditsAtShiftStart = this.playerState.credits;
-    this.reputationAtShiftStart = this.playerState.globalReputation;
-    this.setupCamera();
-    this.lastSavedSnapshot = JSON.stringify(this.serialize());
-    this.setSaveStatus("Saved. Autosaves while the store is closed.");
   }
 
   // Older saves can hold more in a shelf slot than its cap allows; the excess goes to Go-Backs.
   moveShelfOverflowToGoBacks() {
-    let moved = 0;
     for (const shelf of this.fixtures.shelves()) {
       for (const placement of shelf.placements) {
         const overflow = placement.quantity - shelf.getPlacementCapacity(placement);
         if (overflow <= 0) continue;
-        const transfer = transferItems(shelf, this.playerState.goBacks, placement.itemId, overflow, {
-          sourceEntry: placement,
-          eventBus: this.eventBus,
-          sourceName: "shelf",
-          destinationName: "go-backs",
+        const moved = this.gameState.goBacks.takeFrom(shelf, placement.itemId, overflow, {
+          sourceEntry: placement, sourceName: "shelf",
         });
-        if (transfer.moved !== overflow) {
-          throw new Error("Could not move saved shelf overflow into Go-Backs.");
-        }
-        moved += transfer.moved;
+        if (moved !== overflow) throw new Error("Could not move saved shelf overflow into Go-Backs.");
+        this.gameState.shop.changed();
       }
     }
-    if (moved > 0) this.playerState.notifyListeners();
   }
 
   refreshShelfStockDisplay(shelf) {
@@ -2092,7 +2091,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.room.unlockZone(zone.id);
     this.refreshCamera();
-    this.playerState.notifyListeners();
+    this.gameState.shop.changed();
     this.requestAutosave();
     this.showShopMessage(`Debug: ${zone.name} is open.`);
     return true;
@@ -2112,7 +2111,7 @@ export class GameScene extends Phaser.Scene {
       .filter((item) => item.dimensions.w === 1 && item.dimensions.h === 1)
       .filter((item) => {
         const license = database.getLicense(item.license);
-        return this.playerState.activeLicenses.has(item.license) || license?.isUnlocked(this.playerState);
+        return this.gameState.catalog.owns(item.license) || license?.isUnlocked(this.gameState);
       })
       .sort((a, b) => a.baseCost - b.baseCost ||
         (database.getLicense(a.license)?.baseCost ?? 0) - (database.getLicense(b.license)?.baseCost ?? 0))
@@ -2125,10 +2124,10 @@ export class GameScene extends Phaser.Scene {
     }
 
     for (const licenseId of new Set(items.map((item) => item.license))) {
-      if (this.playerState.activeLicenses.has(licenseId)) continue;
+      if (this.gameState.catalog.owns(licenseId)) continue;
       const license = database.getLicense(licenseId);
-      this.playerState.spendCredits(license.baseCost, { category: "licenses", label: license.name });
-      this.playerState.signLicense(licenseId);
+      this.gameState.economy.spend(license.baseCost, { category: "licenses", label: license.name });
+      this.gameState.catalog.sign(licenseId);
     }
     this.recalculateActiveFactions();
 
@@ -2136,7 +2135,7 @@ export class GameScene extends Phaser.Scene {
     for (let count = 0; count < shelfCount; count += 1) {
       const shelfCell = this.findNearestFixtureCell(shelfType, door);
       if (!shelfCell) break;
-      this.playerState.spendCredits(shelfSpec.price, { category: "fixtures", label: shelfSpec.name });
+      this.gameState.economy.spend(shelfSpec.price, { category: "fixtures", label: shelfSpec.name });
       shelves.push(this.spawnFixture({ id: this.fixtures.nextId(shelfType), type: shelfType, ...shelfCell }));
       const result = validateFixtureLayout(this.fixtures.layout(), this.getLayoutOptions());
       this.applyFixtureLayout(this.fixtures.layout(), result);
@@ -2150,19 +2149,17 @@ export class GameScene extends Phaser.Scene {
       const placement = shelf.placeItem(item.id, gx, gy, false, 0);
       const capacity = shelf.getPlacementCapacity(placement);
       const crates = Math.ceil(capacity / getCrateOrderQuantity(item));
-      this.playerState.spendCredits(this.restockCost(item) * crates, {
+      this.gameState.economy.spend(this.restockCost(item) * crates, {
         category: "stock_orders", label: item.name, quantity: crates,
       });
       placement.quantity = capacity;
-      this.playerState.goBacks.add(item.id, crates * getCrateOrderQuantity(item) - capacity);
-      if (this.playerState.storePrices[item.id] === undefined) {
-        this.playerState.storePrices[item.id] = this.market.getPrice(item.id);
-      }
+      this.gameState.goBacks.add(item.id, crates * getCrateOrderQuantity(item) - capacity);
+      this.gameState.catalog.priceIfUnset(item.id, this.gameState.market.getPrice(item.id));
     });
-    this.playerState.spendCredits(DELIVERY_FEE, { category: "delivery_fees", label: "Delivery fee" });
+    this.gameState.economy.spend(DELIVERY_FEE, { category: "delivery_fees", label: "Delivery fee" });
 
     for (const shelf of shelves) this.refreshShelfStockDisplay(shelf);
-    this.playerState.notifyListeners();
+    this.gameState.shop.changed();
     this.showShopMessage(shelves.length > 1 ? "Quickstart: shelves stocked." : "Quickstart: shelf stocked.");
     return true;
   }
@@ -2199,7 +2196,7 @@ export class GameScene extends Phaser.Scene {
    * @returns {number} credits
    */
   restockCost(item) {
-    return this.market.getSupplyCost(item.id, getCrateOrderQuantity(item));
+    return this.gameState.market.getSupplyCost(item.id, getCrateOrderQuantity(item));
   }
 
   /**
@@ -2208,7 +2205,7 @@ export class GameScene extends Phaser.Scene {
    * @returns {number} credits
    */
   getStorePrice(itemId) {
-    return this.playerState.storePrices[itemId] ?? this.market.getPrice(itemId);
+    return this.gameState.catalog.storePrices[itemId] ?? this.gameState.market.getPrice(itemId);
   }
 
   getLoadingPadSpots() {
@@ -2317,7 +2314,7 @@ export class GameScene extends Phaser.Scene {
   getSupplyOrderSummary(order) {
     return summarizeSupplyOrder(order, {
       getCrateCost: (itemId) => this.restockCost(database.getItem(itemId)),
-      credits: this.playerState.credits,
+      credits: this.gameState.economy.credits,
       freePadSpots: this.getLoadingPadSpawnPositions().length,
     });
   }
@@ -2333,7 +2330,7 @@ export class GameScene extends Phaser.Scene {
       this.showShopMessage("Enter a price of at least 1 credit, with no more than two decimal places.");
       return false;
     }
-    this.playerState.setStorePrice(itemId, price);
+    this.gameState.catalog.setPrice(itemId, price);
     return true;
   }
 
@@ -2351,7 +2348,7 @@ export class GameScene extends Phaser.Scene {
     for (const fixture of this.fixtures.shelves()) {
       for (const entry of fixture.stock) add(entry, "stock");
     }
-    for (const entry of this.playerState.goBacks.stock) add(entry, "offShelves");
+    for (const entry of this.gameState.goBacks.stock) add(entry, "offShelves");
     const floorCrates = this.getFloorCrates();
     for (const crate of floorCrates) add(crate, "offShelves");
     for (const crate of this.getCarriedCrates()) {
@@ -2372,7 +2369,7 @@ export class GameScene extends Phaser.Scene {
       .map((item) => ({
         item,
         ...totals.get(item.id),
-        marketPrice: this.market.getPrice(item.id),
+        marketPrice: this.gameState.market.getPrice(item.id),
         unitCost: roundMoney(this.restockCost(item) / getCrateOrderQuantity(item)),
         storePrice: this.getStorePrice(item.id),
       }));
@@ -2401,7 +2398,7 @@ export class GameScene extends Phaser.Scene {
 
     return database
       .getAllItems()
-      .filter((item) => this.playerState.activeLicenses.has(item.license))
+      .filter((item) => this.gameState.catalog.owns(item.license))
       .map((item) => ({
         item,
         ownedQuantity: ownedQuantityByItemId.get(item.id) || 0,
@@ -2413,10 +2410,10 @@ export class GameScene extends Phaser.Scene {
   // Customer factions follow the player's licenses.
   recalculateActiveFactions() {
     const activeFactions = getLicensedFactionIds(
-      this.playerState.activeLicenses,
+      this.gameState.catalog.licenses,
       database.getAllItems(),
     );
-    this.playerState.setActiveFactions(activeFactions);
+    this.gameState.catalog.setActiveFactions(activeFactions);
   }
 
   /**
@@ -2428,7 +2425,7 @@ export class GameScene extends Phaser.Scene {
   placeSupplyOrder(order) {
     for (const [itemId, count] of order) {
       const item = database.getItem(itemId);
-      if (count > 0 && (!item || !this.playerState.activeLicenses.has(item.license))) return false;
+      if (count > 0 && (!item || !this.gameState.catalog.owns(item.license))) return false;
     }
     const summary = this.getSupplyOrderSummary(order);
     if (!summary.canPlace) return false;
@@ -2439,21 +2436,19 @@ export class GameScene extends Phaser.Scene {
     for (const [itemId, count] of order) {
       if (count <= 0) continue;
       const item = database.getItem(itemId);
-      this.playerState.spendCredits(this.restockCost(item) * count, {
+      this.gameState.economy.spend(this.restockCost(item) * count, {
         category: "stock_orders",
         label: item.name,
         quantity: count,
       });
     }
-    this.playerState.spendCredits(summary.deliveryFee, {
+    this.gameState.economy.spend(summary.deliveryFee, {
       category: "delivery_fees",
       label: "Delivery fee",
     });
     for (const [itemId, count] of order) {
       // A first-time item starts at today's market price, then stays put until repriced.
-      if (count > 0 && this.playerState.storePrices[itemId] === undefined) {
-        this.playerState.storePrices[itemId] = this.market.getPrice(itemId);
-      }
+      if (count > 0) this.gameState.catalog.priceIfUnset(itemId, this.gameState.market.getPrice(itemId));
       for (let index = 0; index < count; index += 1) {
         const spawn = spots.shift();
         const crate = this.createItemCrate(itemId, getCrateOrderQuantity(database.getItem(itemId)), spawn.x, spawn.y);
@@ -2463,7 +2458,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
     this.freePlayerFromLoadingPad();
-    this.playerState.notifyListeners();
+    this.gameState.shop.changed();
     return true;
   }
 
@@ -2473,13 +2468,13 @@ export class GameScene extends Phaser.Scene {
   getFixturePurchaseOptions() {
     return Object.values(FIXTURE_TYPES).map((spec) => {
       const license = database.getLicense(spec.licenseId);
-      const licensed = this.playerState.activeLicenses.has(spec.licenseId);
+      const licensed = this.gameState.catalog.owns(spec.licenseId);
       const hasDeliverySpace = !!this.getLoadingPadSpawnPosition();
       return {
         spec,
         license,
         licensed,
-        canAfford: this.playerState.credits >= spec.price,
+        canAfford: this.gameState.economy.credits >= spec.price,
         hasDeliverySpace,
       };
     });
@@ -2493,18 +2488,18 @@ export class GameScene extends Phaser.Scene {
   buyFixture(typeId) {
     const spec = getFixtureType(typeId);
     if (!spec) throw new Error(`Unknown fixture type: ${typeId}`);
-    if (!this.playerState.activeLicenses.has(spec.licenseId)) return false;
-    if (this.playerState.credits < spec.price) return false;
+    if (!this.gameState.catalog.owns(spec.licenseId)) return false;
+    if (this.gameState.economy.credits < spec.price) return false;
     const spawn = this.takeLoadingPadSpawnPositions(1)[0];
     if (!spawn) return false;
 
-    this.playerState.spendCredits(spec.price, { category: "fixtures", label: spec.name });
+    this.gameState.economy.spend(spec.price, { category: "fixtures", label: spec.name });
     const crate = new Crate(this, null, 1, spawn.x, spawn.y, { kind: "fixture", typeId });
     crate.setPaused(this.crateMotionPaused);
     crate.lockToPad();
     this.restockCrates.push(crate);
     this.freePlayerFromLoadingPad();
-    this.playerState.notifyListeners();
+    this.gameState.shop.changed();
     return true;
   }
 
@@ -2572,7 +2567,7 @@ export class GameScene extends Phaser.Scene {
     });
     crate.setPaused(this.crateMotionPaused);
     this.restockCrates.push(crate);
-    this.playerState.notifyListeners();
+    this.gameState.shop.changed();
     return true;
   }
 
@@ -2586,7 +2581,7 @@ export class GameScene extends Phaser.Scene {
     const spec = getFixtureType(fixture.type);
     const value = getFixtureResaleValue(fixture.type);
     if (!this.removePlacedFixture(fixture)) return false;
-    this.playerState.addCredits(value, { category: "fixture_sales", label: spec.name });
+    this.gameState.economy.add(value, { category: "fixture_sales", label: spec.name });
     return true;
   }
 
@@ -2610,7 +2605,7 @@ export class GameScene extends Phaser.Scene {
     if (this.getCarriedCrates().includes(crate)) this.removeCarriedCrate(crate);
     else this.restockCrates = this.restockCrates.filter((candidate) => candidate !== crate);
     crate.destroy();
-    this.playerState.addCredits(value, { category: "fixture_sales", label: spec.name });
+    this.gameState.economy.add(value, { category: "fixture_sales", label: spec.name });
     return true;
   }
 
@@ -2655,7 +2650,7 @@ export class GameScene extends Phaser.Scene {
     this.applyFixtureLayout(this.fixtures.layout(), result);
     crate.destroy();
     this.removeCarriedCrate(crate);
-    this.playerState.notifyListeners();
+    this.gameState.shop.changed();
     return true;
   }
 
@@ -2834,7 +2829,7 @@ export class GameScene extends Phaser.Scene {
       this.removeCarriedCrate(crate);
       crate.destroy();
     }
-    this.playerState.notifyListeners();
+    this.gameState.shop.changed();
     this.showGameMessage(empties.length === 1
       ? "Empty crate put in the trashcan."
       : `${empties.length} empty crates put in the trashcan.`, "#10b981");
@@ -2919,7 +2914,7 @@ export class GameScene extends Phaser.Scene {
   getCleanliness() {
     const salesExpansions = EXPANSION_ORDER.filter((id) =>
       this.room.zones.some((zone) => zone.id === id && !zone.locked)).length;
-    const max = getCleanlinessMax({ salesExpansions, shopLevel: this.playerState.shopLevel });
+    const max = getCleanlinessMax({ salesExpansions, shopLevel: this.gameState.reputation.shopLevel });
     const trashCount = this.trash.count + (this.heldTrash ? 1 : 0);
     return { score: getCleanlinessScore(max, trashCount), max, trashCount };
   }
@@ -2937,7 +2932,7 @@ export class GameScene extends Phaser.Scene {
   reportCleanlinessVerdict(customer, verdict) {
     const walkOut = verdict === "walk-out";
     const penalty = walkOut ? WALK_OUT_REPUTATION_LOSS : UPSET_REPUTATION_LOSS;
-    this.playerState.subReputation(penalty);
+    this.gameState.reputation.lose(penalty);
     this.showFloatingText(
       customer.sprite.x,
       customer.sprite.y - 50,
@@ -2960,7 +2955,7 @@ export class GameScene extends Phaser.Scene {
       throw new Error("A newly supplied empty crate could not be picked up.");
     }
     this.addCarriedCrate(crate);
-    this.playerState.notifyListeners();
+    this.gameState.shop.changed();
     this.showGameMessage("Took a free empty crate.", "#10b981");
     return true;
   }
@@ -3331,7 +3326,7 @@ export class GameScene extends Phaser.Scene {
     for (const crate of lifted) this.addCarriedCrate(crate);
     this.markedStackBase = null;
     this.syncFloorStacks();
-    this.playerState.notifyListeners();
+    this.gameState.shop.changed();
     for (const crate of lifted) this.emitCratePickedUp(crate);
     return true;
   }
@@ -3347,7 +3342,7 @@ export class GameScene extends Phaser.Scene {
     this.markedStackBase = null;
     this.syncCarriedCrate();
     this.syncFloorStacks();
-    this.playerState.notifyListeners();
+    this.gameState.shop.changed();
     for (const crate of placed) this.emitCrateDropped(crate, base.sprite, false);
     return true;
   }
@@ -3633,7 +3628,7 @@ export class GameScene extends Phaser.Scene {
     this.restockCrates.push(crate);
     this.removeCarriedCrate(crate);
     this.syncFloorStacks();
-    this.playerState.notifyListeners();
+    this.gameState.shop.changed();
     this.emitCrateDropped(crate, position, throwing);
     return true;
   }
@@ -3665,7 +3660,7 @@ export class GameScene extends Phaser.Scene {
     this.carriedCrate = null;
     this.syncCarriedCrate();
     this.syncFloorStacks();
-    this.playerState.notifyListeners();
+    this.gameState.shop.changed();
     for (const crate of [bottom, ...rest]) this.emitCrateDropped(crate, position, false);
     return true;
   }
@@ -3734,7 +3729,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   refreshGoBacksBadge() {
-    const count = this.playerState.goBacks.stock.reduce((sum, entry) => sum + entry.quantity, 0);
+    const count = this.gameState.goBacks.stock.reduce((sum, entry) => sum + entry.quantity, 0);
     this.goBacksBadge.setVisible(count > 0);
     this.positionGoBacksBadge();
   }
@@ -3792,7 +3787,7 @@ export class GameScene extends Phaser.Scene {
    * @param {number} time - scene time in ms
    */
   autoPackGoBacks(time) {
-    const stock = this.playerState.goBacks.stock.filter((entry) => entry.quantity > 0);
+    const stock = this.gameState.goBacks.stock.filter((entry) => entry.quantity > 0);
     if (stock.length === 0) {
       this.goBacksPackRetryAt = 0;
       this.goBacksStuckKey = null;
@@ -3800,12 +3795,12 @@ export class GameScene extends Phaser.Scene {
     }
     if (time < (this.goBacksPackRetryAt ?? 0)) return;
     this.fillExistingCratesWithGoBacks();
-    const left = this.playerState.goBacks.stock.filter((entry) => entry.quantity > 0);
+    const left = this.gameState.goBacks.stock.filter((entry) => entry.quantity > 0);
     if (left.length === 0) return;
     const key = left.map((entry) => `${entry.itemId}:${entry.quantity}`).sort().join(",");
     const quiet = key === this.goBacksStuckKey;
     this.packGoBacks({ quiet });
-    const stuck = this.playerState.goBacks.stock.some((entry) => entry.quantity > 0);
+    const stuck = this.gameState.goBacks.stock.some((entry) => entry.quantity > 0);
     this.goBacksStuckKey = stuck ? key : null;
     // Retry later when there's no room yet: crates or customers may move out of the way.
     this.goBacksPackRetryAt = stuck ? time + 5000 : 0;
@@ -3822,12 +3817,12 @@ export class GameScene extends Phaser.Scene {
       ...this.getCarriedCrates(),
     ].filter((crate) => crate.kind === "item");
     let moved = 0;
-    for (const entry of [...this.playerState.goBacks.stock]) {
+    for (const entry of [...this.gameState.goBacks.stock]) {
       const sameItem = crates.filter((crate) => crate.quantity > 0 && crate.itemId === entry.itemId);
       for (const crate of [...sameItem, ...crates.filter((crate) => crate.quantity === 0)]) {
-        if (this.playerState.goBacks.getAvailableUnitsFor(entry.itemId) <= 0) break;
+        if (this.gameState.goBacks.available(entry.itemId) <= 0) break;
         if (crate.getRemainingUnitsFor(entry.itemId) <= 0) continue;
-        moved += this.playerState.packGoBacksIntoCrate(entry.itemId, crate);
+        moved += this.gameState.goBacks.packInto(entry.itemId, crate);
       }
     }
     return moved;
@@ -3845,7 +3840,7 @@ export class GameScene extends Phaser.Scene {
     const register = this.operatingRegisterFixture ?? this.fixtures.registers()[0];
     if (!register?.sprite) return 0;
     const loads = [];
-    for (const entry of this.playerState.goBacks.stock) {
+    for (const entry of this.gameState.goBacks.stock) {
       const limit = getCrateItemLimit(database.getItem(entry.itemId)?.boxSize);
       if (entry.quantity <= 0 || limit <= 0) continue;
       for (let left = entry.quantity; left > 0; left -= limit) loads.push(entry.itemId);
@@ -3877,7 +3872,7 @@ export class GameScene extends Phaser.Scene {
       while (stack.length < FLOOR_STACK_MAX && packed + stack.length < loads.length) {
         stack.push(this.createItemCrate(null, 0, spot.x, spot.y));
       }
-      stack.forEach((crate, index) => this.playerState.packGoBacksIntoCrate(loads[packed + index], crate));
+      stack.forEach((crate, index) => this.gameState.goBacks.packInto(loads[packed + index], crate));
       base.drop(spot.x, spot.y, 0, 0, this.crateMotionPaused);
       this.restockCrates.push(base);
       const above = stack.slice(1);
@@ -3886,7 +3881,7 @@ export class GameScene extends Phaser.Scene {
       packed += stack.length;
     }
     this.syncFloorStacks();
-    this.playerState.notifyListeners();
+    this.gameState.shop.changed();
     const crates = (count) => `${count} ${count === 1 ? "crate" : "crates"}`;
     if (packed === 0) {
       if (!quiet) this.showGameMessage("No clear floor space for the Go-Backs crates. Trying again shortly.", "#f59e0b");
@@ -3992,7 +3987,7 @@ export class GameScene extends Phaser.Scene {
     this.debugInfo?.record("customer-left-angry", {
       customerId: this.debugInfo.identifyCustomer(customer), cart,
     });
-    this.playerState.addToGoBacks(cart);
+    this.gameState.goBacks.addCart(cart);
     const spot = this.findCustomerLine(customer);
     if (!spot) return;
     spot.line.splice(spot.index, 1);
@@ -4132,13 +4127,13 @@ export class GameScene extends Phaser.Scene {
       shelf.placements.map((placement) => ({ ...placement })),
     );
     return createCustomerPool({
-      storeReputation: this.playerState.globalReputation,
-      factionReputation: this.playerState.factionReputation,
-      activeFactions: this.playerState.activeFactions,
+      storeReputation: this.gameState.reputation.global,
+      factionReputation: this.gameState.reputation.factions,
+      activeFactions: this.gameState.catalog.activeFactions,
       shelfPlacements,
       getItem: (itemId) => database.getItem(itemId),
-      employeeCount: this.playerState.getWorkingEmployees().length,
-      tieBreakOffset: this.market.day,
+      employeeCount: this.gameState.staff.working().length,
+      tieBreakOffset: this.gameState.calendar.day,
     });
   }
 
@@ -4197,7 +4192,7 @@ export class GameScene extends Phaser.Scene {
   spawnCustomer(factionId = null) {
     if (this.storeTemporarilyClosed || this.shiftClock.softClosed) return;
     if (this.customers.length >= MAX_CUSTOMERS_IN_STORE) {
-      this.playerState.customersTurnedAway += 1;
+      this.gameState.reputation.turnAwayCustomer();
       this.debugInfo?.record("customer-turned-away", { factionId, reason: "store-at-capacity" });
       return;
     }
@@ -4213,7 +4208,7 @@ export class GameScene extends Phaser.Scene {
         this.reserveShelfSlot(shelf, arrivingCustomer),
       onReserveQueueSlot: (queueingCustomer) => this.reserveQueueSlot(queueingCustomer),
       onReserveExitSlot: () => this.reserveExitSlot(),
-      playerState: this.playerState,
+      gameState: this.gameState,
       spawnBounds: this.customerSpawnBounds,
       onJoinQueue: (arrivingCustomer) => this.handleJoinQueue(arrivingCustomer),
       onLeaveAngry: (angryCustomer, cart) => {
@@ -4294,7 +4289,7 @@ export class GameScene extends Phaser.Scene {
       buyList,
       shelfItemIds,
       (itemId) => this.getStorePrice(itemId) <=
-        this.market.getPrice(itemId) * BARGAIN_PRICE_RATIO,
+        this.gameState.market.getPrice(itemId) * BARGAIN_PRICE_RATIO,
     );
     buyList.bonusItemIds = addTraitBonusItems(buyList, shelfItemIds, traits);
     const targetIds = new Set([
@@ -4472,7 +4467,7 @@ export class GameScene extends Phaser.Scene {
       currency: customer.checkoutPayment.type === "m-scrips" ? "m-scrips" : "credits",
       paymentType: customer.checkoutPayment.type,
       chitCode: customer.checkoutPayment.code,
-      onWrongChange: () => this.playerState.subReputation(1),
+      onWrongChange: () => this.gameState.reputation.lose(1),
       // Three Chit mistakes (wrong keys or running out of time) in one order: the customer gives up and storms out.
       onChitFailed: () => customer.leaveAngry(),
     });
@@ -4596,7 +4591,7 @@ export class GameScene extends Phaser.Scene {
   // The shift ends quietly once the doors are locked and the last customer is gone. The
   // day stays open (prices, calendar) until the player clicks End Day.
   endShift() {
-    const previousLevel = this.playerState.shopLevel;
+    const previousLevel = this.gameState.reputation.shopLevel;
     this.clearEmployees();
     this.shiftEnded = true;
     this.shiftClock.started = false;
@@ -4605,39 +4600,39 @@ export class GameScene extends Phaser.Scene {
     this.storeTemporarilyClosed = false;
     this.storeTemporarilyClosedSinceMs = null;
     this.hud.renderStoreStatus(false);
-    this.playerState.finishShift({
+    this.gameState.finishShift({
       customersServed: this.customersServedThisShift,
-      customersTurnedAway: this.playerState.customersTurnedAway,
+      customersTurnedAway: this.gameState.reputation.customersTurnedAway,
     });
     this.eventBus.emit(GAME_EVENTS.SHIFT_ENDED, {
       served: this.customersServedThisShift,
-      turnedAway: this.playerState.customersTurnedAway,
-      reputation: this.playerState.globalReputation,
-      factionReputation: this.playerState.factionReputation,
+      turnedAway: this.gameState.reputation.customersTurnedAway,
+      reputation: this.gameState.reputation.global,
+      factionReputation: this.gameState.reputation.factions,
     });
     let levelMessage = "";
-    if (this.playerState.shopLevel > previousLevel) {
+    if (this.gameState.reputation.shopLevel > previousLevel) {
       const newContracts = database.getAllLicenses().filter((license) =>
         license.requiredShopLevel > previousLevel &&
-        license.requiredShopLevel <= this.playerState.shopLevel &&
-        !this.playerState.activeLicenses.has(license.id) &&
-        license.isUnlocked(this.playerState));
+        license.requiredShopLevel <= this.gameState.reputation.shopLevel &&
+        !this.gameState.catalog.owns(license.id) &&
+        license.isUnlocked(this.gameState));
       const staffLimitRaised = STAFF_LIMIT_LEVELS.some((level) =>
-        level > previousLevel && level <= this.playerState.shopLevel);
+        level > previousLevel && level <= this.gameState.reputation.shopLevel);
       const newSalesExpansions = this.room.zones.filter((zone) =>
         zone.requiredShopLevel > previousLevel &&
-        zone.requiredShopLevel <= this.playerState.shopLevel &&
+        zone.requiredShopLevel <= this.gameState.reputation.shopLevel &&
         zone.locked && zone.salesFloor);
       const newBackroomExpansions = this.room.zones.filter((zone) =>
         zone.requiredShopLevel > previousLevel &&
-        zone.requiredShopLevel <= this.playerState.shopLevel &&
+        zone.requiredShopLevel <= this.gameState.reputation.shopLevel &&
         zone.locked && zone.backroom);
-      levelMessage = ` Shop Level ${this.playerState.shopLevel} reached!`;
+      levelMessage = ` Shop Level ${this.gameState.reputation.shopLevel} reached!`;
       if (newContracts.length) {
         levelMessage += ` Contracts unlocked: ${newContracts.map((license) => license.name).join(", ")} (Contracts tab).`;
       }
       if (staffLimitRaised) {
-        const limit = getStaffLimit(this.playerState.shopLevel);
+        const limit = getStaffLimit(this.gameState.reputation.shopLevel);
         levelMessage += ` You can now have ${limit} employee${limit === 1 ? "" : "s"} hired at once (Employee tab).`;
       }
       if (newSalesExpansions.length) {
@@ -4646,7 +4641,7 @@ export class GameScene extends Phaser.Scene {
       if (newBackroomExpansions.length) {
         levelMessage += ` Backroom expansion${newBackroomExpansions.length > 1 ? "s" : ""} available to buy in the Layout tab.`;
       }
-      if (hasUnimplementedShopRewardBetween(previousLevel, this.playerState.shopLevel)) {
+      if (hasUnimplementedShopRewardBetween(previousLevel, this.gameState.reputation.shopLevel)) {
         levelMessage += " Some later level rewards are not in the game yet.";
       }
     }
@@ -4669,7 +4664,7 @@ export class GameScene extends Phaser.Scene {
     title.textContent = "SHOP CLOSED";
     const summary = document.createElement("div");
     summary.className = "shift-closing-summary";
-    summary.textContent = `Customers served: ${this.customersServedThisShift} · Turned away: ${this.playerState.customersTurnedAway}`;
+    summary.textContent = `Customers served: ${this.customersServedThisShift} · Turned away: ${this.gameState.reputation.customersTurnedAway}`;
     const hint = document.createElement("div");
     hint.className = "shift-closing-hint";
     hint.textContent = "Select END DAY to start the next day. Today's receipt is in Finances.";
@@ -4698,7 +4693,7 @@ export class GameScene extends Phaser.Scene {
       sold.set(itemId, line);
     }
     for (const [itemId, { amount, quantity }] of sold) {
-      this.playerState.addCredits(amount, {
+      this.gameState.economy.add(amount, {
         category: "sales",
         label: database.getItem(itemId).name,
         quantity,
@@ -4712,7 +4707,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   canEndDay() {
-    return this.playerState.awaitingEndDay && !this.startingShift &&
+    return this.gameState.calendar.awaitingEndDay && !this.startingShift &&
       !this.fixturePlacement.active && this.canSaveOffShift();
   }
 
@@ -4720,16 +4715,15 @@ export class GameScene extends Phaser.Scene {
   // and 52). Prices only move here, so repricing between shifts is stress-free.
   endDay() {
     if (!this.canEndDay()) return false;
-    this.market.advanceDay();
-    this.playerState.endDay(this.market.day);
+    this.gameState.endDay();
     if (this.getEmergencyLoanOffer().available) {
       this.showGameMessage(
-        `Day ${this.market.day} begins. You have nothing left to sell and can't afford a supply order. Open Finances to take an emergency loan.`,
+        `Day ${this.gameState.calendar.day} begins. You have nothing left to sell and can't afford a supply order. Open Finances to take an emergency loan.`,
         "#f59e0b",
       );
       return true;
     }
-    this.showGameMessage(`Day ${this.market.day} begins. Market prices have changed.`, "#10b981");
+    this.showGameMessage(`Day ${this.gameState.calendar.day} begins. Market prices have changed.`, "#10b981");
     return true;
   }
 
@@ -4743,8 +4737,8 @@ export class GameScene extends Phaser.Scene {
       .some(({ offShelves, stock, inCustomerCarts }) => offShelves + stock + inCustomerCarts > 0);
     const crateCosts = this.getRestockableItems().map(({ cost }) => cost);
     return getEmergencyLoanOffer({
-      credits: this.playerState.credits,
-      hasLoan: !!this.playerState.emergencyLoan,
+      credits: this.gameState.economy.credits,
+      hasLoan: !!this.gameState.economy.emergencyLoan,
       shiftRunning,
       ownsSellableStock,
       cheapestOrderCost: crateCosts.length ? Math.min(...crateCosts) + DELIVERY_FEE : null,
@@ -4754,7 +4748,7 @@ export class GameScene extends Phaser.Scene {
   takeEmergencyLoan() {
     const offer = this.getEmergencyLoanOffer();
     if (!offer.available) return false;
-    this.playerState.takeEmergencyLoan(offer.amount, offer.repayTotal);
+    this.gameState.economy.takeLoan(offer.amount, offer.repayTotal);
     this.showGameMessage(
       `Emergency loan received: ${formatMoneyAmount(offer.amount)}. You owe ${formatMoneyAmount(offer.repayTotal)}, paid back from your sales.`,
       "#f59e0b",
@@ -4764,7 +4758,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   payOffEmergencyLoan() {
-    if (!this.playerState.payOffEmergencyLoan()) return false;
+    if (!this.gameState.economy.payOffLoan()) return false;
     this.showGameMessage("Emergency loan paid off.", "#10b981");
     this.requestAutosave();
     return true;
@@ -4773,31 +4767,31 @@ export class GameScene extends Phaser.Scene {
   // Today's running receipt, every finished day's receipt, and lifetime totals, for the
   // Finances tab.
   getFinancesView() {
-    const state = this.playerState;
+    const { economy, reputation, calendar } = this.gameState;
     const shiftRunning = this.shiftClock.started && !this.shiftEnded;
-    const receipts = state.dayReceipts.map((receipt) =>
+    const receipts = economy.dayReceipts.map((receipt) =>
       summarizeReceipt(receipt, receipt.closingCredits, receipt.closingReputation));
     const salesOf = (day) => sumMoney(day.lines
       .filter((line) => line.category === "sales").map((line) => line.amount));
-    const customersToday = state.dayLedger.shift?.customersServed ??
+    const customersToday = economy.dayLedger.shift?.customersServed ??
       (shiftRunning ? this.customersServedThisShift : 0);
     return {
-      day: this.market.day,
+      day: this.gameState.calendar.day,
       shiftRunning,
       emergencyLoan: {
         offer: this.getEmergencyLoanOffer(),
-        balance: state.emergencyLoan?.balance ?? 0,
-        canPayOff: !!state.emergencyLoan && state.credits >= state.emergencyLoan.balance,
+        balance: economy.emergencyLoan?.balance ?? 0,
+        canPayOff: !!economy.emergencyLoan && economy.credits >= economy.emergencyLoan.balance,
       },
-      pendingReputationChange: shiftRunning ? state.pendingReputation.global : null,
-      awaitingEndDay: state.awaitingEndDay,
+      pendingReputationChange: shiftRunning ? reputation.pending.global : null,
+      awaitingEndDay: calendar.awaitingEndDay,
       canEndDay: this.canEndDay(),
-      today: summarizeReceipt(state.dayLedger.serialize(), state.credits, state.globalReputation),
+      today: summarizeReceipt(economy.dayLedger.serialize(), economy.credits, reputation.global),
       receipts,
       lifetime: {
         daysCompleted: receipts.length,
-        totalSales: sumMoney([...state.dayReceipts.map(salesOf), salesOf(state.dayLedger)]),
-        customersServed: state.dayReceipts.reduce(
+        totalSales: sumMoney([...economy.dayReceipts.map(salesOf), salesOf(economy.dayLedger)]),
+        customersServed: economy.dayReceipts.reduce(
           (sum, receipt) => sum + (receipt.shift?.customersServed ?? 0), customersToday),
       },
     };
@@ -4806,7 +4800,7 @@ export class GameScene extends Phaser.Scene {
   // Saves a checkpoint first; if that save fails, the shift doesn't start.
   async startNextShift() {
     if (this.startingShift || this.loadFailed || !this.canSaveOffShift()) return;
-    if (this.playerState.awaitingEndDay) {
+    if (this.gameState.calendar.awaitingEndDay) {
       this.showShopMessage("End the day first: click END DAY at the top.");
       return;
     }
@@ -4833,15 +4827,15 @@ export class GameScene extends Phaser.Scene {
     if (wages > 0) {
       this.showGameMessage(`Employee wages paid: ${wages}.`, "#f59e0b");
     }
-    this.creditsAtShiftStart = this.playerState.credits;
-    this.reputationAtShiftStart = this.playerState.globalReputation;
+    this.creditsAtShiftStart = this.gameState.economy.credits;
+    this.reputationAtShiftStart = this.gameState.reputation.global;
     this.shiftClock.startNewShift();
     this.shiftEnded = false;
     this.startingShift = false;
     this.spawnHiredEmployees();
     this.setSaveStatus("Checkpoint saved. Autosaving resumes after this shift.");
     this.customersServedThisShift = 0;
-    this.playerState.customersTurnedAway = 0;
+    this.gameState.reputation.startShift();
     this.eventBus.emit(GAME_EVENTS.SHIFT_STARTED, { pool: this.customerPool });
     this.managerTablet.refreshLayoutPanels();
     this.managerTablet.refreshEmployeePanel();

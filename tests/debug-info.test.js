@@ -28,11 +28,12 @@ function fixtureScene() {
     game: { canvas: { width: 1280, height: 720 }, loop: { actualFps: 60 } },
     cameras: { main: { scrollX: 0, scrollY: 0, zoom: 1, width: 1280, height: 720 } },
     player: { sprite: { x: 40, y: 50 }, inputEnabled: true },
-    playerState: {
-      serialize: () => ({ globalReputation: 5, goBacks: [] }),
-      activeFactions: new Set(["mercenaries"]),
+    gameState: {
+      toSave: () => ({ playerState: { globalReputation: 5, goBacks: [] } }),
+      catalog: { activeFactions: new Set(["mercenaries"]) },
+      calendar: { day: 1 },
+      market: { serialize: () => ({ prices: { ammo: 5 } }) },
     },
-    market: { day: 1, serialize: () => ({ day: 1, prices: { ammo: 5 } }) },
     customerPool: { totalCustomers: 4, stockScaler: 0.5 },
     customerArrivalSchedule: [{ atMs: 2000, factionId: "mercenaries" }, { atMs: 8000, factionId: null }],
     nextScheduledArrival: 1,

@@ -7,7 +7,7 @@ import { formatMoneyAmount } from "./Money.js";
 import { getNextShopLevel } from "./ShopProgression.js";
 export class HUDController {
     /**
-     * @param {PlayerState} playerState
+     * @param {import('../state/GameState.js').GameState} gameState - shows money, reputation, shop level and the day
      * @param {ShiftClock | null} shiftClock - omit to skip the clock and shift buttons
      * @param {() => void} onStartShift
      * @param {() => void} onSave
@@ -15,7 +15,7 @@ export class HUDController {
      * @param {() => void} onToggleStore - temporarily stops or resumes customer arrivals
      * @param {() => void} onMainMenu - asks to leave the game for the title screen
      */
-    constructor(playerState, shiftClock, onStartShift, onSave, onEndDay, onToggleStore, onMainMenu) {
+    constructor(gameState, shiftClock, onStartShift, onSave, onEndDay, onToggleStore, onMainMenu) {
         this.creditsEl = document.getElementById('hud-credits');
         this.repEl = document.getElementById('hud-rep');
         this.shopLevelEl = document.getElementById('hud-shop-level');
@@ -49,7 +49,10 @@ export class HUDController {
         this.awaitingEndDay = false;
         this.storeTemporarilyClosed = false;
 
-        playerState.subscribe((state) => this.render(state));
+        this.gameState = gameState;
+        this.unsubscribes = [gameState.economy, gameState.reputation, gameState.calendar]
+            .map((slice) => slice.subscribe(() => this.render(), { immediate: false }));
+        this.render();
 
         if (shiftClock) {
             shiftClock.subscribe((clock) => this.renderShiftClock(clock));
@@ -65,6 +68,7 @@ export class HUDController {
     }
 
     destroy() {
+        for (const unsubscribe of this.unsubscribes) unsubscribe();
         this.rootEl.classList.add('hidden');
         this.rootEl.removeEventListener('mousedown', this.preventButtonFocus);
         this.pauseBtn.removeEventListener('click', this.handlePause);
@@ -112,24 +116,25 @@ export class HUDController {
             'Customers who find the store too dirty cost you store reputation, and very dirty stores make them walk out.';
     }
 
-    render(state) {
-        this.creditsEl.innerText = formatMoneyAmount(state.credits);
+    render() {
+        const { economy, reputation, calendar } = this.gameState;
+        this.creditsEl.innerText = formatMoneyAmount(economy.credits);
         
-        if (state.credits < 0) {
+        if (economy.credits < 0) {
             this.creditsEl.classList.add('deficit');
         } else {
             this.creditsEl.classList.remove('deficit');
         }
         
-        this.repEl.innerText = state.globalReputation;
+        this.repEl.innerText = reputation.global;
         this.repEl.title = 'Store reputation changes at the end of each shift.';
-        this.shopLevelEl.innerText = state.shopLevel;
-        const nextLevel = getNextShopLevel(state.shopLevel);
+        this.shopLevelEl.innerText = reputation.shopLevel;
+        const nextLevel = getNextShopLevel(reputation.shopLevel);
         this.shopLevelEl.title = nextLevel
             ? `Finish a shift with at least ${nextLevel.reputation} store reputation to reach Shop Level ${nextLevel.level}.`
             : 'Your shop keeps its earned level even if reputation falls.';
 
-        this.awaitingEndDay = Boolean(state.awaitingEndDay);
+        this.awaitingEndDay = calendar.awaitingEndDay;
         this.renderShiftButtons();
     }
 

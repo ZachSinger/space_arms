@@ -31,11 +31,11 @@ try {
 
   // Mid-game: two stocked shelves, one employee (level 5 allows only one), one played shift, crates on the pad.
   await h.game((scene) => {
-    scene.playerState.shopLevel = 5;
-    scene.playerState.credits += 20000;
+    scene.gameState.reputation.shopLevel = 5;
+    scene.gameState.economy.credits += 20000;
     scene.debugQuickstart({ shelfCount: 2, itemCount: 8 });
-    scene.playerState.hireEmployee("tavi_stock_clerk");
-    scene.playerState.hireEmployee("sera_floor_assistant");
+    scene.gameState.hireEmployee("tavi_stock_clerk");
+    scene.gameState.hireEmployee("sera_floor_assistant");
   });
   await playShortShift(h, 45);
   await h.game((scene) => {

@@ -19,7 +19,7 @@ let server;
 let cacheDirectory;
 let GameScene;
 let CheckoutWindow;
-let PlayerState;
+let GameState;
 let CHARACTER_ART_WIDTH;
 let CHARACTER_FEET_DROP;
 const originalPhaser = globalThis.Phaser;
@@ -53,7 +53,7 @@ before(async () => {
   });
   ({ GameScene } = await server.ssrLoadModule("/js/scenes/game.js"));
   ({ CheckoutWindow } = await server.ssrLoadModule("/js/logic/CheckoutWindow.js"));
-  ({ PlayerState } = await server.ssrLoadModule("/js/logic/PlayerState.js"));
+  ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));
   ({ CHARACTER_ART_WIDTH, CHARACTER_FEET_DROP } = await server.ssrLoadModule("/js/logic/CustomerSprites.js"));
 });
 
@@ -159,16 +159,22 @@ test("pause consumes menu, mouse and keyboard actions, leaving only resume avail
   assert.equal(normalClick.blocked, false);
 });
 
+const ITEMS = [{ id: "ration", baseCost: 10 }];
+const newGame = () => new GameState({ items: ITEMS, random: () => 0.5 });
+const reload = (state) => GameState.fromSave(JSON.parse(JSON.stringify(state.toSave())), { items: ITEMS });
+const loadPlayer = (player) =>
+  GameState.fromSave({ playerState: player, market: { day: 1, ...newGame().market.serialize() } }, { items: ITEMS });
+
 function createExpansionHarness({ shopLevel, credits }) {
   const scene = Object.create(GameScene.prototype);
-  const playerState = new PlayerState();
-  playerState.shopLevel = shopLevel;
-  playerState.credits = credits;
+  const gameState = newGame();
+  gameState.reputation.shopLevel = shopLevel;
+  gameState.economy.credits = credits;
   const messages = [];
   let cameraRefreshes = 0;
   let autosaves = 0;
   Object.assign(scene, {
-    playerState,
+    gameState,
     startingShift: false,
     loadFailed: false,
     shiftEnded: false,
@@ -197,23 +203,23 @@ test("store expansions require their level, credits, and previous purchases", ()
   const locked = createExpansionHarness({ shopLevel: 4, credits: 5000 });
   assert.equal(locked.scene.getExpansionPurchaseOptions()[0].levelMet, false);
   assert.equal(locked.scene.buyExpansion("expansion_west"), false);
-  assert.equal(locked.scene.playerState.credits, 5000);
+  assert.equal(locked.scene.gameState.economy.credits, 5000);
   assert.match(locked.messages[0], /Shop Level 5/);
 
   const poor = createExpansionHarness({ shopLevel: 5, credits: 3999 });
   assert.equal(poor.scene.buyExpansion("expansion_west"), false);
   assert.equal(poor.scene.room.zones.find((zone) => zone.id === "expansion_west").locked, true);
-  assert.equal(poor.scene.playerState.credits, 3999);
+  assert.equal(poor.scene.gameState.economy.credits, 3999);
 
   const open = createExpansionHarness({ shopLevel: 5, credits: 4000 });
   open.scene.shiftClock.started = true;
   assert.equal(open.scene.buyExpansion("expansion_west"), false);
-  assert.equal(open.scene.playerState.credits, 4000);
+  assert.equal(open.scene.gameState.economy.credits, 4000);
   assert.match(open.messages[0], /while the store is closed/);
 
   const wrongOrder = createExpansionHarness({ shopLevel: 30, credits: 100000 });
   assert.equal(wrongOrder.scene.buyExpansion("expansion_a"), false);
-  assert.equal(wrongOrder.scene.playerState.credits, 100000);
+  assert.equal(wrongOrder.scene.gameState.economy.credits, 100000);
   assert.match(wrongOrder.messages[0], /in order/);
 });
 
@@ -222,9 +228,9 @@ test("buying the first store expansion deducts credits and records a receipt lin
   const { scene } = harness;
   assert.equal(scene.getExpansionPurchaseOptions()[0].canAfford, true);
   assert.equal(scene.buyExpansion("expansion_west"), true);
-  assert.equal(scene.playerState.credits, 0);
+  assert.equal(scene.gameState.economy.credits, 0);
   assert.equal(scene.room.zones.find((zone) => zone.id === EXPANSION_ORDER[0]).locked, false);
-  assert.deepEqual(scene.playerState.dayLedger.serialize().lines, [{
+  assert.deepEqual(scene.gameState.economy.dayLedger.serialize().lines, [{
     category: "expansions",
     label: "Sales Floor Expansion West",
     amount: -4000,
@@ -242,7 +248,7 @@ test("backroom expansions require their level, credits, and previous purchases",
 
   const poor = createExpansionHarness({ shopLevel: 13, credits: 3999 });
   assert.equal(poor.scene.buyBackroomUpgrade(BACKROOM_UPGRADE_ORDER[0]), false);
-  assert.equal(poor.scene.playerState.credits, 3999);
+  assert.equal(poor.scene.gameState.economy.credits, 3999);
   assert.match(poor.messages[0], /costs 4,000\./);
 
   const wrongOrder = createExpansionHarness({ shopLevel: 27, credits: 20000 });
@@ -256,10 +262,10 @@ test("buying all backroom expansions records costs and opens the wider room", ()
   for (const id of BACKROOM_UPGRADE_ORDER) {
     assert.equal(scene.buyBackroomUpgrade(id), true);
   }
-  assert.equal(scene.playerState.credits, 0);
+  assert.equal(scene.gameState.economy.credits, 0);
   assert.ok(BACKROOM_UPGRADE_ORDER.every((id) =>
     !scene.room.zones.find((zone) => zone.id === id).locked));
-  assert.deepEqual(scene.playerState.dayLedger.serialize().lines.map((line) => line.amount), [
+  assert.deepEqual(scene.gameState.economy.dayLedger.serialize().lines.map((line) => line.amount), [
     -4000, -6000, -9000,
   ]);
   assert.equal(harness.cameraRefreshes, 3);
@@ -278,7 +284,7 @@ test("debug upgrade buttons open the next zone free, even at Level 1 with the st
     assert.equal(scene.debugUnlockNextZone(order, area), false);
     assert.match(harness.messages.at(-1), new RegExp(`Every ${area} upgrade is already open`));
   }
-  assert.equal(scene.playerState.credits, 0);
+  assert.equal(scene.gameState.economy.credits, 0);
 });
 
 test("the placement grid toggle stays hidden outside placement and independent of the tile grid", () => {
@@ -405,7 +411,7 @@ function createRegisterHarness() {
       this.operatingRegister = true;
       this.operatingRegisterFixture = register;
     },
-    playerState: { addToGoBacks() {} },
+    gameState: { goBacks: { addCart() {} } },
     employees: [],
   });
   scene.controlMode = new ControlMode(scene);
@@ -414,12 +420,12 @@ function createRegisterHarness() {
 
 test("the shift-end event, receipt, and save observers see the applied reputation and level", () => {
   const scene = Object.create(GameScene.prototype);
-  const state = new PlayerState();
+  const state = newGame();
   const events = [];
   const messages = [];
   const savedStates = [];
   Object.assign(scene, {
-    playerState: state,
+    gameState: state,
     customersServedThisShift: 16,
     customers: [],
     loadFailed: false,
@@ -428,7 +434,6 @@ test("the shift-end event, receipt, and save observers see the applied reputatio
     shiftClock: { started: true, isPaused: false, notifyListeners() {} },
     hud: { renderStoreStatus() {} },
     room: { zones: ZONES },
-    market: { day: 1 },
     fixturePlacement: { active: false },
     eventBus: { emit: (name, details) => events.push({ name, details }) },
     clearEmployees() {},
@@ -436,18 +441,18 @@ test("the shift-end event, receipt, and save observers see the applied reputatio
     showGameMessage: (message) => messages.push(message),
   });
   state.subscribe((current) => {
-    if (current.awaitingEndDay && scene.canSaveOffShift()) {
-      savedStates.push(current.serialize());
+    if (current.calendar.awaitingEndDay && scene.canSaveOffShift()) {
+      savedStates.push(current.toSave().playerState);
     }
   });
-  state.addReputation(16, "scavengers");
-  state.subReputation(1, "mercenaries");
-  assert.equal(state.globalReputation, 0);
+  state.reputation.gain(16, "scavengers");
+  state.reputation.lose(1, "mercenaries");
+  assert.equal(state.reputation.global, 0);
   assert.equal(scene.getFinancesView().pendingReputationChange, 15);
 
   scene.endShift();
-  assert.equal(state.globalReputation, 15);
-  assert.equal(state.shopLevel, 2);
+  assert.equal(state.reputation.global, 15);
+  assert.equal(state.reputation.shopLevel, 2);
   assert.equal(scene.shiftClock.started, false);
   assert.deepEqual(events, [{
     name: GAME_EVENTS.SHIFT_ENDED,
@@ -469,11 +474,11 @@ test("the shift-end event, receipt, and save observers see the applied reputatio
 });
 
 test("a shift that earns multiple levels announces each implemented unlock", () => {
-  const state = new PlayerState();
+  const state = newGame();
   const scene = Object.create(GameScene.prototype);
   const messages = [];
   Object.assign(scene, {
-    playerState: state,
+    gameState: state,
     customersServedThisShift: 60,
     shiftEnded: false,
     shiftClock: { started: true, isPaused: false, notifyListeners() {} },
@@ -483,39 +488,39 @@ test("a shift that earns multiple levels announces each implemented unlock", () 
     clearEmployees() {},
     showGameMessage: (message) => messages.push(message),
   });
-  state.addReputation(72);
+  state.reputation.gain(72);
   scene.endShift();
-  assert.equal(state.shopLevel, 4);
+  assert.equal(state.reputation.shopLevel, 4);
   assert.match(messages[0], /Shop Level 4 reached/);
   assert.match(messages[0], /Standard Pistol Ammo/);
   assert.match(messages[0], /You can now have 1 employee hired at once \(Employee tab\)/);
 
-  state.endDay(2);
-  state.addReputation(42);
+  state.endDay();
+  state.reputation.gain(42);
   scene.endShift();
-  assert.equal(state.shopLevel, 5);
+  assert.equal(state.reputation.shopLevel, 5);
   assert.match(messages[1], /Shop Level 5 reached/);
   assert.doesNotMatch(messages[1], /Contracts unlocked|employees? hired at once/);
   assert.match(messages[1], /Sales-floor expansion available to buy in the Layout tab/);
   assert.doesNotMatch(messages[1], /Some later level rewards are not in the game yet/);
 
-  state.endDay(3);
-  state.addReputation(51);
+  state.endDay();
+  state.reputation.gain(51);
   scene.endShift();
-  assert.equal(state.shopLevel, 6);
+  assert.equal(state.reputation.shopLevel, 6);
   assert.match(messages[2], /Shop Level 6 reached/);
   assert.match(messages[2], /Lyra Casual Wear.*Contracts tab/);
   assert.doesNotMatch(messages[2], /Some later level rewards are not in the game yet/);
 });
 
 test("a shift from Shop Level 6 to 30 announces all remaining reward types", () => {
-  const state = new PlayerState();
-  state.shopLevel = 6;
-  state.globalReputation = 165;
+  const state = newGame();
+  state.reputation.shopLevel = 6;
+  state.reputation.global = 165;
   const scene = Object.create(GameScene.prototype);
   const messages = [];
   Object.assign(scene, {
-    playerState: state,
+    gameState: state,
     customersServedThisShift: 60,
     shiftClock: { started: true, isPaused: false, notifyListeners() {} },
     hud: { renderStoreStatus() {} },
@@ -524,10 +529,10 @@ test("a shift from Shop Level 6 to 30 announces all remaining reward types", () 
     clearEmployees() {},
     showGameMessage: (message) => messages.push(message),
   });
-  state.addReputation(3924);
+  state.reputation.gain(3924);
   scene.endShift();
 
-  assert.equal(state.shopLevel, 30);
+  assert.equal(state.reputation.shopLevel, 30);
   assert.match(messages[0], /You can now have 6 employees hired at once/);
   assert.match(messages[0], /Breach-Tech Heavy Tools/);
   assert.match(messages[0], /Sales-floor expansions available to buy/);
@@ -536,15 +541,13 @@ test("a shift from Shop Level 6 to 30 announces all remaining reward types", () 
 });
 
 test("level-up messages do not reannounce contracts or staff already owned in older saves", () => {
-  const state = new PlayerState();
-  for (const id of ["lic_start_survival", "lic_start_surplus", "lic_start_ammo"]) {
-    state.activeLicenses.add(id);
-  }
-  state.hiredEmployees.push("tavi_stock_clerk");
+  const state = newGame();
+  for (const id of ["lic_start_survival", "lic_start_surplus", "lic_start_ammo"]) state.catalog.sign(id);
+  state.staff.add("tavi_stock_clerk");
   const scene = Object.create(GameScene.prototype);
   const messages = [];
   Object.assign(scene, {
-    playerState: state,
+    gameState: state,
     customersServedThisShift: 60,
     shiftClock: { started: true, isPaused: false, notifyListeners() {} },
     hud: { renderStoreStatus() {} },
@@ -553,47 +556,47 @@ test("level-up messages do not reannounce contracts or staff already owned in ol
     clearEmployees() {},
     showGameMessage: (message) => messages.push(message),
   });
-  state.addReputation(72);
+  state.reputation.gain(72);
   scene.endShift();
   assert.match(messages[0], /Shop Level 4 reached/);
   assert.doesNotMatch(messages[0], /Contracts unlocked|Standard Pistol Ammo|Staff unlocked/);
 });
 
 test("level 1 saves keep starting contracts signed before their level requirement changed", () => {
-  const state = new PlayerState();
-  for (const id of ["lic_start_surplus", "lic_start_ammo"]) state.signLicense(id);
-  const restored = PlayerState.deserialize(state.serialize());
+  const state = newGame();
+  for (const id of ["lic_start_surplus", "lic_start_ammo"]) state.catalog.sign(id);
+  const restored = reload(state);
   const contracts = globalThis.__progressionTestLicenses.filter((license) =>
     ["lic_start_surplus", "lic_start_ammo"].includes(license.id));
-  assert.equal(restored.shopLevel, 1);
-  assert.ok(contracts.every((license) => restored.activeLicenses.has(license.id)));
+  assert.equal(restored.reputation.shopLevel, 1);
+  assert.ok(contracts.every((license) => restored.catalog.owns(license.id)));
   const html = ContractRenderer.generateHTML(contracts, restored);
   assert.equal((html.match(/>PURCHASED</g) ?? []).length, 2);
   assert.doesNotMatch(html, />LOCKED</);
 });
 
 test("saves from before contracts were split keep every product they could already order", () => {
-  const state = new PlayerState();
-  state.signLicense("lic_start_ammo");
-  const { contractsSplit, ...oldSave } = state.serialize();
+  const state = newGame();
+  state.catalog.sign("lic_start_ammo");
+  const { contractsSplit, ...oldSave } = state.toSave().playerState;
   assert.equal(contractsSplit, true);
-  const restored = PlayerState.deserialize(upgradeContractSplit({ playerState: oldSave }).playerState);
-  assert.ok(restored.activeLicenses.has("lic_start_ammo"));
-  assert.ok(restored.activeLicenses.has("lic_start_rifle_ammo"));
-  assert.equal(restored.activeLicenses.has("lic_start_survival"), false);
+  const restored = loadPlayer(upgradeContractSplit({ playerState: oldSave }).playerState);
+  assert.ok(restored.catalog.owns("lic_start_ammo"));
+  assert.ok(restored.catalog.owns("lic_start_rifle_ammo"));
+  assert.equal(restored.catalog.owns("lic_start_survival"), false);
 
-  const current = PlayerState.deserialize(upgradeContractSplit({ playerState: state.serialize() }).playerState);
-  assert.equal(current.activeLicenses.has("lic_start_rifle_ammo"), false,
+  const current = loadPlayer(upgradeContractSplit({ playerState: state.toSave().playerState }).playerState);
+  assert.equal(current.catalog.owns("lic_start_rifle_ammo"), false,
     "new saves do not get the follow-up contract for free");
 });
 
 test("the actual hire action explains the level lock and allows hiring after the unlock", () => {
   const scene = Object.create(GameScene.prototype);
-  const state = new PlayerState();
+  const state = newGame();
   const warnings = [];
   let autosaves = 0;
   Object.assign(scene, {
-    playerState: state,
+    gameState: state,
     canHireEmployees: () => true,
     showShopMessage: (message) => warnings.push(message),
     showGameMessage() {},
@@ -601,27 +604,27 @@ test("the actual hire action explains the level lock and allows hiring after the
   });
   assert.equal(scene.hireEmployee("tavi_stock_clerk"), false);
   assert.match(warnings[0], /Shop Level 4.*72 store reputation/);
-  assert.equal(state.credits, 1500);
+  assert.equal(state.economy.credits, 1500);
   assert.equal(autosaves, 0);
 
-  state.addReputation(72);
+  state.reputation.gain(72);
   state.finishShift({ customersServed: 72, customersTurnedAway: 0 });
   assert.equal(scene.hireEmployee("tavi_stock_clerk"), true);
-  assert.equal(state.credits, 1250);
+  assert.equal(state.economy.credits, 1250);
   assert.equal(autosaves, 1);
 });
 
 test("taking an employee off shift is between shifts only, stops wages, and keeps them hired", () => {
-  const state = new PlayerState();
-  state.shopLevel = 4;
+  const state = newGame();
+  state.reputation.shopLevel = 4;
   assert.equal(state.hireEmployee("tavi_stock_clerk"), true);
-  const creditsAfterHire = state.credits;
+  const creditsAfterHire = state.economy.credits;
   const scene = Object.create(GameScene.prototype);
   const warnings = [];
   const messages = [];
   let autosaves = 0;
   Object.assign(scene, {
-    playerState: state,
+    gameState: state,
     canHireEmployees: () => false,
     showShopMessage: (message) => warnings.push(message),
     showGameMessage: (message) => messages.push(message),
@@ -630,34 +633,33 @@ test("taking an employee off shift is between shifts only, stops wages, and keep
 
   assert.equal(scene.setEmployeeOnShift("tavi_stock_clerk", false), false);
   assert.match(warnings[0], /between shifts/);
-  assert.deepEqual(state.offShiftEmployees, []);
+  assert.deepEqual(state.staff.offShift, []);
 
   scene.canHireEmployees = () => true;
   assert.equal(scene.setEmployeeOnShift("tavi_stock_clerk", false), true);
-  assert.deepEqual(state.hiredEmployees, ["tavi_stock_clerk"]);
+  assert.deepEqual(state.staff.hired, ["tavi_stock_clerk"]);
   assert.match(messages[0], /Off Shift.*won't be paid/i);
   assert.equal(scene.payEmployeeWages(), 0);
-  assert.equal(state.credits, creditsAfterHire);
+  assert.equal(state.economy.credits, creditsAfterHire);
   scene.spawnHiredEmployees();
   assert.deepEqual(scene.employees, []);
   assert.equal(autosaves, 1);
 
-  const restored = new PlayerState();
-  restored.applySave(state.serialize());
-  assert.deepEqual(restored.offShiftEmployees, ["tavi_stock_clerk"]);
+  const restored = reload(state);
+  assert.deepEqual(restored.staff.offShift, ["tavi_stock_clerk"]);
   assert.equal(scene.setEmployeeOnShift("tavi_stock_clerk", true), true);
   assert.equal(scene.payEmployeeWages(), 50);
 });
 
 test("training can only be booked between shifts and trainees are paid without spawning for work", () => {
-  const state = new PlayerState();
-  state.shopLevel = 4;
+  const state = newGame();
+  state.reputation.shopLevel = 4;
   state.hireEmployee("tavi_stock_clerk");
   const scene = Object.create(GameScene.prototype);
   const warnings = [];
   let autosaves = 0;
   Object.assign(scene, {
-    playerState: state,
+    gameState: state,
     canHireEmployees: () => false,
     showShopMessage: (message) => warnings.push(message),
     showGameMessage() {},
@@ -665,18 +667,18 @@ test("training can only be booked between shifts and trainees are paid without s
   });
   assert.equal(scene.trainEmployee("tavi_stock_clerk", "register"), false);
   assert.match(warnings[0], /between shifts/);
-  assert.equal(state.credits, 1250);
+  assert.equal(state.economy.credits, 1250);
   scene.canHireEmployees = () => true;
   assert.equal(scene.trainEmployee("tavi_stock_clerk", "register"), true);
   assert.equal(autosaves, 1);
   assert.equal(scene.setEmployeeOnShift("tavi_stock_clerk", false), false);
   assert.match(warnings.at(-1), /away training/);
   assert.equal(scene.payEmployeeWages(), 50);
-  assert.equal(state.credits, 950);
+  assert.equal(state.economy.credits, 950);
   scene.spawnHiredEmployees();
   assert.deepEqual(scene.employees, []);
   state.finishShift({ customersServed: 0, customersTurnedAway: 0 });
-  assert.equal(state.getEmployeeProfile("tavi_stock_clerk").skillLevels.register, 2);
+  assert.equal(state.staff.profile("tavi_stock_clerk").skillLevels.register, 2);
   assert.equal(scene.payEmployeeWages(), 55);
 });
 
@@ -684,7 +686,7 @@ test("actual store price edits preserve cents and explain invalid prices", () =>
   const scene = Object.create(GameScene.prototype);
   const prices = new Map([["ration", 10]]);
   const warnings = [];
-  scene.playerState = { setStorePrice: (id, price) => prices.set(id, price) };
+  scene.gameState = { catalog: { setPrice: (id, price) => prices.set(id, price) } };
   scene.showShopMessage = (message) => warnings.push(message);
   assert.equal(scene.setStorePrice("ration", 10.23), true);
   assert.equal(prices.get("ration"), 10.23);
@@ -953,11 +955,7 @@ test("HUD Save button is wired, reflects availability, and removes its handler o
   });
   let saves = 0;
   let mainMenuRequests = 0;
-  const hud = new HUDController({
-    subscribe(callback) {
-      callback({ credits: 436, globalReputation: 2, shopLevel: 1 });
-    },
-  }, {
+  const hud = new HUDController(newGame(), {
     subscribe(callback) { callback({ started: false, isPaused: true, softClosed: false }); },
   }, () => {}, () => { saves += 1; }, () => {}, () => {}, () => { mainMenuRequests += 1; });
   const mainMenuButton = elements.get("hud-main-menu-btn");

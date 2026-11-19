@@ -104,7 +104,7 @@ export function createDebugSnapshot(scene, identifyCustomer, recentEvents, envir
       },
     },
     shift: {
-      marketDay: scene.market.day,
+      marketDay: scene.gameState.calendar.day,
       durationMs: SHIFT_DURATION_MS,
       elapsedMs: clock.getElapsedMs(),
       displayedTime: clock.getFormattedTime(),
@@ -118,8 +118,8 @@ export function createDebugSnapshot(scene, identifyCustomer, recentEvents, envir
       reputationAtStart: scene.reputationAtShiftStart,
     },
     player: {
-      ...scene.playerState.serialize(),
-      activeFactions: scene.playerState.activeFactions,
+      ...scene.gameState.toSave().playerState,
+      activeFactions: scene.gameState.catalog.activeFactions,
       sprite: spriteState(scene.player.sprite),
       inputEnabled: scene.player.inputEnabled,
       operatingRegister: scene.operatingRegister,
@@ -157,7 +157,7 @@ export function createDebugSnapshot(scene, identifyCustomer, recentEvents, envir
       sprite: spriteState(scene.carriedCrate.sprite),
     } : null,
     rooms: scene.room.zones.map(({ id, locked }) => ({ id, locked })),
-    market: scene.market.serialize(),
+    market: scene.gameState.market.serialize(),
     ui: {
       openWindows: [...scene.windowManager.windows.values()]
         .filter((win) => win.isOpen)
@@ -242,7 +242,7 @@ export class DebugInfo {
   record(type, details) {
     this.recentEvents.push(diagnosticCopy({
       at: new Date().toISOString(),
-      shiftDay: this.scene.market.day,
+      shiftDay: this.scene.gameState.calendar.day,
       elapsedMs: this.scene.shiftClock.getElapsedMs(),
       type,
       details,

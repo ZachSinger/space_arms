@@ -95,7 +95,7 @@ export class Customer {
     onReserveShelfSlot,
     onReserveQueueSlot,
     onReserveExitSlot,
-    playerState,
+    gameState,
     spawnBounds,
     factionId,
     onJoinQueue,
@@ -112,7 +112,7 @@ export class Customer {
     this.onReserveQueueSlot = onReserveQueueSlot;
     this.onReserveExitSlot = onReserveExitSlot;
     this.reservedTarget = null;
-    this.playerState = playerState;
+    this.gameState = gameState;
     this.onJoinQueue = onJoinQueue;
     this.onLeaveAngry = onLeaveAngry;
     this.onMissingPrimary = onMissingPrimary;
@@ -265,7 +265,7 @@ export class Customer {
    * @param {string} itemId
    */
   acceptsPrice(itemId) {
-    const marketPrice = this.scene.market.getPrice(itemId);
+    const marketPrice = this.scene.gameState.market.getPrice(itemId);
     return this.scene.getStorePrice(itemId) <= marketPrice * this.priceTolerance;
   }
 
@@ -462,7 +462,7 @@ export class Customer {
       if (moved === 0) continue;
       this.scene.refreshShelfStockDisplay?.(this.fixture);
       if (this.scene.getStorePrice(itemId) <=
-        this.scene.market.getPrice(itemId) * BARGAIN_PRICE_RATIO) {
+        this.scene.gameState.market.getPrice(itemId) * BARGAIN_PRICE_RATIO) {
         this.showReaction("good-deal", "happy");
       }
       if (this.shoppingPhase === "primary") this.primaryBought.add(itemId);
@@ -550,7 +550,7 @@ export class Customer {
       this.enterLeaving();
       return;
     }
-    this.playerState.notifyListeners();
+    this.gameState.shop.changed();
     this.reservedTarget = this.onReserveQueueSlot
       ? this.onReserveQueueSlot(this)
       : this.registerPoint;

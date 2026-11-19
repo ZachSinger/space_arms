@@ -66,11 +66,11 @@ const TABLET_KEYBOARD_CONTROL_SELECTOR = `${PRICE_CONTROL_SELECTOR}, ${EMPLOYEE_
 
 /**
  * The single Tablet window; owns tab switching, the supply order being built, and
- * live re-rendering of panels whenever playerState changes.
+ * live re-rendering of panels whenever the game state changes.
  */
 export class ManagerTablet {
-  constructor(windowManager, playerState, scene) {
-    this.playerState = playerState;
+  constructor(windowManager, gameState, scene) {
+    this.gameState = gameState;
     this.scene = scene; // needed by the Supply tab to read/order fixture stock
     this.supplyOrder = new Map(); // item id -> crates in the order being built
     this.fixturePurchaseNotice = "";
@@ -125,7 +125,7 @@ export class ManagerTablet {
       if (button) this.switchTab(button.dataset.tab);
     });
 
-    // Delegated, since panel innerHTML is fully replaced on every playerState change.
+    // Delegated, since panel innerHTML is fully replaced on every game state change.
     this.bodyElement.addEventListener("click", (event) => {
       const handbookTopicButton = event.target.closest("[data-handbook-topic]");
       if (handbookTopicButton) {
@@ -273,7 +273,7 @@ export class ManagerTablet {
 
     // License availability, supply affordability, shelf counts, and inventory totals all
     // change elsewhere (sales, deliveries, reputation), so re-render on every state change.
-    this.playerState.subscribe(() => {
+    this.gameState.subscribe(() => {
       this.refreshInventoryPanel();
       this.refreshEmployeePanel();
       this.refreshContractsPanel();
@@ -308,19 +308,19 @@ export class ManagerTablet {
     if (tabId === "inventory") return InventoryRenderer.generateHTML(this.scene.getInventoryItems());
     if (tabId === "employee") {
       return EmployeeRenderer.generateHTML({
-        hiredEmployeeIds: this.playerState.hiredEmployees,
-        offShiftEmployeeIds: this.playerState.offShiftEmployees,
+        hiredEmployeeIds: this.gameState.staff.hired,
+        offShiftEmployeeIds: this.gameState.staff.offShift,
         activeEmployeeIds: this.scene.employees.map((employee) => employee.data.id),
-        employeeJobPriorities: this.playerState.employeeJobPriorities,
-        credits: this.playerState.credits,
+        employeeJobPriorities: this.gameState.staff.jobPriorities,
+        credits: this.gameState.economy.credits,
         canHire: this.scene.canHireEmployees(),
-        employeeSkills: this.playerState.employeeSkills,
-        employeeTraining: this.playerState.employeeTraining,
-        shopLevel: this.playerState.shopLevel,
+        employeeSkills: this.gameState.staff.skills,
+        employeeTraining: this.gameState.staff.training,
+        shopLevel: this.gameState.reputation.shopLevel,
       });
     }
     if (tabId === "contracts") {
-      return ContractRenderer.generateHTML(database.getAllLicenses(), this.playerState);
+      return ContractRenderer.generateHTML(database.getAllLicenses(), this.gameState);
     }
     if (tabId === "supply") return SupplyRenderer.generateHTML(this.scene, this.supplyOrder);
     if (tabId === "fixtures") {
@@ -335,8 +335,8 @@ export class ManagerTablet {
     if (tabId === "handbook") {
       return HandbookRenderer.generateHTML({
         topic: this.handbookTopic,
-        shopLevel: this.playerState.shopLevel,
-        reputation: this.playerState.globalReputation,
+        shopLevel: this.gameState.reputation.shopLevel,
+        reputation: this.gameState.reputation.global,
         licenses: database.getAllLicenses(),
       });
     }
@@ -535,7 +535,7 @@ export class ManagerTablet {
    */
   handlePriceAdjustment(itemId, action) {
     const nextPrice = adjustStorePrice(
-      this.scene.getStorePrice(itemId), this.scene.market.getPrice(itemId), action,
+      this.scene.getStorePrice(itemId), this.scene.gameState.market.getPrice(itemId), action,
     );
     if (nextPrice !== null) this.scene.setStorePrice(itemId, nextPrice);
   }
@@ -543,17 +543,17 @@ export class ManagerTablet {
   handleSignContract(licenseId) {
     const license = database.getLicense(licenseId);
     if (!license) throw new Error(`Unknown supplier license: ${licenseId}.`);
-    if (this.playerState.activeLicenses.has(licenseId)) return; // already owned
-    if (!license.isUnlocked(this.playerState)) {
+    if (this.gameState.catalog.owns(licenseId)) return; // already owned
+    if (!license.isUnlocked(this.gameState)) {
       this.scene.showShopMessage("This contract is locked. Check its requirements in the Contracts tab.");
       return;
     }
-    if (!license.canAfford(this.playerState)) return; // can't afford it
+    if (!license.canAfford(this.gameState)) return; // can't afford it
 
-    this.playerState.spendCredits(license.baseCost, { category: "licenses", label: license.name });
-    this.playerState.signLicense(licenseId);
+    this.gameState.economy.spend(license.baseCost, { category: "licenses", label: license.name });
+    this.gameState.catalog.sign(licenseId);
     this.scene.recalculateActiveFactions();
-    // The panel re-renders via the constructor's playerState subscription.
+    // The panel re-renders via the constructor's game state subscription.
   }
 
   /**
@@ -592,7 +592,7 @@ export class ManagerTablet {
     if (this.scene.startingShift || this.scene.fixturePlacement?.active || this.scene.loadFailed) return;
     this.refreshInventoryPanel();
     this.refreshEmployeePanel();
-    this.refreshSupplyPanel(); // loading pad spots free up without any playerState change
+    this.refreshSupplyPanel(); // loading pad spots free up without any game state change
     this.refreshLayoutPanels();
     this.refreshFinancesPanel();
     this.uiWindow.openWindow();

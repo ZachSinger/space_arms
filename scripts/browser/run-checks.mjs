@@ -22,12 +22,12 @@ const SPEED_LIMITS = { averageMs: 9, p99Ms: 25 };
 export async function runSpeedTest(h, seconds = 45) {
   await h.newGame();
   await h.game((scene) => {
-    scene.playerState.shopLevel = 10;
-    scene.playerState.credits += 100000;
+    scene.gameState.reputation.shopLevel = 10;
+    scene.gameState.economy.credits += 100000;
     for (const zone of scene.room.zones) if (zone.locked) scene.room.unlockZone(zone.id);
     scene.refreshCamera();
     scene.debugQuickstart({ shelfCount: 6, itemCount: 20 });
-    for (const id of ["tavi_stock_clerk", "sera_floor_assistant", "dax_stock_clerk"]) scene.playerState.hireEmployee(id);
+    for (const id of ["tavi_stock_clerk", "sera_floor_assistant", "dax_stock_clerk"]) scene.gameState.hireEmployee(id);
     const itemIds = [...new Set(scene.fixtures.shelves().flatMap((shelf) => shelf.placements.map((entry) => entry.itemId)))];
     // A messy backroom: thirty loose crates.
     const storeroom = scene.room.zones.find((zone) => zone.id === "storeroom");

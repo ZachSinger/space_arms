@@ -15,10 +15,10 @@ export async function runScriptedShift(harness, { employees = [], playSeconds = 
   await h.newGame();
   const setup = await h.game((scene, { employees, shelves, items }) => {
     // Level 7 allows two staff members.
-    scene.playerState.shopLevel = 7;
-    scene.playerState.credits += 20000;
+    scene.gameState.reputation.shopLevel = 7;
+    scene.gameState.economy.credits += 20000;
     scene.debugQuickstart({ shelfCount: shelves, itemCount: items });
-    const hired = employees.map((id) => scene.playerState.hireEmployee(id));
+    const hired = employees.map((id) => scene.gameState.hireEmployee(id));
     const log = { sales: 0, angry: 0, missing: 0, spawned: 0, gaveUp: [] };
     window.__shiftLog = log;
     scene.eventBus.on("customer-sale-completed", () => { log.sales += 1; });
@@ -35,7 +35,7 @@ export async function runScriptedShift(harness, { employees = [], playSeconds = 
   const before = await h.game((scene) => {
     const total = scene.getInventoryItems()
       .reduce((sum, { offShelves, stock, inCustomerCarts }) => sum + offShelves + stock + inCustomerCarts, 0);
-    return { stock: total, credits: scene.playerState.credits };
+    return { stock: total, credits: scene.gameState.economy.credits };
   });
   await h.game((scene) => scene.startNextShift());
   await h.page.waitForFunction(() => window.__game.scene.getScene("scene-game").shiftClock.started, null, { timeout: 30000 });
@@ -54,7 +54,7 @@ export async function runScriptedShift(harness, { employees = [], playSeconds = 
   const after = await h.game((scene) => {
     const total = scene.getInventoryItems()
       .reduce((sum, { offShelves, stock, inCustomerCarts }) => sum + offShelves + stock + inCustomerCarts, 0);
-    const soldUnits = scene.playerState.dayLedger.lines
+    const soldUnits = scene.gameState.economy.dayLedger.lines
       .filter((line) => line.category === "sales").reduce((sum, line) => sum + (line.quantity ?? 1), 0);
     const frames = window.__frames.slice(60);
     const sorted = [...frames].sort((a, b) => a - b);
@@ -72,9 +72,9 @@ export async function runScriptedShift(harness, { employees = [], playSeconds = 
     };
   });
   const endDay = await h.game((scene) => {
-    const day = scene.market.day;
+    const day = scene.gameState.calendar.day;
     const ended = scene.endDay();
-    return { ended, advanced: scene.market.day === day + 1 };
+    return { ended, advanced: scene.gameState.calendar.day === day + 1 };
   });
   const saved = await h.game((scene) => JSON.stringify(scene.serialize()));
   await h.loadSave(JSON.parse(saved));

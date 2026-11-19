@@ -51,10 +51,10 @@ function placeOneOfEachShelf(scene) {
  * @param {Phaser.Scene} scene
  */
 export function unlockEverything(scene) {
-  const { playerState } = scene;
-  playerState.shopLevel = SHOP_LEVEL_TIERS[SHOP_LEVEL_TIERS.length - 1].level;
-  playerState.addCredits(SANDBOX_CREDITS, { category: "loans", label: "Test room money" });
-  for (const license of database.getAllLicenses()) playerState.signLicense(license.id);
+  const { gameState } = scene;
+  gameState.reputation.setShopLevel(SHOP_LEVEL_TIERS[SHOP_LEVEL_TIERS.length - 1].level);
+  gameState.economy.add(SANDBOX_CREDITS, { category: "loans", label: "Test room money" });
+  for (const license of database.getAllLicenses()) gameState.catalog.sign(license.id);
   scene.recalculateActiveFactions();
   for (const zoneId of EXPANSION_ORDER) {
     if (scene.room.zones.find((zone) => zone.id === zoneId)?.locked) scene.room.unlockZone(zoneId);
@@ -67,10 +67,10 @@ export function unlockEverything(scene) {
  * @returns {{ noteGaveUp: (customer: object, reason: string) => void, destroy: () => void }}
  */
 export function setupSandboxRoom(scene) {
-  const { playerState } = scene;
+  const { gameState } = scene;
   unlockEverything(scene);
   placeOneOfEachShelf(scene);
-  playerState.notifyListeners();
+  gameState.shop.changed();
 
   let sent = 0;
   let waitingOutside = 0;
@@ -138,14 +138,14 @@ export function setupSandboxRoom(scene) {
             const placement = shelf.placeItem(item.id, gx, gy, false, 0);
             if (!placement) continue;
             placement.quantity = shelf.getPlacementCapacity(placement);
-            playerState.storePrices[item.id] ??= scene.market.getPrice(item.id);
+            gameState.catalog.priceIfUnset(item.id, gameState.market.getPrice(item.id));
             break;
           }
         }
       }
       scene.refreshShelfStockDisplay(shelf);
     }
-    playerState.notifyListeners();
+    gameState.shop.changed();
     scene.showShopMessage("Test room: every shelf is full.");
   };
 

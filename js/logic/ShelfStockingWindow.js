@@ -161,7 +161,7 @@ export class ShelfStockingWindow {
     if (!placement || placement.quantity > 0) return false;
     this.fixture.removeEmptyPlacement(placement);
     this.notice = `Cleared the sold-out ${database.getItem(placement.itemId).name} space. Customers won't look for it there.`;
-    this.scene.playerState.notifyListeners();
+    this.scene.gameState.shop.changed();
     this.refresh();
     return true;
   }
@@ -268,7 +268,7 @@ export class ShelfStockingWindow {
         `To put something else here, ${getInputDevice() === "gamepad" ? "press X on" : "right-click"} the space to clear it first.`
       : result.message;
     if (!result.moved) this.stopHolding();
-    else this.scene.playerState.notifyListeners();
+    else this.scene.gameState.shop.changed();
     this.refresh();
   }
 
@@ -385,7 +385,7 @@ export class ShelfStockingWindow {
       const action = event.target.closest("[data-price-action]")?.dataset.priceAction;
       if (!action) return;
       const nextPrice = adjustStorePrice(
-        this.scene.getStorePrice(itemId), this.scene.market.getPrice(itemId), action,
+        this.scene.getStorePrice(itemId), this.scene.gameState.market.getPrice(itemId), action,
       );
       if (nextPrice !== null) this.scene.setStorePrice(itemId, nextPrice);
       input.value = this.scene.getStorePrice(itemId);
@@ -441,7 +441,7 @@ export class ShelfStockingWindow {
       return;
     }
     element.querySelector(".shelf-price-widget-market").textContent =
-      `Market price today: ${formatMoneyAmount(this.scene.market.getPrice(itemId))}`;
+      `Market price today: ${formatMoneyAmount(this.scene.gameState.market.getPrice(itemId))}`;
     if (document.activeElement !== input) input.value = this.scene.getStorePrice(itemId);
   }
 

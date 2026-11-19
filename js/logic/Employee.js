@@ -27,7 +27,7 @@ export class Employee {
     this.data = employeeData;
     this.state = "IDLE";
     this.currentJob = null;
-    this.jobPriorities = [...scene.playerState.employeeJobPriorities[employeeData.id]];
+    this.jobPriorities = [...scene.gameState.staff.jobPriorities[employeeData.id]];
     this.destination = null;
     this.registerServiceRemainingMs = 0;
     this.path = [];
@@ -410,7 +410,7 @@ export class Employee {
       destinationName: "shelf",
     });
     this.scene.refreshShelfStockDisplay(shelf);
-    this.scene.playerState.notifyListeners();
+    this.scene.gameState.shop.changed();
 
     if (crate.quantity <= 0) {
       if (!this.walkToTrashcan()) this.returnCrate();

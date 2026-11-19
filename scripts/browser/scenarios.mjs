@@ -14,10 +14,10 @@ const GOLDEN = new URL("../../tests/golden-saves/", import.meta.url);
 async function freshShop(h, { employees = [] } = {}) {
   await h.newGame();
   await h.game((scene, staff) => {
-    scene.playerState.shopLevel = 5;
-    scene.playerState.credits += 20000;
+    scene.gameState.reputation.shopLevel = 5;
+    scene.gameState.economy.credits += 20000;
     scene.debugQuickstart({ shelfCount: 2, itemCount: 8 });
-    for (const id of staff) scene.playerState.hireEmployee(id);
+    for (const id of staff) scene.gameState.hireEmployee(id);
   }, employees);
 }
 
@@ -64,7 +64,7 @@ export const scenarios = {
       window.__hits = () => hits;
       scene.spawnCustomer();
       // Reputation changes wait in a pending tally until End Day.
-      return scene.playerState.pendingReputation.global;
+      return scene.gameState.reputation.pending.global;
     });
     // Customers stand still while browsing a shelf: the easiest moment to aim.
     await h.page.waitForFunction(() => window.__game.scene.getScene("scene-game").customers[0]?.state === "BROWSING",
@@ -91,7 +91,7 @@ export const scenarios = {
       await h.wait(1200);
       if (await h.page.evaluate(() => window.__hits())) break;
     }
-    const after = await h.game((scene) => ({ hits: window.__hits(), reputation: scene.playerState.pendingReputation.global }));
+    const after = await h.game((scene) => ({ hits: window.__hits(), reputation: scene.gameState.reputation.pending.global }));
     const failures = [];
     if (after.hits < 1) failures.push("no customer was hit by a thrown crate");
     else if (!(after.reputation < before)) failures.push(`hit didn't cost reputation (${before} -> ${after.reputation})`);
@@ -163,7 +163,7 @@ export const scenarios = {
       const placement = shelf.placements[0];
       placement.quantity = 0;
       scene.placeSupplyOrder(new Map([[placement.itemId, 1]]));
-      scene.playerState.notifyListeners();
+      scene.gameState.shop.changed();
       return { shelfId: shelf.id, itemId: placement.itemId };
     });
     await h.game((scene) => scene.startNextShift());

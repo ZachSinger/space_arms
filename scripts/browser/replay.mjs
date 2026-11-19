@@ -18,10 +18,10 @@ async function playSeededShift(h, { perFrame, steps }) {
   // Stop the real loop at once so frames of uneven length never touch the run.
   await h.step(0);
   await h.game((scene) => {
-    scene.playerState.shopLevel = 7;
-    scene.playerState.credits += 20000;
+    scene.gameState.reputation.shopLevel = 7;
+    scene.gameState.economy.credits += 20000;
     scene.debugQuickstart({ shelfCount: 2, itemCount: 8 });
-    for (const id of ["tavi_stock_clerk", "sera_floor_assistant"]) scene.playerState.hireEmployee(id);
+    for (const id of ["tavi_stock_clerk", "sera_floor_assistant"]) scene.gameState.hireEmployee(id);
     // Physics carries leftover frame time between steps; start both runs from none.
     scene.physics.world._elapsed = 0;
     scene.startNextShift();
@@ -45,7 +45,7 @@ async function playSeededShift(h, { perFrame, steps }) {
     return {
       log: window.__replayLog,
       shiftMs: Math.round(scene.shiftClock.getElapsedMs()),
-      credits: scene.playerState.credits,
+      credits: scene.gameState.economy.credits,
       customers: scene.customers.map((customer) => [customer.state, ...at(customer.sprite), customer.cart.length]),
       employees: scene.employees.map((employee) => [employee.state, ...at(employee.sprite)]),
       crates: scene.restockCrates.map((crate) => at(crate)),

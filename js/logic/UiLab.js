@@ -14,7 +14,7 @@ import { getTabDefs } from "./ManagerTablet.js";
 export function setupUiLab(scene) {
   unlockEverything(scene);
   scene.debugQuickstart({ shelfCount: 2, itemCount: 8 });
-  scene.playerState.notifyListeners();
+  scene.gameState.shop.changed();
 
   const panel = document.createElement("div");
   panel.className = "sandbox-panel";

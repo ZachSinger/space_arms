@@ -6,6 +6,7 @@
 // price, clamped to a band around the hidden base so it can't drift off forever.
 import { roundMoney } from "./Money.js";
 import { gameRandom } from "../core/Random.js";
+import { Slice } from "../state/Slice.js";
 
 // Daily random-walk swing (fraction of price) and the clamp band (multiples of base).
 export const DAILY_SWING = 0.1;
@@ -16,11 +17,22 @@ export const MAX_BASE_RATIO = 2;
 export const MIN_SUPPLY_RATIO = 0.4;
 export const MAX_SUPPLY_RATIO = 0.6;
 
-export class Market {
-  constructor(items, random = gameRandom) {
+// Which day it is lives in the Calendar slice; the market only knows today's prices.
+export class Market extends Slice {
+  /**
+   * @param {object[]} items
+   * @param {() => number} [random]
+   * @param {{ prices: object, supplyRatios: object } | null} [saved] - restores without new random draws
+   */
+  constructor(items, random = gameRandom, saved = null) {
+    super();
     this.random = random;
-    this.day = 1;
     this.basePrices = new Map(items.map((item) => [item.id, item.baseCost]));
+    if (saved) {
+      this.prices = new Map(Object.entries(saved.prices));
+      this.supplyRatios = new Map(Object.entries(saved.supplyRatios));
+      return;
+    }
     this.supplyRatios = new Map(
       items.map((item) => [
         item.id,
@@ -59,23 +71,16 @@ export class Market {
   }
 
   advanceDay() {
-    this.day += 1;
     for (const [itemId, basePrice] of this.basePrices) {
       this.prices.set(itemId, this.nextPrice(this.prices.get(itemId), basePrice));
     }
+    this.changed();
   }
 
   serialize() {
     return {
-      day: this.day,
       prices: Object.fromEntries(this.prices),
       supplyRatios: Object.fromEntries(this.supplyRatios),
     };
-  }
-
-  applySave(data) {
-    this.day = data.day;
-    this.prices = new Map(Object.entries(data.prices));
-    this.supplyRatios = new Map(Object.entries(data.supplyRatios));
   }
 }

@@ -183,9 +183,9 @@ function makeEmployee({
       completedSales.push({ employee, customer });
       return true;
     },
-    playerState: {
-      employeeJobPriorities: { tavi_stock_clerk: jobPriorities },
-      notifyListeners() {},
+    gameState: {
+      staff: { jobPriorities: { tavi_stock_clerk: jobPriorities } },
+      shop: { changed() {} },
     },
     refreshShelfStockDisplay() {},
     add: {

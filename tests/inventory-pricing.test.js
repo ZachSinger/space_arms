@@ -13,6 +13,7 @@ import { SupplierLicense } from "../js/logic/Licenses.js";
 
 let server;
 let ManagerTablet;
+let GameState;
 let cacheDirectory;
 const originalDocument = globalThis.document;
 
@@ -54,6 +55,7 @@ before(async () => {
     }],
   });
   ({ ManagerTablet } = await server.ssrLoadModule("/js/logic/ManagerTablet.js"));
+  ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));
 });
 
 after(async () => {
@@ -175,13 +177,8 @@ function createHarness() {
   const prices = new Map([["rifle", 100], ["pistol", 200]]);
   const marketPrices = new Map([["rifle", 275], ["pistol", 250]]);
   const unitCosts = new Map([["rifle", 80], ["pistol", 250]]);
-  const playerState = {
-    listeners: [],
-    hiredEmployees: [],
-    credits: 1500,
-    subscribe(listener) { this.listeners.push(listener); listener(); },
-    notifyListeners() { for (const listener of this.listeners) listener(); },
-  };
+  const gameState = new GameState({ items: [] });
+  gameState.market.getPrice = (itemId) => marketPrices.get(itemId);
   const eventBus = {
     listeners: new Map(),
     on(event, listener) {
@@ -199,19 +196,18 @@ function createHarness() {
     resetKeys() {},
   };
   const scene = {
-    playerState,
+    gameState,
     eventBus,
     input: { keyboard },
     employees: [],
     customerCartCount: 0,
     canHireEmployees: () => true,
-    market: { getPrice: (itemId) => marketPrices.get(itemId) },
     offShelves: 1,
     getStorePrice: (itemId) => prices.get(itemId),
     setStorePrice(itemId, price) {
       if (!isMoney(price) || price < 1) return false;
       prices.set(itemId, price);
-      playerState.notifyListeners();
+      gameState.shop.changed();
       return true;
     },
     getInventoryItems() {
@@ -247,7 +243,7 @@ function createHarness() {
     }),
     fixtures: { all: () => [], displayName: () => "" },
   };
-  const tablet = new ManagerTablet({}, playerState, scene);
+  const tablet = new ManagerTablet({}, gameState, scene);
   const click = (itemId, action) => {
     const button = panel.button(itemId, action);
     focus(button);
@@ -295,7 +291,7 @@ test("price buttons update the displayed value and retain keyboard focus", () =>
   assert.equal(h.panel.input("rifle").value, "108.9");
   const profitBeforeMarketChange = h.panel.profit("rifle");
   h.marketPrices.set("rifle", 300);
-  h.scene.playerState.notifyListeners();
+  h.scene.gameState.shop.changed();
   assert.equal(h.panel.profit("rifle"), profitBeforeMarketChange);
   h.click("rifle", "market");
   assert.equal(h.panel.input("rifle").value, "300");
@@ -332,33 +328,25 @@ test("contract signing enforces each shop level without spending credits early",
     data.map((license) => [license.id, new SupplierLicense(license)]),
   );
   const warnings = [];
-  const entries = [];
-  const state = {
-    shopLevel: 1,
-    globalReputation: 1000,
-    factionReputation: { scavengers: 0, mercenaries: 0, explorers: 0 },
-    credits: 1500,
-    activeLicenses: new Set(),
-    spendCredits(amount, entry) { this.credits -= amount; entries.push(entry); },
-    signLicense(id) { this.activeLicenses.add(id); },
-  };
+  const state = new GameState({ items: [] });
+  state.reputation.global = 1000;
   const tablet = Object.create(ManagerTablet.prototype);
-  tablet.playerState = state;
+  tablet.gameState = state;
   tablet.scene = {
     showShopMessage: (message) => warnings.push(message),
     recalculateActiveFactions() {},
   };
   tablet.handleSignContract("lic_start_apparel");
-  assert.equal(state.credits, 1500);
-  assert.equal(state.activeLicenses.has("lic_start_apparel"), false);
+  assert.equal(state.economy.credits, 1500);
+  assert.equal(state.catalog.owns("lic_start_apparel"), false);
   assert.match(warnings[0], /locked.*requirements/i);
 
-  state.shopLevel = 6;
-  state.globalReputation = -5;
+  state.reputation.shopLevel = 6;
+  state.reputation.global = -5;
   tablet.handleSignContract("lic_start_apparel");
-  assert.equal(state.credits, 1425);
-  assert.equal(state.activeLicenses.has("lic_start_apparel"), true);
-  assert.deepEqual(entries.map((entry) => entry.category), ["licenses"]);
+  assert.equal(state.economy.credits, 1425);
+  assert.equal(state.catalog.owns("lic_start_apparel"), true);
+  assert.deepEqual(state.economy.dayLedger.lines.map((line) => line.category), ["licenses"]);
 });
 
 test("opening the tablet hides checkout and closing it resumes register work", () => {
@@ -503,7 +491,7 @@ test("pending changes refresh when leaving price controls", async () => {
   const h = createHarness();
   h.focus(h.panel.input("rifle"));
   h.scene.offShelves = 5;
-  h.scene.playerState.notifyListeners();
+  h.scene.gameState.shop.changed();
   assert.equal(h.tablet.inventoryRefreshPending, true);
   h.focus(h.panel.button("rifle", "market"));
   h.focus(null);
@@ -518,12 +506,12 @@ function createSupplyHarness(credits) {
   const warnings = [];
   let refreshes = 0;
   globalThis.__supplyErrorBuzzes = 0;
-  tablet.playerState = { credits };
+  tablet.gameState = { economy: { credits } };
   tablet.supplyOrder = new Map();
   tablet.scene = {
     getSupplyOrderSummary: (order) => summarizeSupplyOrder(order, {
       getCrateCost: (id) => ({ ammo: 40, rations: 10 })[id],
-      credits: tablet.playerState.credits,
+      credits: tablet.gameState.economy.credits,
       freePadSpots: 9,
     }),
     showShopMessage: (message) => warnings.push(message),
@@ -567,7 +555,7 @@ test("adding another crate of the same item cannot exceed the budget", () => {
 test("lower funds reject additions but never prevent removing crates from the order", () => {
   const h = createSupplyHarness(1000);
   h.tablet.changeSupplyOrder("ammo", 1);
-  h.tablet.playerState.credits = 0;
+  h.tablet.gameState.economy.credits = 0;
   h.tablet.changeSupplyOrder("rations", 1);
   assert.deepEqual([...h.tablet.supplyOrder], [["ammo", 1]]);
   assert.equal(h.buzzes(), 1);

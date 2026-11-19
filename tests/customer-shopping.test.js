@@ -280,7 +280,7 @@ function makeShelfScene(shelves) {
   const scene = Object.create(GameScene.prototype);
   scene.fixtures = { shelves: () => shelves };
   scene.getStorePrice = () => 10;
-  scene.market = { getPrice: () => 10 };
+  scene.gameState = { market: { getPrice: () => 10 } };
   return scene;
 }
 
@@ -323,15 +323,18 @@ function makeCustomer({ factionId = "scavengers", plan }) {
       tags: id === "gun" ? ["Firearm", "Rifle"] : [],
     }),
     getStorePrice: () => 10,
-    market: { getPrice: () => 100 },
+    gameState: { market: { getPrice: () => 100 } },
     showFloatingText: (...args) => floatingText.push(args),
     add: { graphics: addReactionGraphics },
   };
   customer.sprite = { x: 100, y: 100 };
   customer.factionId = factionId;
-  customer.playerState = {
-    subReputation: (amount, id) => repChanges.push({ amount, factionId: id }),
-    notifyListeners() {},
+  customer.gameState = {
+    reputation: {
+      lose: (amount, id) => repChanges.push({ amount: -amount, factionId: id }),
+      gain: (amount, id) => repChanges.push({ amount, factionId: id }),
+    },
+    shop: { changed() {} },
   };
   customer.shoppingPlan = plan;
   customer.state = "SEEK_SHELF";
@@ -501,7 +504,7 @@ test("customers name items they cannot afford after shopping", () => {
   };
   const { customer, floatingText } = makeCustomer({ plan });
   customer.scene.getStorePrice = () => 200;
-  customer.scene.market.getPrice = () => 100;
+  customer.scene.gameState.market.getPrice = () => 100;
 
   customer.visitNextShelf("primary");
 

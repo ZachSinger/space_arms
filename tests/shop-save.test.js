@@ -21,7 +21,7 @@ function snapshot() {
       goBacks: [{ itemId: "wpn_rif_01", quantity: 40 }],
       contractsSplit: true,
     },
-    market: new Market(database.getAllItems(), () => 0.5).serialize(),
+    market: { day: 1, ...new Market(database.getAllItems(), () => 0.5).serialize() },
     fixtures: [
       { id: "fixture_demo_01", type: "shelf_budget_2x2", gx: 16, gy: 3 },
       ...STARTING_FIXTURES,
@@ -196,7 +196,7 @@ test("saves accept cent balances and prices and reject fractions smaller than a 
   const data = snapshot();
   data.playerState.credits = 1500.23;
   data.playerState.storePrices.wpn_rif_01 = 123.45;
-  data.market = new Market(database.getAllItems(), () => 0.123).serialize();
+  data.market = { day: 1, ...new Market(database.getAllItems(), () => 0.123).serialize() };
   assert.doesNotThrow(() => validateShopSave(JSON.parse(JSON.stringify(data)), database));
   for (const corrupt of [
     (saved) => { saved.playerState.credits = 1500.001; },
