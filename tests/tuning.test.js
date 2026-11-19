@@ -5,6 +5,7 @@ import customerTuning from "../data/tuning/customers.json" with { type: "json" }
 import checkoutTuning from "../data/tuning/checkout.json" with { type: "json" };
 import crateTuning from "../data/tuning/crates.json" with { type: "json" };
 import cleaningTuning from "../data/tuning/cleaning.json" with { type: "json" };
+import navigationTuning from "../data/tuning/navigation.json" with { type: "json" };
 
 const entry = (value, extra = {}) => ({ value, min: 0, max: 10, description: "A number.", ...extra });
 
@@ -70,5 +71,12 @@ test("moved tuning numbers keep their old values", () => {
     mercenariesWalkOutPercent: [35, 50],
     explorersUpsetPercent: [75, 95],
     explorersWalkOutPercent: [45, 60],
+  });
+  assert.deepEqual({ ...loadTuning("navigation", navigationTuning) }, {
+    walkStepPx: 8,
+    connectorRadiusCells: 16,
+    maxPathNodes: 50000,
+    maxReachableGridCells: 4000,
+    maxGridPathSteps: 4000,
   });
 });

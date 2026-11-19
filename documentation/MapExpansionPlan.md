@@ -122,12 +122,14 @@ exists" means "already authored in data," not "already rendered."
    supports one hand-seeded demo shelf. Real shelf/register/fixture placement
    (using the newly-extracted `Tileset/Fixtures/` sprites) and a Build Mode
    placement UI are separate, larger pieces of work.
-5. **Pathfinding.** `Pathfinder.js` uses heap-based A* on an 8-pixel navigation
-   grid for character movement, then smooths routes wherever a straight walk
-   clears the room and character-sized fixture/wall boundaries. Customers and
+5. **Pathfinding.** `world/Navigation.js` uses heap-based A* on an 8-pixel navigation
+   grid for character movement (configured in `data/tuning/navigation.json`). It
+   smooths routes wherever a straight walk clears the room and character-sized
+   fixture/wall boundaries. Customers and
    staff can use narrow spaces that tile-center routes used to reject; staff
    routes use their smaller collision body, and register destinations can sit
    directly at the counter's front. Collision remains active as a safety net.
+   Routes between areas pass through their linked portals.
    Other characters are still not route obstacles; customers can pass through
    one another, as before. Fixture moves happen between shifts, so live routes
    do not need to be rebuilt during rearrangement.

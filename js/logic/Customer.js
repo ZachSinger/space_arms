@@ -3,7 +3,7 @@
 // ==========================================
 // One shopper: picks a faction buy list, walks to the shelves holding those items, buys at
 // acceptable prices, then queues for player-driven checkout (or leaves angry).
-// See also: CustomerBuyLists.js (what they want), Pathfinder.js (how they route).
+// See also: CustomerBuyLists.js (what they want), Navigation.js (how they route).
 
 import {
   addCharacterSprite,

@@ -11,6 +11,9 @@ let server;
 let cacheDirectory;
 let Customer;
 let GameScene;
+let Navigation;
+let SPRITE_DISPLAY_WIDTH;
+let SPRITE_DISPLAY_HEIGHT;
 let CustomerFlow;
 let CheckoutSystem;
 let gameRandom;
@@ -51,7 +54,9 @@ before(async () => {
       },
     }],
   });
-  ({ Customer } = await server.ssrLoadModule("/js/logic/Customer.js"));
+  ({ Customer, SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT } =
+    await server.ssrLoadModule("/js/logic/Customer.js"));
+  ({ Navigation } = await server.ssrLoadModule("/js/world/Navigation.js"));
   ({ gameRandom } = await server.ssrLoadModule("/js/core/Random.js"));
   ({ GameScene } = await server.ssrLoadModule("/js/scenes/game.js"));
   ({ CustomerFlow } = await server.ssrLoadModule("/js/systems/CustomerFlow.js"));
@@ -103,8 +108,44 @@ function makeNavigationScene(obstacles = [], register = null) {
   };
   scene.obstacleGroup = { getChildren: () => obstacles };
   scene.fixtures = { register: () => register, registers: () => register ? [register] : [] };
+  scene.areas = { crossing: () => null };
+  scene.navigation = new Navigation({
+    room: scene.room,
+    areas: scene.areas,
+    obstacleGroup: scene.obstacleGroup,
+    fixtures: scene.fixtures,
+    getStoreDoorBlocker: () => scene.storeDoorAnimation?.door.blocker ?? null,
+    getRegisterFacing: () => "down",
+    registerFrontOverlap: 10,
+    defaultBodySize: { width: SPRITE_DISPLAY_WIDTH, height: SPRITE_DISPLAY_HEIGHT },
+  });
   return scene;
 }
+
+test("cross-area paths use matching portal approaches and a teleport waypoint", () => {
+  const scene = makeNavigationScene();
+  const pathCalls = [];
+  const near = { x: 80, y: 96 };
+  const far = { x: 96, y: 160 };
+  scene.areas.crossing = () => ({ near, far });
+  scene.navigation.findAreaPath = (...args) => {
+    pathCalls.push(args);
+    return [{ x: args[2], y: args[3] }];
+  };
+  const bodySize = { width: 22, height: 20 };
+
+  const path = scene.findPath(32, 96, 224, 160, bodySize);
+
+  assert.deepEqual(pathCalls, [
+    [32, 96, near.x, near.y, bodySize],
+    [far.x, far.y, 224, 160, bodySize],
+  ]);
+  assert.deepEqual(path, [
+    near,
+    { ...near, teleportTo: far },
+    { x: 224, y: 160 },
+  ]);
+});
 
 test("characters can walk through a clear passage narrower than one floor square", () => {
   const scene = makeNavigationScene([

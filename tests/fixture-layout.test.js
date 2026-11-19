@@ -6,7 +6,7 @@ import { FixturePlacementGrid } from "../js/logic/FixturePlacementGrid.js";
 import { PAD } from "../js/logic/GamepadInput.js";
 import { getInputDevice, setInputDevice } from "../js/logic/InputDevice.js";
 import { TileRoom } from "../js/logic/TileRoom.js";
-import { findGridPath } from "../js/logic/Pathfinder.js";
+import { findGridPath } from "../js/world/Navigation.js";
 import {
   getZone, getStoreDoorCell, getStoreDoorCells, getBackroomDoorCell, getBackroomExitCell,
   getBackroomLink, getBackroomInteriorBounds, getLoadingPadBounds, getDoorwayClearanceBounds, TILE_SIZE,

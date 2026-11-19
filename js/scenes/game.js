@@ -35,7 +35,6 @@ import {
   getLoadingPadBounds, LOADING_PAD_WIDTH, LOADING_PAD_HEIGHT,
 } from "../logic/RoomLayout.js";
 import { ShiftClock } from "../logic/ShiftClock.js";
-import { findFreeWalkPath } from "../logic/Pathfinder.js";
 import { FixturePlacement } from "../logic/FixturePlacement.js";
 import { setupSandboxRoom } from "../debug/SandboxRoom.js";
 import { setupUiLab } from "../debug/UiLab.js";
@@ -54,6 +53,7 @@ import { CustomerFlow } from "../systems/CustomerFlow.js";
 import { CheckoutSystem } from "../systems/CheckoutSystem.js";
 import { CrateSystem } from "../systems/CrateSystem.js";
 import { CrateWorld } from "../world/CrateWorld.js";
+import { Navigation } from "../world/Navigation.js";
 import { CleaningSystem } from "../modules/cleaning/CleaningSystem.js";
 import { CheckoutWindow } from "../logic/CheckoutWindow.js";
 import { GamepadInput, PAD } from "../logic/GamepadInput.js";
@@ -73,26 +73,6 @@ function reputationPenaltyText(penalty, factionId) {
   const faction = factionId ? CUSTOMER_TRAITS[factionId] : null;
   if (factionId && !faction?.group) throw new Error(`Unknown customer faction: ${factionId}.`);
   return `-${penalty} store reputation${faction ? `\n-${penalty} ${faction.name} reputation` : ""}\nat shift end`;
-}
-
-function segmentIntersectsRectangle(from, to, rectangle) {
-  const epsilon = 0.001;
-  const left = rectangle.left + epsilon;
-  const right = rectangle.right - epsilon;
-  const top = rectangle.top + epsilon;
-  const bottom = rectangle.bottom - epsilon;
-  let minimum = 0;
-  let maximum = 1;
-  const clip = (origin, delta, low, high) => {
-    if (Math.abs(delta) < epsilon) return origin > low && origin < high;
-    const first = (low - origin) / delta;
-    const last = (high - origin) / delta;
-    minimum = Math.max(minimum, Math.min(first, last));
-    maximum = Math.min(maximum, Math.max(first, last));
-    return minimum < maximum;
-  };
-  return clip(from.x, to.x - from.x, left, right) &&
-    clip(from.y, to.y - from.y, top, bottom);
 }
 
 // Reputation lost when a thrown crate hits a customer.
@@ -249,6 +229,16 @@ export class GameScene extends Phaser.Scene {
     this.registerGroup = this.physics.add.staticGroup();
     this.fixtureViews = new FixtureViews(this);
     this.fixtureSystem = new FixtureSystem(this);
+    this.navigation = new Navigation({
+      room: this.room,
+      areas: this.areas,
+      obstacleGroup: this.obstacleGroup,
+      fixtures: this.fixtures,
+      getStoreDoorBlocker: () => this.storeDoorAnimation?.door.blocker ?? null,
+      getRegisterFacing: fixtureFacing,
+      registerFrontOverlap: REGISTER_FRONT_OVERLAP,
+      defaultBodySize: { width: SPRITE_DISPLAY_WIDTH, height: SPRITE_DISPLAY_HEIGHT },
+    });
     for (const fixture of this.fixtures.all()) this.fixtureViews.show(fixture);
 
     // Customers spawn just inside the front door. The small jitter box keeps several quick
@@ -1109,58 +1099,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   getNavigationObstacles(bodySize = { width: SPRITE_DISPLAY_WIDTH, height: SPRITE_DISPLAY_HEIGHT }) {
-    const halfW = bodySize.width / 2;
-    const halfH = bodySize.height / 2;
-    const solids = [...this.obstacleGroup.getChildren(), ...this.room.wallGroup.getChildren()];
-    const storeDoorBlocker = this.storeDoorAnimation?.door.blocker;
-    const obstacles = solids.flatMap((solid) => {
-      if (!solid.body || (solid === storeDoorBlocker
-        ? !bodySize.avoidStoreDoor
-        : solid.body.enable === false)) return [];
-      const { body } = solid;
-      return [{
-        left: body.x - halfW,
-        right: body.x + body.width + halfW,
-        top: body.y - halfH,
-        bottom: body.y + body.height + halfH,
-      }];
-    });
-    for (const register of this.fixtures.registers()) {
-      const registerBody = register.sprite?.body;
-      if (!registerBody) continue;
-      const bounds = {
-        left: registerBody.x - halfW,
-        right: registerBody.x + registerBody.width + halfW,
-        top: registerBody.y - halfH,
-        bottom: registerBody.y + registerBody.height + halfH,
-      };
-      switch (fixtureFacing(register)) {
-        case "down": bounds.bottom -= REGISTER_FRONT_OVERLAP; break;
-        case "up": bounds.top += REGISTER_FRONT_OVERLAP; break;
-        case "left": bounds.left += REGISTER_FRONT_OVERLAP; break;
-        case "right": bounds.right -= REGISTER_FRONT_OVERLAP; break;
-      }
-      obstacles.push(bounds);
-    }
-    return obstacles;
+    return this.navigation.getNavigationObstacles(bodySize);
   }
 
   isNavigationSegmentClear(from, to, obstacles) {
-    const distance = Math.hypot(to.x - from.x, to.y - from.y);
-    const steps = Math.ceil(distance / 8);
-    for (let index = 0; index <= steps; index += 1) {
-      const ratio = steps ? index / steps : 0;
-      const x = from.x + (to.x - from.x) * ratio;
-      const y = from.y + (to.y - from.y) * ratio;
-      if (!this.room.isWalkable(Math.floor(x / TILE_SIZE), Math.floor(y / TILE_SIZE))) return false;
-    }
-    return obstacles.every((rectangle) => !segmentIntersectsRectangle(from, to, rectangle));
+    return this.navigation.isNavigationSegmentClear(from, to, obstacles);
   }
 
   // Whether a character-sized body can move directly between two world positions.
   isStraightWalkClear(fromX, fromY, toX, toY, bodySize) {
-    const obstacles = this.getNavigationObstacles(bodySize);
-    return this.isNavigationSegmentClear({ x: fromX, y: fromY }, { x: toX, y: toY }, obstacles);
+    return this.navigation.isStraightWalkClear(fromX, fromY, toX, toY, bodySize);
   }
 
   /**
@@ -1174,32 +1122,11 @@ export class GameScene extends Phaser.Scene {
    * @returns {Array<{ x: number, y: number }> | null} world-space waypoints
    */
   findPath(fromX, fromY, toX, toY, bodySize) {
-    // The shop and backroom only connect through their door pair: walk to this side's door,
-    // step through it, then walk on from the other side's door.
-    const crossing = this.areas?.crossing(fromY, toY);
-    if (crossing) {
-      const { near, far } = crossing;
-      const toDoor = this.findAreaPath(fromX, fromY, near.x, near.y, bodySize);
-      const fromDoor = toDoor && this.findAreaPath(far.x, far.y, toX, toY, bodySize);
-      if (!fromDoor) return null;
-      return [...toDoor, { x: near.x, y: near.y, teleportTo: { x: far.x, y: far.y } }, ...fromDoor];
-    }
-    return this.findAreaPath(fromX, fromY, toX, toY, bodySize);
+    return this.navigation.findPath(fromX, fromY, toX, toY, bodySize);
   }
 
   findAreaPath(fromX, fromY, toX, toY, bodySize) {
-    const obstacles = this.getNavigationObstacles(bodySize);
-    return findFreeWalkPath(
-      { x: fromX, y: fromY },
-      { x: toX, y: toY },
-      {
-        isWalkable: (x, y) =>
-          this.room.isWalkable(Math.floor(x / TILE_SIZE), Math.floor(y / TILE_SIZE)) &&
-          obstacles.every((rectangle) =>
-            x <= rectangle.left || x >= rectangle.right || y <= rectangle.top || y >= rectangle.bottom),
-        isSegmentClear: (from, to) => this.isNavigationSegmentClear(from, to, obstacles),
-      },
-    );
+    return this.navigation.findAreaPath(fromX, fromY, toX, toY, bodySize);
   }
 
   // --- Supply, pricing, and the Loading Pad ---

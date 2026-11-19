@@ -7,7 +7,7 @@
 import fixtureTypes from "../../data/Fixtures.json" with { type: "json" };
 import { roundMoney } from "./Money.js";
 import { getSlotItemLimit } from "./ShelfSlotStocking.js";
-import { createFloorReachability, FLOOR_NODE_STEP } from "./FloorReachability.js";
+import { createFloorReachability, FLOOR_NODE_STEP } from "../world/Navigation.js";
 import { PLAYER_BODY_HEIGHT, PLAYER_BODY_WIDTH } from "./Player.js";
 import {
   CHARACTER_ART_HEIGHT, CHARACTER_ART_WIDTH, CHARACTER_FEET_DROP,

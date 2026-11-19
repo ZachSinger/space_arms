@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { findFreeWalkPath } from "../js/logic/Pathfinder.js";
+import { findFreeWalkPath } from "../js/world/Navigation.js";
 
 function segmentIntersectsRectangle(from, to, rectangle) {
   const steps = Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / 2);
