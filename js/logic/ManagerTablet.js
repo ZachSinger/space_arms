@@ -190,20 +190,20 @@ export class ManagerTablet {
         const name = getFixtureType(typeId)?.name ?? "Fixture";
         // Set before buying: the purchase re-renders this tab through the state listener.
         this.fixturePurchaseNotice = `Bought ${name}. Its crate is waiting on the Loading Pad.`;
-        if (!this.scene.buyFixture(typeId)) {
+        if (!this.scene.fixtureSystem.buy(typeId)) {
           this.fixturePurchaseNotice = "";
           this.scene.showShopMessage("Fixture purchase is unavailable. Check its license, cost, and requirements.");
         }
       }
 
       const buyExpansionButton = event.target.closest("[data-buy-expansion-id]");
-      if (buyExpansionButton) this.scene.buyExpansion(buyExpansionButton.dataset.buyExpansionId);
+      if (buyExpansionButton) this.scene.fixtureSystem.buyExpansion(buyExpansionButton.dataset.buyExpansionId);
 
       const buyBackroomButton = event.target.closest("[data-buy-backroom-id]");
-      if (buyBackroomButton) this.scene.buyBackroomUpgrade(buyBackroomButton.dataset.buyBackroomId);
+      if (buyBackroomButton) this.scene.fixtureSystem.buyBackroomUpgrade(buyBackroomButton.dataset.buyBackroomId);
 
       const crateFixtureButton = event.target.closest("[data-crate-fixture-id]");
-      if (crateFixtureButton) this.scene.crateFixture(crateFixtureButton.dataset.crateFixtureId);
+      if (crateFixtureButton) this.scene.fixtureSystem.crate(crateFixtureButton.dataset.crateFixtureId);
 
       const sellFixtureButton = event.target.closest("[data-sell-fixture-id]");
       if (sellFixtureButton) {
@@ -484,8 +484,8 @@ export class ManagerTablet {
 
   prepareFixtureSale(kind, target) {
     const reason = kind === "placed"
-      ? this.scene.getFixtureSaleBlockReason(target)
-      : this.scene.getFixtureCrateSaleBlockReason(target);
+      ? this.scene.fixtureSystem.saleBlockReason(target)
+      : this.scene.fixtureSystem.crateSaleBlockReason(target);
     if (reason) {
       this.scene.showShopMessage(reason);
       return;
@@ -518,8 +518,8 @@ export class ManagerTablet {
     this.fixturePurchaseNotice = `Sold ${sale.name} for ${sale.value.toLocaleString()}.`;
     this.fixtureHighlight.reset();
     const sold = sale.kind === "placed"
-      ? this.scene.sellFixture(sale.target.id)
-      : this.scene.sellFixtureCrate(sale.target);
+      ? this.scene.fixtureSystem.sell(sale.target.id)
+      : this.scene.fixtureSystem.sellCrate(sale.target);
     if (!sold) {
       this.fixturePurchaseNotice = "";
       this.refreshLayoutPanels();

@@ -14,14 +14,14 @@ import { DebugTools } from "../debug/DebugTools.js";
 import { Events, GAME_EVENTS } from "../core/Events.js";
 import { ControlMode, CONTROL_MODES } from "../logic/ControlMode.js";
 import { InteractableRegistry } from "../logic/InteractableRegistry.js";
-import { ShelfFixture } from "../logic/ShelfFixture.js";
+/** @typedef {import("../logic/ShelfFixture.js").ShelfFixture} ShelfFixture */
 import { Customer, SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT } from "../logic/Customer.js";
 import { Employee } from "../logic/Employee.js";
 import { getEmployeeTrainingOffer } from "../logic/EmployeeTraining.js";
 import {
   addDiscountBonusItem, BARGAIN_PRICE_RATIO, createCustomerBuyList, createCustomerItemQuantities,
 } from "../logic/CustomerBuyLists.js";
-import { formatMoneyAmount, formatTransactionTotal, isMoney, roundMoney } from "../logic/Money.js";
+import { formatTransactionTotal, isMoney, roundMoney } from "../logic/Money.js";
 import { addTraitBonusItems, CUSTOMER_TRAITS } from "../logic/CustomerTraits.js";
 import {
   createCustomerArrivalSchedule,
@@ -46,8 +46,7 @@ import { TileRoom } from "../logic/TileRoom.js";
 import { SlidingDoor } from "../logic/SlidingDoor.js";
 import {
   TILE_SIZE, getZone, getAuthoredGridSize, getStoreDoorCell, getStoreDoorCells, EXPANSION_ORDER,
-  BACKROOM_UPGRADE_ORDER, getBackroomDoorCell, getBackroomExitCell, getBackroomLink,
-  getBackroomInteriorBounds, getBackroomBounds, getLoadingPadBounds, getDoorwayClearanceBounds, LOADING_PAD_WIDTH, LOADING_PAD_HEIGHT,
+  BACKROOM_UPGRADE_ORDER, getBackroomLink, getBackroomBounds, getLoadingPadBounds, LOADING_PAD_WIDTH, LOADING_PAD_HEIGHT,
 } from "../logic/RoomLayout.js";
 import { ShiftClock, SHIFT_DURATION_MS } from "../logic/ShiftClock.js";
 import { findFreeWalkPath } from "../logic/Pathfinder.js";
@@ -56,14 +55,9 @@ import { worldToClientRect } from "../logic/FixtureHighlight.js";
 import { getGameScale } from "../logic/GameViewport.js";
 import { setupSandboxRoom } from "../debug/SandboxRoom.js";
 import { setupUiLab } from "../debug/UiLab.js";
-import { ShelfAttentionHighlight } from "../logic/ShelfAttentionHighlight.js";
-import { ShelfFacingLight } from "../logic/ShelfFacingLight.js";
-import { ShelfItemDisplay } from "../logic/ShelfItemDisplay.js";
 import { ShelfStockingWindow } from "../logic/ShelfStockingWindow.js";
-import { getFixtureTexture, hasFacingTextures } from "../logic/FixtureTexture.js";
-import { STARTING_FIXTURES, FIXTURE_TYPES, REGISTER_FRONT_OVERLAP, getFixtureType, getFixtureResaleValue, getShelfDisplayGrid, fixtureAccessCells, fixtureArtInset, fixtureFacing, fixtureFacingStep, fixtureFootprint, fixtureInteractionDistance, fixtureRotation, fixtureStandingSpot, validateFixtureLayout } from "../logic/FixtureLayout.js";
-import { FixtureRegistry } from "../logic/FixtureRegistry.js";
-import { SHOP_LAYOUT_VERSION, validateShopSave } from "../logic/ShopSave.js";
+import { REGISTER_FRONT_OVERLAP, getFixtureType, fixtureAccessCells, fixtureFacing, fixtureFacingStep, fixtureFootprint, fixtureInteractionDistance, fixtureStandingSpot, validateFixtureLayout } from "../logic/FixtureLayout.js";
+import { validateShopSave } from "../logic/ShopSave.js";
 import { TrashField, randomTrashKind } from "../logic/TrashField.js";
 import {
   UPSET_REPUTATION_LOSS, WALK_OUT_REPUTATION_LOSS, getCleanlinessMax, getCleanlinessScore,
@@ -71,8 +65,10 @@ import {
 import { UIWindow } from "../logic/UIWindow.js";
 import { Messages, SHOP_MESSAGE_COLOR } from "../world/Messages.js";
 import { ShiftSystem } from "../systems/ShiftSystem.js";
-import { AREA, Areas, areaAtRow } from "../world/Areas.js";
+import { AREA, Areas } from "../world/Areas.js";
 import { CameraRig } from "../world/CameraRig.js";
+import { FixtureViews } from "../world/FixtureViews.js";
+import { FixtureSystem } from "../systems/FixtureSystem.js";
 import { SupplySystem } from "../systems/SupplySystem.js";
 import { GamepadInput, PAD } from "../logic/GamepadInput.js";
 import { UINavigator } from "../logic/UINavigator.js";
@@ -282,12 +278,14 @@ export class GameScene extends Phaser.Scene {
 
     this.areas = new Areas(this);
     this.cameraRig.createBackroomWindow();
-    // Every placed fixture lives in this registry.
-    this.fixtures = new FixtureRegistry();
+    // Every placed fixture lives in the shop's saved state; this is the same registry.
+    this.fixtures = this.gameState.shop.fixtures;
     // The register's body is solid to the player and crates only: customers queue almost
     // flush against its front edge, so it can't join obstacleGroup.
     this.registerGroup = this.physics.add.staticGroup();
-    for (const entry of STARTING_FIXTURES) this.spawnFixture(entry);
+    this.fixtureViews = new FixtureViews(this);
+    this.fixtureSystem = new FixtureSystem(this);
+    for (const fixture of this.fixtures.all()) this.fixtureViews.show(fixture);
     this.operatingRegister = false;
     this.playerPositionBeforeRegister = null;
 
@@ -415,10 +413,7 @@ export class GameScene extends Phaser.Scene {
     this.employees = [];
     this.trash = new TrashField(this, (x, y) => this.isOpenTrashSpot(x, y));
     this.heldTrash = null;
-    const initialLayout = this.fixtures.layout();
-    const initialAccess = validateFixtureLayout(initialLayout, this.getLayoutOptions());
-    if (!initialAccess.valid) throw new Error(initialAccess.reason);
-    this.applyFixtureLayout(initialLayout, initialAccess);
+    this.fixtureSystem.applyCurrentLayout();
     this.fixturePlacement = new FixturePlacement(this);
     this.input.mouse.disableContextMenu();
     this.interactables = new InteractableRegistry();
@@ -824,134 +819,7 @@ export class GameScene extends Phaser.Scene {
     return Number.isFinite(gap) && gap >= -TILE_SIZE / 2 ? Math.max(0, gap) : Infinity;
   }
 
-  // --- Fixture layout ---
-
-  /**
-   * Builds a fixture model and its sprite, then registers it. Shelves start
-   * empty; applySave fills in contents afterward.
-   * @param {{ id: string, type: string, gx: number, gy: number, rotation?: number }} entry - gx/gy is the top-left cell
-   * @returns {object} the registered fixture
-   */
-  spawnFixture({ id, type, gx, gy, rotation = 0 }) {
-    const spec = getFixtureType(type);
-    if (!spec) throw new Error(`Unknown fixture type: ${type}`);
-    const footprint = fixtureFootprint({ type, rotation });
-    const base = {
-      id,
-      x: (gx + footprint.w / 2) * TILE_SIZE,
-      y: (gy + footprint.h / 2) * TILE_SIZE,
-      // Unrotated size: the shelf's item grid and art are laid out in this frame.
-      gridDimensions: { w: spec.w, h: spec.h },
-    };
-    let fixture;
-    if (spec.kind === "shelf") {
-      fixture = new ShelfFixture({
-        ...base,
-        displayType: "universal",
-        displayGrid: getShelfDisplayGrid(spec),
-        // Per-placement slot cap, not a shared pool -- see ShelfFixture.getPlacementCapacity.
-        stackDepth: spec.stackDepth,
-        handsOn: spec.artLayout === "budget",
-        placements: [],
-      });
-    } else {
-      fixture = { ...base };
-    }
-    Object.assign(fixture, { type, gx, gy, rotation });
-    if (spec.kind === "register") this.drawRegister(fixture);
-    else this.drawFixture(fixture, getFixtureTexture(spec));
-    this.orientFixtureSprite(fixture);
-    if (fixture instanceof ShelfFixture) {
-      fixture.stockDisplay = new ShelfAttentionHighlight(this, fixture);
-      if (spec.artLayout === "budget") fixture.facingLight = new ShelfFacingLight(this, fixture);
-      fixture.stockItemsDisplay = new ShelfItemDisplay(this, fixture, (itemId) => database.getItem(itemId));
-      fixture.stockDisplay.sync();
-    }
-    return this.fixtures.add(fixture);
-  }
-
-  /**
-   * Turns the sprite to the fixture's rotation and fits its body box to the turned
-   * footprint. Phaser's own refit ignores rotation, so the box is set by hand.
-   * @param {object} fixture
-   */
-  orientFixtureSprite(fixture) {
-    const { sprite, x, y } = fixture;
-    const rotation = fixtureRotation(fixture);
-    const spec = getFixtureType(fixture.type);
-    // Art drawn for each facing is swapped in upright; other art is spun to face its way.
-    const facingArt = hasFacingTextures(spec);
-    if (facingArt) {
-      sprite.setTexture(getFixtureTexture(spec, rotation));
-      this.sizeFacingArt(sprite, spec, rotation);
-    }
-    sprite.setPosition(x, y).setAngle(facingArt ? 0 : rotation * 90);
-    const footprint = fixtureFootprint(fixture);
-    const inset = fixtureArtInset(fixture);
-    const width = (footprint.w - inset.left - inset.right) * TILE_SIZE;
-    const height = (footprint.h - inset.top - inset.bottom) * TILE_SIZE;
-    const centerX = x + (inset.left - inset.right) * TILE_SIZE / 2;
-    const centerY = y + (inset.top - inset.bottom) * TILE_SIZE / 2;
-    const body = sprite.body;
-    body.world.staticTree.remove(body);
-    body.position.set(centerX - width / 2, centerY - height / 2);
-    body.width = width;
-    body.height = height;
-    body.halfWidth = width / 2;
-    body.halfHeight = height / 2;
-    body.center.set(centerX, centerY);
-    body.world.staticTree.insert(body);
-  }
-
-  sizeFacingArt(sprite, spec, rotation = 0) {
-    const footprint = fixtureFootprint({ type: spec.id, rotation });
-    sprite.setDisplaySize(footprint.w * TILE_SIZE, footprint.h * TILE_SIZE);
-  }
-
-  despawnAllFixtures() {
-    for (const fixture of this.fixtures.clear()) {
-      fixture.stockDisplay?.destroy();
-      fixture.facingLight?.destroy();
-      fixture.stockItemsDisplay?.destroy();
-      fixture.sprite.destroy();
-    }
-  }
-
-  /**
-   * Options for validateFixtureLayout: walkability, the entrance, door thresholds, and
-   * approach spaces used when checking shelf fronts and the checkout line.
-   * @param {Array<{ left: number, right: number, top: number, bottom: number }>} occupiedRectangles - bodies a fixture must not land on (px)
-   */
-  getLayoutOptions(occupiedRectangles = []) {
-    const entrance = getStoreDoorCell();
-    const link = getBackroomLink();
-    const backroomDoor = getBackroomDoorCell();
-    const backroomExit = getBackroomExitCell();
-    const doorwayCells = new Set([
-      ...getStoreDoorCells().map(({ gx, gy }) => `${gx},${gy}`),
-      `${backroomDoor.gx},${backroomDoor.gy}`,
-      `${backroomExit.gx},${backroomExit.gy}`,
-    ]);
-    const reservedCells = new Set([
-      ...doorwayCells,
-      ...getStoreDoorCells().map(({ gx, gy }) => `${gx},${gy + 1}`),
-      `${link.shop.gx},${link.shop.gy}`,
-      `${link.backroom.gx},${link.backroom.gy}`,
-    ]);
-    return {
-      isWalkable: (gx, gy) => this.room.isWalkable(gx, gy),
-      // Door art counts as a doorway, not wall a fixture can tuck into.
-      isWall: (gx, gy) => {
-        const wall = this.room.wallCells.get(`${gx},${gy}`);
-        return Boolean(wall && !wall.door);
-      },
-      entrance, reservedCells, doorwayCells, fixtureReservedCells: doorwayCells, occupiedRectangles,
-      links: [[link.shop, link.backroom]],
-      backroomBounds: getBackroomInteriorBounds(this.room.zones),
-      reservedRectangles: [getLoadingPadBounds()],
-      doorwayClearanceRectangles: getDoorwayClearanceBounds(),
-    };
-  }
+  // --- Saving rules and staff ---
 
   // Saving needs a quiet store: no shift running and nobody inside.
   canSaveOffShift() {
@@ -1081,231 +949,6 @@ export class GameScene extends Phaser.Scene {
     this.employees = [];
   }
 
-  canRearrangeFixtures() {
-    if (this.loadFailed || this.shift.starting ||
-      (this.shiftClock.started && this.shiftClock.isPaused)) return false;
-    return this.canSaveOffShift() ||
-      (this.shiftClock.started && (this.storeTemporarilyClosed || this.shiftClock.softClosed));
-  }
-
-  canExpandStore() {
-    return this.canSaveOffShift() && !this.shift.starting;
-  }
-
-  // Fixtures can only be moved from the same room the player is standing in.
-  getFixtureMoveAreaBlockReason(fixture) {
-    if (!fixture) return null;
-    const area = areaAtRow(Math.floor(fixture.gy));
-    if (area === this.areas.playerArea) return null;
-    const name = this.fixtures.displayName(fixture);
-    return area === AREA.BACKROOM
-      ? `Go into the backroom to move the ${name}.`
-      : `Go out to the sales floor to move the ${name}.`;
-  }
-
-  getExpansionPurchaseOptions() {
-    const nextId = EXPANSION_ORDER.find((id) =>
-      this.room.zones.find((zone) => zone.id === id)?.locked);
-    return EXPANSION_ORDER.map((id) => {
-      const zone = this.room.zones.find((candidate) => candidate.id === id);
-      if (!zone) throw new Error(`Unknown sales-floor expansion: ${id}`);
-      return {
-        zone,
-        isPurchased: !zone.locked,
-        isNext: id === nextId,
-        levelMet: this.gameState.reputation.shopLevel >= zone.requiredShopLevel,
-        canAfford: this.gameState.economy.credits >= zone.cost,
-      };
-    });
-  }
-
-  getBackroomPurchaseOptions() {
-    const nextId = BACKROOM_UPGRADE_ORDER.find((id) =>
-      this.room.zones.find((zone) => zone.id === id)?.locked);
-    return BACKROOM_UPGRADE_ORDER.map((id) => {
-      const zone = this.room.zones.find((candidate) => candidate.id === id);
-      if (!zone) throw new Error(`Unknown backroom expansion: ${id}`);
-      return {
-        zone,
-        isPurchased: !zone.locked,
-        isNext: id === nextId,
-        levelMet: this.gameState.reputation.shopLevel >= zone.requiredShopLevel,
-        canAfford: this.gameState.economy.credits >= zone.cost,
-      };
-    });
-  }
-
-  buyExpansion(zoneId) {
-    if (!EXPANSION_ORDER.includes(zoneId)) {
-      throw new Error(`Unknown sales-floor expansion: ${zoneId}`);
-    }
-    if (!this.canExpandStore()) {
-      this.showShopMessage("Store expansions can only be bought while the store is closed.");
-      return false;
-    }
-    const zone = this.room.zones.find((candidate) => candidate.id === zoneId);
-    if (!zone) throw new Error(`Unknown sales-floor expansion: ${zoneId}`);
-    if (!zone.locked) {
-      this.showShopMessage(`${zone.name} is already open.`);
-      return false;
-    }
-    const nextId = EXPANSION_ORDER.find((id) =>
-      this.room.zones.find((candidate) => candidate.id === id)?.locked);
-    if (zoneId !== nextId) {
-      this.showShopMessage("Buy sales-floor expansions in order.");
-      return false;
-    }
-    if (this.gameState.reputation.shopLevel < zone.requiredShopLevel) {
-      this.showShopMessage(
-        `Reach Shop Level ${zone.requiredShopLevel} to buy ${zone.name}.`,
-      );
-      return false;
-    }
-    if (this.gameState.economy.credits < zone.cost) {
-      this.showShopMessage(`${zone.name} costs ${formatMoneyAmount(zone.cost)}.`);
-      return false;
-    }
-
-    this.gameState.economy.spend(zone.cost, { category: "expansions", label: zone.name });
-    this.room.unlockZone(zoneId);
-    this.cameraRig.refresh();
-    this.gameState.shop.changed();
-    this.requestAutosave();
-    this.showShopMessage(`${zone.name} is open.`);
-    return true;
-  }
-
-  buyBackroomUpgrade(zoneId) {
-    if (!BACKROOM_UPGRADE_ORDER.includes(zoneId)) {
-      throw new Error(`Unknown backroom expansion: ${zoneId}`);
-    }
-    if (!this.canExpandStore()) {
-      this.showShopMessage("Backroom expansions can only be bought while the store is closed.");
-      return false;
-    }
-    const zone = this.room.zones.find((candidate) => candidate.id === zoneId);
-    if (!zone) throw new Error(`Unknown backroom expansion: ${zoneId}`);
-    if (!zone.locked) {
-      this.showShopMessage(`${zone.name} is already open.`);
-      return false;
-    }
-    const nextId = BACKROOM_UPGRADE_ORDER.find((id) =>
-      this.room.zones.find((candidate) => candidate.id === id)?.locked);
-    if (zoneId !== nextId) {
-      this.showShopMessage("Buy backroom expansions in order.");
-      return false;
-    }
-    if (this.gameState.reputation.shopLevel < zone.requiredShopLevel) {
-      this.showShopMessage(
-        `Reach Shop Level ${zone.requiredShopLevel} to buy ${zone.name}.`,
-      );
-      return false;
-    }
-    if (this.gameState.economy.credits < zone.cost) {
-      this.showShopMessage(`${zone.name} costs ${formatMoneyAmount(zone.cost)}.`);
-      return false;
-    }
-
-    this.gameState.economy.spend(zone.cost, { category: "expansions", label: zone.name });
-    this.room.unlockZone(zoneId);
-    this.cameraRig.refresh();
-    this.gameState.shop.changed();
-    this.requestAutosave();
-    this.showShopMessage(`${zone.name} is open.`);
-    return true;
-  }
-
-  /**
-   * The current layout with one fixture moved and turned; nothing is applied.
-   * @param {string} id
-   * @param {number} gx
-   * @param {number} gy
-   * @param {number} [rotation] - quarter turns clockwise; defaults to its current rotation
-   */
-  layoutWithMove(id, gx, gy, rotation) {
-    return this.fixtures.layout().map((entry) =>
-      entry.id === id ? { ...entry, gx, gy, rotation: rotation ?? entry.rotation } : entry);
-  }
-
-  /**
-   * Validates a move without applying it. The player and loose crates count as obstacles.
-   * @param {string} id
-   * @param {number} gx
-   * @param {number} gy
-   * @param {number} [rotation]
-   * @returns {{ valid: boolean, reason?: string }} validateFixtureLayout's result
-   */
-  checkFixtureMove(id, gx, gy, rotation, connectivityCache = null) {
-    const areaBlock = this.getFixtureMoveAreaBlockReason(this.fixtures.get(id));
-    if (areaBlock) return { valid: false, reason: areaBlock };
-    if (areaAtRow(Math.floor(gy)) !== this.areas.playerArea) {
-      return { valid: false, reason: this.areas.playerArea === AREA.BACKROOM ? "Keep it in the backroom." : "Keep it on the sales floor." };
-    }
-    const bodies = [this.player.sprite.body, ...this.restockCrates.map((crate) => crate.sprite.body)];
-    return validateFixtureLayout(this.layoutWithMove(id, gx, gy, rotation), { ...this.getLayoutOptions(
-      bodies.filter((body) => body.enable).map((body) => ({
-        left: body.left, right: body.right, top: body.top, bottom: body.bottom,
-      })),
-    ), connectivityCache });
-  }
-
-  /**
-   * Moves a fixture if the store is closed and the new spot is valid; otherwise shows why not.
-   * @param {string} id
-   * @param {number} gx
-   * @param {number} gy
-   * @param {number} [rotation]
-   * @returns {boolean} whether it moved
-   */
-  moveFixture(id, gx, gy, rotation) {
-    if (!this.canRearrangeFixtures()) {
-      this.showShopMessage("Fixtures can only move while the store is closed.");
-      return false;
-    }
-    if (!this.fixtures.get(id)) throw new Error(`Unknown fixture: ${id}`);
-    const result = this.checkFixtureMove(id, gx, gy, rotation);
-    if (!result.valid) {
-      this.showShopMessage(result.reason);
-      return false;
-    }
-    this.applyFixtureLayout(this.layoutWithMove(id, gx, gy, rotation), result);
-    this.gameState.shop.changed();
-    return true;
-  }
-
-  /**
-   * Moves and turns every fixture sprite to its layout cell and adopts the validated access
-   * points and register queue positions.
-   * @param {Array<{ id: string, gx: number, gy: number, rotation?: number }>} layout
-   * @param {object} result - a valid result from validateFixtureLayout for this layout
-   */
-  applyFixtureLayout(layout, result) {
-    for (const entry of layout) {
-      const fixture = this.fixtures.get(entry.id);
-      fixture.gx = entry.gx;
-      fixture.gy = entry.gy;
-      fixture.rotation = entry.rotation ?? 0;
-      const footprint = fixtureFootprint(fixture);
-      fixture.x = (entry.gx + footprint.w / 2) * TILE_SIZE;
-      fixture.y = (entry.gy + footprint.h / 2) * TILE_SIZE;
-      this.orientFixtureSprite(fixture);
-      fixture.accessCells = result.accessCells?.get(entry.id) ?? fixtureAccessCells(fixture);
-      fixture.standPoint = fixtureStandingSpot(fixture, result.access.get(entry.id));
-    }
-    for (const fixture of this.fixtures.all()) {
-      fixture.stockDisplay?.setPosition(fixture.x, fixture.y);
-      fixture.stockDisplay?.setAngle(fixtureRotation(fixture) * 90);
-      fixture.stockItemsDisplay?.setPosition(fixture.x, fixture.y);
-      fixture.stockItemsDisplay?.setAngle(fixtureRotation(fixture) * 90);
-    }
-    // Each register carries its own validated customer-line positions.
-    for (const register of this.fixtures.registers()) {
-      register.queuePoints = result.queuePointsById?.get(register.id) ?? result.queuePoints;
-    }
-    if (this.goBacksBadge) this.refreshGoBacksBadge();
-    this.trash?.moveOffBlockedSpots();
-  }
-
   // Just past the body box's rear edge, excluding transparent picture margins.
   getBehindRegisterPoint(register = this.operatingRegisterFixture ?? this.fixtures.register()) {
     const bounds = register.sprite.body;
@@ -1321,16 +964,6 @@ export class GameScene extends Phaser.Scene {
   serialize() {
     const snapshot = {
       ...this.gameState.toSave(),
-      fixtures: this.fixtures.all().map((fixture) => {
-        const entry = { id: fixture.id, type: fixture.type, gx: fixture.gx, gy: fixture.gy, rotation: fixtureRotation(fixture) };
-        if (fixture instanceof ShelfFixture) {
-          const placements = fixture.placements.map((stack) => ({ ...stack }));
-          return { ...entry, placements, ...(fixture.handsOn ? { stockingVersion: 1 } : {}) };
-        }
-        return entry;
-      }),
-      unlockedZones: this.room.zones.filter((zone) => !zone.locked).map((zone) => zone.id),
-      layoutVersion: SHOP_LAYOUT_VERSION,
       crates: this.restockCrates.map((crate) => {
         const above = this.floorStacks.get(crate) ?? [];
         return above.length
@@ -1367,8 +1000,10 @@ export class GameScene extends Phaser.Scene {
     // Staged: the whole new game state is built and checked off to the side first.
     const next = GameState.fromSave(data, { items: database.getAllItems(), events: this.eventBus });
     for (const id of data.unlockedZones) this.room.unlockZone(id);
+    // The map never closes a zone again, so one already open stays open in the loaded shop.
+    for (const zone of this.room.zones) if (!zone.locked) next.shop.unlockedZones.add(zone.id);
     // Saves from before the sales-floor rule still load; the misplaced fixture can then be moved out.
-    const result = validateFixtureLayout(data.fixtures, { ...this.getLayoutOptions(), requireSalesFloor: false });
+    const result = validateFixtureLayout(data.fixtures, { ...this.fixtureSystem.layoutOptions(), requireSalesFloor: false });
     if (!result.valid) throw new Error(`Invalid saved layout: ${result.reason}`);
     this.gameState.replaceWith(next, () => this.rebuildShopFromSave(data, result));
     this.shift.resetStartingTotals();
@@ -1384,12 +1019,9 @@ export class GameScene extends Phaser.Scene {
    * @param {object} layout - the checked fixture layout
    */
   rebuildShopFromSave(data, layout) {
-    this.despawnAllFixtures();
-    for (const entry of data.fixtures) {
-      const fixture = this.spawnFixture(entry);
-      if (fixture instanceof ShelfFixture) fixture.placements = entry.placements.map((stack) => ({ ...stack }));
-    }
-    this.applyFixtureLayout(data.fixtures, layout);
+    this.fixtureViews.clear();
+    for (const fixture of this.fixtures.all()) this.fixtureViews.show(fixture);
+    this.fixtureSystem.applyLayout(data.fixtures, layout);
     this.areas.playerArea = AREA.SHOP;
     this.player.teleportTo(this.storeDoor.x, this.storeDoor.y + TILE_SIZE);
     this.cameraRig.refresh();
@@ -1704,23 +1336,6 @@ export class GameScene extends Phaser.Scene {
     );
   }
 
-  /**
-   * The closest cell to `origin` where a new fixture of this type would be valid.
-   * @param {string} typeId
-   * @param {{ gx: number, gy: number }} origin
-   * @returns {{ gx: number, gy: number } | null}
-   */
-  findNearestFixtureCell(typeId, origin) {
-    const { gridW, gridH } = getAuthoredGridSize();
-    const cells = [];
-    for (let gy = 0; gy < gridH; gy += 1) {
-      for (let gx = 0; gx < gridW; gx += 1) cells.push({ gx, gy });
-    }
-    cells.sort((a, b) => Math.hypot(a.gx - origin.gx, a.gy - origin.gy) -
-      Math.hypot(b.gx - origin.gx, b.gy - origin.gy));
-    return cells.find(({ gx, gy }) => this.checkFixturePlacement(typeId, gx, gy).valid) ?? null;
-  }
-
   // --- Supply, pricing, and the Loading Pad ---
 
   // The nearest shelf within SHELF_INTERACT_RANGE, or null. Shared by crate delivery and
@@ -1809,195 +1424,6 @@ export class GameScene extends Phaser.Scene {
     this.gameState.catalog.setActiveFactions(activeFactions);
   }
 
-  // --- Buying, crating, and placing fixtures ---
-
-  // Fixture shop rows, with every reason a purchase might be blocked.
-  getFixturePurchaseOptions() {
-    return Object.values(FIXTURE_TYPES).map((spec) => {
-      const license = database.getLicense(spec.licenseId);
-      const licensed = this.gameState.catalog.owns(spec.licenseId);
-      const hasDeliverySpace = !!this.supply.firstFreePadSpot();
-      return {
-        spec,
-        license,
-        licensed,
-        canAfford: this.gameState.economy.credits >= spec.price,
-        hasDeliverySpace,
-      };
-    });
-  }
-
-  /**
-   * Buys a fixture, delivered as a crate on the Loading Pad.
-   * @param {string} typeId
-   * @returns {boolean} whether the purchase went through
-   */
-  buyFixture(typeId) {
-    const spec = getFixtureType(typeId);
-    if (!spec) throw new Error(`Unknown fixture type: ${typeId}`);
-    if (!this.gameState.catalog.owns(spec.licenseId)) return false;
-    if (this.gameState.economy.credits < spec.price) return false;
-    const spawn = this.supply.takePadSpots(1)[0];
-    if (!spawn) return false;
-
-    this.gameState.economy.spend(spec.price, { category: "fixtures", label: spec.name });
-    this.supply.deliver(new Crate(this, null, 1, spawn.x, spawn.y, { kind: "fixture", typeId }));
-    this.supply.freePlayerFromPad();
-    this.gameState.shop.changed();
-    return true;
-  }
-
-  canCrateFixture(fixture) {
-    return this.getFixtureCrateBlockReason(fixture) === null;
-  }
-
-  /**
-   * @param {object} fixture
-   * @returns {string | null} why it can't be packed into a crate, or null if it can
-   */
-  getFixtureCrateBlockReason(fixture) {
-    return this.getFixtureRemovalBlockReason(fixture, "crated");
-  }
-
-  getFixtureSaleBlockReason(fixture) {
-    return this.getFixtureRemovalBlockReason(fixture, "sold");
-  }
-
-  getFixtureRemovalBlockReason(fixture, action) {
-    if (!fixture) return "Fixture not found.";
-    if (!this.canRearrangeFixtures()) return `Fixtures can only be ${action} while the store is closed.`;
-    if (getFixtureType(fixture.type).kind === "register" &&
-      this.fixtures.ofKind("register").length <= 1) return `The last register cannot be ${action}.`;
-    if (fixture instanceof ShelfFixture && fixture.placements.some((stack) => stack.quantity > 0)) {
-      return `Only empty fixtures can be ${action}.`;
-    }
-    return null;
-  }
-
-  removePlacedFixture(fixture) {
-    const layout = this.fixtures.layout().filter((entry) => entry.id !== fixture.id);
-    const result = validateFixtureLayout(layout, { ...this.getLayoutOptions(), requireSalesFloor: false });
-    if (!result.valid) {
-      this.showShopMessage(result.reason);
-      return false;
-    }
-    if (this.shelfStockingWindow?.fixture === fixture) this.shelfStockingWindow.uiWindow.close();
-    fixture.stockDisplay?.destroy();
-    fixture.facingLight?.destroy();
-    fixture.stockItemsDisplay?.destroy();
-    fixture.sprite.destroy();
-    this.fixtures.remove(fixture.id);
-    this.applyFixtureLayout(layout, result);
-    return true;
-  }
-
-  /**
-   * Packs an empty fixture into a crate where it stood, so it can be carried and re-placed.
-   * @param {string} id
-   * @returns {boolean} whether it was crated
-   */
-  crateFixture(id) {
-    const fixture = this.fixtures.get(id);
-    if (!fixture) throw new Error(`Unknown fixture: ${id}`);
-    const reason = this.getFixtureCrateBlockReason(fixture);
-    if (reason) {
-      this.showShopMessage(reason);
-      return false;
-    }
-    if (!this.removePlacedFixture(fixture)) return false;
-    const crate = new Crate(this, null, 1, fixture.x, fixture.y, {
-      kind: "fixture",
-      typeId: fixture.type,
-    });
-    crate.setPaused(this.crateMotionPaused);
-    this.restockCrates.push(crate);
-    this.gameState.shop.changed();
-    return true;
-  }
-
-  sellFixture(id) {
-    const fixture = this.fixtures.get(id);
-    const reason = this.getFixtureSaleBlockReason(fixture);
-    if (reason) {
-      this.showShopMessage(reason);
-      return false;
-    }
-    const spec = getFixtureType(fixture.type);
-    const value = getFixtureResaleValue(fixture.type);
-    if (!this.removePlacedFixture(fixture)) return false;
-    this.gameState.economy.add(value, { category: "fixture_sales", label: spec.name });
-    return true;
-  }
-
-  getFixtureCrateSaleBlockReason(crate) {
-    if (!crate || crate.kind !== "fixture" ||
-      (crate !== this.carriedCrate && !this.restockCrates.includes(crate))) {
-      return "Fixture crate not found.";
-    }
-    if (!this.canRearrangeFixtures()) return "Fixtures can only be sold while the store is closed.";
-    return null;
-  }
-
-  sellFixtureCrate(crate) {
-    const reason = this.getFixtureCrateSaleBlockReason(crate);
-    if (reason) {
-      this.showShopMessage(reason);
-      return false;
-    }
-    const spec = getFixtureType(crate.typeId);
-    const value = getFixtureResaleValue(crate.typeId);
-    if (this.getCarriedCrates().includes(crate)) this.removeCarriedCrate(crate);
-    else this.restockCrates = this.restockCrates.filter((candidate) => candidate !== crate);
-    crate.destroy();
-    this.gameState.economy.add(value, { category: "fixture_sales", label: spec.name });
-    return true;
-  }
-
-  /**
-   * Validates adding a new fixture of this type without placing it. The player and loose
-   * crates count as obstacles.
-   * @param {string} typeId
-   * @param {number} gx
-   * @param {number} gy
-   * @param {number} [rotation] - quarter turns clockwise
-   */
-  checkFixturePlacement(typeId, gx, gy, rotation = 0, connectivityCache = null) {
-    const id = this.fixtures.nextId(typeId);
-    const layout = [...this.fixtures.layout(), { id, type: typeId, gx, gy, rotation }];
-    const bodies = [this.player.sprite.body, ...this.restockCrates.map((crate) => crate.sprite.body)];
-    return validateFixtureLayout(layout, { ...this.getLayoutOptions(
-      bodies.filter((body) => body.enable).map((body) => ({
-        left: body.left, right: body.right, top: body.top, bottom: body.bottom,
-      })),
-    ), connectivityCache });
-  }
-
-  /**
-   * Unpacks the carried fixture crate into a real fixture at this cell.
-   * @param {Crate} crate - must be the carried fixture crate
-   * @param {number} gx
-   * @param {number} gy
-   * @param {number} [rotation] - quarter turns clockwise
-   * @returns {boolean} whether it was placed
-   */
-  placeFixtureFromCrate(crate, gx, gy, rotation = 0) {
-    if (!this.canRearrangeFixtures() || this.carriedCrate !== crate || crate.kind !== "fixture") return false;
-    const id = this.fixtures.nextId(crate.typeId);
-    const result = this.checkFixturePlacement(crate.typeId, gx, gy, rotation);
-    if (!result.valid) {
-      this.showShopMessage(result.reason);
-      return false;
-    }
-
-    const entry = { id, type: crate.typeId, gx, gy, rotation };
-    this.spawnFixture(entry);
-    this.applyFixtureLayout(this.fixtures.layout(), result);
-    crate.destroy();
-    this.removeCarriedCrate(crate);
-    this.gameState.shop.changed();
-    return true;
-  }
-
   // --- Player interaction and crates ---
 
   /**
@@ -2016,8 +1442,8 @@ export class GameScene extends Phaser.Scene {
       const trashcan = this.getNearbyTrashcan();
       if (trashcan && this.isPlayerFacingFixture(trashcan)) fixture = trashcan;
     }
-    if (!fixture || !this.canRearrangeFixtures()) return null;
-    return this.getFixtureMoveAreaBlockReason(fixture) ? null : fixture;
+    if (!fixture || !this.fixtureSystem.canRearrange()) return null;
+    return this.fixtureSystem.moveAreaBlockReason(fixture) ? null : fixture;
   }
 
   /**
@@ -3022,25 +2448,7 @@ export class GameScene extends Phaser.Scene {
     this.messages.floatText(x, y, text, color);
   }
 
-  // --- Fixture sprites ---
-
-  /**
-   * Creates a solid, clickable fixture sprite.
-   * @param {object} fixture
-   * @param {string} textureKey
-   */
-  drawFixture(fixture, textureKey) {
-    const width = fixture.gridDimensions.w * TILE_SIZE;
-    const height = fixture.gridDimensions.h * TILE_SIZE;
-    const image = this.add.image(fixture.x, fixture.y, textureKey).setDisplaySize(width, height);
-    image.setDepth(2);
-    this.obstacleGroup.add(image); // solid -- customers walk up to it, not through it
-    fixture.sprite = image;
-    image.setInteractive({ useHandCursor: true });
-    image.on("pointerdown", (pointer) => {
-      if (pointer.event?.target === this.game.canvas) this.tryOpenFixtureWindow(fixture);
-    });
-  }
+  // --- Go-Backs badge ---
 
   refreshGoBacksBadge() {
     const count = this.gameState.goBacks.stock.reduce((sum, entry) => sum + entry.quantity, 0);
@@ -3052,23 +2460,6 @@ export class GameScene extends Phaser.Scene {
     if (!this.goBacksBadge?.visible || !this.player?.sprite) return;
     const bounds = this.player.sprite.getBounds();
     this.goBacksBadge.setScale(this.cameraRig.popupScale()).setPosition(bounds.centerX, bounds.top - 2);
-  }
-
-  /**
-   * The register uses the same art-sized body box as other fixtures.
-   * @param {object} fixture
-   */
-  drawRegister(fixture) {
-    const sprite = this.add
-      .image(fixture.x, fixture.y, getFixtureType(fixture.type).texture)
-      .setDisplaySize(fixture.gridDimensions.w * TILE_SIZE, fixture.gridDimensions.h * TILE_SIZE)
-      .setDepth(2)
-      .setInteractive({ useHandCursor: true });
-    sprite.on("pointerdown", (pointer) => {
-      if (pointer.event?.target === this.game.canvas) this.openRegisterWindow();
-    });
-    this.registerGroup.add(sprite); // see registerGroup in create()
-    fixture.sprite = sprite;
   }
 
   // --- Register ---

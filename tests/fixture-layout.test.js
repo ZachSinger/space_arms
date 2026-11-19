@@ -18,7 +18,7 @@ test("shelf and trashcan crates cannot enter placement mode in the backroom", ()
     const crate = { kind: "fixture", typeId };
     const placement = Object.create(FixturePlacement.prototype);
     placement.scene = {
-      canRearrangeFixtures: () => true,
+      fixtureSystem: { canRearrange: () => true },
       carriedCrate: crate,
       areas: { playerArea: "backroom" },
       showShopMessage: (message) => messages.push(message),
@@ -38,7 +38,7 @@ test("shelf crates can enter placement mode from the sales floor", () => {
   const crate = { kind: "fixture", typeId: "shelf_budget_2x4" };
   const placement = Object.create(FixturePlacement.prototype);
   placement.scene = {
-    canRearrangeFixtures: () => true,
+    fixtureSystem: { canRearrange: () => true },
     carriedCrate: crate,
     areas: { playerArea: "shop" },
   };
@@ -121,11 +121,13 @@ test("the fixture placement preview uses the size for its current facing", () =>
   placement.original = null;
   placement.scene = {
     fixtures: { nextId: () => "preview" },
-    checkFixturePlacement: () => ({ valid: true, reason: "Click to place." }),
-    sizeFacingArt: (ghost, receivedSpec, rotation) => {
-      assert.equal(receivedSpec, spec);
-      rotations.push(rotation);
-      ghost.setDisplaySize(TILE_SIZE, TILE_SIZE);
+    fixtureSystem: { checkPlacement: () => ({ valid: true, reason: "Click to place." }) },
+    fixtureViews: {
+      sizeFacingArt: (ghost, receivedSpec, rotation) => {
+        assert.equal(receivedSpec, spec);
+        rotations.push(rotation);
+        ghost.setDisplaySize(TILE_SIZE, TILE_SIZE);
+      },
     },
   };
   placement.graphics = {
@@ -349,12 +351,14 @@ test("the placement grid covers fixture bodies at snapped positions, including c
     cameras: { main: { worldView: view } },
     fixtures: { layout: () => [], nextId: () => "candidate" },
     fixturePlacement: { active: true, spec: getFixtureType("shelf_budget_2x4"), rotation: 0, original: null },
-    checkFixturePlacement: (type, gx, gy) => {
-      checkedPositions.push([gx * TILE_SIZE, gy * TILE_SIZE]);
-      return {
-        valid: gx * TILE_SIZE === 64 && gy * TILE_SIZE === 64 ||
-          secondPlacement && gx * TILE_SIZE === 144 && gy * TILE_SIZE === 64,
-      };
+    fixtureSystem: {
+      checkPlacement: (type, gx, gy) => {
+        checkedPositions.push([gx * TILE_SIZE, gy * TILE_SIZE]);
+        return {
+          valid: gx * TILE_SIZE === 64 && gy * TILE_SIZE === 64 ||
+            secondPlacement && gx * TILE_SIZE === 144 && gy * TILE_SIZE === 64,
+        };
+      },
     },
     add: { graphics: () => graphics },
   };
@@ -442,10 +446,12 @@ test("the body coverage follows real placement rules around the default register
     }
     return result;
   };
-  scene.checkFixturePlacement = (type, gx, gy, rotation, connectivityCache) =>
-    validate({ id: "candidate", type, gx, gy, rotation }, connectivityCache);
-  scene.checkFixtureMove = (id, gx, gy, rotation, connectivityCache) =>
-    validate({ id, type: scene.fixturePlacement.spec.id, gx, gy, rotation }, connectivityCache);
+  scene.fixtureSystem = {
+    checkPlacement: (type, gx, gy, rotation, connectivityCache) =>
+      validate({ id: "candidate", type, gx, gy, rotation }, connectivityCache),
+    checkMove: (id, gx, gy, rotation, connectivityCache) =>
+      validate({ id, type: scene.fixturePlacement.spec.id, gx, gy, rotation }, connectivityCache),
+  };
   const grid = new FixturePlacementGrid(scene);
   grid.toggle();
   const finishAndCompare = () => {

@@ -96,9 +96,7 @@ export class DebugTools {
       scene.showShopMessage(`Every ${areaName} upgrade is already open.`);
       return false;
     }
-    scene.room.unlockZone(zone.id);
-    scene.cameraRig.refresh();
-    scene.gameState.shop.changed();
+    scene.fixtureSystem.openZone(zone.id);
     scene.requestAutosave();
     scene.showShopMessage(`Debug: ${zone.name} is open.`);
     return true;
@@ -127,7 +125,7 @@ export class DebugTools {
       .slice(0, Math.min(itemCount, shelfCount * 4));
 
     const door = getStoreDoorCell();
-    if (!scene.findNearestFixtureCell(shelfType, door)) {
+    if (!scene.fixtureSystem.findNearestCell(shelfType, door)) {
       scene.showShopMessage("Quickstart couldn't find room for the shelf.");
       return false;
     }
@@ -142,12 +140,12 @@ export class DebugTools {
 
     const shelves = [];
     for (let count = 0; count < shelfCount; count += 1) {
-      const shelfCell = scene.findNearestFixtureCell(shelfType, door);
+      const shelfCell = scene.fixtureSystem.findNearestCell(shelfType, door);
       if (!shelfCell) break;
       gameState.economy.spend(shelfSpec.price, { category: "fixtures", label: shelfSpec.name });
-      shelves.push(scene.spawnFixture({ id: scene.fixtures.nextId(shelfType), type: shelfType, ...shelfCell }));
-      const result = validateFixtureLayout(scene.fixtures.layout(), scene.getLayoutOptions());
-      scene.applyFixtureLayout(scene.fixtures.layout(), result);
+      shelves.push(scene.fixtureSystem.spawn({ id: scene.fixtures.nextId(shelfType), type: shelfType, ...shelfCell }));
+      const result = validateFixtureLayout(scene.fixtures.layout(), scene.fixtureSystem.layoutOptions());
+      scene.fixtureSystem.applyLayout(scene.fixtures.layout(), result);
     }
 
     // One item per shelf spot, in each 2x2 grid's reading order, filling shelves in turn.

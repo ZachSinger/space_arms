@@ -7,20 +7,16 @@
 // Loading is staged: `GameState.fromSave` builds a complete new state off to the side (throwing
 // if anything is wrong), and only then does `replaceWith` swap it in, so a bad save never leaves
 // the game half loaded.
-import { Slice } from "./Slice.js";
 import { Economy } from "./slices/Economy.js";
 import { Reputation } from "./slices/Reputation.js";
 import { Catalog } from "./slices/Catalog.js";
 import { Staff } from "./slices/Staff.js";
 import { Calendar } from "./slices/Calendar.js";
 import { GoBacks } from "./slices/GoBacks.js";
+import { Shop } from "./slices/Shop.js";
 import { Market } from "../logic/Market.js";
 import { getStaffLimit } from "../logic/ShopProgression.js";
 import { gameRandom } from "../core/Random.js";
-
-// The shop's map (fixtures, zones, crates, trash) is still saved by the game scene; this slice
-// only announces that it changed. Its data moves in here as that code moves (rebuild Phase 3).
-export class Shop extends Slice {}
 
 const SLICE_NAMES = Object.freeze(["economy", "reputation", "catalog", "staff", "calendar", "market", "goBacks", "shop"]);
 
@@ -28,7 +24,7 @@ export class GameState {
   /**
    * A new game, or with `saved` a game restored from an upgraded, checked save.
    * @param {{ items: object[], random?: () => number, events?: object | null,
-   *   saved?: { playerState: object, market: object } | null }} options
+   *   saved?: { playerState: object, market: object, fixtures?: object[], unlockedZones?: string[] } | null }} options
    */
   constructor({ items, random = gameRandom, events = null, saved = null }) {
     this.items = items;
@@ -44,7 +40,7 @@ export class GameState {
     // A restored market keeps its saved prices and draws no new random numbers.
     this.market = new Market(items, random, market ?? null);
     this.goBacks = saved ? GoBacks.fromSave(player, events) : new GoBacks(events);
-    this.shop = new Shop();
+    this.shop = saved ? Shop.fromSave(saved) : Shop.newGame();
     this.listeners = new Set();
     for (const name of SLICE_NAMES) this[name].attach(() => this.#notify());
   }
@@ -71,7 +67,7 @@ export class GameState {
     return () => this.listeners.delete(callback);
   }
 
-  /** @returns {Slice[]} */
+  /** @returns {import("./Slice.js").Slice[]} */
   slices() {
     return SLICE_NAMES.map((name) => this[name]);
   }
@@ -124,7 +120,7 @@ export class GameState {
     return this.economy.closeDay(this.calendar.day, this.reputation.global);
   }
 
-  /** @returns {{ playerState: object, market: object }} the save sections this state owns */
+  /** @returns {{ playerState: object, market: object, fixtures: object[], unlockedZones: string[], layoutVersion: number }} the save sections this state owns */
   toSave() {
     const economy = this.economy.toSave();
     const reputation = this.reputation.toSave();
@@ -147,12 +143,13 @@ export class GameState {
         emergencyLoan: economy.emergencyLoan,
       },
       market: { day: this.calendar.day, ...this.market.serialize() },
+      ...this.shop.toSave(),
     };
   }
 
   /**
    * Builds a complete state from an upgraded, checked save without touching the running game.
-   * @param {{ playerState: object, market: object }} saved
+   * @param {{ playerState: object, market: object, fixtures?: object[], unlockedZones?: string[] }} saved
    * @param {{ items: object[], random?: () => number, events?: object | null }} options
    */
   static fromSave(saved, { items, random = gameRandom, events = null }) {
@@ -166,7 +163,10 @@ export class GameState {
    * @param {() => void} [rebuildWorld]
    */
   replaceWith(next, rebuildWorld = () => {}) {
-    for (const name of SLICE_NAMES) Object.assign(this[name], next[name]);
+    for (const name of SLICE_NAMES) {
+      if (typeof this[name].adopt === "function") this[name].adopt(next[name]);
+      else Object.assign(this[name], next[name]);
+    }
     // Each slice tells its own subscribers; whole-game subscribers hear about it once.
     this.#holding = true;
     try {

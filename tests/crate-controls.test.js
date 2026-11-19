@@ -23,6 +23,8 @@ let ShelfFixture;
 let GameState;
 let Messages;
 let SupplySystem;
+let FixtureSystem;
+let FixtureViews;
 const originalPhaser = globalThis.Phaser;
 
 before(async () => {
@@ -55,6 +57,8 @@ before(async () => {
   ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));
   ({ Messages } = await server.ssrLoadModule("/js/world/Messages.js"));
   ({ SupplySystem } = await server.ssrLoadModule("/js/systems/SupplySystem.js"));
+  ({ FixtureSystem } = await server.ssrLoadModule("/js/systems/FixtureSystem.js"));
+  ({ FixtureViews } = await server.ssrLoadModule("/js/world/FixtureViews.js"));
 });
 
 after(async () => {
@@ -110,6 +114,8 @@ function createHarness({ carrying = false } = {}) {
     ofKind: () => [],
     displayName: () => "SHELF",
   };
+  scene.fixtureViews = new FixtureViews(scene);
+  scene.fixtureSystem = new FixtureSystem(scene);
   scene.carriedCrate = carrying ? {} : null;
   const classes = new Set(["hidden"]);
   scene.messages = new Messages(scene, {
@@ -242,8 +248,8 @@ test("with empty hands, E opens the fixture you face and holding Ctrl picks it u
   let opened = 0;
   const moved = [];
   h.scene.interactables = { findTarget: () => ({ kind: "fixture", target: shelf }) };
-  h.scene.canRearrangeFixtures = () => true;
-  h.scene.getFixtureMoveAreaBlockReason = () => null;
+  h.scene.fixtureSystem.canRearrange = () => true;
+  h.scene.fixtureSystem.moveAreaBlockReason = () => null;
   h.scene.handleInteract = () => { opened += 1; };
   h.scene.fixturePlacement = { active: false, begin: (id) => moved.push(id) };
 
@@ -266,7 +272,7 @@ test("with empty hands, E opens the fixture you face and holding Ctrl picks it u
   shelf.rotation = 1;
 
   // While the store is open, Ctrl never picks a fixture up.
-  h.scene.canRearrangeFixtures = () => false;
+  h.scene.fixtureSystem.canRearrange = () => false;
   h.scene.startFixtureMovePress();
   assert.equal(h.scene.fixtureMovePress, null);
 });
@@ -276,8 +282,8 @@ test("with empty hands, holding Ctrl at the register picks it up to move", () =>
   const register = { id: "register_1", type: "register", gx: 26, gy: 3, rotation: 0 };
   const moved = [];
   h.scene.interactables = { findTarget: () => ({ kind: "register", target: register }) };
-  h.scene.canRearrangeFixtures = () => true;
-  h.scene.getFixtureMoveAreaBlockReason = () => null;
+  h.scene.fixtureSystem.canRearrange = () => true;
+  h.scene.fixtureSystem.moveAreaBlockReason = () => null;
   h.scene.fixturePlacement = { active: false, begin: (id) => moved.push(id) };
 
   h.scene.startFixtureMovePress();
@@ -296,8 +302,8 @@ test("with empty hands, holding Ctrl while facing the trashcan picks it up to mo
   h.scene.areas.playerArea = AREA.SHOP;
   h.scene.interactables = { findTarget: () => null };
   h.scene.fixtures.ofKind = (kind) => kind === "trash" ? [trashcan] : [];
-  h.scene.canRearrangeFixtures = () => true;
-  h.scene.getFixtureMoveAreaBlockReason = () => null;
+  h.scene.fixtureSystem.canRearrange = () => true;
+  h.scene.fixtureSystem.moveAreaBlockReason = () => null;
   Object.assign(h.scene.player.sprite, { x: 1168, y: 176 + 30 });
   h.scene.player.currentFacing = "up";
   assert.equal(h.scene.getHoldToMoveFixture(), trashcan);
@@ -1154,9 +1160,9 @@ test("fixtures only move from, and into, the room the player is standing in", ()
   const shelf = { id: "shelf", type: "shelf_budget_3x4", gx: 10, gy: 5 };
   scene.fixtures.get = (id) => ({ shelf })[id];
   scene.areas.playerArea = AREA.SHOP;
-  assert.equal(scene.checkFixtureMove("shelf", 1, 102).reason, "Keep it on the sales floor.");
+  assert.equal(scene.fixtureSystem.checkMove("shelf", 1, 102).reason, "Keep it on the sales floor.");
   scene.areas.playerArea = AREA.BACKROOM;
-  assert.equal(scene.checkFixtureMove("shelf", 10, 6).reason, "Go out to the sales floor to move the SHELF.");
+  assert.equal(scene.fixtureSystem.checkMove("shelf", 10, 6).reason, "Go out to the sales floor to move the SHELF.");
 });
 
 
@@ -1562,14 +1568,14 @@ test("selling an empty placed fixture pays half, updates walkable space, and pre
   registry.add(shelf);
   registry.add(register);
   scene.fixtures = registry;
-  scene.canRearrangeFixtures = () => true;
-  scene.getLayoutOptions = () => ({
+  scene.fixtureSystem.canRearrange = () => true;
+  scene.fixtureSystem.layoutOptions = () => ({
     entrance: { gx: 0, gy: 0 },
     gridSize: { gridW: 8, gridH: 8 },
     isWalkable: (gx, gy) => gx >= 0 && gx < 8 && gy >= 0 && gy < 8,
   });
   scene.blockedCells = new Set(["1,1", "1,2"]);
-  scene.applyFixtureLayout = (_layout, result) => { scene.blockedCells = result.blockedCells; };
+  scene.fixtureSystem.applyLayout = (_layout, result) => { scene.blockedCells = result.blockedCells; };
   const payments = [];
   scene.gameState.economy.add = (amount, entry) => {
     assert.equal(scene.fixtures.get("shelf"), undefined);
@@ -1578,19 +1584,19 @@ test("selling an empty placed fixture pays half, updates walkable space, and pre
   const messages = [];
   scene.showShopMessage = (message) => messages.push(message);
 
-  assert.equal(scene.sellFixture("register"), false);
+  assert.equal(scene.fixtureSystem.sell("register"), false);
   assert.match(messages.at(-1), /last register cannot be sold/);
   shelf.placements.push({ itemId: "item", quantity: 1 });
-  assert.equal(scene.sellFixture("shelf"), false);
+  assert.equal(scene.fixtureSystem.sell("shelf"), false);
   assert.match(messages.at(-1), /Only empty fixtures/);
   shelf.placements = [];
-  assert.equal(scene.sellFixture("shelf"), true);
+  assert.equal(scene.fixtureSystem.sell("shelf"), true);
   assert.equal(destroyed, true);
   assert.equal(scene.blockedCells.has("1,1"), false);
   assert.equal(scene.blockedCells.has("1,2"), false);
   assert.equal(scene.fixtures.get("register"), register);
   assert.deepEqual(payments, [{ amount: 75, category: "fixture_sales", label: "BUDGET SHELF 2x2" }]);
-  assert.equal(scene.sellFixture("shelf"), false);
+  assert.equal(scene.fixtureSystem.sell("shelf"), false);
   assert.equal(payments.length, 1);
 });
 
@@ -1604,13 +1610,13 @@ test("crating an empty fixture still creates its crate and opens its floor space
   scene.fixtures = new FixtureRegistry();
   scene.fixtures.add(shelf);
   scene.fixtures.add({ id: "register", type: "register_basic", gx: 4, gy: 2, rotation: 0 });
-  scene.canRearrangeFixtures = () => true;
-  scene.getLayoutOptions = () => ({
+  scene.fixtureSystem.canRearrange = () => true;
+  scene.fixtureSystem.layoutOptions = () => ({
     entrance: { gx: 0, gy: 0 },
     gridSize: { gridW: 8, gridH: 8 },
     isWalkable: (gx, gy) => gx >= 0 && gx < 8 && gy >= 0 && gy < 8,
   });
-  scene.applyFixtureLayout = (_layout, result) => { scene.blockedCells = result.blockedCells; };
+  scene.fixtureSystem.applyLayout = (_layout, result) => { scene.blockedCells = result.blockedCells; };
   const body = {
     setSize() { return this; },
     setOffset() { return this; },
@@ -1634,7 +1640,7 @@ test("crating an empty fixture still creates its crate and opens its floor space
   let notifications = 0;
   scene.gameState.shop.changed = () => { notifications += 1; };
 
-  assert.equal(scene.crateFixture("shelf"), true);
+  assert.equal(scene.fixtureSystem.crate("shelf"), true);
   assert.equal(scene.fixtures.get("shelf"), undefined);
   assert.equal(scene.blockedCells.has("1,1"), false);
   assert.equal(scene.restockCrates.length, 1);
@@ -1645,14 +1651,14 @@ test("crating an empty fixture still creates its crate and opens its floor space
 
 test("a shelf with stock on it cannot be sold or crated", () => {
   const { scene } = createHarness();
-  scene.canRearrangeFixtures = () => true;
+  scene.fixtureSystem.canRearrange = () => true;
   const shelf = new ShelfFixture({ id: "shelf", placements: [] });
   shelf.type = "shelf_budget_2x4";
   shelf.placements = [{ itemId: "item", gx: 0, gy: 0, w: 1, h: 1, quantity: 1 }];
-  assert.match(scene.getFixtureSaleBlockReason(shelf), /Only empty fixtures/);
-  assert.match(scene.getFixtureCrateBlockReason(shelf), /Only empty fixtures/);
+  assert.match(scene.fixtureSystem.saleBlockReason(shelf), /Only empty fixtures/);
+  assert.match(scene.fixtureSystem.crateBlockReason(shelf), /Only empty fixtures/);
   shelf.placements = [];
-  assert.equal(scene.getFixtureSaleBlockReason(shelf), null);
+  assert.equal(scene.fixtureSystem.saleBlockReason(shelf), null);
 });
 
 test("fixture crates can be sold on the loading pad or while carried, only once and off shift", () => {
@@ -1662,7 +1668,7 @@ test("fixture crates can be sold on the loading pad or while carried, only once 
   scene.gameState.economy.add = (amount, entry) => paid.push({ amount, ...entry });
   scene.showShopMessage = (message) => messages.push(message);
   let closed = true;
-  scene.canRearrangeFixtures = () => closed;
+  scene.fixtureSystem.canRearrange = () => closed;
   const padCrate = {
     kind: "fixture", typeId: "shelf_budget_2x4", lockedToPad: true, destroyed: false,
     destroy() { this.destroyed = true; },
@@ -1674,14 +1680,14 @@ test("fixture crates can be sold on the loading pad or while carried, only once 
   scene.restockCrates = [padCrate];
   scene.carriedCrate = carried;
   closed = false;
-  assert.equal(scene.sellFixtureCrate(padCrate), false);
+  assert.equal(scene.fixtureSystem.sellCrate(padCrate), false);
   assert.match(messages.at(-1), /while the store is closed/);
   closed = true;
-  assert.equal(scene.sellFixtureCrate(padCrate), true);
+  assert.equal(scene.fixtureSystem.sellCrate(padCrate), true);
   assert.equal(padCrate.destroyed, true);
   assert.deepEqual(scene.restockCrates, []);
-  assert.equal(scene.sellFixtureCrate(padCrate), false);
-  assert.equal(scene.sellFixtureCrate(carried), true);
+  assert.equal(scene.fixtureSystem.sellCrate(padCrate), false);
+  assert.equal(scene.fixtureSystem.sellCrate(carried), true);
   assert.equal(scene.carriedCrate, null);
   assert.equal(carried.destroyed, true);
   assert.deepEqual(paid, [

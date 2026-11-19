@@ -250,11 +250,13 @@ test("the starter contract covers every shelf", () => {
 
 test("fixture purchases list each fixture with its price and a buy button", () => {
   const html = LayoutRenderer.generateHTML({
-    canRearrangeFixtures: () => true,
     fixtures: { all: () => [] },
-    getFixturePurchaseOptions: () => Object.values(FIXTURE_TYPES).map((spec) => ({
-      spec, licensed: true, canAfford: true, uniqueAlreadyPlaced: false, hasDeliverySpace: true,
-    })),
+    fixtureSystem: {
+      canRearrange: () => true,
+      purchaseOptions: () => Object.values(FIXTURE_TYPES).map((spec) => ({
+        spec, licensed: true, canAfford: true, uniqueAlreadyPlaced: false, hasDeliverySpace: true,
+      })),
+    },
   }, true);
   assert.match(html, /BUDGET SHELF 2x2/);
   assert.match(html, /fixture-sale-price">400</);
@@ -266,15 +268,18 @@ test("fixtures tab offers resale with a clear value and a confirmation", () => {
   const shelf = { id: "shelf_1", type: "shelf_budget_2x4", gx: 1, gy: 1 };
   const padCrate = { kind: "fixture", typeId: "shelf_budget_2x4", lockedToPad: true };
   const scene = {
-    canRearrangeFixtures: () => true,
     fixtures: { all: () => [shelf], displayName: () => "BUDGET SHELF 2x4" },
     restockCrates: [padCrate],
     carriedCrate: { kind: "fixture", typeId: "shelf_budget_2x4" },
-    getFixturePurchaseOptions: () => [],
-    getFixtureCrateBlockReason: () => null,
-    canCrateFixture: () => true,
-    getFixtureSaleBlockReason: () => null,
-    getFixtureCrateSaleBlockReason: () => null,
+    fixtureSystem: {
+      canRearrange: () => true,
+      purchaseOptions: () => [],
+      crateBlockReason: () => null,
+      canCrate: () => true,
+      moveAreaBlockReason: () => null,
+      saleBlockReason: () => null,
+      crateSaleBlockReason: () => null,
+    },
   };
   const html = LayoutRenderer.generateHTML(scene, true, "Purchase complete.", { name: "BUDGET SHELF 2x4", value: 90 });
   assert.match(html, /Sell BUDGET SHELF 2x4 for 90\?/);
@@ -288,7 +293,7 @@ test("fixtures tab offers resale with a clear value and a confirmation", () => {
   assert.ok(html.indexOf("Purchase complete.") < html.indexOf("fixtures-owned-list"));
   assert.ok(html.indexOf("layout-sale-confirmation") < html.indexOf("fixtures-owned-list"));
 
-  scene.getFixtureSaleBlockReason = () => "Only empty fixtures can be sold.";
+  scene.fixtureSystem.saleBlockReason = () => "Only empty fixtures can be sold.";
   const blocked = LayoutRenderer.generateHTML(scene, true);
   assert.match(blocked, /fixture-block-reason">Only empty fixtures can be sold\.<\/p>/);
   assert.match(blocked, /data-sell-fixture-id="shelf_1"[\s\S]*?disabled>SELL/);
@@ -296,25 +301,27 @@ test("fixtures tab offers resale with a clear value and a confirmation", () => {
 
 test("layout tab offers paid store expansions gated by shop level and purchase order", () => {
   const scene = {
-    canExpandStore: () => true,
-    canRearrangeFixtures: () => true,
     fixtures: { all: () => [] },
-    getExpansionPurchaseOptions: () => [
-      {
-        zone: { id: "expansion_west", name: "Sales Floor Expansion West", cost: 4000, requiredShopLevel: 5 },
-        isPurchased: false, isNext: true, levelMet: true, canAfford: true,
-      },
-      {
-        zone: { id: "expansion_a", name: "Sales Floor Expansion A", cost: 5000, requiredShopLevel: 9 },
-        isPurchased: false, isNext: false, levelMet: false, canAfford: false,
-      },
-    ],
-    getBackroomPurchaseOptions: () => [
-      {
-        zone: { id: "backroom_upgrade_a", name: "Backroom Upgrade A", cost: 4000, requiredShopLevel: 13 },
-        isPurchased: false, isNext: true, levelMet: true, canAfford: true,
-      },
-    ],
+    fixtureSystem: {
+      canExpand: () => true,
+      canRearrange: () => true,
+      expansionOptions: () => [
+        {
+          zone: { id: "expansion_west", name: "Sales Floor Expansion West", cost: 4000, requiredShopLevel: 5 },
+          isPurchased: false, isNext: true, levelMet: true, canAfford: true,
+        },
+        {
+          zone: { id: "expansion_a", name: "Sales Floor Expansion A", cost: 5000, requiredShopLevel: 9 },
+          isPurchased: false, isNext: false, levelMet: false, canAfford: false,
+        },
+      ],
+      backroomOptions: () => [
+        {
+          zone: { id: "backroom_upgrade_a", name: "Backroom Upgrade A", cost: 4000, requiredShopLevel: 13 },
+          isPurchased: false, isNext: true, levelMet: true, canAfford: true,
+        },
+      ],
+    },
   };
   const html = LayoutRenderer.generateHTML(scene);
   assert.match(html, /Sales Floor</);
@@ -329,7 +336,7 @@ test("layout tab offers paid store expansions gated by shop level and purchase o
 
   const fixturesHTML = LayoutRenderer.generateHTML({
     ...scene,
-    getFixturePurchaseOptions: () => [],
+    fixtureSystem: { ...scene.fixtureSystem, purchaseOptions: () => [] },
     restockCrates: [],
     supply: { freePadSpots: () => [] },
   }, true);

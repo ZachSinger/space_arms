@@ -24,7 +24,7 @@ export async function runSpeedTest(h, seconds = 45) {
   await h.game((scene) => {
     scene.gameState.reputation.shopLevel = 10;
     scene.gameState.economy.credits += 100000;
-    for (const zone of scene.room.zones) if (zone.locked) scene.room.unlockZone(zone.id);
+    for (const zone of scene.room.zones) if (zone.locked) scene.fixtureSystem.openZone(zone.id);
     scene.cameraRig.refresh();
     scene.debugTools.quickstart({ shelfCount: 6, itemCount: 20 });
     for (const id of ["tavi_stock_clerk", "sera_floor_assistant", "dax_stock_clerk"]) scene.gameState.hireEmployee(id);

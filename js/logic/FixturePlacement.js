@@ -87,8 +87,8 @@ export class FixturePlacement {
   confirm() {
     const { id, gx, gy, rotation } = this.placement;
     const placed = this.original
-      ? this.scene.moveFixture(id, gx, gy, rotation)
-      : this.scene.placeFixtureFromCrate(this.fixtureCrate, gx, gy, rotation);
+      ? this.scene.fixtureSystem.move(id, gx, gy, rotation)
+      : this.scene.fixtureSystem.placeFromCrate(this.fixtureCrate, gx, gy, rotation);
     if (placed) this.cancel();
   }
 
@@ -144,13 +144,13 @@ export class FixturePlacement {
    * @returns {boolean} false if the store is open
    */
   begin(id) {
-    if (!this.scene.canRearrangeFixtures()) {
+    if (!this.scene.fixtureSystem.canRearrange()) {
       this.scene.showShopMessage("Fixtures can only move while the store is closed.");
       return false;
     }
     const original = this.scene.fixtures.get(id);
     if (!original) throw new Error(`Unknown fixture: ${id}`);
-    const areaBlock = this.scene.getFixtureMoveAreaBlockReason(original);
+    const areaBlock = this.scene.fixtureSystem.moveAreaBlockReason(original);
     if (areaBlock) {
       this.scene.showShopMessage(areaBlock);
       return false;
@@ -164,7 +164,7 @@ export class FixturePlacement {
    * @returns {boolean} false if the store is open or the crate isn't a carried fixture crate
    */
   beginFromCrate(crate) {
-    if (!this.scene.canRearrangeFixtures()) {
+    if (!this.scene.fixtureSystem.canRearrange()) {
       this.scene.showShopMessage("Fixtures can only be placed while the store is closed.");
       return false;
     }
@@ -250,8 +250,8 @@ export class FixturePlacement {
     }, worldX, worldY);
     const { id, gx, gy, rotation } = this.placement;
     const result = this.original
-      ? this.scene.checkFixtureMove(id, gx, gy, rotation)
-      : this.scene.checkFixturePlacement(this.spec.id, gx, gy, rotation);
+      ? this.scene.fixtureSystem.checkMove(id, gx, gy, rotation)
+      : this.scene.fixtureSystem.checkPlacement(this.spec.id, gx, gy, rotation);
     const x = gx * TILE_SIZE;
     const y = gy * TILE_SIZE;
     drawFixtureOutline(this.graphics.clear(), this.placement, result.valid ? VALID_COLOR : INVALID_COLOR, 1);
@@ -259,7 +259,7 @@ export class FixturePlacement {
     if (hasFacingTextures(this.spec)) {
       // Upright art for the chosen facing, at the same size as the placed fixture.
       this.ghost.setTexture(getFixtureTexture(this.spec, rotation)).setAngle(0);
-      this.scene.sizeFacingArt(this.ghost, this.spec, rotation);
+      this.scene.fixtureViews.sizeFacingArt(this.ghost, this.spec, rotation);
     } else {
       this.ghost.setAngle(rotation * 90);
     }

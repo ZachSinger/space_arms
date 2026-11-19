@@ -31,16 +31,16 @@ function placeOneOfEachShelf(scene) {
     let best = null;
     for (let gx = cursor; gx + type.w <= roomRight; gx += 1) {
       for (let gy = roomTop - 1; gy < roomTop + 2; gy += FIXTURE_SNAP_STEP) {
-        if (!scene.checkFixturePlacement(typeId, gx, gy, 0).valid) continue;
+        if (!scene.fixtureSystem.checkPlacement(typeId, gx, gy, 0).valid) continue;
         if (!best || gy < best.gy) best = { gx, gy };
         break;
       }
     }
     if (!best) continue;
     const entry = { id: scene.fixtures.nextId(typeId), type: typeId, gx: best.gx, gy: best.gy, rotation: 0 };
-    scene.spawnFixture(entry);
+    scene.fixtureSystem.spawn(entry);
     const layout = scene.fixtures.layout();
-    scene.applyFixtureLayout(layout, validateFixtureLayout(layout, scene.getLayoutOptions()));
+    scene.fixtureSystem.applyLayout(layout, validateFixtureLayout(layout, scene.fixtureSystem.layoutOptions()));
     cursor = best.gx + type.w + 1;
   }
 }
@@ -57,7 +57,7 @@ export function unlockEverything(scene) {
   for (const license of database.getAllLicenses()) gameState.catalog.sign(license.id);
   scene.recalculateActiveFactions();
   for (const zoneId of EXPANSION_ORDER) {
-    if (scene.room.zones.find((zone) => zone.id === zoneId)?.locked) scene.room.unlockZone(zoneId);
+    if (scene.room.zones.find((zone) => zone.id === zoneId)?.locked) scene.fixtureSystem.openZone(zoneId);
   }
   scene.cameraRig.refresh();
 }

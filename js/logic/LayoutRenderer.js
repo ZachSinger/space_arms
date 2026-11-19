@@ -17,7 +17,7 @@ export class LayoutRenderer {
     if (includePurchases) {
       return LayoutRenderer.generateFixturesTabHTML(scene, purchaseNotice, saleConfirmation);
     }
-    const enabled = scene.canExpandStore();
+    const enabled = scene.fixtureSystem.canExpand();
 
     const expansionCards = (options, buyAttribute) => options.map(
       ({ zone, isPurchased, isNext, levelMet, canAfford }) => {
@@ -57,9 +57,9 @@ export class LayoutRenderer {
         <section class="fixtures-section">
           <div class="retro-slot custom-scrollbar layout-expansions-list">
             <h3 class="type-h3 layout-zone-heading">Sales Floor</h3>
-            ${expansionCards(scene.getExpansionPurchaseOptions(), "data-buy-expansion-id")}
+            ${expansionCards(scene.fixtureSystem.expansionOptions(), "data-buy-expansion-id")}
             <h3 class="type-h3 layout-zone-heading">Backroom</h3>
-            ${expansionCards(scene.getBackroomPurchaseOptions(), "data-buy-backroom-id")}
+            ${expansionCards(scene.fixtureSystem.backroomOptions(), "data-buy-backroom-id")}
           </div>
         </section>
       </div>
@@ -75,7 +75,7 @@ export class LayoutRenderer {
    * @returns {string} HTML
    */
   static generateFixturesTabHTML(scene, purchaseNotice = "", saleConfirmation = null) {
-    const enabled = scene.canRearrangeFixtures();
+    const enabled = scene.fixtureSystem.canRearrange();
     const { fixtures } = scene;
     const fixtureCrates = (scene.restockCrates ?? [])
       .map((crate, index) => ({ crate, key: String(index) }))
@@ -84,7 +84,7 @@ export class LayoutRenderer {
       fixtureCrates.push({ crate: scene.carriedCrate, key: "carried" });
     }
 
-    const saleCards = scene.getFixturePurchaseOptions()
+    const saleCards = scene.fixtureSystem.purchaseOptions()
       .map(({ spec, license, licensed, canAfford, hasDeliverySpace }) => {
         const disabled = !licensed || !canAfford || !hasDeliverySpace;
         const label = !licensed
@@ -110,8 +110,8 @@ export class LayoutRenderer {
       }).join("");
 
     const placedCards = fixtures.all().map((fixture) => {
-      const saleBlockReason = scene.getFixtureSaleBlockReason(fixture);
-      const moveBlockReason = scene.getFixtureMoveAreaBlockReason?.(fixture) ?? null;
+      const saleBlockReason = scene.fixtureSystem.saleBlockReason(fixture);
+      const moveBlockReason = scene.fixtureSystem.moveAreaBlockReason(fixture) ?? null;
       const canMove = enabled && !moveBlockReason;
       return `
         <div class="item-card fixture-owned-card" data-fixture-row-id="${fixture.id}">
@@ -126,8 +126,8 @@ export class LayoutRenderer {
               title="${moveBlockReason || "Move this fixture"}"
               ${canMove ? "" : "disabled"}>MOVE</button>
             <button type="button" class="action-btn danger" data-crate-fixture-id="${fixture.id}"
-              title="${scene.getFixtureCrateBlockReason(fixture) || "Create a fixture crate"}"
-              ${scene.canCrateFixture(fixture) ? "" : "disabled"}>CRATE UP</button>
+              title="${scene.fixtureSystem.crateBlockReason(fixture) || "Create a fixture crate"}"
+              ${scene.fixtureSystem.canCrate(fixture) ? "" : "disabled"}>CRATE UP</button>
             <button type="button" class="action-btn danger" data-sell-fixture-id="${fixture.id}"
               title="${saleBlockReason || "Sell this empty fixture"}"
               ${saleBlockReason ? "disabled" : ""}>SELL</button>
@@ -139,7 +139,7 @@ export class LayoutRenderer {
     const crateCards = fixtureCrates.map(({ crate, key }) => {
       const name = getFixtureType(crate.typeId).name;
       const location = key === "carried" ? "Being carried" : crate.lockedToPad ? "On the Loading Pad" : "On the floor";
-      const reason = scene.getFixtureCrateSaleBlockReason(crate);
+      const reason = scene.fixtureSystem.crateSaleBlockReason(crate);
       return `
         <div class="item-card fixture-owned-card fixture-crate-card">
           <div class="fixture-owned-header">

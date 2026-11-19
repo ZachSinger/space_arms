@@ -24,6 +24,8 @@ let CHARACTER_ART_WIDTH;
 let CHARACTER_FEET_DROP;
 let DebugTools;
 let ShiftSystem;
+let FixtureSystem;
+let FixtureViews;
 const originalPhaser = globalThis.Phaser;
 
 before(async () => {
@@ -58,6 +60,8 @@ before(async () => {
   ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));
   ({ DebugTools } = await server.ssrLoadModule("/js/debug/DebugTools.js"));
   ({ ShiftSystem } = await server.ssrLoadModule("/js/systems/ShiftSystem.js"));
+  ({ FixtureSystem } = await server.ssrLoadModule("/js/systems/FixtureSystem.js"));
+  ({ FixtureViews } = await server.ssrLoadModule("/js/world/FixtureViews.js"));
   ({ CHARACTER_ART_WIDTH, CHARACTER_FEET_DROP } = await server.ssrLoadModule("/js/logic/CustomerSprites.js"));
 });
 
@@ -95,6 +99,7 @@ function createHarness(write = async () => true) {
       scene.setSaveStatus(`Not saved: ${error.message}`);
     },
   });
+  scene.fixtureSystem = new FixtureSystem(scene);
   scene.saveManager = new SaveManager({ shop: scene }, {
     write: async (payload) => {
       writes.push(payload);
@@ -106,23 +111,23 @@ function createHarness(write = async () => true) {
 
 test("fixtures can be placed during a closed mid-shift without unlocking saving or expansions", () => {
   const { scene } = createHarness();
-  assert.equal(scene.canRearrangeFixtures(), true);
+  assert.equal(scene.fixtureSystem.canRearrange(), true);
   Object.assign(scene.shiftClock, { started: true, isPaused: false, softClosed: false });
   scene.customers.push({});
-  assert.equal(scene.canRearrangeFixtures(), false);
+  assert.equal(scene.fixtureSystem.canRearrange(), false);
   scene.storeTemporarilyClosed = true;
-  assert.equal(scene.canRearrangeFixtures(), true);
+  assert.equal(scene.fixtureSystem.canRearrange(), true);
   assert.equal(scene.canSaveOffShift(), false);
-  assert.equal(scene.canExpandStore(), false);
+  assert.equal(scene.fixtureSystem.canExpand(), false);
   scene.shiftClock.isPaused = true;
-  assert.equal(scene.canRearrangeFixtures(), false);
+  assert.equal(scene.fixtureSystem.canRearrange(), false);
   scene.shiftClock.isPaused = false;
   scene.shift.starting = true;
-  assert.equal(scene.canRearrangeFixtures(), false);
+  assert.equal(scene.fixtureSystem.canRearrange(), false);
   scene.shift.starting = false;
   scene.storeTemporarilyClosed = false;
   scene.shiftClock.softClosed = true;
-  assert.equal(scene.canRearrangeFixtures(), true);
+  assert.equal(scene.fixtureSystem.canRearrange(), true);
 });
 
 test("pause consumes menu, mouse and keyboard actions, leaving only resume available", () => {
@@ -194,6 +199,7 @@ function createExpansionHarness({ shopLevel, credits }) {
     requestAutosave() { autosaves++; },
     showShopMessage(message) { messages.push(message); },
   });
+  scene.fixtureSystem = new FixtureSystem(scene);
   return {
     scene,
     messages,
@@ -204,24 +210,24 @@ function createExpansionHarness({ shopLevel, credits }) {
 
 test("store expansions require their level, credits, and previous purchases", () => {
   const locked = createExpansionHarness({ shopLevel: 4, credits: 5000 });
-  assert.equal(locked.scene.getExpansionPurchaseOptions()[0].levelMet, false);
-  assert.equal(locked.scene.buyExpansion("expansion_west"), false);
+  assert.equal(locked.scene.fixtureSystem.expansionOptions()[0].levelMet, false);
+  assert.equal(locked.scene.fixtureSystem.buyExpansion("expansion_west"), false);
   assert.equal(locked.scene.gameState.economy.credits, 5000);
   assert.match(locked.messages[0], /Shop Level 5/);
 
   const poor = createExpansionHarness({ shopLevel: 5, credits: 3999 });
-  assert.equal(poor.scene.buyExpansion("expansion_west"), false);
+  assert.equal(poor.scene.fixtureSystem.buyExpansion("expansion_west"), false);
   assert.equal(poor.scene.room.zones.find((zone) => zone.id === "expansion_west").locked, true);
   assert.equal(poor.scene.gameState.economy.credits, 3999);
 
   const open = createExpansionHarness({ shopLevel: 5, credits: 4000 });
   open.scene.shiftClock.started = true;
-  assert.equal(open.scene.buyExpansion("expansion_west"), false);
+  assert.equal(open.scene.fixtureSystem.buyExpansion("expansion_west"), false);
   assert.equal(open.scene.gameState.economy.credits, 4000);
   assert.match(open.messages[0], /while the store is closed/);
 
   const wrongOrder = createExpansionHarness({ shopLevel: 30, credits: 100000 });
-  assert.equal(wrongOrder.scene.buyExpansion("expansion_a"), false);
+  assert.equal(wrongOrder.scene.fixtureSystem.buyExpansion("expansion_a"), false);
   assert.equal(wrongOrder.scene.gameState.economy.credits, 100000);
   assert.match(wrongOrder.messages[0], /in order/);
 });
@@ -229,10 +235,11 @@ test("store expansions require their level, credits, and previous purchases", ()
 test("buying the first store expansion deducts credits and records a receipt line", () => {
   const harness = createExpansionHarness({ shopLevel: 5, credits: 4000 });
   const { scene } = harness;
-  assert.equal(scene.getExpansionPurchaseOptions()[0].canAfford, true);
-  assert.equal(scene.buyExpansion("expansion_west"), true);
+  assert.equal(scene.fixtureSystem.expansionOptions()[0].canAfford, true);
+  assert.equal(scene.fixtureSystem.buyExpansion("expansion_west"), true);
   assert.equal(scene.gameState.economy.credits, 0);
   assert.equal(scene.room.zones.find((zone) => zone.id === EXPANSION_ORDER[0]).locked, false);
+  assert.ok(scene.gameState.shop.unlockedZones.has(EXPANSION_ORDER[0]), "the save keeps the new zone");
   assert.deepEqual(scene.gameState.economy.dayLedger.serialize().lines, [{
     category: "expansions",
     label: "Sales Floor Expansion West",
@@ -245,17 +252,17 @@ test("buying the first store expansion deducts credits and records a receipt lin
 
 test("backroom expansions require their level, credits, and previous purchases", () => {
   const locked = createExpansionHarness({ shopLevel: 12, credits: 20000 });
-  assert.equal(locked.scene.getBackroomPurchaseOptions()[0].levelMet, false);
-  assert.equal(locked.scene.buyBackroomUpgrade(BACKROOM_UPGRADE_ORDER[0]), false);
+  assert.equal(locked.scene.fixtureSystem.backroomOptions()[0].levelMet, false);
+  assert.equal(locked.scene.fixtureSystem.buyBackroomUpgrade(BACKROOM_UPGRADE_ORDER[0]), false);
   assert.match(locked.messages[0], /Shop Level 13/);
 
   const poor = createExpansionHarness({ shopLevel: 13, credits: 3999 });
-  assert.equal(poor.scene.buyBackroomUpgrade(BACKROOM_UPGRADE_ORDER[0]), false);
+  assert.equal(poor.scene.fixtureSystem.buyBackroomUpgrade(BACKROOM_UPGRADE_ORDER[0]), false);
   assert.equal(poor.scene.gameState.economy.credits, 3999);
   assert.match(poor.messages[0], /costs 4,000\./);
 
   const wrongOrder = createExpansionHarness({ shopLevel: 27, credits: 20000 });
-  assert.equal(wrongOrder.scene.buyBackroomUpgrade(BACKROOM_UPGRADE_ORDER[1]), false);
+  assert.equal(wrongOrder.scene.fixtureSystem.buyBackroomUpgrade(BACKROOM_UPGRADE_ORDER[1]), false);
   assert.match(wrongOrder.messages[0], /in order/);
 });
 
@@ -263,7 +270,7 @@ test("buying all backroom expansions records costs and opens the wider room", ()
   const harness = createExpansionHarness({ shopLevel: 27, credits: 19000 });
   const { scene } = harness;
   for (const id of BACKROOM_UPGRADE_ORDER) {
-    assert.equal(scene.buyBackroomUpgrade(id), true);
+    assert.equal(scene.fixtureSystem.buyBackroomUpgrade(id), true);
   }
   assert.equal(scene.gameState.economy.credits, 0);
   assert.ok(BACKROOM_UPGRADE_ORDER.every((id) =>
@@ -996,7 +1003,7 @@ test("HUD Save button is wired, reflects availability, and removes its handler o
 });
 
 test("all placeable fixture physics bodies use the same art-trimmed bounds as placement", () => {
-  const scene = Object.create(GameScene.prototype);
+  const views = new FixtureViews(Object.create(GameScene.prototype));
   const tree = { remove() {}, insert() {} };
   const body = { world: { staticTree: tree }, position: { set(x, y) { this.x = x; this.y = y; } },
     center: { set(x, y) { this.x = x; this.y = y; } } };
@@ -1007,7 +1014,7 @@ test("all placeable fixture physics bodies use the same art-trimmed bounds as pl
   for (const type of Object.keys(FIXTURE_TYPES)) {
     for (let rotation = 0; rotation < 4; rotation++) {
       const fixture = { type, x: 832, y: 192, rotation, sprite };
-      scene.orientFixtureSprite(fixture);
+      views.orient(fixture);
       const footprint = fixtureFootprint(fixture);
       const bounds = fixtureBounds({ ...fixture, gx: 832 / 64 - footprint.w / 2, gy: 192 / 64 - footprint.h / 2 });
       assert.ok(Math.abs(body.width - (bounds.right - bounds.left) * 64) < 1e-9);
@@ -1063,7 +1070,7 @@ test("side-facing register queue and cashier align with the body box rather than
 });
 
 test("the budget shelf art fills its footprint in every direction; only the visible shelf is solid", () => {
-  const scene = Object.create(GameScene.prototype);
+  const views = new FixtureViews(Object.create(GameScene.prototype));
   const tree = { remove() {}, insert() {} };
   const body = { world: { staticTree: tree }, position: { set() {} }, center: { set() {} } };
   const sprite = {
@@ -1079,7 +1086,7 @@ test("the budget shelf art fills its footprint in every direction; only the visi
     setAngle(angle) { this.angle = angle; return this; },
   };
   for (let rotation = 0; rotation < 4; rotation++) {
-    scene.orientFixtureSprite({ type: "shelf_budget_2x2", x: 100, y: 200, rotation, sprite });
+    views.orient({ type: "shelf_budget_2x2", x: 100, y: 200, rotation, sprite });
     const [width, height] = rotation % 2 === 0 ? [72, 64] : [64, 72];
     assert.equal(sprite.displayWidth, width);
     assert.equal(sprite.displayHeight, height);

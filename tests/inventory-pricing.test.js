@@ -226,11 +226,13 @@ function createHarness() {
       orderSummary: () => ({ crates: 0, maxCrates: 9, stockCost: 0, deliveryFee: 0, total: 0, problem: null, canPlace: false }),
       freePadSpots: () => [],
     },
-    canRearrangeFixtures: () => false,
-    canExpandStore: () => false,
-    getFixturePurchaseOptions: () => [],
-    getExpansionPurchaseOptions: () => [],
-    getBackroomPurchaseOptions: () => [],
+    fixtureSystem: {
+      canRearrange: () => false,
+      canExpand: () => false,
+      purchaseOptions: () => [],
+      expansionOptions: () => [],
+      backroomOptions: () => [],
+    },
     shift: { financesView: () => ({
       day: 1,
       shiftRunning: false,
@@ -574,8 +576,7 @@ test("fixture sale confirmations identify the chosen fixture or crate", () => {
   const crate = { kind: "fixture", typeId: "shelf_budget_2x4" };
   tablet.scene = {
     fixtures: { displayName: () => "BUDGET SHELF 2x4" },
-    getFixtureSaleBlockReason: () => null,
-    getFixtureCrateSaleBlockReason: () => null,
+    fixtureSystem: { saleBlockReason: () => null, crateSaleBlockReason: () => null },
   };
   tablet.refreshLayoutPanels = () => {};
   tablet.prepareFixtureSale("placed", shelf);
@@ -592,7 +593,7 @@ test("a removed fixture cannot be sold through an old confirmation", () => {
   const messages = [];
   tablet.scene = {
     fixtures: { displayName: () => "BUDGET SHELF 2x4", get: () => undefined },
-    getFixtureSaleBlockReason: () => null,
+    fixtureSystem: { saleBlockReason: () => null },
     showShopMessage: (message) => messages.push(message),
   };
   tablet.refreshLayoutPanels = () => {};

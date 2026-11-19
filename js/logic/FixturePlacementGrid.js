@@ -156,8 +156,8 @@ export class FixturePlacementGrid {
       const { x, y } = scan;
       const candidate = { ...scan.candidate, gx: x / TILE_SIZE, gy: y / TILE_SIZE };
       const result = placement.original
-        ? scene.checkFixtureMove(candidate.id, candidate.gx, candidate.gy, candidate.rotation, scan.connectivityCache)
-        : scene.checkFixturePlacement(candidate.type, candidate.gx, candidate.gy, candidate.rotation, scan.connectivityCache);
+        ? scene.fixtureSystem.checkMove(candidate.id, candidate.gx, candidate.gy, candidate.rotation, scan.connectivityCache)
+        : scene.fixtureSystem.checkPlacement(candidate.type, candidate.gx, candidate.gy, candidate.rotation, scan.connectivityCache);
       if (result.valid) {
         const solidLeft = x + scan.offsetX;
         if (scan.run && solidLeft <= scan.run.right) {
