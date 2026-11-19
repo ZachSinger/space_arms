@@ -7,7 +7,7 @@ import { UIWindow } from "./UIWindow.js";
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from "./GameViewport.js";
 import { InventoryTab, INVENTORY_PRICE_CONTROL_SELECTOR } from "./InventoryTab.js";
 import { EmployeeTab, EMPLOYEE_PRIORITY_SELECTOR } from "./EmployeeTab.js";
-import { ContractRenderer } from "./ContractRenderer.js";
+import { ContractsTab } from "./ContractsTab.js";
 import { SupplyTab } from "./SupplyTab.js";
 import { LayoutRenderer } from "./LayoutRenderer.js";
 import { FinancesRenderer } from "./FinancesRenderer.js";
@@ -67,6 +67,11 @@ export class ManagerTablet {
     this.scene = scene;
     this.inventoryTab = new InventoryTab(scene);
     this.employeeTab = new EmployeeTab(scene, gameState);
+    this.contractsTab = new ContractsTab(
+      gameState,
+      () => database.getAllLicenses(),
+      (licenseId) => this.handleSignContract(licenseId),
+    );
     this.supplyTab = new SupplyTab(scene);
     this.fixturePurchaseNotice = "";
     this.fixtureSaleConfirmation = null;
@@ -115,6 +120,11 @@ export class ManagerTablet {
       this.bodyElement,
       () => this.renderPanelContent("employee"),
     );
+    this.contractsTab.bind(
+      this.bodyElement.querySelector('[data-tab-panel="contracts"]'),
+      this.bodyElement,
+      () => this.renderPanelContent("contracts"),
+    );
     this.supplyTab.bind(
       this.bodyElement.querySelector('[data-tab-panel="supply"]'),
       () => this.renderPanelContent("supply"),
@@ -138,9 +148,6 @@ export class ManagerTablet {
         this.handbookTopic = handbookTopicButton.dataset.handbookTopic;
         this.refreshHandbookPanel();
       }
-
-      const signButton = event.target.closest("[data-license-id]");
-      if (signButton) this.handleSignContract(signButton.dataset.licenseId);
 
       if (event.target.closest("[data-end-day]") && this.scene.shift.endDay()) this.uiWindow.close();
       if (event.target.closest("[data-finances-start-shift]")) this.scene.shift.start();
@@ -217,7 +224,7 @@ export class ManagerTablet {
     this.gameState.subscribe(() => {
       this.inventoryTab.redraw();
       this.employeeTab.redraw();
-      this.refreshContractsPanel();
+      this.contractsTab.redraw();
       this.refreshSupplyPanel();
       this.refreshLayoutPanels();
       this.refreshFinancesPanel();
@@ -248,9 +255,7 @@ export class ManagerTablet {
   renderPanelBody(tabId) {
     if (tabId === "inventory") return this.inventoryTab.draw();
     if (tabId === "employee") return this.employeeTab.draw();
-    if (tabId === "contracts") {
-      return ContractRenderer.generateHTML(database.getAllLicenses(), this.gameState);
-    }
+    if (tabId === "contracts") return this.contractsTab.draw();
     if (tabId === "supply") return this.supplyTab.draw();
     if (tabId === "fixtures") {
       return LayoutRenderer.generateHTML(
@@ -280,6 +285,7 @@ export class ManagerTablet {
     this.fixtureSaleConfirmation = null;
     if (tabId === "inventory") this.inventoryTab.redraw();
     if (tabId === "employee") this.employeeTab.redraw();
+    if (tabId === "contracts") this.contractsTab.redraw();
     if (tabId === "supply") this.refreshSupplyPanel();
     if (tabId === "layout" || tabId === "fixtures") this.refreshLayoutPanels();
     if (tabId === "finances") this.refreshFinancesPanel();
@@ -300,8 +306,7 @@ export class ManagerTablet {
   }
 
   refreshContractsPanel() {
-    const panel = this.bodyElement.querySelector('[data-tab-panel="contracts"]');
-    if (panel) panel.innerHTML = this.renderPanelContent("contracts");
+    this.contractsTab.redraw();
   }
 
   refreshEmployeePanel() {

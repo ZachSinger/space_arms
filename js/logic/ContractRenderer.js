@@ -3,6 +3,7 @@
 // ==========================================
 // HTML for the Contracts tab: one card per supplier license with its requirements, cost,
 // fixture unlocks, and a buy button reflecting locked/affordable/owned state.
+import { html } from "../core/html.js";
 import { getFixtureType } from "./FixtureLayout.js";
 
 export class ContractRenderer {
@@ -25,17 +26,9 @@ export class ContractRenderer {
    * @returns {string} HTML
    */
   static generateHTML(licenses, gameState) {
-    let html = `
-      <div class="contracts-panel">
-        <h2 class="type-h2">Supplier Contracts</h2>
-        <hr class="divider-thick">
-        <div class="contracts-list custom-scrollbar">
-    `;
-
-    if (!licenses || licenses.length === 0) {
-      html += `<p class="type-description contracts-empty">No contracts are available.</p>`;
-    } else {
-      ContractRenderer.sortLicenses(licenses, gameState).forEach((license) => {
+    const cards = !licenses || licenses.length === 0
+      ? html`<p class="type-description contracts-empty">No contracts are available.</p>`
+      : ContractRenderer.sortLicenses(licenses, gameState).map((license) => {
         const isShopLevelMet =
           gameState.reputation.shopLevel >= license.requiredShopLevel;
         const isGlobalRepMet =
@@ -49,36 +42,31 @@ export class ContractRenderer {
         const canAfford = license.canAfford(gameState);
         const isOwned = gameState.catalog.owns(license.id);
 
-        let actionButtonHTML = "";
+        const actionButton = isOwned
+          ? html`<button type="button" class="retro-tab-btn" disabled>PURCHASED</button>`
+          : !isUnlocked
+            ? html`<button type="button" class="retro-tab-btn" disabled>LOCKED</button>`
+            : !canAfford
+              ? html`<button type="button" class="action-btn danger" disabled>INSUFFICIENT FUNDS</button>`
+              : html`<button type="button" class="action-btn" data-license-id="${license.id}">SIGN CONTRACT</button>`;
         const fixtureNames = license.unlocksFixtures
           .map((typeId) => getFixtureType(typeId)?.name)
           .filter(Boolean);
-        const fixtureUnlocksHTML = fixtureNames.length
-          ? `<p class="type-description contracts-details">Unlocks fixtures: ${fixtureNames.join(", ")}</p>`
-          : "";
-
-        if (isOwned) {
-          actionButtonHTML = `<button type="button" class="retro-tab-btn" disabled>PURCHASED</button>`;
-        } else if (!isUnlocked) {
-          actionButtonHTML = `<button type="button" class="retro-tab-btn" disabled>LOCKED</button>`;
-        } else if (!canAfford) {
-          actionButtonHTML = `<button type="button" class="action-btn danger" disabled>INSUFFICIENT FUNDS</button>`;
-        } else {
-          actionButtonHTML = `<button type="button" class="action-btn" data-license-id="${license.id}">SIGN CONTRACT</button>`;
-        }
+        const fixtureUnlocks = fixtureNames.length
+          ? html`<p class="type-description contracts-details">Unlocks fixtures: ${fixtureNames.join(", ")}</p>`
+          : null;
 
         const globalRepColor = isGlobalRepMet
           ? "var(--color-text-muted)"
           : "#ef4444";
         const levelColor = isShopLevelMet ? "var(--color-text-muted)" : "#ef4444";
-        const levelHtml = license.requiredShopLevel > 1
-          ? `<span style="color: ${levelColor};">Requires Shop Level ${license.requiredShopLevel}</span>`
-          : "";
-        const globalHtml = license.reqReputation !== null
-          ? `<span style="color: ${globalRepColor};">Store reputation: ${license.reqReputation}</span>`
-          : "";
-        let factionHtml = "";
-
+        const levelRequirement = license.requiredShopLevel > 1
+          ? html`<span style="color: ${levelColor};">Requires Shop Level ${license.requiredShopLevel}</span>`
+          : null;
+        const globalRequirement = license.reqReputation !== null
+          ? html`<span style="color: ${globalRepColor};">Store reputation: ${license.reqReputation}</span>`
+          : null;
+        let factionRequirement = null;
         if (license.reqFaction) {
           const factionRepColor = isFactionRepMet
             ? "var(--color-text-muted)"
@@ -86,31 +74,41 @@ export class ContractRenderer {
           const factionName =
             license.reqFaction.charAt(0).toUpperCase() +
             license.reqFaction.slice(1);
-          factionHtml = `<span style="color: ${factionRepColor};">${factionName} reputation: ${license.reqFactionRep}</span>`;
+          factionRequirement = html`<span style="color: ${factionRepColor};">${factionName} reputation: ${license.reqFactionRep}</span>`;
         }
-        const requirementsHtml = isOwned
-          ? "Purchased; stays available."
-          : [levelHtml, globalHtml, factionHtml].filter(Boolean).join(" | ");
+        const requirementParts = isOwned
+          ? ["Purchased; stays available."]
+          : [levelRequirement, globalRequirement, factionRequirement].filter(Boolean)
+            .flatMap((part, index) => index === 0 ? [part] : [html` | `, part]);
+        const requirements = requirementParts.length
+          ? html`<p class="type-description contract-requirements">${requirementParts}</p>`
+          : null;
 
-        html += `
+        return html`
           <div class="item-card contract-card">
             <div class="contract-information">
               <h3 class="type-h3">${license.name}</h3>
               <p class="type-description contracts-details">${license.description}</p>
-              ${fixtureUnlocksHTML}
-              ${requirementsHtml ? `<p class="type-description contract-requirements">${requirementsHtml}</p>` : ""}
+              ${fixtureUnlocks}
+              ${requirements}
             </div>
             <div class="contract-action">
               <p class="type-description">Tier ${license.tier}</p>
               <p class="type-description">Cost: ${license.baseCost.toLocaleString()}</p>
-              ${actionButtonHTML}
+              ${actionButton}
             </div>
           </div>
         `;
       });
-    }
 
-    html += `</div></div>`;
-    return html;
+    return String(html`
+      <div class="contracts-panel">
+        <h2 class="type-h2">Supplier Contracts</h2>
+        <hr class="divider-thick">
+        <div class="contracts-list custom-scrollbar">
+          ${cards}
+        </div>
+      </div>
+    `);
   }
 }

@@ -107,6 +107,35 @@ test("redesigned contracts retain available, unaffordable, locked, and purchased
   assert.doesNotMatch(html, /data-license-id="lic_start_ammo"|data-license-id="lic_corp_labor"|data-license-id="lic_fixture_basics"/);
 });
 
+test("the Contracts tab escapes license data in text and action attributes", () => {
+  const license = {
+    id: 'license" onclick="run()',
+    name: '<img src=x onerror="run()">',
+    description: '<svg onload="run()">',
+    tier: 1,
+    baseCost: 1,
+    unlocksFixtures: [],
+    requiredShopLevel: 1,
+    reqReputation: null,
+    reqFaction: null,
+    reqFactionRep: null,
+    isUnlocked: () => true,
+    canAfford: () => true,
+  };
+  const html = ContractRenderer.generateHTML([license], shopState({
+    shopLevel: 1,
+    globalReputation: 0,
+    factionReputation: {},
+    credits: 10,
+  }));
+
+  assert.match(html, /&lt;img src=x onerror=&quot;run\(\)&quot;&gt;/);
+  assert.match(html, /&lt;svg onload=&quot;run\(\)&quot;&gt;/);
+  assert.match(html, /data-license-id="license&quot; onclick=&quot;run\(\)"/);
+  assert.doesNotMatch(html, /<img src=x onerror=/);
+  assert.doesNotMatch(html, /data-license-id="license" onclick=/);
+});
+
 test("Stellaris Las-Arms unlocks at Shop Level 9", () => {
   const license = new SupplierLicense(licenseById.get("lic_corp_stellaris"));
   const state = shopState({

@@ -100,6 +100,10 @@ function createHarness() {
     querySelectorAll: () => [],
     set innerHTML(markup) { this.markup = markup; },
   };
+  const contractsPanel = {
+    contains: (element) => element !== null,
+    set innerHTML(markup) { this.markup = markup; },
+  };
   const document = { activeElement: null };
   globalThis.document = document;
 
@@ -187,6 +191,7 @@ function createHarness() {
     if (selector === ".tablet-tab-bar") return tabBar;
     if (selector === '[data-tab-panel="inventory"]') return panel;
     if (selector === '[data-tab-panel="employee"]') return employeePanel;
+    if (selector === '[data-tab-panel="contracts"]') return contractsPanel;
     if (selector === '[data-tab-panel="supply"]') return supplyPanel;
     return null;
   };
@@ -396,6 +401,20 @@ test("contract signing enforces each shop level without spending credits early",
   assert.equal(state.economy.credits, 1425);
   assert.equal(state.catalog.owns("lic_start_apparel"), true);
   assert.deepEqual(state.economy.dayLedger.lines.map((line) => line.category), ["licenses"]);
+});
+
+test("Contracts tab routes signing to the tablet contract action", () => {
+  const { body, tablet } = createHarness();
+  const signed = [];
+  tablet.handleSignContract = (licenseId) => signed.push(licenseId);
+  const button = Object.assign(new TestElement(), {
+    dataset: { licenseId: "lic_start_rations" },
+    closest(selector) { return selector === "[data-license-id]" ? this : null; },
+  });
+
+  body.emit("click", { target: button });
+
+  assert.deepEqual(signed, ["lic_start_rations"]);
 });
 
 test("opening the tablet hides checkout and closing it resumes register work", () => {
