@@ -14,12 +14,14 @@ import { fixtureAccessCells, fixtureFacing, fixtureFacingStep, fixtureFootprint,
 import { worldToClientRect } from "../logic/FixtureHighlight.js";
 import { getGameScale } from "../logic/GameViewport.js";
 import { PLAYER_CHARACTER_HEIGHT } from "../logic/Player.js";
+import { controlLabel } from "../input/InputDevice.js";
 
 /** @typedef {import("../logic/Crate.js").Crate} Crate */
 /** @typedef {import("../logic/Customer.js").Customer} Customer */
 
 const REGISTER_ABOVE_LOWER_FRACTION = 0.3;
 const REGISTER_BELOW_RAISE_FRACTION = 0.65;
+const REGISTER_INTERACT_RANGE = 12;
 export const CHECKOUT_TUNING = loadTuning("checkout", checkoutTuning);
 const CUSTOMER_EXIT_SLOT_OFFSETS = Object.freeze([
   [-8, -4], [0, -4], [8, -4], [-8, 4], [0, 4], [8, 4],
@@ -35,6 +37,36 @@ export class CheckoutSystem {
     this.registerDepthBeforeTuck = null;
     this.goBacksPackRetryAt = 0;
     this.goBacksStuckKey = null;
+    if (shop.interactables) this.registerInteractions();
+  }
+
+  registerInteractions() {
+    const shop = this.shop;
+    shop.interactables.registerProvider("register", () =>
+      shop.fixtures.registers().filter((fixture) => fixture.sprite).map((fixture) => ({
+        id: `register:${fixture.id}`,
+        kind: "register",
+        target: fixture,
+        range: REGISTER_INTERACT_RANGE,
+        priority: 1,
+        getActions: () => [
+          ...(this.operatingRegister
+            ? [{
+              action: "interact",
+              hint: `${controlLabel("interact")}: Leave the register`,
+              perform: () => this.endRegisterSession(),
+            }]
+            : [
+              { action: "register", hint: `${controlLabel("interact")}: Activate Register` },
+              {
+                action: "interact",
+                hint: `${controlLabel("interact")}: Activate Register`,
+                perform: () => shop.tryOpenRegister(),
+              },
+            ]),
+        ],
+        distanceFrom: (origin) => shop.feetReachTo(origin, fixture.sprite.getBounds()),
+      })));
   }
 
   openRegisterWindow() {

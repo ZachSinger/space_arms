@@ -140,6 +140,11 @@ function bindCleaningSystem(scene) {
     getCleanliness: () => ({ score: 20, max: 20, trashCount: 0 }),
     updateHighlight() {},
   };
+  scene.interactables.registerProvider("cleaning", () => [{
+    id: "cleaning",
+    kind: "cleaning",
+    getActions: () => scene.cleaningSystem.getActions(),
+  }]);
   scene.trash = scene.cleaningSystem.trash;
   scene.heldTrash = null;
   scene.hud = { renderCleanliness() {} };
@@ -216,7 +221,6 @@ function createHarness({ carrying = false } = {}) {
     on(name, handler) { handlers.set(name, handler); },
   } };
   scene.bindCrateKeys();
-  GameScene.prototype.registerInteractableSources.call(scene);
   return { scene, messages, handlers, removedCaptures };
 }
 

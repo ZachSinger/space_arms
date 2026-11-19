@@ -39,7 +39,7 @@ import { FixturePlacement } from "../logic/FixturePlacement.js";
 import { setupSandboxRoom } from "../debug/SandboxRoom.js";
 import { setupUiLab } from "../debug/UiLab.js";
 import { ShelfStockingWindow } from "../logic/ShelfStockingWindow.js";
-import { REGISTER_FRONT_OVERLAP, getFixtureType, fixtureFacing, fixtureFacingStep, fixtureInteractionDistance, validateFixtureLayout } from "../logic/FixtureLayout.js";
+import { REGISTER_FRONT_OVERLAP, getFixtureType, fixtureFacing, fixtureFacingStep, validateFixtureLayout } from "../logic/FixtureLayout.js";
 import { validateShopSave } from "../logic/ShopSave.js";
 import { UIWindow } from "../logic/UIWindow.js";
 import { Messages, SHOP_MESSAGE_COLOR } from "../world/Messages.js";
@@ -86,12 +86,8 @@ const ANGRY_REPUTATION_PENALTY = 1;
 // Reputation lost once when a customer cannot find any of their primary items.
 const MISSING_PRIMARY_REPUTATION_PENALTY = 1;
 
-// Register reach (px): the gap allowed between the player's feet and the register graphic.
-const REGISTER_INTERACT_RANGE = 12;
 // How far the operating player's feet sit past the register graphic's top edge (px).
 const REGISTER_BEHIND_OVERLAP = 10;
-// How far (px) the player's feet may be from a shelf's front edge to use it: a few pixels.
-const SHELF_INTERACT_RANGE = 12;
 
 /**
  * Grid-cell keys ("gx,gy") overlapped, even partially, by a world-space rectangle. Fixture
@@ -150,6 +146,7 @@ export class GameScene extends Phaser.Scene {
     this.eventBus = new Events({ strict: true });
     this.debugInfo = null;
     this.debugTools = null;
+    this.interactables = new InteractableRegistry();
     this.shift = null;
     this.loadFailed = false;
     this.autosaveBlocked = false;
@@ -348,8 +345,6 @@ export class GameScene extends Phaser.Scene {
     this.fixtureSystem.applyCurrentLayout();
     this.fixturePlacement = new FixturePlacement(this);
     this.input.mouse.disableContextMenu();
-    this.interactables = new InteractableRegistry();
-    this.registerInteractableSources();
     this.controlMode = new ControlMode(this);
     this.bindPauseInputGuard();
 
@@ -661,67 +656,6 @@ export class GameScene extends Phaser.Scene {
 
   createItemCrate(itemId, quantity, x, y) {
     return this.crateSystem.createItemCrate(itemId, quantity, x, y);
-  }
-
-  registerInteractableSources() {
-    // A shelf only answers when the player stands in front of it and looks at its front.
-    this.interactables.registerProvider("stock-holders", () =>
-      this.fixtures.shelves().map((fixture) => ({
-        id: `fixture:${fixture.id}`,
-        kind: "fixture",
-        target: fixture,
-        range: SHELF_INTERACT_RANGE,
-        priority: 3,
-        getActions: (player) => this.isPlayerFacingFixture(fixture, player) ? [
-          { action: "fixture" },
-          {
-            action: "interact",
-            hint: `${controlLabel("interact")}: Open this shelf`,
-            perform: () => this.tryOpenFixtureWindow(fixture),
-          },
-        ] : [],
-        distanceFrom: ({ feet }) => {
-          // The middle of his feet' leading edge, which must be just off the shelf's front.
-          const midX = (feet.left + feet.right) / 2;
-          const midY = (feet.top + feet.bottom) / 2;
-          return fixtureInteractionDistance(fixture, {
-            down: { x: midX, y: feet.top }, up: { x: midX, y: feet.bottom },
-            left: { x: feet.right, y: midY }, right: { x: feet.left, y: midY },
-          }[fixtureFacing(fixture)]);
-        },
-      })));
-
-    this.interactables.registerProvider("register", () =>
-      this.fixtures.registers().filter((fixture) => fixture.sprite).map((fixture) => ({
-        id: `register:${fixture.id}`,
-        kind: "register",
-        target: fixture,
-        range: REGISTER_INTERACT_RANGE,
-        priority: 1,
-        getActions: () => [
-          ...(this.checkoutSystem.operatingRegister
-            ? [{
-              action: "interact",
-              hint: `${controlLabel("interact")}: Leave the register`,
-              perform: () => this.checkoutSystem.endRegisterSession(),
-            }]
-            : [
-              { action: "register", hint: `${controlLabel("interact")}: Activate Register` },
-              {
-                action: "interact",
-                hint: `${controlLabel("interact")}: Activate Register`,
-                perform: () => this.tryOpenRegister(),
-              },
-            ]),
-        ],
-        distanceFrom: (origin) => this.feetReachTo(origin, fixture.sprite.getBounds()),
-      })));
-
-    this.interactables.registerProvider("cleaning", () => [{
-      id: "cleaning",
-      kind: "cleaning",
-      getActions: () => this.cleaningSystem.getActions(),
-    }]);
   }
 
   // Whether the player looks straight at the fixture's front (it faces back at them).
@@ -1163,8 +1097,7 @@ export class GameScene extends Phaser.Scene {
 
   // --- Supply, pricing, and the Loading Pad ---
 
-  // The nearest shelf within SHELF_INTERACT_RANGE, or null. Shared by crate delivery and
-  // opening fixtures so "close enough" means the same for both.
+  // The nearest reachable shelf, shared by crate delivery and fixture opening.
   getNearbyFixture() {
     return this.interactables.findTarget("fixture", this.getInteractionOrigin())?.target ?? null;
   }
@@ -1251,56 +1184,12 @@ export class GameScene extends Phaser.Scene {
 
   // --- Player interaction and crates ---
 
-  /**
-   * The fixture holding Ctrl (or holding A on a controller) would pick up to move: the one
-   * you're facing, with empty hands, while the store is closed.
-   */
   getHoldToMoveFixture() {
-    if (!this.controlMode.allows("interact") || this.getCarriedCrates().length > 0 || this.heldTrash) return null;
-    if (this.checkoutSystem.operatingRegister || this.areas.nearbyPortal()) return null;
-    const origin = this.getInteractionOrigin();
-    const target = this.interactables?.findTarget(
-      "interact",
-      origin,
-      null,
-      this.player,
-      this.input,
-      "fixture",
-    ) ?? this.interactables?.findTarget(
-      "interact",
-      origin,
-      null,
-      this.player,
-      this.input,
-      "register",
-    );
-    let fixture = null;
-    if (target?.kind === "fixture" && this.isPlayerFacingFixture(target.target)) fixture = target.target;
-    // The register is in reach only while you face it, from any side.
-    else if (target?.kind === "register") fixture = target.target;
-    if (!fixture) {
-      const trashcan = this.getNearbyTrashcan();
-      if (trashcan && this.isPlayerFacingFixture(trashcan)) fixture = trashcan;
-    }
-    if (!fixture || !this.fixtureSystem.canRearrange()) return null;
-    return this.fixtureSystem.moveAreaBlockReason(fixture) ? null : fixture;
+    return this.fixtureSystem.getHoldToMoveFixture();
   }
 
   getFixtureMoveAction() {
-    const fixture = this.getHoldToMoveFixture();
-    if (!fixture) return null;
-    const moveKey = controlLabel("moveFixture");
-    const hint = getFixtureType(fixture.type).kind === "trash"
-      ? `Hold ${moveKey}: Move`
-      : `Hold ${moveKey}: Move this ${this.fixtures.displayName(fixture)}`;
-    return {
-      action: "moveFixture",
-      id: `move-fixture:${fixture.id}`,
-      kind: "fixture-move",
-      target: fixture,
-      hint,
-      perform: () => this.fixturePlacement.begin(fixture.id),
-    };
+    return this.fixtureSystem.getMoveAction();
   }
 
   /**

@@ -7,14 +7,15 @@
 import { database } from "../scenes/boot.js";
 import { Crate } from "../logic/Crate.js";
 import { ShelfFixture } from "../logic/ShelfFixture.js";
-import { FIXTURE_TYPES, fixtureAccessCells, fixtureFootprint, fixtureStandingSpot, getFixtureResaleValue,
-  getFixtureType, validateFixtureLayout } from "../logic/FixtureLayout.js";
+import { FIXTURE_TYPES, fixtureAccessCells, fixtureFacing, fixtureFootprint, fixtureInteractionDistance,
+  fixtureStandingSpot, getFixtureResaleValue, getFixtureType, validateFixtureLayout } from "../logic/FixtureLayout.js";
 import { BACKROOM_UPGRADE_ORDER, EXPANSION_ORDER, TILE_SIZE, getAuthoredGridSize, getBackroomDoorCell,
   getBackroomExitCell, getBackroomInteriorBounds, getBackroomLink, getDoorwayClearanceBounds, getLoadingPadBounds,
   getStoreDoorCell, getStoreDoorCells } from "../logic/RoomLayout.js";
 import { formatMoneyAmount } from "../logic/Money.js";
 import { createFixtureModel } from "../state/slices/Shop.js";
 import { AREA, areaAtRow } from "../world/Areas.js";
+import { controlLabel } from "../input/InputDevice.js";
 
 // The two kinds of zone the player buys, in the words the messages use.
 const ZONE_KINDS = Object.freeze({
@@ -22,10 +23,89 @@ const ZONE_KINDS = Object.freeze({
   backroom: { order: BACKROOM_UPGRADE_ORDER, unknown: "backroom expansion", closed: "Backroom expansions", inOrder: "backroom expansions" },
 });
 
+const SHELF_INTERACT_RANGE = 12;
+
 export class FixtureSystem {
   /** @param {object} shop - the game scene, with its room, fixture views, and game state made */
   constructor(shop) {
     this.shop = shop;
+    if (shop.interactables) this.registerInteractions();
+  }
+
+  registerInteractions() {
+    const shop = this.shop;
+    shop.interactables.registerProvider("stock-holders", () =>
+      this.fixtures.shelves().map((fixture) => ({
+        id: `fixture:${fixture.id}`,
+        kind: "fixture",
+        target: fixture,
+        range: SHELF_INTERACT_RANGE,
+        priority: 3,
+        getActions: (player) => shop.isPlayerFacingFixture(fixture, player) ? [
+          { action: "fixture" },
+          {
+            action: "interact",
+            hint: `${controlLabel("interact")}: Open this shelf`,
+            perform: () => shop.tryOpenFixtureWindow(fixture),
+          },
+        ] : [],
+        distanceFrom: ({ feet }) => {
+          const midX = (feet.left + feet.right) / 2;
+          const midY = (feet.top + feet.bottom) / 2;
+          return fixtureInteractionDistance(fixture, {
+            down: { x: midX, y: feet.top }, up: { x: midX, y: feet.bottom },
+            left: { x: feet.right, y: midY }, right: { x: feet.left, y: midY },
+          }[fixtureFacing(fixture)]);
+        },
+      })));
+  }
+
+  getHoldToMoveFixture() {
+    const shop = this.shop;
+    if (!shop.controlMode.allows("interact") || shop.getCarriedCrates().length > 0 || shop.heldTrash) return null;
+    if (shop.checkoutSystem.operatingRegister || shop.areas.nearbyPortal()) return null;
+    const origin = shop.getInteractionOrigin();
+    const target = shop.interactables.findTarget(
+      "interact",
+      origin,
+      null,
+      shop.player,
+      shop.input,
+      "fixture",
+    ) ?? shop.interactables.findTarget(
+      "interact",
+      origin,
+      null,
+      shop.player,
+      shop.input,
+      "register",
+    );
+    let fixture = null;
+    if (target?.kind === "fixture" && shop.isPlayerFacingFixture(target.target)) fixture = target.target;
+    else if (target?.kind === "register") fixture = target.target;
+    if (!fixture) {
+      const trashcan = shop.cleaningSystem.getNearbyTrashcan();
+      if (trashcan && shop.isPlayerFacingFixture(trashcan)) fixture = trashcan;
+    }
+    if (!fixture || !this.canRearrange()) return null;
+    return this.moveAreaBlockReason(fixture) ? null : fixture;
+  }
+
+  getMoveAction() {
+    const fixture = this.getHoldToMoveFixture();
+    if (!fixture) return null;
+    const moveKey = controlLabel("moveFixture");
+    const hint = getFixtureType(fixture.type).kind === "trash"
+      ? `Hold ${moveKey}: Move`
+      : `Hold ${moveKey}: Move this ${this.fixtures.displayName(fixture)}`;
+    return {
+      action: "moveFixture",
+      id: `move-fixture:${fixture.id}`,
+      kind: "fixture-move",
+      target: fixture,
+      hint,
+      perform: () => this.shop.fixturePlacement.begin(fixture.id),
+    };
   }
 
   // The scene's list is the shop slice's own registry, so either name reaches the same fixtures.

@@ -22,6 +22,13 @@ export class CleaningSystem {
     this.shop = shop;
     this.trash = new TrashField(shop, (x, y) => this.isOpenTrashSpot(x, y));
     this.heldTrash = null;
+    if (shop.interactables) {
+      shop.interactables.registerProvider("cleaning", () => [{
+        id: "cleaning",
+        kind: "cleaning",
+        getActions: () => this.getActions(),
+      }]);
+    }
   }
 
   isOpenTrashSpot(x, y) {
