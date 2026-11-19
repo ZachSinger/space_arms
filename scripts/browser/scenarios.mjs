@@ -156,6 +156,34 @@ export const scenarios = {
     return failures;
   },
 
+  async "walking into the backroom and back out with a crate"(h) {
+    await freshShop(h);
+    await giveCrates(h, [3]);
+    const result = await h.game((scene) => {
+      const goThrough = (area) => {
+        const portal = scene.areas.portals.find((candidate) => candidate.area === area);
+        scene.player.teleportTo(portal.door.x, portal.door.y + 40);
+        scene.player.forceFacing("up");
+        const found = scene.areas.nearbyPortal() === portal;
+        scene.handleInteract();
+        const crate = scene.getCarriedCrates()[0];
+        const { x, y } = scene.player.sprite;
+        return { found, area: scene.areas.playerArea, window: scene.backroomCamera.visible,
+          crateFollowed: Boolean(crate) && Math.hypot(crate.sprite.x - x, crate.sprite.y - y) < 80 };
+      };
+      return { inward: goThrough("shop"), outward: goThrough("backroom") };
+    });
+    const failures = [];
+    const { inward, outward } = result;
+    if (!inward.found) failures.push("the backroom door didn't answer from in front of it");
+    if (inward.area !== "backroom" || !inward.window) failures.push("going in didn't put the player in the backroom window");
+    if (!inward.crateFollowed) failures.push("the carried crate didn't come into the backroom");
+    if (!outward.found) failures.push("the backroom's exit didn't answer from in front of it");
+    if (outward.area !== "shop" || outward.window) failures.push("going out didn't return the player to the shop");
+    if (!outward.crateFollowed) failures.push("the carried crate didn't come back out");
+    return failures;
+  },
+
   async "employee restocks a shelf and gets rid of the empty crate"(h) {
     await freshShop(h, { employees: ["tavi_stock_clerk"] });
     const target = await h.game((scene) => {

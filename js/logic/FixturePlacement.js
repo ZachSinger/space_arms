@@ -5,6 +5,7 @@
 // follows the cursor on the 8-pixel grid, with valid/invalid and standing-space outlines.
 // Left-click or A commits; right-click, Esc, or X cancels. Only while the store is closed.
 import { TILE_SIZE } from "./RoomLayout.js";
+import { AREA } from "../world/Areas.js";
 import {
   getFixtureType, fixtureAtWorldPoint, fixtureBounds, fixtureFootprint, fixtureProjectionBoxes,
 } from "./FixtureLayout.js";
@@ -118,7 +119,7 @@ export class FixturePlacement {
   }
 
   getPlacementCamera() {
-    return this.scene.playerInBackroom ? this.scene.backroomCamera : this.scene.cameras.main;
+    return this.scene.areas.playerArea === AREA.BACKROOM ? this.scene.backroomCamera : this.scene.cameras.main;
   }
 
   setPadPoint(worldX, worldY) {
@@ -169,7 +170,7 @@ export class FixturePlacement {
     }
     if (crate !== this.scene.carriedCrate || crate?.kind !== "fixture") return false;
     const spec = getFixtureType(crate.typeId);
-    if (this.scene.playerInBackroom && spec) {
+    if (this.scene.areas.playerArea === AREA.BACKROOM && spec) {
       this.scene.showShopMessage("Fixtures can only be placed on the sales floor.");
       return false;
     }

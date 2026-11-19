@@ -10,7 +10,8 @@ import { getEmployeeJobSpeed } from "./EmployeeTraining.js";
 import { fixtureFootprint } from "./FixtureLayout.js";
 import { PLAYER_BODY_HEIGHT, PLAYER_BODY_WIDTH } from "./Player.js";
 import { FLOOR_STACK_MAX } from "./CrateStack.js";
-import { isBackroomRow, TILE_SIZE } from "./RoomLayout.js";
+import { TILE_SIZE } from "./RoomLayout.js";
+import { AREA, areaAt } from "../world/Areas.js";
 
 const WALK_SPEED = 120;
 const JOB_RETRY_MS = 1000;
@@ -37,7 +38,7 @@ export class Employee {
     this.pathRetryMs = 0;
 
     this.currentFacing = "down";
-    const spawn = scene.backroomExitFront ?? scene.backroomDoor;
+    const spawn = scene.areas.arrivalIn(AREA.BACKROOM);
     this.sprite = addCharacterSprite(
       scene, spawn.x, spawn.y, employeeTextureFor(employeeData.id), PLAYER_BODY_WIDTH, PLAYER_BODY_HEIGHT,
     )
@@ -116,7 +117,7 @@ export class Employee {
       this.retryInMs = BREAK_CHECK_MS;
       return;
     }
-    this.walkTo(this.scene.backroomExitFront ?? this.scene.backroomDoor, "TO_BREAKROOM");
+    this.walkTo(this.scene.areas.arrivalIn(AREA.BACKROOM), "TO_BREAKROOM");
   }
 
   // The first register with customers waiting that neither the player nor another
@@ -431,7 +432,7 @@ export class Employee {
         employee.currentJob?.base === base || employee.currentJob?.returnBase === base),
     ).sort((a, b) => {
       const priority = (candidate) => fromPad
-        ? (isBackroomRow(Math.floor(candidate.sprite.y / TILE_SIZE)) ? 0 : 1)
+        ? (areaAt(candidate.sprite.y) === AREA.BACKROOM ? 0 : 1)
         : (candidate === originalBase ? 0 : 1);
       return priority(a) - priority(b) ||
         Math.hypot(a.sprite.x - this.sprite.x, a.sprite.y - this.sprite.y) -

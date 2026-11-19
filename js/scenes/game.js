@@ -43,10 +43,10 @@ import { separateOverlappingCrates } from "../logic/CrateSeparation.js";
 import { CheckoutWindow } from "../logic/CheckoutWindow.js";
 import { chooseCustomerPayment } from "../logic/CustomerPayment.js";
 import { TileRoom } from "../logic/TileRoom.js";
-import { AnimatedDoor, BACKROOM_DOOR_SPRITE, SlidingDoor } from "../logic/SlidingDoor.js";
+import { SlidingDoor } from "../logic/SlidingDoor.js";
 import {
   TILE_SIZE, getZone, getAuthoredGridSize, getStoreDoorCell, getStoreDoorCells, EXPANSION_ORDER,
-  BACKROOM_UPGRADE_ORDER, getBackroomDoorCell, getBackroomExitCell, getBackroomLink, isBackroomRow,
+  BACKROOM_UPGRADE_ORDER, getBackroomDoorCell, getBackroomExitCell, getBackroomLink,
   getBackroomInteriorBounds, getBackroomBounds, getLoadingPadBounds, getDoorwayClearanceBounds, LOADING_PAD_WIDTH, LOADING_PAD_HEIGHT,
 } from "../logic/RoomLayout.js";
 import { ShiftClock, SHIFT_DURATION_MS } from "../logic/ShiftClock.js";
@@ -71,6 +71,7 @@ import {
 import { UIWindow } from "../logic/UIWindow.js";
 import { Messages, SHOP_MESSAGE_COLOR } from "../world/Messages.js";
 import { ShiftSystem } from "../systems/ShiftSystem.js";
+import { AREA, Areas, areaAt, areaAtRow } from "../world/Areas.js";
 import { SupplySystem } from "../systems/SupplySystem.js";
 import { GamepadInput, PAD } from "../logic/GamepadInput.js";
 import { UINavigator } from "../logic/UINavigator.js";
@@ -109,9 +110,6 @@ const TRASHCAN_REACH = 40;
 // Loose trash is picked up from this far ahead of the player's feet (px), within the reach.
 const TRASH_PICKUP_AHEAD = 22;
 const TRASH_PICKUP_REACH = 26;
-// How far (in pixels) the player may stand from a backroom door, and off to its side, and still use it.
-const BACKROOM_DOOR_GAP = 24;
-const BACKROOM_DOOR_SIDE_REACH = 20;
 
 function segmentIntersectsRectangle(from, to, rectangle) {
   const epsilon = 0.001;
@@ -296,29 +294,7 @@ export class GameScene extends Phaser.Scene {
       wallGroup: this.room.wallGroup,
     });
 
-    // The Sales Floor's door to the backroom, and the backroom's exit back out. Both are
-    // solid; pressing E in front of one moves the player to the floor just inside the other.
-    this.room.addBackroomDoors();
-    const link = getBackroomLink();
-    const doorCell = getBackroomDoorCell();
-    const exitCell = getBackroomExitCell();
-    this.backroomDoor = { x: this.room.worldX(doorCell.gx), y: this.room.worldY(doorCell.gy) };
-    // The glass door slides open while the player stands in front of it.
-    this.backroomDoorAnimation = new AnimatedDoor(this, {
-      x: this.backroomDoor.x,
-      y: this.backroomDoor.y + TILE_SIZE / 2,
-      sprite: BACKROOM_DOOR_SPRITE,
-    });
-    this.backroomDoorFront = { x: this.room.worldX(link.shop.gx), y: this.room.worldY(link.shop.gy) };
-    this.backroomExit = { x: this.room.worldX(exitCell.gx), y: this.room.worldY(exitCell.gy) };
-    // The same glass door on the backroom side, opening while the player is in front of it.
-    this.backroomExitAnimation = new AnimatedDoor(this, {
-      x: this.backroomExit.x,
-      y: this.backroomExit.y + TILE_SIZE / 2,
-      sprite: BACKROOM_DOOR_SPRITE,
-    });
-    this.backroomExitFront = { x: this.room.worldX(link.backroom.gx), y: this.room.worldY(link.backroom.gy) };
-    this.playerInBackroom = false;
+    this.areas = new Areas(this);
     this.setupBackroomWindow();
     // Every placed fixture lives in this registry.
     this.fixtures = new FixtureRegistry();
@@ -593,8 +569,7 @@ export class GameScene extends Phaser.Scene {
       this.managerTablet.fixtureHighlight.destroy();
       this.autosaveTimer.remove();
       this.storeDoorAnimation.destroy();
-      this.backroomDoorAnimation.destroy();
-      this.backroomExitAnimation.destroy();
+      this.areas.destroy();
       this.hud.destroy();
       this.shelfStockingWindow.destroy();
       this.checkoutWindow.destroy();
@@ -798,7 +773,7 @@ export class GameScene extends Phaser.Scene {
    */
   cameraAt(worldX, worldY) {
     const backroom = this.backroomCamera;
-    if (backroom?.visible && Number.isFinite(worldY) && isBackroomRow(Math.floor(worldY / TILE_SIZE))) {
+    if (backroom?.visible && Number.isFinite(worldY) && areaAt(worldY) === AREA.BACKROOM) {
       return backroom;
     }
     return this.cameras?.main;
@@ -850,7 +825,7 @@ export class GameScene extends Phaser.Scene {
     );
 
     // In the backroom the shop view holds still where the player left it.
-    if (this.player?.sprite && !this.playerInBackroom) {
+    if (this.player?.sprite && this.areas.playerArea !== AREA.BACKROOM) {
       camera.startFollow(this.player.sprite, true);
     } else if (this.player?.sprite) {
       camera.stopFollow();
@@ -886,7 +861,7 @@ export class GameScene extends Phaser.Scene {
   refreshBackroomWindow() {
     const camera = this.backroomCamera;
     if (!camera) return;
-    const open = this.playerInBackroom;
+    const open = this.areas.playerArea === AREA.BACKROOM;
     camera.setVisible(open);
     this.backroomFrame?.classList.toggle("hidden", !open);
     if (!open) return;
@@ -917,40 +892,6 @@ export class GameScene extends Phaser.Scene {
       height: `${height + BACKROOM_TITLE_HEIGHT}px`,
       borderWidth: `${border}px`,
     });
-  }
-
-  /**
-   * The backroom door the player is standing in front of (the shop's door, or the backroom's
-   * exit while inside), or null. E goes through it.
-   * @returns {{ x: number, y: number } | null}
-   */
-  getNearbyBackroomDoor() {
-    if (!this.player?.sprite || !this.backroomDoor) return null;
-    const door = this.playerInBackroom ? this.backroomExit : this.backroomDoor;
-    if (this.player.currentFacing !== "up") return null;
-    const { x, y } = this.player.sprite;
-    // Pressed against the door the player stands half a tile below its center.
-    const below = y - door.y;
-    if (Math.abs(x - door.x) >= BACKROOM_DOOR_SIDE_REACH || below <= 0 || below > TILE_SIZE / 2 + BACKROOM_DOOR_GAP) return null;
-    // A fixture beside the door wins when the player is standing nearer to it.
-    const target = this.interactables?.findTarget("interact", this.getInteractionOrigin());
-    if (target?.kind === "fixture" && Math.abs(x - target.target.x) < Math.abs(x - door.x)) return null;
-    return door;
-  }
-
-  /**
-   * Moves the player (and anything they carry) between the shop and the backroom, arriving
-   * on the floor just inside the other door, facing away from it.
-   * @param {boolean} inBackroom
-   */
-  setPlayerInBackroom(inBackroom) {
-    this.playerInBackroom = inBackroom;
-    const arrival = inBackroom ? this.backroomExitFront : this.backroomDoorFront;
-    this.player.teleportTo(arrival.x, arrival.y);
-    this.player.forceFacing("down");
-    this.syncCarriedCrate();
-    this.refreshCamera();
-    this.debugInfo?.record(inBackroom ? "entered-backroom" : "left-backroom", {});
   }
 
   syncCarriedCrate() {
@@ -1340,10 +1281,10 @@ export class GameScene extends Phaser.Scene {
   // Fixtures can only be moved from the same room the player is standing in.
   getFixtureMoveAreaBlockReason(fixture) {
     if (!fixture) return null;
-    const inBackroom = isBackroomRow(Math.floor(fixture.gy));
-    if (inBackroom === Boolean(this.playerInBackroom)) return null;
+    const area = areaAtRow(Math.floor(fixture.gy));
+    if (area === this.areas.playerArea) return null;
     const name = this.fixtures.displayName(fixture);
-    return inBackroom
+    return area === AREA.BACKROOM
       ? `Go into the backroom to move the ${name}.`
       : `Go out to the sales floor to move the ${name}.`;
   }
@@ -1483,8 +1424,8 @@ export class GameScene extends Phaser.Scene {
   checkFixtureMove(id, gx, gy, rotation, connectivityCache = null) {
     const areaBlock = this.getFixtureMoveAreaBlockReason(this.fixtures.get(id));
     if (areaBlock) return { valid: false, reason: areaBlock };
-    if (isBackroomRow(Math.floor(gy)) !== Boolean(this.playerInBackroom)) {
-      return { valid: false, reason: this.playerInBackroom ? "Keep it in the backroom." : "Keep it on the sales floor." };
+    if (areaAtRow(Math.floor(gy)) !== this.areas.playerArea) {
+      return { valid: false, reason: this.areas.playerArea === AREA.BACKROOM ? "Keep it in the backroom." : "Keep it on the sales floor." };
     }
     const bodies = [this.player.sprite.body, ...this.restockCrates.map((crate) => crate.sprite.body)];
     return validateFixtureLayout(this.layoutWithMove(id, gx, gy, rotation), { ...this.getLayoutOptions(
@@ -1595,8 +1536,8 @@ export class GameScene extends Phaser.Scene {
   serializeTrash() {
     const trash = this.trash.serialize();
     if (this.heldTrash) {
-      const spot = this.playerInBackroom
-        ? this.backroomDoorFront
+      const spot = this.areas.playerArea === AREA.BACKROOM
+        ? this.areas.arrivalIn(AREA.SHOP)
         : { x: this.player.sprite.x, y: this.player.sprite.body?.bottom ?? this.player.sprite.y };
       trash.push({ kind: this.heldTrash.kind, x: spot.x, y: spot.y });
     }
@@ -1635,7 +1576,7 @@ export class GameScene extends Phaser.Scene {
       if (fixture instanceof ShelfFixture) fixture.placements = entry.placements.map((stack) => ({ ...stack }));
     }
     this.applyFixtureLayout(data.fixtures, layout);
-    this.playerInBackroom = false;
+    this.areas.playerArea = AREA.SHOP;
     this.player.teleportTo(this.storeDoor.x, this.storeDoor.y + TILE_SIZE);
     this.refreshCamera();
     for (const crate of this.getFloorCrates()) crate.destroy();
@@ -1923,11 +1864,9 @@ export class GameScene extends Phaser.Scene {
   findPath(fromX, fromY, toX, toY, bodySize) {
     // The shop and backroom only connect through their door pair: walk to this side's door,
     // step through it, then walk on from the other side's door.
-    const inBackroom = (y) => isBackroomRow(Math.floor(y / TILE_SIZE));
-    if (this.backroomDoorFront && inBackroom(fromY) !== inBackroom(toY)) {
-      const [near, far] = inBackroom(fromY)
-        ? [this.backroomExitFront, this.backroomDoorFront]
-        : [this.backroomDoorFront, this.backroomExitFront];
+    const crossing = this.areas?.crossing(fromY, toY);
+    if (crossing) {
+      const { near, far } = crossing;
       const toDoor = this.findAreaPath(fromX, fromY, near.x, near.y, bodySize);
       const fromDoor = toDoor && this.findAreaPath(far.x, far.y, toX, toY, bodySize);
       if (!fromDoor) return null;
@@ -2253,7 +2192,7 @@ export class GameScene extends Phaser.Scene {
    */
   getHoldToMoveFixture() {
     if (!this.controlMode.allows("interact") || this.getCarriedCrates().length > 0 || this.heldTrash) return null;
-    if (this.operatingRegister || this.getNearbyBackroomDoor()) return null;
+    if (this.operatingRegister || this.areas.nearbyPortal()) return null;
     const target = this.interactables?.findTarget("interact", this.getInteractionOrigin());
     let fixture = null;
     if (target?.kind === "fixture" && this.isPlayerFacingFixture(target.target)) fixture = target.target;
@@ -2325,8 +2264,9 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     // Doors come first so a carried crate goes through with the player, not onto the floor.
-    if (this.getNearbyBackroomDoor()) {
-      this.setPlayerInBackroom(!this.playerInBackroom);
+    const portal = this.areas.nearbyPortal();
+    if (portal) {
+      this.areas.goThrough(portal);
       return;
     }
     if (this.heldTrash) {
@@ -2386,7 +2326,7 @@ export class GameScene extends Phaser.Scene {
   // The trashcan the player faces, with its edge a few steps ahead, or null. Standing
   // beside a trashcan while facing something else never counts.
   getNearbyTrashcan() {
-    if (this.playerInBackroom) return null;
+    if (this.areas.playerArea === AREA.BACKROOM) return null;
     const step = {
       up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
     }[this.player.currentFacing];
@@ -2456,7 +2396,7 @@ export class GameScene extends Phaser.Scene {
 
   // The trash just ahead of his feet, the way he faces.
   findTrashInFront() {
-    if (!this.trash || this.playerInBackroom || this.operatingRegister) return null;
+    if (!this.trash || this.areas.playerArea === AREA.BACKROOM || this.operatingRegister) return null;
     const step = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[this.player.currentFacing];
     if (!step) return null;
     const { center } = this.player.sprite.body;
@@ -2491,7 +2431,7 @@ export class GameScene extends Phaser.Scene {
     ];
     const spot = spots.find(({ x, y }) => this.isOpenTrashSpot(x, y));
     if (!spot) {
-      this.showGameMessage(this.playerInBackroom
+      this.showGameMessage(this.areas.playerArea === AREA.BACKROOM
         ? "Trash can only be dropped out on the shop floor."
         : "No room to drop the trash here.", "#94a3b8");
       return false;
@@ -2777,8 +2717,9 @@ export class GameScene extends Phaser.Scene {
       const pickKey = controlLabel("crate");
       const putKey = controlLabel("putDown");
       const interactKey = controlLabel("interact");
-      if (this.getNearbyBackroomDoor()) {
-        lines.push(this.playerInBackroom ? `${interactKey}: Go back out to the shop` : `${interactKey}: Go into the backroom`);
+      const portal = this.areas.nearbyPortal();
+      if (portal) {
+        lines.push(portal.to === AREA.SHOP ? `${interactKey}: Go back out to the shop` : `${interactKey}: Go into the backroom`);
       } else if (mode === CONTROL_MODES.WALKING && !this.heldTrash && !this.findTrashInFront()) {
         const register = this.interactables?.findTarget?.("register", this.getInteractionOrigin());
         if (register) lines.push(...register.hint.split("\n"));
@@ -4086,9 +4027,7 @@ export class GameScene extends Phaser.Scene {
       ...this.customers.map((customer) =>
         !customer.isDestroyed && customer.state === "LEAVING" ? customer.sprite : null),
     ]);
-    const nearBackroomDoor = Boolean(this.getNearbyBackroomDoor());
-    this.backroomDoorAnimation.update(delta, !this.playerInBackroom && nearBackroomDoor);
-    this.backroomExitAnimation.update(delta, this.playerInBackroom && nearBackroomDoor);
+    this.areas.update(delta);
     // Pausing a started shift freezes time entirely: customers and arrivals included.
     // Before the shift starts the clock also reads as paused, but the player moves freely.
     const mode = this.controlMode.getMode();
@@ -4118,7 +4057,7 @@ export class GameScene extends Phaser.Scene {
     if (this.trash) {
       this.hud.renderCleanliness(this.getCleanliness());
       this.trash.renderHighlight(Boolean(this.highlightTrashKey?.isDown) && this.controlMode.allows("crate") &&
-        !this.playerInBackroom, time);
+        this.areas.playerArea !== AREA.BACKROOM, time);
     }
 
     this.shiftClock.update(delta);

@@ -20,7 +20,7 @@ test("shelf and trashcan crates cannot enter placement mode in the backroom", ()
     placement.scene = {
       canRearrangeFixtures: () => true,
       carriedCrate: crate,
-      playerInBackroom: true,
+      areas: { playerArea: "backroom" },
       showShopMessage: (message) => messages.push(message),
     };
     placement.start = () => assert.fail(`${typeId} placement should not start in the backroom.`);
@@ -40,7 +40,7 @@ test("shelf crates can enter placement mode from the sales floor", () => {
   placement.scene = {
     canRearrangeFixtures: () => true,
     carriedCrate: crate,
-    playerInBackroom: false,
+    areas: { playerArea: "shop" },
   };
   let started = false;
   placement.start = () => { started = true; return true; };
@@ -291,7 +291,7 @@ test("controller walking and dashing leave the fixture cursor free for the right
   let confirmed = 0;
   Object.assign(placement, {
     active: true,
-    scene: { cameras: { main: camera } },
+    scene: { cameras: { main: camera }, areas: { playerArea: "shop" } },
     spec: getFixtureType("shelf_budget_2x2"),
     rotation: 0,
     padPoint: { x: 100, y: 100 },
@@ -343,7 +343,7 @@ test("the placement grid covers fixture bodies at snapped positions, including c
       zones: [{ id: "floor", gridX: 0, gridY: 0, gridW: 8, gridH: 8, salesFloor: true }],
       wallCells: new Map(),
     },
-    playerInBackroom: false,
+    areas: { playerArea: "shop" },
     player: { sprite: { body: { enable: false } } },
     restockCrates: [],
     cameras: { main: { worldView: view } },
@@ -417,7 +417,7 @@ test("the body coverage follows real placement rules around the default register
   const view = { x: 11 * TILE_SIZE, y: 2 * TILE_SIZE, right: 16 * TILE_SIZE, bottom: 6 * TILE_SIZE };
   const scene = {
     room: options.room,
-    playerInBackroom: false,
+    areas: { playerArea: "shop" },
     player: { sprite: { body: { enable: false } } },
     restockCrates: [],
     cameras: { main: { worldView: view } },
@@ -451,7 +451,7 @@ test("the body coverage follows real placement rules around the default register
   const finishAndCompare = () => {
     finishPlacementGrid(grid);
     assert.ok(validBodies.length > 0, "there is at least one valid placement");
-    const activeView = scene.playerInBackroom ? scene.backroomCamera.worldView : view;
+    const activeView = scene.areas.playerArea === "backroom" ? scene.backroomCamera.worldView : view;
     for (let y = activeView.y + 8; y < activeView.bottom; y += 16) {
       for (let x = activeView.x + 8; x < activeView.right; x += 16) {
         const covered = validBodies.some((body) =>

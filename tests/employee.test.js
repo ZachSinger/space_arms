@@ -153,8 +153,7 @@ function makeEmployee({
   const registerFixture = hasRegister ? { id: "register", sprite: {} } : null;
   const registerLine = [];
   const scene = {
-    backroomDoor: { x: 20, y: 20 },
-    backroomExitFront: { x: 20, y: 20 },
+    areas: { arrivalIn: () => ({ x: 20, y: 20 }) },
     eventBus,
     fixtures: {
       shelves: () => [shelf],

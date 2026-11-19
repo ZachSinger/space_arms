@@ -14,6 +14,7 @@ import { fixtureBounds, getFixtureType } from "../js/logic/FixtureLayout.js";
 import { FixtureRegistry } from "../js/logic/FixtureRegistry.js";
 import { PAD } from "../js/logic/GamepadInput.js";
 import { TILE_SIZE } from "../js/logic/RoomLayout.js";
+import { AREA, Areas } from "../js/world/Areas.js";
 
 let server;
 let cacheDirectory;
@@ -63,6 +64,11 @@ after(async () => {
   else globalThis.Phaser = originalPhaser;
 });
 
+// Areas without door sprites; tests add the portals they need.
+function testAreas(scene, portals = []) {
+  return Object.assign(Object.create(Areas.prototype), { shop: scene, playerArea: AREA.SHOP, portals });
+}
+
 function createHarness({ carrying = false } = {}) {
   const handlers = new Map();
   const removedCaptures = [];
@@ -90,6 +96,7 @@ function createHarness({ carrying = false } = {}) {
   scene.gameState = new GameState({ items: [] });
   scene.restockCrates = [];
   scene.supply = new SupplySystem(scene, null);
+  scene.areas = testAreas(scene);
   scene.floorStacks = new Map();
   scene.markedStackBase = null;
   scene.markedFromTop = 0;
@@ -234,7 +241,6 @@ test("with empty hands, E opens the fixture you face and holding Ctrl picks it u
   const shelf = { id: "shelf_1", type: "shelf_budget_2x2", gx: 3, gy: 1, rotation: 1 };
   let opened = 0;
   const moved = [];
-  h.scene.getNearbyBackroomDoor = () => null;
   h.scene.interactables = { findTarget: () => ({ kind: "fixture", target: shelf }) };
   h.scene.canRearrangeFixtures = () => true;
   h.scene.getFixtureMoveAreaBlockReason = () => null;
@@ -269,7 +275,6 @@ test("with empty hands, holding Ctrl at the register picks it up to move", () =>
   const h = createHarness();
   const register = { id: "register_1", type: "register", gx: 26, gy: 3, rotation: 0 };
   const moved = [];
-  h.scene.getNearbyBackroomDoor = () => null;
   h.scene.interactables = { findTarget: () => ({ kind: "register", target: register }) };
   h.scene.canRearrangeFixtures = () => true;
   h.scene.getFixtureMoveAreaBlockReason = () => null;
@@ -288,8 +293,7 @@ test("with empty hands, holding Ctrl at the register picks it up to move", () =>
 test("with empty hands, holding Ctrl while facing the trashcan picks it up to move", () => {
   const h = createHarness();
   const trashcan = { id: "trash_can_01", type: "trash_can", gx: 18, gy: 2, rotation: 0 };
-  h.scene.playerInBackroom = false;
-  h.scene.getNearbyBackroomDoor = () => null;
+  h.scene.areas.playerArea = AREA.SHOP;
   h.scene.interactables = { findTarget: () => null };
   h.scene.fixtures.ofKind = (kind) => kind === "trash" ? [trashcan] : [];
   h.scene.canRearrangeFixtures = () => true;
@@ -726,7 +730,7 @@ test("E returns every held empty crate, preserving filled crates; Q only puts cr
 test("a sales-floor trashcan takes back empty crates only while faced from close by", () => {
   const h = createHarness();
   const trashcan = { id: "trash_can_01", type: "trash_can", gx: 18, gy: 2, rotation: 0 };
-  h.scene.playerInBackroom = false;
+  h.scene.areas.playerArea = AREA.SHOP;
   h.scene.fixtures.ofKind = (kind) => kind === "trash" ? [trashcan] : [];
   // The trashcan covers x 1152-1184 and y 128-176; stand just below it, facing it.
   Object.assign(h.scene.player.sprite, { x: 1168, y: 176 + 30 });
@@ -743,15 +747,14 @@ test("a sales-floor trashcan takes back empty crates only while faced from close
   h.scene.player.sprite.y = 176 + 60;
   assert.equal(h.scene.isNearTrashcan(), false, "too far from the trashcan");
   h.scene.player.sprite.y = 176 + 30;
-  h.scene.playerInBackroom = true;
+  h.scene.areas.playerArea = AREA.BACKROOM;
   assert.equal(h.scene.isNearTrashcan(), false, "the trashcan isn't reachable from the backroom");
 });
 
 test("the former backroom empty-crate square no longer takes or supplies crates", () => {
   const h = createHarness();
-  h.scene.playerInBackroom = true;
+  h.scene.areas.playerArea = AREA.BACKROOM;
   Object.assign(h.scene.player.sprite, { x: 174, y: 6608 });
-  h.scene.getNearbyBackroomDoor = () => null;
   h.scene.createItemCrate = () => { throw new Error("the backroom must not supply a crate"); };
 
   h.scene.handleInteract();
@@ -1086,15 +1089,16 @@ test("carrying a crate still blocks overlapping pad crates and pushes loose crat
 
 test("a backroom door only answers E when the player is facing it from close by", () => {
   const { scene } = createHarness();
-  scene.backroomDoor = { x: 500, y: 100 };
+  const portal = { area: AREA.SHOP, to: AREA.BACKROOM, door: { x: 500, y: 100 } };
+  scene.areas.portals = [portal];
   scene.interactables = { findTarget: () => null };
   const check = (x, y, facing) => {
     scene.player.sprite = { x, y };
     scene.player.currentFacing = facing;
-    return scene.getNearbyBackroomDoor();
+    return scene.areas.nearbyPortal();
   };
-  assert.equal(check(500, 132, "up"), scene.backroomDoor, "pressed against it");
-  assert.equal(check(500, 156, "up"), scene.backroomDoor, "a small step back");
+  assert.equal(check(500, 132, "up"), portal, "pressed against it");
+  assert.equal(check(500, 156, "up"), portal, "a small step back");
   assert.equal(check(500, 170, "up"), null, "too far back");
   assert.equal(check(525, 132, "up"), null, "off to the side");
   for (const facing of ["down", "left", "right"]) {
@@ -1104,18 +1108,20 @@ test("a backroom door only answers E when the player is facing it from close by"
 
 test("a backroom door and the register explain themselves in the bottom bar's help", () => {
   const { scene } = createHarness();
-  scene.backroomDoor = { x: 500, y: 100 };
-  scene.backroomExit = { x: 145, y: 6432 };
+  scene.areas.portals = [
+    { area: AREA.SHOP, to: AREA.BACKROOM, door: { x: 500, y: 100 } },
+    { area: AREA.BACKROOM, to: AREA.SHOP, door: { x: 145, y: 6432 } },
+  ];
   Object.assign(scene.player.sprite, { x: 500, y: 132 });
   scene.player.currentFacing = "up";
   scene.interactables = { findTarget: (action) => action === "register" ? { hint: "E: Activate Register" } : null };
   scene.updateCrateHint();
   assert.match(scene.messages.element.textContent, /^E: Go into the backroom$/m);
-  scene.playerInBackroom = true;
+  scene.areas.playerArea = AREA.BACKROOM;
   Object.assign(scene.player.sprite, { x: 145, y: 6464 });
   scene.updateCrateHint();
   assert.match(scene.messages.element.textContent, /^E: Go back out to the shop$/m);
-  scene.playerInBackroom = false;
+  scene.areas.playerArea = AREA.SHOP;
   Object.assign(scene.player.sprite, { x: 900, y: 900 });
   scene.updateCrateHint();
   assert.match(scene.messages.element.textContent, /^E: Activate Register$/m);
@@ -1127,7 +1133,6 @@ test("E opens hands-on shelves with a carried stack instead of bulk-delivering i
   const top = { kind: "item", itemId: null, quantity: 0 };
   scene.carriedCrate = top;
   scene.carriedCrates = [{ kind: "item", itemId: "amo_01", quantity: 5 }, top];
-  scene.getNearbyBackroomDoor = () => null;
   scene.getNearbyFixture = () => shelf;
   scene.interactables = { findTarget: () => ({ target: shelf }) };
   let opened = 0;
@@ -1148,9 +1153,9 @@ test("fixtures only move from, and into, the room the player is standing in", ()
   const { scene } = createHarness();
   const shelf = { id: "shelf", type: "shelf_budget_3x4", gx: 10, gy: 5 };
   scene.fixtures.get = (id) => ({ shelf })[id];
-  scene.playerInBackroom = false;
+  scene.areas.playerArea = AREA.SHOP;
   assert.equal(scene.checkFixtureMove("shelf", 1, 102).reason, "Keep it on the sales floor.");
-  scene.playerInBackroom = true;
+  scene.areas.playerArea = AREA.BACKROOM;
   assert.equal(scene.checkFixtureMove("shelf", 10, 6).reason, "Go out to the sales floor to move the SHELF.");
 });
 
@@ -1178,9 +1183,6 @@ test("three carried crates stay straight while the player moves and reverses dir
     fixturePlacement: { active: false, update() {} },
     separateStuckCrates() {},
     storeDoorAnimation: { update() {} },
-    backroomDoorAnimation: { update() {} },
-    backroomExitAnimation: { update() {} },
-    getNearbyBackroomDoor: () => null,
     shiftClock: { isPaused: false, started: false, softClosed: false, update() {} },
     shift: { starting: false, ended: false, update() {} },
     updateCratePushing() {},
@@ -1224,9 +1226,6 @@ test("the game updates player and crate movement during placement without unfree
     fixturePlacement: { active: true, update() {} },
     separateStuckCrates() {},
     storeDoorAnimation: { update() {} },
-    backroomDoorAnimation: { update() {} },
-    backroomExitAnimation: { update() {} },
-    getNearbyBackroomDoor: () => null,
     shiftClock: { isPaused: true, started: false, softClosed: false, update() {} },
     shift: { starting: false, ended: false, update() {} },
     updateCratePushing() { crateUpdates += 1; },
@@ -1259,7 +1258,6 @@ test("E behind the counter always steps away, even beside a trashcan or holding 
   Object.assign(h.scene, {
     operatingRegister: true,
     endRegisterSession() { ended += 1; this.operatingRegister = false; },
-    getNearbyBackroomDoor: () => null,
     isNearTrashcan: () => true, // a trashcan within reach must not hijack E
     takeEmptyCrateFromTrashcan() { tookCrates += 1; },
   });
@@ -1290,7 +1288,6 @@ test("E opens shelves instead of picking up crates, with or without a carried cr
   h.scene.fixtures.register = () => eRegister;
   h.scene.fixtures.registers = () => [eRegister];
   h.scene.fixtures.displayName = () => "Shelf";
-  h.scene.getNearbyBackroomDoor = () => null;
   let opens = 0;
   const opened = [];
   h.scene.eventBus.on(GAME_EVENTS.FIXTURE_OPENED, (event) => opened.push(event));
@@ -1320,7 +1317,6 @@ test("E targets the shelf whose front the player stands at, not the shelf beside
   const small = { id: "small", type: "shelf_budget_2x2", gx: 7.875, gy: 2 };
   const wide = { id: "wide", type: "shelf_budget_2x4", gx: 9, gy: 2 };
   h.scene.fixtures.shelves = () => [small, wide];
-  h.scene.getNearbyBackroomDoor = () => null;
   h.scene.player.sprite.x = 9 * TILE_SIZE + 2;
   const front = fixtureBounds(wide).bottom * TILE_SIZE;
   h.scene.player.sprite.y = front + 10 + 4;
