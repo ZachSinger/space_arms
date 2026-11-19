@@ -16,6 +16,8 @@ import { formatMoneyAmount } from "../logic/Money.js";
 import { createFixtureModel } from "../state/slices/Shop.js";
 import { AREA, areaAtRow } from "../world/Areas.js";
 import { controlLabel } from "../input/InputDevice.js";
+import crateTuning from "../../data/tuning/crates.json" with { type: "json" };
+import { loadTuning } from "../core/Tuning.js";
 
 // The two kinds of zone the player buys, in the words the messages use.
 const ZONE_KINDS = Object.freeze({
@@ -24,6 +26,11 @@ const ZONE_KINDS = Object.freeze({
 });
 
 const SHELF_INTERACT_RANGE = 12;
+const TRASHCAN_REACH = loadTuning("crates", crateTuning).trashcanReachPx;
+const PLAYER_FACING_STEPS = Object.freeze({
+  up: { x: 0, y: -1 }, down: { x: 0, y: 1 },
+  left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
+});
 
 export class FixtureSystem {
   /** @param {object} shop - the game scene, with its room, fixture views, and game state made */
@@ -88,6 +95,55 @@ export class FixtureSystem {
         }],
       }];
     });
+    shop.interactables.registerProvider("trashcan", () => [{
+      id: "trashcan",
+      kind: "trashcan",
+      getActions: () => this.getTrashcanActions(),
+    }]);
+  }
+
+  getNearbyTrashcan() {
+    const shop = this.shop;
+    if (shop.areas.playerArea === AREA.BACKROOM) return null;
+    const step = PLAYER_FACING_STEPS[shop.player.currentFacing];
+    if (!step) return null;
+    const { x, y } = shop.player.sprite;
+    const probe = {
+      x: x + step.x * TRASHCAN_REACH,
+      y: y + step.y * TRASHCAN_REACH,
+    };
+    return shop.fixtures.ofKind("trash").find((fixture) => {
+      const { w, h } = fixtureFootprint(fixture);
+      const left = fixture.gx * TILE_SIZE;
+      const top = fixture.gy * TILE_SIZE;
+      return probe.x >= left - 6 && probe.x <= left + w * TILE_SIZE + 6 &&
+        probe.y >= top - 6 && probe.y <= top + h * TILE_SIZE + 6;
+    }) ?? null;
+  }
+
+  getTrashcanActions() {
+    const shop = this.shop;
+    if (shop.heldTrash) return [];
+    const trashcan = this.getNearbyTrashcan();
+    if (!trashcan) return [];
+    const carriedCrates = shop.getCarriedCrates();
+    const emptyCrates = shop.heldEmptyCrates();
+    let hint;
+    let perform;
+    if (carriedCrates.length === 0) {
+      hint = `${controlLabel("interact")}: Create`;
+      perform = () => shop.takeEmptyCrateFromTrashcan();
+    } else if (emptyCrates.length > 0) {
+      const description = emptyCrates.length === 1
+        ? "your empty crate"
+        : `all ${emptyCrates.length} empty crates`;
+      hint = `${controlLabel("interact")}: Put ${description} in the trashcan`;
+      perform = () => shop.returnEmptyCratesToTrashcan();
+    } else return [];
+    return [{
+      action: "interact", id: `trashcan:${trashcan.id}`, kind: "trashcan", target: trashcan,
+      priority: 5, range: 0, distanceFrom: () => 0, hint, perform,
+    }];
   }
 
   getHoldToMoveFixture() {
@@ -116,7 +172,7 @@ export class FixtureSystem {
     if (target?.kind === "fixture" && shop.isPlayerFacingFixture(target.target)) fixture = target.target;
     else if (target?.kind === "register") fixture = target.target;
     if (!fixture) {
-      const trashcan = shop.cleaningSystem.getNearbyTrashcan();
+      const trashcan = this.getNearbyTrashcan();
       if (trashcan && shop.isPlayerFacingFixture(trashcan)) fixture = trashcan;
     }
     if (!fixture || !this.canRearrange()) return null;

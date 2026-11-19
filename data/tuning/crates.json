@@ -6,6 +6,13 @@
     "integer": true,
     "description": "Most crates the player can move at once, counting what they carry."
   },
+  "trashcanReachPx": {
+    "value": 40,
+    "min": 0,
+    "max": 100,
+    "integer": true,
+    "description": "Distance ahead of the player used to test trashcan interaction."
+  },
   "pushSpeedByCrateCount": {
     "value": [1, 0.6, 0.4, 0.25],
     "min": 0.1,

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { CleaningSystem } from "../js/modules/cleaning/CleaningSystem.js";
 import { AREA } from "../js/world/Areas.js";
+import { InteractableRegistry } from "../js/interaction/InteractableRegistry.js";
 
 function harness({ carried = [], heldTrash = null, trashcan = null, area = AREA.SHOP } = {}) {
   const player = { currentFacing: "up", sprite: { x: 1168, y: 206 } };
@@ -10,6 +11,7 @@ function harness({ carried = [], heldTrash = null, trashcan = null, area = AREA.
     areas: { playerArea: area },
     player,
     fixtures: { ofKind: (kind) => kind === "trash" && trashcan ? [trashcan] : [] },
+    getNearbyTrashcan: () => shop.areas.playerArea === AREA.SHOP ? trashcan : null,
     getCarriedCrates: () => carried,
     heldEmptyCrates: () => carried.filter((crate) => crate.quantity === 0),
     takeEmptyCrateFromTrashcan: () => calls.push("take"),
@@ -37,35 +39,12 @@ test("loose trash action shares its hint and pickup behavior", () => {
   assert.deepEqual(calls, [piece]);
 });
 
-test("trashcan actions take an empty crate or return empty crates", () => {
-  const emptyCrate = { quantity: 0 };
-  const { cleaning: take, calls: takeCalls } = harness({ trashcan: nearbyTrashcan });
-  const [takeAction] = take.getActions();
-  assert.match(takeAction.hint, /Create$/);
-  takeAction.perform();
-
-  const { cleaning: put, calls: putCalls } = harness({
-    carried: [emptyCrate],
-    trashcan: nearbyTrashcan,
-  });
-  const [putAction] = put.getActions();
-  assert.match(putAction.hint, /Put your empty crate in the trashcan$/);
-  putAction.perform();
-
-  assert.deepEqual(takeCalls, ["take"]);
-  assert.deepEqual(putCalls, ["return"]);
-});
-
-test("trashcan actions are unavailable in the backroom", () => {
-  const { cleaning } = harness({ trashcan: nearbyTrashcan, area: AREA.BACKROOM });
-  assert.deepEqual(cleaning.getActions(), []);
-});
-
 test("held trash offers disposal only while facing a nearby trashcan", () => {
   const { cleaning, calls } = harness({
     heldTrash: { id: "trash_held" },
     trashcan: nearbyTrashcan,
   });
+
   const [action] = cleaning.getActions();
   assert.match(action.hint, /Throw the trash in the trashcan$/);
   action.perform();
@@ -73,4 +52,12 @@ test("held trash offers disposal only while facing a nearby trashcan", () => {
 
   cleaning.shop.areas.playerArea = AREA.BACKROOM;
   assert.deepEqual(cleaning.getActions(), []);
+});
+
+test("destroying cleaning unregisters its interactions", () => {
+  const interactables = new InteractableRegistry();
+  const cleaning = new CleaningSystem({ interactables, textures: { exists: () => true } });
+  assert.equal(interactables.providers.has("cleaning"), true);
+  cleaning.destroy();
+  assert.equal(interactables.providers.has("cleaning"), false);
 });

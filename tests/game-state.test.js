@@ -86,6 +86,44 @@ test("loading swaps everything in, rebuilds the shop, and only then tells listen
   assert.equal(current.reputation.global, 40);
 });
 
+test("reputation rules block gains but not losses and survive save replacement", () => {
+  const items = [];
+  const state = new GameState({ items, random: () => 0.5 });
+  const blockGain = () => false;
+  const unregister = state.rules.register("reputation.gain", blockGain);
+  const unregisterDuplicate = state.rules.register("reputation.gain", blockGain);
+
+  assert.equal(state.reputation.gain(3), false);
+  assert.equal(state.reputation.pending.global, 0);
+  state.reputation.lose(2);
+  assert.equal(state.reputation.pending.global, -2);
+
+  const next = GameState.fromSave(state.toSave(), { items });
+  state.replaceWith(next);
+  assert.equal(state.reputation.gain(1), false, "loading does not remove a module's rule");
+
+  unregister();
+  assert.equal(state.reputation.gain(1), false, "another module registration stays active");
+  unregisterDuplicate();
+  assert.equal(state.reputation.gain(1), true);
+  assert.equal(state.reputation.pending.global, -1);
+  const unregisterNew = state.rules.register("reputation.gain", () => false);
+  unregisterDuplicate();
+  assert.equal(state.reputation.gain(1), false, "an old unsubscriber cannot remove a new rule");
+  unregisterNew();
+});
+
+test("reputation rules can evaluate the customer and never block losses", () => {
+  const state = new GameState({ items: [], random: () => 0.5 });
+  const strict = { expectsGoodPresentation: true };
+  const relaxed = { expectsGoodPresentation: false };
+  state.rules.register("reputation.gain", ({ customer }) => !customer.expectsGoodPresentation);
+  assert.equal(state.reputation.gain(1, null, { customer: strict }), false);
+  assert.equal(state.reputation.gain(1, null, { customer: relaxed }), true);
+  state.reputation.lose(2);
+  assert.equal(state.reputation.pending.global, -1);
+});
+
 test("saved trash locations belong to the trash state slice", () => {
   const items = [];
   const state = new GameState({ items, random: () => 0.5 });

@@ -7,7 +7,10 @@ import { fixtureFootprint } from "../../logic/FixtureLayout.js";
 import { TILE_SIZE, EXPANSION_ORDER } from "../../logic/RoomLayout.js";
 import { AREA } from "../../world/Areas.js";
 import { controlLabel } from "../../input/InputDevice.js";
-import { CLEANING_TUNING, getCleanlinessMax, getCleanlinessScore } from "./Litter.js";
+import {
+  CLEANING_TUNING, createCustomerCleaningProfile, getCleanlinessMax, getCleanlinessScore,
+  judgeCleanliness,
+} from "./Litter.js";
 import { randomTrashKind, TrashField } from "./TrashField.js";
 
 const PLAYER_FACING_STEPS = Object.freeze({
@@ -19,11 +22,12 @@ const PLAYER_FACING_STEPS = Object.freeze({
 
 export class CleaningSystem {
   constructor(shop) {
+    this.id = "cleaning";
     this.shop = shop;
     this.trash = new TrashField(shop, (x, y) => this.isOpenTrashSpot(x, y));
     this.heldTrash = null;
     if (shop.interactables) {
-      shop.interactables.registerProvider("cleaning", () => [{
+      this.unregisterInteractions = shop.interactables.registerProvider("cleaning", () => [{
         id: "cleaning",
         kind: "cleaning",
         getActions: () => this.getActions(),
@@ -54,33 +58,10 @@ export class CleaningSystem {
     return true;
   }
 
-  getNearbyTrashcan() {
-    const shop = this.shop;
-    if (shop.areas.playerArea === AREA.BACKROOM) return null;
-    const step = PLAYER_FACING_STEPS[shop.player.currentFacing];
-    if (!step) return null;
-    const { x, y } = shop.player.sprite;
-    const probe = {
-      x: x + step.x * CLEANING_TUNING.trashcanReachPx,
-      y: y + step.y * CLEANING_TUNING.trashcanReachPx,
-    };
-    return shop.fixtures.ofKind("trash").find((fixture) => {
-      const { w, h } = fixtureFootprint(fixture);
-      const left = fixture.gx * TILE_SIZE;
-      const top = fixture.gy * TILE_SIZE;
-      return probe.x >= left - 6 && probe.x <= left + w * TILE_SIZE + 6 &&
-        probe.y >= top - 6 && probe.y <= top + h * TILE_SIZE + 6;
-    }) ?? null;
-  }
-
-  isNearTrashcan() {
-    return Boolean(this.getNearbyTrashcan());
-  }
-
   getActions() {
     const shop = this.shop;
     const carriedCrates = shop.getCarriedCrates();
-    const trashcan = this.getNearbyTrashcan();
+    const trashcan = shop.getNearbyTrashcan();
 
     if (this.heldTrash) {
       return trashcan ? [{
@@ -113,37 +94,6 @@ export class CleaningSystem {
       }
     }
 
-    if (!trashcan) return [];
-    const emptyCrates = shop.heldEmptyCrates();
-    if (carriedCrates.length === 0) {
-      return [{
-        action: "interact",
-        id: `trashcan:${trashcan.id}`,
-        kind: "trashcan",
-        target: trashcan,
-        priority: 5,
-        range: 0,
-        distanceFrom: () => 0,
-        hint: `${controlLabel("interact")}: Create`,
-        perform: () => shop.takeEmptyCrateFromTrashcan(),
-      }];
-    }
-    if (emptyCrates.length > 0) {
-      const description = emptyCrates.length === 1
-        ? "your empty crate"
-        : `all ${emptyCrates.length} empty crates`;
-      return [{
-        action: "interact",
-        id: `trashcan:${trashcan.id}`,
-        kind: "trashcan",
-        target: trashcan,
-        priority: 5,
-        range: 0,
-        distanceFrom: () => 0,
-        hint: `${controlLabel("interact")}: Put ${description} in the trashcan`,
-        perform: () => shop.returnEmptyCratesToTrashcan(),
-      }];
-    }
     return [];
   }
 
@@ -227,6 +177,14 @@ export class CleaningSystem {
     return (score / max) * 100;
   }
 
+  createCustomerProfile(factionId) {
+    return createCustomerCleaningProfile(factionId);
+  }
+
+  judgeCustomerCleanliness(percent, tolerance) {
+    return judgeCleanliness(percent, tolerance);
+  }
+
   reportCleanlinessVerdict(customer, verdict) {
     const walkOut = verdict === "walk-out";
     const penalty = walkOut ? CLEANING_TUNING.walkOutReputationLoss : CLEANING_TUNING.upsetReputationLoss;
@@ -273,10 +231,21 @@ export class CleaningSystem {
     this.syncSavedTrash();
   }
 
+  update(time) {
+    this.updateHighlight(time);
+  }
+
   updateHighlight(time) {
     const shop = this.shop;
     const show = Boolean(shop.highlightTrashKey?.isDown) && shop.controlMode.allows("crate") &&
       shop.areas.playerArea !== AREA.BACKROOM;
     this.trash.renderHighlight(show, time);
+  }
+
+  destroy() {
+    this.unregisterInteractions?.();
+    this.heldTrash?.sprite.destroy();
+    this.heldTrash = null;
+    this.trash.destroy();
   }
 }

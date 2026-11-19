@@ -11,7 +11,7 @@ import { InteractableRegistry } from "../js/interaction/InteractableRegistry.js"
 import { InteractionSystem } from "../js/interaction/InteractionSystem.js";
 import { Crate, CRATE_STACK_SPACING, INTERACT_RANGE } from "../js/logic/Crate.js";
 import { HOLD_KEY_MS, MAX_CARRIED_CRATES, isSquarelyInFront } from "../js/logic/CrateStack.js";
-import { fixtureBounds, fixtureFootprint, getFixtureType } from "../js/logic/FixtureLayout.js";
+import { fixtureBounds, getFixtureType } from "../js/logic/FixtureLayout.js";
 import { FixtureRegistry } from "../js/logic/FixtureRegistry.js";
 import { PAD } from "../js/input/GamepadInput.js";
 import { TILE_SIZE } from "../js/logic/RoomLayout.js";
@@ -92,45 +92,9 @@ function bindCrateSystem(scene) {
 }
 
 function bindCleaningSystem(scene) {
-  const getNearbyTrashcan = () => {
-    if (scene.areas.playerArea === AREA.BACKROOM) return null;
-    const step = {
-      up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
-    }[scene.player.currentFacing];
-    if (!step) return null;
-    const { x, y } = scene.player.sprite;
-    const probe = { x: x + step.x * 40, y: y + step.y * 40 };
-    return scene.fixtures.ofKind("trash").find((fixture) => {
-      const { w, h } = fixtureFootprint(fixture);
-      const left = fixture.gx * TILE_SIZE;
-      const top = fixture.gy * TILE_SIZE;
-      return probe.x >= left - 6 && probe.x <= left + w * TILE_SIZE + 6 &&
-        probe.y >= top - 6 && probe.y <= top + h * TILE_SIZE + 6;
-    }) ?? null;
-  };
   scene.cleaningSystem = {
     trash: { count: 0, renderHighlight() {} },
-    getActions: () => {
-      if (!scene.isNearTrashcan()) return [];
-      const carriedCrates = scene.getCarriedCrates();
-      if (carriedCrates.length > 0 && scene.heldEmptyCrates().length === 0) return [];
-      return [{
-        action: "interact",
-        kind: "trashcan",
-        range: 0,
-        distanceFrom: () => 0,
-        hint: carriedCrates.length === 0
-          ? "E: Create"
-          : `E: Put ${scene.heldEmptyCrates().length === 1 ? "your empty crate" : `all ${scene.heldEmptyCrates().length} empty crates`} in the trashcan`,
-        perform: () => {
-          if (scene.heldTrash) scene.throwAwayHeldTrash();
-          else if (carriedCrates.length === 0) scene.takeEmptyCrateFromTrashcan();
-          else scene.returnEmptyCratesToTrashcan();
-        },
-      }];
-    },
-    getNearbyTrashcan,
-    isNearTrashcan: () => Boolean(getNearbyTrashcan()),
+    getActions: () => [],
     findTrashInFront: () => null,
     isOpenTrashSpot: () => false,
     dropTrash: () => false,
@@ -421,6 +385,20 @@ test("combining crate stock records a container transfer", () => {
   });
 });
 
+test("sale reputation rules receive the actual customer", () => {
+  const state = new GameState({ items: [], random: () => 0.5 });
+  const events = new Events();
+  const customer = { factionId: null, expectsGoodPresentation: true };
+  state.rules.register("reputation.gain", (context) => context.customer !== customer);
+  const shift = Object.assign(Object.create(ShiftSystem.prototype), {
+    shop: { gameState: state }, customersServed: 0, recordSale() {},
+  });
+  shift.listen(events);
+  events.emit(GAME_EVENTS.CUSTOMER_SALE_COMPLETED, { customer, total: 0 });
+  assert.equal(state.reputation.pending.global, 0);
+  assert.equal(shift.customersServed, 1);
+});
+
 test("completed sales sink customer-cart stock before recording revenue", () => {
   const eventBus = new Events();
   const transfers = [];
@@ -611,7 +589,7 @@ test("with empty hands, holding Ctrl while facing the trashcan picks it up to mo
   h.scene.interactables = {
     findTarget: (action) => action === "moveFixture" ? h.scene.fixtureSystem.getMoveAction() : null,
     getActions: (...args) => [
-      ...h.scene.cleaningSystem.getActions(...args),
+      ...h.scene.fixtureSystem.getTrashcanActions(...args),
       h.scene.fixtureSystem.getMoveAction(),
     ].filter(Boolean),
   };
@@ -1092,6 +1070,7 @@ test("E returns every held empty crate, preserving filled crates; Q only puts cr
   const empties = [crate({ quantity: 0 }), crate({ quantity: 0 })];
   carry(h.scene, [empties[0], full, empties[1]]);
   h.scene.isNearTrashcan = () => true;
+  h.scene.fixtureSystem.getNearbyTrashcan = () => ({ id: "trashcan" });
   h.scene.handleInteract();
   assert.ok(empties.every((entry) => entry.destroyed));
   assert.deepEqual(h.scene.getCarriedCrates(), [full]);
@@ -1135,6 +1114,26 @@ test("a sales-floor trashcan takes back empty crates only while faced from close
   assert.equal(h.scene.isNearTrashcan(), false, "the trashcan isn't reachable from the backroom");
 });
 
+test("trashcan supplies and receives crates when cleaning is disabled", () => {
+  const h = createHarness();
+  h.scene.interactables.providers.delete("cleaning");
+  h.scene.cleaningSystem = null;
+  const trashcan = { id: "trash_can_01", type: "trash_can", gx: 18, gy: 2, rotation: 0 };
+  h.scene.fixtures.ofKind = (kind) => kind === "trash" ? [trashcan] : [];
+  Object.assign(h.scene.player.sprite, { x: 1168, y: 206 });
+  h.scene.player.currentFacing = "up";
+  let created = 0;
+  h.scene.takeEmptyCrateFromTrashcan = () => { created += 1; };
+  h.scene.handleInteract();
+  assert.equal(created, 1);
+  carry(h.scene, [crate({ quantity: 0 })]);
+  h.scene.handleInteract();
+  assert.deepEqual(h.scene.getCarriedCrates(), []);
+  h.scene.fixtureSystem.canRearrange = () => true;
+  h.scene.fixtureSystem.moveAreaBlockReason = () => null;
+  assert.equal(h.scene.getHoldToMoveFixture(), trashcan);
+});
+
 test("the former backroom empty-crate square no longer takes or supplies crates", () => {
   const h = createHarness();
   h.scene.areas.playerArea = AREA.BACKROOM;
@@ -1172,6 +1171,7 @@ test("E supplies one free empty crate only with empty hands", () => {
   };
 
   h.scene.isNearTrashcan = () => true;
+  h.scene.fixtureSystem.getNearbyTrashcan = () => ({ id: "trashcan" });
   h.scene.handleInteract();
   assert.equal(h.scene.getCarriedCrates().length, 1);
   assert.ok(created.every((crate) => crate.pickedUpBy === h.scene.player.sprite));
@@ -1607,6 +1607,7 @@ test("three carried crates stay straight while the player moves and reverses dir
   };
   Object.assign(h.scene, {
     handleGamepad() {},
+    gameModules: { update() {} },
     fixturePlacement: { active: false, update() {} },
     crateWorld: { update() {}, updateCratePushing() {} },
     storeDoorAnimation: { update() {} },
@@ -1648,6 +1649,7 @@ test("the game updates player and crate movement during placement without unfree
   scene.player.forceFacing = () => {};
   Object.assign(scene, {
     handleGamepad() {},
+    gameModules: { update() {} },
     fixturePlacement: { active: true, update() {} },
     crateWorld: { update() {}, updateCratePushing() { crateUpdates += 1; } },
     storeDoorAnimation: { update() {} },

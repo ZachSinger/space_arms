@@ -36,6 +36,7 @@ test("moved tuning numbers keep their old values", () => {
   });
   assert.deepEqual({ ...loadTuning("crates", crateTuning) }, {
     maxMovedCrates: 4,
+    trashcanReachPx: 40,
     pushSpeedByCrateCount: [1, 0.6, 0.4, 0.25],
     customerPushClaimMs: 150,
     customerPushReach: 160,
@@ -55,7 +56,6 @@ test("moved tuning numbers keep their old values", () => {
     trashDropWalkMs: [1000, 6000],
     upsetReputationLoss: 1,
     walkOutReputationLoss: 2,
-    trashcanReachPx: 40,
     trashPickupAheadPx: 22,
     trashPickupReachPx: 26,
     blockedSpotSearchStepPx: 16,

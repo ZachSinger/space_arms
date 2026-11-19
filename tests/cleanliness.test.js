@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  getCleanlinessMax, getCleanlinessScore, judgeCleanliness, rollCleanlinessTolerance,
+  CLEANLINESS_JUDGE_MS, CLEANLINESS_TOLERANCES, createCustomerCleaningProfile,
+  getCleanlinessMax, getCleanlinessScore, judgeCleanliness, TRASH_DROP_CHANCE, TRASH_DROP_WALK_MS,
+  rollCleanlinessTolerance,
 } from "../js/modules/cleaning/Litter.js";
 import { CleaningSystem } from "../js/modules/cleaning/CleaningSystem.js";
+import { ModuleHost } from "../js/modules/GameModules.js";
 import { Trash } from "../js/state/slices/Trash.js";
 import { AREA } from "../js/world/Areas.js";
 
@@ -35,6 +38,26 @@ test("a customer is fine, upset, or walks out depending on the store's cleanline
   assert.equal(judgeCleanliness(70, tolerance), "fine");
   assert.equal(judgeCleanliness(69, tolerance), "upset");
   assert.equal(judgeCleanliness(29, tolerance), "walk-out");
+});
+
+test("cleaning customer behavior is provided by the module and can be disabled", () => {
+  const [upsetMin, upsetMax] = CLEANLINESS_TOLERANCES.civilian.upset;
+  const [walkOutMin, walkOutMax] = CLEANLINESS_TOLERANCES.civilian.walkOut;
+  const rolls = [0.25, 0.75, TRASH_DROP_CHANCE / 2, 0.5];
+  const profile = createCustomerCleaningProfile("civilian", () => rolls.shift());
+  assert.deepEqual(profile.tolerance, {
+    upsetBelow: upsetMin + 0.25 * (upsetMax - upsetMin),
+    walkOutBelow: walkOutMin + 0.75 * (walkOutMax - walkOutMin),
+  });
+  assert.equal(profile.judgeAfterMs, CLEANLINESS_JUDGE_MS);
+  assert.equal(profile.trashDropAtWalkMs, TRASH_DROP_CHANCE > 0
+    ? TRASH_DROP_WALK_MS[0] + 0.5 * (TRASH_DROP_WALK_MS[1] - TRASH_DROP_WALK_MS[0])
+    : null);
+
+  const modules = new ModuleHost({}, []);
+  assert.equal(modules.get("cleaning"), null);
+  assert.doesNotThrow(() => modules.update(0, 16));
+  assert.doesNotThrow(() => modules.destroy());
 });
 
 test("cleaning owns floor trash, keeps held trash in the score, and saves it at the player", () => {

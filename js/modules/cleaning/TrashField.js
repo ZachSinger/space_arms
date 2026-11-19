@@ -95,6 +95,12 @@ export class TrashField {
     this.pieces = [];
   }
 
+  destroy() {
+    this.clear();
+    this.highlight?.destroy();
+    this.highlight = null;
+  }
+
   /**
    * Bright pulsing rings over every piece on the floor, drawn above shelves and people so
    * trash hidden behind them still shows. Call every frame; false hides them.

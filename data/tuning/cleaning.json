@@ -75,13 +75,6 @@
     "integer": true,
     "description": "Store reputation lost when a customer leaves over cleanliness."
   },
-  "trashcanReachPx": {
-    "value": 40,
-    "min": 0,
-    "max": 100,
-    "integer": true,
-    "description": "Distance from a trashcan edge used to test player interaction."
-  },
   "trashPickupAheadPx": {
     "value": 22,
     "min": 0,

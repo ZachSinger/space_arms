@@ -102,6 +102,10 @@ export class HUDController {
         this.staminaEl.classList.toggle('exhausted', exhausted);
     }
 
+    setCleanlinessEnabled(enabled) {
+        this.cleanlinessEl.parentElement.style.display = enabled ? '' : 'none';
+    }
+
     renderCleanliness({ score, max, trashCount }) {
         const key = `${score}/${max}/${trashCount}`;
         if (!this.cleanlinessEl || key === this.cleanlinessKey) return;

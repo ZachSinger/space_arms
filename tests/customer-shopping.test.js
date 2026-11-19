@@ -967,6 +967,13 @@ test("customers decide about cleanliness once, before taking anything, and a fil
     const verdicts = [];
     const customer = Object.create(Customer.prototype);
     Object.assign(customer, {
+      cleaning: {
+        getCleanlinessPercent: () => percent,
+        reportCleanlinessVerdict: (_customer, verdict) => verdicts.push(verdict),
+        judgeCustomerCleanliness: (value, tolerance) => value < tolerance.walkOutBelow
+          ? "walk-out"
+          : value < tolerance.upsetBelow ? "upset" : "fine",
+      },
       cleanlinessTolerance: { upsetBelow: 70, walkOutBelow: 30 },
       cleanlinessJudged: false,
       cleanlinessTimerMs: 0,
@@ -974,10 +981,6 @@ test("customers decide about cleanliness once, before taking anything, and a fil
       cart: [],
       phaseItemIds: ["wpn_rif_01"],
       fixture: { placements: [{ itemId: "wpn_rif_01", quantity: 3 }] },
-      store: {
-        getCleanlinessPercent: () => percent,
-        reportCleanlinessVerdict: (_customer, verdict) => verdicts.push(verdict),
-      },
       left: false,
       showReaction() {},
       clearPatience() {},
@@ -985,6 +988,15 @@ test("customers decide about cleanliness once, before taking anything, and a fil
       shopped: false,
       getRemainingUnitsFor() { this.shopped = true; return 0; },
       visitNextShelfStop() {},
+    });
+
+    test("a broken enabled cleaning policy is not treated as a clean store", () => {
+      const customer = Object.assign(Object.create(Customer.prototype), {
+        cleaning: {},
+        cleanlinessTolerance: { upsetBelow: 70, walkOutBelow: 30 },
+        cleanlinessJudged: false,
+      });
+      assert.throws(() => customer.judgeStoreCleanliness(), /getCleanlinessPercent/);
     });
     customer.shopAtCurrentShelf();
     return { customer, verdicts };

@@ -62,6 +62,18 @@ export function rollCleanlinessTolerance(factionId, random = gameRandom) {
 }
 
 /**
+ * @param {string | null} factionId
+ * @param {() => number} [random]
+ */
+export function createCustomerCleaningProfile(factionId, random = gameRandom) {
+  const tolerance = rollCleanlinessTolerance(factionId, random);
+  const trashDropAtWalkMs = random() < TRASH_DROP_CHANCE
+    ? TRASH_DROP_WALK_MS[0] + random() * (TRASH_DROP_WALK_MS[1] - TRASH_DROP_WALK_MS[0])
+    : null;
+  return { tolerance, judgeAfterMs: CLEANLINESS_JUDGE_MS, trashDropAtWalkMs };
+}
+
+/**
  * @param {number} percent - store cleanliness, 0-100
  * @param {{ upsetBelow: number, walkOutBelow: number }} tolerance
  * @returns {"fine" | "upset" | "walk-out"}

@@ -10,8 +10,8 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
-export async function startGame({ port = 5391, headless = true } = {}) {
-  const server = await createServer({ root: ROOT, logLevel: "error", server: {
+export async function startGame({ port = 5391, headless = true, vitePlugins = [] } = {}) {
+  const server = await createServer({ root: ROOT, logLevel: "error", plugins: vitePlugins, server: {
     port,
     strictPort: true,
     // Builds and packaging write here; watching them can crash the server mid-check.

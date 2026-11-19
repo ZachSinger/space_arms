@@ -18,9 +18,6 @@ import { sumMoney } from "./Money.js";
 import { BASE_PATIENCE_MS, getPatienceMs, planShelfRoute, rollCustomerTraits } from "./CustomerTraits.js";
 import { fixtureFacing } from "./FixtureLayout.js";
 import { Mover } from "../world/Mover.js";
-import {
-  CLEANLINESS_JUDGE_MS, TRASH_DROP_CHANCE, TRASH_DROP_WALK_MS, judgeCleanliness, rollCleanlinessTolerance,
-} from "../modules/cleaning/Litter.js";
 import { gameRandom } from "../core/Random.js";
 
 const SPEED = 100; // px/s
@@ -158,12 +155,16 @@ export class Customer {
     this.factionId = character.factionId;
     this.traits = rollCustomerTraits(this.factionId, gameRandom, getStoreConditions?.());
     this.maxPatienceMs = getPatienceMs(this.traits);
-    this.cleanlinessTolerance = rollCleanlinessTolerance(this.factionId);
+    this.cleaning = store.cleaning ?? null;
+    const cleaningProfile = this.cleaning ? this.cleaning.createCustomerProfile(this.factionId) : null;
+    if (this.cleaning && (!cleaningProfile?.tolerance || !Number.isFinite(cleaningProfile.judgeAfterMs))) {
+      throw new Error("Cleaning must provide a customer tolerance and judgment time.");
+    }
+    this.cleanlinessTolerance = cleaningProfile?.tolerance ?? null;
+    this.cleanlinessJudgeMs = cleaningProfile?.judgeAfterMs ?? null;
     this.cleanlinessJudged = false;
     this.cleanlinessTimerMs = 0;
-    this.trashDropAtWalkMs = gameRandom() < TRASH_DROP_CHANCE
-      ? TRASH_DROP_WALK_MS[0] + gameRandom() * (TRASH_DROP_WALK_MS[1] - TRASH_DROP_WALK_MS[0])
-      : null;
+    this.trashDropAtWalkMs = cleaningProfile?.trashDropAtWalkMs ?? null;
     this.trashWalkMs = 0;
     this.shoppingPlan = getShoppingPlan
       ? getShoppingPlan(this.factionId, this.traits)
@@ -199,9 +200,10 @@ export class Customer {
       return;
     }
 
-    if (this.cleanlinessTolerance && !this.cleanlinessJudged && this.state !== "LEAVING") {
+    if (this.cleaning && this.cleanlinessTolerance && this.cleanlinessJudgeMs != null &&
+      !this.cleanlinessJudged && this.state !== "LEAVING") {
       this.cleanlinessTimerMs += delta;
-      if (this.cleanlinessTimerMs >= CLEANLINESS_JUDGE_MS && this.judgeStoreCleanliness() === "walk-out") return;
+      if (this.cleanlinessTimerMs >= this.cleanlinessJudgeMs && this.judgeStoreCleanliness() === "walk-out") return;
     }
 
     switch (this.state) {
@@ -753,14 +755,13 @@ export class Customer {
    * @returns {"fine" | "upset" | "walk-out" | null} null if already decided
    */
   judgeStoreCleanliness() {
-    if (this.cleanlinessJudged || !this.cleanlinessTolerance) return null;
+    if (this.cleanlinessJudged || !this.cleanlinessTolerance || !this.cleaning) return null;
     this.cleanlinessJudged = true;
-    const percent = this.store.getCleanlinessPercent?.();
-    if (percent == null) return "fine";
-    const verdict = judgeCleanliness(percent, this.cleanlinessTolerance);
+    const percent = this.cleaning.getCleanlinessPercent();
+    const verdict = this.cleaning.judgeCustomerCleanliness(percent, this.cleanlinessTolerance);
     if (verdict === "fine") return verdict;
     this.showReaction("cleanliness", verdict === "walk-out" ? "angry" : "disappointed");
-    this.store.reportCleanlinessVerdict?.(this, verdict);
+    this.cleaning.reportCleanlinessVerdict(this, verdict);
     if (verdict === "walk-out") {
       this.clearPatience();
       this.enterLeaving();
@@ -774,7 +775,7 @@ export class Customer {
     this.trashWalkMs += delta;
     if (this.trashWalkMs < this.trashDropAtWalkMs) return;
     const body = this.sprite.body;
-    if (this.store.dropTrash?.(this.sprite.x, body?.bottom ?? this.sprite.y)) this.trashDropAtWalkMs = null;
+    if (this.cleaning.dropTrash(this.sprite.x, body?.bottom ?? this.sprite.y)) this.trashDropAtWalkMs = null;
     // Not a good spot (e.g. the doorway): try again a moment later.
     else this.trashDropAtWalkMs += 500;
   }

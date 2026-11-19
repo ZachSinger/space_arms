@@ -15,6 +15,7 @@ import { Events, GAME_EVENTS } from "../core/Events.js";
 import { ControlMode, CONTROL_MODES } from "../input/ControlMode.js";
 import { InteractableRegistry } from "../interaction/InteractableRegistry.js";
 import { InteractionSystem } from "../interaction/InteractionSystem.js";
+import { ModuleHost } from "../modules/GameModules.js";
 /** @typedef {import("../logic/ShelfFixture.js").ShelfFixture} ShelfFixture */
 import { SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT } from "../logic/Customer.js";
 import { Employee } from "../logic/Employee.js";
@@ -57,7 +58,6 @@ import { CheckoutSystem } from "../systems/CheckoutSystem.js";
 import { CrateSystem } from "../systems/CrateSystem.js";
 import { CrateWorld } from "../world/CrateWorld.js";
 import { Navigation } from "../world/Navigation.js";
-import { CleaningSystem } from "../modules/cleaning/CleaningSystem.js";
 import { CheckoutWindow } from "../logic/CheckoutWindow.js";
 import { GamepadInput, PAD } from "../input/GamepadInput.js";
 import { UINavigator } from "../logic/UINavigator.js";
@@ -333,15 +333,20 @@ export class GameScene extends Phaser.Scene {
     });
     this.customers = [];
     this.employees = [];
-    this.cleaningSystem = new CleaningSystem(this);
+    this.gameModules = new ModuleHost(this);
+    this.cleaningSystem = this.gameModules.get("cleaning");
+    this.hud.setCleanlinessEnabled(Boolean(this.cleaningSystem));
+    this.events.once("shutdown", () => this.gameModules.destroy());
     this.customerStore = createCustomerStore(this);
     this.employeeStore = createEmployeeStore(this);
     for (const property of ["trash", "heldTrash"]) {
       Object.defineProperty(this, property, {
         configurable: true,
         enumerable: true,
-        get: () => this.cleaningSystem[property],
-        set: (value) => { this.cleaningSystem[property] = value; },
+        get: () => this.cleaningSystem?.[property],
+        set: (value) => {
+          if (this.cleaningSystem) this.cleaningSystem[property] = value;
+        },
       });
     }
     this.fixtureSystem.applyCurrentLayout();
@@ -361,7 +366,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.bindCrateKeys();
     // Hold H: every piece of trash on the floor lights up, even behind shelves.
-    this.highlightTrashKey = this.input.keyboard.addKey("H", false);
+    this.highlightTrashKey = this.cleaningSystem ? this.input.keyboard.addKey("H", false) : null;
 
     // Constructed after the fixtures exist: its Supply tab reads their stock immediately
     // on construction (via SupplyRenderer -> supply.restockableItems()).
@@ -642,7 +647,7 @@ export class GameScene extends Phaser.Scene {
 
   // Held trash sits at his hand on the side he faces; facing away, his body hides it.
   syncHeldTrash() {
-    this.cleaningSystem.syncHeldTrash();
+    this.cleaningSystem?.syncHeldTrash();
   }
 
   getCarriedCrates() {
@@ -849,14 +854,14 @@ export class GameScene extends Phaser.Scene {
     const snapshot = {
       ...this.gameState.toSave(),
       ...crates,
-      ...(this.trash ? { trash: this.serializeTrash() } : {}),
+      ...(this.cleaningSystem ? { trash: this.serializeTrash() } : {}),
     };
     return validateShopSave(snapshot, database);
   }
 
   // Trash in hand is saved as lying on the shop floor where he stands (or by the backroom door).
   serializeTrash() {
-    return this.cleaningSystem.serializeTrash();
+    return this.cleaningSystem?.serializeTrash() ?? [];
   }
 
   /**
@@ -895,7 +900,7 @@ export class GameScene extends Phaser.Scene {
     this.cameraRig.refresh();
     this.cratePress = null;
     this.crateSystem.load(data);
-    this.cleaningSystem.load(data.trash ?? []);
+    this.cleaningSystem?.load(data.trash ?? []);
     this.moveShelfOverflowToGoBacks();
     this.refreshShelfStockDisplays();
     this.recalculateActiveFactions();
@@ -1295,13 +1300,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   isNearTrashcan() {
-    return this.cleaningSystem.isNearTrashcan();
+    return Boolean(this.fixtureSystem.getNearbyTrashcan());
   }
 
   // The trashcan the player faces, with its edge a few steps ahead, or null. Standing
   // beside a trashcan while facing something else never counts.
   getNearbyTrashcan() {
-    return this.cleaningSystem.getNearbyTrashcan();
+    return this.fixtureSystem.getNearbyTrashcan();
   }
 
   heldEmptyCrates() {
@@ -1333,7 +1338,7 @@ export class GameScene extends Phaser.Scene {
 
   // Where loose trash may lie: open sales floor that no wall or fixture covers.
   isOpenTrashSpot(x, y) {
-    return this.cleaningSystem.isOpenTrashSpot(x, y);
+    return this.cleaningSystem?.isOpenTrashSpot(x, y) ?? false;
   }
 
   /**
@@ -1341,34 +1346,34 @@ export class GameScene extends Phaser.Scene {
    * @returns {boolean} whether it was dropped
    */
   dropTrash(x, y) {
-    return this.cleaningSystem.dropTrash(x, y);
+    return this.cleaningSystem?.dropTrash(x, y) ?? false;
   }
 
   // The trash just ahead of his feet, the way he faces.
   findTrashInFront() {
-    return this.cleaningSystem.findTrashInFront();
+    return this.cleaningSystem?.findTrashInFront() ?? null;
   }
 
   pickUpTrash(piece) {
-    return this.cleaningSystem.pickUpTrash(piece);
+    return this.cleaningSystem?.pickUpTrash(piece) ?? false;
   }
 
   throwAwayHeldTrash() {
-    return this.cleaningSystem.throwAwayHeldTrash();
+    return this.cleaningSystem?.throwAwayHeldTrash() ?? false;
   }
 
   // Q with trash in hand: it goes back on the floor just ahead of him, or at his feet.
   dropHeldTrash() {
-    return this.cleaningSystem.dropHeldTrash();
+    return this.cleaningSystem?.dropHeldTrash() ?? false;
   }
 
   // Trash in hand still counts against the store until it's in a trashcan.
   getCleanliness() {
-    return this.cleaningSystem.getCleanliness();
+    return this.cleaningSystem?.getCleanliness() ?? null;
   }
 
   getCleanlinessPercent() {
-    return this.cleaningSystem.getCleanlinessPercent();
+    return this.cleaningSystem?.getCleanlinessPercent() ?? null;
   }
 
   /**
@@ -1377,7 +1382,7 @@ export class GameScene extends Phaser.Scene {
    * @param {"upset" | "walk-out"} verdict
    */
   reportCleanlinessVerdict(customer, verdict) {
-    this.cleaningSystem.reportCleanlinessVerdict(customer, verdict);
+    this.cleaningSystem?.reportCleanlinessVerdict(customer, verdict);
   }
 
   takeEmptyCrateFromTrashcan() {
@@ -1776,8 +1781,8 @@ export class GameScene extends Phaser.Scene {
       this.employees.forEach((employee) => employee.update(delta));
     }
     this.hud.renderStamina(this.player);
-    this.hud.renderCleanliness(this.cleaningSystem.getCleanliness());
-    this.cleaningSystem.updateHighlight(time);
+    if (this.cleaningSystem) this.hud.renderCleanliness(this.cleaningSystem.getCleanliness());
+    this.gameModules.update(time, delta);
 
     this.shiftClock.update(delta);
     this.positionGoBacksBadge();

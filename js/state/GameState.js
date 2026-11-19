@@ -19,6 +19,7 @@ import { Trash } from "./slices/Trash.js";
 import { Market } from "../logic/Market.js";
 import { getStaffLimit } from "../logic/ShopProgression.js";
 import { gameRandom } from "../core/Random.js";
+import { DecisionRules } from "./DecisionRules.js";
 
 const SLICE_NAMES = Object.freeze([
   "economy", "reputation", "catalog", "staff", "calendar", "market", "goBacks", "shop", "crates", "trash",
@@ -34,10 +35,13 @@ export class GameState {
     this.items = items;
     this.random = random;
     this.events = events;
+    this.rules = new DecisionRules();
     const player = saved?.playerState;
     const market = saved?.market;
     this.economy = saved ? Economy.fromSave(player, { day: market.day }) : new Economy();
-    this.reputation = saved ? Reputation.fromSave(player) : new Reputation();
+    this.reputation = saved
+      ? Reputation.fromSave(player, this.rules)
+      : new Reputation(this.rules);
     this.catalog = saved ? Catalog.fromSave(player) : new Catalog();
     this.staff = saved ? Staff.fromSave(player) : new Staff();
     this.calendar = saved ? Calendar.fromSave(player, market) : new Calendar();

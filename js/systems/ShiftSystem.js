@@ -29,7 +29,7 @@ export class ShiftSystem {
   listen(eventBus) {
     eventBus.on(GAME_EVENTS.CUSTOMER_SALE_COMPLETED, ({ customer }) => {
       this.recordSale(customer);
-      this.shop.gameState.reputation.gain(1, customer.factionId);
+      this.shop.gameState.reputation.gain(1, customer.factionId, { customer });
       this.customersServed += 1;
       this.shop.debugInfo?.recordCustomer("customer-sale-completed", customer);
     });

@@ -25,7 +25,15 @@ Design is specified in detail in `documentation/` — consult it before inventin
 - **Electron shell** (`main.js`, `preload.cjs`): native window/display-mode control and save-file I/O via `contextBridge`. `contextIsolation: true`, `nodeIntegration: false` — keep it that way.
 - **Frontend** (served by Vite at `http://localhost:5173` in dev; the packaged app loads the built `dist/` through the `app://game/` protocol in `main.js`): Phaser 3 scenes (`js/scenes/`) own the canvas "world" simulation (shelves, customers, pathfinding). DOM windows (`js/logic/UIWindow.js`, `WindowManager.js`) own all heavy interactive UI (inventory, dialogue, settings, contracts). **These two layers are strictly decoupled** — don't render game-logic UI inside the Phaser canvas.
 - **Data layer** (`data/*.json` + `js/logic/DatabaseManager.js`): static item/license/icon definitions. Never hardcode item prices, dimensions, or license tiers in JS — query them through `DatabaseManager`.
-- **State** (`js/logic/PlayerState.js`): single source of truth for mutable runtime state (credits, reputation, licenses). All mutations go through its methods (`addCredits`, `addReputation`, etc.) — renderers must never mutate state directly.
+- **State** (`js/state/GameState.js`): the saved game is split into domain slices (economy, reputation, catalog, staff, shop, crates, and more). Mutations go through slice methods; renderers must never mutate state directly.
+
+## Feature Modules
+
+- Runtime add-ons are registered in `js/modules/GameModules.js`; remove an ID from `ENABLED_GAME_MODULES` to disable it. `ModuleHost` constructs, updates, and destroys enabled modules.
+- Modules expose optional `update(time, delta)` and `destroy()` lifecycle methods. They register interactions through `InteractableRegistry`, and decision policies through `gameState.rules`.
+- Decision rules must return `true` or `false`; any rule may veto an action. Reputation gains pass through `reputation.gain`, while reputation losses are intentionally unaffected.
+- Keep module-specific customer policies inside the module and expose them through the customer store; customer logic must not import optional modules directly.
+- Persistent module data belongs in a `GameState` slice and the normal save validation/upgrade path, not in unvalidated module-local save blobs. See `documentation/ModuleGuide.md` before adding a module.
 
 ## Build and Test
 

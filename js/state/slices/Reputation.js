@@ -6,6 +6,7 @@
 import { Slice } from "../Slice.js";
 import { getShopLevelForReputation } from "../../logic/ShopProgression.js";
 import { CUSTOMER_FACTION_IDS } from "../../logic/CustomerBuyLists.js";
+import { DecisionRules } from "../DecisionRules.js";
 
 function emptyFactions() {
   return Object.fromEntries(CUSTOMER_FACTION_IDS.map((id) => [id, 0]));
@@ -16,8 +17,9 @@ function emptyTally() {
 }
 
 export class Reputation extends Slice {
-  constructor() {
+  constructor(rules = new DecisionRules()) {
     super();
+    this.rules = rules;
     this.global = 0;
     this.factions = emptyFactions();
     this.pending = emptyTally();
@@ -30,12 +32,15 @@ export class Reputation extends Slice {
    * Tally store reputation, and the faction's too when one is given.
    * @param {number} amount
    * @param {string | null} [factionId]
+   * @param {{ customer?: object }} [context]
    */
-  gain(amount, factionId = null) {
+  gain(amount, factionId = null, context = {}) {
     if (!Number.isSafeInteger(amount) || amount < 0) {
       throw new TypeError(`Reputation gain must be a non-negative whole number, got ${amount}.`);
     }
+    if (!this.rules.permits("reputation.gain", { ...context, amount, factionId })) return false;
     this.#tally(amount, factionId);
+    return true;
   }
 
   lose(amount, factionId = null) {
@@ -108,9 +113,20 @@ export class Reputation extends Slice {
     };
   }
 
+  adopt(next) {
+    this.global = next.global;
+    this.factions = { ...next.factions };
+    this.pending = {
+      global: next.pending.global,
+      factions: { ...next.pending.factions },
+    };
+    this.shopLevel = next.shopLevel;
+    this.customersTurnedAway = next.customersTurnedAway;
+  }
+
   /** @param {object} data - the saved player section */
-  static fromSave(data) {
-    const reputation = new Reputation();
+  static fromSave(data, rules = new DecisionRules()) {
+    const reputation = new Reputation(rules);
     reputation.global = data.globalReputation;
     reputation.shopLevel = Math.max(data.shopLevel ?? 1, getShopLevelForReputation(data.globalReputation));
     reputation.factions = { ...data.factionReputation };
