@@ -21,6 +21,7 @@ function fixtureScene() {
     patienceRemainingMs: 30000,
   };
   return {
+    shift: { ended: false, starting: false, customersServed: 2, creditsAtStart: 1500, reputationAtStart: 5 },
     shiftClock: {
       getElapsedMs: () => 4000, getFormattedTime: () => "08:04",
       started: true, isPaused: false, softClosed: false,

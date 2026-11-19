@@ -37,7 +37,7 @@ export async function runScriptedShift(harness, { employees = [], playSeconds = 
       .reduce((sum, { offShelves, stock, inCustomerCarts }) => sum + offShelves + stock + inCustomerCarts, 0);
     return { stock: total, credits: scene.gameState.economy.credits };
   });
-  await h.game((scene) => scene.startNextShift());
+  await h.game((scene) => scene.shift.start());
   await h.page.waitForFunction(() => window.__game.scene.getScene("scene-game").shiftClock.started, null, { timeout: 30000 });
   await h.game((scene) => {
     const spawn = scene.spawnCustomer.bind(scene);
@@ -50,7 +50,7 @@ export async function runScriptedShift(harness, { employees = [], playSeconds = 
   });
   await h.wait(playSeconds * 1000);
   await h.game((scene) => { scene.shiftClock.elapsedMs = Math.max(scene.shiftClock.elapsedMs, 12 * 35 * 1000 - 500); });
-  await h.page.waitForFunction(() => window.__game.scene.getScene("scene-game").shiftEnded, null, { timeout: 240000 });
+  await h.page.waitForFunction(() => window.__game.scene.getScene("scene-game").shift.ended, null, { timeout: 240000 });
   const after = await h.game((scene) => {
     const total = scene.getInventoryItems()
       .reduce((sum, { offShelves, stock, inCustomerCarts }) => sum + offShelves + stock + inCustomerCarts, 0);
@@ -73,7 +73,7 @@ export async function runScriptedShift(harness, { employees = [], playSeconds = 
   });
   const endDay = await h.game((scene) => {
     const day = scene.gameState.calendar.day;
-    const ended = scene.endDay();
+    const ended = scene.shift.endDay();
     return { ended, advanced: scene.gameState.calendar.day === day + 1 };
   });
   const saved = await h.game((scene) => JSON.stringify(scene.serialize()));

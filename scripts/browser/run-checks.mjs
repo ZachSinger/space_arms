@@ -39,7 +39,7 @@ export async function runSpeedTest(h, seconds = 45) {
       scene.restockCrates.push(crate);
     }
   });
-  await h.game((scene) => scene.startNextShift());
+  await h.game((scene) => scene.shift.start());
   await h.page.waitForFunction(() => window.__game.scene.getScene("scene-game").shiftClock.started);
   await h.game((scene) => {
     // Time the game spends working on each frame (update and drawing), not the gap between

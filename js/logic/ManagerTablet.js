@@ -149,10 +149,10 @@ export class ManagerTablet {
         this.refreshEmployeePanel();
       }
 
-      if (event.target.closest("[data-end-day]") && this.scene.endDay()) this.uiWindow.close();
-      if (event.target.closest("[data-finances-start-shift]")) this.scene.startNextShift();
-      if (event.target.closest("[data-take-emergency-loan]")) this.scene.takeEmergencyLoan();
-      if (event.target.closest("[data-pay-off-emergency-loan]")) this.scene.payOffEmergencyLoan();
+      if (event.target.closest("[data-end-day]") && this.scene.shift.endDay()) this.uiWindow.close();
+      if (event.target.closest("[data-finances-start-shift]")) this.scene.shift.start();
+      if (event.target.closest("[data-take-emergency-loan]")) this.scene.shift.takeLoan();
+      if (event.target.closest("[data-pay-off-emergency-loan]")) this.scene.shift.payOffLoan();
 
       const financesDayButton = event.target.closest("[data-finances-day]");
       if (financesDayButton) {
@@ -330,7 +330,7 @@ export class ManagerTablet {
     }
     if (tabId === "layout") return LayoutRenderer.generateHTML(this.scene);
     if (tabId === "finances") {
-      return FinancesRenderer.generateHTML(this.scene.getFinancesView(), this.financesDay);
+      return FinancesRenderer.generateHTML(this.scene.shift.financesView(), this.financesDay);
     }
     if (tabId === "handbook") {
       return HandbookRenderer.generateHTML({
@@ -589,7 +589,7 @@ export class ManagerTablet {
   // --- Window ---
 
   openWindow() {
-    if (this.scene.startingShift || this.scene.fixturePlacement?.active || this.scene.loadFailed) return;
+    if (this.scene.shift.starting || this.scene.fixturePlacement?.active || this.scene.loadFailed) return;
     this.refreshInventoryPanel();
     this.refreshEmployeePanel();
     this.refreshSupplyPanel(); // loading pad spots free up without any game state change

@@ -4,7 +4,7 @@ import { ControlMode, CONTROL_MODES } from "../js/logic/ControlMode.js";
 
 function createScene() {
   return {
-    startingShift: false,
+    shift: { starting: false },
     loadFailed: false,
     fixturePlacement: { active: false },
     operatingRegister: false,
@@ -32,7 +32,7 @@ test("selects the active control mode by state priority", () => {
   scene.fixturePlacement.active = true;
   assert.equal(controls.getMode(), CONTROL_MODES.PLACING);
 
-  scene.startingShift = true;
+  scene.shift.starting = true;
   assert.equal(controls.getMode(), CONTROL_MODES.LOADING);
 });
 
@@ -93,7 +93,7 @@ test("each mode exposes only its declared actions", () => {
 
   scene.fixturePlacement.active = false;
   assert.equal(controls.allows("rotateFixture"), false);
-  scene.startingShift = true;
+  scene.shift.starting = true;
   assert.equal(controls.allows("pause"), false);
   assert.equal(controls.allows("debugGrid"), false);
 });

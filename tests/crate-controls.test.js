@@ -65,7 +65,7 @@ function createHarness({ carrying = false } = {}) {
   const handlers = new Map();
   const removedCaptures = [];
   const scene = Object.create(GameScene.prototype);
-  scene.startingShift = false;
+  scene.shift = { starting: false, ended: false };
   scene.loadFailed = false;
   scene.operatingRegister = false;
   scene.fixturePlacement = { active: false };
@@ -599,6 +599,7 @@ test("Space says to wait for a moving crate, and nothing happens during menus or
     floorStack(blocked.scene, 1);
     if (state === "placement") blocked.scene.fixturePlacement.active = true;
     else if (state === "menu") blocked.scene.windowManager.windows.set("tablet", { id: "tablet", isOpen: true });
+    else if (state === "startingShift") blocked.scene.shift.starting = true;
     else blocked.scene[state] = true;
     tap(blocked);
     hold(blocked);
@@ -862,6 +863,7 @@ for (const state of ["nothingNearby", "moving", "placement", "startingShift", "l
     else if (state === "moving") h.scene.restockCrates = [crate({ stationary: false })];
     else if (state === "placement") h.scene.fixturePlacement.active = true;
     else if (state === "menu") h.scene.windowManager.windows.set("inventory", { id: "inventory", isOpen: true });
+    else if (state === "startingShift") h.scene.shift.starting = true;
     else h.scene[state] = true;
     h.scene.updateCrateHint();
     assert.equal(h.scene.messages.element.classList.contains("hidden"), true);
@@ -1177,6 +1179,7 @@ test("three carried crates stay straight while the player moves and reverses dir
     backroomExitAnimation: { update() {} },
     getNearbyBackroomDoor: () => null,
     shiftClock: { isPaused: false, started: false, softClosed: false, update() {} },
+    shift: { starting: false, ended: false, update() {} },
     updateCratePushing() {},
     hud: { renderStamina() {} },
     positionGoBacksBadge() {},
@@ -1222,6 +1225,7 @@ test("the game updates player and crate movement during placement without unfree
     backroomExitAnimation: { update() {} },
     getNearbyBackroomDoor: () => null,
     shiftClock: { isPaused: true, started: false, softClosed: false, update() {} },
+    shift: { starting: false, ended: false, update() {} },
     updateCratePushing() { crateUpdates += 1; },
     hud: { renderStamina() {} },
     positionGoBacksBadge() {},

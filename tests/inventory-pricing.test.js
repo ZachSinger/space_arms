@@ -229,7 +229,7 @@ function createHarness() {
     getFixturePurchaseOptions: () => [],
     getExpansionPurchaseOptions: () => [],
     getBackroomPurchaseOptions: () => [],
-    getFinancesView: () => ({
+    shift: { financesView: () => ({
       day: 1,
       shiftRunning: false,
       awaitingEndDay: false,
@@ -240,7 +240,7 @@ function createHarness() {
       },
       receipts: [],
       lifetime: { daysCompleted: 0, totalSales: 0, customersServed: 0 },
-    }),
+    }) },
     fixtures: { all: () => [], displayName: () => "" },
   };
   const tablet = new ManagerTablet({}, gameState, scene);

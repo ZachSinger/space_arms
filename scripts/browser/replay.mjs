@@ -24,7 +24,7 @@ async function playSeededShift(h, { perFrame, steps }) {
     for (const id of ["tavi_stock_clerk", "sera_floor_assistant"]) scene.gameState.hireEmployee(id);
     // Physics carries leftover frame time between steps; start both runs from none.
     scene.physics.world._elapsed = 0;
-    scene.startNextShift();
+    scene.shift.start();
     const log = { sales: 0, spawned: 0 };
     window.__replayLog = log;
     scene.eventBus.on("customer-sale-completed", () => { log.sales += 1; });

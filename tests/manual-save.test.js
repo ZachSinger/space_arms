@@ -23,6 +23,7 @@ let GameState;
 let CHARACTER_ART_WIDTH;
 let CHARACTER_FEET_DROP;
 let DebugTools;
+let ShiftSystem;
 const originalPhaser = globalThis.Phaser;
 
 before(async () => {
@@ -56,6 +57,7 @@ before(async () => {
   ({ CheckoutWindow } = await server.ssrLoadModule("/js/logic/CheckoutWindow.js"));
   ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));
   ({ DebugTools } = await server.ssrLoadModule("/js/debug/DebugTools.js"));
+  ({ ShiftSystem } = await server.ssrLoadModule("/js/systems/ShiftSystem.js"));
   ({ CHARACTER_ART_WIDTH, CHARACTER_FEET_DROP } = await server.ssrLoadModule("/js/logic/CustomerSprites.js"));
 });
 
@@ -75,8 +77,7 @@ function createHarness(write = async () => true) {
   const controls = [];
   Object.assign(scene, {
     loadFailed: false,
-    startingShift: false,
-    shiftEnded: false,
+    shift: { starting: false, ended: false },
     shiftClock: { started: false },
     customers: [],
     autosaveBlocked: false,
@@ -116,9 +117,9 @@ test("fixtures can be placed during a closed mid-shift without unlocking saving 
   scene.shiftClock.isPaused = true;
   assert.equal(scene.canRearrangeFixtures(), false);
   scene.shiftClock.isPaused = false;
-  scene.startingShift = true;
+  scene.shift.starting = true;
   assert.equal(scene.canRearrangeFixtures(), false);
-  scene.startingShift = false;
+  scene.shift.starting = false;
   scene.storeTemporarilyClosed = false;
   scene.shiftClock.softClosed = true;
   assert.equal(scene.canRearrangeFixtures(), true);
@@ -178,9 +179,8 @@ function createExpansionHarness({ shopLevel, credits }) {
   let autosaves = 0;
   Object.assign(scene, {
     gameState,
-    startingShift: false,
+    shift: { starting: false, ended: false },
     loadFailed: false,
-    shiftEnded: false,
     shiftClock: { started: false },
     customers: [],
     room: {
@@ -429,20 +429,19 @@ test("the shift-end event, receipt, and save observers see the applied reputatio
   const savedStates = [];
   Object.assign(scene, {
     gameState: state,
-    customersServedThisShift: 16,
     customers: [],
     loadFailed: false,
-    startingShift: false,
-    shiftEnded: false,
     shiftClock: { started: true, isPaused: false, notifyListeners() {} },
     hud: { renderStoreStatus() {} },
     room: { zones: ZONES },
     fixturePlacement: { active: false },
     eventBus: { emit: (name, details) => events.push({ name, details }) },
     clearEmployees() {},
-    getEmergencyLoanOffer: () => ({ available: false, amount: 0, repayTotal: 0 }),
     showGameMessage: (message) => messages.push(message),
   });
+  scene.shift = new ShiftSystem(scene);
+  scene.shift.customersServed = 16;
+  scene.shift.loanOffer = () => ({ available: false, amount: 0, repayTotal: 0 });
   state.subscribe((current) => {
     if (current.calendar.awaitingEndDay && scene.canSaveOffShift()) {
       savedStates.push(current.toSave().playerState);
@@ -451,9 +450,9 @@ test("the shift-end event, receipt, and save observers see the applied reputatio
   state.reputation.gain(16, "scavengers");
   state.reputation.lose(1, "mercenaries");
   assert.equal(state.reputation.global, 0);
-  assert.equal(scene.getFinancesView().pendingReputationChange, 15);
+  assert.equal(scene.shift.financesView().pendingReputationChange, 15);
 
-  scene.endShift();
+  scene.shift.end();
   assert.equal(state.reputation.global, 15);
   assert.equal(state.reputation.shopLevel, 2);
   assert.equal(scene.shiftClock.started, false);
@@ -466,8 +465,8 @@ test("the shift-end event, receipt, and save observers see the applied reputatio
       factionReputation: { scavengers: 16, mercenaries: -1, explorers: 0 },
     },
   }]);
-  assert.equal(scene.getFinancesView().today.reputationChange, 15);
-  assert.equal(scene.getFinancesView().pendingReputationChange, null);
+  assert.equal(scene.shift.financesView().today.reputationChange, 15);
+  assert.equal(scene.shift.financesView().pendingReputationChange, null);
   assert.equal(savedStates.length, 1);
   assert.equal(savedStates[0].globalReputation, 15);
   assert.equal(savedStates[0].shopLevel, 2);
@@ -482,8 +481,6 @@ test("a shift that earns multiple levels announces each implemented unlock", () 
   const messages = [];
   Object.assign(scene, {
     gameState: state,
-    customersServedThisShift: 60,
-    shiftEnded: false,
     shiftClock: { started: true, isPaused: false, notifyListeners() {} },
     hud: { renderStoreStatus() {} },
     room: { zones: ZONES },
@@ -491,8 +488,10 @@ test("a shift that earns multiple levels announces each implemented unlock", () 
     clearEmployees() {},
     showGameMessage: (message) => messages.push(message),
   });
+  scene.shift = new ShiftSystem(scene);
+  scene.shift.customersServed = 60;
   state.reputation.gain(72);
-  scene.endShift();
+  scene.shift.end();
   assert.equal(state.reputation.shopLevel, 4);
   assert.match(messages[0], /Shop Level 4 reached/);
   assert.match(messages[0], /Standard Pistol Ammo/);
@@ -500,7 +499,7 @@ test("a shift that earns multiple levels announces each implemented unlock", () 
 
   state.endDay();
   state.reputation.gain(42);
-  scene.endShift();
+  scene.shift.end();
   assert.equal(state.reputation.shopLevel, 5);
   assert.match(messages[1], /Shop Level 5 reached/);
   assert.doesNotMatch(messages[1], /Contracts unlocked|employees? hired at once/);
@@ -509,7 +508,7 @@ test("a shift that earns multiple levels announces each implemented unlock", () 
 
   state.endDay();
   state.reputation.gain(51);
-  scene.endShift();
+  scene.shift.end();
   assert.equal(state.reputation.shopLevel, 6);
   assert.match(messages[2], /Shop Level 6 reached/);
   assert.match(messages[2], /Lyra Casual Wear.*Contracts tab/);
@@ -524,7 +523,6 @@ test("a shift from Shop Level 6 to 30 announces all remaining reward types", () 
   const messages = [];
   Object.assign(scene, {
     gameState: state,
-    customersServedThisShift: 60,
     shiftClock: { started: true, isPaused: false, notifyListeners() {} },
     hud: { renderStoreStatus() {} },
     room: { zones: ZONES.map((zone) => ({ ...zone })) },
@@ -532,8 +530,10 @@ test("a shift from Shop Level 6 to 30 announces all remaining reward types", () 
     clearEmployees() {},
     showGameMessage: (message) => messages.push(message),
   });
+  scene.shift = new ShiftSystem(scene);
+  scene.shift.customersServed = 60;
   state.reputation.gain(3924);
-  scene.endShift();
+  scene.shift.end();
 
   assert.equal(state.reputation.shopLevel, 30);
   assert.match(messages[0], /You can now have 6 employees hired at once/);
@@ -551,7 +551,6 @@ test("level-up messages do not reannounce contracts or staff already owned in ol
   const messages = [];
   Object.assign(scene, {
     gameState: state,
-    customersServedThisShift: 60,
     shiftClock: { started: true, isPaused: false, notifyListeners() {} },
     hud: { renderStoreStatus() {} },
     room: { zones: ZONES },
@@ -559,8 +558,10 @@ test("level-up messages do not reannounce contracts or staff already owned in ol
     clearEmployees() {},
     showGameMessage: (message) => messages.push(message),
   });
+  scene.shift = new ShiftSystem(scene);
+  scene.shift.customersServed = 60;
   state.reputation.gain(72);
-  scene.endShift();
+  scene.shift.end();
   assert.match(messages[0], /Shop Level 4 reached/);
   assert.doesNotMatch(messages[0], /Contracts unlocked|Standard Pistol Ammo|Staff unlocked/);
 });
@@ -911,7 +912,7 @@ test("manual saving stays blocked mid-shift, while starting a shift, and after a
   for (const flags of [
     { shiftClock: { started: true, isPaused: false } },
     { shiftClock: { started: true, isPaused: true } },
-    { startingShift: true },
+    { shift: { starting: true, ended: false } },
     { loadFailed: true },
   ]) {
     const { scene, writes, messages, controls } = createHarness();

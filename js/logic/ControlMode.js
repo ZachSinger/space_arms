@@ -39,7 +39,7 @@ export class ControlMode {
     );
 
     let nextMode = CONTROL_MODES.WALKING;
-    if (scene.loadFailed || scene.startingShift) nextMode = CONTROL_MODES.LOADING;
+    if (scene.loadFailed || scene.shift?.starting) nextMode = CONTROL_MODES.LOADING;
     else if (scene.shiftClock?.started && scene.shiftClock.isPaused) nextMode = CONTROL_MODES.PAUSED;
     else if (scene.fixturePlacement?.active && !placementBlocked) nextMode = CONTROL_MODES.PLACING;
     else if (scene.fixturePlacement?.active) nextMode = CONTROL_MODES.MODAL;

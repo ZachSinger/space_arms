@@ -13,11 +13,11 @@ import { startGame } from "./harness.mjs";
 const OUT = new URL("../../tests/golden-saves/", import.meta.url);
 
 async function playShortShift(h, seconds) {
-  await h.game((scene) => scene.startNextShift());
+  await h.game((scene) => scene.shift.start());
   await h.page.waitForFunction(() => window.__game.scene.getScene("scene-game").shiftClock.started);
   await h.wait(seconds * 1000);
   await h.game((scene) => { scene.shiftClock.elapsedMs = 12 * 35 * 1000 - 200; });
-  await h.page.waitForFunction(() => window.__game.scene.getScene("scene-game").shiftEnded, null, { timeout: 240000 });
+  await h.page.waitForFunction(() => window.__game.scene.getScene("scene-game").shift.ended, null, { timeout: 240000 });
 }
 
 const serialize = (h) => h.game((scene) => JSON.parse(JSON.stringify(scene.serialize())));
@@ -39,7 +39,7 @@ try {
   });
   await playShortShift(h, 45);
   await h.game((scene) => {
-    scene.endDay();
+    scene.shift.endDay();
     const itemId = scene.fixtures.shelves()[0].placements[0].itemId;
     scene.placeSupplyOrder(new Map([[itemId, 3]]));
   });

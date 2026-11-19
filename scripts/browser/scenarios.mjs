@@ -166,7 +166,7 @@ export const scenarios = {
       scene.gameState.shop.changed();
       return { shelfId: shelf.id, itemId: placement.itemId };
     });
-    await h.game((scene) => scene.startNextShift());
+    await h.game((scene) => scene.shift.start());
     const deadline = Date.now() + 90000;
     let state = null;
     while (Date.now() < deadline) {
