@@ -6,6 +6,7 @@
 // player types the total, then counts cash change from an unlimited placeholder drawer.
 
 import { UIWindow } from "./UIWindow.js";
+import { PausableTimers } from "../core/Clock.js";
 import { CheckoutRenderer, cashFaceValue, renderCurrentChange } from "./CheckoutRenderer.js";
 import {
   CashPayment, creditCentsToScrips, formatCashAmount, splitCash,
@@ -78,6 +79,7 @@ function formatCheckoutTotal(total, currency = "credits") {
 export class CheckoutWindow {
   constructor(windowManager) {
     this.windowManager = windowManager;
+    this.timers = new PausableTimers();
     const rightAlignedX =
       DESIGN_WIDTH - (DESIGN_WIDTH * CHECKOUT_WIDTH_PERCENT) / 100 - RIGHT_MARGIN_PX;
 
@@ -128,9 +130,7 @@ export class CheckoutWindow {
   }
 
   destroy() {
-    this.stopChitTimer();
-    clearTimeout(this.beltStopTimer);
-    for (const timer of this.registerTimers ?? []) clearTimeout(timer.id);
+    this.timers.clear();
     window.removeEventListener("mousedown", this.handleMouseDown);
     window.removeEventListener("mouseup", this.handleMouseUp);
     window.removeEventListener("keydown", this.handleKeyDown);
@@ -235,19 +235,11 @@ export class CheckoutWindow {
    */
   freezeMotion(frozen) {
     const animations = this.uiWindow.element.getAnimations?.({ subtree: true }) ?? [];
-    const now = Date.now();
     for (const animation of animations) {
       if (!frozen) animation.play();
     }
     if (frozen) this.pauseAnimations();
-    for (const timer of this.registerTimers ?? []) {
-      clearTimeout(timer.id);
-      if (frozen) {
-        timer.remaining = Math.max(0, timer.remaining - (now - timer.startedAt));
-      } else {
-        this.startRegisterTimer(timer);
-      }
-    }
+    this.timers.setPaused(frozen);
     // The belt's "rolling" stripes stop on a timer, so restart it from the cards' positions.
     if (!frozen && this.mode === "checkout") this.advanceBelt();
   }
@@ -258,18 +250,7 @@ export class CheckoutWindow {
    * @param {number} ms
    */
   delayRegister(callback, ms) {
-    this.registerTimers ??= new Set();
-    const timer = { callback, remaining: ms };
-    this.registerTimers.add(timer);
-    if (!this.paused) this.startRegisterTimer(timer);
-  }
-
-  startRegisterTimer(timer) {
-    timer.startedAt = Date.now();
-    timer.id = setTimeout(() => {
-      this.registerTimers.delete(timer);
-      timer.callback();
-    }, timer.remaining);
+    this.timers.after(ms, callback);
   }
 
   resume() {
@@ -377,9 +358,9 @@ export class CheckoutWindow {
       card.style.transition = `left ${seconds}s linear, border-color 0.1s ease`;
       card.style.left = `${targetX}px`;
     });
-    clearTimeout(this.beltStopTimer);
+    this.beltStopTimer?.cancel();
     belt.classList.toggle("rolling", longestSeconds > 0);
-    this.beltStopTimer = setTimeout(() => belt.classList.remove("rolling"), longestSeconds * 1000);
+    this.beltStopTimer = this.timers.after(longestSeconds * 1000, () => belt.classList.remove("rolling"));
     // A register opened during a pause waits, frozen, for the shift to resume.
     if (this.paused) this.pauseAnimations();
   }
@@ -634,20 +615,17 @@ export class CheckoutWindow {
   restartChitTimer() {
     this.stopChitTimer();
     this.chitTimeLeftMs = CHIT_KEY_TIME_MS;
-    this.chitTimerLastTick = Date.now();
     this.refreshChitTimer();
-    this.chitTimerId = setInterval(() => this.tickChitTimer(), CHIT_TIMER_TICK_MS);
+    this.chitTimer = this.timers.every(CHIT_TIMER_TICK_MS, (elapsed) => this.tickChitTimer(elapsed));
   }
 
   stopChitTimer() {
-    clearInterval(this.chitTimerId);
-    this.chitTimerId = null;
+    this.chitTimer?.cancel();
+    this.chitTimer = null;
   }
 
-  tickChitTimer() {
-    const now = Date.now();
-    const elapsed = now - this.chitTimerLastTick;
-    this.chitTimerLastTick = now;
+  /** @param {number} elapsed - running (unpaused) ms since the last tick */
+  tickChitTimer(elapsed) {
     if (this.paymentStage !== "chit") {
       this.stopChitTimer();
       return;

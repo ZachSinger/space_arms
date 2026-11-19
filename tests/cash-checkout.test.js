@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { CashPayment, getCashDenominations } from "../js/logic/CashPayment.js";
 import { ChitPayment } from "../js/logic/ChitPayment.js";
+import { PausableTimers } from "../js/core/Clock.js";
 import { cashFaceValue, CheckoutRenderer, renderCurrentChange } from "../js/logic/CheckoutRenderer.js";
 
 let server;
@@ -86,6 +87,7 @@ function harness({ cash = true, tender = 5, chit = false } = {}) {
   let penalties = 0;
   const checkout = Object.create(CheckoutWindow.prototype);
   Object.assign(checkout, {
+    timers: new PausableTimers(),
     total: 1.23, paymentStage: "total", paymentBuffer: "",
     cashPayment: cash ? new CashPayment(1.23, tender) : null,
     chitPayment: chit ? new ChitPayment(1.23, "314") : null,
@@ -138,6 +140,7 @@ test("closing a belt gap pins unscanned items before continuing at normal speed"
     },
   };
   const checkout = Object.create(CheckoutWindow.prototype);
+  checkout.timers = new PausableTimers();
   checkout.bodyElement = {
     querySelector: (selector) => selector === "#checkout-belt" ? belt : { offsetLeft: 400 },
   };
@@ -411,7 +414,7 @@ test("a third wrong Explorer Chit key in one order loses the sale", () => {
 });
 
 test("each Chit attempt gets 10 seconds; only a mistake restarts the clock", (context) => {
-  context.mock.timers.enable({ apis: ["setInterval", "Date"] });
+  context.mock.timers.enable({ apis: ["setTimeout", "Date"] });
   const h = harness({ cash: false, chit: true });
   let failed = 0;
   h.checkout.onChitFailed = () => { failed += 1; };
