@@ -1,0 +1,123 @@
+.finances-panel {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  column-gap: calc(var(--line-break) * 2);
+  row-gap: var(--line-break);
+  overflow: hidden;
+}
+
+.finances-day-list,
+.finances-receipt-scroll {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--line-break);
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.finances-loan-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--line-break);
+}
+
+.finances-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.finances-summary-card .type-h3 {
+  margin-bottom: 4px;
+}
+
+.finances-day-btn {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--font-size-11);
+  text-align: left;
+}
+
+.finances-day-net {
+  white-space: nowrap;
+}
+
+.finances-loan-card .action-btn {
+  align-self: flex-start;
+}
+
+.finances-end-day-btn,
+.finances-start-shift-btn {
+  align-self: flex-start;
+  padding: 8px 16px;
+  font-size: var(--font-size-14);
+}
+
+.finances-receipt {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.finances-section-title {
+  margin-top: 10px;
+  color: var(--color-text-main);
+  font-size: var(--font-size-18);
+  font-weight: bold;
+  letter-spacing: 1px;
+  opacity: 0.85;
+}
+
+.finances-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--font-size-14);
+  color: var(--color-text-main);
+}
+
+.finances-value {
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.finances-row.earned .finances-value {
+  color: #10b981;
+}
+
+.finances-row.spent .finances-value {
+  color: #ef4444;
+}
+
+.finances-empty {
+  font-size: var(--font-size-12);
+  color: var(--color-text-main);
+  opacity: 0.6;
+}
+
+.finances-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--color-border-subtle);
+}
+
+.finances-totals .finances-row {
+  font-size: var(--font-size-18);
+}
+
+.finances-balance {
+  margin: 10px 0;
+}
+
+.finances-balance .finances-value {
+  color: #38bdf8;
+}

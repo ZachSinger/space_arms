@@ -126,6 +126,12 @@ function createHarness() {
     querySelector: (selector) => selector === ".layout-expansions-list" ? layoutList : null,
     set innerHTML(_markup) { layoutList.scrollTop = 0; },
   };
+  const financesDayList = { scrollTop: 0 };
+  const financesPanel = {
+    contains: (element) => element !== null,
+    querySelector: (selector) => selector === ".finances-day-list" ? financesDayList : null,
+    set innerHTML(_markup) { financesDayList.scrollTop = 0; },
+  };
   const document = { activeElement: null };
   globalThis.document = document;
 
@@ -217,6 +223,7 @@ function createHarness() {
     if (selector === '[data-tab-panel="supply"]') return supplyPanel;
     if (selector === '[data-tab-panel="fixtures"]') return fixturesPanel;
     if (selector === '[data-tab-panel="layout"]') return layoutPanel;
+    if (selector === '[data-tab-panel="finances"]') return financesPanel;
     return null;
   };
   body.querySelectorAll = () => [];
@@ -491,6 +498,43 @@ test("Layout tab routes floor and backroom expansion purchases", () => {
     ["floor", "expansion_west"],
     ["backroom", "backroom_a"],
   ]);
+});
+
+test("Finances tab routes day selection and shift and loan actions", () => {
+  const { body, scene, tablet } = createHarness();
+  const calls = [];
+  scene.shift.start = () => calls.push("start");
+  scene.shift.endDay = () => { calls.push("end-day"); return true; };
+  scene.shift.takeLoan = () => calls.push("take-loan");
+  scene.shift.payOffLoan = () => calls.push("pay-off-loan");
+  tablet.uiWindow.close = () => calls.push("close");
+  const click = (selector, dataset = {}) => body.emit("click", {
+    target: Object.assign(new TestElement(), {
+      dataset,
+      closest(candidate) { return candidate === selector ? this : null; },
+    }),
+  });
+
+  click("[data-finances-day]", { financesDay: "2" });
+  assert.equal(tablet.financesTab.selectedDay, 2);
+  click("[data-finances-day]", { financesDay: "today" });
+  assert.equal(tablet.financesTab.selectedDay, null);
+  click("[data-finances-start-shift]");
+  click("[data-end-day]");
+  click("[data-take-emergency-loan]");
+  click("[data-pay-off-emergency-loan]");
+
+  assert.deepEqual(calls, ["start", "end-day", "close", "take-loan", "pay-off-loan"]);
+});
+
+test("refreshing Finances preserves the day list scroll position", () => {
+  const { tablet } = createHarness();
+  const dayList = tablet.financesTab.panel.querySelector(".finances-day-list");
+  dayList.scrollTop = 87;
+
+  tablet.refreshFinancesPanel();
+
+  assert.equal(dayList.scrollTop, 87);
 });
 
 test("opening the tablet hides checkout and closing it resumes register work", () => {

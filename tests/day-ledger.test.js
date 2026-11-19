@@ -504,6 +504,20 @@ test("the Finances tab spells out what every bit of money was for", () => {
   assert.doesNotMatch(html, /data-finances-start-shift/);
 });
 
+test("the Finances tab escapes untrusted receipt labels", () => {
+  const view = financesView();
+  view.today.earned = [{
+    category: "sales",
+    label: '<img src=x onerror="run()">',
+    amount: 25,
+    quantity: 1,
+  }];
+  const markup = FinancesRenderer.generateHTML(view);
+
+  assert.match(markup, /Sold &lt;img src=x onerror=&quot;run\(\)&quot;&gt; \(1 item\)/);
+  assert.doesNotMatch(markup, /<img src=x/);
+});
+
 test("the receipt uses short supply and fixture labels and larger earned/spent headings", async () => {
   const ledger = new DayLedger({ day: 1, openingCredits: 100, openingReputation: 0 });
   ledger.record({ category: "fixtures", label: "Starter Shelf", amount: -50 });
@@ -515,7 +529,7 @@ test("the receipt uses short supply and fixture labels and larger earned/spent h
   assert.match(html, /Fixture: Starter Shelf/);
   assert.match(html, /Supply: Rations/);
   assert.doesNotMatch(html, /Bought fixture:|Ordered Rations/);
-  const css = await readFile(new URL("../styles/space_dealer_window.css", import.meta.url), "utf8");
+  const css = await readFile(new URL("../styles/windows/finances.css", import.meta.url), "utf8");
   assert.match(css, /\.finances-section-title\s*\{[^}]*font-size:\s*var\(--font-size-18\)/s);
   assert.match(css, /\.finances-balance\s*\{[^}]*margin:\s*10px 0/s);
 });
@@ -536,7 +550,7 @@ test("all receipt totals, reputation, and customer counts use larger text", asyn
       assert.ok(sections[0].includes(label), `missing "${label}" from a totals section`);
     }
   }
-  const css = await readFile(new URL("../styles/space_dealer_window.css", import.meta.url), "utf8");
+  const css = await readFile(new URL("../styles/windows/finances.css", import.meta.url), "utf8");
   assert.match(css, /\.finances-totals\s+\.finances-row\s*\{[^}]*font-size:\s*var\(--font-size-18\)/s);
 });
 

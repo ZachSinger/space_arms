@@ -11,7 +11,7 @@ import { ContractsTab } from "./ContractsTab.js";
 import { SupplyTab } from "./SupplyTab.js";
 import { FixturesTab } from "./FixturesTab.js";
 import { LayoutTab } from "./LayoutTab.js";
-import { FinancesRenderer } from "./FinancesRenderer.js";
+import { FinancesTab } from "./FinancesTab.js";
 import { HandbookRenderer } from "./HandbookRenderer.js";
 import { FixtureHighlight } from "./FixtureHighlight.js";
 import { GAME_EVENTS } from "../core/Events.js";
@@ -76,8 +76,8 @@ export class ManagerTablet {
     this.supplyTab = new SupplyTab(scene);
     this.fixturesTab = new FixturesTab(scene);
     this.layoutTab = new LayoutTab(scene);
+    this.financesTab = new FinancesTab(scene);
     this.handbookTopic = "store";
-    this.financesDay = null; // a finished day being reviewed, or null for today
 
     const tabDefs = getTabDefs(scene);
     const tabBarHTML = tabDefs.map(
@@ -162,6 +162,23 @@ export class ManagerTablet {
         buyBackroomUpgrade: (upgradeId) => this.scene.fixtureSystem.buyBackroomUpgrade(upgradeId),
       },
     );
+    this.financesTab.bind(
+      this.bodyElement.querySelector('[data-tab-panel="finances"]'),
+      this.bodyElement,
+      () => this.renderPanelContent("finances"),
+      {
+        selectDay: (value) => {
+          this.financesTab.selectedDay = value === "today" ? null : Number(value);
+          this.financesTab.redraw();
+        },
+        endDay: () => {
+          if (this.scene.shift.endDay()) this.uiWindow.close();
+        },
+        startShift: () => this.scene.shift.start(),
+        takeLoan: () => this.scene.shift.takeLoan(),
+        payOffLoan: () => this.scene.shift.payOffLoan(),
+      },
+    );
     this.fixtureHighlight = new FixtureHighlight(scene, this.uiWindow);
     this.uiWindow.onClose = () => {
       this.fixturesTab.purchaseNotice = "";
@@ -180,18 +197,6 @@ export class ManagerTablet {
       if (handbookTopicButton) {
         this.handbookTopic = handbookTopicButton.dataset.handbookTopic;
         this.refreshHandbookPanel();
-      }
-
-      if (event.target.closest("[data-end-day]") && this.scene.shift.endDay()) this.uiWindow.close();
-      if (event.target.closest("[data-finances-start-shift]")) this.scene.shift.start();
-      if (event.target.closest("[data-take-emergency-loan]")) this.scene.shift.takeLoan();
-      if (event.target.closest("[data-pay-off-emergency-loan]")) this.scene.shift.payOffLoan();
-
-      const financesDayButton = event.target.closest("[data-finances-day]");
-      if (financesDayButton) {
-        const value = financesDayButton.dataset.financesDay;
-        this.financesDay = value === "today" ? null : Number(value);
-        this.refreshFinancesPanel();
       }
 
     });
@@ -251,9 +256,7 @@ export class ManagerTablet {
     if (tabId === "supply") return this.supplyTab.draw();
     if (tabId === "fixtures") return this.fixturesTab.draw();
     if (tabId === "layout") return this.layoutTab.draw();
-    if (tabId === "finances") {
-      return FinancesRenderer.generateHTML(this.scene.shift.financesView(), this.financesDay);
-    }
+    if (tabId === "finances") return this.financesTab.draw();
     if (tabId === "handbook") {
       return HandbookRenderer.generateHTML({
         topic: this.handbookTopic,
@@ -302,12 +305,7 @@ export class ManagerTablet {
   }
 
   refreshFinancesPanel() {
-    const panel = this.bodyElement.querySelector('[data-tab-panel="finances"]');
-    if (!panel) return;
-    const scrollTop = panel.querySelector(".finances-day-list")?.scrollTop ?? 0;
-    panel.innerHTML = this.renderPanelContent("finances");
-    const list = panel.querySelector(".finances-day-list");
-    if (list) list.scrollTop = scrollTop;
+    this.financesTab.redraw();
   }
 
   refreshHandbookPanel() {
