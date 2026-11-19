@@ -852,12 +852,12 @@ export class Customer {
         const stepping = yieldInfo.msLeft > CRATE_YIELD_WAIT_MS;
         const speed = stepping ? SPEED * CRATE_YIELD_STEP_SPEED : 0;
         this.sprite.body.setVelocity(yieldInfo.away.x * speed, yieldInfo.away.y * speed);
-        this.scene.pushCratesForCustomer?.(this, delta, { canPush: false });
+        this.scene.crateWorld?.pushCratesForCustomer?.(this, delta, { canPush: false });
         return;
       }
     }
     this.followPath(delta);
-    if (!this.isDestroyed) this.scene.pushCratesForCustomer?.(this, delta);
+    if (!this.isDestroyed) this.scene.crateWorld?.pushCratesForCustomer?.(this, delta);
   }
 
   /**

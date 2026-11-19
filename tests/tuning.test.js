@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { loadTuning } from "../js/core/Tuning.js";
 import customerTuning from "../data/tuning/customers.json" with { type: "json" };
 import checkoutTuning from "../data/tuning/checkout.json" with { type: "json" };
+import crateTuning from "../data/tuning/crates.json" with { type: "json" };
 
 const entry = (value, extra = {}) => ({ value, min: 0, max: 10, description: "A number.", ...extra });
 
@@ -30,5 +31,14 @@ test("moved tuning numbers keep their old values", () => {
   });
   assert.deepEqual({ ...loadTuning("checkout", checkoutTuning) }, {
     goBackRetryIntervalMs: 5000,
+  });
+  assert.deepEqual({ ...loadTuning("crates", crateTuning) }, {
+    maxMovedCrates: 4,
+    pushSpeedByCrateCount: [1, 0.6, 0.4, 0.25],
+    customerPushClaimMs: 150,
+    customerPushReach: 160,
+    customerCrateStuckMs: 1000,
+    customerCrateSqueezeMs: 1500,
+    physicsFrameDeltaCapMs: 50,
   });
 });

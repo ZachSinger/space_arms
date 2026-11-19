@@ -16,8 +16,7 @@ import { getFixtureTexture } from "../logic/FixtureTexture.js";
 import { ITEM_CRATE_TINTS, getItemCrateCategory } from "../logic/CrateCategory.js";
 import { Crate, INTERACT_RANGE } from "../logic/Crate.js";
 import { MAX_CARRIED_CRATES } from "../logic/CrateStack.js";
-import { solveCratePush } from "../logic/CratePushing.js";
-import { separateOverlappingCrates } from "../logic/CrateSeparation.js";
+import { CrateWorld } from "../world/CrateWorld.js";
 import { controlLabel } from "../logic/InputDevice.js";
 import { Player, PLAYER_CRATE_HOLD_OFFSET } from "../logic/Player.js";
 import { Market } from "../logic/Market.js";
@@ -107,14 +106,11 @@ export class ShelfLabScene extends Phaser.Scene {
     this.roomHeight = ROOM.rows * TILE_SIZE;
     this.physics.world.setBounds(0, 0, this.roomWidth, this.roomHeight);
     this.solids = this.physics.add.staticGroup();
-    this.crateBounds = new Phaser.Geom.Rectangle(0, 0, this.roomWidth, this.roomHeight);
-    this.crateGroup = this.physics.add.group();
-    this.physics.add.collider(this.crateGroup, this.crateGroup, (spriteA, spriteB) => {
-      for (const sprite of [spriteA, spriteB]) {
-        this.restockCrates.find((crate) => crate.sprite === sprite)?.refreshDrag();
-      }
+    this.crateWorld = new CrateWorld(this, {
+      width: this.roomWidth,
+      height: this.roomHeight,
+      colliders: [this.solids],
     });
-    this.physics.add.collider(this.crateGroup, this.solids);
     this.drawFloor();
     this.placeShelf();
     this.placeTrash();
@@ -190,10 +186,9 @@ export class ShelfLabScene extends Phaser.Scene {
   }
 
   update(_time, delta) {
-    for (const crate of this.restockCrates) crate.updateThrow(delta);
-    this.separateStuckCrates();
+    this.crateWorld.update(delta);
     this.player.update(delta);
-    this.updateCratePushing(delta);
+    this.crateWorld.updateCratePushing(delta);
     this.syncCarriedCrates();
     if (this.hold && this.hold.slot !== null) {
       this.hold.timer -= delta;
@@ -458,45 +453,6 @@ export class ShelfLabScene extends Phaser.Scene {
     this.syncCarriedCrates();
     this.lastEvent = "Threw the empty crate in the trash.";
     this.refresh();
-  }
-
-  // Loose crates get pushed when the player walks into them, as in the shop.
-  updateCratePushing(delta) {
-    const body = this.player.sprite.body;
-    const rectOf = (b) => ({ left: b.x, top: b.y, width: b.width, height: b.height });
-    const crates = this.restockCrates
-      .filter((crate) => crate.isPushed || crate.isStationary() || crate.isSliding())
-      .map((crate) => ({ key: crate, rect: rectOf(crate.sprite.body), locked: false }));
-    const { playerVelocity, crateVelocities } = solveCratePush({
-      player: rectOf(body),
-      velocity: body.velocity,
-      dt: Math.min(delta, 50) / 1000,
-      crates,
-      isBlocked: (rect) => this.isCrateSpaceBlocked(rect),
-    });
-    body.setVelocity(playerVelocity.x, playerVelocity.y);
-    for (const crate of this.restockCrates) {
-      const velocity = crateVelocities.get(crate);
-      if (velocity && (velocity.x || velocity.y)) crate.push(velocity);
-      else if (crate.isPushed) crate.stopPush();
-    }
-  }
-
-  // Pull apart crates that a fast throw pushed into each other.
-  separateStuckCrates() {
-    const crates = this.restockCrates
-      .filter((crate) => crate.sprite.body?.enable)
-      .map((crate) => {
-        const b = crate.sprite.body;
-        return { key: crate, rect: { left: b.x, top: b.y, width: b.width, height: b.height }, locked: false };
-      });
-    const offsets = separateOverlappingCrates(crates, (_crate, rect) => this.isCrateSpaceBlocked(rect));
-    for (const [crate, offset] of offsets) crate.nudge(offset.x, offset.y);
-  }
-
-  isCrateSpaceBlocked({ left, top, width, height }) {
-    if (left < 0 || top < 0 || left + width > this.roomWidth || top + height > this.roomHeight) return true;
-    return this.physics.overlapRect(left, top, width, height, false, true).some((b) => b.enable);
   }
 
   // --- Up-close shelf ---

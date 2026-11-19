@@ -26,6 +26,7 @@ let SupplySystem;
 let FixtureSystem;
 let FixtureViews;
 let CheckoutSystem;
+let CrateWorld;
 const originalPhaser = globalThis.Phaser;
 
 before(async () => {
@@ -61,6 +62,7 @@ before(async () => {
   ({ FixtureSystem } = await server.ssrLoadModule("/js/systems/FixtureSystem.js"));
   ({ FixtureViews } = await server.ssrLoadModule("/js/world/FixtureViews.js"));
   ({ CheckoutSystem } = await server.ssrLoadModule("/js/systems/CheckoutSystem.js"));
+  ({ CrateWorld } = await server.ssrLoadModule("/js/world/CrateWorld.js"));
 });
 
 after(async () => {
@@ -103,6 +105,7 @@ function createHarness({ carrying = false } = {}) {
   scene.supply = new SupplySystem(scene, null);
   scene.areas = testAreas(scene);
   scene.floorStacks = new Map();
+  scene.crateWorld = Object.assign(Object.create(CrateWorld.prototype), { shop: scene });
   scene.markedStackBase = null;
   scene.markedFromTop = 0;
   scene.cratePress = null;
@@ -140,6 +143,70 @@ function createHarness({ carrying = false } = {}) {
   GameScene.prototype.registerInteractableSources.call(scene);
   return { scene, messages, handlers, removedCaptures };
 }
+
+test("CrateWorld registers wall, pad, and customer physics", () => {
+  const previousPhaser = globalThis.Phaser;
+  const crateGroup = {};
+  const padBarrier = {};
+  const colliders = [];
+  let overlapCallback;
+  let hit;
+  globalThis.Phaser = {
+    ...previousPhaser,
+    Geom: { Rectangle: class Rectangle {
+      constructor(x, y, width, height) {
+        Object.assign(this, { x, y, width, height, left: x, top: y, right: x + width, bottom: y + height });
+      }
+    } },
+  };
+  const scene = {
+    restockCrates: [],
+    customers: [],
+    add: { zone: () => padBarrier },
+    physics: {
+      add: {
+        group: () => crateGroup,
+        collider: (...args) => colliders.push(args),
+        existing: () => {},
+        overlap: (_crateGroup, _customerGroup, callback) => { overlapCallback = callback; },
+      },
+    },
+  };
+  try {
+    new CrateWorld(scene, {
+      width: 400,
+      height: 300,
+      colliders: ["walls", "fixtures"],
+      padRect: { centerX: 80, centerY: 240 },
+      customerGroup: {},
+      onCustomerHit: (customer, crate) => { hit = { customer, crate }; },
+    });
+  } finally {
+    globalThis.Phaser = previousPhaser;
+  }
+
+  assert.equal(scene.crateGroup, crateGroup);
+  assert.deepEqual({ ...scene.crateBounds }, {
+    x: 0, y: 0, width: 400, height: 300, left: 0, top: 0, right: 400, bottom: 300,
+  });
+  assert.equal(colliders[0][0], crateGroup);
+  assert.equal(colliders[0][1], crateGroup);
+  assert.equal(colliders[1][1], "walls");
+  assert.equal(colliders[2][1], "fixtures");
+  const padFilter = colliders.find(([, target]) => target === padBarrier)[3];
+  const locked = { sprite: {}, lockedToPad: true };
+  const loose = { sprite: {}, lockedToPad: false };
+  scene.restockCrates = [locked, loose];
+  assert.equal(padFilter(locked.sprite), false);
+  assert.equal(padFilter(loose.sprite), true);
+
+  const customer = { sprite: {} };
+  const crate = { sprite: {}, itemId: "item", tryHitCustomer: () => true };
+  scene.customers = [customer];
+  scene.restockCrates = [crate];
+  overlapCallback(crate.sprite, customer.sprite);
+  assert.deepEqual(hit, { customer, crate });
+});
 
 // A 40px crate on the floor `distance` px to the right of the player's middle (in front of
 // him while he faces right).
@@ -1031,10 +1098,10 @@ test("a floor stack is as heavy as its height, and you never move more than 4 cr
     setVelocity(x, y) { this.velocity = { x, y }; },
   };
   h.scene.player.sprite.body = body;
-  h.scene.isCrateSpaceBlocked = () => false;
+  h.scene.crateWorld.isCrateSpaceBlocked = () => false;
   const push = () => {
     body.velocity = { x: 160, y: 0 };
-    h.scene.updateCratePushing(16);
+    h.scene.crateWorld.updateCratePushing(16);
     return body.velocity.x;
   };
   const makeBase = () => {
@@ -1077,19 +1144,19 @@ test("carrying a crate still blocks overlapping pad crates and pushes loose crat
   };
   scene.player.sprite.body = body;
   scene.restockCrates = [groundCrate];
-  scene.isCrateSpaceBlocked = () => false;
+  scene.crateWorld.isCrateSpaceBlocked = () => false;
 
-  scene.updateCratePushing(16);
+  scene.crateWorld.updateCratePushing(16);
   assert.deepEqual(body.velocity, { x: 0, y: 0 });
   assert.equal(groundCrate.pushedVelocity, undefined);
   body.velocity = { x: -160, y: 0 };
-  scene.updateCratePushing(16);
+  scene.crateWorld.updateCratePushing(16);
   assert.deepEqual(body.velocity, { x: -160, y: 0 });
 
   body.x = 77;
   body.velocity = { x: 160, y: 0 };
   groundCrate.lockedToPad = false;
-  scene.updateCratePushing(16);
+  scene.crateWorld.updateCratePushing(16);
   assert.equal(body.velocity.x, 64, "the crate in his hands makes it heavier to push");
   assert.deepEqual(groundCrate.pushedVelocity, { x: 64, y: 0 });
   assert.ok(scene.carriedCrate);
@@ -1189,11 +1256,10 @@ test("three carried crates stay straight while the player moves and reverses dir
   Object.assign(h.scene, {
     handleGamepad() {},
     fixturePlacement: { active: false, update() {} },
-    separateStuckCrates() {},
+    crateWorld: { update() {}, updateCratePushing() {} },
     storeDoorAnimation: { update() {} },
     shiftClock: { isPaused: false, started: false, softClosed: false, update() {} },
     shift: { starting: false, ended: false, update() {} },
-    updateCratePushing() {},
     hud: { renderStamina() {} },
     positionGoBacksBadge() {},
     updateCrateHint() {},
@@ -1231,11 +1297,10 @@ test("the game updates player and crate movement during placement without unfree
   Object.assign(scene, {
     handleGamepad() {},
     fixturePlacement: { active: true, update() {} },
-    separateStuckCrates() {},
+    crateWorld: { update() {}, updateCratePushing() { crateUpdates += 1; } },
     storeDoorAnimation: { update() {} },
     shiftClock: { isPaused: true, started: false, softClosed: false, update() {} },
     shift: { starting: false, ended: false, update() {} },
-    updateCratePushing() { crateUpdates += 1; },
     hud: { renderStamina() {} },
     positionGoBacksBadge() {},
     updateCrateHint() {},

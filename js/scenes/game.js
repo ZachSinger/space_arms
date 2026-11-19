@@ -29,12 +29,10 @@ import {
 } from "../logic/CrateStack.js";
 import { CrateFooter } from "../logic/CrateFooter.js";
 import { getCrateOrderQuantity } from "../logic/SupplyOrder.js";
-import { findCratePushRival, solveCratePush } from "../logic/CratePushing.js";
-import { separateOverlappingCrates } from "../logic/CrateSeparation.js";
 import { TileRoom } from "../logic/TileRoom.js";
 import { SlidingDoor } from "../logic/SlidingDoor.js";
 import {
-  TILE_SIZE, getZone, getAuthoredGridSize, getStoreDoorCell, getStoreDoorCells, EXPANSION_ORDER,
+  TILE_SIZE, getZone, getStoreDoorCell, getStoreDoorCells, EXPANSION_ORDER,
   getLoadingPadBounds, LOADING_PAD_WIDTH, LOADING_PAD_HEIGHT,
 } from "../logic/RoomLayout.js";
 import { ShiftClock } from "../logic/ShiftClock.js";
@@ -59,6 +57,7 @@ import { FixtureSystem } from "../systems/FixtureSystem.js";
 import { SupplySystem } from "../systems/SupplySystem.js";
 import { CustomerFlow } from "../systems/CustomerFlow.js";
 import { CheckoutSystem } from "../systems/CheckoutSystem.js";
+import { CrateWorld } from "../world/CrateWorld.js";
 import { CheckoutWindow } from "../logic/CheckoutWindow.js";
 import { GamepadInput, PAD } from "../logic/GamepadInput.js";
 import { UINavigator } from "../logic/UINavigator.js";
@@ -107,11 +106,6 @@ function segmentIntersectsRectangle(from, to, rectangle) {
 
 // Reputation lost when a thrown crate hits a customer.
 const CRATE_HIT_REPUTATION_PENALTY = 1;
-// Customers only consider crates this close (px) when shoving through.
-const CUSTOMER_PUSH_REACH = 160;
-// A customer held back by a crate that won't move this long (ms) squeezes past it for a moment.
-const CUSTOMER_CRATE_STUCK_MS = 1000;
-const CUSTOMER_CRATE_SQUEEZE_MS = 1500;
 // People sort by feet position above this; the tallest map (about 6,800 pixels) stays below
 // the 9,000+ layer used for speech bubbles, prompts, and gauges.
 const PEOPLE_DEPTH_BASE = 2000;
@@ -304,40 +298,16 @@ export class GameScene extends Phaser.Scene {
       LOADING_PAD_HEIGHT,
     ));
     this.supply.drawPad();
-    const { gridW, gridH } = getAuthoredGridSize();
-    this.crateBounds = new Phaser.Geom.Rectangle(0, 0, gridW * TILE_SIZE, gridH * TILE_SIZE);
-    this.crateGroup = this.physics.add.group();
-    this.physics.add.collider(this.crateGroup, this.crateGroup, (spriteA, spriteB) => {
-      for (const sprite of [spriteA, spriteB]) {
-        this.restockCrates.find((crate) => crate.sprite === sprite)?.refreshDrag();
-      }
-    });
-    this.physics.add.collider(this.crateGroup, this.room.wallGroup);
-    this.physics.add.collider(this.crateGroup, this.obstacleGroup);
-    this.physics.add.collider(this.crateGroup, this.registerGroup);
-    // Loose crates bounce off the loading pad; only the deliveries locked onto it sit inside.
-    // The player and customers walk over it freely.
-    const padBarrier = this.add.zone(
-      this.supply.padRect.centerX,
-      this.supply.padRect.centerY,
-      LOADING_PAD_WIDTH,
-      LOADING_PAD_HEIGHT,
-    );
-    this.physics.add.existing(padBarrier, true);
-    this.physics.add.collider(this.crateGroup, padBarrier, null, (crateSprite) =>
-      !this.restockCrates.find((crate) => crate.sprite === crateSprite)?.lockedToPad);
-    // Overlap rather than collide, so thrown crates hit customers without blocking their paths.
-    this.physics.add.overlap(this.crateGroup, this.customerGroup, (crateSprite, customerSprite) => {
-      const crate = this.restockCrates.find((candidate) => candidate.sprite === crateSprite);
-      const customer = this.customers.find((candidate) => candidate.sprite === customerSprite);
-      if (crate && customer && crate.tryHitCustomer(customer)) {
-        this.eventBus.emit(GAME_EVENTS.CUSTOMER_HIT_BY_CRATE, {
-          customer,
-          itemId: crate.itemId,
-        });
-      }
-    });
     this.restockCrates = []; // uncarried crates, at the Loading Pad or dropped on the floor
+    this.crateWorld = new CrateWorld(this, {
+      colliders: [this.room.wallGroup, this.obstacleGroup, this.registerGroup],
+      padRect: this.supply.padRect,
+      customerGroup: this.customerGroup,
+      onCustomerHit: (customer, crate) => this.eventBus.emit(GAME_EVENTS.CUSTOMER_HIT_BY_CRATE, {
+        customer,
+        itemId: crate.itemId,
+      }),
+    });
     this.carriedCrate = null; // the uppermost carried crate, used for the next action
     this.carriedCrates = [];
     // Floor stacks: a bottom crate (in restockCrates) -> the crates sitting on it, lowest first.
@@ -2118,158 +2088,6 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * The player bumps into crates: loose resting crates get pushed (slowing the player),
-   * loading pad crates act like walls. Crates still being launched by a throw are ignored.
-   * A floor stack is as heavy as its height, and whatever the player carries adds to the load;
-   * he can never move more than MAX_MOVED_CRATES in total.
-   * @param {number} delta - ms since last frame
-   */
-  updateCratePushing(delta) {
-    const body = this.player.sprite.body;
-    const rectOf = (b) => ({ left: b.x, top: b.y, width: b.width, height: b.height });
-    const holding = this.getCarriedCrates().length;
-    const crates = this.restockCrates
-      .filter((crate) => crate.lockedToPad || crate.isPushed || crate.isStationary() || crate.isSliding())
-      .map((crate) => ({
-        key: crate,
-        rect: rectOf(crate.sprite.body),
-        weight: 1 + (this.floorStacks.get(crate)?.length ?? 0),
-        locked: crate.lockedToPad,
-      }));
-    const { playerVelocity, crateVelocities } = solveCratePush({
-      player: rectOf(body),
-      velocity: body.velocity,
-      dt: Math.min(delta, 50) / 1000,
-      crates,
-      isBlocked: (rect) => this.isCrateSpaceBlocked(rect),
-      carriedWeight: holding,
-    });
-    body.setVelocity(playerVelocity.x, playerVelocity.y);
-    for (const crate of this.restockCrates) {
-      const velocity = crateVelocities.get(crate);
-      if (velocity && (velocity.x || velocity.y)) crate.push(velocity);
-      else if (crate.isPushed) crate.stopPush();
-    }
-  }
-
-  /**
-   * A walking customer shoves loose crates out of their way, however heavy. Called right after
-   * the customer picks this frame's velocity. If someone further from their destination is
-   * already pushing the same crates, this customer gives way instead. A crate jammed so it
-   * can't move would trap them, so after a second of that they squeeze past for a moment.
-   * @param {import("../logic/Customer.js").Customer} customer
-   * @param {number} delta - ms
-   * @param {{ canPush?: boolean }} [options] - false while stepping aside: crates block instead
-   */
-  pushCratesForCustomer(customer, delta, { canPush = true } = {}) {
-    const body = customer.sprite.body;
-    if (!body) return;
-    if (customer.crateSqueezeMs > 0) {
-      customer.crateSqueezeMs -= delta;
-      return;
-    }
-    const intended = { x: body.velocity.x, y: body.velocity.y };
-    const intendedSpeed = Math.hypot(intended.x, intended.y);
-    if (!intendedSpeed) {
-      customer.crateStuckMs = 0;
-      return;
-    }
-    const rectOf = (b) => ({ left: b.x, top: b.y, width: b.width, height: b.height });
-    const center = body.center;
-    const crates = this.restockCrates
-      .filter((crate) => !crate.lockedToPad && crate.sprite.body?.enable &&
-        (crate.isPushed || crate.isStationary() || crate.isSliding()) &&
-        Math.hypot(crate.sprite.x - center.x, crate.sprite.y - center.y) < CUSTOMER_PUSH_REACH)
-      .map((crate) => ({
-        key: crate,
-        rect: rectOf(crate.sprite.body),
-        weight: 1 + (this.floorStacks.get(crate)?.length ?? 0),
-        locked: false,
-      }));
-    if (!crates.length) {
-      customer.crateStuckMs = 0;
-      return;
-    }
-    const { playerVelocity, crateVelocities } = solveCratePush({
-      player: rectOf(body),
-      velocity: intended,
-      dt: Math.min(delta, 50) / 1000,
-      crates,
-      isBlocked: (rect) => this.isCrateSpaceBlocked(rect),
-      maxMoved: canPush ? Infinity : 0,
-    });
-    const moved = [...crateVelocities].filter(([, v]) => v.x || v.y);
-    const distance = customer.remainingWalkDistance();
-    const now = this.time.now;
-    const rival = findCratePushRival({
-      customer,
-      distance,
-      now,
-      crates: moved.map(([crate]) => crate),
-      isActive: (other) => !other.isDestroyed && !other.crateYield,
-    });
-    if (rival) {
-      const crate = moved.find(([candidate]) => candidate.customerPushClaim === rival)[0];
-      customer.giveWayToCratePush(this.stepAsideFrom(customer, crate, rival.velocity));
-      return;
-    }
-    body.setVelocity(playerVelocity.x, playerVelocity.y);
-    for (const [crate, velocity] of moved) {
-      crate.push(velocity);
-      crate.customerPushClaim = { customer, distance, time: now, velocity };
-    }
-    const blocked = Math.hypot(playerVelocity.x, playerVelocity.y) < intendedSpeed * 0.3;
-    customer.crateStuckMs = canPush && blocked ? (customer.crateStuckMs ?? 0) + delta : 0;
-    if (customer.crateStuckMs > CUSTOMER_CRATE_STUCK_MS) {
-      customer.crateStuckMs = 0;
-      customer.crateSqueezeMs = CUSTOMER_CRATE_SQUEEZE_MS;
-      body.setVelocity(intended.x, intended.y);
-    }
-  }
-
-  // Unit direction for a customer to step out of the path of a crate someone else is pushing.
-  stepAsideFrom(customer, crate, crateVelocity) {
-    const center = customer.sprite.body.center;
-    const offset = { x: center.x - crate.sprite.x, y: center.y - crate.sprite.y };
-    const speed = Math.hypot(crateVelocity?.x ?? 0, crateVelocity?.y ?? 0);
-    let away = offset;
-    if (speed) {
-      const side = { x: -crateVelocity.y / speed, y: crateVelocity.x / speed };
-      away = side.x * offset.x + side.y * offset.y >= 0 ? side : { x: -side.x, y: -side.y };
-    }
-    const length = Math.hypot(away.x, away.y);
-    return length ? { x: away.x / length, y: away.y / length } : { x: 0, y: 0 };
-  }
-
-  /**
-   * Pull apart loose crates that sank into each other (fast throws can push them past
-   * Arcade's collision), so crates never end up stacked on top of one another.
-   */
-  separateStuckCrates() {
-    const crates = this.restockCrates
-      .filter((crate) => crate.sprite.body?.enable)
-      .map((crate) => {
-        const b = crate.sprite.body;
-        return { key: crate, rect: { left: b.x, top: b.y, width: b.width, height: b.height }, locked: crate.lockedToPad };
-      });
-    const offsets = separateOverlappingCrates(crates, (_crate, rect) => this.isCrateSpaceBlocked(rect));
-    for (const [crate, offset] of offsets) crate.nudge(offset.x, offset.y);
-  }
-
-  /**
-   * Whether a pushed crate would leave the map or overlap a static body.
-   * @param {{ left: number, top: number, width: number, height: number }} rect - px
-   */
-  isCrateSpaceBlocked({ left, top, width, height }) {
-    const bounds = this.crateBounds;
-    if (left < bounds.left || top < bounds.top || left + width > bounds.right || top + height > bounds.bottom) {
-      return true;
-    }
-    // Static bodies: walls, fixtures, the register, and the loading pad barrier.
-    return this.physics.overlapRect(left, top, width, height, false, true).some((b) => b.enable);
-  }
-
   // Space picks up and Q puts down. Each waits for release to tell a tap (one crate) from a
   // hold (a stack); a hold fires as soon as the key has been down for HOLD_KEY_MS.
   bindCrateKeys() {
@@ -2448,8 +2266,7 @@ export class GameScene extends Phaser.Scene {
     this.handleGamepad(time, delta);
     if (this.controlMode.getMode() !== CONTROL_MODES.PAUSED) this.fixturePlacement.update();
     this.debugTools?.update();
-    for (const crate of this.restockCrates) crate.updateThrow(delta);
-    this.separateStuckCrates();
+    this.crateWorld.update(delta);
     // The front door opens only for customers: arrivals hold it open themselves, and
     // leaving customers open it on approach. It ignores the player.
     this.storeDoorAnimation.update(delta, [
@@ -2471,7 +2288,7 @@ export class GameScene extends Phaser.Scene {
       for (const crate of this.restockCrates) if (crate.isPushed) crate.stopPush();
     } else {
       this.player.update(delta);
-      this.updateCratePushing(delta);
+      this.crateWorld.updateCratePushing(delta);
       this.syncCarriedCrate();
       this.syncFloorStacks();
     }

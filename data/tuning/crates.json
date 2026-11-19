@@ -1,0 +1,49 @@
+{
+  "maxMovedCrates": {
+    "value": 4,
+    "min": 1,
+    "max": 8,
+    "integer": true,
+    "description": "Most crates the player can move at once, counting what they carry."
+  },
+  "pushSpeedByCrateCount": {
+    "value": [1, 0.6, 0.4, 0.25],
+    "min": 0.1,
+    "max": 1,
+    "description": "Player movement speed when pushing that many crates."
+  },
+  "customerPushClaimMs": {
+    "value": 150,
+    "min": 10,
+    "max": 1000,
+    "integer": true,
+    "description": "How long a shopper's claim on crates lasts without renewal."
+  },
+  "customerPushReach": {
+    "value": 160,
+    "min": 32,
+    "max": 320,
+    "description": "How close a loose crate must be before a walking shopper can push it."
+  },
+  "customerCrateStuckMs": {
+    "value": 1000,
+    "min": 100,
+    "max": 5000,
+    "integer": true,
+    "description": "How long a shopper waits before squeezing past a crate that will not move."
+  },
+  "customerCrateSqueezeMs": {
+    "value": 1500,
+    "min": 100,
+    "max": 5000,
+    "integer": true,
+    "description": "How long a shopper squeezes past after getting stuck behind a crate."
+  },
+  "physicsFrameDeltaCapMs": {
+    "value": 50,
+    "min": 10,
+    "max": 100,
+    "integer": true,
+    "description": "Maximum time step used when resolving crate pushes after a long frame."
+  }
+}

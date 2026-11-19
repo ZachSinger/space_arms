@@ -3,11 +3,14 @@
 // ==========================================
 // Walking into a crate pushes it: dead-on moves it straight, off-center turns it sideways.
 // Pushed crates push others and each slows the player; a crate that can't move blocks.
+import { loadTuning } from "../core/Tuning.js";
+import crateTuning from "../../data/tuning/crates.json" with { type: "json" };
 
+export const CRATE_TUNING = loadTuning("crates", crateTuning);
 // Player speed multiplier by number of crates being pushed at once (index = count).
-export const PUSH_SPEED_BY_CRATE_COUNT = [1, 0.6, 0.4, 0.25];
+export const PUSH_SPEED_BY_CRATE_COUNT = CRATE_TUNING.pushSpeedByCrateCount;
 // Most crates the player can move at once: everything pushed plus everything carried.
-export const MAX_MOVED_CRATES = 4;
+export const MAX_MOVED_CRATES = CRATE_TUNING.maxMovedCrates;
 // px; reach() extends motion by this so touching counts as contact.
 const CONTACT_SKIN = 2;
 const EPSILON = 0.001;
@@ -175,7 +178,7 @@ export function solveCratePush({
 }
 
 // How long (ms) a customer's claim on the crates they're pushing lasts without renewal.
-export const CUSTOMER_PUSH_CLAIM_MS = 150;
+export const CUSTOMER_PUSH_CLAIM_MS = CRATE_TUNING.customerPushClaimMs;
 
 /**
  * Two customers shoving the same crates: whoever is further from their destination keeps
