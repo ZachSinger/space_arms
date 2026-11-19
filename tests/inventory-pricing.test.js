@@ -15,6 +15,7 @@ let server;
 let ManagerTablet;
 let SupplyTab;
 let EmployeeTab;
+let FixturesTab;
 let GameState;
 let cacheDirectory;
 const originalDocument = globalThis.document;
@@ -63,6 +64,7 @@ before(async () => {
   ({ ManagerTablet } = await server.ssrLoadModule("/js/logic/ManagerTablet.js"));
   ({ SupplyTab } = await server.ssrLoadModule("/js/logic/SupplyTab.js"));
   ({ EmployeeTab } = await server.ssrLoadModule("/js/logic/EmployeeTab.js"));
+  ({ FixturesTab } = await server.ssrLoadModule("/js/logic/FixturesTab.js"));
   ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));
 });
 
@@ -103,6 +105,18 @@ function createHarness() {
   const contractsPanel = {
     contains: (element) => element !== null,
     set innerHTML(markup) { this.markup = markup; },
+  };
+  const fixtureLists = {
+    ".fixtures-catalog-list": { scrollTop: 0 },
+    ".fixtures-owned-list": { scrollTop: 0 },
+  };
+  const fixturesPanel = {
+    contains: (element) => element !== null,
+    querySelector: (selector) => fixtureLists[selector] ?? null,
+    set innerHTML(markup) {
+      this.markup = markup;
+      for (const list of Object.values(fixtureLists)) list.scrollTop = 0;
+    },
   };
   const document = { activeElement: null };
   globalThis.document = document;
@@ -193,6 +207,7 @@ function createHarness() {
     if (selector === '[data-tab-panel="employee"]') return employeePanel;
     if (selector === '[data-tab-panel="contracts"]') return contractsPanel;
     if (selector === '[data-tab-panel="supply"]') return supplyPanel;
+    if (selector === '[data-tab-panel="fixtures"]') return fixturesPanel;
     return null;
   };
   body.querySelectorAll = () => [];
@@ -417,6 +432,35 @@ test("Contracts tab routes signing to the tablet contract action", () => {
   assert.deepEqual(signed, ["lic_start_rations"]);
 });
 
+test("Fixtures tab routes purchase, move, and crate actions", () => {
+  const { body, scene, tablet } = createHarness();
+  const calls = [];
+  scene.fixtureSystem.buy = (typeId) => { calls.push(["buy", typeId]); return true; };
+  scene.fixtureSystem.crate = (fixtureId) => calls.push(["crate", fixtureId]);
+  scene.fixturePlacement = { begin: (fixtureId) => calls.push(["move", fixtureId]) };
+  const control = (attribute, key, value) => Object.assign(new TestElement(), {
+    dataset: { [key]: value },
+    closest(selector) { return selector === attribute ? this : null; },
+  });
+
+  body.emit("click", {
+    target: control("[data-buy-fixture-id]", "buyFixtureId", "shelf_budget_2x2"),
+  });
+  body.emit("click", {
+    target: control("[data-move-fixture-id]", "moveFixtureId", "fixture-1"),
+  });
+  body.emit("click", {
+    target: control("[data-crate-fixture-id]", "crateFixtureId", "fixture-1"),
+  });
+
+  assert.deepEqual(calls, [
+    ["buy", "shelf_budget_2x2"],
+    ["move", "fixture-1"],
+    ["crate", "fixture-1"],
+  ]);
+  assert.match(tablet.fixturesTab.purchaseNotice, /Bought BUDGET SHELF 2x2/);
+});
+
 test("opening the tablet hides checkout and closing it resumes register work", () => {
   const { scene, tablet } = createHarness();
   const calls = [];
@@ -425,12 +469,12 @@ test("opening the tablet hides checkout and closing it resumes register work", (
   tablet.uiWindow.openWindow = () => calls.push("tablet-open");
   tablet.openWindow();
   assert.deepEqual(calls, ["tablet-open", "suspend"]);
-  tablet.fixturePurchaseNotice = "Bought a fixture.";
-  tablet.fixtureSaleConfirmation = { name: "BUDGET SHELF 2x4" };
+  tablet.fixturesTab.purchaseNotice = "Bought a fixture.";
+  tablet.fixturesTab.saleConfirmation = { name: "BUDGET SHELF 2x4" };
   tablet.uiWindow.onClose();
   assert.deepEqual(calls, ["tablet-open", "suspend", "resume"]);
-  assert.equal(tablet.fixturePurchaseNotice, "");
-  assert.equal(tablet.fixtureSaleConfirmation, null);
+  assert.equal(tablet.fixturesTab.purchaseNotice, "");
+  assert.equal(tablet.fixturesTab.saleConfirmation, null);
 });
 
 test("reopening the tablet refreshes the employee panel", () => {
@@ -666,6 +710,7 @@ test("lower funds reject additions but never prevent removing crates from the or
 
 test("fixture sale confirmations identify the chosen fixture or crate", () => {
   const tablet = Object.create(ManagerTablet.prototype);
+  tablet.fixturesTab = { purchaseNotice: "", saleConfirmation: null };
   const shelf = { id: "shelf_2", type: "shelf_budget_2x4" };
   const crate = { kind: "fixture", typeId: "shelf_budget_2x4" };
   tablet.scene = {
@@ -674,15 +719,16 @@ test("fixture sale confirmations identify the chosen fixture or crate", () => {
   };
   tablet.refreshLayoutPanels = () => {};
   tablet.prepareFixtureSale("placed", shelf);
-  assert.equal(tablet.fixtureSaleConfirmation.name, "BUDGET SHELF 2x4");
-  assert.equal(tablet.fixtureSaleConfirmation.value, 150);
+  assert.equal(tablet.fixturesTab.saleConfirmation.name, "BUDGET SHELF 2x4");
+  assert.equal(tablet.fixturesTab.saleConfirmation.value, 150);
   tablet.prepareFixtureSale("crate", crate);
-  assert.equal(tablet.fixtureSaleConfirmation.name, "BUDGET SHELF 2x4 crate");
-  assert.equal(tablet.fixtureSaleConfirmation.value, 150);
+  assert.equal(tablet.fixturesTab.saleConfirmation.name, "BUDGET SHELF 2x4 crate");
+  assert.equal(tablet.fixturesTab.saleConfirmation.value, 150);
 });
 
 test("a removed fixture cannot be sold through an old confirmation", () => {
   const tablet = Object.create(ManagerTablet.prototype);
+  tablet.fixturesTab = { purchaseNotice: "", saleConfirmation: null };
   const shelf = { id: "shelf_2", type: "shelf_budget_2x4" };
   const messages = [];
   tablet.scene = {
@@ -693,7 +739,7 @@ test("a removed fixture cannot be sold through an old confirmation", () => {
   tablet.refreshLayoutPanels = () => {};
   tablet.prepareFixtureSale("placed", shelf);
   tablet.confirmFixtureSale();
-  assert.equal(tablet.fixtureSaleConfirmation, null);
+  assert.equal(tablet.fixturesTab.saleConfirmation, null);
   assert.match(messages[0], /no longer available/);
 });
 
@@ -710,6 +756,9 @@ test("refreshing fixture panels preserves list scroll positions", () => {
   const fixtures = makePanel({ ".fixtures-catalog-list": 137, ".fixtures-owned-list": 61 });
   const layout = makePanel({ ".layout-expansions-list": 23 });
   const tablet = Object.create(ManagerTablet.prototype);
+  tablet.fixturesTab = new FixturesTab({});
+  tablet.fixturesTab.panel = fixtures;
+  tablet.fixturesTab.renderPanel = () => "";
   tablet.bodyElement = {
     querySelector: (selector) => selector.includes('"fixtures"') ? fixtures : layout,
   };

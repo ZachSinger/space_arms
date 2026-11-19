@@ -787,7 +787,6 @@ button {
   margin-top: 4px;
 }
 
-.fixtures-panel,
 .finances-panel,
 .handbook-panel {
   flex: 1;
@@ -804,32 +803,6 @@ button {
   grid-template-columns: minmax(0, 0.55fr) minmax(0, 1.45fr);
 }
 
-.fixtures-panel-single {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.fixtures-panel-heading {
-  min-width: 0;
-  display: flex;
-  align-items: flex-start;
-}
-
-.fixtures-panel-divider {
-  grid-column: 1 / -1;
-}
-
-.fixtures-section {
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--line-break);
-}
-
-.fixtures-catalog-list,
-.fixtures-owned-list,
-.layout-expansions-list,
-.layout-fixture-list,
 .finances-day-list,
 .finances-receipt-scroll {
   flex: 1;
@@ -839,115 +812,6 @@ button {
   gap: var(--line-break);
   padding: 10px;
   overflow-y: auto;
-}
-
-.layout-zone-heading {
-  margin-top: var(--line-break);
-}
-
-.layout-zone-heading:first-child {
-  margin-top: 0;
-}
-
-.fixture-sale-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: calc(var(--line-break) * 2);
-}
-
-.fixture-sale-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.fixture-sale-action {
-  flex: 0 0 calc(132px * var(--text-scale));
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--line-break);
-  text-align: right;
-}
-
-.fixture-sale-action button {
-  width: 100%;
-}
-
-.fixture-sale-price {
-  font-weight: bold;
-}
-
-.fixture-locked-note,
-.fixture-block-reason {
-  color: #f59e0b;
-}
-
-.fixture-owned-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.fixture-owned-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.fixture-owned-header .type-h3 {
-  overflow-wrap: anywhere;
-}
-
-.fixture-owned-header > span {
-  white-space: nowrap;
-}
-
-.fixture-owned-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.fixtures-crates-heading {
-  margin-top: var(--line-break);
-}
-
-.fixtures-empty {
-  color: var(--color-text-muted);
-  padding: 10px;
-}
-
-.layout-purchase-notice {
-  margin: 6px 0;
-  padding: 6px 8px;
-  border: 1px solid #4ade80;
-  background: rgba(34, 197, 94, 0.12);
-  color: #4ade80;
-  font-weight: bold;
-}
-
-.layout-sale-confirmation {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 6px 0;
-  padding: 8px;
-  border: 1px solid #f59e0b;
-}
-
-.layout-fixture-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
 }
 
 .shelf-stocking-status:empty {

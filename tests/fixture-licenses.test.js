@@ -293,6 +293,33 @@ test("fixture purchases list each fixture with its price and a buy button", () =
   assert.doesNotMatch(html, /credits|floor tiles/);
 });
 
+test("the Fixtures tab escapes fixture names and action attributes", () => {
+  const scene = {
+    fixtures: { all: () => [] },
+    fixtureSystem: {
+      canRearrange: () => true,
+      purchaseOptions: () => [{
+        spec: {
+          id: 'shelf" onclick="run()',
+          name: '<img src=x onerror="run()">',
+          price: 75,
+        },
+        license: { name: "<svg onload='run()'>" },
+        licensed: false,
+        canAfford: true,
+        hasDeliverySpace: true,
+      }],
+    },
+  };
+  const html = LayoutRenderer.generateHTML(scene, true);
+
+  assert.match(html, /&lt;img src=x onerror=&quot;run\(\)&quot;&gt;/);
+  assert.match(html, /Needs contract: &lt;svg onload=&#39;run\(\)&#39;&gt;/);
+  assert.match(html, /data-buy-fixture-id="shelf&quot; onclick=&quot;run\(\)"/);
+  assert.doesNotMatch(html, /<img src=x onerror=/);
+  assert.doesNotMatch(html, /data-buy-fixture-id="shelf" onclick=/);
+});
+
 test("fixtures tab offers resale with a clear value and a confirmation", () => {
   const shelf = { id: "shelf_1", type: "shelf_budget_2x4", gx: 1, gy: 1 };
   const padCrate = { kind: "fixture", typeId: "shelf_budget_2x4", lockedToPad: true };

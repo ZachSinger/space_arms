@@ -9,6 +9,7 @@ import { InventoryTab, INVENTORY_PRICE_CONTROL_SELECTOR } from "./InventoryTab.j
 import { EmployeeTab, EMPLOYEE_PRIORITY_SELECTOR } from "./EmployeeTab.js";
 import { ContractsTab } from "./ContractsTab.js";
 import { SupplyTab } from "./SupplyTab.js";
+import { FixturesTab } from "./FixturesTab.js";
 import { LayoutRenderer } from "./LayoutRenderer.js";
 import { FinancesRenderer } from "./FinancesRenderer.js";
 import { HandbookRenderer } from "./HandbookRenderer.js";
@@ -73,8 +74,7 @@ export class ManagerTablet {
       (licenseId) => this.handleSignContract(licenseId),
     );
     this.supplyTab = new SupplyTab(scene);
-    this.fixturePurchaseNotice = "";
-    this.fixtureSaleConfirmation = null;
+    this.fixturesTab = new FixturesTab(scene);
     this.handbookTopic = "store";
     this.financesDay = null; // a finished day being reviewed, or null for today
 
@@ -129,10 +129,33 @@ export class ManagerTablet {
       this.bodyElement.querySelector('[data-tab-panel="supply"]'),
       () => this.renderPanelContent("supply"),
     );
+    this.fixturesTab.bind(
+      this.bodyElement.querySelector('[data-tab-panel="fixtures"]'),
+      this.bodyElement,
+      () => this.renderPanelContent("fixtures"),
+      {
+        buyFixture: (typeId) => this.handleFixturePurchase(typeId),
+        moveFixture: (fixtureId) => this.scene.fixturePlacement.begin(fixtureId),
+        crateFixture: (fixtureId) => this.scene.fixtureSystem.crate(fixtureId),
+        sellFixture: (fixtureId) =>
+          this.prepareFixtureSale("placed", this.scene.fixtures.get(fixtureId)),
+        sellFixtureCrate: (key) => {
+          const crate = key === "carried"
+            ? this.scene.carriedCrate
+            : this.scene.restockCrates[Number(key)];
+          this.prepareFixtureSale("crate", crate);
+        },
+        confirmSale: () => this.confirmFixtureSale(),
+        cancelSale: () => {
+          this.fixturesTab.saleConfirmation = null;
+          this.refreshLayoutPanels();
+        },
+      },
+    );
     this.fixtureHighlight = new FixtureHighlight(scene, this.uiWindow);
     this.uiWindow.onClose = () => {
-      this.fixturePurchaseNotice = "";
-      this.fixtureSaleConfirmation = null;
+      this.fixturesTab.purchaseNotice = "";
+      this.fixturesTab.saleConfirmation = null;
       this.fixtureHighlight.reset();
       this.scene.checkoutSystem.resumeRegisterCheckout();
     };
@@ -161,46 +184,11 @@ export class ManagerTablet {
         this.refreshFinancesPanel();
       }
 
-      const moveButton = event.target.closest("[data-move-fixture-id]");
-      if (moveButton) this.scene.fixturePlacement.begin(moveButton.dataset.moveFixtureId);
-
-      const buyFixtureButton = event.target.closest("[data-buy-fixture-id]");
-      if (buyFixtureButton) {
-        const typeId = buyFixtureButton.dataset.buyFixtureId;
-        const name = getFixtureType(typeId)?.name ?? "Fixture";
-        // Set before buying: the purchase re-renders this tab through the state listener.
-        this.fixturePurchaseNotice = `Bought ${name}. Its crate is waiting on the Loading Pad.`;
-        if (!this.scene.fixtureSystem.buy(typeId)) {
-          this.fixturePurchaseNotice = "";
-          this.scene.showShopMessage("Fixture purchase is unavailable. Check its license, cost, and requirements.");
-        }
-      }
-
       const buyExpansionButton = event.target.closest("[data-buy-expansion-id]");
       if (buyExpansionButton) this.scene.fixtureSystem.buyExpansion(buyExpansionButton.dataset.buyExpansionId);
 
       const buyBackroomButton = event.target.closest("[data-buy-backroom-id]");
       if (buyBackroomButton) this.scene.fixtureSystem.buyBackroomUpgrade(buyBackroomButton.dataset.buyBackroomId);
-
-      const crateFixtureButton = event.target.closest("[data-crate-fixture-id]");
-      if (crateFixtureButton) this.scene.fixtureSystem.crate(crateFixtureButton.dataset.crateFixtureId);
-
-      const sellFixtureButton = event.target.closest("[data-sell-fixture-id]");
-      if (sellFixtureButton) {
-        this.prepareFixtureSale("placed", this.scene.fixtures.get(sellFixtureButton.dataset.sellFixtureId));
-      }
-
-      const sellCrateButton = event.target.closest("[data-sell-fixture-crate]");
-      if (sellCrateButton) {
-        const key = sellCrateButton.dataset.sellFixtureCrate;
-        const crate = key === "carried" ? this.scene.carriedCrate : this.scene.restockCrates[Number(key)];
-        this.prepareFixtureSale("crate", crate);
-      }
-      if (event.target.closest("[data-confirm-fixture-sale]")) this.confirmFixtureSale();
-      if (event.target.closest("[data-cancel-fixture-sale]")) {
-        this.fixtureSaleConfirmation = null;
-        this.refreshLayoutPanels();
-      }
 
     });
     // Focused controls must not also drive the player or fire game hotkeys.
@@ -257,11 +245,7 @@ export class ManagerTablet {
     if (tabId === "employee") return this.employeeTab.draw();
     if (tabId === "contracts") return this.contractsTab.draw();
     if (tabId === "supply") return this.supplyTab.draw();
-    if (tabId === "fixtures") {
-      return LayoutRenderer.generateHTML(
-        this.scene, true, this.fixturePurchaseNotice, this.fixtureSaleConfirmation,
-      );
-    }
+    if (tabId === "fixtures") return this.fixturesTab.draw();
     if (tabId === "layout") return LayoutRenderer.generateHTML(this.scene);
     if (tabId === "finances") {
       return FinancesRenderer.generateHTML(this.scene.shift.financesView(), this.financesDay);
@@ -281,8 +265,8 @@ export class ManagerTablet {
   switchTab(tabId) {
     if (this.bodyElement.contains(document.activeElement)) document.activeElement.blur();
     this.fixtureHighlight.reset();
-    this.fixturePurchaseNotice = "";
-    this.fixtureSaleConfirmation = null;
+    this.fixturesTab.purchaseNotice = "";
+    this.fixturesTab.saleConfirmation = null;
     if (tabId === "inventory") this.inventoryTab.redraw();
     if (tabId === "employee") this.employeeTab.redraw();
     if (tabId === "contracts") this.contractsTab.redraw();
@@ -339,6 +323,10 @@ export class ManagerTablet {
         selector,
         top: panel.querySelector(selector)?.scrollTop ?? 0,
       }));
+      if (id === "fixtures") {
+        this.fixturesTab.redraw();
+        continue;
+      }
       panel.innerHTML = this.renderPanelContent(id);
       for (const { selector, top } of positions) {
         const list = panel.querySelector(selector);
@@ -363,8 +351,8 @@ export class ManagerTablet {
       return;
     }
     const typeId = kind === "placed" ? target.type : target.typeId;
-    this.fixturePurchaseNotice = "";
-    this.fixtureSaleConfirmation = {
+    this.fixturesTab.purchaseNotice = "";
+    this.fixturesTab.saleConfirmation = {
       kind,
       target,
       name: kind === "placed"
@@ -376,25 +364,34 @@ export class ManagerTablet {
   }
 
   confirmFixtureSale() {
-    const sale = this.fixtureSaleConfirmation;
+    const sale = this.fixturesTab.saleConfirmation;
     if (!sale) {
       this.scene.showShopMessage("Choose a fixture to sell first.");
       return;
     }
-    this.fixtureSaleConfirmation = null;
+    this.fixturesTab.saleConfirmation = null;
     if (sale.kind === "placed" && this.scene.fixtures.get(sale.target.id) !== sale.target) {
       this.scene.showShopMessage("That fixture is no longer available.");
       this.refreshLayoutPanels();
       return;
     }
-    this.fixturePurchaseNotice = `Sold ${sale.name} for ${sale.value.toLocaleString()}.`;
+    this.fixturesTab.purchaseNotice = `Sold ${sale.name} for ${sale.value.toLocaleString()}.`;
     this.fixtureHighlight.reset();
     const sold = sale.kind === "placed"
       ? this.scene.fixtureSystem.sell(sale.target.id)
       : this.scene.fixtureSystem.sellCrate(sale.target);
     if (!sold) {
-      this.fixturePurchaseNotice = "";
+      this.fixturesTab.purchaseNotice = "";
       this.refreshLayoutPanels();
+    }
+  }
+
+  handleFixturePurchase(typeId) {
+    const name = getFixtureType(typeId)?.name ?? "Fixture";
+    this.fixturesTab.purchaseNotice = `Bought ${name}. Its crate is waiting on the Loading Pad.`;
+    if (!this.scene.fixtureSystem.buy(typeId)) {
+      this.fixturesTab.purchaseNotice = "";
+      this.scene.showShopMessage("Fixture purchase is unavailable. Check its license, cost, and requirements.");
     }
   }
 
