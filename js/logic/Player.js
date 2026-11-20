@@ -123,7 +123,7 @@ export class Player {
     if (up) vy -= 1;
     if (down) vy += 1;
     // Null while a menu has the controller.
-    const pad = this.scene.getPadMovement?.() ?? null;
+    const pad = this.scene.controls?.padMovement() ?? null;
     if (vx === 0 && vy === 0 && pad) {
       vx = pad.x;
       vy = pad.y;

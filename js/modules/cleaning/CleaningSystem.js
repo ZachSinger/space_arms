@@ -237,7 +237,7 @@ export class CleaningSystem {
 
   updateHighlight(time) {
     const shop = this.shop;
-    const show = Boolean(shop.highlightTrashKey?.isDown) && shop.controlMode.allows("crate") &&
+    const show = Boolean(shop.controls?.highlightTrashKey?.isDown) && shop.controlMode.allows("crate") &&
       shop.areas.playerArea !== AREA.BACKROOM;
     this.trash.renderHighlight(show, time);
   }

@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { ControlMode } from "../js/input/ControlMode.js";
+import { PlayerControls } from "../js/input/PlayerControls.js";
 import { Events, GAME_EVENTS } from "../js/core/Events.js";
 import { InteractableRegistry } from "../js/interaction/InteractableRegistry.js";
 import { InteractionSystem } from "../js/interaction/InteractionSystem.js";
@@ -158,7 +159,6 @@ function createHarness({ carrying = false } = {}) {
   scene.crateWorld = Object.assign(Object.create(CrateWorld.prototype), { shop: scene });
   scene.markedStackBase = null;
   scene.markedFromTop = 0;
-  scene.cratePress = null;
   scene.crateMotionPaused = false;
   scene.time = { now: 0 };
   scene.fixtures = {
@@ -192,7 +192,8 @@ function createHarness({ carrying = false } = {}) {
     removeCapture(key) { removedCaptures.push(key); },
     on(name, handler) { handlers.set(name, handler); },
   } };
-  scene.bindCrateKeys();
+  scene.controls = new PlayerControls(scene);
+  scene.controls.bindCrateKeys();
   return { scene, messages, handlers, removedCaptures };
 }
 
@@ -353,7 +354,7 @@ function tap(h, key = "SPACE") {
 function hold(h, key = "SPACE") {
   h.handlers.get(`keydown-${key}`)(keyEvent());
   h.scene.time.now += HOLD_KEY_MS;
-  h.scene.updateCratePress();
+  h.scene.controls.updateCratePress();
   h.handlers.get(`keyup-${key}`)(keyEvent());
 }
 
@@ -559,27 +560,27 @@ test("with empty hands, E opens the fixture you face and holding Ctrl picks it u
   h.scene.fixturePlacement = { active: false, begin: (id) => moved.push(id) };
 
   // Releasing Ctrl before the hold fires moves nothing.
-  h.scene.startFixtureMovePress();
-  assert.equal(h.scene.fixtureMovePress.fixture, shelf);
-  h.scene.fixtureMovePress = null;
-  h.scene.updateFixtureMovePress();
+  h.scene.controls.startFixtureMovePress();
+  assert.equal(h.scene.controls.fixtureMovePress.fixture, shelf);
+  h.scene.controls.fixtureMovePress = null;
+  h.scene.controls.updateFixtureMovePress();
   assert.deepEqual(moved, []);
 
-  h.scene.startFixtureMovePress();
+  h.scene.controls.startFixtureMovePress();
   h.scene.time.now += HOLD_KEY_MS;
-  h.scene.updateFixtureMovePress();
+  h.scene.controls.updateFixtureMovePress();
   assert.deepEqual([opened, moved], [0, ["shelf_1"]]);
 
   // A shelf he isn't looking at (behind him) is never picked up.
   shelf.rotation = 3;
-  h.scene.startFixtureMovePress();
-  assert.equal(h.scene.fixtureMovePress, null);
+  h.scene.controls.startFixtureMovePress();
+  assert.equal(h.scene.controls.fixtureMovePress, null);
   shelf.rotation = 1;
 
   // While the store is open, Ctrl never picks a fixture up.
   h.scene.fixtureSystem.canRearrange = () => false;
-  h.scene.startFixtureMovePress();
-  assert.equal(h.scene.fixtureMovePress, null);
+  h.scene.controls.startFixtureMovePress();
+  assert.equal(h.scene.controls.fixtureMovePress, null);
 });
 
 test("with empty hands, holding Ctrl at the register picks it up to move", () => {
@@ -595,9 +596,9 @@ test("with empty hands, holding Ctrl at the register picks it up to move", () =>
   h.scene.fixtureSystem.moveAreaBlockReason = () => null;
   h.scene.fixturePlacement = { active: false, begin: (id) => moved.push(id) };
 
-  h.scene.startFixtureMovePress();
+  h.scene.controls.startFixtureMovePress();
   h.scene.time.now += HOLD_KEY_MS;
-  h.scene.updateFixtureMovePress();
+  h.scene.controls.updateFixtureMovePress();
   assert.deepEqual(moved, ["register_1"]);
 
   // Not while working it.
@@ -630,9 +631,9 @@ test("with empty hands, holding Ctrl while facing the trashcan picks it up to mo
 
   const moved = [];
   h.scene.fixturePlacement.begin = (id) => moved.push(id);
-  h.scene.startFixtureMovePress();
+  h.scene.controls.startFixtureMovePress();
   h.scene.time.now += HOLD_KEY_MS;
-  h.scene.updateFixtureMovePress();
+  h.scene.controls.updateFixtureMovePress();
   assert.deepEqual(moved, [trashcan.id]);
 
   h.scene.player.currentFacing = "down";
@@ -713,7 +714,7 @@ test("Space and Q wait to tell a tap from a hold, and Space leaves focused UI co
   const inUi = keyEvent({ inUi: true });
   h.handlers.get("keydown-SPACE")(inUi);
   assert.equal(inUi.defaultPrevented, false);
-  assert.equal(h.scene.cratePress, null);
+  assert.equal(h.scene.controls.cratePress, null);
 
   const press = keyEvent();
   h.handlers.get("keydown-SPACE")(press);
@@ -722,7 +723,7 @@ test("Space and Q wait to tell a tap from a hold, and Space leaves focused UI co
   h.handlers.get("keydown-SPACE")(keyEvent({ repeat: true }));
   h.handlers.get("keyup-SPACE")(keyEvent());
   assert.equal(h.scene.carriedCrate, nearby);
-  assert.equal(h.scene.cratePress, null);
+  assert.equal(h.scene.controls.cratePress, null);
   assert.deepEqual(h.messages, []);
 });
 
@@ -1028,18 +1029,18 @@ test("paused controller ignores register, tablet and menu controls; Start resume
     togglePause() { this.isPaused = !this.isPaused; },
   };
   scene.checkoutSystem.operatingRegister = true;
-  scene.padInput = { poll() {}, hadInput: false, justPressed: () => true };
+  scene.controls.padInput = { poll() {}, hadInput: false, justPressed: () => true };
   let hudClosed = false;
-  scene.uiNavigator = {
+  scene.controls.uiNavigator = {
     handle() { assert.fail("Paused controller must not navigate menus"); },
     setHudOpen(open) { hudClosed = !open; },
   };
-  scene.padInput.justPressed = (button) => button !== PAD.START;
-  scene.handleGamepad(0, 16);
+  scene.controls.padInput.justPressed = (button) => button !== PAD.START;
+  scene.controls.handleGamepad(0, 16);
   assert.equal(scene.checkoutSystem.operatingRegister, true);
   assert.equal(scene.shiftClock.isPaused, true);
-  scene.padInput.justPressed = () => true;
-  scene.handleGamepad(0, 16);
+  scene.controls.padInput.justPressed = () => true;
+  scene.controls.handleGamepad(0, 16);
   assert.equal(scene.shiftClock.isPaused, false);
   assert.equal(scene.checkoutSystem.operatingRegister, true);
   assert.equal(hudClosed, true);
@@ -1050,22 +1051,22 @@ test("controller X and Y tell a tap from a hold the same way, and R3 moves the a
   const goBacksPacks = addNearbyRegister(h.scene);
   const down = new Set();
   let pressed = new Set();
-  h.scene.padInput = {
+  h.scene.controls.padInput = {
     poll() {}, hadInput: false,
     justPressed: (button) => pressed.has(button),
     isDown: (button) => down.has(button),
   };
   h.scene.checkoutWindow = { usesChitInput: () => false, usesSpaceKey: () => false };
-  h.scene.uiNavigator = { handle: () => false };
+  h.scene.controls.uiNavigator = { handle: () => false };
   const press = (button) => {
     pressed = new Set([button]);
     down.add(button);
-    h.scene.handleGamepad(0, 16);
+    h.scene.controls.handleGamepad(0, 16);
     pressed = new Set();
   };
   const release = (button) => {
     down.delete(button);
-    h.scene.updateCratePress();
+    h.scene.controls.updateCratePress();
   };
 
   press(PAD.Y);
@@ -1077,7 +1078,7 @@ test("controller X and Y tell a tap from a hold the same way, and R3 moves the a
   assert.equal(h.scene.markedFloorStack().marked, middle);
   press(PAD.X);
   h.scene.time.now += HOLD_KEY_MS;
-  h.scene.updateCratePress();
+  h.scene.controls.updateCratePress();
   release(PAD.X);
   assert.deepEqual(h.scene.getCarriedCrates(), [middle, top]);
 
@@ -1288,8 +1289,8 @@ test("the registered crate action is both advertised in the hint and performed b
   scene.updateCrateHint();
   assert.equal(action.target, floorCrate);
   assert.ok(scene.messages.element.textContent.includes(action.hint));
-  scene.startCratePress("pickUp");
-  scene.endCratePress("pickUp");
+  scene.controls.startCratePress("pickUp");
+  scene.controls.endCratePress("pickUp");
   assert.equal(scene.getCarriedCrates()[0], floorCrate);
 });
 
@@ -1629,7 +1630,7 @@ test("three carried crates stay straight while the player moves and reverses dir
     playerSprite.y += playerSprite.body.velocity.y;
   };
   Object.assign(h.scene, {
-    handleGamepad() {},
+    controls: { handleGamepad() {}, updatePresses() {} },
     gameModules: { update() {} },
     fixturePlacement: { active: false, update() {} },
     crateWorld: { update() {}, updateCratePushing() {} },
@@ -1671,7 +1672,7 @@ test("the game updates player and crate movement during placement without unfree
   scene.player.update = () => { playerUpdates += 1; };
   scene.player.forceFacing = () => {};
   Object.assign(scene, {
-    handleGamepad() {},
+    controls: { handleGamepad() {}, updatePresses() {} },
     gameModules: { update() {} },
     fixturePlacement: { active: true, update() {} },
     crateWorld: { update() {}, updateCratePushing() { crateUpdates += 1; } },

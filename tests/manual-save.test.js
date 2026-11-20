@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { HUDController } from "../js/logic/HUDController.js";
 import { ControlMode } from "../js/input/ControlMode.js";
+import { PlayerControls } from "../js/input/PlayerControls.js";
 import { GAME_EVENTS } from "../js/core/Events.js";
 import { SupplierLicense } from "../js/logic/Licenses.js";
 import { ContractRenderer } from "../js/logic/ContractRenderer.js";
@@ -139,6 +140,7 @@ test("pause consumes menu, mouse and keyboard actions, leaving only resume avail
   scene.shiftClock.isPaused = true;
   scene.shiftClock.togglePause = () => { scene.shiftClock.isPaused = !scene.shiftClock.isPaused; };
   scene.controlMode = new ControlMode(scene);
+  scene.controls = new PlayerControls(scene);
   const event = (type, options = {}) => ({
     type, blocked: false, prevented: false,
     preventDefault() { this.prevented = true; },
@@ -151,23 +153,23 @@ test("pause consumes menu, mouse and keyboard actions, leaving only resume avail
     event("keydown", { code: "KeyP", repeat: true }),
     ...["pointerdown", "mousedown", "click", "dblclick", "wheel", "contextmenu", "touchstart", "touchmove", "pointermove"].map((type) => event(type)),
   ]) {
-    scene.handlePausedInput(input);
+    scene.controls.handlePausedInput(input);
     assert.equal(input.blocked, true, input.type);
     assert.equal(input.prevented, true, input.type);
     assert.equal(scene.shiftClock.isPaused, true);
   }
   const resumeClick = event("click", { target: { closest: () => ({}) } });
-  scene.handlePausedInput(resumeClick);
+  scene.controls.handlePausedInput(resumeClick);
   assert.equal(resumeClick.blocked, false);
   for (const key of [{ code: "KeyP" }, { key: "Escape" }]) {
     scene.shiftClock.isPaused = true;
     const resumeKey = event("keydown", key);
-    scene.handlePausedInput(resumeKey);
+    scene.controls.handlePausedInput(resumeKey);
     assert.equal(resumeKey.blocked, true, "resume must not also close an open window");
     assert.equal(scene.shiftClock.isPaused, false);
   }
   const normalClick = event("click");
-  scene.handlePausedInput(normalClick);
+  scene.controls.handlePausedInput(normalClick);
   assert.equal(normalClick.blocked, false);
 });
 

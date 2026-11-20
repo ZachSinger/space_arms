@@ -63,7 +63,7 @@ test("placement allows walking unless another window or controller menu has focu
   };
   scene.fixturePlacement = { active: true };
   scene.windowManager.windows.set(tablet.id, tablet);
-  scene.uiNavigator = { hasScope: () => controllerMenuOpen };
+  scene.controls = { uiNavigator: { hasScope: () => controllerMenuOpen } };
   const controls = new ControlMode(scene);
 
   assert.equal(controls.getMode(), CONTROL_MODES.PLACING);

@@ -100,7 +100,7 @@ export class SaveSystem {
     shop.areas.playerArea = AREA.SHOP;
     shop.player.teleportTo(shop.storeDoor.x, shop.storeDoor.y + TILE_SIZE);
     shop.cameraRig.refresh();
-    shop.cratePress = null;
+    shop.controls.cratePress = null;
     shop.crateSystem.load(data);
     shop.cleaningSystem?.load(data.trash ?? []);
     this.moveShelfOverflowToGoBacks();

@@ -23,7 +23,7 @@ import { getLicensedFactionIds } from "../logic/CustomerPooling.js";
 import { Player, PLAYER_CRATE_HOLD_OFFSET } from "../logic/Player.js";
 import { CRATE_STACK_SPACING } from "../logic/Crate.js";
 import {
-  HOLD_KEY_MS, MAX_CARRIED_CRATES,
+  MAX_CARRIED_CRATES,
 } from "../logic/CrateStack.js";
 import { CrateFooter } from "../logic/CrateFooter.js";
 import { getCrateOrderQuantity } from "../logic/SupplyOrder.js";
@@ -57,9 +57,8 @@ import { CrateSystem } from "../systems/CrateSystem.js";
 import { CrateWorld } from "../world/CrateWorld.js";
 import { Navigation } from "../world/Navigation.js";
 import { CheckoutWindow } from "../logic/CheckoutWindow.js";
-import { GamepadInput, PAD } from "../input/GamepadInput.js";
-import { UINavigator } from "../logic/UINavigator.js";
-import { controlLabel, setInputDevice } from "../input/InputDevice.js";
+import { PlayerControls } from "../input/PlayerControls.js";
+import { controlLabel } from "../input/InputDevice.js";
 import { database } from "./boot.js"; // the exported DatabaseManager singleton
 import { installSceneTextSize } from "../logic/GameTextSize.js";
 import { gameRandom, randomSeed } from "../core/Random.js";
@@ -116,6 +115,7 @@ export class GameScene extends Phaser.Scene {
     gameRandom.reseed(this.seed);
     installSceneTextSize(this, Phaser);
     this.eventBus = new Events({ strict: true });
+    this.controls = new PlayerControls(this);
     this.debugInfo = null;
     this.debugTools = null;
     this.interactables = new InteractableRegistry();
@@ -273,8 +273,6 @@ export class GameScene extends Phaser.Scene {
     // Which floor stack the green arrow is on, and how many crates down from the top it points.
     this.markedStackBase = null;
     this.markedFromTop = 0;
-    // The pick-up or put-down button being held, until it's released (tap) or held long enough (hold).
-    this.cratePress = null;
     // Points down at the crate the pick-up button would take, or the stack the put-down button adds to.
     this.pickupMarker = this.add.graphics().setDepth(20000).setVisible(false);
     this.pickupMarker.fillStyle(0x22c55e).lineStyle(1, 0x052e16)
@@ -288,9 +286,7 @@ export class GameScene extends Phaser.Scene {
       // Paused time must freeze the register too, or the player could ring up for free.
       this.checkoutWindow.setPaused(paused);
       if (paused) {
-        this.cratePress = null;
-        this.interactPress = null;
-        this.fixtureMovePress = null;
+        this.controls.cancelPresses();
         this.shelfStockingWindow.stopHolding();
       }
       if (paused === this.crateMotionPaused) return;
@@ -320,19 +316,7 @@ export class GameScene extends Phaser.Scene {
     this.input.mouse.disableContextMenu();
     this.controlMode = new ControlMode(this);
     this.interactionSystem = new InteractionSystem(this);
-    this.bindPauseInputGuard();
-
-    // E opens fixtures or delivers/places crates; holding Ctrl facing a fixture picks it up
-    // to move. Space picks crates up and Q puts them down (tap: one crate, hold: a stack);
-    // Q with empty hands packs the Go-Backs. See bindCrateKeys.
-    this.interactPress = null;
-    this.fixtureMovePress = null;
-    this.input.keyboard.on("keydown-E", (event) => {
-      if (!event.repeat) this.handleInteract();
-    });
-    this.bindCrateKeys();
-    // Hold H: every piece of trash on the floor lights up, even behind shelves.
-    this.highlightTrashKey = this.cleaningSystem ? this.input.keyboard.addKey("H", false) : null;
+    this.controls.install();
 
     // Constructed after the fixtures exist: its Supply tab reads their stock immediately
     // on construction (via SupplyRenderer -> supply.restockableItems()).
@@ -392,56 +376,12 @@ export class GameScene extends Phaser.Scene {
     this.eventBus.on(GAME_EVENTS.SHIFT_STARTED, (details) => {
       this.debugInfo?.record("shift-started", details);
     });
-    // I or Tab opens the tablet and, while it's open, closes it again.
-    this.handleTabletKey = (event) => {
-      if (event.code !== "KeyI" && event.code !== "Tab") return;
-      if (event.code === "Tab") event.preventDefault();
-      if (event.repeat) return;
-      const tablet = this.managerTablet;
-      if (tablet.uiWindow.isOpen) {
-        if (event.code === "KeyI" && event.target?.matches?.("input, textarea")) return;
-        tablet.uiWindow.close();
-      } else if (this.controlMode.allows("tablet")) {
-        tablet.openWindow();
-      }
-    };
-    document.addEventListener("keydown", this.handleTabletKey);
-    this.events.once("shutdown", () => document.removeEventListener("keydown", this.handleTabletKey));
-
-    // The shop camera: PageUp zooms in, PageDown zooms out (never past the whole shop).
-    this.bindControlKey("keydown-PAGE_UP", "cameraZoom", () => this.cameraRig.zoomBy(1));
-    this.bindControlKey("keydown-PAGE_DOWN", "cameraZoom", () => this.cameraRig.zoomBy(-1));
-
     // Debug tools are keyboard shortcuts plus HUD buttons; REAL games remove them all.
     DebugTools.showButtons(!this.realMode);
     this.debugTools = this.realMode ? null : new DebugTools(this);
     this.debugTools?.install();
 
-    // The shift clock's manual pause: freezes time entirely so the player can think.
-    this.bindControlKey("keydown-P", "pause", () => this.shiftClock.togglePause());
-    // Esc pauses too, unless it just closed a window. Other screens on top block pausing
-    // anyway; the register doesn't, so Esc pauses there like P.
-    // A plain window listener rather than Phaser's: some browsers cancel Esc before the page
-    // sees it, and Phaser ignores cancelled keys. This runs after WindowManager's document
-    // listener, so a press that closed a window is already marked consumed.
-    this.handleEscPause = (event) => {
-      if (event.key !== "Escape" || event.repeat) return;
-      if (this.windowManager.isConsumed(event)) return;
-      if (!this.controlMode.allows("pause")) return;
-      this.shiftClock.togglePause();
-    };
-    window.addEventListener("keydown", this.handleEscPause);
-    this.events.once("shutdown", () => window.removeEventListener("keydown", this.handleEscPause));
-
-    // Controller: the same actions as the keys above (see handleGamepad), plus a menu cursor
-    // for every window.
-    this.padInput = new GamepadInput();
-    this.uiNavigator = new UINavigator({
-      onUnhandled: (button) => this.handleUnusedMenuButton(button),
-    });
-
     this.events.once("shutdown", () => {
-      this.uiNavigator.destroy();
       this.eventBus.clear();
       this.debugInfo?.destroy();
       this.debugTools?.destroy();
@@ -487,112 +427,6 @@ export class GameScene extends Phaser.Scene {
       this.refreshGoBacksBadge();
     });
     this.shiftClock.subscribe(() => this.saves.updateControls());
-  }
-
-  bindControlKey(eventName, action, callback) {
-    this.input.keyboard.on(eventName, (...args) => {
-      if (this.controlMode.allows(action)) callback(...args);
-    });
-  }
-
-  bindPauseInputGuard() {
-    const events = [
-      "keydown", "mousedown", "pointerdown", "click", "dblclick",
-      "contextmenu", "wheel", "touchstart", "touchmove", "mousemove", "pointermove",
-    ];
-    const handler = (event) => this.handlePausedInput(event);
-    for (const type of events) window.addEventListener(type, handler, { capture: true, passive: false });
-    this.events.once("shutdown", () => {
-      for (const type of events) window.removeEventListener(type, handler, true);
-    });
-  }
-
-  handlePausedInput(event) {
-    if (this.controlMode.getMode() !== CONTROL_MODES.PAUSED) return;
-    if (event.type !== "keydown" && event.target?.closest?.("#hud-pause-btn")) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    // Handle resume before window-close handlers or Phaser see the key.
-    if (event.type === "keydown" && !event.repeat &&
-      (event.code === "KeyP" || event.key === "Escape")) {
-      this.shiftClock.togglePause();
-    }
-  }
-
-  /**
-   * One frame of controller input. A screen on top gets it through the menu cursor;
-   * otherwise each button runs the same action as its keyboard key:
-   *   A = E (interact)   X = Space (pick up / throw)   Y = Q (put down; packs the Go-Backs with empty hands)
-   *   R3 (right stick click) = Ctrl (green arrow one crate down)   Back = I (tablet)
-   *   LB/RB = PageDown/PageUp (zoom)   Start = top bar (pause, start shift, save, ...)
-   *   B = leave the register   left stick / D-pad = walk   triggers = dash
-   * @param {number} time
-   * @param {number} delta
-   */
-  handleGamepad(time, delta) {
-    const pad = this.padInput;
-    pad.poll(time);
-    if (pad.hadInput) setInputDevice("gamepad");
-    const mode = this.controlMode.getMode();
-    if (mode === CONTROL_MODES.LOADING && !this.saves.loadFailed) return;
-    if (mode === CONTROL_MODES.PAUSED) {
-      if (pad.justPressed(PAD.START)) {
-        this.shiftClock.togglePause();
-        this.uiNavigator.setHudOpen(false);
-      }
-      return;
-    }
-
-    if (pad.justPressed(PAD.START)) this.uiNavigator.toggleHud();
-    if (pad.justPressed(PAD.BACK)) {
-      if (this.managerTablet.uiWindow.isOpen) this.managerTablet.uiWindow.close();
-      else if (this.controlMode.allows("tablet")) this.managerTablet.openWindow();
-    }
-    if (this.checkoutWindow.usesChitInput()) {
-      const chitKeys = [
-        [PAD.UP, "up"],
-        [PAD.DOWN, "down"],
-        [PAD.LEFT, "left"],
-        [PAD.RIGHT, "right"],
-      ];
-      const pressedKey = chitKeys.find(([button]) => pad.justPressed(button));
-      if (pressedKey) {
-        this.checkoutWindow.enterChitDirection(pressedKey[1]);
-        return;
-      }
-    }
-    if (this.uiNavigator.handle(pad, delta)) return;
-
-    if (mode === CONTROL_MODES.PLACING) {
-      this.fixturePlacement.handlePad(pad, delta);
-    } else {
-      if (pad.justPressed(PAD.A)) this.startInteractPress({ button: PAD.A });
-      if (pad.justPressed(PAD.X) && !this.checkoutWindow.usesSpaceKey()) {
-        this.startCratePress("pickUp", { button: PAD.X });
-      }
-      if (pad.justPressed(PAD.Y)) this.startCratePress("putDown", { button: PAD.Y });
-      if (pad.justPressed(PAD.R3)) this.markNextCrateDown();
-      if (pad.justPressed(PAD.B) && this.checkoutSystem.operatingRegister) this.checkoutSystem.endRegisterSession();
-    }
-    if (pad.justPressed(PAD.LB)) this.handleUnusedMenuButton(PAD.LB);
-    if (pad.justPressed(PAD.RB)) this.handleUnusedMenuButton(PAD.RB);
-  }
-
-  // Buttons the open screen had no use for, e.g. B or Y while ringing up a customer.
-  handleUnusedMenuButton(button) {
-    if (button === PAD.B && this.checkoutSystem.operatingRegister) this.checkoutSystem.endRegisterSession();
-    if ((button === PAD.LB || button === PAD.RB) && this.controlMode.allows("cameraZoom")) {
-      this.cameraRig.zoomBy(button === PAD.RB ? 1 : -1);
-    }
-  }
-
-  /**
-   * Controller walking for Player.update, or null while a screen has the controller.
-   * @returns {{x: number, y: number, dash: boolean} | null}
-   */
-  getPadMovement() {
-    if (!this.padInput?.connected || this.uiNavigator?.hasScope()) return null;
-    return { ...this.padInput.moveVector(), dash: this.padInput.wantsDash() };
   }
 
   syncCarriedCrate() {
@@ -848,59 +682,6 @@ export class GameScene extends Phaser.Scene {
       this.input,
       "fixture-move",
     );
-  }
-
-  /**
-   * A (on a controller) went down. Facing a fixture you could move, it waits to see whether
-   * this is a tap (open it) or a hold (pick it up to move); otherwise it acts right away.
-   * @param {{ button?: number }} [options] - the controller button, which is polled for release
-   */
-  startInteractPress({ button = null } = {}) {
-    if (!this.controlMode.allows("interact")) return;
-    const action = this.getFixtureMoveAction();
-    if (!action) {
-      this.interactPress = null;
-      this.handleInteract();
-      return;
-    }
-    this.interactPress = { fixture: action.target, action, button, startedAt: this.time.now };
-  }
-
-  // Releasing before the hold fired is a tap.
-  endInteractPress() {
-    const press = this.interactPress;
-    this.interactPress = null;
-    if (press) this.handleInteract();
-  }
-
-  updateInteractPress() {
-    const press = this.interactPress;
-    if (!press) return;
-    if (press.button !== null && !this.padInput?.isDown(press.button)) {
-      this.endInteractPress();
-      return;
-    }
-    if (this.time.now - press.startedAt < HOLD_KEY_MS) return;
-    this.interactPress = null;
-    const action = this.getFixtureMoveAction();
-    if (action?.target === press.fixture) action.perform();
-  }
-
-  // Ctrl went down. Facing a fixture with empty hands while the store is closed, keeping it
-  // held picks the fixture up to move; releasing sooner leaves it alone.
-  startFixtureMovePress() {
-    const action = this.getFixtureMoveAction();
-    this.fixtureMovePress = action
-      ? { fixture: action.target, action, startedAt: this.time.now }
-      : null;
-  }
-
-  updateFixtureMovePress() {
-    const press = this.fixtureMovePress;
-    if (!press || this.time.now - press.startedAt < HOLD_KEY_MS) return;
-    this.fixtureMovePress = null;
-    const action = this.getFixtureMoveAction();
-    if (action?.target === press.fixture) action.perform();
   }
 
   // E delivers/places a carried crate, opens a nearby fixture, or toggles register operation.
@@ -1243,76 +1024,6 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // Space picks up and Q puts down. Each waits for release to tell a tap (one crate) from a
-  // hold (a stack); a hold fires as soon as the key has been down for HOLD_KEY_MS.
-  bindCrateKeys() {
-    const keyboard = this.input.keyboard;
-    // Cursor keys capture Space by default, which blocks focused UI controls.
-    keyboard.removeCapture("SPACE");
-    keyboard.on("keydown-SPACE", (event) => {
-      if (event.target?.closest?.("#ui-layer")) return;
-      event.preventDefault();
-      if (event.repeat || this.checkoutWindow?.usesSpaceKey()) return;
-      this.startCratePress("pickUp");
-    });
-    keyboard.on("keydown-Q", (event) => {
-      if (!event.repeat) this.startCratePress("putDown");
-    });
-    keyboard.on("keyup-SPACE", () => this.endCratePress("pickUp"));
-    keyboard.on("keyup-Q", () => this.endCratePress("putDown"));
-    keyboard.on("keydown-CTRL", (event) => {
-      if (!event.repeat) this.startFixtureMovePress();
-      this.markNextCrateDown();
-    });
-    keyboard.on("keyup-CTRL", () => { this.fixtureMovePress = null; });
-  }
-
-  allowsCrateAction() {
-    return this.controlMode.allows("crate");
-  }
-
-  /**
-   * A pick-up or put-down button went down. Actions with no hold version (like throwing)
-   * happen right away; the rest wait to see whether it's a tap or a hold.
-   * @param {"pickUp"|"putDown"} which
-   * @param {{ button?: number }} [options] - the controller button, which is polled for release
-   */
-  startCratePress(which, { button = null } = {}) {
-    if (!this.allowsCrateAction(which)) return;
-    const action = this.getCrateControlAction(which);
-    if (!action) return;
-    if (!action.hold) {
-      this.cratePress = null;
-      action.perform();
-      return;
-    }
-    this.cratePress = { which, button, startedAt: this.time.now, fired: false };
-  }
-
-  // Releasing before the hold fired is a tap.
-  endCratePress(which) {
-    const press = this.cratePress;
-    if (press?.which !== which) return;
-    this.cratePress = null;
-    if (press.fired || !this.allowsCrateAction(which)) return;
-    this.getCrateControlAction(which)?.perform();
-  }
-
-  // Each frame: ends controller presses on release, and fires a hold once it's long enough.
-  updateCratePress() {
-    const press = this.cratePress;
-    if (!press) return;
-    if (press.button !== null && !this.padInput?.isDown(press.button)) {
-      this.endCratePress(press.which);
-      return;
-    }
-    if (press.fired || this.time.now - press.startedAt < HOLD_KEY_MS) return;
-    press.fired = true;
-    if (!this.allowsCrateAction(press.which)) return;
-    const action = this.getCrateControlAction(press.which);
-    (action?.hold ?? action?.perform)?.();
-  }
-
   // Tap Q: your top crate goes on the floor in front of you. With throwing, it's thrown the
   // way you're walking instead.
   dropTopCrate(throwing = false) {
@@ -1383,7 +1094,7 @@ export class GameScene extends Phaser.Scene {
   // --- Frame update and shift flow ---
 
   update(time, delta) {
-    this.handleGamepad(time, delta);
+    this.controls.handleGamepad(time, delta);
     if (this.controlMode.getMode() !== CONTROL_MODES.PAUSED) this.fixturePlacement.update();
     this.debugTools?.update();
     this.crateWorld.update(delta);
@@ -1425,9 +1136,7 @@ export class GameScene extends Phaser.Scene {
 
     this.shiftClock.update(delta);
     this.positionGoBacksBadge();
-    this.updateCratePress();
-    this.updateInteractPress();
-    this.updateFixtureMovePress();
+    this.controls.updatePresses();
     this.updateCrateHint();
     this.updateCrateMarker();
     for (const fixture of this.fixtures.shelves()) {

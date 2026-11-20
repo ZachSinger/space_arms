@@ -4,7 +4,7 @@
 // Polls connected controllers once per frame (browser Gamepad API, "standard" mapping) and
 // turns them into held buttons, just-pressed buttons, stick vectors, and a menu direction
 // that repeats while held. Every connected controller drives the same player.
-// See also: UINavigator.js (menus), game.js handleGamepad (world actions).
+// See also: UINavigator.js (menus), PlayerControls.js handleGamepad (world actions).
 
 // Standard-mapping button indexes, named after the Xbox layout.
 export const PAD = Object.freeze({

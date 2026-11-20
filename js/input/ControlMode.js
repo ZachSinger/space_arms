@@ -35,7 +35,7 @@ export class ControlMode {
       !scene.checkoutSystem?.operatingRegister || !REGISTER_WINDOWS.has(window.id));
     const placementBlocked = scene.fixturePlacement?.active && (
       openWindows.some((window) => window.element?.classList.contains("active")) ||
-      scene.uiNavigator?.hasScope?.()
+      scene.controls?.uiNavigator?.hasScope?.()
     );
 
     let nextMode = CONTROL_MODES.WALKING;

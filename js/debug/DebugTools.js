@@ -28,12 +28,12 @@ export class DebugTools {
 
   install() {
     const { scene } = this;
-    scene.bindControlKey("keydown-G", "debug", () => this.toggleGrid());
-    scene.bindControlKey("keydown-BACK_SLASH", "debugGrid", (event) => {
+    scene.controls.bindKey("keydown-G", "debug", () => this.toggleGrid());
+    scene.controls.bindKey("keydown-BACK_SLASH", "debugGrid", (event) => {
       if (!event.repeat) this.toggleGrid(8, 0x00ff00, 1);
     });
-    scene.bindControlKey("keydown-Y", "debug", () => scene.customerFlow.spawn(null));
-    scene.bindControlKey("keydown-K", "debug", () => this.quickstart());
+    scene.controls.bindKey("keydown-Y", "debug", () => scene.customerFlow.spawn(null));
+    scene.controls.bindKey("keydown-K", "debug", () => this.quickstart());
 
     this.buttons = [
       ["hud-debug-shop-upgrade-btn", () => this.unlockNextZone(EXPANSION_ORDER, "sales floor")],
