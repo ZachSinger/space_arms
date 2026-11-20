@@ -61,7 +61,7 @@ export class CleaningSystem {
   getActions() {
     const shop = this.shop;
     const carriedCrates = shop.crateSystem.getCarriedCrates();
-    const trashcan = shop.getNearbyTrashcan();
+    const trashcan = shop.fixtureSystem.getNearbyTrashcan();
 
     if (this.heldTrash) {
       return trashcan ? [{

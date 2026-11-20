@@ -21,7 +21,7 @@ try {
     const trashcan = scene.fixtures.ofKind("trash")[0];
     scene.player.sprite.body.reset(1168, 206);
     scene.player.currentFacing = "up";
-    const nearby = scene.getNearbyTrashcan()?.id;
+    const nearby = scene.fixtureSystem.getNearbyTrashcan()?.id;
     scene.handleInteract();
     const afterTaking = scene.crateSystem.getCarriedCrates().length;
     scene.handleInteract();

@@ -697,7 +697,7 @@ test("fixture movement prefers the faced shelf when a trashcan is also nearby", 
     },
   ]);
   h.scene.isPlayerFacingFixture = () => true;
-  h.scene.getNearbyTrashcan = () => trashcan;
+  h.scene.fixtureSystem.getNearbyTrashcan = () => trashcan;
   h.scene.fixtureSystem.canRearrange = () => true;
   h.scene.fixtureSystem.moveAreaBlockReason = () => null;
 
@@ -1093,7 +1093,6 @@ test("E returns every held empty crate, preserving filled crates; Q only puts cr
   const full = crate();
   const empties = [crate({ quantity: 0 }), crate({ quantity: 0 })];
   carry(h.scene, [empties[0], full, empties[1]]);
-  h.scene.isNearTrashcan = () => true;
   h.scene.fixtureSystem.getNearbyTrashcan = () => ({ id: "trashcan" });
   h.scene.handleInteract();
   assert.ok(empties.every((entry) => entry.destroyed));
@@ -1122,20 +1121,20 @@ test("a sales-floor trashcan takes back empty crates only while faced from close
   // The trashcan covers x 1152-1184 and y 128-176; stand just below it, facing it.
   Object.assign(h.scene.player.sprite, { x: 1168, y: 176 + 30 });
   h.scene.player.currentFacing = "up";
-  assert.equal(h.scene.isNearTrashcan(), true);
+  assert.equal(Boolean(h.scene.fixtureSystem.getNearbyTrashcan()), true);
   carry(h.scene, [crate({ quantity: 0 }), crate({ quantity: 0 })]);
   h.scene.handleInteract();
   assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), []);
   assert.equal(h.messages.at(-1), "2 empty crates put in the trashcan.");
 
   h.scene.player.currentFacing = "right";
-  assert.equal(h.scene.isNearTrashcan(), false, "beside it but facing something else");
+  assert.equal(Boolean(h.scene.fixtureSystem.getNearbyTrashcan()), false, "beside it but facing something else");
   h.scene.player.currentFacing = "up";
   h.scene.player.sprite.y = 176 + 60;
-  assert.equal(h.scene.isNearTrashcan(), false, "too far from the trashcan");
+  assert.equal(Boolean(h.scene.fixtureSystem.getNearbyTrashcan()), false, "too far from the trashcan");
   h.scene.player.sprite.y = 176 + 30;
   h.scene.areas.playerArea = AREA.BACKROOM;
-  assert.equal(h.scene.isNearTrashcan(), false, "the trashcan isn't reachable from the backroom");
+  assert.equal(Boolean(h.scene.fixtureSystem.getNearbyTrashcan()), false, "the trashcan isn't reachable from the backroom");
 });
 
 test("trashcan supplies and receives crates when cleaning is disabled", () => {
@@ -1194,7 +1193,6 @@ test("E supplies one free empty crate only with empty hands", () => {
     return crate;
   };
 
-  h.scene.isNearTrashcan = () => true;
   h.scene.fixtureSystem.getNearbyTrashcan = () => ({ id: "trashcan" });
   h.scene.handleInteract();
   assert.equal(h.scene.crateSystem.getCarriedCrates().length, 1);
@@ -1704,10 +1702,9 @@ test("E behind the counter always steps away, even beside a trashcan or holding 
   const h = createHarness();
   let ended = 0;
   let tookCrates = 0;
-  Object.assign(h.scene, {
-    isNearTrashcan: () => true, // a trashcan within reach must not hijack E
-    takeEmptyCrateFromTrashcan() { tookCrates += 1; },
-  });
+  // A trashcan within reach must not hijack E.
+  h.scene.fixtureSystem.getNearbyTrashcan = () => ({ id: "trashcan" });
+  h.scene.crateSystem.takeEmptyCrateFromTrashcan = () => { tookCrates += 1; };
   h.scene.checkoutSystem.operatingRegister = true;
   h.scene.checkoutSystem.endRegisterSession = () => {
     ended += 1;

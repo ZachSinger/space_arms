@@ -162,7 +162,7 @@ export class CrateSystem {
       const reason = "You can't pick up crates while holding trash";
       return this.addActionHints({
         pickUp: { tap: say(reason, "#f59e0b"), blocked: true },
-        putDown: { tap: () => shop.dropHeldTrash(), trash: true },
+        putDown: { tap: () => shop.cleaningSystem?.dropHeldTrash() ?? false, trash: true },
       }, null, holding);
     }
 

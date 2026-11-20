@@ -32,7 +32,7 @@ export class InteractionSystem {
     if (shop.carriedCrate?.kind === "item") {
       const nearby = shop.getNearbyFixture();
       if (nearby) throw new Error(`Fixture "${nearby.id}" has no interaction action.`);
-      shop.showGameMessage(shop.isNearTrashcan()
+      shop.showGameMessage(shop.fixtureSystem.getNearbyTrashcan()
         ? "Only empty crates go in the trashcan."
         : "Too far from a shelf", "#94a3b8");
       return;
@@ -54,7 +54,7 @@ export class InteractionSystem {
       const portalAction = shop.getPortalInteractionAction();
       if (portalAction) {
         lines.push(portalAction.hint);
-      } else if (mode === CONTROL_MODES.WALKING && !shop.heldTrash && !shop.findTrashInFront()) {
+      } else if (mode === CONTROL_MODES.WALKING && !shop.heldTrash && !shop.cleaningSystem?.findTrashInFront()) {
         const interactable = shop.interactables.findTarget("interact", shop.getInteractionOrigin());
         if (interactable?.hint && interactable.kind !== "trash" && interactable.kind !== "trashcan") {
           lines.push(...interactable.hint.split("\n"));
@@ -62,7 +62,7 @@ export class InteractionSystem {
       }
 
       const stack = shop.crateSystem.markedFloorStack();
-      const nearTrashcan = shop.isNearTrashcan();
+      const nearTrashcan = Boolean(shop.fixtureSystem.getNearbyTrashcan());
       const availableActions = shop.interactables.getActions(
         shop.player,
         shop.input,

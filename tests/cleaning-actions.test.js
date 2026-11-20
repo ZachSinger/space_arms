@@ -11,7 +11,7 @@ function harness({ carried = [], heldTrash = null, trashcan = null, area = AREA.
     areas: { playerArea: area },
     player,
     fixtures: { ofKind: (kind) => kind === "trash" && trashcan ? [trashcan] : [] },
-    getNearbyTrashcan: () => shop.areas.playerArea === AREA.SHOP ? trashcan : null,
+    fixtureSystem: { getNearbyTrashcan: () => shop.areas.playerArea === AREA.SHOP ? trashcan : null },
     crateSystem: {
       getCarriedCrates: () => carried,
       heldEmptyCrates: () => carried.filter((crate) => crate.quantity === 0),

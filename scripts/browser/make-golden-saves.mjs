@@ -56,7 +56,7 @@ try {
   // Trash on the floor.
   await h.game((scene) => {
     const door = scene.storeDoor;
-    for (let index = 0; index < 6; index += 1) scene.dropTrash(door.x - 96 + index * 32, door.y + 96);
+    for (let index = 0; index < 6; index += 1) scene.cleaningSystem.dropTrash(door.x - 96 + index * 32, door.y + 96);
   });
   saves["trash"] = await serialize(h);
 } finally {

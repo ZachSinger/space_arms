@@ -670,67 +670,6 @@ export class GameScene extends Phaser.Scene {
     );
   }
 
-  isNearTrashcan() {
-    return Boolean(this.fixtureSystem.getNearbyTrashcan());
-  }
-
-  // The trashcan the player faces, with its edge a few steps ahead, or null. Standing
-  // beside a trashcan while facing something else never counts.
-  getNearbyTrashcan() {
-    return this.fixtureSystem.getNearbyTrashcan();
-  }
-
-  // --- Trash and cleanliness (documentation/modules/Cleaning.md) ---
-
-  // Where loose trash may lie: open sales floor that no wall or fixture covers.
-  isOpenTrashSpot(x, y) {
-    return this.cleaningSystem?.isOpenTrashSpot(x, y) ?? false;
-  }
-
-  /**
-   * A customer drops a piece of trash at their feet, if that spot is open shop floor.
-   * @returns {boolean} whether it was dropped
-   */
-  dropTrash(x, y) {
-    return this.cleaningSystem?.dropTrash(x, y) ?? false;
-  }
-
-  // The trash just ahead of his feet, the way he faces.
-  findTrashInFront() {
-    return this.cleaningSystem?.findTrashInFront() ?? null;
-  }
-
-  pickUpTrash(piece) {
-    return this.cleaningSystem?.pickUpTrash(piece) ?? false;
-  }
-
-  throwAwayHeldTrash() {
-    return this.cleaningSystem?.throwAwayHeldTrash() ?? false;
-  }
-
-  // Q with trash in hand: it goes back on the floor just ahead of him, or at his feet.
-  dropHeldTrash() {
-    return this.cleaningSystem?.dropHeldTrash() ?? false;
-  }
-
-  // Trash in hand still counts against the store until it's in a trashcan.
-  getCleanliness() {
-    return this.cleaningSystem?.getCleanliness() ?? null;
-  }
-
-  getCleanlinessPercent() {
-    return this.cleaningSystem?.getCleanlinessPercent() ?? null;
-  }
-
-  /**
-   * A customer found the store too dirty: store reputation only, never their faction's.
-   * @param {Customer} customer
-   * @param {"upset" | "walk-out"} verdict
-   */
-  reportCleanlinessVerdict(customer, verdict) {
-    this.cleaningSystem?.reportCleanlinessVerdict(customer, verdict);
-  }
-
   /**
    * Opens a shelf's window if the player is in range; silently does nothing if not.
    * @param {object} [fixture] - the clicked fixture; the E key passes none and uses the nearest

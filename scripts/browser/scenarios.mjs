@@ -42,7 +42,7 @@ const giveCrates = (h, quantities) => h.game((scene, amounts) => {
 const openFloor = (h) => h.game((scene) => {
   const zone = scene.room.zones.find((candidate) => candidate.salesFloor && !candidate.locked);
   const open = (gx, gy) => [0.2, 0.5, 0.8].every((fx) => [0.2, 0.5, 0.8].every((fy) =>
-    scene.isOpenTrashSpot((gx + fx) * 64, (gy + fy) * 64)));
+    scene.cleaningSystem?.isOpenTrashSpot((gx + fx) * 64, (gy + fy) * 64)));
   for (let gy = zone.gridY + zone.gridH - 1; gy > zone.gridY; gy -= 1) {
     for (let gx = zone.gridX + 1; gx < zone.gridX + zone.gridW - 1; gx += 1) {
       if (open(gx - 1, gy) && open(gx, gy) && open(gx + 1, gy) && open(gx, gy - 1)) {
@@ -79,7 +79,7 @@ export const scenarios = {
         for (const [dx, dy, facing] of sides) {
           const x = target.x + dx;
           const y = target.y + dy;
-          if (!scene.isOpenTrashSpot(x, y) || !scene.isOpenTrashSpot(target.x + dx / 2, target.y + dy / 2)) continue;
+          if (!scene.cleaningSystem?.isOpenTrashSpot(x, y) || !scene.cleaningSystem?.isOpenTrashSpot(target.x + dx / 2, target.y + dy / 2)) continue;
           scene.player.teleportTo(x, y);
           scene.player.forceFacing(facing);
           scene.player.sprite.body.setVelocity(step[facing][0] * 220, step[facing][1] * 220);
@@ -280,12 +280,12 @@ export const scenarios = {
     const result = await h.game((scene, at) => {
       const can = scene.fixtures.ofKind("trash")[0];
       if (!can) return { error: "no trashcan in the shop" };
-      const before = scene.getCleanliness();
+      const before = scene.cleaningSystem.getCleanliness();
       scene.player.teleportTo(at.x, at.y - 64);
       scene.player.forceFacing("down");
       const { center } = scene.player.sprite.body;
-      if (!scene.dropTrash(center.x, center.y + 22)) return { error: "couldn't drop trash in front of the player" };
-      const dirty = scene.getCleanliness();
+      if (!scene.cleaningSystem.dropTrash(center.x, center.y + 22)) return { error: "couldn't drop trash in front of the player" };
+      const dirty = scene.cleaningSystem.getCleanliness();
       scene.handleInteract();
       return { before: before.trashCount, dirty: dirty.trashCount, holding: Boolean(scene.heldTrash) };
     }, spot);
@@ -296,12 +296,12 @@ export const scenarios = {
       for (const [facing, ox, oy] of [["up", 0.5, 1.6], ["down", 0.5, -0.6], ["left", 1.6, 0.5], ["right", -0.6, 0.5]]) {
         scene.player.teleportTo((can.gx + ox) * 64, (can.gy + oy) * 64);
         scene.player.forceFacing(facing);
-        if (scene.isNearTrashcan()) break;
+        if (scene.fixtureSystem.getNearbyTrashcan()) break;
       }
       scene.handleInteract();
-      const near = scene.isNearTrashcan();
+      const near = Boolean(scene.fixtureSystem.getNearbyTrashcan());
       scene.handleInteract();
-      return { near, held: Boolean(scene.heldTrash), count: scene.getCleanliness().trashCount };
+      return { near, held: Boolean(scene.heldTrash), count: scene.cleaningSystem.getCleanliness().trashCount };
     });
     const failures = [];
     if (result.dirty !== result.before + 1) failures.push("dropping trash didn't lower cleanliness");
