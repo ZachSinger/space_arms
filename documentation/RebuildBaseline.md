@@ -19,6 +19,9 @@ running it. Add `--quick` for shorter shifts, or `--only=shift`, `--only=scenari
 Run `node scripts/browser/check-optional-cleaning.mjs` to check the real game with Cleaning
 disabled and enabled, including the trashcan, customers, HUD, and saved trash.
 
+The production build optimizes item pictures while leaving the source art untouched. After
+building, `npm run check:build` checks the pictures and Phase 9's 15,000,000-byte size limit.
+
 ## Browser checks
 
 - **Scripted shifts** (no staff, then two staff): a real shift at normal speed, then the clock jumps

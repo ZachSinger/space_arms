@@ -14,6 +14,7 @@
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json",
     "check": "npm run typecheck && npm run lint",
+    "check:build": "node scripts/check-build.mjs",
     "check:game": "node scripts/browser/run-checks.mjs"
   },
   "build": {
@@ -42,6 +43,7 @@
     "globals": "^17.14.0",
     "phaser": "^3.80.1",
     "playwright-core": "^1.65.1",
+    "sharp": "^0.35.5",
     "typescript": "^7.0.2",
     "vite": "^5.4.1"
   },

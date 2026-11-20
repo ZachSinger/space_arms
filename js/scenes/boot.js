@@ -25,9 +25,7 @@ export class BootScene extends Phaser.Scene {
 
   preload() {
     this.load.json("items", "data/Items.json");
-    this.load.json("iconset", "data/IconSet.json");
     this.load.json("licenses", "data/Licenses.json");
-    this.load.atlas("item-icons", "img/IconSet.png", "data/IconSet.json");
     for (const sheet of [PLAYER_SPRITE, PLAYER_CARRY_SPRITE]) {
       this.load.spritesheet(sheet.key, sheet.path, {
         frameWidth: sheet.frameWidth,
@@ -65,7 +63,6 @@ export class BootScene extends Phaser.Scene {
       }
     }
     const rawItems = this.cache.json.get("items");
-    const rawIconset = this.cache.json.get("iconset");
     const rawLicenses = this.cache.json.get("licenses");
 
     database.loadItemsJSON(rawItems);
