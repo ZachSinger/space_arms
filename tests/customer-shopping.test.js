@@ -231,6 +231,81 @@ test("characters route around the true edges of a fixture body", () => {
   }
 });
 
+test("reused routes stay independent and are invalidated when the shop changes", () => {
+  const obstacle = { body: { x: 80, y: 32, width: 80, height: 96, enable: true } };
+  const scene = makeNavigationScene([obstacle]);
+  const zone = { gridX: 0, gridY: 0, gridW: 4, gridH: 4, locked: false };
+  scene.room.zones = [zone];
+  scene.room.wallCells = new Map();
+  scene.room.navigationWalkabilityKey = () => JSON.stringify([zone.locked, [...scene.room.wallCells.keys()]]);
+  const onFloor = scene.room.isWalkable;
+  let checks = 0;
+  scene.room.isWalkable = (gx, gy) => {
+    checks += 1;
+    return !zone.locked && !scene.room.wallCells.has(`${gx},${gy}`) && onFloor(gx, gy);
+  };
+  const route = () => scene.findAreaPath(32, 96, 224, 96);
+  const first = route();
+  assert.ok(first?.length);
+  const expected = structuredClone(first);
+  const firstChecks = checks;
+  first[0].x = -1;
+  first.pop();
+  checks = 0;
+  assert.deepEqual(route(), expected, "moving one character must not change another character's route");
+  assert.ok(checks < firstChecks / 2, "the repeated route avoids another search");
+
+  obstacle.body.x += 16;
+  checks = 0;
+  const moved = route();
+  assert.ok(checks > firstChecks / 2, "a moved fixture needs a new route");
+  scene.navigation.routeCache.clear();
+  assert.deepEqual(moved, route());
+  obstacle.body.enable = false;
+  assert.deepEqual(route(), [], "a disabled obstacle no longer blocks the direct path");
+  obstacle.body.enable = true;
+
+  zone.locked = true;
+  assert.equal(route(), null, "locking the room invalidates the route");
+  zone.locked = false;
+  assert.ok(route()?.length);
+  scene.room.wallCells.set("1,1", {});
+  const withWall = route();
+  scene.navigation.routeCache.clear();
+  assert.deepEqual(withWall, route(), "adding a wall recalculates the route");
+  scene.room.isWalkable = () => false;
+  assert.equal(route(), null, "changing the room's walkability function invalidates routes");
+});
+
+test("cached routes respect each character's size", () => {
+  const scene = makeNavigationScene([
+    { body: { x: 80, y: 32, width: 80, height: 96 } },
+  ]);
+  scene.room.navigationWalkabilityKey = () => "unchanged";
+  const normal = scene.findAreaPath(32, 96, 224, 96);
+  const larger = scene.findAreaPath(32, 96, 224, 96, { width: 46, height: 48 });
+  assert.ok(normal?.length);
+  assert.ok(larger?.length);
+  assert.notDeepEqual(larger, normal);
+  assert.deepEqual(scene.findAreaPath(32, 96, 224, 96), normal);
+});
+
+test("a room without a walkability key never reuses routes", () => {
+  const scene = makeNavigationScene([{ body: { x: 80, y: 32, width: 80, height: 96 } }]);
+  const onFloor = scene.room.isWalkable;
+  let closed = false;
+  scene.room.isWalkable = (gx, gy) => !closed && onFloor(gx, gy);
+  assert.ok(scene.findAreaPath(32, 96, 224, 96)?.length);
+  closed = true;
+  assert.equal(scene.findAreaPath(32, 96, 224, 96), null);
+});
+
+test("a room that opts into route caching must provide a valid key", () => {
+  const scene = makeNavigationScene([{ body: { x: 80, y: 32, width: 80, height: 96 } }]);
+  scene.room.navigationWalkabilityKey = () => undefined;
+  assert.throws(() => scene.findAreaPath(32, 96, 224, 96), /walkability key must be a string/);
+});
+
 test("the register queue can approach the counter's exact front edge", () => {
   const register = { rotation: 0, sprite: { body: { x: 80, y: 40, width: 90, height: 75 } } };
   const scene = makeNavigationScene([], register);

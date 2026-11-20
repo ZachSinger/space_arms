@@ -86,6 +86,14 @@ export class TileRoom {
     return this.isOpen(gx, gy) && !this.wallCells.has(`${gx},${gy}`);
   }
 
+  // Keep this in step with isOpen/isWalkable so cached routes expire when the floor changes.
+  navigationWalkabilityKey() {
+    return JSON.stringify([
+      this.zones.map((zone) => [zone.locked, zone.gridX, zone.gridY, zone.gridW, zone.gridH, zone.backroom]),
+      [...this.wallCells.keys()],
+    ]);
+  }
+
   /**
    * True if the cell is unlocked floor that no room wall covers (doors count as walls).
    * Unlike isWalkable, this works while walls are still being built.

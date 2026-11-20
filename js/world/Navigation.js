@@ -32,6 +32,8 @@ const PIXEL_DIRECTIONS = [
   [-1, -1, Math.SQRT2],
 ];
 
+const ROUTE_CACHE_LIMIT = 128;
+
 class MinHeap {
   constructor() {
     this.items = [];
@@ -323,7 +325,7 @@ function segmentIntersectsRectangle(from, to, rectangle) {
 /**
  * Routes characters around the shop and between areas through their paired portals.
  * @param {{
- *   room: { isWalkable: (gx: number, gy: number) => boolean, wallGroup: { getChildren: () => object[] } },
+ *   room: { isWalkable: (gx: number, gy: number) => boolean, navigationWalkabilityKey?: () => string, wallGroup: { getChildren: () => object[] } },
  *   areas: { crossing: (fromY: number, toY: number) => { near: {x:number,y:number}, far: {x:number,y:number} } | null },
  *   obstacleGroup: { getChildren: () => object[] },
  *   fixtures: { registers: () => object[] },
@@ -346,6 +348,9 @@ export class Navigation {
     this.getRegisterFacing = getRegisterFacing;
     this.registerFrontOverlap = registerFrontOverlap;
     this.defaultBodySize = defaultBodySize;
+    this.routeCache = new Map();
+    this.routeLayout = null;
+    this.routeWalkability = null;
     this.store = Object.freeze({
       findPath: (...args) => this.findPath(...args),
     });
@@ -419,17 +424,43 @@ export class Navigation {
 
   findAreaPath(fromX, fromY, toX, toY, bodySize) {
     const obstacles = this.getNavigationObstacles(bodySize);
-    return findFreeWalkPath(
-      { x: fromX, y: fromY },
-      { x: toX, y: toY },
+    const start = { x: fromX, y: fromY };
+    const goal = { x: toX, y: toY };
+    const isSegmentClear = (from, to) => this.isNavigationSegmentClear(from, to, obstacles);
+    if (isSegmentClear(start, goal)) return [];
+
+    let routeKey = null;
+    if (typeof this.room.navigationWalkabilityKey === "function") {
+      const layout = this.room.navigationWalkabilityKey();
+      if (typeof layout !== "string") throw new TypeError("The room's navigation walkability key must be a string.");
+      if (layout !== this.routeLayout || this.room.isWalkable !== this.routeWalkability) {
+        this.routeCache.clear();
+        this.routeLayout = layout;
+        this.routeWalkability = this.room.isWalkable;
+      }
+      routeKey = JSON.stringify([fromX, fromY, toX, toY, obstacles]);
+      if (this.routeCache.has(routeKey)) {
+        const cached = this.routeCache.get(routeKey);
+        return cached === null ? null : cached.map((point) => ({ ...point }));
+      }
+    }
+
+    const path = findFreeWalkPath(
+      start,
+      goal,
       {
         isWalkable: (x, y) =>
           this.room.isWalkable(Math.floor(x / TILE_SIZE), Math.floor(y / TILE_SIZE)) &&
           obstacles.every((rectangle) =>
             x <= rectangle.left || x >= rectangle.right || y <= rectangle.top || y >= rectangle.bottom),
-        isSegmentClear: (from, to) => this.isNavigationSegmentClear(from, to, obstacles),
+        isSegmentClear,
       },
     );
+    if (routeKey !== null) {
+      if (this.routeCache.size >= ROUTE_CACHE_LIMIT) this.routeCache.delete(this.routeCache.keys().next().value);
+      this.routeCache.set(routeKey, path === null ? null : path.map((point) => ({ ...point })));
+    }
+    return path;
   }
 }
 

@@ -1,6 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { BACKROOM_UPGRADE_ORDER, EXPANSION_ORDER, SHOP_BACK_WALL_HEIGHT, ZONES, getAuthoredGridSize, getBackroomBounds, getBackroomDoorCell, getBackroomInteriorBounds, getBackroomLink, getLoadingPadBounds, getStoreDoorCell, getTotalGridSize, getZone, isBackroomRow } from "../js/logic/RoomLayout.js";
+import { TileRoom } from "../js/logic/TileRoom.js";
+
+test("the navigation key changes when room walkability changes", () => {
+  const room = Object.create(TileRoom.prototype);
+  const zone = { gridX: 0, gridY: 0, gridW: 4, gridH: 4, locked: false };
+  room.zones = [zone];
+  room.wallCells = new Map();
+  const initial = room.navigationWalkabilityKey();
+  assert.equal(room.isWalkable(2, 1), true);
+  room.wallCells.set("2,1", {});
+  assert.notEqual(room.navigationWalkabilityKey(), initial);
+  assert.equal(room.isWalkable(2, 1), false);
+  room.wallCells.clear();
+  zone.gridW = 2;
+  assert.notEqual(room.navigationWalkabilityKey(), initial);
+  assert.equal(room.isWalkable(2, 1), false);
+  zone.gridW = 4;
+  zone.locked = true;
+  assert.notEqual(room.navigationWalkabilityKey(), initial);
+  assert.equal(room.isWalkable(2, 1), false);
+});
 
 test("the full shop viewport is reserved at 39 by 21 tiles", () => {
   assert.deepEqual(getTotalGridSize(), { gridW: 39, gridH: 21 });
