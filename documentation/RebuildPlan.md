@@ -436,6 +436,10 @@ A per-frame cap would delay staff decisions and change replays, so none was adde
 staff skip same-room spots that cannot beat their best route; spots behind doors are always
 checked, and equal routes still pick the same spot.
 
+Icon atlases and further art squeezing were measured and skipped: item pictures are already
+shrunk at build time, floor and wall art is shown larger than its source at the closest zoom,
+and lossless re-saving would save only ~320 KB (4%) while visibly changing some pictures.
+
 ### Total
 
 About **31–33 sessions**, re-estimated after step 3.7. Phases 0–3 give the biggest payoff.
