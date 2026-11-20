@@ -327,7 +327,11 @@ function segmentIntersectsRectangle(from, to, rectangle) {
  * Routes characters around the shop and between areas through their paired portals.
  * @param {{
  *   room: { isWalkable: (gx: number, gy: number) => boolean, navigationWalkabilityKey?: () => string, wallGroup: { getChildren: () => object[] } },
- *   areas: { crossing: (fromY: number, toY: number) => { near: {x:number,y:number}, far: {x:number,y:number} } | null },
+ *   areas: {
+ *     crossings: (fromX: number, fromY: number, toX: number, toY: number) => Array<{ near: {x:number,y:number}, far: {x:number,y:number} }> | null,
+ *     isWalkable: (gx: number, gy: number) => boolean,
+ *     navigationWalkabilityKey: () => string | null,
+ *   },
  *   obstacleGroup: { getChildren: () => object[] },
  *   fixtures: { registers: () => object[] },
  *   getStoreDoorBlocker: () => object | null,
@@ -430,7 +434,8 @@ export class Navigation {
   }
 
   prepareWalkabilityCache() {
-    if (typeof this.room.navigationWalkabilityKey !== "function") {
+    const layout = this.areas.navigationWalkabilityKey();
+    if (layout === null) {
       if (this.walkGridEnabled || this.routeWalkability) {
         this.routeCache.clear();
         this.walkGridCache.clear();
@@ -441,7 +446,6 @@ export class Navigation {
       return false;
     }
 
-    const layout = this.room.navigationWalkabilityKey();
     if (typeof layout !== "string") {
       throw new TypeError("The room's navigation walkability key must be a string.");
     }
@@ -456,10 +460,10 @@ export class Navigation {
   }
 
   isRoomWalkable(gx, gy) {
-    if (!this.walkGridEnabled) return this.room.isWalkable(gx, gy);
+    if (!this.walkGridEnabled) return this.areas.isWalkable(gx, gy);
     const key = `${gx},${gy}`;
     if (this.walkGridCache.has(key)) return this.walkGridCache.get(key);
-    const walkable = this.room.isWalkable(gx, gy);
+    const walkable = this.areas.isWalkable(gx, gy);
     if (this.walkGridCache.size >= WALK_GRID_CACHE_LIMIT) {
       this.walkGridCache.delete(this.walkGridCache.keys().next().value);
     }
@@ -468,15 +472,18 @@ export class Navigation {
   }
 
   findPath(fromX, fromY, toX, toY, bodySize) {
-    const crossing = this.areas?.crossing(fromY, toY);
-    if (crossing) {
-      const { near, far } = crossing;
-      const toDoor = this.findAreaPath(fromX, fromY, near.x, near.y, bodySize);
-      const fromDoor = toDoor && this.findAreaPath(far.x, far.y, toX, toY, bodySize);
-      if (!fromDoor) return null;
-      return [...toDoor, { x: near.x, y: near.y, teleportTo: { x: far.x, y: far.y } }, ...fromDoor];
+    const crossings = this.areas.crossings(fromX, fromY, toX, toY);
+    if (!crossings) return null;
+    const path = [];
+    for (const { near, far } of crossings) {
+      const leg = this.findAreaPath(fromX, fromY, near.x, near.y, bodySize);
+      if (!leg) return null;
+      path.push(...leg, { x: near.x, y: near.y, teleportTo: { x: far.x, y: far.y } });
+      fromX = far.x;
+      fromY = far.y;
     }
-    return this.findAreaPath(fromX, fromY, toX, toY, bodySize);
+    const last = this.findAreaPath(fromX, fromY, toX, toY, bodySize);
+    return last ? [...path, ...last] : null;
   }
 
   findAreaPath(fromX, fromY, toX, toY, bodySize) {

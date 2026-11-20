@@ -2,12 +2,12 @@
 // FILE: CameraRig.js
 // ==========================================
 // The cameras: the shop camera (zoom, following the player, keeping the same view across
-// window resizes) and the backroom's own camera, drawn as a framed window over the middle of
-// the shop while the player is inside. Also answers which camera shows a point or an area, so
+// window resizes) and a framed camera shared by the backroom and module rooms.
+// Also answers which camera shows a point or an area, so
 // pop-ups stay the same size on screen and clicks land on the right spot.
 import { CRATE_FOOTER_HEIGHT_PX } from "../logic/CrateFooter.js";
 import { TILE_SIZE } from "../logic/RoomLayout.js";
-import { AREA, areaAt } from "./Areas.js";
+import { AREA } from "./Areas.js";
 
 // Screen space kept clear when fitting the map: the top status bar (36px + 2px border),
 // the bottom crate bar (#crate-footer, 96px), and a small margin around the map.
@@ -73,20 +73,21 @@ export class CameraRig {
     return 1 / (this.cameraAt(worldX, worldY)?.zoom || 1);
   }
 
-  /** The camera that shows an area: the backroom's window for the backroom, else the shop's. */
+  /** Other rooms share the framed camera; only the player's current room is shown. */
   cameraFor(area) {
-    return area === AREA.BACKROOM ? this.backroomCamera : this.shop.cameras.main;
+    return area === AREA.SHOP ? this.shop.cameras.main : this.backroomCamera;
   }
 
   /**
-   * The camera that draws a world point: the backroom window's for backroom points while
-   * it's open, otherwise the shop camera. With no point, the shop camera.
+   * The camera that draws a world point: the framed camera for the active room's points,
+   * otherwise the shop camera. With no point, the shop camera.
    * @param {number} [worldX]
    * @param {number} [worldY]
    */
   cameraAt(worldX, worldY) {
     const backroom = this.backroomCamera;
-    if (backroom?.visible && Number.isFinite(worldY) && areaAt(worldY) === AREA.BACKROOM) {
+    if (backroom?.visible && Number.isFinite(worldX) && Number.isFinite(worldY) &&
+      this.shop.areas.areaAt(worldX, worldY) === this.shop.areas.playerArea) {
       return backroom;
     }
     return this.shop.cameras?.main;
@@ -138,8 +139,8 @@ export class CameraRig {
       boundsH,
     );
 
-    // In the backroom the shop view holds still where the player left it.
-    if (scene.player?.sprite && scene.areas.playerArea !== AREA.BACKROOM) {
+    // Inside another room the shop view holds still where the player left it.
+    if (scene.player?.sprite && scene.areas.playerArea === AREA.SHOP) {
       camera.startFollow(scene.player.sprite, true);
     } else if (scene.player?.sprite) {
       camera.stopFollow();
@@ -171,20 +172,20 @@ export class CameraRig {
     this.refreshBackroomWindow();
   }
 
-  // Sizes the window to fit the backroom the player owns: buying a backroom upgrade makes
-  // both the room and its window bigger.
+  // Fit the current room's bounds, including expansions.
   refreshBackroomWindow() {
     const camera = this.backroomCamera;
     if (!camera) return;
     const scene = this.shop;
-    const open = scene.areas.playerArea === AREA.BACKROOM;
+    const area = scene.areas.playerArea;
+    const open = area !== AREA.SHOP;
     camera.setVisible(open);
     this.backroomFrame?.classList.toggle("hidden", !open);
     if (!open) return;
 
     const screenW = Math.max(1, scene.scale.width);
     const screenH = this.mapViewHeight();
-    const room = scene.room.getCameraBounds("backroom");
+    const room = scene.areas.boundsFor(area);
     const zoom = Math.min(
       (screenW * BACKROOM_WINDOW_SHARE) / room.width,
       (screenH * BACKROOM_WINDOW_SHARE - BACKROOM_TITLE_HEIGHT) / room.height,
@@ -200,6 +201,7 @@ export class CameraRig {
 
     const frame = this.backroomFrame;
     if (!frame) return;
+    frame.querySelector(".backroom-window-title").textContent = scene.areas.titleFor(area);
     const border = BACKROOM_FRAME_BORDER;
     Object.assign(frame.style, {
       left: `${x - border}px`,

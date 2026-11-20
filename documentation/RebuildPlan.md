@@ -406,6 +406,12 @@ pattern for every future add-on.
 
 **Done when:** turning Cleaning off in one line removes it cleanly, and all three paper checks fit.
 
+**Implemented foundation:** Cleaning is optional, and the guide covers all three planned modules.
+The Shooting Range gap now has registered rooms, module-owned floor checks, paired stairs,
+multi-room character routes, and a shared framed room camera. A temporary-room browser check
+tests entry, exit, routing, and cleanup; the existing backroom screenshot is unchanged.
+This does not implement the future modules' gameplay.
+
 ### Phase 9 — Performance and build size (2 sessions)
 
 **In plain words:** make the slow parts fast, measured against the Phase 0 baseline.

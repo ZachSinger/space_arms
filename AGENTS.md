@@ -34,6 +34,7 @@ Design is specified in detail in `documentation/` — consult it before inventin
 - Decision rules must return `true` or `false`; any rule may veto an action. Reputation gains pass through `reputation.gain`, while reputation losses are intentionally unaffected.
 - Keep module-specific customer policies inside the module and expose them through the customer store; customer logic must not import optional modules directly.
 - Persistent module data belongs in a `GameState` slice and the normal save validation/upgrade path, not in unvalidated module-local save blobs. See `documentation/ModuleGuide.md` before adding a module.
+- Extra rooms register bounds, floor checks, and walkability keys with `Areas.registerArea`; entrances use `registerPortalPair`. Stairs use a standing footprint rather than a wall-door facing check. Use `Areas.areaAt(x, y)` for registered rooms; the exported row-only helpers describe only the original shop/backroom layout.
 
 ## Build and Test
 

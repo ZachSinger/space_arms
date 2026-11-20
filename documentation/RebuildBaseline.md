@@ -30,7 +30,8 @@ building, `npm run check:build` checks the pictures and Phase 9's 15,000,000-byt
 - **Scenarios**: a thrown crate hits a customer and costs reputation; taking the middle crate out
   of a three-high stack; stepping behind each register and back out; an employee refills an empty
   shelf space and gets rid of the empty crate; trash is picked up and binned; every golden save
-  loads and resaves exactly as before.
+  loads and resaves exactly as before. A temporary registered room also verifies stairs using E,
+  shared portal routes, the framed room camera, and clean removal without adding a shipped room.
 - **Replay**: the same seeded stretch of a busy shift is played twice, once at normal pace (one game
   step per frame) and once fast-forwarded (twelve normal-size steps per frame). Where everyone
   stands, sales, money, and trash must match exactly. Games started with a `seed` replay their

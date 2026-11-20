@@ -128,7 +128,12 @@ function makeNavigationScene(obstacles = [], register = null) {
   };
   scene.obstacleGroup = { getChildren: () => obstacles };
   scene.fixtures = { register: () => register, registers: () => register ? [register] : [] };
-  scene.areas = { crossing: () => null };
+  scene.areas = {
+    crossings: () => [],
+    isWalkable: (gx, gy) => scene.room.isWalkable(gx, gy),
+    navigationWalkabilityKey: () => typeof scene.room.navigationWalkabilityKey === "function"
+      ? scene.room.navigationWalkabilityKey() : null,
+  };
   scene.navigation = new Navigation({
     room: scene.room,
     areas: scene.areas,
@@ -147,7 +152,7 @@ test("cross-area paths use matching portal approaches and a teleport waypoint", 
   const pathCalls = [];
   const near = { x: 80, y: 96 };
   const far = { x: 96, y: 160 };
-  scene.areas.crossing = () => ({ near, far });
+  scene.areas.crossings = () => [{ near, far }];
   scene.navigation.findAreaPath = (...args) => {
     pathCalls.push(args);
     return [{ x: args[2], y: args[3] }];
@@ -172,6 +177,24 @@ test("customers require an injected store route interface", () => {
     () => new Customer({ store: {} }),
     /Customer requires a store interface with findPath/,
   );
+});
+
+test("multi-room paths include every portal leg and reject disconnected rooms", () => {
+  const scene = makeNavigationScene();
+  scene.areas.crossings = () => [
+    { near: { x: 64, y: 64 }, far: { x: 128, y: 128 } },
+    { near: { x: 160, y: 160 }, far: { x: 192, y: 192 } },
+  ];
+  scene.navigation.findAreaPath = (_x, _y, x, y) => [{ x, y }];
+  assert.deepEqual(scene.findPath(32, 32, 224, 224), [
+    { x: 64, y: 64 },
+    { x: 64, y: 64, teleportTo: { x: 128, y: 128 } },
+    { x: 160, y: 160 },
+    { x: 160, y: 160, teleportTo: { x: 192, y: 192 } },
+    { x: 224, y: 224 },
+  ]);
+  scene.areas.crossings = () => null;
+  assert.equal(scene.findPath(32, 32, 224, 224), null);
 });
 
 test("characters can walk through a clear passage narrower than one floor square", () => {

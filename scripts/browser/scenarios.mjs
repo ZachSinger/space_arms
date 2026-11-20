@@ -184,6 +184,64 @@ export const scenarios = {
     return failures;
   },
 
+  async "registered room stairs use E, shared routes, and the framed camera"(h) {
+    await freshShop(h);
+    const source = await openFloor(h);
+    await placePlayer(h, { ...source, facing: "right" });
+    await h.wait(100);
+    const setup = await h.game((scene) => {
+      const source = { x: scene.player.sprite.x, y: scene.player.sprite.y };
+      const front = { x: 8320, y: 128 };
+      const removeArea = scene.areas.registerArea("test-room", {
+        title: "TEST ROOM",
+        getBounds: () => ({ x: 8192, y: 0, width: 256, height: 256 }),
+        isWalkable: (gx, gy) => gx >= 128 && gx < 132 && gy >= 0 && gy < 4,
+        walkabilityKey: () => "test-floor",
+      });
+      const removePortals = scene.areas.registerPortalPair(
+        { area: "shop", door: source, front: source, hint: "Go downstairs",
+          standingBounds: { x: source.x - 16, y: source.y - 16, width: 32, height: 32 } },
+        { area: "test-room", door: front, front, hint: "Go upstairs",
+          standingBounds: { x: front.x - 16, y: front.y - 16, width: 32, height: 32 } },
+      );
+      scene.testRoomCleanup = () => {
+        if (scene.areas.playerArea === "test-room") {
+          scene.areas.goThrough(scene.areas.portalBetween("test-room", "shop"));
+        }
+        removePortals();
+        removeArea();
+      };
+      const path = scene.findPath(source.x, source.y, front.x + 32, front.y);
+      return { routed: path?.some((point) => point.teleportTo?.x === front.x) ?? false };
+    });
+    const failures = [];
+    try {
+      if (!setup.routed) failures.push("the shared route did not include the stairs");
+      await h.page.keyboard.press("e");
+      await h.wait(300);
+      const entered = await h.game((scene) => ({
+        area: scene.areas.playerArea,
+        visible: scene.cameraRig.backroomCamera.visible,
+        title: scene.cameraRig.backroomFrame.textContent,
+        cameraMatches: scene.cameraRig.cameraAt(scene.player.sprite.x, scene.player.sprite.y) ===
+          scene.cameraRig.backroomCamera,
+      }));
+      if (entered.area !== "test-room") failures.push("E did not enter the registered room");
+      if (!entered.visible || entered.title !== "TEST ROOM" || !entered.cameraMatches) {
+        failures.push("the framed camera did not show the registered room");
+      }
+      await h.page.keyboard.press("e");
+      await h.wait(300);
+      const left = await h.game((scene) => ({
+        area: scene.areas.playerArea, visible: scene.cameraRig.backroomCamera.visible,
+      }));
+      if (left.area !== "shop" || left.visible) failures.push("E did not return to the shop view");
+    } finally {
+      await h.game((scene) => { scene.testRoomCleanup(); delete scene.testRoomCleanup; });
+    }
+    return failures;
+  },
+
   async "employee restocks a shelf and gets rid of the empty crate"(h) {
     await freshShop(h, { employees: ["tavi_stock_clerk"] });
     const target = await h.game((scene) => {
