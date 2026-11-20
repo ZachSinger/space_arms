@@ -610,6 +610,35 @@ test("a stock clerk carries an empty crate to the nearest trashcan", () => {
   assert.equal(employee.state, "IDLE");
 });
 
+test("staff skip routing to same-room spots that cannot beat the best walk, keeping ties and doors exact", () => {
+  const { employee } = makeEmployee();
+  employee.sprite.body.center = { x: 0, y: 0 };
+  const calls = [];
+  const routes = new Map();
+  employee.scene.findPath = (fromX, fromY, toX, toY) => {
+    calls.push(`${toX},${toY}`);
+    return routes.has(`${toX},${toY}`) ? routes.get(`${toX},${toY}`) : [];
+  };
+  employee.scene.areas.areaAt = (x) => x >= 1000 ? "upstairs" : "shop";
+
+  const blocked = { x: 10, y: 0 };
+  const tieFirst = { x: 0, y: 30 };
+  const tieSecond = { x: 30, y: 0 };
+  const far = { x: 200, y: 0 };
+  routes.set("10,0", null);
+  let result = employee.findClosestSpot([far, tieSecond, blocked, tieFirst]);
+  assert.equal(result.spot, tieSecond, "equal walks keep the earliest listed spot");
+  assert.deepEqual(calls, ["10,0", "30,0", "0,30"], "the far spot is never routed");
+
+  calls.length = 0;
+  const upstairs = { x: 1005, y: 0 };
+  routes.set("1005,0", [{ x: 2, y: 0, teleportTo: { x: 1000, y: 0 } }]);
+  result = employee.findClosestSpot([tieSecond, upstairs]);
+  assert.equal(result.spot, upstairs, "a short walk through a door still wins");
+  assert.equal(result.length, 7);
+  assert.deepEqual(calls, ["1005,0"], "a same-room spot farther than the door walk is skipped");
+});
+
 test("employees reach tight corners before turning and cap their final movement step", () => {
   const { employee } = makeEmployee();
   employee.state = "TO_TRASHCAN";

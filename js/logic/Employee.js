@@ -290,8 +290,20 @@ export class Employee {
 
   findClosestSpot(spots) {
     const position = this.sprite.body.center ?? this.sprite;
+    const areas = this.store.areas;
+    const startArea = areas?.areaAt?.(position.x, position.y);
+    // A walk within one room is never shorter than a straight line, so farther spots can be
+    // skipped. Door crossings jump between rooms, so those spots are always checked.
+    const candidates = spots.map((spot, index) => ({
+      spot,
+      index,
+      minimumLength: startArea !== undefined && areas.areaAt(spot.x, spot.y) === startArea
+        ? Math.hypot(spot.x - position.x, spot.y - position.y)
+        : 0,
+    })).sort((a, b) => a.minimumLength - b.minimumLength || a.index - b.index);
     let best = null;
-    for (const spot of spots) {
+    for (const { spot, index, minimumLength } of candidates) {
+      if (best && minimumLength > best.length + 1e-6) break;
       const path = this.store.findPath(position.x, position.y, spot.x, spot.y, WALK_BODY);
       if (!path) continue;
       let length = 0;
@@ -300,9 +312,11 @@ export class Employee {
         length += Math.hypot(waypoint.x - from.x, waypoint.y - from.y);
         from = waypoint.teleportTo ?? waypoint;
       }
-      if (!best || length < best.length) best = { spot, path, length };
+      if (!best || length < best.length || (length === best.length && index < best.index)) {
+        best = { spot, path, length, index };
+      }
     }
-    return best;
+    return best && { spot: best.spot, path: best.path, length: best.length };
   }
 
   startPath(point, path, nextState) {

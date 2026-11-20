@@ -430,6 +430,12 @@ This does not implement the future modules' gameplay.
 
 **Final milestone check:** a 10-minute feel check across the whole game.
 
+Search-limit measurement (45 s busy shop, seed 4242): fewer than 30 of ~7,970 frames start
+any new route search, and the worst burst (18 searches, ~7 ms) still fits one 60 fps frame.
+A per-frame cap would delay staff decisions and change replays, so none was added. Instead,
+staff skip same-room spots that cannot beat their best route; spots behind doors are always
+checked, and equal routes still pick the same spot.
+
 ### Total
 
 About **31–33 sessions**, re-estimated after step 3.7. Phases 0–3 give the biggest payoff.
