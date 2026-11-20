@@ -27,7 +27,7 @@ export function createEmployeeStore(scene) {
   return {
     findPath: (...args) => scene.navigation.store.findPath(...args),
     getBehindRegisterPoint: (register) => scene.checkoutSystem.behindRegisterPoint(register),
-    syncFloorStacks: (...args) => scene.syncFloorStacks(...args),
+    syncFloorStacks: (...args) => scene.crateSystem.syncFloorStacks(...args),
     refreshShelfStockDisplay: (...args) => scene.refreshShelfStockDisplay(...args),
     showShopMessage: (...args) => scene.showShopMessage(...args),
     createEmployeeSprite(x, y, texture, width, height) {
@@ -48,6 +48,6 @@ export function createEmployeeStore(scene) {
     get floorStacks() { return scene.floorStacks; },
     get eventBus() { return scene.eventBus; },
     get player() { return scene.player; },
-    get crateMotionPaused() { return scene.crateMotionPaused; },
+    get crateMotionPaused() { return scene.crateSystem.motionPaused; },
   };
 }

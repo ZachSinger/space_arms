@@ -297,7 +297,7 @@ export class Areas {
     const arrival = partner.front;
     shop.player.teleportTo(arrival.x, arrival.y);
     shop.player.forceFacing(partner.arrivalFacing ?? "down");
-    shop.syncCarriedCrate();
+    shop.crateSystem.syncCarriedCrate();
     shop.cameraRig.refresh();
     shop.debugInfo?.record(portal.to === AREA.BACKROOM ? "entered-backroom" :
       portal.area === AREA.BACKROOM ? "left-backroom" : "changed-area", { from: portal.area, to: portal.to });

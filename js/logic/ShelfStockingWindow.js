@@ -124,14 +124,14 @@ export class ShelfStockingWindow {
    */
   getStockingCrate() {
     if (!this.uiWindow.isOpen) return null;
-    const stockable = this.scene.getStockableCrates()
+    const stockable = this.scene.crateSystem.getStockableCrates()
       .filter((crate) => crate.kind === "item" && crate.quantity > 0);
     return stockable.includes(this.chosenCrate) ? this.chosenCrate : stockable.at(-1) ?? null;
   }
 
   // Q: the next crate down the stack (wrapping back to the top) stocks next.
   chooseNextCrate() {
-    const topFirst = this.scene.getStockableCrates()
+    const topFirst = this.scene.crateSystem.getStockableCrates()
       .filter((crate) => crate.kind === "item" && crate.quantity > 0).reverse();
     if (topFirst.length === 0) {
       this.notice = "None of your crates have items to stock.";
@@ -259,7 +259,7 @@ export class ShelfStockingWindow {
       return;
     }
     const { index, pull } = this.holding;
-    const result = moveShelfCrateItem(this.fixture, this.scene.getStockableCrates(),
+    const result = moveShelfCrateItem(this.fixture, this.scene.crateSystem.getStockableCrates(),
       index % this.art.columns.length, Math.floor(index / this.art.columns.length), pull, this.scene.eventBus,
       this.getStockingCrate());
     this.notice = result.reservedFor
@@ -273,7 +273,7 @@ export class ShelfStockingWindow {
 
   refresh() {
     if (!this.uiWindow.isOpen) return;
-    const crates = this.scene.getStockableCrates().filter((crate) => crate.kind === "item");
+    const crates = this.scene.crateSystem.getStockableCrates().filter((crate) => crate.kind === "item");
     const stockableItemIds = new Set(crates.filter((crate) => crate.quantity > 0).map((crate) => crate.itemId));
     this.status.textContent = this.notice || "";
     for (let index = 0; index < this.cells.length; index++) {

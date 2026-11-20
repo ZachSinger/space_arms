@@ -54,7 +54,7 @@ export class CrateWorld {
     const shop = this.shop;
     const body = shop.player.sprite.body;
     const rectOf = (b) => ({ left: b.x, top: b.y, width: b.width, height: b.height });
-    const holding = shop.getCarriedCrates?.().length ?? shop.carriedCrates?.length ?? 0;
+    const holding = shop.crateSystem?.getCarriedCrates().length ?? shop.carriedCrates?.length ?? 0;
     const crates = shop.restockCrates
       .filter((crate) => crate.lockedToPad || crate.isPushed || crate.isStationary() || crate.isSliding())
       .map((crate) => ({

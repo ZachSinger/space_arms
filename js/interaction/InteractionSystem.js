@@ -61,7 +61,7 @@ export class InteractionSystem {
         }
       }
 
-      const stack = shop.markedFloorStack();
+      const stack = shop.crateSystem.markedFloorStack();
       const nearTrashcan = shop.isNearTrashcan();
       const availableActions = shop.interactables.getActions(
         shop.player,
@@ -75,7 +75,7 @@ export class InteractionSystem {
         if (action.hint) lines.push(...action.hint.split("\n"));
       }
       if (stack?.crates.length > 1) lines.push(`${controlLabel("nextCrate")}: Move the arrow one crate down`);
-      const trashcanTakesE = nearTrashcan && shop.heldEmptyCrates().length > 0;
+      const trashcanTakesE = nearTrashcan && shop.crateSystem.heldEmptyCrates().length > 0;
       if (!trashcanTakesE && shop.carriedCrate?.kind === "item") {
         const nearby = shop.getNearbyFixture();
         if (nearby) {

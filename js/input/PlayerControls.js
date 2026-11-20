@@ -190,7 +190,7 @@ export class PlayerControls {
         this.startCratePress("pickUp", { button: PAD.X });
       }
       if (pad.justPressed(PAD.Y)) this.startCratePress("putDown", { button: PAD.Y });
-      if (pad.justPressed(PAD.R3)) shop.markNextCrateDown();
+      if (pad.justPressed(PAD.R3)) shop.crateSystem.markNextCrateDown();
       if (pad.justPressed(PAD.B) && shop.checkoutSystem.operatingRegister) shop.checkoutSystem.endRegisterSession();
     }
     if (pad.justPressed(PAD.LB)) this.handleUnusedMenuButton(PAD.LB);
@@ -296,7 +296,7 @@ export class PlayerControls {
     keyboard.on("keyup-Q", () => this.endCratePress("putDown"));
     keyboard.on("keydown-CTRL", (event) => {
       if (!event.repeat) this.startFixtureMovePress();
-      shop.markNextCrateDown();
+      shop.crateSystem.markNextCrateDown();
     });
     keyboard.on("keyup-CTRL", () => { this.fixtureMovePress = null; });
   }

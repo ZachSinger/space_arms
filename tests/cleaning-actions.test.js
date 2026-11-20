@@ -12,10 +12,12 @@ function harness({ carried = [], heldTrash = null, trashcan = null, area = AREA.
     player,
     fixtures: { ofKind: (kind) => kind === "trash" && trashcan ? [trashcan] : [] },
     getNearbyTrashcan: () => shop.areas.playerArea === AREA.SHOP ? trashcan : null,
-    getCarriedCrates: () => carried,
-    heldEmptyCrates: () => carried.filter((crate) => crate.quantity === 0),
-    takeEmptyCrateFromTrashcan: () => calls.push("take"),
-    returnEmptyCratesToTrashcan: () => calls.push("return"),
+    crateSystem: {
+      getCarriedCrates: () => carried,
+      heldEmptyCrates: () => carried.filter((crate) => crate.quantity === 0),
+      takeEmptyCrateFromTrashcan: () => calls.push("take"),
+      returnEmptyCratesToTrashcan: () => calls.push("return"),
+    },
   };
   const cleaning = Object.assign(Object.create(CleaningSystem.prototype), { shop, heldTrash });
   cleaning.findTrashInFront = () => null;

@@ -35,7 +35,7 @@ test("the outline follows the shelf's turned body box and disappears once the cr
   let stockable = [{ itemId: "rifle", quantity: 4 }];
   const fixture = shelf([{ itemId: "rifle", quantity: 10 }]);
   fixture.rotation = 1; // turned sideways: 1 tile wide, 2 tall
-  const scene = { add: { graphics: () => graphics }, getStockableCrates: () => stockable };
+  const scene = { add: { graphics: () => graphics }, crateSystem: { getStockableCrates: () => stockable } };
   const highlight = new ShelfAttentionHighlight(scene, fixture);
   highlight.update(0);
   assert.equal(graphics.visible, true);
@@ -56,7 +56,7 @@ test("an inactive shelf does not clear its graphics every frame", () => {
     clear() { clears += 1; return this; },
   };
   const fixture = shelf([{ itemId: "rifle", quantity: 0 }]);
-  const scene = { add: { graphics: () => graphics }, getStockableCrates: () => [] };
+  const scene = { add: { graphics: () => graphics }, crateSystem: { getStockableCrates: () => [] } };
   const highlight = new ShelfAttentionHighlight(scene, fixture);
   highlight.update(0);
   highlight.update(16);

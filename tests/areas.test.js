@@ -15,7 +15,7 @@ function harness() {
       teleportTo(x, y) { this.sprite = { x, y }; },
       forceFacing(facing) { this.currentFacing = facing; },
     },
-    syncCarriedCrate() { this.synced = true; },
+    crateSystem: { syncCarriedCrate() { scene.synced = true; } },
     cameraRig: { refresh() {} },
   };
   const areas = Object.assign(Object.create(Areas.prototype), {

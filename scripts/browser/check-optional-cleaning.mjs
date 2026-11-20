@@ -23,9 +23,9 @@ try {
     scene.player.currentFacing = "up";
     const nearby = scene.getNearbyTrashcan()?.id;
     scene.handleInteract();
-    const afterTaking = scene.getCarriedCrates().length;
+    const afterTaking = scene.crateSystem.getCarriedCrates().length;
     scene.handleInteract();
-    const afterReturning = scene.getCarriedCrates().length;
+    const afterReturning = scene.crateSystem.getCarriedCrates().length;
     return {
       cleaning: scene.cleaningSystem,
       visible: getComputedStyle(hud).display !== "none",

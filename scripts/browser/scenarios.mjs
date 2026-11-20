@@ -30,11 +30,11 @@ const placePlayer = (h, spot) => h.game((scene, { x, y, facing }) => {
 const giveCrates = (h, quantities) => h.game((scene, amounts) => {
   const itemId = scene.fixtures.shelves()[0].placements[0].itemId;
   for (const quantity of amounts) {
-    const crate = scene.createItemCrate(itemId, quantity, scene.player.sprite.x, scene.player.sprite.y);
+    const crate = scene.crateSystem.createItemCrate(itemId, quantity, scene.player.sprite.x, scene.player.sprite.y);
     crate.pickUp(scene.player.sprite);
-    scene.addCarriedCrate(crate);
+    scene.crateSystem.addCarriedCrate(crate);
   }
-  scene.syncCarriedCrate();
+  scene.crateSystem.syncCarriedCrate();
 }, quantities);
 
 // The centre of an open shop-floor tile with open floor on both sides and walkable floor
@@ -83,7 +83,7 @@ export const scenarios = {
           scene.player.teleportTo(x, y);
           scene.player.forceFacing(facing);
           scene.player.sprite.body.setVelocity(step[facing][0] * 220, step[facing][1] * 220);
-          if (scene.throwTopCrate()) return true;
+          if (scene.crateSystem.throwTopCrate()) return true;
         }
         return false;
       });
@@ -104,17 +104,17 @@ export const scenarios = {
     await placePlayer(h, { x: spot.x, y: spot.y - 70, facing: "down" });
     const result = await h.game((scene, at) => {
       const itemId = scene.fixtures.shelves()[0].placements[0].itemId;
-      const [bottom, middle, top] = [1, 2, 3].map((quantity) => scene.createItemCrate(itemId, quantity, at.x, at.y));
+      const [bottom, middle, top] = [1, 2, 3].map((quantity) => scene.crateSystem.createItemCrate(itemId, quantity, at.x, at.y));
       bottom.drop(at.x, at.y, 0, 0, false);
       scene.restockCrates.push(bottom);
       scene.floorStacks.set(bottom, [middle, top]);
-      scene.syncFloorStacks();
-      const tookMiddle = scene.pickUpFromStack({ base: bottom, crates: [bottom, middle, top], marked: middle }, false);
+      scene.crateSystem.syncFloorStacks();
+      const tookMiddle = scene.crateSystem.pickUpFromStack({ base: bottom, crates: [bottom, middle, top], marked: middle }, false);
       const left = [bottom, ...(scene.floorStacks.get(bottom) ?? [])].map((crate) => crate.quantity);
-      const held = scene.getCarriedCrates().map((crate) => crate.quantity);
-      const tookBottomWithAbove = scene.pickUpFromStack(
+      const held = scene.crateSystem.getCarriedCrates().map((crate) => crate.quantity);
+      const tookBottomWithAbove = scene.crateSystem.pickUpFromStack(
         { base: bottom, crates: [bottom, ...(scene.floorStacks.get(bottom) ?? [])], marked: bottom }, true);
-      return { tookMiddle, left, held, tookBottomWithAbove, heldAfter: scene.getCarriedCrates().map((crate) => crate.quantity),
+      return { tookMiddle, left, held, tookBottomWithAbove, heldAfter: scene.crateSystem.getCarriedCrates().map((crate) => crate.quantity),
         stillOnFloor: scene.restockCrates.includes(bottom) };
     }, spot);
     const failures = [];
@@ -166,7 +166,7 @@ export const scenarios = {
         scene.player.forceFacing("up");
         const found = scene.areas.nearbyPortal() === portal;
         scene.handleInteract();
-        const crate = scene.getCarriedCrates()[0];
+        const crate = scene.crateSystem.getCarriedCrates()[0];
         const { x, y } = scene.player.sprite;
         return { found, area: scene.areas.playerArea, window: scene.cameraRig.backroomCamera.visible,
           crateFollowed: Boolean(crate) && Math.hypot(crate.sprite.x - x, crate.sprite.y - y) < 80 };

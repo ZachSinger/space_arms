@@ -34,7 +34,7 @@ export async function runSpeedTest(h, seconds = 45) {
     for (let index = 0; index < 30; index += 1) {
       const x = (storeroom.gridX + 0.5 + (index % 4)) * 64;
       const y = (storeroom.gridY + 0.5 + Math.floor(index / 4) % 4) * 64;
-      const crate = scene.createItemCrate(itemIds[index % itemIds.length], 4, x, y);
+      const crate = scene.crateSystem.createItemCrate(itemIds[index % itemIds.length], 4, x, y);
       crate.drop(x, y, 0, 0, false);
       scene.restockCrates.push(crate);
     }

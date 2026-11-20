@@ -70,7 +70,7 @@ export class CheckoutSystem {
             }]
             : [
               { action: "register", hint: `${controlLabel("interact")}: Activate Register` },
-              ...(shop.getCarriedCrates().length === 0 && !shop.heldTrash ? [{
+              ...(shop.crateSystem.getCarriedCrates().length === 0 && !shop.heldTrash ? [{
                 action: "interact",
                 hint: `${controlLabel("interact")}: Activate Register`,
                 perform: () => shop.tryOpenRegister(),
@@ -139,7 +139,7 @@ export class CheckoutSystem {
       ...(shop.restockCrates ?? [])
         .filter((crate) => !crate.isCarried && !crate.launch)
         .flatMap((crate) => [crate, ...(shop.floorStacks?.get(crate) ?? [])]),
-      ...shop.getCarriedCrates(),
+      ...shop.crateSystem.getCarriedCrates(),
     ].filter((crate) => crate.kind === "item");
     let moved = 0;
     for (const entry of [...shop.gameState.goBacks.stock]) {
@@ -187,7 +187,7 @@ export class CheckoutSystem {
     let packed = 0;
     let floorStacksPlaced = 0;
     while (packed < loads.length) {
-      const base = shop.createItemCrate(null, 0, centerX, centerY);
+      const base = shop.crateSystem.createItemCrate(null, 0, centerX, centerY);
       base.sprite.body.enable = false; // so it doesn't count as an obstacle while it looks for room
       const spot = this.findGoBacksSpot(base, reserved);
       if (!spot) {
@@ -197,17 +197,17 @@ export class CheckoutSystem {
       if (!spot.inBackroom) floorStacksPlaced += 1;
       const stack = [base];
       while (stack.length < FLOOR_STACK_MAX && packed + stack.length < loads.length) {
-        stack.push(shop.createItemCrate(null, 0, spot.x, spot.y));
+        stack.push(shop.crateSystem.createItemCrate(null, 0, spot.x, spot.y));
       }
       stack.forEach((crate, index) => shop.gameState.goBacks.packInto(loads[packed + index], crate));
-      base.drop(spot.x, spot.y, 0, 0, shop.crateMotionPaused);
+      base.drop(spot.x, spot.y, 0, 0, shop.crateSystem.motionPaused);
       shop.restockCrates.push(base);
       const above = stack.slice(1);
       for (const crate of above) crate.pickUp(base.sprite, { stackedOnId: base.id });
       if (above.length) shop.floorStacks.set(base, above);
       packed += stack.length;
     }
-    shop.syncFloorStacks();
+    shop.crateSystem.syncFloorStacks();
     shop.gameState.shop.changed();
     const crates = (count) => `${count} ${count === 1 ? "crate" : "crates"}`;
     if (packed === 0) {
@@ -389,7 +389,7 @@ export class CheckoutSystem {
     if (this.operatingRegister) return;
     if (!register) return;
     // Working the counter needs empty hands; crates would lock the player in place.
-    if (shop.getCarriedCrates().length > 0) {
+    if (shop.crateSystem.getCarriedCrates().length > 0) {
       shop.showShopMessage("Put down what you're carrying before working the register.");
       return;
     }
@@ -417,7 +417,7 @@ export class CheckoutSystem {
       registerId: register.id,
     });
     shop.sortPeopleByFeet();
-    shop.syncFloorStacks();
+    shop.crateSystem.syncFloorStacks();
   }
 
   // Returns the player to where they stood before beginRegisterSession(). Only called when
@@ -449,7 +449,7 @@ export class CheckoutSystem {
       registerId: register?.id ?? null,
     });
     shop.sortPeopleByFeet();
-    shop.syncFloorStacks();
+    shop.crateSystem.syncFloorStacks();
   }
 
   lineFor(register) {

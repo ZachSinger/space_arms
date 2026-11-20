@@ -421,7 +421,7 @@ function createRegisterHarness() {
   });
   scene.carriedCrates = [];
   scene.carriedCrate = null;
-  scene.crateSystem = { getCarriedCrates: () => scene.carriedCrates };
+  scene.crateSystem = { getCarriedCrates: () => scene.carriedCrates, syncCarriedCrate() {}, syncFloorStacks() {} };
   scene.controlMode = new ControlMode(scene);
   scene.checkoutSystem = new CheckoutSystem(scene);
   scene.checkoutSystem.operatingRegister = true;
@@ -857,7 +857,7 @@ test("the register refuses a player whose hands are full of crates", () => {
     carriedCrate: { id: "crate_1" },
     showShopMessage: (text) => messages.push(text),
   });
-  scene.crateSystem = { getCarriedCrates: () => scene.carriedCrates };
+  scene.crateSystem = { getCarriedCrates: () => scene.carriedCrates, syncCarriedCrate() {}, syncFloorStacks() {} };
   scene.checkoutSystem = new CheckoutSystem(scene);
   scene.checkoutSystem.beginRegisterSession(register);
   assert.equal(scene.checkoutSystem.operatingRegister, false);
@@ -1064,7 +1064,7 @@ test("side-facing register queue and cashier align with the body box rather than
       scene.employees = [];
       scene.eventBus = { emit() {} };
       scene.checkoutWindow = { mode: "closed" };
-      scene.crateSystem = { getCarriedCrates: () => [] };
+      scene.crateSystem = { getCarriedCrates: () => [], syncCarriedCrate() {}, syncFloorStacks() {} };
       scene.checkoutSystem = new CheckoutSystem(scene);
       scene.player = { sprite, inputEnabled: true,
         teleportTo(x, y) { sprite.x = x; sprite.y = y; }, forceFacing() {} };

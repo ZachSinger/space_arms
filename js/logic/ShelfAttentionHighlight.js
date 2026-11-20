@@ -47,7 +47,7 @@ export class ShelfAttentionHighlight {
   setAngle() {}
 
   sync() {
-    const active = shelfMatchesStockable(this.fixture, this.scene.getStockableCrates?.() ?? []);
+    const active = shelfMatchesStockable(this.fixture, this.scene.crateSystem?.getStockableCrates() ?? []);
     if (active === this.active) return;
     this.active = active;
     if (!this.active) this.graphics.clear().setVisible(false);

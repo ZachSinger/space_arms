@@ -217,6 +217,7 @@ function makeEmployee({
     restockCrates: [crate],
     floorStacks: new Map(),
     syncFloorStacks() {},
+    crateSystem: { syncFloorStacks() {}, motionPaused: false },
     player: { sprite: {} },
     showShopMessage() {},
     findPath: () => [],

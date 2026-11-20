@@ -143,7 +143,7 @@ export class SupplySystem {
    * @param {import("../logic/Crate.js").Crate} crate
    */
   deliver(crate) {
-    crate.setPaused(this.shop.crateMotionPaused);
+    crate.setPaused(this.shop.crateSystem.motionPaused);
     crate.lockToPad();
     this.shop.restockCrates.push(crate);
   }
@@ -231,7 +231,7 @@ export class SupplySystem {
       for (let index = 0; index < count; index += 1) {
         const spawn = spots.shift();
         const quantity = getCrateOrderQuantity(database.getItem(itemId));
-        const crate = this.shop.createItemCrate(itemId, 0, spawn.x, spawn.y);
+        const crate = this.shop.crateSystem.createItemCrate(itemId, 0, spawn.x, spawn.y);
         const result = sourceItems(crate, itemId, quantity, {
           sourceId: deliveryId,
           sourceLocation: { kind: "supply-delivery", deliveryId, day: gameState.calendar.day },

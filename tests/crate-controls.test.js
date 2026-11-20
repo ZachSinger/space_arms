@@ -159,7 +159,7 @@ function createHarness({ carrying = false } = {}) {
   scene.crateWorld = Object.assign(Object.create(CrateWorld.prototype), { shop: scene });
   scene.markedStackBase = null;
   scene.markedFromTop = 0;
-  scene.crateMotionPaused = false;
+  scene.crateSystem.motionPaused = false;
   scene.time = { now: 0 };
   scene.fixtures = {
     shelves: () => [],
@@ -397,7 +397,7 @@ test("combining crate stock records a container transfer", () => {
   heldCrate.getRemainingUnitsFor = () => 3;
   carry(scene, [heldCrate]);
 
-  assert.equal(scene.combineIntoCarried(floorCrate), 3);
+  assert.equal(scene.crateSystem.combineIntoCarried(floorCrate), 3);
   assert.equal(floorCrate.quantity, 4);
   assert.equal(heldCrate.quantity, 5);
   assert.equal(transfers.length, 1);
@@ -478,7 +478,7 @@ test("supply orders source delivered stock into crates through inventory rules",
   scene.gameState.market.getPrice = () => 10;
   scene.gameState.economy.spend = () => {};
   scene.gameState.shop.changed = () => {};
-  scene.createItemCrate = (itemId, quantity, x, y) => {
+  scene.crateSystem.createItemCrate = (itemId, quantity, x, y) => {
     const stockCrate = crate({ quantity });
     stockCrate.itemId = itemId;
     stockCrate.quantity = quantity;
@@ -734,7 +734,7 @@ test("tapping Space picks up the marked crate; holding takes it and every crate 
   const [bottom, middle, top] = floorStack(h.scene, 3);
 
   tap(h);
-  assert.deepEqual(h.scene.getCarriedCrates(), [top]);
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [top]);
   assert.deepEqual(h.scene.floorStacks.get(bottom), [middle]);
   assert.deepEqual(h.scene.player.sprite.body.velocity, { x: 160, y: 0 }, "picking up never stops the player");
 
@@ -743,9 +743,9 @@ test("tapping Space picks up the marked crate; holding takes it and every crate 
   assert.deepEqual(h.scene.floorStacks.get(bottom), [middle, top]);
   // Ctrl moves the arrow down to the middle crate; holding Space takes it and the top one.
   h.handlers.get("keydown-CTRL")(keyEvent());
-  assert.equal(h.scene.markedFloorStack().marked, middle);
+  assert.equal(h.scene.crateSystem.markedFloorStack().marked, middle);
   hold(h);
-  assert.deepEqual(h.scene.getCarriedCrates(), [middle, top]);
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [middle, top]);
   assert.equal(h.scene.carriedCrate, top);
   assert.equal(h.scene.floorStacks.has(bottom), false);
   assert.deepEqual(h.scene.restockCrates, [bottom]);
@@ -756,16 +756,16 @@ test("tapping Space picks up the marked crate; holding takes it and every crate 
 test("Ctrl loops the arrow back to the top, and taking the bottom crate lets the next one settle in its place", () => {
   const h = createHarness();
   const [bottom, middle, top] = floorStack(h.scene, 3);
-  h.scene.markNextCrateDown();
-  h.scene.markNextCrateDown();
-  assert.equal(h.scene.markedFloorStack().marked, bottom);
-  h.scene.markNextCrateDown();
-  assert.equal(h.scene.markedFloorStack().marked, top);
-  h.scene.markNextCrateDown();
-  h.scene.markNextCrateDown();
+  h.scene.crateSystem.markNextCrateDown();
+  h.scene.crateSystem.markNextCrateDown();
+  assert.equal(h.scene.crateSystem.markedFloorStack().marked, bottom);
+  h.scene.crateSystem.markNextCrateDown();
+  assert.equal(h.scene.crateSystem.markedFloorStack().marked, top);
+  h.scene.crateSystem.markNextCrateDown();
+  h.scene.crateSystem.markNextCrateDown();
 
   tap(h);
-  assert.deepEqual(h.scene.getCarriedCrates(), [bottom]);
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [bottom]);
   assert.deepEqual(h.scene.restockCrates, [middle]);
   assert.deepEqual(h.scene.floorStacks.get(middle), [top]);
   assert.deepEqual(middle.dropped, { x: 140, y: 100, velocityX: 0, velocityY: 0, paused: false });
@@ -776,12 +776,12 @@ test("Space won't pick up past three crates and says how many you're holding", (
   carry(h.scene, [crate(), crate()]);
   const [bottom, top] = floorStack(h.scene, 2);
 
-  h.scene.markNextCrateDown();
+  h.scene.crateSystem.markNextCrateDown();
   hold(h);
-  assert.equal(h.scene.getCarriedCrates().length, 2);
+  assert.equal(h.scene.crateSystem.getCarriedCrates().length, 2);
   assert.equal(h.messages.at(-1),
     "You can only carry 3 crates. You're holding 2, so you can't pick up 2 more.");
-  h.scene.markNextCrateDown();
+  h.scene.crateSystem.markNextCrateDown();
   tap(h);
   assert.equal(h.scene.carriedCrate, top);
   tap(h);
@@ -803,7 +803,7 @@ test("picking up a crate of the item you hold pours as much as fits into yours a
   tap(h);
   assert.equal(held.quantity, limit - 1);
   assert.equal(floor.quantity, 0);
-  assert.deepEqual(h.scene.getCarriedCrates(), [held], "the empty crate stays on the floor");
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [held], "the empty crate stays on the floor");
   assert.deepEqual(h.scene.restockCrates, [floor]);
 
   floor.add("wpn_pis_01", 5);
@@ -816,7 +816,7 @@ test("picking up a crate of the item you hold pours as much as fits into yours a
 
   // Your crate is full, so the next tap picks the floor crate up as usual.
   tap(h);
-  assert.deepEqual(h.scene.getCarriedCrates(), [held, floor]);
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [held, floor]);
 });
 
 test("tapping Q puts the top crate down and holding Q sets the whole stack down as one floor stack", () => {
@@ -834,12 +834,12 @@ test("tapping Q puts the top crate down and holding Q sets the whole stack down 
 
   tap(h, "Q");
   assert.deepEqual(upper.dropped, { x: 52, y: 100, velocityX: 0, velocityY: 0, paused: false });
-  assert.deepEqual(h.scene.getCarriedCrates(), [lower, middle]);
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [lower, middle]);
   assert.deepEqual(h.scene.restockCrates, [upper]);
 
   h.scene.restockCrates = [];
   hold(h, "Q");
-  assert.deepEqual(h.scene.getCarriedCrates(), []);
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), []);
   assert.equal(h.scene.carriedCrate, null);
   assert.deepEqual(h.scene.restockCrates, [lower]);
   assert.deepEqual(h.scene.floorStacks.get(lower), [middle]);
@@ -855,7 +855,7 @@ test("crates stay in your hands when there's no room to set them down", () => {
   carry(h.scene, [lower, upper]);
   hold(h, "Q");
   tap(h, "Q");
-  assert.deepEqual(h.scene.getCarriedCrates(), [lower, upper]);
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [lower, upper]);
   assert.deepEqual(h.scene.restockCrates, []);
   assert.deepEqual(h.messages, ["No room to set the stack down", "No room to drop crate"]);
 });
@@ -868,16 +868,16 @@ test("Q stacks onto the marked floor crate: a tap adds one, a hold adds as many 
 
   tap(h, "Q");
   assert.deepEqual(h.scene.floorStacks.get(base), [carried[2]]);
-  assert.deepEqual(h.scene.getCarriedCrates(), carried.slice(0, 2));
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), carried.slice(0, 2));
   hold(h, "Q");
   assert.deepEqual(h.scene.floorStacks.get(base), [carried[2], carried[1]]);
-  assert.deepEqual(h.scene.getCarriedCrates(), [carried[0]], "the rest stay in your hands");
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [carried[0]], "the rest stay in your hands");
 
   for (const press of [tap, hold]) {
     press(h, "Q");
     assert.equal(h.messages.at(-1), "You can't stack any higher. Stacks can only be 3 crates high.");
   }
-  assert.deepEqual(h.scene.getCarriedCrates(), [carried[0]]);
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [carried[0]]);
 });
 
 test("nothing stacks on a fixture crate or a Loading Pad crate, and a fixture crate never stacks", () => {
@@ -917,7 +917,7 @@ test("Space throws your only crate while walking with no arrow showing, and expl
   carry(h.scene, [lower, upper]);
   h.scene.player.sprite.body.velocity = { x: 160, y: 0 };
   tap(h);
-  assert.deepEqual(h.scene.getCarriedCrates(), [lower, upper], "two crates can't be thrown");
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [lower, upper], "two crates can't be thrown");
   assert.equal(h.messages.at(-1), "You can only throw a crate when you're holding just one.");
   carry(h.scene, [upper]);
   const velocity = { x: 160 / Math.sqrt(2), y: -160 / Math.sqrt(2) };
@@ -929,13 +929,13 @@ test("Space throws your only crate while walking with no arrow showing, and expl
   assert.equal(h.scene.player.sprite.body.velocity, velocity);
   upper.isStationary = () => false; // still flying, so the arrow can't mark it
   h.handlers.get("keyup-SPACE")(keyEvent());
-  assert.deepEqual(h.scene.getCarriedCrates(), []);
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), []);
   h.scene.restockCrates = h.scene.restockCrates.filter((c) => c !== upper);
   carry(h.scene, [lower]);
 
   h.scene.player.sprite.body.velocity = { x: 0, y: 0 };
   tap(h);
-  assert.deepEqual(h.scene.getCarriedCrates(), [lower]);
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [lower]);
   assert.equal(h.messages.at(-1), "To throw a crate, walk and press Space.");
 
   h.scene.player.sprite.body.velocity = { x: 160, y: 0 };
@@ -950,29 +950,29 @@ test("the arrow only marks crates in front of the player", () => {
   const behind = crate();
   behind.sprite.x = 50; // to his left
   h.scene.restockCrates = [behind];
-  assert.equal(h.scene.markedFloorStack(), null);
+  assert.equal(h.scene.crateSystem.markedFloorStack(), null);
   tap(h);
   assert.equal(h.messages.at(-1), "No crate nearby");
   h.scene.player.currentFacing = "left";
-  assert.equal(h.scene.markedFloorStack().marked, behind);
+  assert.equal(h.scene.crateSystem.markedFloorStack().marked, behind);
   h.scene.restockCrates = [crate({ distance: INTERACT_RANGE + 1 })];
   h.scene.player.currentFacing = "right";
-  assert.equal(h.scene.markedFloorStack(), null, "out of reach");
+  assert.equal(h.scene.crateSystem.markedFloorStack(), null, "out of reach");
   // Close enough, but off to the side: less than half his feet line up with it.
   const offside = crate();
   offside.sprite.y = 109;
   h.scene.restockCrates = [offside];
-  assert.equal(h.scene.markedFloorStack(), null, "not squarely in front");
+  assert.equal(h.scene.crateSystem.markedFloorStack(), null, "not squarely in front");
   offside.sprite.y = 108;
-  assert.equal(h.scene.markedFloorStack().marked, offside, "half his feet line up");
+  assert.equal(h.scene.crateSystem.markedFloorStack().marked, offside, "half his feet line up");
 });
 
 test("the stack arrow stops at 32 pixels from the crate edge so distant stacks don't steal Q", () => {
   const h = createHarness();
   const [base] = floorStack(h.scene, 1, { distance: 32 });
-  assert.equal(h.scene.markedFloorStack().base, base, "a stack exactly in reach is marked");
+  assert.equal(h.scene.crateSystem.markedFloorStack().base, base, "a stack exactly in reach is marked");
   base.sprite.x += 1;
-  assert.equal(h.scene.markedFloorStack(), null, "one pixel farther is out of reach");
+  assert.equal(h.scene.crateSystem.markedFloorStack(), null, "one pixel farther is out of reach");
   const held = crate();
   carry(h.scene, [held]);
   tap(h, "Q");
@@ -1075,17 +1075,17 @@ test("controller X and Y tell a tap from a hold the same way, and R3 moves the a
 
   const [bottom, middle, top] = floorStack(h.scene, 3);
   press(PAD.R3);
-  assert.equal(h.scene.markedFloorStack().marked, middle);
+  assert.equal(h.scene.crateSystem.markedFloorStack().marked, middle);
   press(PAD.X);
   h.scene.time.now += HOLD_KEY_MS;
   h.scene.controls.updateCratePress();
   release(PAD.X);
-  assert.deepEqual(h.scene.getCarriedCrates(), [middle, top]);
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [middle, top]);
 
   press(PAD.Y);
   release(PAD.Y);
   assert.deepEqual(h.scene.floorStacks.get(bottom), [top]);
-  assert.deepEqual(h.scene.getCarriedCrates(), [middle]);
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [middle]);
 });
 
 test("E returns every held empty crate, preserving filled crates; Q only puts crates down", () => {
@@ -1097,18 +1097,18 @@ test("E returns every held empty crate, preserving filled crates; Q only puts cr
   h.scene.fixtureSystem.getNearbyTrashcan = () => ({ id: "trashcan" });
   h.scene.handleInteract();
   assert.ok(empties.every((entry) => entry.destroyed));
-  assert.deepEqual(h.scene.getCarriedCrates(), [full]);
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [full]);
   assert.equal(h.messages.at(-1), "2 empty crates put in the trashcan.");
 
   h.scene.handleInteract();
-  assert.deepEqual(h.scene.getCarriedCrates(), [full]);
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [full]);
   assert.equal(h.messages.at(-1), "Only empty crates go in the trashcan.");
   const empty = crate({ quantity: 0 });
   carry(h.scene, [full, empty]);
   tap(h, "Q");
   assert.ok(empty.dropped);
   assert.notEqual(empty.destroyed, true);
-  assert.deepEqual(h.scene.getCarriedCrates(), [full]);
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [full]);
   tap(h, "Q");
   assert.equal(h.scene.carriedCrate, null, "a stocked crate is still put down normally beside the trashcan");
   assert.ok(full.dropped);
@@ -1125,7 +1125,7 @@ test("a sales-floor trashcan takes back empty crates only while faced from close
   assert.equal(h.scene.isNearTrashcan(), true);
   carry(h.scene, [crate({ quantity: 0 }), crate({ quantity: 0 })]);
   h.scene.handleInteract();
-  assert.deepEqual(h.scene.getCarriedCrates(), []);
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), []);
   assert.equal(h.messages.at(-1), "2 empty crates put in the trashcan.");
 
   h.scene.player.currentFacing = "right";
@@ -1147,12 +1147,12 @@ test("trashcan supplies and receives crates when cleaning is disabled", () => {
   Object.assign(h.scene.player.sprite, { x: 1168, y: 206 });
   h.scene.player.currentFacing = "up";
   let created = 0;
-  h.scene.takeEmptyCrateFromTrashcan = () => { created += 1; };
+  h.scene.crateSystem.takeEmptyCrateFromTrashcan = () => { created += 1; };
   h.scene.handleInteract();
   assert.equal(created, 1);
   carry(h.scene, [crate({ quantity: 0 })]);
   h.scene.handleInteract();
-  assert.deepEqual(h.scene.getCarriedCrates(), []);
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), []);
   h.scene.fixtureSystem.canRearrange = () => true;
   h.scene.fixtureSystem.moveAreaBlockReason = () => null;
   assert.equal(h.scene.getHoldToMoveFixture(), trashcan);
@@ -1162,22 +1162,22 @@ test("the former backroom empty-crate square no longer takes or supplies crates"
   const h = createHarness();
   h.scene.areas.playerArea = AREA.BACKROOM;
   Object.assign(h.scene.player.sprite, { x: 174, y: 6608 });
-  h.scene.createItemCrate = () => { throw new Error("the backroom must not supply a crate"); };
+  h.scene.crateSystem.createItemCrate = () => { throw new Error("the backroom must not supply a crate"); };
 
   h.scene.handleInteract();
-  assert.equal(h.scene.getCarriedCrates().length, 0);
+  assert.equal(h.scene.crateSystem.getCarriedCrates().length, 0);
   const empty = crate({ quantity: 0 });
   carry(h.scene, [empty]);
   h.scene.handleInteract();
   assert.equal(empty.destroyed, undefined);
-  assert.deepEqual(h.scene.getCarriedCrates(), [empty]);
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [empty]);
 });
 
 test("E supplies one free empty crate only with empty hands", () => {
   const h = createHarness();
   const created = [];
   h.scene.carriedCrates = [];
-  h.scene.createItemCrate = (itemId, quantity, x, y) => {
+  h.scene.crateSystem.createItemCrate = (itemId, quantity, x, y) => {
     assert.equal(itemId, null);
     assert.equal(quantity, 0);
     const crate = {
@@ -1197,9 +1197,9 @@ test("E supplies one free empty crate only with empty hands", () => {
   h.scene.isNearTrashcan = () => true;
   h.scene.fixtureSystem.getNearbyTrashcan = () => ({ id: "trashcan" });
   h.scene.handleInteract();
-  assert.equal(h.scene.getCarriedCrates().length, 1);
+  assert.equal(h.scene.crateSystem.getCarriedCrates().length, 1);
   assert.ok(created.every((crate) => crate.pickedUpBy === h.scene.player.sprite));
-  assert.equal(h.scene.takeEmptyCrateFromTrashcan(), false);
+  assert.equal(h.scene.crateSystem.takeEmptyCrateFromTrashcan(), false);
   assert.equal(created.length, 1);
   assert.match(h.messages.at(-1), /put your crates down/i);
   const placing = [];
@@ -1220,7 +1220,7 @@ test("the context lines say what each crate button does right now", () => {
     "Tap Space: Pick up a crate of 5 Test item",
     "Ctrl: Move the arrow one crate down",
   ].join("\n"), "the arrow starts on the top crate, so a hold would take the same one crate");
-  h.scene.markNextCrateDown();
+  h.scene.crateSystem.markNextCrateDown();
   h.scene.updateCrateHint();
   assert.equal(element.textContent, [
     "Tap Space: Pick up a crate of 5 Test item",
@@ -1291,7 +1291,7 @@ test("the registered crate action is both advertised in the hint and performed b
   assert.ok(scene.messages.element.textContent.includes(action.hint));
   scene.controls.startCratePress("pickUp");
   scene.controls.endCratePress("pickUp");
-  assert.equal(scene.getCarriedCrates()[0], floorCrate);
+  assert.equal(scene.crateSystem.getCarriedCrates()[0], floorCrate);
 });
 
 for (const state of ["nothingNearby", "moving", "placement", "startingShift", "loadFailed", "menu"]) {
@@ -1364,16 +1364,16 @@ test("the green arrow and the bottom bar follow the marked crate; holding cards 
     setPosition(x, y) { this.x = x; this.y = y; return this; },
   };
   const renders = [];
-  h.scene.pickupMarker = marker;
-  h.scene.crateFooter = { render: (view) => renders.push(view) };
+  h.scene.crateSystem.pickupMarker = marker;
+  h.scene.crateSystem.crateFooter = { render: (view) => renders.push(view) };
 
-  h.scene.updateCrateMarker();
+  h.scene.crateSystem.updateCrateMarker();
   assert.equal(marker.visible, false);
   assert.deepEqual(renders.at(-1), { marked: null, carried: [] });
 
   const [, top] = floorStack(h.scene, 2);
   carry(h.scene, [crate({ quantity: 0 }), crate({ kind: "fixture" })]);
-  h.scene.updateCrateMarker();
+  h.scene.crateSystem.updateCrateMarker();
   assert.deepEqual([marker.visible, marker.angle, marker.x, marker.y], [true, 0, top.sprite.x, top.sprite.y - 27]);
   assert.deepEqual(renders.at(-1), {
     marked: { name: "Test item", count: "x5", image: null },
@@ -1383,29 +1383,29 @@ test("the green arrow and the bottom bar follow the marked crate; holding cards 
     ],
   });
 
-  h.scene.markNextCrateDown();
-  h.scene.updateCrateMarker();
+  h.scene.crateSystem.markNextCrateDown();
+  h.scene.crateSystem.updateCrateMarker();
   assert.equal(marker.angle, -90, "lower crates in a stack are pointed at from the side");
 
   h.scene.windowManager.windows.set("inventory", { id: "inventory", isOpen: true });
-  h.scene.updateCrateMarker();
+  h.scene.crateSystem.updateCrateMarker();
   assert.equal(marker.visible, false);
   assert.equal(renders.at(-1).marked, null);
 
   h.scene.shelfStockingWindow = { getStockingCrate: () => null, getHoveredShelf: () => ({ itemId: "test_item", quantity: 3 }) };
-  h.scene.updateCrateMarker();
+  h.scene.crateSystem.updateCrateMarker();
   assert.deepEqual(renders.at(-1).marked, { label: "SHELF", name: "Test item", count: "x3", image: null },
     "the shelf space under the mouse shows in the bar");
   h.scene.shelfStockingWindow = { getStockingCrate: () => null, getHoveredShelf: () => ({ empty: true }) };
-  h.scene.updateCrateMarker();
+  h.scene.crateSystem.updateCrateMarker();
   assert.equal(renders.at(-1).marked.name, "Empty shelf space");
   h.scene.shelfStockingWindow = { getStockingCrate: () => null, getHoveredShelf: () => ({ itemId: "test_item", quantity: 0 }) };
-  h.scene.updateCrateMarker();
+  h.scene.crateSystem.updateCrateMarker();
   assert.deepEqual([renders.at(-1).marked.name, renders.at(-1).marked.count], ["Test item", "SOLD OUT"]);
 
-  const chosen = h.scene.getCarriedCrates()[0];
+  const chosen = h.scene.crateSystem.getCarriedCrates()[0];
   h.scene.shelfStockingWindow = { getStockingCrate: () => chosen, getHoveredShelf: () => null };
-  h.scene.updateCrateMarker();
+  h.scene.crateSystem.updateCrateMarker();
   assert.deepEqual(renders.at(-1).carried.map((card) => card.stockingNext ?? false), [false, true],
     "the crate that stocks next is marked in the holding cards");
 });
@@ -1413,13 +1413,13 @@ test("the green arrow and the bottom bar follow the marked crate; holding cards 
 test("stacked crates sit tight on their base, and floor crates cover anyone who walks behind them", () => {
   const h = createHarness();
   const [base, ...above] = floorStack(h.scene, 3);
-  h.scene.syncFloorStacks();
+  h.scene.crateSystem.syncFloorStacks();
   assert.deepEqual(above.map((stacked) => stacked.following),
     [0, 1].map((index) => ({ carrier: base.sprite, index, holdOffset: 10, spacing: 10 })));
   assert.equal(base.sprite.depth, 9999 + 1 + MAX_CARRIED_CRATES, "his feet are above the crate's bottom edge");
 
   h.scene.player.sprite.y = 120;
-  h.scene.syncFloorStacks();
+  h.scene.crateSystem.syncFloorStacks();
   const bottom = base.sprite.body.bottom;
   assert.equal(base.sprite.depth, 2000 + bottom - 0.5, "sorted by its base like a person");
   assert.ok(above.every((stacked, index) => stacked.sprite.depth === base.sprite.depth + 0.01 * (index + 1)));
@@ -1442,7 +1442,7 @@ test("behind the register the counter is lifted over the player, not the player 
   const [base, ...above] = floorStack(h.scene, 3);
   h.scene.player.sprite.y = 120; // his feet are below the stack's bottom edge: it's beside/behind him
   h.scene.sortPeopleByFeet();
-  h.scene.syncFloorStacks();
+  h.scene.crateSystem.syncFloorStacks();
   const player = h.scene.player.sprite.depth;
   assert.ok(register.sprite.depth > player, "the counter hides his legs");
   for (const stacked of [base, ...above]) {
@@ -1596,7 +1596,7 @@ test("E opens hands-on shelves with a carried stack instead of bulk-delivering i
   };
   scene.handleInteract();
   assert.equal(opened, 1);
-  assert.equal(scene.getCarriedCrates().length, 2);
+  assert.equal(scene.crateSystem.getCarriedCrates().length, 2);
   assert.equal(scene.carriedCrate, top);
 });
 
@@ -1640,11 +1640,11 @@ test("three carried crates stay straight while the player moves and reverses dir
     hud: { renderStamina() {}, renderCleanliness() {} },
     positionGoBacksBadge() {},
     updateCrateHint() {},
-    updateCrateMarker() {},
     customerFlow: { refreshPool() {}, spawnScheduled() {} },
     customers: [],
     employees: [],
   });
+  h.scene.crateSystem.updateCrateMarker = () => {};
 
   for (const velocity of [{ x: 160, y: 0 }, { x: -160, y: 0 }, { x: 0, y: -160 }, { x: 0, y: 160 }]) {
     playerSprite.body.velocity = velocity;
@@ -1682,11 +1682,11 @@ test("the game updates player and crate movement during placement without unfree
     hud: { renderStamina() {}, renderCleanliness() {} },
     positionGoBacksBadge() {},
     updateCrateHint() {},
-    updateCrateMarker() {},
     customerFlow: { refreshPool() {}, spawnScheduled() {} },
     customers: [{ update() { customerUpdates += 1; }, standStill() { customerStops += 1; } }],
     employees: [],
   });
+  scene.crateSystem.updateCrateMarker = () => {};
 
   scene.update(0, 16);
   assert.equal(playerUpdates, 1);
@@ -1762,7 +1762,7 @@ test("E opens shelves instead of picking up crates, with or without a carried cr
   h.scene.handleInteract();
   assert.equal(opens, 2);
   assert.equal(opened.length, 1, "re-opening the same shelf isn't a new open");
-  assert.equal(h.scene.getCarriedCrates().length, 1);
+  assert.equal(h.scene.crateSystem.getCarriedCrates().length, 1);
 });
 
 test("E targets the shelf whose front the player stands at, not the shelf beside it", () => {
@@ -1857,7 +1857,7 @@ test("packing the Go-Backs sets crate stacks of at most three on found floor spo
     return spots[searches.length - 1] ?? null;
   };
   const created = [];
-  h.scene.createItemCrate = (itemId, quantity) => {
+  h.scene.crateSystem.createItemCrate = (itemId, quantity) => {
     const made = itemCrate(itemId, quantity);
     created.push(made);
     return made;
@@ -1907,7 +1907,7 @@ test("Go-Backs pack themselves: same-item crates first, then empty ones, then ne
   h.scene.floorStacks.set(sameItem, [stackedSameItem]);
   let spots = [];
   h.scene.checkoutSystem.findGoBacksSpot = () => spots.shift() ?? null;
-  h.scene.createItemCrate = (itemId, quantity) => itemCrate(itemId, quantity);
+  h.scene.crateSystem.createItemCrate = (itemId, quantity) => itemCrate(itemId, quantity);
 
   h.scene.gameState.goBacks.add("wpn_pis_01", 9);
   h.scene.checkoutSystem.autoPackGoBacks(0);
@@ -2088,7 +2088,7 @@ test("crating an empty fixture still creates its crate and opens its floor space
   }) };
   scene.crateGroup = { add() {} };
   scene.crateBounds = {};
-  scene.crateMotionPaused = false;
+  scene.crateSystem.motionPaused = false;
   let notifications = 0;
   scene.gameState.shop.changed = () => { notifications += 1; };
 

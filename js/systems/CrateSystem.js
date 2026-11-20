@@ -1,5 +1,11 @@
 import { database } from "../scenes/boot.js";
-import { Crate } from "../logic/Crate.js";
+import { Crate, CRATE_STACK_SPACING } from "../logic/Crate.js";
+import { CrateFooter } from "../logic/CrateFooter.js";
+import { getFixtureType } from "../logic/FixtureLayout.js";
+import { transferItems } from "../logic/InventoryTransfer.js";
+import { PLAYER_CRATE_HOLD_OFFSET } from "../logic/Player.js";
+import { CONTROL_MODES } from "../input/ControlMode.js";
+import { PEOPLE_DEPTH_BASE } from "../world/Depth.js";
 import { getItemCrateTint } from "../logic/CrateCategory.js";
 import { TILE_SIZE } from "../logic/RoomLayout.js";
 import {
@@ -17,7 +23,28 @@ export class CrateSystem {
     this.floorStacks = new Map();
     this.markedStackBase = null;
     this.markedFromTop = 0;
+    // Paused shift time freezes every loose crate where it is.
+    this.motionPaused = false;
+    this.pickupMarker = null;
+    this.crateFooter = null;
     if (shop.interactables) this.registerInteractions();
+  }
+
+  /** The green arrow and the bottom crate bar; both go away when the scene shuts down. */
+  createViews() {
+    const shop = this.shop;
+    // Points down at the crate the pick-up button would take, or the stack the put-down button adds to.
+    this.pickupMarker = shop.add.graphics().setDepth(20000).setVisible(false);
+    this.pickupMarker.fillStyle(0x22c55e).lineStyle(1, 0x052e16)
+      .fillTriangle(-5, -4, 5, -4, 0, 4).strokeTriangle(-5, -4, 5, -4, 0, 4);
+    this.crateFooter = new CrateFooter();
+    shop.events.once("shutdown", () => this.crateFooter.destroy());
+  }
+
+  setMotionPaused(paused) {
+    if (paused === this.motionPaused) return;
+    this.motionPaused = paused;
+    for (const crate of this.restockCrates) crate.setPaused(paused);
   }
 
   registerInteractions() {
@@ -57,7 +84,7 @@ export class CrateSystem {
     stack.push(crate);
     this.carriedCrates = stack;
     this.carriedCrate = crate;
-    this.shop.syncCarriedCrate();
+    this.syncCarriedCrate();
   }
 
   removeCarriedCrate(crate) {
@@ -67,7 +94,7 @@ export class CrateSystem {
     stack.splice(index, 1);
     this.carriedCrates = stack;
     if (this.carriedCrate === crate) this.carriedCrate = stack.at(-1) ?? null;
-    this.shop.syncCarriedCrate();
+    this.syncCarriedCrate();
     return true;
   }
 
@@ -147,11 +174,11 @@ export class CrateSystem {
         actions.pickUp = { tap: say("Put your crates down before picking up a fixture crate"), blocked: true };
       } else if (top?.kind === "fixture") {
         actions.pickUp = { tap: say("Put the fixture crate down before picking up another crate"), blocked: true };
-      } else if (shop.combinableUnits(stack.marked) > 0) {
+      } else if (this.combinableUnits(stack.marked) > 0) {
         actions.pickUp = {
-          tap: () => shop.combineIntoCarried(stack.marked),
-          hold: () => shop.combineIntoCarried(stack.marked),
-          combines: shop.combinableUnits(stack.marked),
+          tap: () => this.combineIntoCarried(stack.marked),
+          hold: () => this.combineIntoCarried(stack.marked),
+          combines: this.combinableUnits(stack.marked),
         };
       } else {
         const tooMany = (count) => say(`You can only carry ${MAX_CARRIED_CRATES} crates. You're holding ` +
@@ -167,12 +194,12 @@ export class CrateSystem {
         };
       }
     } else if (holding === 1) {
-      actions.pickUp = { tap: () => shop.throwTopCrate(), throws: true };
+      actions.pickUp = { tap: () => this.throwTopCrate(), throws: true };
     } else if (holding > 1) {
       actions.pickUp = { tap: say("You can only throw a crate when you're holding just one.", "#94a3b8") };
     } else {
       actions.pickUp = {
-        tap: shop.findCrateInFront({ moving: true })
+        tap: this.findCrateInFront({ moving: true })
           ? say("Wait for crate to stop", "#f59e0b")
           : say("No crate nearby"),
       };
@@ -194,7 +221,7 @@ export class CrateSystem {
           onStack: true,
         };
     } else {
-      actions.putDown = { tap: () => shop.dropTopCrate(), hold: () => shop.dropWholeStack() };
+      actions.putDown = { tap: () => this.dropTopCrate(), hold: () => this.dropWholeStack() };
     }
     return this.addActionHints(actions, stack, holding);
   }
@@ -220,7 +247,7 @@ export class CrateSystem {
     } else if (stack && pickUp && !pickUp.blocked) {
       pickUpHints.push(holding >= MAX_CARRIED_CRATES
         ? handsFull
-        : `Tap ${pickKey}: Pick up ${shop.describeCrate(stack.marked)}`);
+        : `Tap ${pickKey}: Pick up ${this.describeCrate(stack.marked)}`);
       if (pickUp.lifted > 1 && holding + pickUp.lifted <= MAX_CARRIED_CRATES) {
         pickUpHints.push(`Hold ${pickKey}: Pick up ${pickUp.lifted} crates (this one and the ones above it)`);
       }
@@ -283,7 +310,7 @@ export class CrateSystem {
       this.floorStacks.delete(base);
       const [newBase, ...rest] = withAbove ? [] : above;
       if (newBase) {
-        newBase.drop(x, y, 0, 0, shop.crateMotionPaused);
+        newBase.drop(x, y, 0, 0, this.motionPaused);
         this.restockCrates.push(newBase);
         for (const crate of rest) crate.setStackedOn(newBase.id);
         if (rest.length) this.floorStacks.set(newBase, rest);
@@ -295,7 +322,7 @@ export class CrateSystem {
     }
     for (const crate of lifted) this.addCarriedCrate(crate);
     this.markedStackBase = null;
-    shop.syncFloorStacks();
+    this.syncFloorStacks();
     shop.gameState.crates.changed();
     for (const crate of lifted) this.emitCratePickedUp(crate);
     return true;
@@ -310,8 +337,8 @@ export class CrateSystem {
     for (const crate of placed) crate.setStackedOn(base.id);
     this.floorStacks.set(base, [...(this.floorStacks.get(base) ?? []), ...placed]);
     this.markedStackBase = null;
-    shop.syncCarriedCrate();
-    shop.syncFloorStacks();
+    this.syncCarriedCrate();
+    this.syncFloorStacks();
     shop.gameState.crates.changed();
     for (const crate of placed) this.emitCrateDropped(crate, base.sprite, false);
     return true;
@@ -331,10 +358,10 @@ export class CrateSystem {
       return false;
     }
     if (throwing) crate.startThrow(shop.player.sprite, velocityX, velocityY);
-    else crate.drop(position.x, position.y, 0, 0, shop.crateMotionPaused);
+    else crate.drop(position.x, position.y, 0, 0, this.motionPaused);
     this.restockCrates.push(crate);
     this.removeCarriedCrate(crate);
-    shop.syncFloorStacks();
+    this.syncFloorStacks();
     shop.gameState.crates.changed();
     this.emitCrateDropped(crate, position, throwing);
     return true;
@@ -350,7 +377,7 @@ export class CrateSystem {
       shop.showGameMessage("No room to set the stack down", "#94a3b8");
       return false;
     }
-    bottom.drop(position.x, position.y, 0, 0, shop.crateMotionPaused);
+    bottom.drop(position.x, position.y, 0, 0, this.motionPaused);
     this.restockCrates.push(bottom);
     if (rest.length) {
       for (const crate of rest) crate.setStackedOn(bottom.id);
@@ -358,10 +385,179 @@ export class CrateSystem {
     }
     this.carriedCrates = [];
     this.carriedCrate = null;
-    shop.syncCarriedCrate();
-    shop.syncFloorStacks();
+    this.syncCarriedCrate();
+    this.syncFloorStacks();
     shop.gameState.crates.changed();
     for (const crate of [bottom, ...rest]) this.emitCrateDropped(crate, position, false);
+    return true;
+  }
+
+  // Held crates ride over his head; held trash sits at his hand on the side he faces.
+  syncCarriedCrate() {
+    const shop = this.shop;
+    shop.player.updateCarryPose?.();
+    this.getCarriedCrates().forEach((crate, index) =>
+      crate.followCarrier?.(shop.player.sprite, index, PLAYER_CRATE_HOLD_OFFSET));
+    shop.cleaningSystem?.syncHeldTrash();
+  }
+
+  // Floor crates sort with people by their base: anyone whose feet are behind a crate's bottom
+  // edge is drawn behind it. The player is also kept behind his own held crates' worth of
+  // depth, so nothing he carries pokes through. Crates sitting on a floor crate are drawn on
+  // top of it and move with it.
+  syncFloorStacks() {
+    const player = this.shop.player;
+    const body = player?.sprite?.body;
+    if (!body) return;
+    const inFront = player.sprite.depth + 1 + MAX_CARRIED_CRATES;
+    for (const crate of this.restockCrates ?? []) {
+      if (crate.launch || !crate.sprite.body) continue;
+      const bottom = crate.sprite.body.bottom;
+      const byBase = PEOPLE_DEPTH_BASE + bottom - 0.5;
+      crate.sprite.setDepth(body.bottom < bottom ? Math.max(byBase, inFront) : byBase);
+    }
+    for (const [base, above] of this.floorStacks ?? []) {
+      above.forEach((crate, index) => {
+        crate.followCarrier(base.sprite, index, CRATE_STACK_SPACING, CRATE_STACK_SPACING);
+        // Just over the crate below, never past someone standing a pixel in front.
+        crate.sprite.setDepth(base.sprite.depth + 0.01 * (index + 1));
+      });
+    }
+  }
+
+  // Held crates of the same item as `floorCrate` that still have room, top crate first.
+  combineTargets(floorCrate) {
+    if (floorCrate.kind !== "item" || floorCrate.quantity <= 0) return [];
+    return [...this.getCarriedCrates()].reverse().filter((held) => held.kind === "item" &&
+      held.quantity > 0 && held.itemId === floorCrate.itemId && held.getRemainingUnitsFor(held.itemId) > 0);
+  }
+
+  // How many items from `floorCrate` would fit into the same-item crates you're holding.
+  combinableUnits(floorCrate) {
+    const room = this.combineTargets(floorCrate)
+      .reduce((total, held) => total + held.getRemainingUnitsFor(held.itemId), 0);
+    return Math.min(room, Math.max(0, floorCrate.quantity));
+  }
+
+  // Moves as many items as fit from the floor crate into your crates; the floor crate stays put.
+  combineIntoCarried(floorCrate) {
+    const itemId = floorCrate.itemId;
+    const name = database.getItem(itemId)?.name ?? "items";
+    let moved = 0;
+    for (const held of this.combineTargets(floorCrate)) {
+      const result = transferItems(floorCrate, held, itemId, held.getRemainingUnitsFor(itemId), {
+        eventBus: this.shop.eventBus,
+        sourceName: "crate",
+        destinationName: "crate",
+      });
+      moved += result.moved;
+    }
+    if (moved === 0) return 0;
+    const left = floorCrate.quantity;
+    this.shop.showGameMessage(left > 0
+      ? `Moved ${moved} ${name} into your crate. ${left} didn't fit and stay in the crate on the floor.`
+      : `Moved ${moved} ${name} into your crate. The crate on the floor is now empty.`, "#22c55e");
+    return moved;
+  }
+
+  // "a crate of 6 Plasma Pistol", for hints.
+  describeCrate(crate) {
+    if (crate.kind === "fixture") return `the ${getFixtureType(crate.typeId).name} fixture crate`;
+    if (crate.quantity === 0) return "an empty crate";
+    return `a crate of ${crate.quantity} ${database.getItem(crate.itemId)?.name ?? "unknown items"}`;
+  }
+
+  // Picture, name, and count for the bottom bar and the holding cards.
+  describeCrateForFooter(crate) {
+    if (crate.kind === "fixture") return { name: `${getFixtureType(crate.typeId).name} fixture`, count: "", image: null };
+    if (crate.quantity === 0) return { name: "Empty crate", count: "", image: null };
+    const item = database.getItem(crate.itemId);
+    return { name: item?.name ?? "Unknown item", count: `x${crate.quantity}`, image: item?.image ?? null };
+  }
+
+  // The green arrow over the marked crate, plus the bottom bar and holding cards.
+  updateCrateMarker() {
+    const shop = this.shop;
+    const mode = shop.controlMode.getMode();
+    const stack = mode === CONTROL_MODES.WALKING || mode === CONTROL_MODES.CARRYING
+      ? this.markedFloorStack()
+      : null;
+    this.pickupMarker.setVisible(Boolean(stack));
+    if (stack) {
+      const bounds = stack.marked.sprite.getBounds();
+      // Points down at the top crate; for crates lower in a stack, points in from the left side.
+      if (this.markedFromTop === 0) this.pickupMarker.setAngle(0).setPosition(bounds.centerX, bounds.top - 7);
+      else this.pickupMarker.setAngle(-90).setPosition(bounds.left - 7, bounds.centerY);
+    }
+    const stocking = shop.shelfStockingWindow?.getStockingCrate();
+    this.crateFooter.render({
+      marked: stack ? this.describeCrateForFooter(stack.marked) : this.describeHoveredShelfForFooter(),
+      carried: [...this.getCarriedCrates()].reverse().map((crate) => crate === stocking
+        ? { ...this.describeCrateForFooter(crate), stockingNext: true }
+        : this.describeCrateForFooter(crate)),
+    });
+  }
+
+  // While the shelf window is open, the bar shows the shelf space under the cursor.
+  describeHoveredShelfForFooter() {
+    const shelf = this.shop.shelfStockingWindow?.getHoveredShelf();
+    if (!shelf) return null;
+    if (shelf.empty) return { label: "SHELF", name: "Empty shelf space", count: "", image: null };
+    const item = database.getItem(shelf.itemId);
+    return { label: "SHELF", name: item?.name ?? "Unknown item",
+      count: shelf.quantity > 0 ? `x${shelf.quantity}` : "SOLD OUT", image: item?.image ?? null };
+  }
+
+  // The pick-up button with no green arrow: throws your top crate the way you're walking.
+  throwTopCrate() {
+    const { x, y } = this.shop.player.sprite.body.velocity;
+    if (this.motionPaused || (x === 0 && y === 0)) {
+      this.shop.showGameMessage(`To throw a crate, walk and press ${controlLabel("crate")}.`, "#94a3b8");
+      return false;
+    }
+    return this.dropTopCrate(true);
+  }
+
+  heldEmptyCrates() {
+    return this.getCarriedCrates().filter((crate) => crate.kind === "item" && crate.quantity === 0);
+  }
+
+  returnEmptyCratesToTrashcan() {
+    const shop = this.shop;
+    if (!shop.fixtureSystem.getNearbyTrashcan()) {
+      shop.showGameMessage("Move closer to a trashcan.", "#94a3b8");
+      return false;
+    }
+    const empties = this.heldEmptyCrates();
+    if (empties.length === 0) {
+      shop.showGameMessage("Only empty crates go in the trashcan.", "#94a3b8");
+      return false;
+    }
+    for (const crate of empties) {
+      this.removeCarriedCrate(crate);
+      crate.destroy();
+    }
+    shop.gameState.crates.changed();
+    shop.showGameMessage(empties.length === 1
+      ? "Empty crate put in the trashcan."
+      : `${empties.length} empty crates put in the trashcan.`, "#10b981");
+    return true;
+  }
+
+  takeEmptyCrateFromTrashcan() {
+    const shop = this.shop;
+    if (this.getCarriedCrates().length > 0) {
+      shop.showGameMessage("Put your crates down before taking an empty crate.", "#94a3b8");
+      return false;
+    }
+    const crate = this.createItemCrate(null, 0, shop.player.sprite.x, shop.player.sprite.y);
+    if (!crate.pickUp(shop.player.sprite)) {
+      crate.destroy();
+      throw new Error("A newly supplied empty crate could not be picked up.");
+    }
+    this.addCarriedCrate(crate);
+    shop.gameState.crates.changed();
+    shop.showGameMessage("Took a free empty crate.", "#10b981");
     return true;
   }
 
@@ -407,7 +603,7 @@ export class CrateSystem {
       }
       return crate;
     });
-    shop.syncFloorStacks();
+    this.syncFloorStacks();
     const carriedEntries = Array.isArray(data.carriedCrates)
       ? data.carriedCrates
       : data.carriedCrate ? [data.carriedCrate] : [];
@@ -421,6 +617,6 @@ export class CrateSystem {
       return crate;
     });
     this.carriedCrate = this.carriedCrates.at(-1) ?? null;
-    shop.syncCarriedCrate();
+    this.syncCarriedCrate();
   }
 }

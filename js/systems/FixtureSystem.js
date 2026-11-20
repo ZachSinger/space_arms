@@ -69,7 +69,7 @@ export class FixtureSystem {
       id: "fixture-move",
       kind: "fixture-move",
       isAvailable: () => shop.controlMode?.allows("interact") &&
-          shop.getCarriedCrates().length === 0 && !shop.heldTrash &&
+          shop.crateSystem.getCarriedCrates().length === 0 && !shop.heldTrash &&
           !shop.checkoutSystem?.operatingRegister && this.canRearrange(),
       range: 0,
       distanceFrom: () => 0,
@@ -126,19 +126,19 @@ export class FixtureSystem {
     if (shop.heldTrash) return [];
     const trashcan = this.getNearbyTrashcan();
     if (!trashcan) return [];
-    const carriedCrates = shop.getCarriedCrates();
-    const emptyCrates = shop.heldEmptyCrates();
+    const carriedCrates = shop.crateSystem.getCarriedCrates();
+    const emptyCrates = shop.crateSystem.heldEmptyCrates();
     let hint;
     let perform;
     if (carriedCrates.length === 0) {
       hint = `${controlLabel("interact")}: Create`;
-      perform = () => shop.takeEmptyCrateFromTrashcan();
+      perform = () => shop.crateSystem.takeEmptyCrateFromTrashcan();
     } else if (emptyCrates.length > 0) {
       const description = emptyCrates.length === 1
         ? "your empty crate"
         : `all ${emptyCrates.length} empty crates`;
       hint = `${controlLabel("interact")}: Put ${description} in the trashcan`;
-      perform = () => shop.returnEmptyCratesToTrashcan();
+      perform = () => shop.crateSystem.returnEmptyCratesToTrashcan();
     } else return [];
     return [{
       action: "interact", id: `trashcan:${trashcan.id}`, kind: "trashcan", target: trashcan,
@@ -148,7 +148,7 @@ export class FixtureSystem {
 
   getHoldToMoveFixture() {
     const shop = this.shop;
-    if (!shop.controlMode.allows("interact") || shop.getCarriedCrates().length > 0 || shop.heldTrash) return null;
+    if (!shop.controlMode.allows("interact") || shop.crateSystem.getCarriedCrates().length > 0 || shop.heldTrash) return null;
     if (shop.checkoutSystem.operatingRegister || shop.areas.nearbyPortal()) return null;
     const origin = shop.getInteractionOrigin();
     const target = shop.interactables.findTarget(
@@ -558,7 +558,7 @@ export class FixtureSystem {
       kind: "fixture",
       typeId: fixture.type,
     });
-    crate.setPaused(scene.crateMotionPaused);
+    crate.setPaused(scene.crateSystem.motionPaused);
     scene.restockCrates.push(crate);
     scene.gameState.shop.changed();
     return true;
@@ -598,7 +598,7 @@ export class FixtureSystem {
     }
     const spec = getFixtureType(crate.typeId);
     const value = getFixtureResaleValue(crate.typeId);
-    if (scene.getCarriedCrates().includes(crate)) scene.removeCarriedCrate(crate);
+    if (scene.crateSystem.getCarriedCrates().includes(crate)) scene.crateSystem.removeCarriedCrate(crate);
     else scene.restockCrates = scene.restockCrates.filter((candidate) => candidate !== crate);
     crate.destroy();
     scene.gameState.economy.add(value, { category: "fixture_sales", label: spec.name });
@@ -640,7 +640,7 @@ export class FixtureSystem {
     this.spawn({ id, type: crate.typeId, gx, gy, rotation });
     this.applyLayout(this.fixtures.layout(), result);
     crate.destroy();
-    scene.removeCarriedCrate(crate);
+    scene.crateSystem.removeCarriedCrate(crate);
     scene.gameState.shop.changed();
     return true;
   }
