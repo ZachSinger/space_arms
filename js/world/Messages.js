@@ -23,6 +23,7 @@ export class Messages {
     this.timeout = null;
     this.warningShowing = false;
     this.hint = "";
+    this.hintSet = false;
     this.saveErrorWindow = null;
     this.retrySave = null;
   }
@@ -51,7 +52,9 @@ export class Messages {
   }
 
   setHint(text) {
+    if (this.hintSet && this.hint === text) return;
     this.hint = text;
+    this.hintSet = true;
     this.renderHint();
   }
 

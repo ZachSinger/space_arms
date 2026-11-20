@@ -197,6 +197,30 @@ function createHarness({ carrying = false } = {}) {
   return { scene, messages, handlers, removedCaptures };
 }
 
+test("unchanged hints are not redrawn and the latest hint returns after a warning", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { scene } = createHarness();
+  const messages = scene.messages;
+  const renderHint = messages.renderHint.bind(messages);
+  let renders = 0;
+  messages.renderHint = () => { renders += 1; renderHint(); };
+
+  messages.setHint("E: Open this shelf");
+  messages.setHint("E: Open this shelf");
+  assert.equal(renders, 1);
+  messages.show("Too far away");
+  messages.setHint("E: Open the register");
+  messages.setHint("E: Open the register");
+  assert.equal(messages.element.textContent, "Too far away");
+  assert.equal(renders, 2);
+  t.mock.timers.tick(2250);
+  t.mock.timers.tick(250);
+  assert.equal(messages.element.textContent, "E: Open the register");
+  assert.equal(messages.element.classList.contains("hidden"), false);
+  messages.setHint("E: Open the register");
+  assert.equal(renders, 3);
+});
+
 test("CrateWorld registers wall, pad, and customer physics", () => {
   const previousPhaser = globalThis.Phaser;
   const crateGroup = {};
