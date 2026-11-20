@@ -193,7 +193,7 @@ export class CustomerFlow {
     buyList.bonusItemIds = addDiscountBonusItem(
       buyList,
       shelfItemIds,
-      (itemId) => shop.getStorePrice(itemId) <= shop.gameState.market.getPrice(itemId) * BARGAIN_PRICE_RATIO,
+      (itemId) => shop.catalogSystem.getStorePrice(itemId) <= shop.gameState.market.getPrice(itemId) * BARGAIN_PRICE_RATIO,
     );
     buyList.bonusItemIds = addTraitBonusItems(buyList, shelfItemIds, traits);
     const targetIds = new Set([

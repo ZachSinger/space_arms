@@ -56,7 +56,7 @@ export function unlockEverything(scene) {
   gameState.reputation.setShopLevel(SHOP_LEVEL_TIERS[SHOP_LEVEL_TIERS.length - 1].level);
   gameState.economy.add(SANDBOX_CREDITS, { category: "loans", label: "Test room money" });
   for (const license of database.getAllLicenses()) gameState.catalog.sign(license.id);
-  scene.recalculateActiveFactions();
+  scene.catalogSystem.recalculateActiveFactions();
   for (const zoneId of EXPANSION_ORDER) {
     if (scene.room.zones.find((zone) => zone.id === zoneId)?.locked) scene.fixtureSystem.openZone(zoneId);
   }

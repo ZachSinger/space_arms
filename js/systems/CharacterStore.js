@@ -5,7 +5,7 @@ export function createCustomerStore(scene) {
     add: scene.add,
     findPath: (...args) => scene.navigation.store.findPath(...args),
     getItem: (...args) => scene.getItem(...args),
-    getStorePrice: (...args) => scene.getStorePrice(...args),
+    getStorePrice: (...args) => scene.catalogSystem.getStorePrice(...args),
     showFloatingText: (...args) => scene.showFloatingText(...args),
     getRandomBrowseShelf: (...args) => scene.getRandomBrowseShelf(...args),
     refreshShelfStockDisplay: (...args) => scene.refreshShelfStockDisplay?.(...args),

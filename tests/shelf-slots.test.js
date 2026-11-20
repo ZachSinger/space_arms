@@ -270,7 +270,7 @@ test("shelf price stickers show each stocked space's price, turn sold out, and h
   const stickers = Array.from({ length: 6 }, fakeElement);
   const view = Object.assign(Object.create(ShelfStockingWindow.prototype), {
     uiWindow: { isOpen: true },
-    scene: { crateSystem: { getStockableCrates: () => [] }, getStorePrice: (itemId) => prices[itemId] },
+    scene: { crateSystem: { getStockableCrates: () => [] }, catalogSystem: { getStorePrice: (itemId) => prices[itemId] } },
     fixture: shelf,
     art: getBudgetShelfArt(2, 3),
     selected: null,

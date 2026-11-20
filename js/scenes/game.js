@@ -49,6 +49,7 @@ import { CustomerFlow } from "../systems/CustomerFlow.js";
 import { createCustomerStore, createEmployeeStore } from "../systems/CharacterStore.js";
 import { CheckoutSystem } from "../systems/CheckoutSystem.js";
 import { CrateSystem } from "../systems/CrateSystem.js";
+import { CatalogSystem } from "../systems/CatalogSystem.js";
 import { CrateWorld } from "../world/CrateWorld.js";
 import { Navigation } from "../world/Navigation.js";
 import { CheckoutWindow } from "../logic/CheckoutWindow.js";
@@ -132,7 +133,8 @@ export class GameScene extends Phaser.Scene {
         set: (value) => { this.crateSystem[property] = value; },
       });
     }
-    this.recalculateActiveFactions();
+    this.catalogSystem = new CatalogSystem(this);
+    this.catalogSystem.recalculateActiveFactions();
     this.shiftClock = new ShiftClock();
     this.customerFlow = new CustomerFlow(this);
     this.hud = new HUDController(
@@ -536,86 +538,6 @@ export class GameScene extends Phaser.Scene {
   // The nearest reachable shelf, shared by crate delivery and fixture opening.
   getNearbyFixture() {
     return this.interactables.findTarget("fixture", this.getInteractionOrigin())?.target ?? null;
-  }
-
-  /**
-   * Credits for one crate of this item. Shared by the Supply tab's price display and
-   * ordering, so both always agree.
-   * @param {object} item - catalog item
-   * @returns {number} credits
-   */
-  /**
-   * The player's own price, falling back to today's market price if never set.
-   * @param {string} itemId
-   * @returns {number} credits
-   */
-  getStorePrice(itemId) {
-    return this.gameState.catalog.storePrices[itemId] ?? this.gameState.market.getPrice(itemId);
-  }
-
-  /**
-   * Accepts prices to the cent and rejects anything below 1 credit.
-   * @param {string} itemId
-   * @param {number} price - credits
-   * @returns {boolean} whether the price was accepted
-   */
-  setStorePrice(itemId, price) {
-    if (!isMoney(price) || price < 1) {
-      this.showShopMessage("Enter a price of at least 1 credit, with no more than two decimal places.");
-      return false;
-    }
-    this.gameState.catalog.setPrice(itemId, price);
-    return true;
-  }
-
-  // Inventory tab rows: every owned item, including items currently held by customers.
-  getInventoryItems() {
-    const totals = new Map();
-    const add = (entry, column) => {
-      if (!entry.itemId || entry.quantity <= 0) return;
-      if (!totals.has(entry.itemId)) {
-        totals.set(entry.itemId, { offShelves: 0, stock: 0, inCustomerCarts: 0 });
-      }
-      totals.get(entry.itemId)[column] += entry.quantity;
-    };
-
-    for (const fixture of this.fixtures.shelves()) {
-      for (const entry of fixture.stock) add(entry, "stock");
-    }
-    for (const entry of this.gameState.goBacks.stock) add(entry, "offShelves");
-    const floorCrates = this.crateSystem.getFloorCrates();
-    for (const crate of floorCrates) add(crate, "offShelves");
-    for (const crate of this.crateSystem.getCarriedCrates()) {
-      if (crate.kind === "item") add(crate, "offShelves");
-    }
-    for (const employee of this.employees ?? []) {
-      const crate = employee.currentJob?.crate;
-      if (crate?.isCarried && !floorCrates.includes(crate)) add(crate, "offShelves");
-    }
-    for (const customer of this.customers) {
-      if (customer.state === "LEAVING") continue;
-      for (const { itemId } of customer.cart) {
-        add({ itemId, quantity: 1 }, "inCustomerCarts");
-      }
-    }
-    return database.getAllItems()
-      .filter((item) => totals.has(item.id))
-      .map((item) => ({
-        item,
-        ...totals.get(item.id),
-        marketPrice: this.gameState.market.getPrice(item.id),
-        unitCost: roundMoney(this.supply.crateCost(item) / getCrateOrderQuantity(item)),
-        storePrice: this.getStorePrice(item.id),
-      }));
-  }
-
-  // Customer factions follow the player's licenses.
-  recalculateActiveFactions() {
-    const activeFactions = getLicensedFactionIds(
-      this.gameState.catalog.licenses,
-      database.getAllItems(),
-    );
-    this.gameState.catalog.setActiveFactions(activeFactions);
   }
 
   // --- Player interaction and crates ---

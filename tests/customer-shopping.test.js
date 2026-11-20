@@ -545,6 +545,7 @@ function makeShelfScene(shelves) {
   const scene = Object.create(GameScene.prototype);
   scene.fixtures = { shelves: () => shelves };
   scene.getStorePrice = () => 10;
+  scene.catalogSystem = { getStorePrice: () => 10 };
   scene.gameState = { market: { getPrice: () => 10 } };
   return scene;
 }

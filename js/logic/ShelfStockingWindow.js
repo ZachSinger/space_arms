@@ -320,7 +320,7 @@ export class ShelfStockingWindow {
       const sticker = this.stickers[index];
       sticker.hidden = !placement;
       if (!placement) continue;
-      const price = formatStickerPrice(this.scene.getStorePrice(placement.itemId));
+      const price = formatStickerPrice(this.scene.catalogSystem.getStorePrice(placement.itemId));
       const soldOut = placement.quantity === 0;
       const signature = `${placement.itemId}:${price}:${soldOut}`;
       if (sticker.dataset.price === signature) continue;
@@ -375,7 +375,7 @@ export class ShelfStockingWindow {
     element.querySelector(".shelf-price-widget-name").textContent = item.name;
     const input = element.querySelector("input");
     input.setAttribute("aria-label", `Store price for ${item.name}`);
-    input.value = this.scene.getStorePrice(itemId);
+    input.value = this.scene.catalogSystem.getStorePrice(itemId);
     element.addEventListener("click", (event) => {
       if (event.target.closest("[data-price-close]")) {
         this.closePriceWidget();
@@ -384,14 +384,14 @@ export class ShelfStockingWindow {
       const action = event.target.closest("[data-price-action]")?.dataset.priceAction;
       if (!action) return;
       const nextPrice = adjustStorePrice(
-        this.scene.getStorePrice(itemId), this.scene.gameState.market.getPrice(itemId), action,
+        this.scene.catalogSystem.getStorePrice(itemId), this.scene.gameState.market.getPrice(itemId), action,
       );
-      if (nextPrice !== null) this.scene.setStorePrice(itemId, nextPrice);
-      input.value = this.scene.getStorePrice(itemId);
+      if (nextPrice !== null) this.scene.catalogSystem.setStorePrice(itemId, nextPrice);
+      input.value = this.scene.catalogSystem.getStorePrice(itemId);
       this.refresh();
     });
     input.addEventListener("change", () => {
-      if (!this.scene.setStorePrice(itemId, Number(input.value))) input.value = this.scene.getStorePrice(itemId);
+      if (!this.scene.catalogSystem.setStorePrice(itemId, Number(input.value))) input.value = this.scene.catalogSystem.getStorePrice(itemId);
       this.refresh();
     });
     input.addEventListener("keydown", (event) => {
@@ -441,7 +441,7 @@ export class ShelfStockingWindow {
     }
     element.querySelector(".shelf-price-widget-market").textContent =
       `Market price today: ${formatMoneyAmount(this.scene.gameState.market.getPrice(itemId))}`;
-    if (document.activeElement !== input) input.value = this.scene.getStorePrice(itemId);
+    if (document.activeElement !== input) input.value = this.scene.catalogSystem.getStorePrice(itemId);
   }
 
   closePriceWidget() {

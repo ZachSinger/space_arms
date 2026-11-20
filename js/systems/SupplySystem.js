@@ -166,7 +166,7 @@ export class SupplySystem {
   restockableItems() {
     const shop = this.shop;
     const ownedQuantityByItemId = new Map(
-      shop.getInventoryItems().map(({ item, stock, offShelves }) => [
+      shop.catalogSystem.getInventoryItems().map(({ item, stock, offShelves }) => [
         item.id,
         stock + offShelves,
       ]),

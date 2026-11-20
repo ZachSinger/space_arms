@@ -23,7 +23,7 @@ export class InventoryTab {
   }
 
   draw() {
-    return InventoryRenderer.generateHTML(this.scene.getInventoryItems());
+    return InventoryRenderer.generateHTML(this.scene.catalogSystem.getInventoryItems());
   }
 
   /**
@@ -107,12 +107,12 @@ export class InventoryTab {
     if (!input) return;
 
     const itemId = input.dataset.priceItemId;
-    if (!this.scene.setStorePrice(itemId, Number(input.value))) {
-      input.value = this.scene.getStorePrice(itemId);
+    if (!this.scene.catalogSystem.setStorePrice(itemId, Number(input.value))) {
+      input.value = this.scene.catalogSystem.getStorePrice(itemId);
       return;
     }
 
-    const entry = this.scene.getInventoryItems().find(({ item }) => item.id === itemId);
+    const entry = this.scene.catalogSystem.getInventoryItems().find(({ item }) => item.id === itemId);
     const profit = input.closest(".inventory-item-card")?.querySelector("[data-inventory-profit]");
     if (entry && profit) {
       profit.outerHTML = InventoryRenderer.generateProfitHTML(entry.storePrice, entry.unitCost);
@@ -152,11 +152,11 @@ export class InventoryTab {
    */
   handlePriceAdjustment(itemId, action) {
     const nextPrice = adjustStorePrice(
-      this.scene.getStorePrice(itemId),
+      this.scene.catalogSystem.getStorePrice(itemId),
       this.scene.gameState.market.getPrice(itemId),
       action,
     );
-    if (nextPrice !== null) this.scene.setStorePrice(itemId, nextPrice);
+    if (nextPrice !== null) this.scene.catalogSystem.setStorePrice(itemId, nextPrice);
   }
 
   destroy() {

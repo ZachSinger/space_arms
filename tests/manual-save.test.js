@@ -30,6 +30,7 @@ let FixtureSystem;
 let FixtureViews;
 let CustomerFlow;
 let CheckoutSystem;
+let CatalogSystem;
 const originalPhaser = globalThis.Phaser;
 
 before(async () => {
@@ -70,6 +71,7 @@ before(async () => {
   ({ FixtureViews } = await server.ssrLoadModule("/js/world/FixtureViews.js"));
   ({ CustomerFlow } = await server.ssrLoadModule("/js/systems/CustomerFlow.js"));
   ({ CheckoutSystem } = await server.ssrLoadModule("/js/systems/CheckoutSystem.js"));
+  ({ CatalogSystem } = await server.ssrLoadModule("/js/systems/CatalogSystem.js"));
   ({ CHARACTER_ART_WIDTH, CHARACTER_FEET_DROP } = await server.ssrLoadModule("/js/logic/CustomerSprites.js"));
 });
 
@@ -708,10 +710,11 @@ test("actual store price edits preserve cents and explain invalid prices", () =>
   const warnings = [];
   scene.gameState = { catalog: { setPrice: (id, price) => prices.set(id, price) } };
   scene.showShopMessage = (message) => warnings.push(message);
-  assert.equal(scene.setStorePrice("ration", 10.23), true);
+  scene.catalogSystem = new CatalogSystem(scene);
+  assert.equal(scene.catalogSystem.setStorePrice("ration", 10.23), true);
   assert.equal(prices.get("ration"), 10.23);
   for (const invalid of [0.99, 10.234, NaN, Infinity]) {
-    assert.equal(scene.setStorePrice("ration", invalid), false);
+    assert.equal(scene.catalogSystem.setStorePrice("ration", invalid), false);
     assert.equal(prices.get("ration"), 10.23);
   }
   assert.equal(warnings.length, 4);

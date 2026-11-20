@@ -33,7 +33,7 @@ export async function runScriptedShift(harness, { employees = [], playSeconds = 
   }, { employees, shelves, items });
   if (setup.hired.some((ok) => !ok)) throw new Error(`Could not hire ${employees.join(", ")}`);
   const before = await h.game((scene) => {
-    const total = scene.getInventoryItems()
+    const total = scene.catalogSystem.getInventoryItems()
       .reduce((sum, { offShelves, stock, inCustomerCarts }) => sum + offShelves + stock + inCustomerCarts, 0);
     return { stock: total, credits: scene.gameState.economy.credits };
   });
@@ -52,7 +52,7 @@ export async function runScriptedShift(harness, { employees = [], playSeconds = 
   await h.game((scene) => { scene.shiftClock.elapsedMs = Math.max(scene.shiftClock.elapsedMs, 12 * 35 * 1000 - 500); });
   await h.page.waitForFunction(() => window.__game.scene.getScene("scene-game").shift.ended, null, { timeout: 240000 });
   const after = await h.game((scene) => {
-    const total = scene.getInventoryItems()
+    const total = scene.catalogSystem.getInventoryItems()
       .reduce((sum, { offShelves, stock, inCustomerCarts }) => sum + offShelves + stock + inCustomerCarts, 0);
     const soldUnits = scene.gameState.economy.dayLedger.lines
       .filter((line) => line.category === "sales").reduce((sum, line) => sum + (line.quantity ?? 1), 0);

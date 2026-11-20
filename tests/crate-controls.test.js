@@ -28,6 +28,7 @@ let SupplySystem;
 let FixtureSystem;
 let FixtureViews;
 let CheckoutSystem;
+let CatalogSystem;
 let CrateSystem;
 let CrateWorld;
 let ShiftSystem;
@@ -67,6 +68,7 @@ before(async () => {
   ({ FixtureSystem } = await server.ssrLoadModule("/js/systems/FixtureSystem.js"));
   ({ FixtureViews } = await server.ssrLoadModule("/js/world/FixtureViews.js"));
   ({ CheckoutSystem } = await server.ssrLoadModule("/js/systems/CheckoutSystem.js"));
+  ({ CatalogSystem } = await server.ssrLoadModule("/js/systems/CatalogSystem.js"));
   ({ CrateSystem } = await server.ssrLoadModule("/js/systems/CrateSystem.js"));
   ({ CrateWorld } = await server.ssrLoadModule("/js/world/CrateWorld.js"));
   ({ ShiftSystem } = await server.ssrLoadModule("/js/systems/ShiftSystem.js"));
@@ -1985,9 +1987,10 @@ test("inventory totals include all carried crates and active customer carts but 
       return { rifle: 81, pistol: 59 }[itemId];
     },
   };
-  scene.getStorePrice = () => 125;
+  scene.catalogSystem = new CatalogSystem(scene);
+  scene.catalogSystem.getStorePrice = () => 125;
 
-  const inventory = scene.getInventoryItems();
+  const inventory = scene.catalogSystem.getInventoryItems();
   assert.equal(inventory.find(({ item }) => item.id === "rifle").inCustomerCarts, 2);
   assert.equal(inventory.find(({ item }) => item.id === "pistol").inCustomerCarts, 1);
   assert.equal(inventory.find(({ item }) => item.id === "rifle").offShelves, 21);

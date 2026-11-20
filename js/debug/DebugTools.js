@@ -137,7 +137,7 @@ export class DebugTools {
       gameState.economy.spend(license.baseCost, { category: "licenses", label: license.name });
       gameState.catalog.sign(licenseId);
     }
-    scene.recalculateActiveFactions();
+    scene.catalogSystem.recalculateActiveFactions();
 
     const shelves = [];
     for (let count = 0; count < shelfCount; count += 1) {

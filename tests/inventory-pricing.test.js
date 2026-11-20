@@ -270,23 +270,25 @@ function createHarness() {
     staffSystem: { canManage: () => true },
     saves: { loadFailed: false },
     offShelves: 1,
-    getStorePrice: (itemId) => prices.get(itemId),
-    setStorePrice(itemId, price) {
-      if (!isMoney(price) || price < 1) return false;
-      prices.set(itemId, price);
-      gameState.shop.changed();
-      return true;
-    },
-    getInventoryItems() {
-      return ["rifle", "pistol"].map((itemId) => ({
-        item: { id: itemId, name: itemId },
-        offShelves: this.offShelves,
-        stock: 0,
-        inCustomerCarts: this.customerCartCount,
-        marketPrice: marketPrices.get(itemId),
-        unitCost: unitCosts.get(itemId),
-        storePrice: prices.get(itemId),
-      }));
+    catalogSystem: {
+      getStorePrice: (itemId) => prices.get(itemId),
+      setStorePrice(itemId, price) {
+        if (!isMoney(price) || price < 1) return false;
+        prices.set(itemId, price);
+        gameState.shop.changed();
+        return true;
+      },
+      getInventoryItems() {
+        return ["rifle", "pistol"].map((itemId) => ({
+          item: { id: itemId, name: itemId },
+          offShelves: scene.offShelves,
+          stock: 0,
+          inCustomerCarts: scene.customerCartCount,
+          marketPrice: marketPrices.get(itemId),
+          unitCost: unitCosts.get(itemId),
+          storePrice: prices.get(itemId),
+        }));
+      },
     },
     supply: {
       restockableItems: () => [],
@@ -368,7 +370,7 @@ test("price buttons update the displayed value and retain keyboard focus", () =>
   h.click("rifle", "increase");
   assert.equal(h.panel.input("rifle").value, "110");
   assert.match(h.panel.profit("rifle"), />30<\/span>/);
-  assert.equal(h.scene.getStorePrice("rifle"), 110);
+  assert.equal(h.scene.catalogSystem.getStorePrice("rifle"), 110);
   assert.equal(h.document.activeElement, h.panel.button("rifle", "increase"));
   assert.equal(h.keyboard.enabled, false);
 
@@ -400,7 +402,7 @@ test("committing a typed price updates profit without replacing the next price b
   input.value = "95.37";
   const renders = h.panel.renderCount;
   h.body.emit("change", { target: input });
-  assert.equal(h.scene.getStorePrice("rifle"), 95.37);
+  assert.equal(h.scene.catalogSystem.getStorePrice("rifle"), 95.37);
   assert.match(h.panel.profit("rifle"), />15\.37<\/span>/);
   assert.equal(h.panel.renderCount, renders);
 
@@ -425,7 +427,7 @@ test("contract signing enforces each shop level without spending credits early",
   tablet.gameState = state;
   tablet.scene = {
     showShopMessage: (message) => warnings.push(message),
-    recalculateActiveFactions() {},
+    catalogSystem: { recalculateActiveFactions() {} },
   };
   tablet.handleSignContract("lic_start_apparel");
   assert.equal(state.economy.credits, 1500);
@@ -702,21 +704,21 @@ test("a typed price commits before a subsequent button click", async () => {
 
   h.body.emit("click", { target: button });
   assert.equal(h.panel.input("rifle").value, "220");
-  assert.equal(h.scene.getStorePrice("rifle"), 220);
+  assert.equal(h.scene.catalogSystem.getStorePrice("rifle"), 220);
   assert.equal(h.tablet.inventoryTab.refreshPending, false);
   h.focus(null);
 });
 
 test("percentage buttons change low prices by at least one credit", () => {
   const h = createHarness();
-  h.scene.setStorePrice("rifle", 1);
+  h.scene.catalogSystem.setStorePrice("rifle", 1);
   h.click("rifle", "increase");
   assert.equal(h.panel.input("rifle").value, "2");
   h.click("rifle", "decrease");
   assert.equal(h.panel.input("rifle").value, "1");
   h.click("rifle", "decrease");
   assert.equal(h.panel.input("rifle").value, "1");
-  h.scene.setStorePrice("rifle", 5);
+  h.scene.catalogSystem.setStorePrice("rifle", 5);
   h.click("rifle", "decrease");
   assert.equal(h.panel.input("rifle").value, "4");
   h.focus(null);

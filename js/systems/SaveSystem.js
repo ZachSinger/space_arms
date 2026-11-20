@@ -105,7 +105,7 @@ export class SaveSystem {
     shop.cleaningSystem?.load(data.trash ?? []);
     this.moveShelfOverflowToGoBacks();
     shop.refreshShelfStockDisplays();
-    shop.recalculateActiveFactions();
+    shop.catalogSystem.recalculateActiveFactions();
   }
 
   // Older saves can hold more in a shelf slot than its cap allows; the excess goes to Go-Backs.

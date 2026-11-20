@@ -257,7 +257,7 @@ export class ShiftSystem {
    */
   loanOffer() {
     const shop = this.shop;
-    const ownsSellableStock = shop.getInventoryItems()
+    const ownsSellableStock = shop.catalogSystem.getInventoryItems()
       .some(({ offShelves, stock, inCustomerCarts }) => offShelves + stock + inCustomerCarts > 0);
     const crateCosts = shop.supply.restockableItems().map(({ cost }) => cost);
     return getEmergencyLoanOffer({

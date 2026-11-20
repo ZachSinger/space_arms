@@ -384,7 +384,7 @@ export class ManagerTablet {
 
     this.gameState.economy.spend(license.baseCost, { category: "licenses", label: license.name });
     this.gameState.catalog.sign(licenseId);
-    this.scene.recalculateActiveFactions();
+    this.scene.catalogSystem.recalculateActiveFactions();
     // The panel re-renders via the constructor's game state subscription.
   }
 
