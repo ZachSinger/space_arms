@@ -33,6 +33,7 @@ const PIXEL_DIRECTIONS = [
 ];
 
 const ROUTE_CACHE_LIMIT = 128;
+const WALK_GRID_CACHE_LIMIT = 16384;
 
 class MinHeap {
   constructor() {
@@ -349,8 +350,10 @@ export class Navigation {
     this.registerFrontOverlap = registerFrontOverlap;
     this.defaultBodySize = defaultBodySize;
     this.routeCache = new Map();
+    this.walkGridCache = new Map();
     this.routeLayout = null;
     this.routeWalkability = null;
+    this.walkGridEnabled = false;
     this.store = Object.freeze({
       findPath: (...args) => this.findPath(...args),
     });
@@ -394,20 +397,74 @@ export class Navigation {
   }
 
   isNavigationSegmentClear(from, to, obstacles) {
+    this.prepareWalkabilityCache();
+    return this.isNavigationSegmentClearForLayout(
+      from,
+      to,
+      obstacles,
+      (gx, gy) => this.isRoomWalkable(gx, gy),
+    );
+  }
+
+  isNavigationSegmentClearForLayout(from, to, obstacles, isRoomWalkable) {
     const distance = Math.hypot(to.x - from.x, to.y - from.y);
     const steps = Math.ceil(distance / NAVIGATION_TUNING.walkStepPx);
     for (let index = 0; index <= steps; index += 1) {
       const ratio = steps ? index / steps : 0;
       const x = from.x + (to.x - from.x) * ratio;
       const y = from.y + (to.y - from.y) * ratio;
-      if (!this.room.isWalkable(Math.floor(x / TILE_SIZE), Math.floor(y / TILE_SIZE))) return false;
+      if (!isRoomWalkable(Math.floor(x / TILE_SIZE), Math.floor(y / TILE_SIZE))) return false;
     }
     return obstacles.every((rectangle) => !segmentIntersectsRectangle(from, to, rectangle));
   }
 
   isStraightWalkClear(fromX, fromY, toX, toY, bodySize) {
+    this.prepareWalkabilityCache();
     const obstacles = this.getNavigationObstacles(bodySize);
-    return this.isNavigationSegmentClear({ x: fromX, y: fromY }, { x: toX, y: toY }, obstacles);
+    return this.isNavigationSegmentClearForLayout(
+      { x: fromX, y: fromY },
+      { x: toX, y: toY },
+      obstacles,
+      (gx, gy) => this.isRoomWalkable(gx, gy),
+    );
+  }
+
+  prepareWalkabilityCache() {
+    if (typeof this.room.navigationWalkabilityKey !== "function") {
+      if (this.walkGridEnabled || this.routeWalkability) {
+        this.routeCache.clear();
+        this.walkGridCache.clear();
+        this.routeLayout = null;
+        this.routeWalkability = null;
+      }
+      this.walkGridEnabled = false;
+      return false;
+    }
+
+    const layout = this.room.navigationWalkabilityKey();
+    if (typeof layout !== "string") {
+      throw new TypeError("The room's navigation walkability key must be a string.");
+    }
+    if (layout !== this.routeLayout || this.room.isWalkable !== this.routeWalkability) {
+      this.routeCache.clear();
+      this.walkGridCache.clear();
+      this.routeLayout = layout;
+      this.routeWalkability = this.room.isWalkable;
+    }
+    this.walkGridEnabled = true;
+    return true;
+  }
+
+  isRoomWalkable(gx, gy) {
+    if (!this.walkGridEnabled) return this.room.isWalkable(gx, gy);
+    const key = `${gx},${gy}`;
+    if (this.walkGridCache.has(key)) return this.walkGridCache.get(key);
+    const walkable = this.room.isWalkable(gx, gy);
+    if (this.walkGridCache.size >= WALK_GRID_CACHE_LIMIT) {
+      this.walkGridCache.delete(this.walkGridCache.keys().next().value);
+    }
+    this.walkGridCache.set(key, walkable);
+    return walkable;
   }
 
   findPath(fromX, fromY, toX, toY, bodySize) {
@@ -423,21 +480,20 @@ export class Navigation {
   }
 
   findAreaPath(fromX, fromY, toX, toY, bodySize) {
+    const canCache = this.prepareWalkabilityCache();
     const obstacles = this.getNavigationObstacles(bodySize);
     const start = { x: fromX, y: fromY };
     const goal = { x: toX, y: toY };
-    const isSegmentClear = (from, to) => this.isNavigationSegmentClear(from, to, obstacles);
+    const isSegmentClear = (from, to) => this.isNavigationSegmentClearForLayout(
+      from,
+      to,
+      obstacles,
+      (gx, gy) => this.isRoomWalkable(gx, gy),
+    );
     if (isSegmentClear(start, goal)) return [];
 
     let routeKey = null;
-    if (typeof this.room.navigationWalkabilityKey === "function") {
-      const layout = this.room.navigationWalkabilityKey();
-      if (typeof layout !== "string") throw new TypeError("The room's navigation walkability key must be a string.");
-      if (layout !== this.routeLayout || this.room.isWalkable !== this.routeWalkability) {
-        this.routeCache.clear();
-        this.routeLayout = layout;
-        this.routeWalkability = this.room.isWalkable;
-      }
+    if (canCache) {
       routeKey = JSON.stringify([fromX, fromY, toX, toY, obstacles]);
       if (this.routeCache.has(routeKey)) {
         const cached = this.routeCache.get(routeKey);
@@ -450,7 +506,7 @@ export class Navigation {
       goal,
       {
         isWalkable: (x, y) =>
-          this.room.isWalkable(Math.floor(x / TILE_SIZE), Math.floor(y / TILE_SIZE)) &&
+          this.isRoomWalkable(Math.floor(x / TILE_SIZE), Math.floor(y / TILE_SIZE)) &&
           obstacles.every((rectangle) =>
             x <= rectangle.left || x >= rectangle.right || y <= rectangle.top || y >= rectangle.bottom),
         isSegmentClear,

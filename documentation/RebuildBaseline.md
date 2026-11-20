@@ -67,3 +67,20 @@ about 30 loose crates. Work the game does per frame (updating and drawing), thre
 
 The speed test fails above **9 ms average** or **25 ms for the slowest 1%** (about 1.5× baseline).
 The occasional worst-frame spike is recorded but not checked; it should shrink, not grow.
+
+### Shared walk-grid check
+
+The navigation cache reuses room-floor checks across different routes, but still checks current
+fixture obstacles and each character's clearance. A changed room walkability key or floor-check
+function clears it; rooms without a key do not cache floor cells.
+
+A real-game comparison ran 100 obstructed searches across three nearby start/end pairs, clearing
+the route cache before each search to measure floor reuse alone. All paths matched exactly:
+
+| Floor-cell reuse | Floor checks | Total search time |
+|---|---|---|
+| Off | 147,420 | 42.7 ms |
+| On | 11 | 29.9 ms |
+
+Times vary between runs. Regression tests cover shared straight-walk checks, changed floors,
+removed cache keys, moved fixtures, and different character sizes.

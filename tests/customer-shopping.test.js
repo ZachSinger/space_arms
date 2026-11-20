@@ -249,16 +249,25 @@ test("reused routes stay independent and are invalidated when the shop changes",
   assert.ok(first?.length);
   const expected = structuredClone(first);
   const firstChecks = checks;
+  let cachedRouteReads = 0;
+  const getCachedRoute = scene.navigation.routeCache.get.bind(scene.navigation.routeCache);
+  scene.navigation.routeCache.get = (key) => {
+    cachedRouteReads += 1;
+    return getCachedRoute(key);
+  };
   first[0].x = -1;
   first.pop();
   checks = 0;
   assert.deepEqual(route(), expected, "moving one character must not change another character's route");
-  assert.ok(checks < firstChecks / 2, "the repeated route avoids another search");
+  assert.equal(cachedRouteReads, 1, "the repeated route uses its cached result");
+  assert.ok(checks < firstChecks, "the repeated route avoids another search");
 
   obstacle.body.x += 16;
+  const cachedRoutes = scene.navigation.routeCache.size;
   checks = 0;
   const moved = route();
-  assert.ok(checks > firstChecks / 2, "a moved fixture needs a new route");
+  assert.equal(scene.navigation.routeCache.size, cachedRoutes + 1, "a moved fixture needs a new route");
+  assert.ok(checks < firstChecks, "a moved fixture can reuse the unchanged room walk grid");
   scene.navigation.routeCache.clear();
   assert.deepEqual(moved, route());
   obstacle.body.enable = false;
@@ -275,6 +284,87 @@ test("reused routes stay independent and are invalidated when the shop changes",
   assert.deepEqual(withWall, route(), "adding a wall recalculates the route");
   scene.room.isWalkable = () => false;
   assert.equal(route(), null, "changing the room's walkability function invalidates routes");
+});
+
+test("the walkability grid is reused across routes and refreshed when the room changes", () => {
+  const scene = makeNavigationScene([
+    { body: { x: 80, y: 32, width: 80, height: 96, enable: true } },
+  ]);
+  const floor = scene.room.isWalkable;
+  let checks = 0;
+  let revision = 0;
+  let floorOpen = true;
+  scene.room.isWalkable = (gx, gy) => {
+    checks += 1;
+    return floorOpen && floor(gx, gy);
+  };
+  scene.room.navigationWalkabilityKey = () => String(revision);
+
+  assert.ok(scene.findAreaPath(32, 96, 224, 96)?.length);
+  const firstSearchChecks = checks;
+  assert.ok(scene.navigation.walkGridCache.size > 0);
+
+  checks = 0;
+  scene.navigation.routeCache.clear();
+  assert.ok(scene.findAreaPath(40, 96, 216, 96)?.length);
+  assert.ok(checks < firstSearchChecks, "a second route reuses cells already checked");
+
+  revision += 1;
+  floorOpen = false;
+  checks = 0;
+  assert.equal(scene.findAreaPath(32, 96, 224, 96), null);
+  assert.ok(checks > 0, "a changed layout recomputes walkable cells");
+  assert.ok([...scene.navigation.walkGridCache.values()].every((walkable) => !walkable));
+});
+
+test("removing a room's walkability key disables and clears its cached grid", () => {
+  const scene = makeNavigationScene([
+    { body: { x: 80, y: 32, width: 80, height: 96, enable: true } },
+  ]);
+  let floorOpen = true;
+  const floor = scene.room.isWalkable;
+  scene.room.isWalkable = (gx, gy) => floorOpen && floor(gx, gy);
+  scene.room.navigationWalkabilityKey = () => "fixed-layout";
+
+  assert.ok(scene.findAreaPath(32, 96, 224, 96)?.length);
+  assert.ok(scene.navigation.walkGridCache.size > 0);
+
+  delete scene.room.navigationWalkabilityKey;
+  floorOpen = false;
+  assert.equal(scene.findAreaPath(32, 96, 224, 96), null);
+  assert.equal(scene.navigation.walkGridCache.size, 0);
+});
+
+test("straight walks reuse floor checks but refresh them when the floor changes", () => {
+  const scene = makeNavigationScene();
+  const floor = scene.room.isWalkable;
+  let checks = 0;
+  let revision = 0;
+  let closed = false;
+  scene.room.isWalkable = (gx, gy) => {
+    checks += 1;
+    return !closed && floor(gx, gy);
+  };
+  scene.room.navigationWalkabilityKey = () => String(revision);
+
+  assert.deepEqual(scene.findAreaPath(32, 96, 224, 96), []);
+  assert.ok(checks > 0);
+  checks = 0;
+  assert.deepEqual(scene.findAreaPath(32, 96, 224, 96), []);
+  assert.equal(scene.isStraightWalkClear(32, 96, 224, 96), true);
+  assert.equal(checks, 0, "route and movement checks share the cached floor cells");
+
+  closed = true;
+  revision += 1;
+  assert.equal(scene.isStraightWalkClear(32, 96, 224, 96), false);
+  assert.equal(scene.findAreaPath(32, 96, 224, 96), null);
+
+  closed = false;
+  delete scene.room.navigationWalkabilityKey;
+  assert.deepEqual(scene.findAreaPath(32, 96, 224, 96), []);
+  assert.equal(scene.navigation.walkGridCache.size, 0);
+  closed = true;
+  assert.equal(scene.isStraightWalkClear(32, 96, 224, 96), false);
 });
 
 test("cached routes respect each character's size", () => {

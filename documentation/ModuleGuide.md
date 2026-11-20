@@ -19,7 +19,7 @@ Game modules are optional gameplay features managed by `ModuleHost` in
 - Durable data belongs in a `GameState` slice and the standard save validation and upgrade path.
   The module host owns runtime lifecycle, not an unvalidated second save format.
 - If a module changes where characters can walk, its room's `navigationWalkabilityKey()` must
-  change too. Rooms without that method do not reuse cached routes.
+  change too. Rooms without that method do not reuse cached routes or cached walkability cells.
 
 Cleaning demonstrates the optional-feature boundary: the scene, HUD, customer policies, and
 interactions all tolerate the module being absent. Its saved trash data remains part of the save
