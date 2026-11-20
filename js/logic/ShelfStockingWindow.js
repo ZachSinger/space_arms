@@ -10,6 +10,7 @@ import { adjustStorePrice, formatMoneyAmount } from "./Money.js";
 import tilesetManifest from "../../data/TilesetManifest.json" with { type: "json" };
 import { getInputDevice } from "../input/InputDevice.js";
 import { DESIGN_HEIGHT, getGameScale } from "./GameViewport.js";
+import { html } from "../core/html.js";
 
 const TEXTURE_PATHS = new Map(tilesetManifest.map(({ key, path }) => [key, path]));
 
@@ -179,12 +180,11 @@ export class ShelfStockingWindow {
     const art = getBudgetShelfArtForType(getFixtureType(fixture.type));
     if (!art) throw new Error("Missing close-up shelf art.");
     this.art = art;
-    this.body.replaceChildren();
-    this.status = document.createElement("p");
-    this.status.className = "type-description shelf-stocking-status";
-    this.status.setAttribute("role", "status");
-    this.stage = document.createElement("div");
-    this.stage.className = "shelf-stocking-stage";
+    this.body.innerHTML = html`
+      <p class="type-description shelf-stocking-status" role="status"></p>
+      <div class="shelf-stocking-stage"></div>`;
+    this.status = this.body.querySelector(".shelf-stocking-status");
+    this.stage = this.body.querySelector(".shelf-stocking-stage");
     // Crop the empty strip above the shelf picture so the window hugs the art.
     const visibleHeight = art.height - art.top;
     this.stage.style.aspectRatio = `${art.width} / ${visibleHeight}`;
@@ -236,7 +236,6 @@ export class ShelfStockingWindow {
       this.stage.appendChild(sticker);
       return sticker;
     });
-    this.body.append(this.status, this.stage);
     this.uiWindow.openWindow();
     this.refresh();
     this.refreshTimer = window.setInterval(() => this.refresh(), 100);
@@ -356,7 +355,7 @@ export class ShelfStockingWindow {
     element.className = "shelf-price-widget";
     element.setAttribute("role", "dialog");
     element.setAttribute("aria-label", `Price for ${item.name}`);
-    element.innerHTML = `
+    element.innerHTML = html`
       <div class="shelf-price-widget-head">
         <span class="shelf-price-widget-name"></span>
         <button type="button" data-price-close aria-label="Close price controls">X</button>
