@@ -40,10 +40,10 @@ try {
 
   const saved = JSON.parse(await readFile(new URL("../../tests/golden-saves/trash.json", import.meta.url), "utf8"));
   await disabled.loadSave(saved);
-  const loaded = await disabled.game((scene) => scene.serialize());
+  const loaded = await disabled.game((scene) => scene.saves.serialize());
   assert.deepEqual(loaded.trash, saved.trash);
   await disabled.loadSave(loaded);
-  assert.deepEqual((await disabled.game((scene) => scene.serialize())).trash, saved.trash);
+  assert.deepEqual((await disabled.game((scene) => scene.saves.serialize())).trash, saved.trash);
 
   await disabled.game((scene) => {
     scene.debugTools.quickstart({ shelfCount: 2, itemCount: 8 });

@@ -67,7 +67,7 @@ export async function startGame({ port = 5391, headless = true, vitePlugins = []
       await page.waitForFunction(() => {
         const scene = window.__game.scene.getScene("scene-game");
         return scene?.sys.isActive() && scene.player && scene.player !== window.__previousPlayer &&
-          scene.hud && scene.lastSavedSnapshot;
+          scene.hud && scene.saves.lastSavedSnapshot;
       }, null, { timeout: 60000 });
     },
     /** Runs a function inside the page with the game scene as `scene`. */

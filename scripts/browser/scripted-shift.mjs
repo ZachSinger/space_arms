@@ -76,9 +76,9 @@ export async function runScriptedShift(harness, { employees = [], playSeconds = 
     const ended = scene.shift.endDay();
     return { ended, advanced: scene.gameState.calendar.day === day + 1 };
   });
-  const saved = await h.game((scene) => JSON.stringify(scene.serialize()));
+  const saved = await h.game((scene) => JSON.stringify(scene.saves.serialize()));
   await h.loadSave(JSON.parse(saved));
-  const reloaded = await h.game((scene) => JSON.stringify(scene.serialize()));
+  const reloaded = await h.game((scene) => JSON.stringify(scene.saves.serialize()));
   return { before, after, endDay, saveRoundTrip: reloaded === saved, saved, reloaded };
 }
 

@@ -320,7 +320,7 @@ export const scenarios = {
       const save = JSON.parse(await readFile(new URL(`${name}.json`, GOLDEN), "utf8"));
       const expected = JSON.parse(await readFile(new URL(file, GOLDEN), "utf8"));
       await h.loadSave(save);
-      const actual = await h.game((scene) => JSON.parse(scene.lastSavedSnapshot));
+      const actual = await h.game((scene) => JSON.parse(scene.saves.lastSavedSnapshot));
       for (const fixture of actual.fixtures ?? []) {
         if (!Array.isArray(fixture.placements)) continue;
         if (!Number.isSafeInteger(fixture.nextPlacementId) ||

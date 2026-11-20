@@ -313,7 +313,7 @@ export class ManagerTablet {
 
   updateSaveStatus() {
     this.bodyElement.querySelectorAll("[data-save-status]").forEach((element) => {
-      element.textContent = this.scene.saveStatus;
+      element.textContent = this.scene.saves.status;
     });
   }
 
@@ -391,7 +391,7 @@ export class ManagerTablet {
   // --- Window ---
 
   openWindow() {
-    if (this.scene.shift.starting || this.scene.fixturePlacement?.active || this.scene.loadFailed) return;
+    if (this.scene.shift.starting || this.scene.fixturePlacement?.active || this.scene.saves.loadFailed) return;
     this.inventoryTab.redraw();
     this.refreshEmployeePanel();
     this.refreshSupplyPanel(); // loading pad spots free up without any game state change

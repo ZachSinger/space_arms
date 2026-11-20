@@ -39,13 +39,13 @@ import { FixturePlacement } from "../logic/FixturePlacement.js";
 import { setupSandboxRoom } from "../debug/SandboxRoom.js";
 import { setupUiLab } from "../debug/UiLab.js";
 import { ShelfStockingWindow } from "../logic/ShelfStockingWindow.js";
-import { REGISTER_FRONT_OVERLAP, getFixtureType, fixtureFacing, validateFixtureLayout } from "../logic/FixtureLayout.js";
-import { validateShopSave } from "../logic/ShopSave.js";
+import { REGISTER_FRONT_OVERLAP, getFixtureType, fixtureFacing } from "../logic/FixtureLayout.js";
 import { UIWindow } from "../logic/UIWindow.js";
 import { Messages, SHOP_MESSAGE_COLOR } from "../world/Messages.js";
 import { ShiftSystem } from "../systems/ShiftSystem.js";
 import { StaffSystem } from "../systems/StaffSystem.js";
-import { AREA, Areas } from "../world/Areas.js";
+import { SaveSystem } from "../systems/SaveSystem.js";
+import { Areas } from "../world/Areas.js";
 import { CameraRig } from "../world/CameraRig.js";
 import { FixtureViews } from "../world/FixtureViews.js";
 import { FixtureSystem } from "../systems/FixtureSystem.js";
@@ -60,7 +60,6 @@ import { CheckoutWindow } from "../logic/CheckoutWindow.js";
 import { GamepadInput, PAD } from "../input/GamepadInput.js";
 import { UINavigator } from "../logic/UINavigator.js";
 import { controlLabel, setInputDevice } from "../input/InputDevice.js";
-import { SaveManager } from "../../SaveManager.js";
 import { database } from "./boot.js"; // the exported DatabaseManager singleton
 import { installSceneTextSize } from "../logic/GameTextSize.js";
 import { gameRandom, randomSeed } from "../core/Random.js";
@@ -85,30 +84,6 @@ const PEOPLE_DEPTH_BASE = 2000;
 const ANGRY_REPUTATION_PENALTY = 1;
 // Reputation lost once when a customer cannot find any of their primary items.
 const MISSING_PRIMARY_REPUTATION_PENALTY = 1;
-
-/**
- * Grid-cell keys ("gx,gy") overlapped, even partially, by a world-space rectangle. Fixture
- * pixel bounds don't always land on cell boundaries.
- * @param {number} centerX - px
- * @param {number} centerY - px
- * @param {number} width - px
- * @param {number} height - px
- * @returns {string[]}
- */
-function getOccupiedCellKeys(centerX, centerY, width, height) {
-  const gxMin = Math.floor((centerX - width / 2) / TILE_SIZE);
-  const gxMax = Math.floor((centerX + width / 2 - 0.01) / TILE_SIZE);
-  const gyMin = Math.floor((centerY - height / 2) / TILE_SIZE);
-  const gyMax = Math.floor((centerY + height / 2 - 0.01) / TILE_SIZE);
-
-  const keys = [];
-  for (let gy = gyMin; gy <= gyMax; gy += 1) {
-    for (let gx = gxMin; gx <= gxMax; gx += 1) {
-      keys.push(`${gx},${gy}`);
-    }
-  }
-  return keys;
-}
 
 /**
  * The playable shop scene ("scene-game"), started from the title scene.
@@ -145,12 +120,6 @@ export class GameScene extends Phaser.Scene {
     this.debugTools = null;
     this.interactables = new InteractableRegistry();
     this.shift = null;
-    this.loadFailed = false;
-    this.autosaveBlocked = false;
-    this.saveInProgress = null;
-    this.autosaveQueued = false;
-    this.lastSavedSnapshot = null;
-    this.saveStatus = "Not saved yet";
     this.messages = new Messages(this, document.getElementById("game-message"));
     this.events.once("shutdown", () => {
       this.messages.destroy();
@@ -160,6 +129,7 @@ export class GameScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.syncCarriedCrate, this);
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.syncFloorStacks, this);
     this.gameState = new GameState({ items: database.getAllItems(), events: this.eventBus });
+    this.saves = new SaveSystem(this);
     this.crateSystem = new CrateSystem(this);
     for (const property of [
       "restockCrates", "carriedCrate", "carriedCrates", "floorStacks", "markedStackBase", "markedFromTop",
@@ -178,7 +148,7 @@ export class GameScene extends Phaser.Scene {
       this.gameState,
       this.shiftClock,
       () => this.shift.start(),
-      () => this.saveManually(),
+      () => this.saves.saveManually(),
       () => this.shift.endDay(),
       () => this.customerFlow.toggleTemporaryClosure(),
       () => this.confirmReturnToMainMenu(),
@@ -488,16 +458,7 @@ export class GameScene extends Phaser.Scene {
       this.windowManager.destroy();
     });
 
-    this.saveManager = new SaveManager({ shop: this });
-    if (this.savedShopData) {
-      try {
-        this.applySave(this.savedShopData);
-      } catch (error) {
-        this.loadFailed = true;
-        this.player.inputEnabled = false;
-        this.handlePersistenceError(error);
-      }
-    }
+    if (this.savedShopData) this.saves.loadAtStart(this.savedShopData);
     this.sandboxRoom = !this.sandbox ? null
       : this.lab === "ui" ? setupUiLab(this) : setupSandboxRoom(this);
     this.events.once("shutdown", () => {
@@ -508,7 +469,7 @@ export class GameScene extends Phaser.Scene {
     this.autosaveTimer = this.time.addEvent({
       delay: 1000,
       loop: true,
-      callback: () => this.requestAutosave(),
+      callback: () => this.saves.requestAutosave(),
     });
     // A "!" floats over the player while abandoned items wait in the Go-Backs bin.
     this.goBacksBadge = this.add.text(0, 0, "!", {
@@ -520,12 +481,12 @@ export class GameScene extends Phaser.Scene {
       strokeThickness: 4,
     }).setOrigin(0.5, 1).setDepth(9000).setVisible(false);
     this.gameState.subscribe(() => {
-      this.requestAutosave();
+      this.saves.requestAutosave();
       this.refreshShelfStockDisplays();
-      this.updateSaveControls();
+      this.saves.updateControls();
       this.refreshGoBacksBadge();
     });
-    this.shiftClock.subscribe(() => this.updateSaveControls());
+    this.shiftClock.subscribe(() => this.saves.updateControls());
   }
 
   bindControlKey(eventName, action, callback) {
@@ -573,7 +534,7 @@ export class GameScene extends Phaser.Scene {
     pad.poll(time);
     if (pad.hadInput) setInputDevice("gamepad");
     const mode = this.controlMode.getMode();
-    if (mode === CONTROL_MODES.LOADING && !this.loadFailed) return;
+    if (mode === CONTROL_MODES.LOADING && !this.saves.loadFailed) return;
     if (mode === CONTROL_MODES.PAUSED) {
       if (pad.justPressed(PAD.START)) {
         this.shiftClock.togglePause();
@@ -701,93 +662,6 @@ export class GameScene extends Phaser.Scene {
     return Number.isFinite(gap) && gap >= -TILE_SIZE / 2 ? Math.max(0, gap) : Infinity;
   }
 
-  // --- Saving rules ---
-
-  // Saving needs a quiet store: no shift running and nobody inside.
-  canSaveOffShift() {
-    return !this.loadFailed && (!this.shiftClock.started || this.shift.ended) &&
-      this.customers.length === 0;
-  }
-
-  // The Shelf Test Room is closed-store time like any other; it just never writes a save.
-  canWriteSave() {
-    return !this.sandbox && this.canSaveOffShift();
-  }
-
-  // --- Saving and loading ---
-
-  serialize() {
-    const crates = this.crateSystem.serialize();
-    const snapshot = {
-      ...this.gameState.toSave(),
-      ...crates,
-      ...(this.cleaningSystem ? { trash: this.serializeTrash() } : {}),
-    };
-    return validateShopSave(snapshot, database);
-  }
-
-  // Trash in hand is saved as lying on the shop floor where he stands (or by the backroom door).
-  serializeTrash() {
-    return this.cleaningSystem?.serializeTrash() ?? [];
-  }
-
-  /**
-   * Replaces the whole shop with a saved one. Throws if the save is invalid.
-   * @param {object} saved - raw save data; validated by validateShopSave
-   */
-  applySave(saved) {
-    const data = validateShopSave(saved, database);
-    // Staged: the whole new game state is built and checked off to the side first.
-    const next = GameState.fromSave(data, { items: database.getAllItems(), events: this.eventBus });
-    for (const id of data.unlockedZones) this.room.unlockZone(id);
-    // The map never closes a zone again, so one already open stays open in the loaded shop.
-    for (const zone of this.room.zones) if (!zone.locked) next.shop.unlockedZones.add(zone.id);
-    // Saves from before the sales-floor rule still load; the misplaced fixture can then be moved out.
-    const result = validateFixtureLayout(data.fixtures, { ...this.fixtureSystem.layoutOptions(), requireSalesFloor: false });
-    if (!result.valid) throw new Error(`Invalid saved layout: ${result.reason}`);
-    this.gameState.replaceWith(next, () => this.rebuildShopFromSave(data, result));
-    this.shift.resetStartingTotals();
-    this.cameraRig.reset();
-    this.lastSavedSnapshot = JSON.stringify(this.serialize());
-    this.setSaveStatus("Saved. Autosaves while the store is closed.");
-  }
-
-  /**
-   * Puts the saved shop back on the map. Runs after the new game state is swapped in and before
-   * any screen hears about it.
-   * @param {object} data - an upgraded, checked save
-   * @param {object} layout - the checked fixture layout
-   */
-  rebuildShopFromSave(data, layout) {
-    this.fixtureViews.clear();
-    for (const fixture of this.fixtures.all()) this.fixtureViews.show(fixture);
-    this.fixtureSystem.applyLayout(data.fixtures, layout);
-    this.areas.playerArea = AREA.SHOP;
-    this.player.teleportTo(this.storeDoor.x, this.storeDoor.y + TILE_SIZE);
-    this.cameraRig.refresh();
-    this.cratePress = null;
-    this.crateSystem.load(data);
-    this.cleaningSystem?.load(data.trash ?? []);
-    this.moveShelfOverflowToGoBacks();
-    this.refreshShelfStockDisplays();
-    this.recalculateActiveFactions();
-  }
-
-  // Older saves can hold more in a shelf slot than its cap allows; the excess goes to Go-Backs.
-  moveShelfOverflowToGoBacks() {
-    for (const shelf of this.fixtures.shelves()) {
-      for (const placement of shelf.placements) {
-        const overflow = placement.quantity - shelf.getPlacementCapacity(placement);
-        if (overflow <= 0) continue;
-        const moved = this.gameState.goBacks.takeFrom(shelf, placement.itemId, overflow, {
-          sourceEntry: placement, sourceName: "shelf",
-        });
-        if (moved !== overflow) throw new Error("Could not move saved shelf overflow into Go-Backs.");
-        this.gameState.shop.changed();
-      }
-    }
-  }
-
   refreshShelfStockDisplay(shelf) {
     shelf?.stockDisplay?.sync();
     shelf?.stockItemsDisplay?.sync();
@@ -797,87 +671,7 @@ export class GameScene extends Phaser.Scene {
     for (const shelf of this.fixtures.shelves()) this.refreshShelfStockDisplay(shelf);
   }
 
-  // Coalesces any number of requests in one tick into a single save attempt.
-  requestAutosave() {
-    if (!this.canWriteSave() || this.autosaveBlocked || this.autosaveQueued) return;
-    this.autosaveQueued = true;
-    queueMicrotask(() => {
-      this.autosaveQueued = false;
-      if (!this.scene.isActive() || !this.canWriteSave()) return;
-      this.saveOffShift().catch((error) => this.handlePersistenceError(error));
-    });
-  }
-
-  async saveManually() {
-    if (this.sandbox) {
-      this.showShopMessage("Test areas are never saved.");
-      return;
-    }
-    if (this.loadFailed || this.shift.starting || !this.canSaveOffShift()) {
-      this.showShopMessage(this.loadFailed
-        ? "Cannot save after a load error. Your existing save has not been overwritten."
-        : "Finish the shift before saving.");
-      return;
-    }
-    try {
-      this.showingSave = true;
-      await this.saveOffShift();
-      this.autosaveBlocked = false;
-      this.messages.closeSaveError();
-      this.setSaveStatus("Saved. Autosaves while the store is closed.");
-      this.showShopMessage("Game saved.");
-    } catch (error) {
-      this.handlePersistenceError(error);
-    } finally {
-      this.showingSave = false;
-      this.updateSaveControls();
-    }
-  }
-
-  // Waits out any save already running, then skips writing if nothing changed since the
-  // last successful save.
-  async saveOffShift() {
-    if (!this.canWriteSave()) return;
-    if (this.saveInProgress) {
-      await this.saveInProgress;
-      return this.saveOffShift();
-    }
-    const snapshot = JSON.stringify(this.serialize());
-    if (snapshot === this.lastSavedSnapshot) return;
-    this.saveInProgress = this.saveManager.save();
-    // Background autosaves stay silent; only a save the player asked for shows progress.
-    if (this.showingSave) this.setSaveStatus("Saving...");
-    try {
-      await this.saveInProgress;
-      this.lastSavedSnapshot = snapshot;
-      this.autosaveBlocked = false;
-      this.setSaveStatus("Saved. Autosaves while the store is closed.");
-      this.messages.closeSaveError();
-    } finally {
-      this.saveInProgress = null;
-      this.updateSaveControls();
-    }
-  }
-
-  updateSaveControls() {
-    if (!this.hud) return;
-    this.hud.renderSaveState({
-      canSave: !this.shift.starting && this.canWriteSave(),
-      saving: Boolean(this.saveInProgress && this.showingSave),
-      status: this.saveStatus,
-      unavailableReason: this.loadFailed
-        ? "Saving disabled: your saved game could not be loaded."
-        : this.shift.starting ? "Starting the shift..." : "Finish the shift before saving.",
-    });
-  }
-
-  setSaveStatus(text) {
-    this.saveStatus = text;
-    this.managerTablet?.updateSaveStatus();
-    this.updateSaveControls();
-  }
-
-  // --- On-screen messages and save errors ---
+  // --- On-screen messages and menus ---
 
   showShopMessage(message) {
     this.messages.show(message, SHOP_MESSAGE_COLOR);
@@ -906,28 +700,6 @@ export class GameScene extends Phaser.Scene {
         .addEventListener("click", () => this.mainMenuWindow.close());
     }
     this.mainMenuWindow.openWindow();
-  }
-
-  /**
-   * Blocks autosave and shows the save/load error window. After a failed load the only way
-   * out is back to the title, so the existing save is never overwritten.
-   * @param {Error} error
-   */
-  handlePersistenceError(error) {
-    console.error(this.loadFailed ? "Could not load game" : "Could not save game", error);
-    this.autosaveBlocked = true;
-    this.setSaveStatus(`Not saved: ${error.message}`);
-    this.messages.showSaveError({
-      text: `${this.loadFailed ? "Your saved game could not be loaded. It has not been overwritten." : "Your progress could not be saved."} ${error.message}`,
-      buttonLabel: this.loadFailed ? "RETURN TO TITLE" : "RETRY SAVE",
-      onButton: () => {
-        if (this.loadFailed) this.scene.start("scene-title");
-        else {
-          this.autosaveBlocked = false;
-          this.saveOffShift().catch((failure) => this.handlePersistenceError(failure));
-        }
-      },
-    });
   }
 
   // --- Pathfinding ---

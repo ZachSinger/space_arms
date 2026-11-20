@@ -21,7 +21,7 @@ export class StaffSystem {
   // Staff changes need the same quiet store as saving, and not mid shift start.
   canManage() {
     const { shop } = this;
-    return !shop.shift.starting && !shop.loadFailed && shop.canSaveOffShift();
+    return !shop.shift.starting && !shop.saves.loadFailed && shop.saves.canSaveOffShift();
   }
 
   hire(employeeId) {
@@ -45,7 +45,7 @@ export class StaffSystem {
       `${employee.name} hired and On Shift. Their wage of ${employee.wagePerShift} is due at each shift start.`,
       STAFF_MESSAGE_COLOR,
     );
-    shop.requestAutosave();
+    shop.saves.requestAutosave();
     return true;
   }
 
@@ -67,7 +67,7 @@ export class StaffSystem {
         : `${employee.name} is Off Shift. They'll stay home and won't be paid until you set them On Shift.`,
       STAFF_MESSAGE_COLOR,
     );
-    shop.requestAutosave();
+    shop.saves.requestAutosave();
     return true;
   }
 
@@ -98,7 +98,7 @@ export class StaffSystem {
       `${employee.name} will be away training next shift. Their wage of ${employee.wagePerShift} is still due.`,
       STAFF_MESSAGE_COLOR,
     );
-    shop.requestAutosave();
+    shop.saves.requestAutosave();
     return true;
   }
 
@@ -109,7 +109,7 @@ export class StaffSystem {
       return false;
     }
     if (!this.staff.moveJobPriority(employeeId, jobId, direction)) return false;
-    shop.requestAutosave();
+    shop.saves.requestAutosave();
     return true;
   }
 

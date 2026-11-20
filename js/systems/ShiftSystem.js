@@ -49,7 +49,7 @@ export class ShiftSystem {
   async start() {
     const shop = this.shop;
     const { gameState } = shop;
-    if (this.starting || shop.loadFailed || !shop.canSaveOffShift()) return;
+    if (this.starting || shop.saves.loadFailed || !shop.saves.canSaveOffShift()) return;
     if (gameState.calendar.awaitingEndDay) {
       shop.showShopMessage("End the day first: click END DAY at the top.");
       return;
@@ -63,10 +63,10 @@ export class ShiftSystem {
     shop.managerTablet.uiWindow.close();
     shop.player.sprite.body.stop();
     try {
-      await shop.saveOffShift();
+      await shop.saves.saveOffShift();
     } catch (error) {
       this.starting = false;
-      shop.handlePersistenceError(error);
+      shop.saves.handleError(error);
       return;
     }
     shop.customerFlow.prepareSchedule();
@@ -81,7 +81,7 @@ export class ShiftSystem {
     this.ended = false;
     this.starting = false;
     shop.staffSystem.spawnWorking();
-    shop.setSaveStatus("Checkpoint saved. Autosaving resumes after this shift.");
+    shop.saves.setStatus("Checkpoint saved. Autosaving resumes after this shift.");
     this.customersServed = 0;
     gameState.reputation.startShift();
     shop.eventBus.emit(GAME_EVENTS.SHIFT_STARTED, { pool: shop.customerFlow.pool });
@@ -230,7 +230,7 @@ export class ShiftSystem {
   canEndDay() {
     const shop = this.shop;
     return shop.gameState.calendar.awaitingEndDay && !this.starting &&
-      !shop.fixturePlacement.active && shop.canSaveOffShift();
+      !shop.fixturePlacement.active && shop.saves.canSaveOffShift();
   }
 
   // Closes today's receipt, moves the calendar on, and changes market prices (bible Steps 43
@@ -277,14 +277,14 @@ export class ShiftSystem {
       `Emergency loan received: ${formatMoneyAmount(offer.amount)}. You owe ${formatMoneyAmount(offer.repayTotal)}, paid back from your sales.`,
       "#f59e0b",
     );
-    this.shop.requestAutosave();
+    this.shop.saves.requestAutosave();
     return true;
   }
 
   payOffLoan() {
     if (!this.shop.gameState.economy.payOffLoan()) return false;
     this.shop.showGameMessage("Emergency loan paid off.", "#10b981");
-    this.shop.requestAutosave();
+    this.shop.saves.requestAutosave();
     return true;
   }
 

@@ -6,7 +6,6 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { HUDController } from "../js/logic/HUDController.js";
-import { SaveManager } from "../SaveManager.js";
 import { ControlMode } from "../js/input/ControlMode.js";
 import { GAME_EVENTS } from "../js/core/Events.js";
 import { SupplierLicense } from "../js/logic/Licenses.js";
@@ -25,6 +24,7 @@ let CHARACTER_FEET_DROP;
 let DebugTools;
 let ShiftSystem;
 let StaffSystem;
+let SaveSystem;
 let FixtureSystem;
 let FixtureViews;
 let CustomerFlow;
@@ -64,6 +64,7 @@ before(async () => {
   ({ DebugTools } = await server.ssrLoadModule("/js/debug/DebugTools.js"));
   ({ ShiftSystem } = await server.ssrLoadModule("/js/systems/ShiftSystem.js"));
   ({ StaffSystem } = await server.ssrLoadModule("/js/systems/StaffSystem.js"));
+  ({ SaveSystem } = await server.ssrLoadModule("/js/systems/SaveSystem.js"));
   ({ FixtureSystem } = await server.ssrLoadModule("/js/systems/FixtureSystem.js"));
   ({ FixtureViews } = await server.ssrLoadModule("/js/world/FixtureViews.js"));
   ({ CustomerFlow } = await server.ssrLoadModule("/js/systems/CustomerFlow.js"));
@@ -86,33 +87,28 @@ function createHarness(write = async () => true) {
   const writes = [];
   const controls = [];
   Object.assign(scene, {
-    loadFailed: false,
     shift: { starting: false, ended: false },
     shiftClock: { started: false },
     customers: [],
-    autosaveBlocked: false,
-    saveInProgress: null,
-    lastSavedSnapshot: null,
-    saveStatus: "Not saved yet",
     credits: 436,
     hud: { renderSaveState: (state) => controls.push(state) },
-    serialize: () => ({ credits: scene.credits }),
     showShopMessage: (message) => messages.push(message),
     messages: { closeSaveError() {} },
-    handlePersistenceError: (error) => {
-      errors.push(error);
-      scene.autosaveBlocked = true;
-      scene.setSaveStatus(`Not saved: ${error.message}`);
-    },
   });
-  scene.fixtureSystem = new FixtureSystem(scene);
-  scene.customerFlow = new CustomerFlow(scene);
-  scene.saveManager = new SaveManager({ shop: scene }, {
+  scene.saves = new SaveSystem(scene, {
     write: async (payload) => {
       writes.push(payload);
       return write(payload);
     },
   });
+  scene.saves.serialize = () => ({ credits: scene.credits });
+  scene.saves.handleError = (error) => {
+    errors.push(error);
+    scene.saves.autosaveBlocked = true;
+    scene.saves.setStatus(`Not saved: ${error.message}`);
+  };
+  scene.fixtureSystem = new FixtureSystem(scene);
+  scene.customerFlow = new CustomerFlow(scene);
   return { scene, messages, errors, writes, controls };
 }
 
@@ -124,7 +120,7 @@ test("fixtures can be placed during a closed mid-shift without unlocking saving 
   assert.equal(scene.fixtureSystem.canRearrange(), false);
   scene.customerFlow.temporarilyClosed = true;
   assert.equal(scene.fixtureSystem.canRearrange(), true);
-  assert.equal(scene.canSaveOffShift(), false);
+  assert.equal(scene.saves.canSaveOffShift(), false);
   assert.equal(scene.fixtureSystem.canExpand(), false);
   scene.shiftClock.isPaused = true;
   assert.equal(scene.fixtureSystem.canRearrange(), false);
@@ -192,7 +188,6 @@ function createExpansionHarness({ shopLevel, credits }) {
   Object.assign(scene, {
     gameState,
     shift: { starting: false, ended: false },
-    loadFailed: false,
     shiftClock: { started: false },
     customers: [],
     room: {
@@ -203,9 +198,10 @@ function createExpansionHarness({ shopLevel, credits }) {
       },
     },
     cameraRig: { refresh() { cameraRefreshes++; }, reset() { cameraRefreshes++; } },
-    requestAutosave() { autosaves++; },
     showShopMessage(message) { messages.push(message); },
   });
+  scene.saves = new SaveSystem(scene, { write: async () => true });
+  scene.saves.requestAutosave = () => { autosaves++; };
   scene.fixtureSystem = new FixtureSystem(scene);
   return {
     scene,
@@ -419,6 +415,7 @@ function createRegisterHarness() {
     ]) },
     gameState: { goBacks: { addCart() {} } },
     employees: [],
+    saves: { loadFailed: false },
   });
   scene.carriedCrates = [];
   scene.carriedCrate = null;
@@ -441,7 +438,6 @@ test("the shift-end event, receipt, and save observers see the applied reputatio
   Object.assign(scene, {
     gameState: state,
     customers: [],
-    loadFailed: false,
     shiftClock: { started: true, isPaused: false, notifyListeners() {} },
     hud: { renderStoreStatus() {} },
     room: { zones: ZONES },
@@ -450,12 +446,13 @@ test("the shift-end event, receipt, and save observers see the applied reputatio
     showGameMessage: (message) => messages.push(message),
   });
   scene.shift = new ShiftSystem(scene);
+  scene.saves = new SaveSystem(scene, { write: async () => true });
   scene.staffSystem = { clear() {} };
   scene.customerFlow = new CustomerFlow(scene);
   scene.shift.customersServed = 16;
   scene.shift.loanOffer = () => ({ available: false, amount: 0, repayTotal: 0 });
   state.subscribe((current) => {
-    if (current.calendar.awaitingEndDay && scene.canSaveOffShift()) {
+    if (current.calendar.awaitingEndDay && scene.saves.canSaveOffShift()) {
       savedStates.push(current.toSave().playerState);
     }
   });
@@ -617,7 +614,7 @@ test("the actual hire action explains the level lock and allows hiring after the
     gameState: state,
     showShopMessage: (message) => warnings.push(message),
     showGameMessage() {},
-    requestAutosave: () => { autosaves += 1; },
+    saves: { requestAutosave: () => { autosaves += 1; } },
   };
   const staffSystem = new StaffSystem(scene);
   staffSystem.canManage = () => true;
@@ -646,7 +643,7 @@ test("taking an employee off shift is between shifts only, stops wages, and keep
     employees: [],
     showShopMessage: (message) => warnings.push(message),
     showGameMessage: (message) => messages.push(message),
-    requestAutosave: () => { autosaves += 1; },
+    saves: { requestAutosave: () => { autosaves += 1; } },
   };
   const staffSystem = new StaffSystem(scene);
   staffSystem.canManage = () => false;
@@ -682,7 +679,7 @@ test("training can only be booked between shifts and trainees are paid without s
     employees: [],
     showShopMessage: (message) => warnings.push(message),
     showGameMessage() {},
-    requestAutosave: () => { autosaves += 1; },
+    saves: { requestAutosave: () => { autosaves += 1; } },
   };
   const staffSystem = new StaffSystem(scene);
   staffSystem.canManage = () => false;
@@ -885,15 +882,15 @@ test("a customer arriving while the player holds crates near the register never 
 
 test("manual save persists the current shop and confirms unchanged saves without another write", async () => {
   const { scene, writes, messages, controls } = createHarness();
-  await scene.saveManually();
+  await scene.saves.saveManually();
   assert.equal(writes.length, 1);
   assert.deepEqual(writes[0].data.shop, { credits: 436 });
-  assert.equal(scene.lastSavedSnapshot, JSON.stringify({ credits: 436 }));
+  assert.equal(scene.saves.lastSavedSnapshot, JSON.stringify({ credits: 436 }));
   assert.deepEqual(messages, ["Game saved."]);
   assert.equal(controls.at(-1).canSave, true);
   assert.equal(controls.at(-1).saving, false);
 
-  await scene.saveManually();
+  await scene.saves.saveManually();
   assert.equal(writes.length, 1);
   assert.equal(messages.at(-1), "Game saved.");
 });
@@ -903,7 +900,7 @@ test("manual save shows busy controls until the write finishes", async () => {
   const { scene, controls, messages } = createHarness(() =>
     new Promise((resolve) => { finishWrite = resolve; }),
   );
-  const saving = scene.saveManually();
+  const saving = scene.saves.saveManually();
   assert.equal(controls.at(-1).saving, true);
   assert.equal(messages.length, 0);
 
@@ -916,13 +913,13 @@ test("manual save shows busy controls until the write finishes", async () => {
 test("manual save failures use the save error path and never confirm success", async () => {
   const failure = new Error("Disk full");
   const { scene, errors, messages, controls } = createHarness(async () => { throw failure; });
-  await scene.saveManually();
+  await scene.saves.saveManually();
   assert.deepEqual(errors, [failure]);
   assert.deepEqual(messages, []);
-  assert.equal(scene.lastSavedSnapshot, null);
-  assert.equal(scene.saveInProgress, null);
+  assert.equal(scene.saves.lastSavedSnapshot, null);
+  assert.equal(scene.saves.inProgress, null);
   assert.equal(controls.at(-1).saving, false);
-  assert.match(scene.saveStatus, /Disk full/);
+  assert.match(scene.saves.status, /Disk full/);
 });
 
 test("manual saving stays blocked mid-shift, while starting a shift, and after a load error", async () => {
@@ -930,13 +927,14 @@ test("manual saving stays blocked mid-shift, while starting a shift, and after a
     { shiftClock: { started: true, isPaused: false } },
     { shiftClock: { started: true, isPaused: true } },
     { shift: { starting: true, ended: false } },
-    { loadFailed: true },
+    { saves: { loadFailed: true } },
   ]) {
     const { scene, writes, messages, controls } = createHarness();
-    Object.assign(scene, flags);
-    scene.updateSaveControls();
+    if (flags.saves) Object.assign(scene.saves, flags.saves);
+    else Object.assign(scene, flags);
+    scene.saves.updateControls();
     assert.equal(controls.at(-1).canSave, false);
-    await scene.saveManually();
+    await scene.saves.saveManually();
     assert.equal(writes.length, 0);
     assert.equal(messages.length, 1);
     assert.doesNotMatch(messages[0], /Game saved/);

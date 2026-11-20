@@ -79,6 +79,7 @@ function createPlayer() {
   };
   const scene = {
     movementAllowed: true,
+    saves: { loadFailed: false },
     add: {
       sprite(x, y, texture, frame) {
         Object.assign(sprite, { x, y, texture, frame });

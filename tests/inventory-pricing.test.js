@@ -268,6 +268,7 @@ function createHarness() {
     employees: [],
     customerCartCount: 0,
     staffSystem: { canManage: () => true },
+    saves: { loadFailed: false },
     offShelves: 1,
     getStorePrice: (itemId) => prices.get(itemId),
     setStorePrice(itemId, price) {

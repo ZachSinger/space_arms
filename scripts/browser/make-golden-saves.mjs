@@ -20,7 +20,7 @@ async function playShortShift(h, seconds) {
   await h.page.waitForFunction(() => window.__game.scene.getScene("scene-game").shift.ended, null, { timeout: 240000 });
 }
 
-const serialize = (h) => h.game((scene) => JSON.parse(JSON.stringify(scene.serialize())));
+const serialize = (h) => h.game((scene) => JSON.parse(JSON.stringify(scene.saves.serialize())));
 
 const h = await startGame();
 const saves = {};
@@ -129,7 +129,7 @@ try {
     await write(`${name}.json`, save);
     await write(`${name}.expected.json`, validateShopSave(clone(save), database));
     await checker.loadSave(clone(save));
-    await write(`${name}.resaved.json`, await checker.game((scene) => JSON.parse(scene.lastSavedSnapshot)));
+    await write(`${name}.resaved.json`, await checker.game((scene) => JSON.parse(scene.saves.lastSavedSnapshot)));
   }
   if (checker.errors().length) throw new Error(JSON.stringify(checker.errors()));
 } finally {

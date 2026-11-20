@@ -98,7 +98,7 @@ export class DebugTools {
       return false;
     }
     scene.fixtureSystem.openZone(zone.id);
-    scene.requestAutosave();
+    scene.saves.requestAutosave();
     scene.showShopMessage(`Debug: ${zone.name} is open.`);
     return true;
   }

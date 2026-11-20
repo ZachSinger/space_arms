@@ -131,8 +131,7 @@ function createHarness({ carrying = false } = {}) {
   const scene = Object.create(GameScene.prototype);
   scene.shift = { starting: false, ended: false };
   scene.shiftClock = { started: false, isPaused: false, softClosed: false };
-  scene.canSaveOffShift = () => true;
-  scene.loadFailed = false;
+  scene.saves = { loadFailed: false, canSaveOffShift: () => true };
   scene.fixturePlacement = { active: false };
   scene.windowManager = { windows: new Map() };
   scene.eventBus = new Events();
@@ -993,7 +992,7 @@ test("Space says to wait for a moving crate, and nothing happens during menus or
     if (state === "placement") blocked.scene.fixturePlacement.active = true;
     else if (state === "menu") blocked.scene.windowManager.windows.set("tablet", { id: "tablet", isOpen: true });
     else if (state === "startingShift") blocked.scene.shift.starting = true;
-    else blocked.scene[state] = true;
+    else blocked.scene.saves.loadFailed = true;
     tap(blocked);
     hold(blocked);
     assert.equal(blocked.scene.carriedCrate, null, state);
@@ -1304,7 +1303,7 @@ for (const state of ["nothingNearby", "moving", "placement", "startingShift", "l
     else if (state === "placement") h.scene.fixturePlacement.active = true;
     else if (state === "menu") h.scene.windowManager.windows.set("inventory", { id: "inventory", isOpen: true });
     else if (state === "startingShift") h.scene.shift.starting = true;
-    else h.scene[state] = true;
+    else h.scene.saves.loadFailed = true;
     h.scene.updateCrateHint();
     assert.equal(h.scene.messages.element.classList.contains("hidden"), true);
   });

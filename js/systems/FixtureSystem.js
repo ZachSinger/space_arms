@@ -270,14 +270,14 @@ export class FixtureSystem {
 
   canRearrange() {
     const scene = this.shop;
-    if (scene.loadFailed || scene.shift.starting ||
+    if (scene.saves.loadFailed || scene.shift.starting ||
       (scene.shiftClock.started && scene.shiftClock.isPaused)) return false;
-    return scene.canSaveOffShift() ||
+    return scene.saves.canSaveOffShift() ||
       (scene.shiftClock.started && (scene.customerFlow.temporarilyClosed || scene.shiftClock.softClosed));
   }
 
   canExpand() {
-    return this.shop.canSaveOffShift() && !this.shop.shift.starting;
+    return this.shop.saves.canSaveOffShift() && !this.shop.shift.starting;
   }
 
   // Fixtures can only be moved from the same room the player is standing in.
@@ -350,7 +350,7 @@ export class FixtureSystem {
 
     economy.spend(zone.cost, { category: "expansions", label: zone.name });
     this.openZone(zoneId);
-    scene.requestAutosave();
+    scene.saves.requestAutosave();
     scene.showShopMessage(`${zone.name} is open.`);
     return true;
   }

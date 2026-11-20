@@ -52,7 +52,7 @@ function fixtureScene() {
     shelfStockingWindow: { fixture, uiWindow: { isOpen: true } },
     fixturePlacement: { active: false },
     checkoutWindow: { mode: "checkout", total: 5, uiWindow: { element: { querySelectorAll: () => [] } } },
-    saveStatus: "Saved", loadFailed: false,
+    saves: { status: "Saved", loadFailed: false, autosaveBlocked: false, inProgress: null },
   };
 }
 

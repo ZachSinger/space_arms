@@ -5,7 +5,7 @@ import { ControlMode, CONTROL_MODES } from "../js/input/ControlMode.js";
 function createScene() {
   return {
     shift: { starting: false },
-    loadFailed: false,
+    saves: { loadFailed: false },
     fixturePlacement: { active: false },
     checkoutSystem: { operatingRegister: false },
     carriedCrate: null,
