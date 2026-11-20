@@ -5,6 +5,7 @@
 import "../../styles/tokens.css";
 import "../../styles/windows/shelf-stocking.css";
 import "../../styles/space_dealer_window.css";
+import "../../styles/windows/hud.css";
 import "../../styles/windows/dialogue.css";
 import "../../styles/windows/settings.css";
 import "../../styles/windows/checkout.css";
