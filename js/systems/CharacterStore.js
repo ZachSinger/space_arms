@@ -26,7 +26,7 @@ export function createCustomerStore(scene) {
 export function createEmployeeStore(scene) {
   return {
     findPath: (...args) => scene.navigation.store.findPath(...args),
-    getBehindRegisterPoint: (...args) => scene.getBehindRegisterPoint(...args),
+    getBehindRegisterPoint: (register) => scene.checkoutSystem.behindRegisterPoint(register),
     syncFloorStacks: (...args) => scene.syncFloorStacks(...args),
     refreshShelfStockDisplay: (...args) => scene.refreshShelfStockDisplay(...args),
     showShopMessage: (...args) => scene.showShopMessage(...args),

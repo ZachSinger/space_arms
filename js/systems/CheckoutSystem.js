@@ -22,6 +22,8 @@ import { controlLabel } from "../input/InputDevice.js";
 const REGISTER_ABOVE_LOWER_FRACTION = 0.3;
 const REGISTER_BELOW_RAISE_FRACTION = 0.65;
 const REGISTER_INTERACT_RANGE = 12;
+// How far the operating player's feet sit past the register graphic's top edge (px).
+const REGISTER_BEHIND_OVERLAP = 10;
 export const CHECKOUT_TUNING = loadTuning("checkout", checkoutTuning);
 const CUSTOMER_EXIT_SLOT_OFFSETS = Object.freeze([
   [-8, -4], [0, -4], [8, -4], [-8, 4], [0, 4], [8, 4],
@@ -38,6 +40,16 @@ export class CheckoutSystem {
     this.goBacksPackRetryAt = 0;
     this.goBacksStuckKey = null;
     if (shop.interactables) this.registerInteractions();
+  }
+
+  // Just past the body box's rear edge, excluding transparent picture margins.
+  behindRegisterPoint(register = this.operatingRegisterFixture ?? this.shop.fixtures.register()) {
+    const bounds = register.sprite.body;
+    const { dx, dy } = fixtureFacingStep(register, true);
+    const player = this.shop.player.sprite;
+    const reachX = bounds.width / 2 + player.displayWidth / 2 - REGISTER_BEHIND_OVERLAP;
+    const reachY = bounds.height / 2 + player.displayHeight / 2 - REGISTER_BEHIND_OVERLAP;
+    return { x: bounds.center.x + dx * reachX, y: bounds.center.y + dy * reachY };
   }
 
   registerInteractions() {
@@ -232,7 +244,7 @@ export class CheckoutSystem {
     return [
       ...shop.fixtures.registers().flatMap((register) => [
         ...(register.queuePoints ?? []).map(tileAround),
-        tileAround(shop.getBehindRegisterPoint(register)),
+        tileAround(this.behindRegisterPoint(register)),
       ]),
       ...cells.map((cell) => tileAround(cellCenter(cell))),
     ];
@@ -386,7 +398,7 @@ export class CheckoutSystem {
     this.operatingRegister = true;
     this.operatingRegisterFixture = register;
     this.playerPositionBeforeRegister = { x: shop.player.sprite.x, y: shop.player.sprite.y };
-    const behind = shop.getBehindRegisterPoint(register);
+    const behind = this.behindRegisterPoint(register);
     // From above, the player stands tucked behind the counter, partly hidden by it.
     if (fixtureFacingStep(register, true).dy < 0) {
       behind.y += PLAYER_CHARACTER_HEIGHT * REGISTER_ABOVE_LOWER_FRACTION;

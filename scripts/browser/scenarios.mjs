@@ -130,7 +130,7 @@ export const scenarios = {
   async "stepping behind each register and back out"(h) {
     await freshShop(h);
     const results = await h.game((scene) => scene.fixtures.ofKind("register").map((register) => {
-      const point = scene.getBehindRegisterPoint(register);
+      const point = scene.checkoutSystem.behindRegisterPoint(register);
       scene.player.teleportTo(point.x, point.y);
       const start = { x: scene.player.sprite.x, y: scene.player.sprite.y };
       scene.checkoutSystem.beginRegisterSession(register);

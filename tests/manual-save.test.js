@@ -24,6 +24,7 @@ let CHARACTER_ART_WIDTH;
 let CHARACTER_FEET_DROP;
 let DebugTools;
 let ShiftSystem;
+let StaffSystem;
 let FixtureSystem;
 let FixtureViews;
 let CustomerFlow;
@@ -62,6 +63,7 @@ before(async () => {
   ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));
   ({ DebugTools } = await server.ssrLoadModule("/js/debug/DebugTools.js"));
   ({ ShiftSystem } = await server.ssrLoadModule("/js/systems/ShiftSystem.js"));
+  ({ StaffSystem } = await server.ssrLoadModule("/js/systems/StaffSystem.js"));
   ({ FixtureSystem } = await server.ssrLoadModule("/js/systems/FixtureSystem.js"));
   ({ FixtureViews } = await server.ssrLoadModule("/js/world/FixtureViews.js"));
   ({ CustomerFlow } = await server.ssrLoadModule("/js/systems/CustomerFlow.js"));
@@ -445,10 +447,10 @@ test("the shift-end event, receipt, and save observers see the applied reputatio
     room: { zones: ZONES },
     fixturePlacement: { active: false },
     eventBus: { emit: (name, details) => events.push({ name, details }) },
-    clearEmployees() {},
     showGameMessage: (message) => messages.push(message),
   });
   scene.shift = new ShiftSystem(scene);
+  scene.staffSystem = { clear() {} };
   scene.customerFlow = new CustomerFlow(scene);
   scene.shift.customersServed = 16;
   scene.shift.loanOffer = () => ({ available: false, amount: 0, repayTotal: 0 });
@@ -495,10 +497,10 @@ test("a shift that earns multiple levels announces each implemented unlock", () 
     hud: { renderStoreStatus() {} },
     room: { zones: ZONES },
     eventBus: { emit() {} },
-    clearEmployees() {},
     showGameMessage: (message) => messages.push(message),
   });
   scene.shift = new ShiftSystem(scene);
+  scene.staffSystem = { clear() {} };
   scene.customerFlow = new CustomerFlow(scene);
   scene.shift.customersServed = 60;
   state.reputation.gain(72);
@@ -538,10 +540,10 @@ test("a shift from Shop Level 6 to 30 announces all remaining reward types", () 
     hud: { renderStoreStatus() {} },
     room: { zones: ZONES.map((zone) => ({ ...zone })) },
     eventBus: { emit() {} },
-    clearEmployees() {},
     showGameMessage: (message) => messages.push(message),
   });
   scene.shift = new ShiftSystem(scene);
+  scene.staffSystem = { clear() {} };
   scene.customerFlow = new CustomerFlow(scene);
   scene.shift.customersServed = 60;
   state.reputation.gain(3924);
@@ -567,10 +569,10 @@ test("level-up messages do not reannounce contracts or staff already owned in ol
     hud: { renderStoreStatus() {} },
     room: { zones: ZONES },
     eventBus: { emit() {} },
-    clearEmployees() {},
     showGameMessage: (message) => messages.push(message),
   });
   scene.shift = new ShiftSystem(scene);
+  scene.staffSystem = { clear() {} };
   scene.customerFlow = new CustomerFlow(scene);
   scene.shift.customersServed = 60;
   state.reputation.gain(72);
@@ -608,25 +610,25 @@ test("saves from before contracts were split keep every product they could alrea
 });
 
 test("the actual hire action explains the level lock and allows hiring after the unlock", () => {
-  const scene = Object.create(GameScene.prototype);
   const state = newGame();
   const warnings = [];
   let autosaves = 0;
-  Object.assign(scene, {
+  const scene = {
     gameState: state,
-    canHireEmployees: () => true,
     showShopMessage: (message) => warnings.push(message),
     showGameMessage() {},
     requestAutosave: () => { autosaves += 1; },
-  });
-  assert.equal(scene.hireEmployee("tavi_stock_clerk"), false);
+  };
+  const staffSystem = new StaffSystem(scene);
+  staffSystem.canManage = () => true;
+  assert.equal(staffSystem.hire("tavi_stock_clerk"), false);
   assert.match(warnings[0], /Shop Level 4.*72 store reputation/);
   assert.equal(state.economy.credits, 1500);
   assert.equal(autosaves, 0);
 
   state.reputation.gain(72);
   state.finishShift({ customersServed: 72, customersTurnedAway: 0 });
-  assert.equal(scene.hireEmployee("tavi_stock_clerk"), true);
+  assert.equal(staffSystem.hire("tavi_stock_clerk"), true);
   assert.equal(state.economy.credits, 1250);
   assert.equal(autosaves, 1);
 });
@@ -636,67 +638,69 @@ test("taking an employee off shift is between shifts only, stops wages, and keep
   state.reputation.shopLevel = 4;
   assert.equal(state.hireEmployee("tavi_stock_clerk"), true);
   const creditsAfterHire = state.economy.credits;
-  const scene = Object.create(GameScene.prototype);
   const warnings = [];
   const messages = [];
   let autosaves = 0;
-  Object.assign(scene, {
+  const scene = {
     gameState: state,
-    canHireEmployees: () => false,
+    employees: [],
     showShopMessage: (message) => warnings.push(message),
     showGameMessage: (message) => messages.push(message),
     requestAutosave: () => { autosaves += 1; },
-  });
+  };
+  const staffSystem = new StaffSystem(scene);
+  staffSystem.canManage = () => false;
 
-  assert.equal(scene.setEmployeeOnShift("tavi_stock_clerk", false), false);
+  assert.equal(staffSystem.setOnShift("tavi_stock_clerk", false), false);
   assert.match(warnings[0], /between shifts/);
   assert.deepEqual(state.staff.offShift, []);
 
-  scene.canHireEmployees = () => true;
-  assert.equal(scene.setEmployeeOnShift("tavi_stock_clerk", false), true);
+  staffSystem.canManage = () => true;
+  assert.equal(staffSystem.setOnShift("tavi_stock_clerk", false), true);
   assert.deepEqual(state.staff.hired, ["tavi_stock_clerk"]);
   assert.match(messages[0], /Off Shift.*won't be paid/i);
-  assert.equal(scene.payEmployeeWages(), 0);
+  assert.equal(staffSystem.payWages(), 0);
   assert.equal(state.economy.credits, creditsAfterHire);
-  scene.spawnHiredEmployees();
+  staffSystem.spawnWorking();
   assert.deepEqual(scene.employees, []);
   assert.equal(autosaves, 1);
 
   const restored = reload(state);
   assert.deepEqual(restored.staff.offShift, ["tavi_stock_clerk"]);
-  assert.equal(scene.setEmployeeOnShift("tavi_stock_clerk", true), true);
-  assert.equal(scene.payEmployeeWages(), 50);
+  assert.equal(staffSystem.setOnShift("tavi_stock_clerk", true), true);
+  assert.equal(staffSystem.payWages(), 50);
 });
 
 test("training can only be booked between shifts and trainees are paid without spawning for work", () => {
   const state = newGame();
   state.reputation.shopLevel = 4;
   state.hireEmployee("tavi_stock_clerk");
-  const scene = Object.create(GameScene.prototype);
   const warnings = [];
   let autosaves = 0;
-  Object.assign(scene, {
+  const scene = {
     gameState: state,
-    canHireEmployees: () => false,
+    employees: [],
     showShopMessage: (message) => warnings.push(message),
     showGameMessage() {},
     requestAutosave: () => { autosaves += 1; },
-  });
-  assert.equal(scene.trainEmployee("tavi_stock_clerk", "register"), false);
+  };
+  const staffSystem = new StaffSystem(scene);
+  staffSystem.canManage = () => false;
+  assert.equal(staffSystem.train("tavi_stock_clerk", "register"), false);
   assert.match(warnings[0], /between shifts/);
   assert.equal(state.economy.credits, 1250);
-  scene.canHireEmployees = () => true;
-  assert.equal(scene.trainEmployee("tavi_stock_clerk", "register"), true);
+  staffSystem.canManage = () => true;
+  assert.equal(staffSystem.train("tavi_stock_clerk", "register"), true);
   assert.equal(autosaves, 1);
-  assert.equal(scene.setEmployeeOnShift("tavi_stock_clerk", false), false);
+  assert.equal(staffSystem.setOnShift("tavi_stock_clerk", false), false);
   assert.match(warnings.at(-1), /away training/);
-  assert.equal(scene.payEmployeeWages(), 50);
+  assert.equal(staffSystem.payWages(), 50);
   assert.equal(state.economy.credits, 950);
-  scene.spawnHiredEmployees();
+  staffSystem.spawnWorking();
   assert.deepEqual(scene.employees, []);
   state.finishShift({ customersServed: 0, customersTurnedAway: 0 });
   assert.equal(state.staff.profile("tavi_stock_clerk").skillLevels.register, 2);
-  assert.equal(scene.payEmployeeWages(), 55);
+  assert.equal(staffSystem.payWages(), 55);
 });
 
 test("actual store price edits preserve cents and explain invalid prices", () => {
@@ -1039,7 +1043,7 @@ test("side-facing register queue and cashier align with the body box rather than
   scene.checkoutSystem = new CheckoutSystem(scene);
   scene.fixtures = { register: () => register };
   scene.player = { sprite: { displayWidth: 48, displayHeight: 72 } };
-  assert.deepEqual(scene.getBehindRegisterPoint(), { x: 129, y: 100 });
+  assert.deepEqual(scene.checkoutSystem.behindRegisterPoint(), { x: 129, y: 100 });
   const first = positionRegisterQueue([{ x: 0, y: 100 }, { x: -64, y: 100 }], body, fixtureFacingStep(register))[0];
   assert.deepEqual(first, {
     x: 85 - CHARACTER_ART_WIDTH / 2 + 10,

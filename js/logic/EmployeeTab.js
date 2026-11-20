@@ -22,7 +22,7 @@ export class EmployeeTab {
       activeEmployeeIds: this.scene.employees.map((employee) => employee.data.id),
       employeeJobPriorities: this.gameState.staff.jobPriorities,
       credits: this.gameState.economy.credits,
-      canHire: this.scene.canHireEmployees(),
+      canHire: this.scene.staffSystem.canManage(),
       employeeSkills: this.gameState.staff.skills,
       employeeTraining: this.gameState.staff.training,
       shopLevel: this.gameState.reputation.shopLevel,
@@ -79,13 +79,13 @@ export class EmployeeTab {
 
     const hireButton = event.target.closest("[data-hire-employee-id]");
     if (hireButton) {
-      this.scene.hireEmployee(hireButton.dataset.hireEmployeeId);
+      this.scene.staffSystem.hire(hireButton.dataset.hireEmployeeId);
       return;
     }
 
     const shiftButton = event.target.closest("[data-employee-shift-id]");
     if (shiftButton) {
-      this.scene.setEmployeeOnShift(
+      this.scene.staffSystem.setOnShift(
         shiftButton.dataset.employeeShiftId,
         shiftButton.dataset.employeeShiftOn === "true",
       );
@@ -95,7 +95,7 @@ export class EmployeeTab {
 
     const priorityButton = event.target.closest(EMPLOYEE_PRIORITY_SELECTOR);
     if (!priorityButton || priorityButton.getAttribute("aria-pressed") === "true") return;
-    const changed = this.scene.moveEmployeeJobPriority(
+    const changed = this.scene.staffSystem.moveJobPriority(
       priorityButton.dataset.employeePriorityId,
       priorityButton.dataset.employeePriorityJob,
       -1,

@@ -72,7 +72,7 @@ export class ShiftSystem {
     shop.customerFlow.prepareSchedule();
     shop.customerFlow.clearTemporaryClosure();
     shop.hud.renderStoreStatus(false);
-    const wages = shop.payEmployeeWages();
+    const wages = shop.staffSystem.payWages();
     if (wages > 0) {
       shop.showGameMessage(`Employee wages paid: ${wages}.`, "#f59e0b");
     }
@@ -80,7 +80,7 @@ export class ShiftSystem {
     shop.shiftClock.startNewShift();
     this.ended = false;
     this.starting = false;
-    shop.spawnHiredEmployees();
+    shop.staffSystem.spawnWorking();
     shop.setSaveStatus("Checkpoint saved. Autosaving resumes after this shift.");
     this.customersServed = 0;
     gameState.reputation.startShift();
@@ -107,7 +107,7 @@ export class ShiftSystem {
     const shop = this.shop;
     const { gameState } = shop;
     const previousLevel = gameState.reputation.shopLevel;
-    shop.clearEmployees();
+    shop.staffSystem.clear();
     this.ended = true;
     shop.shiftClock.started = false;
     shop.shiftClock.isPaused = true;

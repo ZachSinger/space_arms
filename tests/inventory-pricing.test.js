@@ -267,7 +267,7 @@ function createHarness() {
     input: { keyboard },
     employees: [],
     customerCartCount: 0,
-    canHireEmployees: () => true,
+    staffSystem: { canManage: () => true },
     offShelves: 1,
     getStorePrice: (itemId) => prices.get(itemId),
     setStorePrice(itemId, price) {
@@ -586,7 +586,7 @@ test("reopening the tablet refreshes the employee panel", () => {
 test("employee priority choices select the other job and ignore the selected job", () => {
   const { body, scene, tablet } = createHarness();
   const calls = [];
-  scene.moveEmployeeJobPriority = (...args) => { calls.push(args); return true; };
+  scene.staffSystem.moveJobPriority = (...args) => { calls.push(args); return true; };
   const choice = (pressed) => Object.assign(new TestElement(), {
     dataset: { employeePriorityId: "tavi_stock_clerk", employeePriorityJob: "stock_shelves" },
     getAttribute: () => String(pressed),
@@ -598,17 +598,17 @@ test("employee priority choices select the other job and ignore the selected job
   assert.equal(calls.length, 1);
 
   let refreshed = 0;
-  scene.moveEmployeeJobPriority = () => false;
+  scene.staffSystem.moveJobPriority = () => false;
   tablet.employeeTab.redraw = () => { refreshed += 1; };
   body.emit("click", { target: choice(false) });
   assert.equal(refreshed, 1);
 });
 
-test("employee tab routes hiring and shift actions to the scene", () => {
+test("employee tab routes hiring and shift actions to the staff system", () => {
   const { body, scene, tablet } = createHarness();
   const calls = [];
-  scene.hireEmployee = (employeeId) => calls.push(["hire", employeeId]);
-  scene.setEmployeeOnShift = (employeeId, onShift) => calls.push(["shift", employeeId, onShift]);
+  scene.staffSystem.hire = (employeeId) => calls.push(["hire", employeeId]);
+  scene.staffSystem.setOnShift = (employeeId, onShift) => calls.push(["shift", employeeId, onShift]);
   tablet.employeeTab.redraw = () => calls.push(["redraw"]);
   const control = (attribute, dataset) => Object.assign(new TestElement(), {
     dataset,

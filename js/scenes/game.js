@@ -7,7 +7,6 @@
 import { WindowManager } from "../logic/WindowManager.js";
 import { ManagerTablet } from "../logic/ManagerTablet.js";
 import { GameState } from "../state/GameState.js";
-import { getStaffLimitReason } from "../logic/ShopProgression.js";
 import { HUDController } from "../logic/HUDController.js";
 import { DebugInfo } from "../debug/DebugInfo.js";
 import { DebugTools } from "../debug/DebugTools.js";
@@ -18,8 +17,6 @@ import { InteractionSystem } from "../interaction/InteractionSystem.js";
 import { ModuleHost } from "../modules/GameModules.js";
 /** @typedef {import("../logic/ShelfFixture.js").ShelfFixture} ShelfFixture */
 import { SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT } from "../logic/Customer.js";
-import { Employee } from "../logic/Employee.js";
-import { getEmployeeTrainingOffer } from "../logic/EmployeeTraining.js";
 import { isMoney, roundMoney } from "../logic/Money.js";
 import { CUSTOMER_TRAITS } from "../logic/CustomerTraits.js";
 import { getLicensedFactionIds } from "../logic/CustomerPooling.js";
@@ -42,11 +39,12 @@ import { FixturePlacement } from "../logic/FixturePlacement.js";
 import { setupSandboxRoom } from "../debug/SandboxRoom.js";
 import { setupUiLab } from "../debug/UiLab.js";
 import { ShelfStockingWindow } from "../logic/ShelfStockingWindow.js";
-import { REGISTER_FRONT_OVERLAP, getFixtureType, fixtureFacing, fixtureFacingStep, validateFixtureLayout } from "../logic/FixtureLayout.js";
+import { REGISTER_FRONT_OVERLAP, getFixtureType, fixtureFacing, validateFixtureLayout } from "../logic/FixtureLayout.js";
 import { validateShopSave } from "../logic/ShopSave.js";
 import { UIWindow } from "../logic/UIWindow.js";
 import { Messages, SHOP_MESSAGE_COLOR } from "../world/Messages.js";
 import { ShiftSystem } from "../systems/ShiftSystem.js";
+import { StaffSystem } from "../systems/StaffSystem.js";
 import { AREA, Areas } from "../world/Areas.js";
 import { CameraRig } from "../world/CameraRig.js";
 import { FixtureViews } from "../world/FixtureViews.js";
@@ -87,9 +85,6 @@ const PEOPLE_DEPTH_BASE = 2000;
 const ANGRY_REPUTATION_PENALTY = 1;
 // Reputation lost once when a customer cannot find any of their primary items.
 const MISSING_PRIMARY_REPUTATION_PENALTY = 1;
-
-// How far the operating player's feet sit past the register graphic's top edge (px).
-const REGISTER_BEHIND_OVERLAP = 10;
 
 /**
  * Grid-cell keys ("gx,gy") overlapped, even partially, by a world-space rectangle. Fixture
@@ -191,6 +186,7 @@ export class GameScene extends Phaser.Scene {
 
     this.windowManager = new WindowManager();
     this.shift = new ShiftSystem(this);
+    this.staffSystem = new StaffSystem(this);
 
     // Shop map: the authored tile room (see RoomLayout.js).
     this.room = new TileRoom(this);
@@ -705,7 +701,7 @@ export class GameScene extends Phaser.Scene {
     return Number.isFinite(gap) && gap >= -TILE_SIZE / 2 ? Math.max(0, gap) : Infinity;
   }
 
-  // --- Saving rules and staff ---
+  // --- Saving rules ---
 
   // Saving needs a quiet store: no shift running and nobody inside.
   canSaveOffShift() {
@@ -716,135 +712,6 @@ export class GameScene extends Phaser.Scene {
   // The Shelf Test Room is closed-store time like any other; it just never writes a save.
   canWriteSave() {
     return !this.sandbox && this.canSaveOffShift();
-  }
-
-  canHireEmployees() {
-    return !this.shift.starting && !this.loadFailed && this.canSaveOffShift();
-  }
-
-  hireEmployee(employeeId) {
-    const employee = this.gameState.staff.profile(employeeId);
-    if (!this.canHireEmployees()) {
-      this.showShopMessage("Staff can only be hired between shifts.");
-      return false;
-    }
-    if (this.gameState.staff.hired.includes(employeeId)) return false;
-    const staffLimitReason = getStaffLimitReason(
-      this.gameState.reputation.shopLevel, this.gameState.staff.hired.length,
-    );
-    if (staffLimitReason) {
-      this.showShopMessage(staffLimitReason);
-      return false;
-    }
-    if (!this.gameState.hireEmployee(employeeId)) {
-      this.showShopMessage(`Not enough money. Hiring ${employee.name} costs ${employee.hireCost}.`);
-      return false;
-    }
-    this.showGameMessage(
-      `${employee.name} hired and On Shift. Their wage of ${employee.wagePerShift} is due at each shift start.`,
-      "#10b981",
-    );
-    this.requestAutosave();
-    return true;
-  }
-
-  setEmployeeOnShift(employeeId, onShift) {
-    const employee = this.gameState.staff.profile(employeeId);
-    if (!this.canHireEmployees()) {
-      this.showShopMessage("Staff can only be set On Shift or Off Shift between shifts.");
-      return false;
-    }
-    if (this.gameState.staff.training[employeeId]) {
-      this.showShopMessage(`${employee.name} is away training next shift. They're available again once they return.`);
-      return false;
-    }
-    if (!this.gameState.staff.setOnShift(employeeId, onShift)) return false;
-    this.showGameMessage(
-      onShift
-        ? `${employee.name} is On Shift. They'll work and be paid ${employee.wagePerShift} each shift.`
-        : `${employee.name} is Off Shift. They'll stay home and won't be paid until you set them On Shift.`,
-      "#10b981",
-    );
-    this.requestAutosave();
-    return true;
-  }
-
-  getEmployeeTrainingBlockReason(employeeId, jobId) {
-    const offer = getEmployeeTrainingOffer(
-      employeeId, this.gameState.staff.skills[employeeId], jobId,
-    );
-    if (!this.canHireEmployees()) return "Book employee training between shifts.";
-    if (!this.gameState.staff.hired.includes(employeeId)) return "Hire this employee before booking training.";
-    if (this.gameState.staff.training[employeeId]) return "This employee already has training booked.";
-    if (!offer) return "This skill is already at Level 5.";
-    if (this.gameState.economy.credits < offer.cost) return `Training costs ${offer.cost}. You don't have enough money.`;
-    return null;
-  }
-
-  trainEmployee(employeeId, jobId) {
-    const reason = this.getEmployeeTrainingBlockReason(employeeId, jobId);
-    if (reason) {
-      this.showShopMessage(reason);
-      return false;
-    }
-    if (!this.gameState.trainEmployee(employeeId, jobId)) {
-      this.showShopMessage("Training is no longer available. Check the employee's skill and your money.");
-      return false;
-    }
-    const employee = this.gameState.staff.profile(employeeId);
-    this.showGameMessage(
-      `${employee.name} will be away training next shift. Their wage of ${employee.wagePerShift} is still due.`,
-      "#10b981",
-    );
-    this.requestAutosave();
-    return true;
-  }
-
-  moveEmployeeJobPriority(employeeId, jobId, direction) {
-    if (!this.canHireEmployees()) {
-      this.showShopMessage("Staff job priorities can only be changed between shifts.");
-      return false;
-    }
-    if (!this.gameState.staff.moveJobPriority(employeeId, jobId, direction)) return false;
-    this.requestAutosave();
-    return true;
-  }
-
-  // Wages are paid up front, even into the red (bible Step 32), one receipt line each.
-  payEmployeeWages() {
-    let total = 0;
-    for (const employeeId of this.gameState.staff.paid()) {
-      const employee = this.gameState.staff.profile(employeeId);
-      if (employee.wagePerShift <= 0) continue;
-      this.gameState.economy.spend(employee.wagePerShift, {
-        category: "wages",
-        label: employee.name,
-      });
-      total += employee.wagePerShift;
-    }
-    return total;
-  }
-
-  spawnHiredEmployees() {
-    this.employees = this.gameState.staff.working()
-      .map((employeeId) => new Employee(
-        this.gameState.staff.profile(employeeId), this.employeeStore,
-      ));
-  }
-
-  clearEmployees() {
-    for (const employee of this.employees) employee.destroy();
-    this.employees = [];
-  }
-
-  // Just past the body box's rear edge, excluding transparent picture margins.
-  getBehindRegisterPoint(register = this.checkoutSystem.operatingRegisterFixture ?? this.fixtures.register()) {
-    const bounds = register.sprite.body;
-    const { dx, dy } = fixtureFacingStep(register, true);
-    const player = this.player.sprite;
-    const reachX = bounds.width / 2 + player.displayWidth / 2 - REGISTER_BEHIND_OVERLAP;
-    const reachY = bounds.height / 2 + player.displayHeight / 2 - REGISTER_BEHIND_OVERLAP;
-    return { x: bounds.center.x + dx * reachX, y: bounds.center.y + dy * reachY };
   }
 
   // --- Saving and loading ---
