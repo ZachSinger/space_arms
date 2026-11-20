@@ -12,6 +12,7 @@ import {
 import { getFixtureTexture, hasFacingTextures } from "./FixtureTexture.js";
 import { PAD } from "../input/GamepadInput.js";
 import { getInputDevice } from "../input/InputDevice.js";
+import { fixturePlacementContext } from "./FixturePlacementContext.js";
 
 const PAD_CURSOR_SPEED = 240;
 const VALID_COLOR = 0x10b981;
@@ -249,6 +250,10 @@ export class FixturePlacement {
       rotation: this.rotation,
     }, worldX, worldY);
     const { id, gx, gy, rotation } = this.placement;
+    const previewKey = JSON.stringify([
+      this.spec.id, id, gx, gy, rotation, fixturePlacementContext(this.scene),
+    ]);
+    if (previewKey === this.previewKey) return;
     const result = this.original
       ? this.scene.fixtureSystem.checkMove(id, gx, gy, rotation)
       : this.scene.fixtureSystem.checkPlacement(this.spec.id, gx, gy, rotation);
@@ -263,6 +268,7 @@ export class FixturePlacement {
     } else {
       this.ghost.setAngle(rotation * 90);
     }
+    this.previewKey = previewKey;
   }
 
   /**
@@ -284,6 +290,7 @@ export class FixturePlacement {
     this.placedGraphics.clear().setVisible(false);
     this.original = null;
     this.fixtureCrate = null;
+    this.previewKey = null;
   }
 
   cancel() {

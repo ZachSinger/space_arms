@@ -47,3 +47,18 @@ test("the outline follows the shelf's turned body box and disappears once the cr
   highlight.update(100);
   assert.equal(graphics.visible, false);
 });
+
+test("an inactive shelf does not clear its graphics every frame", () => {
+  let clears = 0;
+  const graphics = {
+    setDepth() { return this; },
+    setVisible() { return this; },
+    clear() { clears += 1; return this; },
+  };
+  const fixture = shelf([{ itemId: "rifle", quantity: 0 }]);
+  const scene = { add: { graphics: () => graphics }, getStockableCrates: () => [] };
+  const highlight = new ShelfAttentionHighlight(scene, fixture);
+  highlight.update(0);
+  highlight.update(16);
+  assert.equal(clears, 0);
+});

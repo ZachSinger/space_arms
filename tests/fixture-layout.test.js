@@ -120,7 +120,11 @@ test("the fixture placement preview uses the size for its current facing", () =>
   const outlines = [];
   placement.original = null;
   placement.scene = {
-    fixtures: { nextId: () => "preview" },
+    fixtures: { nextId: () => "preview", layout: () => [] },
+    player: { sprite: { body: { enable: false } } },
+    restockCrates: [],
+    areas: { playerArea: "shop" },
+    room: { zones: [], wallCells: new Map() },
     fixtureSystem: { checkPlacement: () => ({ valid: true, reason: "Click to place." }) },
     fixtureViews: {
       sizeFacingArt: (ghost, receivedSpec, rotation) => {
@@ -161,6 +165,63 @@ test("the fixture placement preview uses the size for its current facing", () =>
     }
   }
   assert.deepEqual(rotations, [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3]);
+});
+
+test("placement preview is reused until its position or surroundings change", () => {
+  let checks = 0;
+  const body = { enable: true, left: 0, right: 10, top: 0, bottom: 10 };
+  const fixtures = [];
+  const zone = { id: "floor", locked: false, gridX: 0, gridY: 0, gridW: 8, gridH: 8, salesFloor: true };
+  const scene = {
+    fixtures: { nextId: () => "preview", layout: () => fixtures },
+    player: { sprite: { body } },
+    restockCrates: [],
+    areas: { playerArea: "shop" },
+    room: { zones: [zone], wallCells: new Map() },
+    fixtureSystem: { checkPlacement: () => { checks += 1; return { valid: body.left === 0 }; } },
+    fixtureViews: { sizeFacingArt() {} },
+  };
+  const graphics = {
+    clear() { return this; }, fillStyle(color) { this.color = color; return this; }, lineStyle() { return this; },
+    fillRect() { return this; }, strokeRect() { return this; },
+  };
+  const ghost = {
+    setPosition() { return this; }, setTexture() { return this; }, setAngle() { return this; },
+  };
+  const placement = Object.assign(Object.create(FixturePlacement.prototype), {
+    scene, graphics, ghost, original: null, spec: getFixtureType("shelf_budget_2x2"), rotation: 0,
+  });
+  const update = () => placement.updatePreviewAt(320, 320);
+  update();
+  update();
+  assert.equal(checks, 1, "an unchanged preview is not checked twice");
+  assert.equal(graphics.color, 0x10b981);
+  body.left += 1;
+  update();
+  assert.equal(graphics.color, 0xef4444, "moving into the space immediately changes the preview");
+  const crateBody = { enable: true, left: 20, right: 30, top: 20, bottom: 30 };
+  scene.restockCrates.push({ sprite: { body: crateBody } });
+  update();
+  crateBody.left += 1;
+  update();
+  crateBody.enable = false;
+  update();
+  crateBody.enable = true;
+  update();
+  fixtures.push({ id: "other", type: "trash_can", gx: 2, gy: 2 });
+  update();
+  zone.locked = true;
+  update();
+  zone.gridW += 1;
+  update();
+  scene.room.wallCells.set("1,1", { door: false });
+  update();
+  scene.areas.playerArea = "backroom";
+  update();
+  placement.rotation = 1;
+  update();
+  placement.updatePreviewAt(384, 320);
+  assert.equal(checks, 13, "each change rechecks the placement");
 });
 
 test("each budget shelf width fits its sections and stays on the placement grid when turned", () => {

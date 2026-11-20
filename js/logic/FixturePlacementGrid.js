@@ -1,6 +1,7 @@
 import { FIXTURE_POSITION_STEP, FIXTURE_SNAP_STEP, fixtureArtInset, fixtureFootprint } from "./FixtureLayout.js";
 import { TILE_SIZE } from "./RoomLayout.js";
 import { AREA } from "../world/Areas.js";
+import { fixturePlacementContext } from "./FixturePlacementContext.js";
 
 const SNAP_STEP = FIXTURE_SNAP_STEP * TILE_SIZE;
 // Body coverage is approximated in 2px cells; scaled art margins can be fractional.
@@ -101,14 +102,9 @@ export class FixturePlacementGrid {
     const top = Math.floor(Math.max(view.y, Math.min(...zones.map((z) => z.gridY * TILE_SIZE)) - TILE_SIZE) / SNAP_STEP) * SNAP_STEP;
     const right = Math.ceil(Math.min(view.right, Math.max(...zones.map((z) => (z.gridX + z.gridW) * TILE_SIZE)) + TILE_SIZE) / SNAP_STEP) * SNAP_STEP;
     const bottom = Math.ceil(Math.min(view.bottom, Math.max(...zones.map((z) => (z.gridY + z.gridH) * TILE_SIZE)) + TILE_SIZE) / SNAP_STEP) * SNAP_STEP;
-    const bodies = [scene.player.sprite.body, ...scene.restockCrates.map((crate) => crate.sprite.body)]
-      .filter((body) => body.enable)
-      .map(({ left, right, top, bottom }) => ({ left, right, top, bottom }));
     const signature = JSON.stringify([
       placement.spec.id, placement.rotation, placement.original?.id,
-      scene.fixtures.layout(), bodies, inBackroom,
-      scene.room.zones.map((zone) => [zone.id, zone.locked]),
-      [...scene.room.wallCells].map(([key, wall]) => [key, wall.door]), left, top, right, bottom,
+      fixturePlacementContext(scene), left, top, right, bottom,
     ]);
     if (signature !== this.signature) {
       this.signature = signature;
