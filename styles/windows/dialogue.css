@@ -1,0 +1,36 @@
+.dialogue-window {
+  left: 50%;
+  bottom: 5%;
+  transform: translateX(-50%);
+  width: min(720px, calc(100% - 40px));
+  min-height: 160px;
+  padding: 18px 22px;
+  pointer-events: auto;
+}
+
+.dialogue-text {
+  height: 5.4em;
+  overflow: hidden;
+  font-size: var(--font-size-16);
+  line-height: 1.35;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.dialogue-continue {
+  align-self: flex-end;
+  color: var(--color-border-active);
+  font-size: var(--font-size-13);
+  visibility: hidden;
+  animation: dialogue-pulse 0.8s steps(2, end) infinite;
+}
+
+.dialogue-continue.visible {
+  visibility: visible;
+}
+
+@keyframes dialogue-pulse {
+  50% {
+    opacity: 0;
+  }
+}
