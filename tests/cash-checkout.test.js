@@ -451,6 +451,15 @@ test("about half of customers pay cash, with a clear card keypad prompt", () => 
   assert.match(html, /CARD PAYMENT - ENTER TOTAL/);
 });
 
+test("item image paths cannot add markup to the checkout window", () => {
+  const markup = CheckoutRenderer.generateHTML(
+    [{ itemId: "item", price: 1 }],
+    { getItem: () => ({ image: 'image.png" onerror="unexpected' }) },
+  );
+  assert.match(markup, /src="image\.png&quot; onerror=&quot;unexpected"/);
+  assert.doesNotMatch(markup, /src="image\.png" onerror=/);
+});
+
 test("the register window opens beside the register, on whichever side has room", () => {
   const viewport = { left: 8, top: 44, right: 1000, bottom: 700 };
   const size = { width: 400, height: 300 };
@@ -501,8 +510,8 @@ test("Scavenger cash shows only M-Scrip bills and prices the sale in M-Scrips", 
 
 test("Explorer Chit display fits a five-digit code and shows all five input spaces", async () => {
   const html = CheckoutRenderer.generateHTML([], {}, null, new ChitPayment(100, "31421"));
-  const css = await readFile(new URL("../styles/space_dealer_window.css", import.meta.url), "utf8");
-  assert.match(css, /\.chit-card\s*\{[^}]*background-image:\s*url\("\.\.\/img\/Generated\/explorer_travel_chit\.png"\)/s);
+  const css = await readFile(new URL("../styles/windows/checkout.css", import.meta.url), "utf8");
+  assert.match(css, /\.chit-card\s*\{[^}]*background-image:\s*url\("\.\.\/\.\.\/img\/Generated\/explorer_travel_chit\.png"\)/s);
   assert.match(css, /\.chit-card\s*\{[^}]*min-height:\s*calc\(240px \* var\(--text-scale\)\)/s);
   assert.match(html, /class="chit-screen"/);
   assert.match(html, /EXPLORER TRAVEL CHIT/);
@@ -517,11 +526,11 @@ test("Explorer Chit display fits a five-digit code and shows all five input spac
 test("change counted appears first on the left, and the bills use a narrow upright layout", async () => {
   const html = CheckoutRenderer.generateHTML([], {}, new CashPayment(1.23, 5));
   assert.ok(html.indexOf("CURRENT CHANGE") < html.indexOf("CHANGE OWED"));
-  const css = await readFile(new URL("../styles/space_dealer_window.css", import.meta.url), "utf8");
+  const css = await readFile(new URL("../styles/windows/checkout.css", import.meta.url), "utf8");
   assert.match(css, /\.cash-summary\s*\{[^}]*justify-content:\s*flex-start/s);
   assert.match(css, /\.cash-bills\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*60px\)/s);
   assert.match(css, /\.cash-bill \.cash-art\s*\{[^}]*width:\s*46px;[^}]*height:\s*84px/s);
   assert.match(css, /\.cash-loose\.cash-bill\s*\{[^}]*width:\s*52px;[^}]*height:\s*96px/s);
-  assert.match(css, /background-image:\s*url\("\.\.\/img\/Generated\/currency_bill\.png"\)/);
-  assert.match(css, /background-image:\s*url\("\.\.\/img\/Generated\/currency_coin\.png"\)/);
+  assert.match(css, /background-image:\s*url\("\.\.\/\.\.\/img\/Generated\/currency_bill\.png"\)/);
+  assert.match(css, /background-image:\s*url\("\.\.\/\.\.\/img\/Generated\/currency_coin\.png"\)/);
 });

@@ -7,6 +7,7 @@
 
 import { UIWindow } from "./UIWindow.js";
 import { PausableTimers } from "../core/Clock.js";
+import { html } from "../core/html.js";
 import { CheckoutRenderer, cashFaceValue, renderCurrentChange } from "./CheckoutRenderer.js";
 import {
   CashPayment, creditCentsToScrips, formatCashAmount, splitCash,
@@ -672,7 +673,7 @@ export class CheckoutWindow {
     this.removeTenderOverlay();
     const overlay = document.createElement("div");
     overlay.className = "cash-tender-overlay";
-    overlay.innerHTML = `
+    overlay.innerHTML = html`
       <div class="cash-tender-panel">
         <div class="cash-tender-title">THE CUSTOMER HANDS YOU ${formatCashAmount(this.cashPayment.tenderUnits, this.cashPayment.currency).toUpperCase()}</div>
         <div class="cash-tender-area"></div>
@@ -686,7 +687,7 @@ export class CheckoutWindow {
       element.type = "button";
       element.className = `cash-loose cash-${piece.kind}`;
       element.setAttribute("aria-label", `Take ${piece.label}`);
-      element.innerHTML = `<span class="cash-value">${cashFaceValue(piece, this.cashPayment.currency)}</span>`;
+      element.innerHTML = html`<span class="cash-value">${cashFaceValue(piece, this.cashPayment.currency)}</span>`;
       // Random spot and tilt inside the area, kept clear of its edges.
       element.style.left = `${8 + Math.random() * 64}%`;
       element.style.top = `${10 + Math.random() * 60}%`;
@@ -752,7 +753,7 @@ export class CheckoutWindow {
       ? formatCashAmount(this.cashPayment.tenderUnits, "m-scrips")
       : formatTransactionTotal(this.cashPayment.tenderUnits / 100);
     this.bodyElement.querySelector("#checkout-total-value").innerHTML =
-      `${formatCheckoutTotal(this.total, this.cashPayment.currency)} - <span class="checkout-paid">${paid}</span>`;
+      String(html`${formatCheckoutTotal(this.total, this.cashPayment.currency)} - <span class="checkout-paid">${paid}</span>`);
     this.bodyElement.querySelector("#checkout-payment").classList.remove("hidden");
     this.bodyElement.querySelector("#checkout-payment").classList.add("counting-change");
     this.setWidth("change");
@@ -833,16 +834,16 @@ export class CheckoutWindow {
     this.bodyElement.querySelectorAll("[data-cash-count]").forEach((element) => {
       element.textContent = `${cash.change.get(Number(element.dataset.cashCount)) ?? 0} in change`;
     });
-    const piecesHTML = (pieces) => pieces.map(({ kind, units, count }) => `
+    const piecesHTML = (pieces) => pieces.map(({ kind, units, count }) => html`
       <span class="cash-pile-item">
         <span class="cash-piece cash-${kind}"><span class="cash-value">${cashFaceValue({ kind, units }, cash.currency)}</span></span>
         <span class="cash-pile-count">x${count}</span>
-      </span>`).join("");
+      </span>`);
     const selected = [...cash.change].map(([units, count]) => ({
       ...splitCash(units, cash.currency)[0], count,
     }));
     this.bodyElement.querySelector("#checkout-change-pile").innerHTML = selected.length
-      ? `<span class="cash-row-label">CHANGE TO HAND OVER</span>${piecesHTML(selected)}`
+      ? String(html`<span class="cash-row-label">CHANGE TO HAND OVER</span>${piecesHTML(selected)}`)
       : "No change selected.";
   }
 
