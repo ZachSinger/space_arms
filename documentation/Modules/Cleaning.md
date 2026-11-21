@@ -66,7 +66,7 @@ for being bigger. Each customer rolls two numbers when they arrive:
   shelf sooner, they decide right then, before taking anything.
 
 ### Trash
-- About 2 in 5 customers drop one piece of trash (a can, crumpled paper, or small box)
+- About 3 in 20 customers drop one piece of trash (a can, crumpled paper, or small box)
   somewhere on the sales floor, 1 to 6 seconds into their walking (the walk out counts).
 - Trash lies on the floor, under people, crates, and shelves. Hold H to light up every
   piece, even ones hidden behind shelves.

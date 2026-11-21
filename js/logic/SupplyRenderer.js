@@ -62,7 +62,7 @@ export class SupplyRenderer {
           <span class="supply-item-stock" title="Total items you own across shelves and crates">Own: ${ownedQuantity}</span>
           <div class="supply-item-crate">
             <strong>${cost.toLocaleString()}</strong>
-            <span>${getCrateOrderQuantity(item)} items</span>
+            <span>Crate of ${getCrateOrderQuantity(item)}</span>
           </div>
           <div class="supply-crate-stepper">
             <button type="button" class="action-btn" data-supply-remove="${item.id}" data-pad-x aria-label="Remove one ${item.name} crate"${count > 0 ? "" : " disabled"}>-</button>

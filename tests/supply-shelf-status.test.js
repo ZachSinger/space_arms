@@ -46,7 +46,7 @@ test("the Supply tab keeps crate ordering and cost details in its split-panel la
   assert.match(html, /Sold out on shelves/);
   assert.match(html, /Own: 60/);
   assert.match(html, /<strong>25<\/strong>/);
-  assert.match(html, /20 items/);
+  assert.match(html, /Crate of 20/);
   assert.match(html, /data-supply-remove="rations"/);
   assert.match(html, /data-supply-add="rations"/);
   assert.match(html, /Items:<\/span><strong>2\/9/);

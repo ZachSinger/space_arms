@@ -106,6 +106,21 @@ test("the door opens for an arriving customer until they walk clear", () => {
   assert.equal(door.state, "closed");
 });
 
+test("an arriving customer waits until the door is fully open before stepping in", () => {
+  const { door } = createDoor();
+  const arrival = { x: 100, y: 90, active: true };
+  let entered = 0;
+  door.letIn(arrival, () => { entered += 1; });
+  door.update(180, []);
+  assert.equal(door.state, "opening");
+  assert.equal(entered, 0);
+  door.update(90, []);
+  assert.equal(door.state, "open");
+  assert.equal(entered, 1);
+  door.update(16, []);
+  assert.equal(entered, 1);
+});
+
 test("the door reverses its closing animation if someone approaches", () => {
   const { door, sprites } = createDoor();
   door.update(270, atDoor);

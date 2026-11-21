@@ -484,8 +484,8 @@ export class CheckoutWindow {
       if (this.paymentStage !== "total") return;
       playKeypadClick();
       const next = this.paymentBuffer + digit;
-      const maxWholeDigits = Math.floor(this.total).toString().length;
-      if (!new RegExp(`^\\d{0,${maxWholeDigits}}(?:\\.\\d{0,2})?$`).test(next)) return;
+      // Extra whole digits are allowed so a mistyped total fails on confirm instead of being ignored.
+      if (!/^\d{0,8}(?:\.\d{0,2})?$/.test(next)) return;
       this.paymentBuffer = next === "." ? "0." : next;
       refreshDisplay();
     };
@@ -831,9 +831,6 @@ export class CheckoutWindow {
     const current = this.bodyElement.querySelector("#checkout-change-current");
     current.classList.toggle("change-exact", cash.changeUnits === cash.changeDueUnits);
     current.classList.toggle("change-over", cash.changeUnits > cash.changeDueUnits);
-    this.bodyElement.querySelectorAll("[data-cash-count]").forEach((element) => {
-      element.textContent = `${cash.change.get(Number(element.dataset.cashCount)) ?? 0} in change`;
-    });
     const piecesHTML = (pieces) => pieces.map(({ kind, units, count }) => html`
       <span class="cash-pile-item">
         <span class="cash-piece cash-${kind}"><span class="cash-value">${cashFaceValue({ kind, units }, cash.currency)}</span></span>

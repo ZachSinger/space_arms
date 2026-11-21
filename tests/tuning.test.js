@@ -52,7 +52,7 @@ test("moved tuning numbers keep their old values", () => {
     trashPenalty: 1,
     dirtPenalty: 2,
     cleanlinessJudgeMs: 3000,
-    trashDropChance: 0.4,
+    trashDropChance: 0.15,
     trashDropWalkMs: [1000, 6000],
     upsetReputationLoss: 1,
     walkOutReputationLoss: 2,

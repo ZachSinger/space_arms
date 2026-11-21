@@ -339,6 +339,15 @@ test("a card total ending in .00 still needs the cents keyed in", () => {
   assert.equal(h.completed(), 1);
 });
 
+test("a card total accepts a digit typed where the decimal point belongs, then rejects it", () => {
+  const h = harness({ cash: false });
+  for (const digit of "123") h.checkout.appendDigit(digit);
+  assert.equal(h.checkout.paymentBuffer, "123");
+  h.checkout.confirmPayment();
+  assert.equal(h.completed(), 0);
+  assert.equal(h.elements.get("#checkout-payment-feedback").textContent, "AMOUNT INCORRECT");
+});
+
 test("keypad Backspace removes one character, including the decimal point, while Clear resets all", () => {
   const h = harness({ cash: false });
   let prevented = 0;

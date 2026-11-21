@@ -33,7 +33,6 @@ function renderDrawer(kind, currency) {
       <button type="button" class="cash-denomination cash-${kind}" data-cash-units="${units}"
         aria-label="Add ${label} to change; right-click to remove" title="Click to add ${label}. Right-click to remove one.">
         <span class="cash-art"><span>${cashFaceValue({ kind, units }, currency)}</span></span>
-        <span class="cash-count" data-cash-count="${units}">0 in change</span>
       </button>`)}`;
 }
 

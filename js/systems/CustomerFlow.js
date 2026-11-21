@@ -147,7 +147,8 @@ export class CustomerFlow {
     });
     shop.customerGroup.add(customer.sprite);
     shop.customers.push(customer);
-    shop.storeDoorAnimation.letIn(customer.sprite);
+    customer.waitOutsideDoor();
+    shop.storeDoorAnimation.letIn(customer.sprite, () => customer.enterThroughDoor());
     shop.debugInfo?.recordCustomer("customer-entered", customer);
   }
 

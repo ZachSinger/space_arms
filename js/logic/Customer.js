@@ -138,6 +138,7 @@ export class Customer {
     this.onArriveAtDestination = null;
     this.onPathUnavailable = null;
     this.isDestroyed = false;
+    this.waitingAtDoor = false;
     // Customers built without a constructor (tests) shop instantly instead of pausing.
     this.browseShelfMs = BROWSE_SHELF_MS;
     this.wanderChance = WANDER_CHANCE;
@@ -194,6 +195,7 @@ export class Customer {
    */
   update(delta = 0) {
     if (this.isDestroyed) return; // guards against being updated the same frame it self-destructed
+    if (this.waitingAtDoor) return;
 
     if (this.path === null) {
       this.getMover().handlePathUnavailable();
@@ -966,6 +968,22 @@ export class Customer {
     }
     this.currentFacing = facing;
     showCharacterFacing(this.sprite, facing, moving);
+  }
+
+  // New arrivals wait unseen in the doorway until the front door has opened, so they never
+  // appear through a closed door or get pushed out of its solid frame.
+  waitOutsideDoor() {
+    this.waitingAtDoor = true;
+    this.sprite.setVisible(false);
+    this.sprite.body.enable = false;
+  }
+
+  enterThroughDoor() {
+    if (this.isDestroyed || !this.waitingAtDoor) return;
+    this.waitingAtDoor = false;
+    this.sprite.body.enable = true;
+    this.sprite.body.reset(this.sprite.x, this.sprite.y);
+    this.sprite.setVisible(true);
   }
 
   // Holds the standing pose, e.g. while the game is paused.
