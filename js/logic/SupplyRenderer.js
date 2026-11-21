@@ -3,7 +3,7 @@
 // ==========================================
 // HTML for the Supply tab: the player builds one order of crates for licensed items, then
 // places it, spawning physical crates on the Loading Pad to haul in by hand.
-// See also: SupplyOrder.js (order rules), GameScene.handleInteract (crate hauling).
+// See also: SupplyOrder.js (order rules), InteractionSystem.handleInteract (crate hauling).
 import { html } from "../core/html.js";
 import { DELIVERY_FEE, getCrateOrderQuantity } from "./SupplyOrder.js";
 

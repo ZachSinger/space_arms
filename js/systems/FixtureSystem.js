@@ -5,6 +5,7 @@
 // buying sales-floor expansions and backroom upgrades. Layout data lives in the shop's saved
 // state (state/slices/Shop.js); its pictures on the map are drawn by world/FixtureViews.js.
 import { database } from "../scenes/boot.js";
+import { GAME_EVENTS } from "../core/Events.js";
 import { Crate } from "../logic/Crate.js";
 import { ShelfFixture } from "../logic/ShelfFixture.js";
 import { FIXTURE_TYPES, fixtureAccessCells, fixtureFacing, fixtureFootprint, fixtureInteractionDistance,
@@ -48,12 +49,12 @@ export class FixtureSystem {
         target: fixture,
         range: SHELF_INTERACT_RANGE,
         priority: 3,
-        getActions: (player) => shop.isPlayerFacingFixture(fixture, player) ? [
+        getActions: (player) => shop.interactionSystem.isPlayerFacingFixture(fixture, player) ? [
           { action: "fixture" },
           {
             action: "interact",
             hint: `${controlLabel("interact")}: Open this shelf`,
-            perform: () => shop.tryOpenFixtureWindow(fixture),
+            perform: () => this.tryOpenFixtureWindow(fixture),
           },
         ] : [],
         distanceFrom: ({ feet }) => {
@@ -150,7 +151,7 @@ export class FixtureSystem {
     const shop = this.shop;
     if (!shop.controlMode.allows("interact") || shop.crateSystem.getCarriedCrates().length > 0 || shop.heldTrash) return null;
     if (shop.checkoutSystem.operatingRegister || shop.areas.nearbyPortal()) return null;
-    const origin = shop.getInteractionOrigin();
+    const origin = shop.interactionSystem.getInteractionOrigin();
     const target = shop.interactables.findTarget(
       "interact",
       origin,
@@ -169,11 +170,11 @@ export class FixtureSystem {
       { excludeProvider: "fixture-move" },
     );
     let fixture = null;
-    if (target?.kind === "fixture" && shop.isPlayerFacingFixture(target.target)) fixture = target.target;
+    if (target?.kind === "fixture" && shop.interactionSystem.isPlayerFacingFixture(target.target)) fixture = target.target;
     else if (target?.kind === "register") fixture = target.target;
     if (!fixture) {
       const trashcan = this.getNearbyTrashcan();
-      if (trashcan && shop.isPlayerFacingFixture(trashcan)) fixture = trashcan;
+      if (trashcan && shop.interactionSystem.isPlayerFacingFixture(trashcan)) fixture = trashcan;
     }
     if (!fixture || !this.canRearrange()) return null;
     return this.moveAreaBlockReason(fixture) ? null : fixture;
@@ -660,5 +661,28 @@ export class FixtureSystem {
     cells.sort((a, b) => Math.hypot(a.gx - origin.gx, a.gy - origin.gy) -
       Math.hypot(b.gx - origin.gx, b.gy - origin.gy));
     return cells.find(({ gx, gy }) => this.checkPlacement(typeId, gx, gy).valid) ?? null;
+  }
+
+  /**
+   * Opens a shelf's window if the player is in range; silently does nothing if not.
+   * @param {object} [fixture] - the clicked fixture; the E key passes none and uses the nearest
+   * @returns {boolean} whether a window opened
+   */
+  tryOpenFixtureWindow(fixture) {
+    const shop = this.shop;
+    if (!shop.controlMode.allows("interact")) return false;
+    const target = shop.interactables.findTarget(
+      "fixture",
+      shop.interactionSystem.getInteractionOrigin(),
+      fixture,
+    )?.target;
+    if (!target) return false;
+    const fixtureWindow = shop.shelfStockingWindow;
+    const alreadyOpen = fixtureWindow.uiWindow.isOpen && fixtureWindow.fixture === target;
+    fixtureWindow.openForFixture(target, shop.fixtures.displayName(target));
+    if (!alreadyOpen) {
+      shop.eventBus.emit(GAME_EVENTS.FIXTURE_OPENED, { fixtureId: target.id, type: target.type });
+    }
+    return true;
   }
 }

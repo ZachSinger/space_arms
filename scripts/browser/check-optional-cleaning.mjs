@@ -22,9 +22,9 @@ try {
     scene.player.sprite.body.reset(1168, 206);
     scene.player.currentFacing = "up";
     const nearby = scene.fixtureSystem.getNearbyTrashcan()?.id;
-    scene.handleInteract();
+    scene.interactionSystem.handleInteract();
     const afterTaking = scene.crateSystem.getCarriedCrates().length;
-    scene.handleInteract();
+    scene.interactionSystem.handleInteract();
     const afterReturning = scene.crateSystem.getCarriedCrates().length;
     return {
       cleaning: scene.cleaningSystem,

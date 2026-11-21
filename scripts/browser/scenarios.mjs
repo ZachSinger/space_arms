@@ -165,7 +165,7 @@ export const scenarios = {
         scene.player.teleportTo(portal.door.x, portal.door.y + 40);
         scene.player.forceFacing("up");
         const found = scene.areas.nearbyPortal() === portal;
-        scene.handleInteract();
+        scene.interactionSystem.handleInteract();
         const crate = scene.crateSystem.getCarriedCrates()[0];
         const { x, y } = scene.player.sprite;
         return { found, area: scene.areas.playerArea, window: scene.cameraRig.backroomCamera.visible,
@@ -286,7 +286,7 @@ export const scenarios = {
       const { center } = scene.player.sprite.body;
       if (!scene.cleaningSystem.dropTrash(center.x, center.y + 22)) return { error: "couldn't drop trash in front of the player" };
       const dirty = scene.cleaningSystem.getCleanliness();
-      scene.handleInteract();
+      scene.interactionSystem.handleInteract();
       return { before: before.trashCount, dirty: dirty.trashCount, holding: Boolean(scene.heldTrash) };
     }, spot);
     if (result.error) return [result.error];
@@ -298,9 +298,9 @@ export const scenarios = {
         scene.player.forceFacing(facing);
         if (scene.fixtureSystem.getNearbyTrashcan()) break;
       }
-      scene.handleInteract();
+      scene.interactionSystem.handleInteract();
       const near = Boolean(scene.fixtureSystem.getNearbyTrashcan());
-      scene.handleInteract();
+      scene.interactionSystem.handleInteract();
       return { near, held: Boolean(scene.heldTrash), count: scene.cleaningSystem.getCleanliness().trashCount };
     });
     const failures = [];

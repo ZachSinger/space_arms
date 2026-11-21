@@ -44,7 +44,7 @@ export class PlayerControls {
     // to move. Space picks crates up and Q puts them down (tap: one crate, hold: a stack);
     // Q with empty hands packs the Go-Backs. See bindCrateKeys.
     shop.input.keyboard.on("keydown-E", (event) => {
-      if (!event.repeat) shop.handleInteract();
+      if (!event.repeat) shop.interactionSystem.handleInteract();
     });
     this.bindCrateKeys();
     // Hold H: every piece of trash on the floor lights up, even behind shelves.
@@ -230,10 +230,10 @@ export class PlayerControls {
   startInteractPress({ button = null } = {}) {
     const shop = this.shop;
     if (!shop.controlMode.allows("interact")) return;
-    const action = shop.getFixtureMoveAction();
+    const action = shop.interactionSystem.getFixtureMoveAction();
     if (!action) {
       this.interactPress = null;
-      shop.handleInteract();
+      shop.interactionSystem.handleInteract();
       return;
     }
     this.interactPress = { fixture: action.target, action, button, startedAt: shop.time.now };
@@ -243,7 +243,7 @@ export class PlayerControls {
   endInteractPress() {
     const press = this.interactPress;
     this.interactPress = null;
-    if (press) this.shop.handleInteract();
+    if (press) this.shop.interactionSystem.handleInteract();
   }
 
   updateInteractPress() {
@@ -255,14 +255,14 @@ export class PlayerControls {
     }
     if (this.shop.time.now - press.startedAt < HOLD_KEY_MS) return;
     this.interactPress = null;
-    const action = this.shop.getFixtureMoveAction();
+    const action = this.shop.interactionSystem.getFixtureMoveAction();
     if (action?.target === press.fixture) action.perform();
   }
 
   // Ctrl went down. Facing a fixture with empty hands while the store is closed, keeping it
   // held picks the fixture up to move; releasing sooner leaves it alone.
   startFixtureMovePress() {
-    const action = this.shop.getFixtureMoveAction();
+    const action = this.shop.interactionSystem.getFixtureMoveAction();
     this.fixtureMovePress = action
       ? { fixture: action.target, action, startedAt: this.shop.time.now }
       : null;
@@ -272,7 +272,7 @@ export class PlayerControls {
     const press = this.fixtureMovePress;
     if (!press || this.shop.time.now - press.startedAt < HOLD_KEY_MS) return;
     this.fixtureMovePress = null;
-    const action = this.shop.getFixtureMoveAction();
+    const action = this.shop.interactionSystem.getFixtureMoveAction();
     if (action?.target === press.fixture) action.perform();
   }
 
@@ -313,7 +313,7 @@ export class PlayerControls {
    */
   startCratePress(which, { button = null } = {}) {
     if (!this.allowsCrateAction(which)) return;
-    const action = this.shop.getCrateControlAction(which);
+    const action = this.shop.interactionSystem.getCrateControlAction(which);
     if (!action) return;
     if (!action.hold) {
       this.cratePress = null;
@@ -329,7 +329,7 @@ export class PlayerControls {
     if (press?.which !== which) return;
     this.cratePress = null;
     if (press.fired || !this.allowsCrateAction(which)) return;
-    this.shop.getCrateControlAction(which)?.perform();
+    this.shop.interactionSystem.getCrateControlAction(which)?.perform();
   }
 
   // Each frame: ends controller presses on release, and fires a hold once it's long enough.
@@ -343,7 +343,7 @@ export class PlayerControls {
     if (press.fired || this.shop.time.now - press.startedAt < HOLD_KEY_MS) return;
     press.fired = true;
     if (!this.allowsCrateAction(press.which)) return;
-    const action = this.shop.getCrateControlAction(press.which);
+    const action = this.shop.interactionSystem.getCrateControlAction(press.which);
     (action?.hold ?? action?.perform)?.();
   }
 }

@@ -116,7 +116,7 @@ export class FixtureViews {
     fixture.sprite = image;
     image.setInteractive({ useHandCursor: true });
     image.on("pointerdown", (pointer) => {
-      if (pointer.event?.target === scene.game.canvas) scene.tryOpenFixtureWindow(fixture);
+      if (pointer.event?.target === scene.game.canvas) scene.fixtureSystem.tryOpenFixtureWindow(fixture);
     });
   }
 

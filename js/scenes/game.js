@@ -352,41 +352,6 @@ export class GameScene extends Phaser.Scene {
     this.shiftClock.subscribe(() => this.saves.updateControls());
   }
 
-  // Whether the player looks straight at the fixture's front (it faces back at them).
-  isPlayerFacingFixture(fixture, player = this.player) {
-    const opposite = { down: "up", up: "down", left: "right", right: "left" };
-    const facing = (player ?? this.player)?.currentFacing;
-    return Boolean(facing) && opposite[facing] === fixtureFacing(fixture);
-  }
-
-  // Where the player reaches from: his feet, which must be right up against what he uses.
-  getInteractionOrigin() {
-    const { x, y, body } = this.player.sprite;
-    const feet = body?.left !== undefined
-      ? { left: body.left, right: body.right, top: body.top, bottom: body.bottom }
-      : { left: x, right: x, top: y, bottom: y };
-    return { x, y, feet, facing: this.player.currentFacing };
-  }
-
-  /**
-   * Gap (px) between the edge of the player's feet that faces `rect` and that rect, when he
-   * faces it with his feet lined up with it (at least partly); Infinity otherwise.
-   * @param {{ feet: object, facing: string }} origin - from getInteractionOrigin()
-   * @param {{ left: number, right: number, top: number, bottom: number }} rect - px
-   */
-  feetReachTo({ feet, facing }, rect) {
-    const acrossX = feet.right > rect.left && feet.left < rect.right;
-    const acrossY = feet.bottom > rect.top && feet.top < rect.bottom;
-    const gap = {
-      up: acrossX ? feet.top - rect.bottom : NaN,
-      down: acrossX ? rect.top - feet.bottom : NaN,
-      left: acrossY ? feet.left - rect.right : NaN,
-      right: acrossY ? rect.left - feet.right : NaN,
-    }[facing];
-    // A small negative gap is fine: his feet may tuck slightly under the art.
-    return Number.isFinite(gap) && gap >= -TILE_SIZE / 2 ? Math.max(0, gap) : Infinity;
-  }
-
   refreshShelfStockDisplay(shelf) {
     shelf?.stockDisplay?.sync();
     shelf?.stockItemsDisplay?.sync();
@@ -471,97 +436,6 @@ export class GameScene extends Phaser.Scene {
     return this.navigation.findAreaPath(fromX, fromY, toX, toY, bodySize);
   }
 
-  // --- Supply, pricing, and the Loading Pad ---
-
-  // The nearest reachable shelf, shared by crate delivery and fixture opening.
-  getNearbyFixture() {
-    return this.interactables.findTarget("fixture", this.getInteractionOrigin())?.target ?? null;
-  }
-
-  // --- Player interaction and crates ---
-
-  getHoldToMoveFixture() {
-    return this.fixtureSystem.getHoldToMoveFixture();
-  }
-
-  getFixtureMoveAction() {
-    return this.interactables.findTarget(
-      "moveFixture",
-      this.getInteractionOrigin(),
-      null,
-      this.player,
-      this.input,
-      "fixture-move",
-    );
-  }
-
-  // E delivers/places a carried crate, opens a nearby fixture, or toggles register operation.
-  handleInteract() {
-    return this.interactionSystem.handleInteract();
-  }
-
-  getRegisterInteractionAction() {
-    return this.interactables.getActions(
-      this.player,
-      this.input,
-      this.getInteractionOrigin(),
-    ).find((action) => action.kind === "register" && action.action === "interact");
-  }
-
-  getPortalInteractionAction() {
-    return this.interactables.findTarget(
-      "interact",
-      this.getInteractionOrigin(),
-      null,
-      this.player,
-      this.input,
-      "portal",
-    );
-  }
-
-  getCrateControlAction(which) {
-    return this.interactables.findTarget(
-      which,
-      this.getInteractionOrigin(),
-      null,
-      this.player,
-      this.input,
-      "crate-control",
-    );
-  }
-
-  /**
-   * Opens a shelf's window if the player is in range; silently does nothing if not.
-   * @param {object} [fixture] - the clicked fixture; the E key passes none and uses the nearest
-   * @returns {boolean} whether a window opened
-   */
-  tryOpenFixtureWindow(fixture) {
-    if (!this.controlMode.allows("interact")) return false;
-    const target = this.interactables.findTarget(
-      "fixture",
-      this.getInteractionOrigin(),
-      fixture,
-    )?.target;
-    if (!target) return false;
-    const fixtureWindow = this.shelfStockingWindow;
-    const alreadyOpen = fixtureWindow.uiWindow.isOpen && fixtureWindow.fixture === target;
-    fixtureWindow.openForFixture(target, this.fixtures.displayName(target));
-    if (!alreadyOpen) {
-      this.eventBus.emit(GAME_EVENTS.FIXTURE_OPENED, { fixtureId: target.id, type: target.type });
-    }
-    return true;
-  }
-
-  // --- Crate handling ---
-  // Space (X) picks crates up and Q (Y) puts them down: a tap moves one crate, a hold moves a
-  // stack. A green arrow marks the floor crate those buttons act on; floor crates stack up to
-  // FLOOR_STACK_MAX high.
-
-  // The help lines on the right of the bottom bar: what each button does right now.
-  updateCrateHint() {
-    return this.interactionSystem.updateHint();
-  }
-
   // People (player, customers, staff) are drawn lower-on-screen in front: a customer walking
   // down past someone passes behind them. Everyone stays above shelves and floor crates.
   sortPeopleByFeet() {
@@ -577,14 +451,6 @@ export class GameScene extends Phaser.Scene {
     if (this.checkoutSystem.registerDepthBeforeTuck != null && this.player?.sprite) {
       this.checkoutSystem.operatingRegisterFixture?.sprite?.setDepth(this.player.sprite.depth + 0.5);
     }
-  }
-
-  // Keyboard equivalent of clicking the register: steps behind the counter if close enough,
-  // even with no customer waiting. Returns false so handleInteract can show its fallback.
-  tryOpenRegister() {
-    if (!this.checkoutSystem.isPlayerNearRegister()) return false;
-    this.checkoutSystem.openRegisterWindow();
-    return true;
   }
 
   showFloatingText(x, y, text, color) {
@@ -671,7 +537,7 @@ export class GameScene extends Phaser.Scene {
     this.shiftClock.update(delta);
     this.positionGoBacksBadge();
     this.controls.updatePresses();
-    this.updateCrateHint();
+    this.interactionSystem.updateHint();
     this.crateSystem.updateCrateMarker();
     for (const fixture of this.fixtures.shelves()) {
       fixture.stockDisplay?.update(time);

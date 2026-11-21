@@ -73,11 +73,11 @@ export class CheckoutSystem {
               ...(shop.crateSystem.getCarriedCrates().length === 0 && !shop.heldTrash ? [{
                 action: "interact",
                 hint: `${controlLabel("interact")}: Activate Register`,
-                perform: () => shop.tryOpenRegister(),
+                perform: () => this.tryOpenRegister(),
               }] : []),
             ]),
         ],
-        distanceFrom: (origin) => shop.feetReachTo(origin, fixture.sprite.getBounds()),
+        distanceFrom: (origin) => shop.interactionSystem.feetReachTo(origin, fixture.sprite.getBounds()),
       })));
   }
 
@@ -379,7 +379,7 @@ export class CheckoutSystem {
 
   getNearbyRegisterTarget() {
     const shop = this.shop;
-    return shop.interactables.findTarget("register", shop.getInteractionOrigin())?.target ?? null;
+    return shop.interactables.findTarget("register", shop.interactionSystem.getInteractionOrigin())?.target ?? null;
   }
 
   // Hold the player at the validated rear access point until they leave the counter.
@@ -660,4 +660,12 @@ export class CheckoutSystem {
 
   // Called by customers who couldn't reach where they were going; only the test room counts them.
 
+
+  // Keyboard equivalent of clicking the register: steps behind the counter if close enough,
+  // even with no customer waiting. Returns false so handleInteract can show its fallback.
+  tryOpenRegister() {
+    if (!this.isPlayerNearRegister()) return false;
+    this.openRegisterWindow();
+    return true;
+  }
 }

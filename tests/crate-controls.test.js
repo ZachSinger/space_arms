@@ -558,7 +558,7 @@ test("with empty hands, E opens the fixture you face and holding Ctrl picks it u
   };
   h.scene.fixtureSystem.canRearrange = () => true;
   h.scene.fixtureSystem.moveAreaBlockReason = () => null;
-  h.scene.handleInteract = () => { opened += 1; };
+  h.scene.interactionSystem.handleInteract = () => { opened += 1; };
   h.scene.fixturePlacement = { active: false, begin: (id) => moved.push(id) };
 
   // Releasing Ctrl before the hold fires moves nothing.
@@ -605,7 +605,7 @@ test("with empty hands, holding Ctrl at the register picks it up to move", () =>
 
   // Not while working it.
   h.scene.checkoutSystem.operatingRegister = true;
-  assert.equal(h.scene.getHoldToMoveFixture(), null);
+  assert.equal(h.scene.fixtureSystem.getHoldToMoveFixture(), null);
 });
 
 test("with empty hands, holding Ctrl while facing the trashcan picks it up to move", () => {
@@ -624,11 +624,11 @@ test("with empty hands, holding Ctrl while facing the trashcan picks it up to mo
   h.scene.fixtureSystem.moveAreaBlockReason = () => null;
   Object.assign(h.scene.player.sprite, { x: 1168, y: 176 + 30 });
   h.scene.player.currentFacing = "up";
-  assert.equal(h.scene.getHoldToMoveFixture(), trashcan);
-  const action = h.scene.getFixtureMoveAction();
+  assert.equal(h.scene.fixtureSystem.getHoldToMoveFixture(), trashcan);
+  const action = h.scene.interactionSystem.getFixtureMoveAction();
   assert.equal(action.target, trashcan);
   assert.match(action.hint, /Hold Ctrl: Move$/);
-  h.scene.updateCrateHint();
+  h.scene.interactionSystem.updateHint();
   assert.equal(h.scene.messages.element.textContent, "E: Create\nHold Ctrl: Move");
 
   const moved = [];
@@ -639,8 +639,8 @@ test("with empty hands, holding Ctrl while facing the trashcan picks it up to mo
   assert.deepEqual(moved, [trashcan.id]);
 
   h.scene.player.currentFacing = "down";
-  assert.equal(h.scene.getHoldToMoveFixture(), null, "not while looking away from it");
-  h.scene.updateCrateHint();
+  assert.equal(h.scene.fixtureSystem.getHoldToMoveFixture(), null, "not while looking away from it");
+  h.scene.interactionSystem.updateHint();
   assert.equal(h.scene.messages.element.textContent, "",
     "facing away from the trashcan, it offers nothing at all");
 });
@@ -660,13 +660,13 @@ test("the registered fixture-move action supplies the hint and moves its target"
 
   const action = scene.interactables.findTarget(
     "moveFixture",
-    scene.getInteractionOrigin(),
+    scene.interactionSystem.getInteractionOrigin(),
     null,
     scene.player,
     scene.input,
     "fixture-move",
   );
-  scene.updateCrateHint();
+  scene.interactionSystem.updateHint();
 
   assert.equal(action.target, shelf);
   assert.ok(scene.messages.element.textContent.includes(action.hint));
@@ -698,12 +698,12 @@ test("fixture movement prefers the faced shelf when a trashcan is also nearby", 
       distanceFrom: () => 1,
     },
   ]);
-  h.scene.isPlayerFacingFixture = () => true;
+  h.scene.interactionSystem.isPlayerFacingFixture = () => true;
   h.scene.fixtureSystem.getNearbyTrashcan = () => trashcan;
   h.scene.fixtureSystem.canRearrange = () => true;
   h.scene.fixtureSystem.moveAreaBlockReason = () => null;
 
-  assert.equal(h.scene.getHoldToMoveFixture(), shelf);
+  assert.equal(h.scene.fixtureSystem.getHoldToMoveFixture(), shelf);
 });
 
 test("Space and Q wait to tell a tap from a hold, and Space leaves focused UI controls alone", () => {
@@ -800,7 +800,7 @@ test("picking up a crate of the item you hold pours as much as fits into yours a
   const floor = itemCrate("wpn_pis_01", 2);
   h.scene.restockCrates.push(floor);
 
-  h.scene.updateCrateHint();
+  h.scene.interactionSystem.updateHint();
   assert.match(h.scene.messages.hint, /Space: Move all 2 .* from this crate into yours/);
   tap(h);
   assert.equal(held.quantity, limit - 1);
@@ -809,7 +809,7 @@ test("picking up a crate of the item you hold pours as much as fits into yours a
   assert.deepEqual(h.scene.restockCrates, [floor]);
 
   floor.add("wpn_pis_01", 5);
-  h.scene.updateCrateHint();
+  h.scene.interactionSystem.updateHint();
   assert.match(h.scene.messages.hint, /Move 1 of the 5 .* \(that's all that fits\)/);
   tap(h);
   assert.equal(held.quantity, limit);
@@ -1096,12 +1096,12 @@ test("E returns every held empty crate, preserving filled crates; Q only puts cr
   const empties = [crate({ quantity: 0 }), crate({ quantity: 0 })];
   carry(h.scene, [empties[0], full, empties[1]]);
   h.scene.fixtureSystem.getNearbyTrashcan = () => ({ id: "trashcan" });
-  h.scene.handleInteract();
+  h.scene.interactionSystem.handleInteract();
   assert.ok(empties.every((entry) => entry.destroyed));
   assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [full]);
   assert.equal(h.messages.at(-1), "2 empty crates put in the trashcan.");
 
-  h.scene.handleInteract();
+  h.scene.interactionSystem.handleInteract();
   assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [full]);
   assert.equal(h.messages.at(-1), "Only empty crates go in the trashcan.");
   const empty = crate({ quantity: 0 });
@@ -1125,7 +1125,7 @@ test("a sales-floor trashcan takes back empty crates only while faced from close
   h.scene.player.currentFacing = "up";
   assert.equal(Boolean(h.scene.fixtureSystem.getNearbyTrashcan()), true);
   carry(h.scene, [crate({ quantity: 0 }), crate({ quantity: 0 })]);
-  h.scene.handleInteract();
+  h.scene.interactionSystem.handleInteract();
   assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), []);
   assert.equal(h.messages.at(-1), "2 empty crates put in the trashcan.");
 
@@ -1149,14 +1149,14 @@ test("trashcan supplies and receives crates when cleaning is disabled", () => {
   h.scene.player.currentFacing = "up";
   let created = 0;
   h.scene.crateSystem.takeEmptyCrateFromTrashcan = () => { created += 1; };
-  h.scene.handleInteract();
+  h.scene.interactionSystem.handleInteract();
   assert.equal(created, 1);
   carry(h.scene, [crate({ quantity: 0 })]);
-  h.scene.handleInteract();
+  h.scene.interactionSystem.handleInteract();
   assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), []);
   h.scene.fixtureSystem.canRearrange = () => true;
   h.scene.fixtureSystem.moveAreaBlockReason = () => null;
-  assert.equal(h.scene.getHoldToMoveFixture(), trashcan);
+  assert.equal(h.scene.fixtureSystem.getHoldToMoveFixture(), trashcan);
 });
 
 test("the former backroom empty-crate square no longer takes or supplies crates", () => {
@@ -1165,11 +1165,11 @@ test("the former backroom empty-crate square no longer takes or supplies crates"
   Object.assign(h.scene.player.sprite, { x: 174, y: 6608 });
   h.scene.crateSystem.createItemCrate = () => { throw new Error("the backroom must not supply a crate"); };
 
-  h.scene.handleInteract();
+  h.scene.interactionSystem.handleInteract();
   assert.equal(h.scene.crateSystem.getCarriedCrates().length, 0);
   const empty = crate({ quantity: 0 });
   carry(h.scene, [empty]);
-  h.scene.handleInteract();
+  h.scene.interactionSystem.handleInteract();
   assert.equal(empty.destroyed, undefined);
   assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [empty]);
 });
@@ -1196,7 +1196,7 @@ test("E supplies one free empty crate only with empty hands", () => {
   };
 
   h.scene.fixtureSystem.getNearbyTrashcan = () => ({ id: "trashcan" });
-  h.scene.handleInteract();
+  h.scene.interactionSystem.handleInteract();
   assert.equal(h.scene.crateSystem.getCarriedCrates().length, 1);
   assert.ok(created.every((crate) => crate.pickedUpBy === h.scene.player.sprite));
   assert.equal(h.scene.crateSystem.takeEmptyCrateFromTrashcan(), false);
@@ -1206,7 +1206,7 @@ test("E supplies one free empty crate only with empty hands", () => {
   h.scene.fixturePlacement = { beginFromCrate: (crate) => placing.push(crate) };
   const fixtureCrate = crate({ kind: "fixture" });
   carry(h.scene, [fixtureCrate]);
-  h.scene.handleInteract();
+  h.scene.interactionSystem.handleInteract();
   assert.equal(created.length, 1, "a fixture crate is not empty hands");
   assert.deepEqual(placing, [fixtureCrate], "E still places a fixture beside the trashcan");
 });
@@ -1215,13 +1215,13 @@ test("the context lines say what each crate button does right now", () => {
   const h = createHarness();
   const element = h.scene.messages.element;
   const [bottom] = floorStack(h.scene, 2);
-  h.scene.updateCrateHint();
+  h.scene.interactionSystem.updateHint();
   assert.equal(element.textContent, [
     "Tap Space: Pick up a crate of 5 Test item",
     "Ctrl: Move the arrow one crate down",
   ].join("\n"), "the arrow starts on the top crate, so a hold would take the same one crate");
   h.scene.crateSystem.markNextCrateDown();
-  h.scene.updateCrateHint();
+  h.scene.interactionSystem.updateHint();
   assert.equal(element.textContent, [
     "Tap Space: Pick up a crate of 5 Test item",
     "Hold Space: Pick up 2 crates (this one and the ones above it)",
@@ -1231,7 +1231,7 @@ test("the context lines say what each crate button does right now", () => {
   assert.equal(element.classList.contains("hidden"), false);
 
   carry(h.scene, [crate(), crate({ quantity: 0 })]);
-  h.scene.updateCrateHint();
+  h.scene.interactionSystem.updateHint();
   assert.equal(element.textContent, [
     "Tap Space: Pick up a crate of 5 Test item",
     "Tap Q: Set your top crate on this stack",
@@ -1241,7 +1241,7 @@ test("the context lines say what each crate button does right now", () => {
 
   h.scene.floorStacks.get(bottom).push(crate());
   carry(h.scene, [crate(), crate(), crate()]);
-  h.scene.updateCrateHint();
+  h.scene.interactionSystem.updateHint();
   assert.equal(element.textContent, [
     "Your hands are full (3 crates max)",
     "You can't stack any higher. Stacks can only be 3 crates high.",
@@ -1250,14 +1250,14 @@ test("the context lines say what each crate button does right now", () => {
 
   h.scene.restockCrates = [];
   h.scene.floorStacks.clear();
-  h.scene.updateCrateHint();
+  h.scene.interactionSystem.updateHint();
   assert.equal(element.textContent, [
     "Tap Q: Put your top crate down",
     "Hold Q: Set all 3 crates down as a stack",
   ].join("\n"), "walking with more than one crate never offers a throw");
 
   h.scene.player.sprite.body.velocity = { x: 0, y: 0 };
-  h.scene.updateCrateHint();
+  h.scene.interactionSystem.updateHint();
   assert.equal(element.textContent, [
     "Tap Q: Put your top crate down",
     "Hold Q: Set all 3 crates down as a stack",
@@ -1265,7 +1265,7 @@ test("the context lines say what each crate button does right now", () => {
   h.scene.player.sprite.body.velocity = { x: 160, y: 0 };
 
   carry(h.scene, [crate({ kind: "fixture" })]);
-  h.scene.updateCrateHint();
+  h.scene.interactionSystem.updateHint();
   assert.equal(element.textContent, [
     "Space: Throw your crate",
     "Tap Q: Put your top crate down",
@@ -1279,14 +1279,14 @@ test("the registered crate action is both advertised in the hint and performed b
   scene.restockCrates = [floorCrate];
   const action = scene.interactables.findTarget(
     "pickUp",
-    scene.getInteractionOrigin(),
+    scene.interactionSystem.getInteractionOrigin(),
     null,
     scene.player,
     scene.input,
     "crate-control",
   );
 
-  scene.updateCrateHint();
+  scene.interactionSystem.updateHint();
   assert.equal(action.target, floorCrate);
   assert.ok(scene.messages.element.textContent.includes(action.hint));
   scene.controls.startCratePress("pickUp");
@@ -1305,7 +1305,7 @@ for (const state of ["nothingNearby", "moving", "placement", "startingShift", "l
     else if (state === "menu") h.scene.windowManager.windows.set("inventory", { id: "inventory", isOpen: true });
     else if (state === "startingShift") h.scene.shift.starting = true;
     else h.scene.saves.loadFailed = true;
-    h.scene.updateCrateHint();
+    h.scene.interactionSystem.updateHint();
     assert.equal(h.scene.messages.element.classList.contains("hidden"), true);
   });
 }
@@ -1314,7 +1314,7 @@ test("behind the counter the hint always offers the way out", () => {
   const h = createHarness();
   h.scene.restockCrates = [crate()];
   h.scene.checkoutSystem.operatingRegister = true;
-  h.scene.updateCrateHint();
+  h.scene.interactionSystem.updateHint();
   const element = h.scene.messages.element;
   assert.equal(element.textContent, "E: Leave the register");
   assert.equal(element.classList.contains("hidden"), false);
@@ -1330,12 +1330,12 @@ test("warnings take priority over crate hints and restore the current hint after
   const h = createHarness();
   const target = crate();
   h.scene.restockCrates = [target];
-  h.scene.updateCrateHint();
+  h.scene.interactionSystem.updateHint();
   const element = h.scene.messages.element;
   h.scene.messages.show("Not enough credits.");
   assert.equal(element.classList.contains("context-message"), false);
   target.quantity = 3;
-  h.scene.updateCrateHint();
+  h.scene.interactionSystem.updateHint();
   assert.equal(element.textContent, "Not enough credits.");
   assert.equal(timers[0].delay, 2250);
   timers[0].callback();
@@ -1349,7 +1349,7 @@ test("warnings take priority over crate hints and restore the current hint after
 
   h.scene.messages.show("Another warning");
   h.scene.restockCrates = [];
-  h.scene.updateCrateHint();
+  h.scene.interactionSystem.updateHint();
   assert.equal(element.textContent, "Another warning");
   timers[2].callback();
   timers[3].callback();
@@ -1558,19 +1558,19 @@ test("a backroom door and the register explain themselves in the bottom bar's he
   }]);
   Object.assign(scene.player.sprite, { x: 500, y: 132 });
   scene.player.currentFacing = "up";
-  scene.updateCrateHint();
+  scene.interactionSystem.updateHint();
   assert.match(scene.messages.element.textContent, /^E: Go into the backroom$/m);
   let usedPortal = null;
   scene.areas.goThrough = (portal) => { usedPortal = portal; };
-  scene.handleInteract();
+  scene.interactionSystem.handleInteract();
   assert.equal(usedPortal, scene.areas.portals[0], "the action advertised by the hint runs on E");
   scene.areas.playerArea = AREA.BACKROOM;
   Object.assign(scene.player.sprite, { x: 145, y: 6464 });
-  scene.updateCrateHint();
+  scene.interactionSystem.updateHint();
   assert.match(scene.messages.element.textContent, /^E: Go back out to the shop$/m);
   scene.areas.playerArea = AREA.SHOP;
   Object.assign(scene.player.sprite, { x: 900, y: 900 });
-  scene.updateCrateHint();
+  scene.interactionSystem.updateHint();
   assert.match(scene.messages.element.textContent, /^E: Activate Register$/m);
 });
 
@@ -1580,11 +1580,11 @@ test("E opens hands-on shelves with a carried stack instead of bulk-delivering i
   const top = { kind: "item", itemId: null, quantity: 0 };
   scene.carriedCrate = top;
   scene.carriedCrates = [{ kind: "item", itemId: "amo_01", quantity: 5 }, top];
-  scene.getNearbyFixture = () => shelf;
+  scene.interactionSystem.getNearbyFixture = () => shelf;
   scene.interactables = {
     findTarget: (action) => action === "fixture"
       ? { target: shelf }
-      : { target: shelf, perform: () => scene.tryOpenFixtureWindow(shelf) },
+      : { target: shelf, perform: () => scene.fixtureSystem.tryOpenFixtureWindow(shelf) },
   };
   let opened = 0;
   scene.shelfStockingWindow = {
@@ -1594,7 +1594,7 @@ test("E opens hands-on shelves with a carried stack instead of bulk-delivering i
       opened += 1;
     },
   };
-  scene.handleInteract();
+  scene.interactionSystem.handleInteract();
   assert.equal(opened, 1);
   assert.equal(scene.crateSystem.getCarriedCrates().length, 2);
   assert.equal(scene.carriedCrate, top);
@@ -1639,7 +1639,7 @@ test("three carried crates stay straight while the player moves and reverses dir
     shift: { starting: false, ended: false, update() {} },
     hud: { renderStamina() {}, renderCleanliness() {} },
     positionGoBacksBadge() {},
-    updateCrateHint() {},
+    interactionSystem: { updateHint() {} },
     customerFlow: { refreshPool() {}, spawnScheduled() {} },
     customers: [],
     employees: [],
@@ -1681,7 +1681,7 @@ test("the game updates player and crate movement during placement without unfree
     shift: { starting: false, ended: false, update() {} },
     hud: { renderStamina() {}, renderCleanliness() {} },
     positionGoBacksBadge() {},
-    updateCrateHint() {},
+    interactionSystem: { updateHint() {} },
     customerFlow: { refreshPool() {}, spawnScheduled() {} },
     customers: [{ update() { customerUpdates += 1; }, standStill() { customerStops += 1; } }],
     employees: [],
@@ -1713,14 +1713,14 @@ test("E behind the counter always steps away, even beside a trashcan or holding 
     h.scene.checkoutSystem.operatingRegister = false;
   };
 
-  h.scene.handleInteract();
+  h.scene.interactionSystem.handleInteract();
   assert.equal(ended, 1, "E leaves the counter");
   assert.equal(tookCrates, 0, "the trashcan never hands a crate to the cashier");
 
   // Even holding crates (which should be impossible there), E still gets the player out.
   h.scene.checkoutSystem.operatingRegister = true;
   carry(h.scene, [crate()]);
-  h.scene.handleInteract();
+  h.scene.interactionSystem.handleInteract();
   assert.equal(ended, 2);
   assert.equal(h.scene.checkoutSystem.operatingRegister, false);
 });
@@ -1752,13 +1752,13 @@ test("E opens shelves instead of picking up crates, with or without a carried cr
       opens += 1;
     },
   };
-  h.scene.handleInteract();
+  h.scene.interactionSystem.handleInteract();
   assert.equal(opens, 1);
   assert.deepEqual(opened, [{ fixtureId: "shelf", type: "shelf_budget_3x4" }]);
   assert.equal(h.scene.carriedCrate, null);
   assert.deepEqual(h.scene.restockCrates, [nearby]);
   carry(h.scene, [itemCrate("wpn_pis_01", 4)]);
-  h.scene.handleInteract();
+  h.scene.interactionSystem.handleInteract();
   assert.equal(opens, 2);
   assert.equal(opened.length, 1, "re-opening the same shelf isn't a new open");
   assert.equal(h.scene.crateSystem.getCarriedCrates().length, 1);
@@ -1781,23 +1781,23 @@ test("E targets the shelf whose front the player stands at, not the shelf beside
 
   for (const facing of ["down", "left", "right"]) {
     h.scene.player.currentFacing = facing;
-    assert.equal(h.scene.getNearbyFixture(), null, `looking ${facing}, away from the shelf front`);
+    assert.equal(h.scene.interactionSystem.getNearbyFixture(), null, `looking ${facing}, away from the shelf front`);
   }
   h.scene.player.currentFacing = "up";
-  h.scene.handleInteract();
+  h.scene.interactionSystem.handleInteract();
   assert.deepEqual(opened, [wide]);
-  assert.equal(h.scene.getNearbyFixture(), wide);
-  assert.equal(h.scene.tryOpenFixtureWindow(small), false);
+  assert.equal(h.scene.interactionSystem.getNearbyFixture(), wide);
+  assert.equal(h.scene.fixtureSystem.tryOpenFixtureWindow(small), false);
 
   h.scene.player.sprite.x = 8 * TILE_SIZE + 20;
-  h.scene.handleInteract();
+  h.scene.interactionSystem.handleInteract();
   assert.deepEqual(opened, [wide, small]);
 
   // His feet may be at most 12px from the shelf front: a few pixels, not across the room.
   h.scene.player.sprite.y = front + 10 + 12;
-  assert.equal(h.scene.getNearbyFixture(), small);
+  assert.equal(h.scene.interactionSystem.getNearbyFixture(), small);
   h.scene.player.sprite.y += 1;
-  assert.equal(h.scene.getNearbyFixture(), null);
+  assert.equal(h.scene.interactionSystem.getNearbyFixture(), null);
 });
 
 test("E uses the register target only while the player is in range", () => {
@@ -1815,15 +1815,15 @@ test("E uses the register target only while the player is in range", () => {
   // Just below the register, facing it.
   h.scene.player.sprite.y = 120 + 10 + 4;
   h.scene.player.currentFacing = "up";
-  const hint = () => h.scene.interactables.findTarget("register", h.scene.getInteractionOrigin()).hint;
+  const hint = () => h.scene.interactables.findTarget("register", h.scene.interactionSystem.getInteractionOrigin()).hint;
   assert.equal(hint(), "E: Activate Register");
   h.scene.gameState.goBacks.add("wpn_pis_01", 1);
   assert.equal(hint(), "E: Activate Register", "Go-Backs pack themselves, so there's no button for them");
   h.scene.gameState.goBacks.remove("wpn_pis_01", 1);
   let registerOpens = 0;
-  h.scene.tryOpenRegister = () => { registerOpens += 1; return true; };
+  h.scene.checkoutSystem.tryOpenRegister = () => { registerOpens += 1; return true; };
 
-  h.scene.handleInteract();
+  h.scene.interactionSystem.handleInteract();
   assert.equal(registerOpens, 1);
   assert.equal(h.scene.checkoutSystem.isPlayerNearRegister(), true);
   h.scene.player.currentFacing = "down";

@@ -271,7 +271,7 @@ export class Areas {
       // A fixture beside the door wins when the player is standing nearer to it.
       const target = shop.interactables?.findTarget(
         "interact",
-        shop.getInteractionOrigin(),
+        shop.interactionSystem.getInteractionOrigin(),
         null,
         player,
         shop.input,
