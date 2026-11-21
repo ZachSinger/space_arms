@@ -24,8 +24,8 @@ export async function runScriptedShift(harness, { employees = [], playSeconds = 
     scene.eventBus.on("customer-sale-completed", () => { log.sales += 1; });
     scene.eventBus.on("customer-left-angry", () => { log.angry += 1; });
     scene.eventBus.on("customer-missing-primary", () => { log.missing += 1; });
-    const note = scene.noteCustomerGaveUp.bind(scene);
-    scene.noteCustomerGaveUp = (customer, reason) => { log.gaveUp.push(reason); note(customer, reason); };
+    const note = scene.customerFlow.noteGaveUp.bind(scene.customerFlow);
+    scene.customerFlow.noteGaveUp = (customer, reason) => { log.gaveUp.push(reason); note(customer, reason); };
     const frames = [];
     window.__frames = frames;
     scene.events.on("postupdate", (_time, delta) => frames.push(delta));

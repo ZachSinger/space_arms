@@ -447,7 +447,7 @@ export class FixtureSystem {
     for (const register of this.fixtures.registers()) {
       register.queuePoints = result.queuePointsById?.get(register.id) ?? result.queuePoints;
     }
-    if (scene.goBacksBadge) scene.refreshGoBacksBadge();
+    scene.goBacksBadge?.refresh();
     scene.cleaningSystem?.moveOffBlockedSpots();
   }
 

@@ -17,6 +17,7 @@ import { FixtureRegistry } from "../js/logic/FixtureRegistry.js";
 import { PAD } from "../js/input/GamepadInput.js";
 import { TILE_SIZE } from "../js/logic/RoomLayout.js";
 import { AREA, Areas } from "../js/world/Areas.js";
+import { sortPeopleByFeet } from "../js/world/Depth.js";
 
 let server;
 let cacheDirectory;
@@ -1441,7 +1442,7 @@ test("behind the register the counter is lifted over the player, not the player 
   h.scene.checkoutSystem.registerDepthBeforeTuck = 2;
   const [base, ...above] = floorStack(h.scene, 3);
   h.scene.player.sprite.y = 120; // his feet are below the stack's bottom edge: it's beside/behind him
-  h.scene.sortPeopleByFeet();
+  sortPeopleByFeet(h.scene);
   h.scene.crateSystem.syncFloorStacks();
   const player = h.scene.player.sprite.depth;
   assert.ok(register.sprite.depth > player, "the counter hides his legs");
@@ -1638,7 +1639,7 @@ test("three carried crates stay straight while the player moves and reverses dir
     shiftClock: { isPaused: false, started: false, softClosed: false, update() {} },
     shift: { starting: false, ended: false, update() {} },
     hud: { renderStamina() {}, renderCleanliness() {} },
-    positionGoBacksBadge() {},
+    goBacksBadge: { position() {} },
     interactionSystem: { updateHint() {} },
     customerFlow: { refreshPool() {}, spawnScheduled() {} },
     customers: [],
@@ -1680,7 +1681,7 @@ test("the game updates player and crate movement during placement without unfree
     shiftClock: { isPaused: true, started: false, softClosed: false, update() {} },
     shift: { starting: false, ended: false, update() {} },
     hud: { renderStamina() {}, renderCleanliness() {} },
-    positionGoBacksBadge() {},
+    goBacksBadge: { position() {} },
     interactionSystem: { updateHint() {} },
     customerFlow: { refreshPool() {}, spawnScheduled() {} },
     customers: [{ update() { customerUpdates += 1; }, standStill() { customerStops += 1; } }],

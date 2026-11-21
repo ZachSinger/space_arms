@@ -15,6 +15,7 @@ import { worldToClientRect } from "../logic/FixtureHighlight.js";
 import { getGameScale } from "../logic/GameViewport.js";
 import { PLAYER_CHARACTER_HEIGHT } from "../logic/Player.js";
 import { controlLabel } from "../input/InputDevice.js";
+import { sortPeopleByFeet } from "../world/Depth.js";
 
 /** @typedef {import("../logic/Crate.js").Crate} Crate */
 /** @typedef {import("../logic/Customer.js").Customer} Customer */
@@ -416,7 +417,7 @@ export class CheckoutSystem {
     shop.eventBus.emit(GAME_EVENTS.REGISTER_SESSION_STARTED, {
       registerId: register.id,
     });
-    shop.sortPeopleByFeet();
+    sortPeopleByFeet(shop);
     shop.crateSystem.syncFloorStacks();
   }
 
@@ -448,7 +449,7 @@ export class CheckoutSystem {
     shop.eventBus.emit(GAME_EVENTS.REGISTER_SESSION_ENDED, {
       registerId: register?.id ?? null,
     });
-    shop.sortPeopleByFeet();
+    sortPeopleByFeet(shop);
     shop.crateSystem.syncFloorStacks();
   }
 

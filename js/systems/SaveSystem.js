@@ -104,7 +104,7 @@ export class SaveSystem {
     shop.crateSystem.load(data);
     shop.cleaningSystem?.load(data.trash ?? []);
     this.moveShelfOverflowToGoBacks();
-    shop.refreshShelfStockDisplays();
+    shop.fixtureViews.refreshStockDisplays();
     shop.catalogSystem.recalculateActiveFactions();
   }
 

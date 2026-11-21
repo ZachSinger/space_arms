@@ -169,7 +169,7 @@ export function setupSandboxRoom(scene) {
           }
         }
       }
-      scene.refreshShelfStockDisplay(shelf);
+      scene.fixtureViews.refreshStockDisplay(shelf);
     }
     gameState.shop.changed();
     scene.showShopMessage("Test room: every shelf is full.");

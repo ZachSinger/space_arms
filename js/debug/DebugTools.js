@@ -179,7 +179,7 @@ export class DebugTools {
     });
     gameState.economy.spend(DELIVERY_FEE, { category: "delivery_fees", label: "Delivery fee" });
 
-    for (const shelf of shelves) scene.refreshShelfStockDisplay(shelf);
+    for (const shelf of shelves) scene.fixtureViews.refreshStockDisplay(shelf);
     gameState.shop.changed();
     scene.showShopMessage(shelves.length > 1 ? "Quickstart: shelves stocked." : "Quickstart: shelf stocked.");
     return true;

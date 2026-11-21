@@ -14,6 +14,7 @@ import {
   createCustomerArrivalSchedule, growCustomerArrivalSchedule, createCustomerPool,
 } from "../logic/CustomerPooling.js";
 import { SHIFT_DURATION_MS } from "../logic/ShiftClock.js";
+import { gameRandom } from "../core/Random.js";
 
 export const CUSTOMER_TUNING = loadTuning("customers", customerTuning);
 
@@ -212,5 +213,20 @@ export class CustomerFlow {
       shelfStops,
       allShelfStops,
     };
+  }
+
+  /**
+   * @param {object | null} [excludedShelf] - the customer's next planned stop
+   * @returns {object | null} a different currently stocked shelf to browse
+   */
+  getRandomBrowseShelf(excludedShelf = null) {
+    const shelves = this.shop.fixtures.shelves().filter((shelf) =>
+      shelf !== excludedShelf && shelf.findAvailableSlot(),
+    );
+    return shelves.length ? gameRandom.pick(shelves) : null;
+  }
+
+  noteGaveUp(customer, reason) {
+    this.shop.sandboxRoom?.noteGaveUp(customer, reason);
   }
 }

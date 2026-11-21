@@ -211,7 +211,7 @@ export const scenarios = {
         removePortals();
         removeArea();
       };
-      const path = scene.findPath(source.x, source.y, front.x + 32, front.y);
+      const path = scene.navigation.findPath(source.x, source.y, front.x + 32, front.y);
       return { routed: path?.some((point) => point.teleportTo?.x === front.x) ?? false };
     });
     const failures = [];

@@ -1,15 +1,16 @@
 import { addCharacterSprite } from "../logic/CustomerSprites.js";
+import { database } from "../scenes/boot.js";
 
 export function createCustomerStore(scene) {
   return {
     add: scene.add,
     findPath: (...args) => scene.navigation.store.findPath(...args),
-    getItem: (...args) => scene.getItem(...args),
+    getItem: (itemId) => database.getItem(itemId),
     getStorePrice: (...args) => scene.catalogSystem.getStorePrice(...args),
     showFloatingText: (...args) => scene.showFloatingText(...args),
-    getRandomBrowseShelf: (...args) => scene.getRandomBrowseShelf(...args),
-    refreshShelfStockDisplay: (...args) => scene.refreshShelfStockDisplay?.(...args),
-    noteCustomerGaveUp: (...args) => scene.noteCustomerGaveUp?.(...args),
+    getRandomBrowseShelf: (...args) => scene.customerFlow.getRandomBrowseShelf(...args),
+    refreshShelfStockDisplay: (...args) => scene.fixtureViews?.refreshStockDisplay(...args),
+    noteCustomerGaveUp: (...args) => scene.customerFlow?.noteGaveUp(...args),
     createCustomerSprite: (...args) => addCharacterSprite(scene, ...args),
     get cleaning() { return scene.cleaningSystem; },
     get scale() { return scene.scale; },
@@ -28,7 +29,7 @@ export function createEmployeeStore(scene) {
     findPath: (...args) => scene.navigation.store.findPath(...args),
     getBehindRegisterPoint: (register) => scene.checkoutSystem.behindRegisterPoint(register),
     syncFloorStacks: (...args) => scene.crateSystem.syncFloorStacks(...args),
-    refreshShelfStockDisplay: (...args) => scene.refreshShelfStockDisplay(...args),
+    refreshShelfStockDisplay: (...args) => scene.fixtureViews.refreshStockDisplay(...args),
     showShopMessage: (...args) => scene.showShopMessage(...args),
     createEmployeeSprite(x, y, texture, width, height) {
       const sprite = addCharacterSprite(scene, x, y, texture, width, height).setDepth(3);

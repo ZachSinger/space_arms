@@ -159,7 +159,7 @@ test("cross-area paths use matching portal approaches and a teleport waypoint", 
   };
   const bodySize = { width: 22, height: 20 };
 
-  const path = scene.findPath(32, 96, 224, 160, bodySize);
+  const path = scene.navigation.findPath(32, 96, 224, 160, bodySize);
 
   assert.deepEqual(pathCalls, [
     [32, 96, near.x, near.y, bodySize],
@@ -186,7 +186,7 @@ test("multi-room paths include every portal leg and reject disconnected rooms", 
     { near: { x: 160, y: 160 }, far: { x: 192, y: 192 } },
   ];
   scene.navigation.findAreaPath = (_x, _y, x, y) => [{ x, y }];
-  assert.deepEqual(scene.findPath(32, 32, 224, 224), [
+  assert.deepEqual(scene.navigation.findPath(32, 32, 224, 224), [
     { x: 64, y: 64 },
     { x: 64, y: 64, teleportTo: { x: 128, y: 128 } },
     { x: 160, y: 160 },
@@ -194,7 +194,7 @@ test("multi-room paths include every portal leg and reject disconnected rooms", 
     { x: 224, y: 224 },
   ]);
   scene.areas.crossings = () => null;
-  assert.equal(scene.findPath(32, 32, 224, 224), null);
+  assert.equal(scene.navigation.findPath(32, 32, 224, 224), null);
 });
 
 test("characters can walk through a clear passage narrower than one floor square", () => {
@@ -203,7 +203,7 @@ test("characters can walk through a clear passage narrower than one floor square
     { body: { x: 80, y: 120, width: 80, height: 136 } },
   ]);
 
-  assert.deepEqual(scene.findAreaPath(32, 96, 224, 96), []);
+  assert.deepEqual(scene.navigation.findAreaPath(32, 96, 224, 96), []);
 });
 
 test("the public door remains a route through the wall while its blocker opens on approach", () => {
@@ -211,7 +211,7 @@ test("the public door remains a route through the wall while its blocker opens o
   const scene = makeNavigationScene([blocker]);
   scene.storeDoorAnimation = { door: { blocker } };
 
-  assert.deepEqual(scene.findAreaPath(32, 96, 224, 96), []);
+  assert.deepEqual(scene.navigation.findAreaPath(32, 96, 224, 96), []);
 });
 
 test("staff routes avoid the public door even while a customer holds it open", () => {
@@ -220,11 +220,11 @@ test("staff routes avoid the public door even while a customer holds it open", (
   scene.storeDoorAnimation = { door: { blocker } };
   for (const enabled of [true, false]) {
     blocker.body.enable = enabled;
-    const path = scene.findAreaPath(32, 96, 224, 96, {
+    const path = scene.navigation.findAreaPath(32, 96, 224, 96, {
       width: 22, height: 20, avoidStoreDoor: true,
     });
     assert.ok(path && path.length > 0, "staff must go around, not wait for a customer to open the door");
-    assert.deepEqual(scene.findAreaPath(32, 96, 224, 96), []);
+    assert.deepEqual(scene.navigation.findAreaPath(32, 96, 224, 96), []);
   }
 });
 
@@ -234,22 +234,22 @@ test("shoppers fit any passage wider than their feet, which the old whole-body b
     { body: { x: 0, y: 120, width: 256, height: 136 } },
   ]);
 
-  assert.ok(scene.findAreaPath(32, 100, 224, 100));
-  assert.equal(scene.findAreaPath(32, 100, 224, 100, { width: 46, height: 48 }), null);
+  assert.ok(scene.navigation.findAreaPath(32, 100, 224, 100));
+  assert.equal(scene.navigation.findAreaPath(32, 100, 224, 100, { width: 46, height: 48 }), null);
 });
 
 test("characters route around the true edges of a fixture body", () => {
   const scene = makeNavigationScene([
     { body: { x: 80, y: 32, width: 80, height: 96 } },
   ]);
-  const path = scene.findAreaPath(32, 96, 224, 96);
+  const path = scene.navigation.findAreaPath(32, 96, 224, 96);
 
   assert.ok(path);
   assert.ok(path.length > 0);
   assert.ok(path.some(({ y }) => y <= 22 || y >= 138));
   let previous = { x: 32, y: 96 };
   for (const point of [...path, { x: 224, y: 96 }]) {
-    assert.equal(scene.isStraightWalkClear(previous.x, previous.y, point.x, point.y), true);
+    assert.equal(scene.navigation.isStraightWalkClear(previous.x, previous.y, point.x, point.y), true);
     previous = point;
   }
 });
@@ -267,7 +267,7 @@ test("reused routes stay independent and are invalidated when the shop changes",
     checks += 1;
     return !zone.locked && !scene.room.wallCells.has(`${gx},${gy}`) && onFloor(gx, gy);
   };
-  const route = () => scene.findAreaPath(32, 96, 224, 96);
+  const route = () => scene.navigation.findAreaPath(32, 96, 224, 96);
   const first = route();
   assert.ok(first?.length);
   const expected = structuredClone(first);
@@ -323,19 +323,19 @@ test("the walkability grid is reused across routes and refreshed when the room c
   };
   scene.room.navigationWalkabilityKey = () => String(revision);
 
-  assert.ok(scene.findAreaPath(32, 96, 224, 96)?.length);
+  assert.ok(scene.navigation.findAreaPath(32, 96, 224, 96)?.length);
   const firstSearchChecks = checks;
   assert.ok(scene.navigation.walkGridCache.size > 0);
 
   checks = 0;
   scene.navigation.routeCache.clear();
-  assert.ok(scene.findAreaPath(40, 96, 216, 96)?.length);
+  assert.ok(scene.navigation.findAreaPath(40, 96, 216, 96)?.length);
   assert.ok(checks < firstSearchChecks, "a second route reuses cells already checked");
 
   revision += 1;
   floorOpen = false;
   checks = 0;
-  assert.equal(scene.findAreaPath(32, 96, 224, 96), null);
+  assert.equal(scene.navigation.findAreaPath(32, 96, 224, 96), null);
   assert.ok(checks > 0, "a changed layout recomputes walkable cells");
   assert.ok([...scene.navigation.walkGridCache.values()].every((walkable) => !walkable));
 });
@@ -349,12 +349,12 @@ test("removing a room's walkability key disables and clears its cached grid", ()
   scene.room.isWalkable = (gx, gy) => floorOpen && floor(gx, gy);
   scene.room.navigationWalkabilityKey = () => "fixed-layout";
 
-  assert.ok(scene.findAreaPath(32, 96, 224, 96)?.length);
+  assert.ok(scene.navigation.findAreaPath(32, 96, 224, 96)?.length);
   assert.ok(scene.navigation.walkGridCache.size > 0);
 
   delete scene.room.navigationWalkabilityKey;
   floorOpen = false;
-  assert.equal(scene.findAreaPath(32, 96, 224, 96), null);
+  assert.equal(scene.navigation.findAreaPath(32, 96, 224, 96), null);
   assert.equal(scene.navigation.walkGridCache.size, 0);
 });
 
@@ -370,24 +370,24 @@ test("straight walks reuse floor checks but refresh them when the floor changes"
   };
   scene.room.navigationWalkabilityKey = () => String(revision);
 
-  assert.deepEqual(scene.findAreaPath(32, 96, 224, 96), []);
+  assert.deepEqual(scene.navigation.findAreaPath(32, 96, 224, 96), []);
   assert.ok(checks > 0);
   checks = 0;
-  assert.deepEqual(scene.findAreaPath(32, 96, 224, 96), []);
-  assert.equal(scene.isStraightWalkClear(32, 96, 224, 96), true);
+  assert.deepEqual(scene.navigation.findAreaPath(32, 96, 224, 96), []);
+  assert.equal(scene.navigation.isStraightWalkClear(32, 96, 224, 96), true);
   assert.equal(checks, 0, "route and movement checks share the cached floor cells");
 
   closed = true;
   revision += 1;
-  assert.equal(scene.isStraightWalkClear(32, 96, 224, 96), false);
-  assert.equal(scene.findAreaPath(32, 96, 224, 96), null);
+  assert.equal(scene.navigation.isStraightWalkClear(32, 96, 224, 96), false);
+  assert.equal(scene.navigation.findAreaPath(32, 96, 224, 96), null);
 
   closed = false;
   delete scene.room.navigationWalkabilityKey;
-  assert.deepEqual(scene.findAreaPath(32, 96, 224, 96), []);
+  assert.deepEqual(scene.navigation.findAreaPath(32, 96, 224, 96), []);
   assert.equal(scene.navigation.walkGridCache.size, 0);
   closed = true;
-  assert.equal(scene.isStraightWalkClear(32, 96, 224, 96), false);
+  assert.equal(scene.navigation.isStraightWalkClear(32, 96, 224, 96), false);
 });
 
 test("cached routes respect each character's size", () => {
@@ -395,12 +395,12 @@ test("cached routes respect each character's size", () => {
     { body: { x: 80, y: 32, width: 80, height: 96 } },
   ]);
   scene.room.navigationWalkabilityKey = () => "unchanged";
-  const normal = scene.findAreaPath(32, 96, 224, 96);
-  const larger = scene.findAreaPath(32, 96, 224, 96, { width: 46, height: 48 });
+  const normal = scene.navigation.findAreaPath(32, 96, 224, 96);
+  const larger = scene.navigation.findAreaPath(32, 96, 224, 96, { width: 46, height: 48 });
   assert.ok(normal?.length);
   assert.ok(larger?.length);
   assert.notDeepEqual(larger, normal);
-  assert.deepEqual(scene.findAreaPath(32, 96, 224, 96), normal);
+  assert.deepEqual(scene.navigation.findAreaPath(32, 96, 224, 96), normal);
 });
 
 test("a room without a walkability key never reuses routes", () => {
@@ -408,22 +408,22 @@ test("a room without a walkability key never reuses routes", () => {
   const onFloor = scene.room.isWalkable;
   let closed = false;
   scene.room.isWalkable = (gx, gy) => !closed && onFloor(gx, gy);
-  assert.ok(scene.findAreaPath(32, 96, 224, 96)?.length);
+  assert.ok(scene.navigation.findAreaPath(32, 96, 224, 96)?.length);
   closed = true;
-  assert.equal(scene.findAreaPath(32, 96, 224, 96), null);
+  assert.equal(scene.navigation.findAreaPath(32, 96, 224, 96), null);
 });
 
 test("a room that opts into route caching must provide a valid key", () => {
   const scene = makeNavigationScene([{ body: { x: 80, y: 32, width: 80, height: 96 } }]);
   scene.room.navigationWalkabilityKey = () => undefined;
-  assert.throws(() => scene.findAreaPath(32, 96, 224, 96), /walkability key must be a string/);
+  assert.throws(() => scene.navigation.findAreaPath(32, 96, 224, 96), /walkability key must be a string/);
 });
 
 test("the register queue can approach the counter's exact front edge", () => {
   const register = { rotation: 0, sprite: { body: { x: 80, y: 40, width: 90, height: 75 } } };
   const scene = makeNavigationScene([], register);
 
-  assert.deepEqual(scene.findAreaPath(125, 200, 125, 129), []);
+  assert.deepEqual(scene.navigation.findAreaPath(125, 200, 125, 129), []);
 });
 
 test("customers clear the captured door-side shelf corner before turning, even from its collision edge", () => {
@@ -439,7 +439,7 @@ test("customers clear the captured door-side shelf corner before turning, even f
       let arrived = false;
       const velocity = { x: 0, y: 0 };
       customer.scene = scene;
-      customer.store = scene;
+      customer.store = scene.navigation.store;
       customer.sprite = { ...start, body: {
         setVelocity(x, y) { Object.assign(velocity, { x, y }); },
       } };
@@ -449,7 +449,7 @@ test("customers clear the captured door-side shelf corner before turning, even f
         customer.followPath(delta);
         const from = { x: customer.sprite.x, y: customer.sprite.y };
         const to = { x: from.x + velocity.x * delta / 1000, y: from.y + velocity.y * delta / 1000 };
-        assert.equal(scene.isStraightWalkClear(from.x, from.y, to.x, to.y), true,
+        assert.equal(scene.navigation.isStraightWalkClear(from.x, from.y, to.x, to.y), true,
           `customer must not cut into the shelf from ${JSON.stringify(from)} to ${JSON.stringify(to)}`);
         Object.assign(customer.sprite, to);
       }
@@ -547,6 +547,7 @@ function makeShelfScene(shelves) {
   scene.getStorePrice = () => 10;
   scene.catalogSystem = { getStorePrice: () => 10 };
   scene.gameState = { market: { getPrice: () => 10 } };
+  scene.customerFlow = new CustomerFlow(scene);
   return scene;
 }
 
@@ -669,14 +670,14 @@ test("random browsing chooses only stocked shelves other than the next stop", ()
   const scene = makeShelfScene([empty, soldOut, first, second]);
 
   for (let i = 0; i < 20; i += 1) {
-    assert.ok([first, second].includes(scene.getRandomBrowseShelf()));
+    assert.ok([first, second].includes(scene.customerFlow.getRandomBrowseShelf()));
   }
-  assert.equal(scene.getRandomBrowseShelf(first), second);
+  assert.equal(scene.customerFlow.getRandomBrowseShelf(first), second);
   first.placements[0].quantity = 0;
-  assert.equal(scene.getRandomBrowseShelf(), second);
-  assert.equal(scene.getRandomBrowseShelf(second), null);
+  assert.equal(scene.customerFlow.getRandomBrowseShelf(), second);
+  assert.equal(scene.customerFlow.getRandomBrowseShelf(second), null);
   second.placements[0].quantity = 0;
-  assert.equal(scene.getRandomBrowseShelf(), null);
+  assert.equal(scene.customerFlow.getRandomBrowseShelf(), null);
 });
 
 test("wanderer routes include stocked shelves while keeping sold-out wants for reporting", (t) => {

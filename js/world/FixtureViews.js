@@ -137,4 +137,13 @@ export class FixtureViews {
     scene.registerGroup.add(sprite); // see registerGroup in create()
     fixture.sprite = sprite;
   }
+
+  refreshStockDisplay(shelf) {
+    shelf?.stockDisplay?.sync();
+    shelf?.stockItemsDisplay?.sync();
+  }
+
+  refreshStockDisplays() {
+    for (const shelf of this.shop.fixtures.shelves()) this.refreshStockDisplay(shelf);
+  }
 }

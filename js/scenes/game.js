@@ -18,7 +18,9 @@ import { ModuleHost } from "../modules/GameModules.js";
 /** @typedef {import("../logic/ShelfFixture.js").ShelfFixture} ShelfFixture */
 import { SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT } from "../logic/Customer.js";
 import { Player } from "../logic/Player.js";
-import { PEOPLE_DEPTH_BASE } from "../world/Depth.js";
+import { sortPeopleByFeet } from "../world/Depth.js";
+import { GoBacksBadge } from "../world/GoBacksBadge.js";
+import { confirmReturnToMainMenu } from "../world/MainMenuPrompt.js";
 import { TileRoom } from "../logic/TileRoom.js";
 import { SlidingDoor } from "../logic/SlidingDoor.js";
 import {
@@ -31,7 +33,6 @@ import { setupSandboxRoom } from "../debug/SandboxRoom.js";
 import { setupUiLab } from "../debug/UiLab.js";
 import { ShelfStockingWindow } from "../logic/ShelfStockingWindow.js";
 import { REGISTER_FRONT_OVERLAP, fixtureFacing } from "../logic/FixtureLayout.js";
-import { UIWindow } from "../logic/UIWindow.js";
 import { Messages, SHOP_MESSAGE_COLOR } from "../world/Messages.js";
 import { ShiftSystem } from "../systems/ShiftSystem.js";
 import { StaffSystem } from "../systems/StaffSystem.js";
@@ -128,7 +129,7 @@ export class GameScene extends Phaser.Scene {
       () => this.saves.saveManually(),
       () => this.shift.endDay(),
       () => this.customerFlow.toggleTemporaryClosure(),
-      () => this.confirmReturnToMainMenu(),
+      () => confirmReturnToMainMenu(this),
     );
 
     this.windowManager = new WindowManager();
@@ -334,31 +335,14 @@ export class GameScene extends Phaser.Scene {
       loop: true,
       callback: () => this.saves.requestAutosave(),
     });
-    // A "!" floats over the player while abandoned items wait in the Go-Backs bin.
-    this.goBacksBadge = this.add.text(0, 0, "!", {
-      fontFamily: "Courier New, monospace",
-      fontSize: "20px",
-      fontStyle: "bold",
-      color: "#fbbf24",
-      stroke: "#111827",
-      strokeThickness: 4,
-    }).setOrigin(0.5, 1).setDepth(9000).setVisible(false);
+    this.goBacksBadge = new GoBacksBadge(this);
     this.gameState.subscribe(() => {
       this.saves.requestAutosave();
-      this.refreshShelfStockDisplays();
+      this.fixtureViews.refreshStockDisplays();
       this.saves.updateControls();
-      this.refreshGoBacksBadge();
+      this.goBacksBadge.refresh();
     });
     this.shiftClock.subscribe(() => this.saves.updateControls());
-  }
-
-  refreshShelfStockDisplay(shelf) {
-    shelf?.stockDisplay?.sync();
-    shelf?.stockItemsDisplay?.sync();
-  }
-
-  refreshShelfStockDisplays() {
-    for (const shelf of this.fixtures.shelves()) this.refreshShelfStockDisplay(shelf);
   }
 
   // --- On-screen messages and menus ---
@@ -371,124 +355,8 @@ export class GameScene extends Phaser.Scene {
     this.messages.show(message, color);
   }
 
-  // Reloading the page (rather than switching scenes) guarantees a completely fresh start
-  // and also picks up code changes during development.
-  confirmReturnToMainMenu() {
-    if (!this.mainMenuWindow) {
-      this.mainMenuWindow = new UIWindow({
-        id: "main-menu-confirmation", title: "MAIN MENU", width: "400px", height: "auto",
-        x: 80, y: 120, shouldCloseOtherWindows: true,
-        contentHTML: `
-          <p>Go back to the title screen? Anything you haven't saved will be lost.</p>
-          <button class="action-btn" data-confirm-main-menu>GO TO TITLE SCREEN</button>
-          <button class="action-btn" data-cancel-main-menu>KEEP PLAYING</button>
-        `,
-      }, this.windowManager);
-      this.mainMenuWindow.element.querySelector("[data-confirm-main-menu]")
-        .addEventListener("click", () => window.location.reload());
-      this.mainMenuWindow.element.querySelector("[data-cancel-main-menu]")
-        .addEventListener("click", () => this.mainMenuWindow.close());
-    }
-    this.mainMenuWindow.openWindow();
-  }
-
-  // --- Pathfinding ---
-
-  /**
-   * @param {ShelfFixture | null} [excludedShelf] - the customer's next planned stop
-   * @returns {ShelfFixture | null} a different currently stocked shelf to browse
-   */
-  getRandomBrowseShelf(excludedShelf = null) {
-    const shelves = this.fixtures.shelves().filter((shelf) =>
-      shelf !== excludedShelf && shelf.findAvailableSlot(),
-    );
-    return shelves.length ? gameRandom.pick(shelves) : null;
-  }
-
-  getNavigationObstacles(bodySize = { width: SPRITE_DISPLAY_WIDTH, height: SPRITE_DISPLAY_HEIGHT }) {
-    return this.navigation.getNavigationObstacles(bodySize);
-  }
-
-  isNavigationSegmentClear(from, to, obstacles) {
-    return this.navigation.isNavigationSegmentClear(from, to, obstacles);
-  }
-
-  // Whether a character-sized body can move directly between two world positions.
-  isStraightWalkClear(fromX, fromY, toX, toY, bodySize) {
-    return this.navigation.isStraightWalkClear(fromX, fromY, toX, toY, bodySize);
-  }
-
-  /**
-   * A smoothed path between two world points, routed around walls and fixtures. Null means
-   * no safe route exists and must not be treated as a direct path.
-   * @param {number} fromX - px
-   * @param {number} fromY - px
-   * @param {number} toX - px
-   * @param {number} toY - px
-   * @param {{width: number, height: number}} [bodySize] - collision size in px; defaults to a customer
-   * @returns {Array<{ x: number, y: number }> | null} world-space waypoints
-   */
-  findPath(fromX, fromY, toX, toY, bodySize) {
-    return this.navigation.findPath(fromX, fromY, toX, toY, bodySize);
-  }
-
-  findAreaPath(fromX, fromY, toX, toY, bodySize) {
-    return this.navigation.findAreaPath(fromX, fromY, toX, toY, bodySize);
-  }
-
-  // People (player, customers, staff) are drawn lower-on-screen in front: a customer walking
-  // down past someone passes behind them. Everyone stays above shelves and floor crates.
-  sortPeopleByFeet() {
-    const people = [
-      this.player?.sprite,
-      ...this.customers.map((customer) => (customer.isDestroyed ? null : customer.sprite)),
-      ...this.employees.map((employee) => employee.sprite),
-    ];
-    for (const sprite of people) {
-      if (sprite?.active) sprite.setDepth(PEOPLE_DEPTH_BASE + (sprite.body?.bottom ?? sprite.y));
-    }
-    // Tucked behind the counter, the register draws just over him and hides his legs.
-    if (this.checkoutSystem.registerDepthBeforeTuck != null && this.player?.sprite) {
-      this.checkoutSystem.operatingRegisterFixture?.sprite?.setDepth(this.player.sprite.depth + 0.5);
-    }
-  }
-
   showFloatingText(x, y, text, color) {
     this.messages.floatText(x, y, text, color);
-  }
-
-  // --- Go-Backs badge ---
-
-  refreshGoBacksBadge() {
-    const count = this.gameState.goBacks.stock.reduce((sum, entry) => sum + entry.quantity, 0);
-    this.goBacksBadge.setVisible(count > 0);
-    this.positionGoBacksBadge();
-  }
-
-  positionGoBacksBadge() {
-    if (!this.goBacksBadge?.visible || !this.player?.sprite) return;
-    const bounds = this.player.sprite.getBounds();
-    this.goBacksBadge.setScale(this.cameraRig.popupScale()).setPosition(bounds.centerX, bounds.top - 2);
-  }
-
-  // --- Register ---
-
-  // Clicking the register or pressing E nearby always puts the player behind the counter,
-  // customer or not; only the scan window needs someone at the front of the line. A
-  // customer who arrives later opens it automatically (see handleJoinQueue).
-  getItem(itemId) {
-    return database.getItem(itemId);
-  }
-
-  // --- Register queue and checkout ---
-
-  /**
-   * The customer line for one register, created on first use.
-   * @param {object} register - register fixture
-   * @returns {Customer[]}
-   */
-  noteCustomerGaveUp(customer, reason) {
-    this.sandboxRoom?.noteGaveUp(customer, reason);
   }
 
   // --- Frame update and shift flow ---
@@ -510,7 +378,7 @@ export class GameScene extends Phaser.Scene {
     const mode = this.controlMode.getMode();
     const movementFrozen = (this.shiftClock.isPaused && this.shiftClock.started) ||
       mode === CONTROL_MODES.LOADING;
-    this.sortPeopleByFeet();
+    sortPeopleByFeet(this);
 
     if (movementFrozen) {
       // Skipping customer update() also freezes their state-machine timers, not just movement.
@@ -535,7 +403,7 @@ export class GameScene extends Phaser.Scene {
     this.gameModules.update(time, delta);
 
     this.shiftClock.update(delta);
-    this.positionGoBacksBadge();
+    this.goBacksBadge.position();
     this.controls.updatePresses();
     this.interactionSystem.updateHint();
     this.crateSystem.updateCrateMarker();
