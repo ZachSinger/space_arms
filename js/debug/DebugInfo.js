@@ -6,6 +6,7 @@
 // See also: main.js (writes captures to the debug folder).
 import { CUSTOMER_POOL_TUNING } from "../logic/CustomerPooling.js";
 import { SHIFT_DURATION_MS } from "../logic/ShiftClock.js";
+import { GAME_EVENTS } from "../core/Events.js";
 
 // Oldest events are dropped past this count.
 const MAX_RECENT_EVENTS = 200;
@@ -252,6 +253,26 @@ export class DebugInfo {
 
   recordCustomer(type, customer) {
     this.record(type, snapshotCustomer(customer, this.identifyCustomer(customer)));
+  }
+
+  // Game events worth keeping in the capture's recent-events list.
+  listen(eventBus) {
+    eventBus.on(GAME_EVENTS.CUSTOMER_HIT_BY_CRATE, ({ customer }) => this.recordCustomer("customer-hit-by-crate", customer));
+    eventBus.on(GAME_EVENTS.CUSTOMER_MISSING_PRIMARY, ({ customer, itemIds }) => {
+      this.record("customer-missing-primary", { customerId: this.identifyCustomer(customer), itemIds });
+    });
+    for (const [event, name] of [
+      [GAME_EVENTS.CRATE_PICKED_UP, "crate-picked-up"],
+      [GAME_EVENTS.CRATE_DROPPED, "crate-dropped"],
+      [GAME_EVENTS.FIXTURE_OPENED, "fixture-opened"],
+      [GAME_EVENTS.INVENTORY_TRANSFERRED, "inventory-transferred"],
+      [GAME_EVENTS.REGISTER_SESSION_ENDED, "register-session-ended"],
+      [GAME_EVENTS.REGISTER_SESSION_STARTED, "register-session-started"],
+      [GAME_EVENTS.SHIFT_ENDED, "shift-ended"],
+      [GAME_EVENTS.SHIFT_STARTED, "shift-started"],
+    ]) {
+      eventBus.on(event, (details) => this.record(name, details));
+    }
   }
 
   showStatus(message, failed = false) {

@@ -17,12 +17,8 @@ import { InteractionSystem } from "../interaction/InteractionSystem.js";
 import { ModuleHost } from "../modules/GameModules.js";
 /** @typedef {import("../logic/ShelfFixture.js").ShelfFixture} ShelfFixture */
 import { SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT } from "../logic/Customer.js";
-import { isMoney, roundMoney } from "../logic/Money.js";
-import { CUSTOMER_TRAITS } from "../logic/CustomerTraits.js";
-import { getLicensedFactionIds } from "../logic/CustomerPooling.js";
 import { Player } from "../logic/Player.js";
 import { PEOPLE_DEPTH_BASE } from "../world/Depth.js";
-import { getCrateOrderQuantity } from "../logic/SupplyOrder.js";
 import { TileRoom } from "../logic/TileRoom.js";
 import { SlidingDoor } from "../logic/SlidingDoor.js";
 import {
@@ -50,6 +46,7 @@ import { createCustomerStore, createEmployeeStore } from "../systems/CharacterSt
 import { CheckoutSystem } from "../systems/CheckoutSystem.js";
 import { CrateSystem } from "../systems/CrateSystem.js";
 import { CatalogSystem } from "../systems/CatalogSystem.js";
+import { ReputationPenalties } from "../systems/ReputationPenalties.js";
 import { CrateWorld } from "../world/CrateWorld.js";
 import { Navigation } from "../world/Navigation.js";
 import { CheckoutWindow } from "../logic/CheckoutWindow.js";
@@ -62,19 +59,6 @@ import { gameRandom, randomSeed } from "../core/Random.js";
 // under the top of the door opening (opening top is 24px above center, heads ~42px tall,
 // tallest art reaches 50px).
 const DOORWAY_FEET_OFFSET = 30;
-
-function reputationPenaltyText(penalty, factionId) {
-  const faction = factionId ? CUSTOMER_TRAITS[factionId] : null;
-  if (factionId && !faction?.group) throw new Error(`Unknown customer faction: ${factionId}.`);
-  return `-${penalty} store reputation${faction ? `\n-${penalty} ${faction.name} reputation` : ""}\nat shift end`;
-}
-
-// Reputation lost when a thrown crate hits a customer.
-const CRATE_HIT_REPUTATION_PENALTY = 1;
-// Reputation lost when a customer leaves the queue without a sale.
-const ANGRY_REPUTATION_PENALTY = 1;
-// Reputation lost once when a customer cannot find any of their primary items.
-const MISSING_PRIMARY_REPUTATION_PENALTY = 1;
 
 /**
  * The playable shop scene ("scene-game"), started from the title scene.
@@ -308,59 +292,13 @@ export class GameScene extends Phaser.Scene {
     this.managerTablet = new ManagerTablet(this.windowManager, this.gameState, this);
     // REAL games run without the debug recorder; every call site uses debugInfo?.
     this.debugInfo = this.realMode ? null : new DebugInfo(this);
-    this.eventBus.on(GAME_EVENTS.CUSTOMER_HIT_BY_CRATE, ({ customer }) => {
-      const penalty = CRATE_HIT_REPUTATION_PENALTY;
-      customer.gameState.reputation.lose(penalty, customer.factionId);
-      this.showFloatingText(
-        customer.sprite.x,
-        customer.sprite.y - 50,
-        `Customer hit!\n${reputationPenaltyText(penalty, customer.factionId)}`,
-        "#ef4444",
-      );
-      this.debugInfo?.recordCustomer("customer-hit-by-crate", customer);
-    });
+    this.reputationPenalties = new ReputationPenalties(this);
+    this.reputationPenalties.listen(this.eventBus);
     this.eventBus.on(GAME_EVENTS.CUSTOMER_LEFT_ANGRY, ({ customer, cart }) => {
-      const penalty = ANGRY_REPUTATION_PENALTY;
-      customer.gameState.reputation.lose(penalty, customer.factionId);
-      this.showFloatingText(
-        customer.sprite.x,
-        customer.sprite.y - 50,
-        `Left angry!\n${reputationPenaltyText(penalty, customer.factionId)}`,
-        "#ef4444",
-      );
       this.checkoutSystem.handleAngryLeave(customer, cart);
     });
-    this.eventBus.on(GAME_EVENTS.CUSTOMER_MISSING_PRIMARY, ({ customer, itemIds, itemNames }) => {
-      const penalty = MISSING_PRIMARY_REPUTATION_PENALTY;
-      customer.gameState.reputation.lose(penalty, customer.factionId);
-      this.showFloatingText(
-        customer.sprite.x,
-        customer.sprite.y - 50,
-        `Out of stock:\n${itemNames.join("\n")}\n${reputationPenaltyText(penalty, customer.factionId)}`,
-        "#ef4444",
-      );
-      this.debugInfo?.record("customer-missing-primary", {
-        customerId: this.debugInfo.identifyCustomer(customer),
-        itemIds,
-      });
-    });
     this.shift.listen(this.eventBus);
-    for (const [event, name] of [
-      [GAME_EVENTS.CRATE_PICKED_UP, "crate-picked-up"],
-      [GAME_EVENTS.CRATE_DROPPED, "crate-dropped"],
-      [GAME_EVENTS.FIXTURE_OPENED, "fixture-opened"],
-      [GAME_EVENTS.INVENTORY_TRANSFERRED, "inventory-transferred"],
-      [GAME_EVENTS.REGISTER_SESSION_ENDED, "register-session-ended"],
-      [GAME_EVENTS.REGISTER_SESSION_STARTED, "register-session-started"],
-    ]) {
-      this.eventBus.on(event, (details) => this.debugInfo?.record(name, details));
-    }
-    this.eventBus.on(GAME_EVENTS.SHIFT_ENDED, (details) => {
-      this.debugInfo?.record("shift-ended", details);
-    });
-    this.eventBus.on(GAME_EVENTS.SHIFT_STARTED, (details) => {
-      this.debugInfo?.record("shift-started", details);
-    });
+    this.debugInfo?.listen(this.eventBus);
     // Debug tools are keyboard shortcuts plus HUD buttons; REAL games remove them all.
     DebugTools.showButtons(!this.realMode);
     this.debugTools = this.realMode ? null : new DebugTools(this);
