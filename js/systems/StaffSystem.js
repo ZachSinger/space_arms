@@ -102,13 +102,13 @@ export class StaffSystem {
     return true;
   }
 
-  moveJobPriority(employeeId, jobId, direction) {
+  prioritizeJob(employeeId, jobId) {
     const { shop } = this;
     if (!this.canManage()) {
       shop.messages.show("Staff job priorities can only be changed between shifts.");
       return false;
     }
-    if (!this.staff.moveJobPriority(employeeId, jobId, direction)) return false;
+    if (!this.staff.prioritizeJob(employeeId, jobId)) return false;
     shop.saves.requestAutosave();
     return true;
   }

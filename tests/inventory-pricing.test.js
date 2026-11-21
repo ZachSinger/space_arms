@@ -586,22 +586,22 @@ test("reopening the tablet refreshes the employee panel", () => {
   assert.equal(refreshed, 1);
 });
 
-test("employee priority choices select the other job and ignore the selected job", () => {
+test("employee priority choices put the chosen job first and ignore the selected job", () => {
   const { body, scene, tablet } = createHarness();
   const calls = [];
-  scene.staffSystem.moveJobPriority = (...args) => { calls.push(args); return true; };
+  scene.staffSystem.prioritizeJob = (...args) => { calls.push(args); return true; };
   const choice = (pressed) => Object.assign(new TestElement(), {
-    dataset: { employeePriorityId: "tavi_stock_clerk", employeePriorityJob: "stock_shelves" },
+    dataset: { employeePriorityId: "tavi_stock_clerk", employeePriorityJob: "clean" },
     getAttribute: () => String(pressed),
     closest(selector) { return selector === "button[data-employee-priority-id]" ? this : null; },
   });
   body.emit("click", { target: choice(false) });
-  assert.deepEqual(calls, [["tavi_stock_clerk", "stock_shelves", -1]]);
+  assert.deepEqual(calls, [["tavi_stock_clerk", "clean"]]);
   body.emit("click", { target: choice(true) });
   assert.equal(calls.length, 1);
 
   let refreshed = 0;
-  scene.staffSystem.moveJobPriority = () => false;
+  scene.staffSystem.prioritizeJob = () => false;
   tablet.employeeTab.redraw = () => { refreshed += 1; };
   body.emit("click", { target: choice(false) });
   assert.equal(refreshed, 1);

@@ -7,9 +7,14 @@ import { DatabaseManager } from "../js/logic/DatabaseManager.js";
 import { validateShopSave } from "../js/logic/ShopSave.js";
 import { SHOP_LAYOUT_VERSION } from "../js/state/migrations/index.js";
 import { upgradeContractSplit } from "../js/state/migrations/contractSplit.js";
+import { migratePreWarAmmoContract } from "../js/state/migrations/preWarAmmoContract.js";
 
 const dir = new URL("./golden-saves/", import.meta.url);
 const read = (name) => JSON.parse(readFileSync(new URL(name, dir), "utf8"));
+const upgradeExpected = (data) => ({
+  ...migratePreWarAmmoContract(upgradeContractSplit(data)),
+  layoutVersion: SHOP_LAYOUT_VERSION,
+});
 const database = new DatabaseManager();
 database.loadItemsJSON(JSON.parse(readFileSync(new URL("../data/Items.json", import.meta.url), "utf8")));
 database.loadLicensesJSON(JSON.parse(readFileSync(new URL("../data/Licenses.json", import.meta.url), "utf8")));
@@ -27,7 +32,7 @@ for (const name of names) {
   test(`golden save "${name}" loads exactly as before the rebuild`, () => {
     // The contract split used to happen while loading the player; it now happens in the save upgrade.
     assert.deepEqual(validateShopSave(read(`${name}.json`), database),
-      upgradeContractSplit(read(`${name}.expected.json`)));
+      upgradeExpected(read(`${name}.expected.json`)));
   });
 
   test(`golden save "${name}" is unchanged by a second check`, () => {

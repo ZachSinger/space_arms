@@ -53,7 +53,7 @@
     "description": "Boxes, tins, and speed-loaders of ordinary pistol ammunition.",
     "tier": 1,
     "baseCost": 200,
-    "requiredShopLevel": 4,
+    "requiredShopLevel": 3,
     "reqReputation": null
   },
   {
@@ -70,10 +70,10 @@
   {
     "id": "lic_start_long_guns",
     "name": "Scrap-Yard Long Guns",
-    "description": "Stamped-kit rifles, a scatter-rifle, and a rocket launcher of uncertain origin.",
+    "description": "A stamped-kit rifle of uncertain origin.",
     "tier": 1,
     "baseCost": 200,
-    "requiredShopLevel": 6,
+    "requiredShopLevel": 8,
     "reqReputation": null,
     "reqFaction": "scavengers",
     "reqFactionRep": 0,
@@ -94,7 +94,7 @@
     "description": "Magazines, buckets, and crates of ordinary rifle ammunition.",
     "tier": 1,
     "baseCost": 350,
-    "requiredShopLevel": 7,
+    "requiredShopLevel": 8,
     "reqReputation": null,
     "splitFrom": "lic_start_ammo"
   },
@@ -104,7 +104,7 @@
     "description": "Welding torches, spanners, and rust removers for salvage crews.",
     "tier": 1,
     "baseCost": 25,
-    "requiredShopLevel": 7,
+    "requiredShopLevel": 9,
     "reqReputation": null,
     "reqFaction": "explorers",
     "reqFactionRep": 2
@@ -115,7 +115,7 @@
     "description": "Helmets, chest rigs, leg guards, and gauntlets riveted from scrap plate.",
     "tier": 1,
     "baseCost": 300,
-    "requiredShopLevel": 8,
+    "requiredShopLevel": 11,
     "reqReputation": null,
     "reqFaction": "scavengers",
     "reqFactionRep": 2,
@@ -127,7 +127,7 @@
     "description": "Loafers, sneakers, and high-tops from Lyra Synthetics.",
     "tier": 1,
     "baseCost": 100,
-    "requiredShopLevel": 8,
+    "requiredShopLevel": 9,
     "reqReputation": null,
     "splitFrom": "lic_start_apparel"
   },
@@ -137,7 +137,7 @@
     "description": "Homemade magazines and grips for patching up old guns.",
     "tier": 1,
     "baseCost": 150,
-    "requiredShopLevel": 9,
+    "requiredShopLevel": 12,
     "reqReputation": null,
     "reqFaction": "scavengers",
     "reqFactionRep": 5
@@ -148,7 +148,7 @@
     "description": "Civilian laser rifles and pistols, with the batteries to run them.",
     "tier": 2,
     "baseCost": 225,
-    "requiredShopLevel": 9,
+    "requiredShopLevel": 14,
     "reqReputation": null
   },
   {
@@ -157,7 +157,7 @@
     "description": "Scatter shells, breaching slugs, and a recoilless cannon to fire the big ones.",
     "tier": 2,
     "baseCost": 1000,
-    "requiredShopLevel": 10,
+    "requiredShopLevel": 16,
     "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 10
@@ -168,7 +168,7 @@
     "description": "Cargo pants, leggings, and a bubble void helm from Lyra Synthetics.",
     "tier": 1,
     "baseCost": 125,
-    "requiredShopLevel": 10,
+    "requiredShopLevel": 11,
     "reqReputation": null,
     "splitFrom": "lic_start_apparel"
   },
@@ -178,7 +178,7 @@
     "description": "Plasma cutters, core drills, and tether winches for serious salvage work.",
     "tier": 1,
     "baseCost": 100,
-    "requiredShopLevel": 10,
+    "requiredShopLevel": 16,
     "reqReputation": null,
     "reqFaction": "explorers",
     "reqFactionRep": 2,
@@ -190,7 +190,7 @@
     "description": "High-tier close combat tools including mono-katanas, plasma-axes, and stun batons.",
     "tier": 3,
     "baseCost": 2500,
-    "requiredShopLevel": 11,
+    "requiredShopLevel": 17,
     "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 15
@@ -201,7 +201,7 @@
     "description": "Civilian space suits and helmets from Stellaris Dynamics.",
     "tier": 2,
     "baseCost": 1275,
-    "requiredShopLevel": 11,
+    "requiredShopLevel": 19,
     "reqReputation": null,
     "splitFrom": "lic_corp_stellaris"
   },
@@ -211,7 +211,7 @@
     "description": "Pipe stocks, sawed-off chokes, and loud compensators.",
     "tier": 1,
     "baseCost": 200,
-    "requiredShopLevel": 11,
+    "requiredShopLevel": 12,
     "reqReputation": null,
     "reqFaction": "scavengers",
     "reqFactionRep": 5,
@@ -223,7 +223,7 @@
     "description": "Unforgiving, steel-plated industrial pressure suits and reinforced greaves.",
     "tier": 3,
     "baseCost": 3000,
-    "requiredShopLevel": 12,
+    "requiredShopLevel": 20,
     "reqReputation": null
   },
   {
@@ -232,7 +232,7 @@
     "description": "Work gloves, mag-grip boots, and pullovers for dock and station crews.",
     "tier": 2,
     "baseCost": 600,
-    "requiredShopLevel": 12,
+    "requiredShopLevel": 19,
     "reqReputation": null
   },
   {
@@ -241,7 +241,7 @@
     "description": "A mining laser, battery packs, and a salvaged micro-generator.",
     "tier": 1,
     "baseCost": 225,
-    "requiredShopLevel": 12,
+    "requiredShopLevel": 20,
     "reqReputation": null,
     "reqFaction": "explorers",
     "reqFactionRep": 2,
@@ -253,7 +253,7 @@
     "description": "Glowing iron sights and welded tube-sights.",
     "tier": 1,
     "baseCost": 50,
-    "requiredShopLevel": 12,
+    "requiredShopLevel": 17,
     "reqReputation": null,
     "reqFaction": "scavengers",
     "reqFactionRep": 5,
@@ -265,7 +265,7 @@
     "description": "Batteries, foregrips, stocks, and flashlights for Stellaris guns.",
     "tier": 2,
     "baseCost": 75,
-    "requiredShopLevel": 13,
+    "requiredShopLevel": 14,
     "reqReputation": null,
     "splitFrom": "lic_corp_stellaris"
   },
@@ -275,7 +275,7 @@
     "description": "Solar hoods, work trousers, and smart-goggles.",
     "tier": 2,
     "baseCost": 1000,
-    "requiredShopLevel": 13,
+    "requiredShopLevel": 21,
     "reqReputation": null,
     "splitFrom": "lic_corp_labor"
   },
@@ -285,7 +285,7 @@
     "description": "Scrubs, clean-room boots, and sterilization gloves.",
     "tier": 2,
     "baseCost": 475,
-    "requiredShopLevel": 13,
+    "requiredShopLevel": 21,
     "reqReputation": null
   },
   {
@@ -294,7 +294,7 @@
     "description": "Space suits built for frozen, burning, and long-haul worlds.",
     "tier": 3,
     "baseCost": 7075,
-    "requiredShopLevel": 13,
+    "requiredShopLevel": 24,
     "reqReputation": null,
     "reqFaction": "explorers",
     "reqFactionRep": 25
@@ -305,7 +305,7 @@
     "description": "Standard suits, coveralls, jackets, and trousers from Arx.",
     "tier": 2,
     "baseCost": 3125,
-    "requiredShopLevel": 14,
+    "requiredShopLevel": 25,
     "reqReputation": null,
     "splitFrom": "lic_corp_labor"
   },
@@ -315,7 +315,7 @@
     "description": "Sealed hazard suits, rebreathers, aprons, visors, and responder jackets.",
     "tier": 2,
     "baseCost": 4050,
-    "requiredShopLevel": 14,
+    "requiredShopLevel": 27,
     "reqReputation": null,
     "splitFrom": "lic_corp_hazard"
   },
@@ -325,7 +325,7 @@
     "description": "Oxygen canisters, carbon filters, and basic trauma kits.",
     "tier": 2,
     "baseCost": 625,
-    "requiredShopLevel": 14,
+    "requiredShopLevel": 24,
     "reqReputation": null,
     "splitFrom": "lic_corp_hazard"
   },
@@ -335,7 +335,7 @@
     "description": "Pressurized helmets and gloves for explorers.",
     "tier": 3,
     "baseCost": 1650,
-    "requiredShopLevel": 14,
+    "requiredShopLevel": 26,
     "reqReputation": null,
     "reqFaction": "explorers",
     "reqFactionRep": 25,
@@ -347,7 +347,7 @@
     "description": "Wholesale supplier of heavy plasma canisters, tactical coolant rigs, and thermal batteries.",
     "tier": 3,
     "baseCost": 8000,
-    "requiredShopLevel": 15,
+    "requiredShopLevel": 28,
     "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 20
@@ -358,7 +358,7 @@
     "description": "Focusing lenses, thermal and astro scopes, and a plasma projector.",
     "tier": 2,
     "baseCost": 925,
-    "requiredShopLevel": 15,
+    "requiredShopLevel": 28,
     "reqReputation": null,
     "splitFrom": "lic_corp_stellaris"
   },
@@ -368,7 +368,7 @@
     "description": "Welder masks, padded trousers, and steel-toe and deck-tread boots.",
     "tier": 2,
     "baseCost": 1275,
-    "requiredShopLevel": 15,
+    "requiredShopLevel": 25,
     "reqReputation": null,
     "splitFrom": "lic_corp_labor"
   },
@@ -378,7 +378,7 @@
     "description": "Pressurized boots, deployable shelters, and distress beacons.",
     "tier": 3,
     "baseCost": 1775,
-    "requiredShopLevel": 15,
+    "requiredShopLevel": 26,
     "reqReputation": null,
     "reqFaction": "explorers",
     "reqFactionRep": 25,
@@ -390,7 +390,7 @@
     "description": "Aulin's assault rifle and sidearm, with high-capacity magazines.",
     "tier": 2,
     "baseCost": 5300,
-    "requiredShopLevel": 16,
+    "requiredShopLevel": 29,
     "reqReputation": null
   },
   {
@@ -399,7 +399,7 @@
     "description": "Bio-shield helmets, haz-mat visors, and armored medical jackets.",
     "tier": 2,
     "baseCost": 2850,
-    "requiredShopLevel": 16,
+    "requiredShopLevel": 30,
     "reqReputation": null,
     "splitFrom": "lic_corp_hazard"
   },
@@ -409,7 +409,7 @@
     "description": "Acid-resistant leggings and sealed or impact-damped boots.",
     "tier": 2,
     "baseCost": 1525,
-    "requiredShopLevel": 16,
+    "requiredShopLevel": 27,
     "reqReputation": null,
     "splitFrom": "lic_corp_hazard"
   },
@@ -419,7 +419,7 @@
     "description": "Assault helmets, flak vests, and active repulsor armor.",
     "tier": 3,
     "baseCost": 7800,
-    "requiredShopLevel": 17,
+    "requiredShopLevel": 31,
     "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 20
@@ -430,7 +430,7 @@
     "description": "HUD helmets, pressurized gloves, and mag boots.",
     "tier": 3,
     "baseCost": 1700,
-    "requiredShopLevel": 17,
+    "requiredShopLevel": 30,
     "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 20,
@@ -442,7 +442,7 @@
     "description": "Vertical grips, core stocks, and target-painter lasers.",
     "tier": 2,
     "baseCost": 1225,
-    "requiredShopLevel": 17,
+    "requiredShopLevel": 29,
     "reqReputation": null,
     "splitFrom": "lic_corp_aulin"
   },
@@ -452,7 +452,7 @@
     "description": "The MK-IV pulse rifle with its coolant rig and cooling shroud.",
     "tier": 3,
     "baseCost": 1800,
-    "requiredShopLevel": 18,
+    "requiredShopLevel": 33,
     "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 25
@@ -463,7 +463,7 @@
     "description": "Juggernaut, Centurion, and Vanguard armored suits.",
     "tier": 3,
     "baseCost": 7425,
-    "requiredShopLevel": 18,
+    "requiredShopLevel": 34,
     "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 25,
@@ -475,7 +475,7 @@
     "description": "Suppressors, holographic sights, and micro-reflex sights.",
     "tier": 2,
     "baseCost": 1975,
-    "requiredShopLevel": 18,
+    "requiredShopLevel": 31,
     "reqReputation": null,
     "splitFrom": "lic_corp_aulin"
   },
@@ -485,7 +485,7 @@
     "description": "Scout rifles, mag-pistols, and budget reflex sights for security work.",
     "tier": 2,
     "baseCost": 2350,
-    "requiredShopLevel": 19,
+    "requiredShopLevel": 35,
     "reqReputation": null
   },
   {
@@ -494,7 +494,7 @@
     "description": "The Crowd-Pleaser flak cannon and its canisters.",
     "tier": 2,
     "baseCost": 7400,
-    "requiredShopLevel": 19,
+    "requiredShopLevel": 36,
     "reqReputation": null,
     "splitFrom": "lic_corp_omni"
   },
@@ -504,7 +504,7 @@
     "description": "Breaching shields, riot walls, and deflector energy shields.",
     "tier": 3,
     "baseCost": 4200,
-    "requiredShopLevel": 19,
+    "requiredShopLevel": 34,
     "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 25,
@@ -516,7 +516,7 @@
     "description": "Rail-sniper rifles, machine pistols, and magnetic spikes.",
     "tier": 3,
     "baseCost": 5500,
-    "requiredShopLevel": 20,
+    "requiredShopLevel": 35,
     "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 30
@@ -527,7 +527,7 @@
     "description": "Bipod grips, wire stocks, sirens, flash-hiders, and reflex sights.",
     "tier": 2,
     "baseCost": 1225,
-    "requiredShopLevel": 20,
+    "requiredShopLevel": 36,
     "reqReputation": null,
     "splitFrom": "lic_corp_omni"
   },
@@ -537,7 +537,7 @@
     "description": "Heavy braces, breacher strobes, and long-range scopes.",
     "tier": 3,
     "baseCost": 1600,
-    "requiredShopLevel": 20,
+    "requiredShopLevel": 33,
     "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 25,
@@ -549,9 +549,20 @@
     "description": "Highly regulated access to mortars, unguided RPGs, and heavy counter-weight weapon stocks.",
     "tier": 3,
     "baseCost": 3000,
-    "requiredShopLevel": 21,
+    "requiredShopLevel": 38,
     "reqReputation": null,
     "reqFaction": "mercenaries",
+    "reqFactionRep": 40
+  },
+  {
+    "id": "lic_edge_antique_ammo",
+    "name": "Pre-War Ammunition",
+    "description": "Heavy pistol and rifle ammunition sourced alongside the Pre-War firearms that use it.",
+    "tier": 4,
+    "baseCost": 350,
+    "requiredShopLevel": 41,
+    "reqReputation": null,
+    "reqFaction": "scavengers",
     "reqFactionRep": 40
   },
   {
@@ -560,7 +571,7 @@
     "description": "The K-200 Gauss Cannon and its depleted uranium slugs.",
     "tier": 3,
     "baseCost": 8050,
-    "requiredShopLevel": 21,
+    "requiredShopLevel": 38,
     "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 30,
@@ -572,7 +583,7 @@
     "description": "Laser welders, pocket multi-tools, and soldering irons.",
     "tier": 2,
     "baseCost": 3400,
-    "requiredShopLevel": 22,
+    "requiredShopLevel": 40,
     "reqReputation": null
   },
   {
@@ -581,7 +592,7 @@
     "description": "Premium weapon enhancements including biometric grips, speed-loaders, and eye-tracking smart optics.",
     "tier": 4,
     "baseCost": 6000,
-    "requiredShopLevel": 22,
+    "requiredShopLevel": 43,
     "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 45
@@ -592,7 +603,7 @@
     "description": "High-feed spools, mag-grips, shock absorbers, and anomaly sensors.",
     "tier": 3,
     "baseCost": 1650,
-    "requiredShopLevel": 22,
+    "requiredShopLevel": 39,
     "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 30,
@@ -604,7 +615,7 @@
     "description": "A private network sourcing perfectly preserved Pre-War ballistic weapons and wooden sporting goods.",
     "tier": 4,
     "baseCost": 18000,
-    "requiredShopLevel": 23,
+    "requiredShopLevel": 41,
     "reqReputation": null,
     "reqFaction": "scavengers",
     "reqFactionRep": 40
@@ -615,7 +626,7 @@
     "description": "Decrypters, dosimeters, biosphere analyzers, and bore-scopes.",
     "tier": 2,
     "baseCost": 8600,
-    "requiredShopLevel": 23,
+    "requiredShopLevel": 40,
     "reqReputation": null,
     "splitFrom": "lic_corp_diagnostics"
   },
@@ -625,7 +636,7 @@
     "description": "Accelerator coils plus X-ray and multi-spectral optics.",
     "tier": 3,
     "baseCost": 2275,
-    "requiredShopLevel": 23,
+    "requiredShopLevel": 39,
     "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 30,
@@ -637,7 +648,7 @@
     "description": "Autocannon belts, belt-boxes, and heavy handles.",
     "tier": 4,
     "baseCost": 2300,
-    "requiredShopLevel": 24,
+    "requiredShopLevel": 44,
     "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 55
@@ -648,7 +659,7 @@
     "description": "Counter-weight stocks, friend-foe scanners, heavy barrels, and artillery sights.",
     "tier": 4,
     "baseCost": 3700,
-    "requiredShopLevel": 24,
+    "requiredShopLevel": 47,
     "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 55,
@@ -660,7 +671,7 @@
     "description": "Under-the-counter access to severe trauma solutions like anti-radiation flush and synthetic skin.",
     "tier": 4,
     "baseCost": 3000,
-    "requiredShopLevel": 25,
+    "requiredShopLevel": 42,
     "reqReputation": null,
     "reqFaction": "scavengers",
     "reqFactionRep": 45
@@ -671,7 +682,7 @@
     "description": "Industrial-grade plasma cutters, hydraulic spreaders, and heavy pneumatic rivet guns.",
     "tier": 2,
     "baseCost": 3000,
-    "requiredShopLevel": 26,
+    "requiredShopLevel": 43,
     "reqReputation": null
   },
   {
@@ -680,7 +691,7 @@
     "description": "The Avalanche rotary gun and Dragon muzzle brake.",
     "tier": 2,
     "baseCost": 7925,
-    "requiredShopLevel": 27,
+    "requiredShopLevel": 44,
     "reqReputation": null,
     "splitFrom": "lic_corp_vanguard"
   },
@@ -690,7 +701,7 @@
     "description": "Needle-carbines, micro-emitters, phase-daggers, and smart-flechettes.",
     "tier": 4,
     "baseCost": 21875,
-    "requiredShopLevel": 28,
+    "requiredShopLevel": 48,
     "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 60
@@ -701,7 +712,7 @@
     "description": "Silk-drums, smart-grips, and bio-scanners.",
     "tier": 4,
     "baseCost": 3150,
-    "requiredShopLevel": 28,
+    "requiredShopLevel": 48,
     "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 60,
@@ -713,7 +724,7 @@
     "description": "Repeaters, hand cannons, drum magazines, and combat knives.",
     "tier": 2,
     "baseCost": 6200,
-    "requiredShopLevel": 29,
+    "requiredShopLevel": 45,
     "reqReputation": null
   },
   {
@@ -722,7 +733,7 @@
     "description": "Angled grips, recoil-pad stocks, arm braces, and motion trackers.",
     "tier": 2,
     "baseCost": 1575,
-    "requiredShopLevel": 29,
+    "requiredShopLevel": 45,
     "reqReputation": null,
     "splitFrom": "lic_corp_vanguard"
   },
@@ -732,7 +743,7 @@
     "description": "Range-finders, prism optics, low-light amplifiers, and ghost rings.",
     "tier": 2,
     "baseCost": 2300,
-    "requiredShopLevel": 29,
+    "requiredShopLevel": 47,
     "reqReputation": null,
     "splitFrom": "lic_corp_vanguard"
   },
@@ -742,7 +753,7 @@
     "description": "Frictionless barrels, neural-link HUDs, and predictive sights.",
     "tier": 4,
     "baseCost": 4975,
-    "requiredShopLevel": 29,
+    "requiredShopLevel": 50,
     "reqReputation": null,
     "reqFaction": "mercenaries",
     "reqFactionRep": 60,
@@ -754,7 +765,7 @@
     "description": "Highly illegal or fiercely regulated weaponry, including singularity launchers and archaic liquid fuel.",
     "tier": 4,
     "baseCost": 25000,
-    "requiredShopLevel": 30,
+    "requiredShopLevel": 50,
     "reqReputation": null,
     "reqFaction": "explorers",
     "reqFactionRep": 50

@@ -95,10 +95,9 @@ export class EmployeeTab {
 
     const priorityButton = event.target.closest(EMPLOYEE_PRIORITY_SELECTOR);
     if (!priorityButton || priorityButton.getAttribute("aria-pressed") === "true") return;
-    const changed = this.scene.staffSystem.moveJobPriority(
+    const changed = this.scene.staffSystem.prioritizeJob(
       priorityButton.dataset.employeePriorityId,
       priorityButton.dataset.employeePriorityJob,
-      -1,
     );
     if (!changed) this.redraw();
   }

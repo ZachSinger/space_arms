@@ -133,8 +133,8 @@ export class CustomerFlow {
       gameState: shop.gameState,
       spawnBounds: shop.customerSpawnBounds,
       onJoinQueue: (arrivingCustomer) => shop.checkoutSystem.handleJoinQueue(arrivingCustomer),
-      onLeaveAngry: (angryCustomer, cart) => {
-        shop.eventBus.emit(GAME_EVENTS.CUSTOMER_LEFT_ANGRY, { customer: angryCustomer, cart });
+      onLeaveAngry: (angryCustomer, cart, { reputationPenalty = true } = {}) => {
+        shop.eventBus.emit(GAME_EVENTS.CUSTOMER_LEFT_ANGRY, { customer: angryCustomer, cart, reputationPenalty });
       },
       onMissingPrimary: (customer, itemIds, itemNames) => {
         shop.eventBus.emit(GAME_EVENTS.CUSTOMER_MISSING_PRIMARY, { customer, itemIds, itemNames });

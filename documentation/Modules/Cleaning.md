@@ -40,7 +40,27 @@ These answer the open questions in the design above.
 1. **Slice 1 (built):** trash only. Customers drop trash, you pick it up and throw it in a
    trashcan, the store has a cleanliness level shown in the top bar, and customers judge it.
 2. **Slice 2 (next):** dirt marks and the mop.
-3. **Later:** employees who clean.
+3. **Employees who clean (built):** see below.
+
+### Employees who clean
+- Cleaning is a third employee job, **Clean up trash**, next to Run register and Stock
+  shelves. Like the others it has its own skill (Level 1–5, trained the same way) and its own
+  place in the job order. The staff panel's **Prioritize Cleaning** button puts it first.
+- An employee works down their job order and takes the first job that has work. Cleaning has
+  work when there is floor trash nobody else is going for and a trashcan they can reach.
+  Without the cleaning module, cleaning never has work.
+- They walk to the nearest piece, pick it up (one at a time, carried at their side), walk to
+  the nearest trashcan, and throw it away. The cleanliness level goes back up exactly as when
+  you do it. Then they pick their next job again.
+- Each employee reserves the piece they're walking to, so two employees never go for the same
+  one. If you pick it up first, they give up on it and choose again.
+- Skill makes the whole trip faster: walking, picking up, and throwing away (+20% speed per
+  level, the same as the other jobs).
+- At closing they leave trash they haven't picked up yet and throw away trash they're
+  already carrying, so they never hold up the end of the shift. If they're removed from the
+  store while carrying trash, it goes back on the floor; it's never lost or counted twice.
+- Saves from before this job (save format 11 and older) add Clean up trash to the end of each
+  employee's job order, at Level 1.
 
 ### Cleanliness level
 - Maximum: 20, +20 for each **sales floor** expansion bought (the backroom never gets dirty,

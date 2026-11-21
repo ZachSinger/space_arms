@@ -1121,35 +1121,36 @@ test("Mercenaries collect matching ammunition after buying a firearm", () => {
   assert.equal(customer.state, "SEEK_REGISTER");
 });
 
-test("factions with no eligible shelf assignments leave with a hint and no penalty", () => {
+test("customers with no eligible shelf assignments leave without a message or penalty", () => {
+  const bonusShelf = fixture({ x: 200, y: 100 }, [{ itemId: "bonus", quantity: 1 }]);
   const plan = {
     primaryItemIds: [],
-    bonusItemIds: [],
+    bonusItemIds: ["bonus"],
     matchingAmmoIdsByFirearm: {},
-    shelfStops: [],
+    shelfStops: [{ fixture: bonusShelf, standPoint: bonusShelf.standPoint }],
   };
-  const { customer, repChanges, floatingText } = makeCustomer({
-    factionId: "explorers",
-    plan,
-  });
-  customer.shoppingPhase = "primary";
-  customer.finishShoppingPhase();
+  for (const factionId of [null, "scavengers", "mercenaries", "explorers"]) {
+    const { customer, repChanges, floatingText, missingPrimaryEvents } = makeCustomer({ factionId, plan });
+    customer.shoppingPhase = "primary";
+    customer.finishShoppingPhase();
 
-  assert.deepEqual(repChanges, []);
-  assert.equal(customer.state, "LEAVING");
-  assert.match(floatingText[0][2], /no matching stock/i);
-  assert.match(floatingText[0][2], /tools or survival gear/i);
+    assert.deepEqual(repChanges, []);
+    assert.deepEqual(missingPrimaryEvents, []);
+    assert.deepEqual(floatingText, []);
+    assert.deepEqual(customer.cart, []);
+    assert.equal(customer.state, "LEAVING");
+    assert.equal(bonusShelf.placements[0].quantity, 1);
+  }
 });
 
-test("neutral customers explain when there are no products to browse", () => {
-  const { customer, floatingText } = makeCustomer({
-    factionId: null,
+test("customers with unknown factions still report an error", () => {
+  const { customer } = makeCustomer({
+    factionId: "pirates",
     plan: { primaryItemIds: [], bonusItemIds: [], shelfStops: [] },
   });
   customer.shoppingPhase = "primary";
-  customer.finishShoppingPhase();
 
-  assert.match(floatingText[0][2], /no products are on the shelves/i);
+  assert.throws(() => customer.finishShoppingPhase(), /Unknown customer faction: pirates/);
 });
 
 test("customers decide about cleanliness once, before taking anything, and a filthy store sends them out", () => {

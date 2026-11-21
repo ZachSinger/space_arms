@@ -42,20 +42,31 @@ test("an unknown handbook topic is an error", () => {
 test("the store page shows the player's level and the next goal", () => {
   const html = render("store", 2, 20);
   assert.match(html, /Store Level 2<\/strong> with <strong>20<\/strong>/);
-  assert.match(html, /at least <strong>39<\/strong> to reach Level 3/);
+  assert.match(html, /at least <strong>50<\/strong> to reach Level 3/);
 });
 
 test("level rewards come from the game's own unlock data", () => {
   const rewards = getLevelRewards(licenses);
   assert.ok(rewards.get(2).some((text) => text.startsWith("Supply license: Frontier Survival Kit")));
-  assert.ok(rewards.get(4).some((text) => text.startsWith("Supply license: Standard Pistol Ammo")));
+  assert.ok(rewards.get(3).some((text) => text.startsWith("Supply license: Standard Pistol Ammo")));
   assert.ok(rewards.get(5).includes("Supply license: Scrap-Yard Melee"));
-  assert.ok(rewards.get(30).some((text) => text.startsWith("Supply license: Exotic Ordinance")));
+  assert.ok(rewards.get(50).some((text) => text.startsWith("Supply license: Exotic Ordinance")));
   assert.ok(rewards.get(4).includes("Staff limit: up to 1 employee hired at once"));
   assert.ok(rewards.get(23).includes("Staff limit: up to 6 employees hired at once"));
-  assert.ok(rewards.get(5).some((text) => text.includes("Sales Floor Expansion West")));
-  assert.ok(rewards.get(13).some((text) => text.includes("Backroom Upgrade A")));
+  assert.ok(rewards.get(6).some((text) => text.includes("Sales Floor Expansion West")));
+  assert.ok(rewards.get(22).some((text) => text.includes("Backroom Upgrade A")));
   assert.ok(![...rewards.values()].flat().some((text) => /hovercart|spaces/i.test(text)));
+});
+
+test("every level after the first unlocks one or two things", () => {
+  const html = render("store", 49, 16572);
+  assert.match(html, /at least <strong>17148<\/strong> to reach Level 50/);
+  assert.match(render("store", 50, 17148), /Store Level 50<\/strong>, the highest level/);
+  const rewards = getLevelRewards(licenses);
+  for (let level = 2; level <= 50; level += 1) {
+    const count = rewards.get(level).length;
+    assert.ok(count >= 1 && count <= 2, `Level ${level} unlocks ${count} things`);
+  }
 });
 
 test("level rewards mark the levels already reached", () => {
@@ -101,6 +112,8 @@ test("the handbook explains paid training absences, permanent skills, and on/off
 test("the handbook describes duplicate purchases and the new cash collection gesture", () => {
   const html = render("customers");
   assert.match(html, /1, 2, or 3 of the same item/);
+  assert.match(html, /10 extra seconds for each person ahead/);
+  assert.match(html, /5 more seconds unless they reach the front/);
   assert.match(html, /Start a new click or click-and-hold/);
   assert.match(html, /the others keep moving at normal belt speed/);
   assert.match(html, /120 M-Scrips equal 1 credit/);

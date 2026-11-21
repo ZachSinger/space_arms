@@ -306,6 +306,24 @@ test("drawer clicks and right-clicks adjust change, and Space rejects mistakes u
   assert.equal(prevented, 4);
 });
 
+test("a third wrong change hand-over loses the sale without another penalty", () => {
+  const h = harness();
+  let failed = 0;
+  h.checkout.onChangeFailed = () => { failed += 1; };
+  h.checkout.paymentStage = "change";
+  h.checkout.handOverChange();
+  h.checkout.handOverChange();
+  assert.match(h.elements.get("#checkout-payment-feedback").textContent, /One more mistake and the customer leaves/);
+  assert.equal(failed, 0);
+  h.checkout.handOverChange();
+  assert.equal(failed, 1);
+  assert.equal(h.penalties(), 1);
+  assert.equal(h.checkout.paymentStage, "lost");
+  h.checkout.handOverChange();
+  assert.equal(failed, 1);
+  assert.equal(h.completed(), 0);
+});
+
 test("held Space and a hidden register cannot hand over change", () => {
   const h = harness();
   h.checkout.paymentStage = "change";

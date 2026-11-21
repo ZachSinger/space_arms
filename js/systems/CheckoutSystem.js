@@ -297,22 +297,6 @@ export class CheckoutSystem {
   }
 
   /**
-   * An employee ringing up the front customer holds their patience. The player's own
-   * checkout doesn't: the first scan resets patience once (see CheckoutWindow.onFirstScan).
-   * @param {Customer} customer
-   */
-
-  isServingCustomer(customer) {
-    const shop = this.shop;
-    return shop.employees.some((employee) =>
-        employee.state === "SERVING_REGISTER" &&
-        employee.currentJob?.customer === customer &&
-        employee.currentJob?.register &&
-        this.lineFor(employee.currentJob.register)[0] === customer,
-      );
-  }
-
-  /**
    * An angry customer's cart goes to the Go-Backs bin, and their line moves up.
    * @param {Customer} customer
    * @param {Array<object>} cart
@@ -566,6 +550,7 @@ export class CheckoutSystem {
   layoutRegisterLine(register) {
     this.lineFor(register).forEach((customer, index) => {
       const point = register.queuePoints[index];
+      customer.setQueuePosition(index);
       customer.setQueueTarget(point.x, point.y);
     });
   }
@@ -602,7 +587,6 @@ export class CheckoutSystem {
       this.layoutRegisterLine(spot.register); // shuffle everyone else forward one spot
 
       const nextCustomer = line[0];
-      nextCustomer?.resetPatience(); // any sale resets the next in line's patience
       if (nextCustomer) {
         this.startCheckout(nextCustomer);
       } else {
@@ -616,6 +600,8 @@ export class CheckoutSystem {
       paymentType: customer.checkoutPayment.type,
       chitCode: customer.checkoutPayment.code,
       onWrongChange: () => shop.gameState.reputation.lose(1),
+      // The third wrong change loses the sale; the reputation was already lost on the second.
+      onChangeFailed: () => customer.leaveAngry({ reputationPenalty: false }),
       // Three Chit mistakes (wrong keys or running out of time) in one order: the customer gives up and storms out.
       onChitFailed: () => customer.leaveAngry(),
     });
@@ -639,7 +625,6 @@ export class CheckoutSystem {
     );
     line.shift();
     this.layoutRegisterLine(register);
-    line[0]?.resetPatience();
     return true;
   }
 
@@ -655,7 +640,6 @@ export class CheckoutSystem {
     shop.eventBus.emit(GAME_EVENTS.CUSTOMER_SALE_COMPLETED, { customer, total });
     spot.line.shift();
     this.layoutRegisterLine(spot.register);
-    spot.line[0]?.resetPatience();
     return true;
   }
 

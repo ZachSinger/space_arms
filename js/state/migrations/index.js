@@ -6,7 +6,9 @@
 // Formats that exist today:
 //   layoutVersion 9   before stock fixtures were removed (also: retired job, old shelves)
 //   layoutVersion 10  before crates had stable IDs
-//   layoutVersion 11  current
+//   layoutVersion 11  before employees had the cleaning job
+//   layoutVersion 12  before heavy ammo moved into its own contract
+//   layoutVersion 13  current
 // Any may also be from before the contract split (no `contractsSplit`), hold retired
 // fixtures, crates, licenses, or a hovercart, or hold shelves stocked under the old rule.
 import { requireSave, isRecord } from "../saveHelpers.js";
@@ -16,11 +18,12 @@ import { migrateRemovedEmployeeJob } from "./employeeJobs.js";
 import { upgradeContractSplit } from "./contractSplit.js";
 import { upgradeShelfStocking } from "./shelfStocking.js";
 import { upgradeCrateIds } from "./crateIds.js";
+import { addEmployeeCleaningJob } from "./cleaningJob.js";
+import { migratePreWarAmmoContract } from "./preWarAmmoContract.js";
 
 // The fixture-retirement upgrade removes stock fixtures and moves their contents into Go-Backs.
-export const SHOP_LAYOUT_VERSION = 11;
+export const SHOP_LAYOUT_VERSION = 13;
 const OLDEST_SUPPORTED_VERSION = 9;
-const PREVIOUS_SUPPORTED_VERSION = 10;
 
 /**
  * @typedef {{ name: string, always?: boolean, fromVersion?: number,
@@ -35,6 +38,8 @@ export const SAVE_UPGRADES = [
   { name: "contract split", always: true, run: upgradeContractSplit },
   { name: "hands-on shelf stocking", always: true, run: upgradeShelfStocking },
   { name: "stable crate IDs", fromVersion: 10, run: upgradeCrateIds },
+  { name: "employee cleaning job", fromVersion: 11, run: addEmployeeCleaningJob },
+  { name: "pre-war ammo contract", fromVersion: 12, run: migratePreWarAmmoContract },
 ];
 
 /**
@@ -47,8 +52,8 @@ export const SAVE_UPGRADES = [
 export function upgradeShopSave(data, database) {
   requireSave(isRecord(data), "missing shop state.");
   const version = data.layoutVersion;
-  requireSave(version === SHOP_LAYOUT_VERSION || version === PREVIOUS_SUPPORTED_VERSION ||
-    version === OLDEST_SUPPORTED_VERSION,
+  requireSave(Number.isSafeInteger(version) && version >= OLDEST_SUPPORTED_VERSION &&
+    version <= SHOP_LAYOUT_VERSION,
     version === undefined || Number.isSafeInteger(version) && version < OLDEST_SUPPORTED_VERSION
       ? "this save uses an unsupported shop layout."
       : "unknown shop layout version.");

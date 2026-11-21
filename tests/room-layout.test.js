@@ -62,7 +62,7 @@ test("the starting backroom is one floor square longer and the loading pad stays
 
 test("sales floor expansions are locked, fit the map, and stay out of the backroom", () => {
   assert.equal(EXPANSION_ORDER.length, 5);
-  assert.deepEqual(EXPANSION_ORDER.map((id) => getZone(id).requiredShopLevel), [5, 9, 17, 24, 30]);
+  assert.deepEqual(EXPANSION_ORDER.map((id) => getZone(id).requiredShopLevel), [6, 13, 32, 42, 49]);
   for (const id of EXPANSION_ORDER) {
     const zone = getZone(id);
     assert.ok(zone.locked && zone.salesFloor && !zone.backroom && zone.cost > 0, id);
@@ -76,7 +76,7 @@ test("the backroom sits apart from the shop, and only its upgrades grow it", () 
     assert.ok(zone.backroom && isBackroomRow(zone.gridY), id);
   }
   assert.ok(BACKROOM_UPGRADE_ORDER.every((id) => getZone(id).locked));
-  assert.deepEqual(BACKROOM_UPGRADE_ORDER.map((id) => getZone(id).requiredShopLevel), [13, 20, 27]);
+  assert.deepEqual(BACKROOM_UPGRADE_ORDER.map((id) => getZone(id).requiredShopLevel), [22, 37, 46]);
   assert.deepEqual(BACKROOM_UPGRADE_ORDER.map((id) => getZone(id).cost), [4000, 6000, 9000]);
   const link = getBackroomLink();
   assert.equal(isBackroomRow(link.shop.gy), false);

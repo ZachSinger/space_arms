@@ -99,7 +99,7 @@ test("redesigned contracts retain available, unaffordable, locked, and purchased
   }));
   assert.match(html, /data-license-id="lic_start_rations"/);
   assert.match(html, /INSUFFICIENT FUNDS/);
-  assert.match(html, /Requires Shop Level 12/);
+  assert.match(html, /Requires Shop Level 19/);
   assert.match(html, />LOCKED<\/button>/);
   assert.match(html, /Purchased; stays available\./);
   assert.match(html, /Unlocks fixtures:/);
@@ -136,7 +136,7 @@ test("the Contracts tab escapes license data in text and action attributes", () 
   assert.doesNotMatch(html, /data-license-id="license" onclick=/);
 });
 
-test("Stellaris Las-Arms unlocks at Shop Level 9", () => {
+test("Stellaris Las-Arms unlocks at Shop Level 14", () => {
   const license = new SupplierLicense(licenseById.get("lic_corp_stellaris"));
   const state = shopState({
     shopLevel: 8,
@@ -146,9 +146,9 @@ test("Stellaris Las-Arms unlocks at Shop Level 9", () => {
     activeLicenses: new Set(),
   });
   assert.equal(license.isUnlocked(state), false);
-  assert.match(ContractRenderer.generateHTML([license], state), /Requires Shop Level 9/);
+  assert.match(ContractRenderer.generateHTML([license], state), /Requires Shop Level 14/);
 
-  state.reputation.shopLevel = 9;
+  state.reputation.shopLevel = 14;
   assert.equal(license.isUnlocked(state), true);
   assert.match(
     ContractRenderer.generateHTML([license], state),
@@ -158,13 +158,13 @@ test("Stellaris Las-Arms unlocks at Shop Level 9", () => {
 
 test("planned supplier contracts unlock at their assigned Shop Levels", () => {
   const contracts = [
-    ["lic_corp_labor", 12],
-    ["lic_corp_hazard", 13],
-    ["lic_corp_aulin", 16],
-    ["lic_corp_omni", 19],
-    ["lic_corp_diagnostics", 22],
-    ["lic_corp_breach", 26],
-    ["lic_corp_vanguard", 29],
+    ["lic_corp_labor", 19],
+    ["lic_corp_hazard", 21],
+    ["lic_corp_aulin", 29],
+    ["lic_corp_omni", 35],
+    ["lic_corp_diagnostics", 40],
+    ["lic_corp_breach", 43],
+    ["lic_corp_vanguard", 45],
   ];
   const state = shopState({
     shopLevel: 1,
@@ -187,23 +187,24 @@ test("planned supplier contracts unlock at their assigned Shop Levels", () => {
 test("reputation-gated supplier contracts now use Shop Levels while keeping faction gates", () => {
   const contracts = [
     [5, "lic_start_armor_melee"],
-    [7, "lic_start_tools"],
-    [9, "lic_start_mods"],
-    [10, "lic_corp_scatter"],
-    [11, "lic_pro_adv_melee"],
-    [12, "lic_pro_arx_heavy"],
-    [13, "lic_pro_kessler"],
-    [15, "lic_pro_high_energy"],
-    [17, "lic_pro_aegis_sec"],
-    [18, "lic_pro_kodiak"],
-    [20, "lic_pro_zastava"],
-    [21, "lic_pro_artillery"],
-    [22, "lic_edge_kinetic"],
-    [23, "lic_edge_antique"],
-    [24, "lic_edge_blackwood"],
-    [25, "lic_edge_unrestricted"],
-    [28, "lic_edge_tessier"],
-    [30, "lic_edge_exotic"],
+    [9, "lic_start_tools"],
+    [12, "lic_start_mods"],
+    [16, "lic_corp_scatter"],
+    [17, "lic_pro_adv_melee"],
+    [20, "lic_pro_arx_heavy"],
+    [24, "lic_pro_kessler"],
+    [28, "lic_pro_high_energy"],
+    [31, "lic_pro_aegis_sec"],
+    [33, "lic_pro_kodiak"],
+    [35, "lic_pro_zastava"],
+    [38, "lic_pro_artillery"],
+    [41, "lic_edge_antique"],
+    [41, "lic_edge_antique_ammo"],
+    [42, "lic_edge_unrestricted"],
+    [43, "lic_edge_kinetic"],
+    [44, "lic_edge_blackwood"],
+    [48, "lic_edge_tessier"],
+    [50, "lic_edge_exotic"],
   ];
   const state = shopState({
     shopLevel: 1,
@@ -419,10 +420,32 @@ test("contracts are small and products unlock slowly through the early levels", 
   for (const item of items) counts.set(item.license, (counts.get(item.license) ?? 0) + 1);
   for (const [id, count] of counts) {
     assert.ok(licenseById.has(id), id);
-    assert.ok(count >= 2 && count <= 5, `${id} has ${count} products`);
+    const minimum = id === "lic_start_long_guns" ? 1 : 2;
+    assert.ok(count >= minimum && count <= 5, `${id} has ${count} products`);
   }
   const earlyProducts = licenses
     .filter((license) => (license.requiredShopLevel ?? 1) <= 5)
     .reduce((total, license) => total + (counts.get(license.id) ?? 0), 0);
   assert.ok(earlyProducts <= 15, `${earlyProducts} products by Shop Level 5`);
+});
+
+test("mismatched guns and ammunition unlock with their matching supplies", async () => {
+  const items = JSON.parse(await readFile(new URL("../data/Items.json", import.meta.url), "utf8"));
+  const itemById = new Map(items.map((item) => [item.id, item]));
+  const expectedLicenses = new Map([
+    ["wpn_rif_10", "lic_corp_scatter"],
+    ["wpn_hvy_08", "lic_pro_artillery"],
+    ["amo_03", "lic_edge_antique_ammo"],
+    ["amo_04", "lic_edge_antique_ammo"],
+    ["amo_07", "lic_edge_antique_ammo"],
+    ["amo_08", "lic_edge_antique_ammo"],
+  ]);
+
+  for (const [itemId, licenseId] of expectedLicenses) {
+    assert.equal(itemById.get(itemId)?.license, licenseId, itemId);
+  }
+  assert.equal(licenseById.get("lic_corp_scatter")?.requiredShopLevel, 16);
+  assert.equal(licenseById.get("lic_pro_artillery")?.requiredShopLevel, 38);
+  assert.equal(licenseById.get("lic_edge_antique")?.requiredShopLevel, 41);
+  assert.equal(licenseById.get("lic_edge_antique_ammo")?.requiredShopLevel, 41);
 });

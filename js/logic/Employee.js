@@ -1,7 +1,8 @@
 // ==========================================
 // FILE: Employee.js
 // ==========================================
-// A hired employee who serves the register and stocks shelves from delivered crates.
+// A hired employee who serves the register, stocks shelves from delivered crates, and (with the
+// cleaning module) carries floor trash to a trashcan.
 import { transferItems } from "./InventoryTransfer.js";
 import { employeeTextureFor, showEmployeeFacing, EMPLOYEE_CRATE_HOLD_OFFSET } from "./EmployeeSprites.js";
 import { EMPLOYEE_JOB_IDS } from "./EmployeeJobs.js";
@@ -21,6 +22,10 @@ const WALK_BODY = { width: PLAYER_BODY_WIDTH, height: PLAYER_BODY_HEIGHT, avoidS
 // rookie (level 1) keeps up with ~15 customers a shift and melts around 30+, so training
 // and extra registers matter (see scripts/staffing-sim.mjs).
 export const REGISTER_SERVICE_MS_PER_ITEM = 5000;
+// Bending down for a piece of trash, and dropping it in the trashcan, at cleaning Level 1.
+export const TRASH_HANDLING_MS = 600;
+const CLEANING_WALK_STATES = Object.freeze(["TO_LITTER", "TO_LITTER_BIN"]);
+const CLEANING_ACTION_STATES = Object.freeze(["PICKING_UP_LITTER", "BINNING_LITTER"]);
 
 export class Employee {
   constructor(employeeData, store) {
@@ -34,6 +39,9 @@ export class Employee {
     this.jobPriorities = [...store.gameState.staff.jobPriorities[employeeData.id]];
     this.destination = null;
     this.registerServiceRemainingMs = 0;
+    this.cleaningActionRemainingMs = 0;
+    // After finding no reachable trash or trashcan, wait this long before looking again.
+    this.cleaningCheckInMs = 0;
     this.path = [];
     this.retryInMs = 0;
     this.clockOutRequested = false;
@@ -50,6 +58,7 @@ export class Employee {
 
   update(delta = 0) {
     if (this.isDestroyed) return;
+    this.cleaningCheckInMs -= delta;
     if (this.state === "WAITING_CRATE_RETURN") {
       this.retryInMs -= delta;
       if (this.retryInMs <= 0) this.returnCrate();
@@ -80,9 +89,14 @@ export class Employee {
     }
     if (this.state === "SERVING_REGISTER") {
       this.updateRegisterService(delta);
+    } else if (CLEANING_ACTION_STATES.includes(this.state)) {
+      this.updateCleaningAction(delta);
+    } else if (this.state === "TO_LITTER" && !this.isStillAfterTrash()) {
+      this.sprite.body.setVelocity(0, 0);
+      this.finishTask();
     } else if ([
       "TO_SHELF", "TO_CRATE", "TO_RETURN_CRATE", "TO_TRASHCAN",
-      "TO_REGISTER", "TO_BREAKROOM",
+      "TO_REGISTER", "TO_BREAKROOM", ...CLEANING_WALK_STATES,
     ].includes(this.state)) {
       if (["TO_SHELF", "TO_RETURN_CRATE", "TO_TRASHCAN"].includes(this.state) &&
         this.currentJob.crate.isCarried) {
@@ -111,6 +125,8 @@ export class Employee {
           this.walkToCrate(job.base ?? job.crate, "TO_CRATE");
           return;
         }
+      } else if (jobId === "clean") {
+        if (this.startCleaningJob()) return;
       } else if (!EMPLOYEE_JOB_IDS.includes(jobId)) {
         throw new Error(`Employee ${this.data.id} has unknown job priority: ${jobId}`);
       }
@@ -266,10 +282,10 @@ export class Employee {
     ], nextState);
   }
 
-  walkToTrashcan() {
+  trashcanSpots() {
     const reachX = PLAYER_BODY_WIDTH / 2 + 2;
     const reachY = PLAYER_BODY_HEIGHT / 2 + 2;
-    const spots = this.store.fixtures.ofKind("trash").flatMap((fixture) => {
+    return this.store.fixtures.ofKind("trash").flatMap((fixture) => {
       const { w, h } = fixtureFootprint(fixture);
       const left = fixture.gx * TILE_SIZE;
       const top = fixture.gy * TILE_SIZE;
@@ -282,10 +298,99 @@ export class Employee {
         { x: left - reachX, y: midY }, { x: right + reachX, y: midY },
       ].map((spot) => ({ ...spot, fixture }));
     });
-    const closest = this.findClosestSpot(spots);
+  }
+
+  walkToTrashcan(nextState = "TO_TRASHCAN") {
+    const closest = this.findClosestSpot(this.trashcanSpots());
     if (!closest) return false;
     this.currentJob.trashcan = closest.spot.fixture;
-    return this.startPath(closest.spot, closest.path, "TO_TRASHCAN");
+    return this.startPath(closest.spot, closest.path, nextState);
+  }
+
+  // Cleaning: the nearest piece of floor trash nobody else is after, then the nearest trashcan.
+  // No cleaning module, no trash, or no reachable trashcan means there's no cleaning work.
+  startCleaningJob() {
+    const cleaning = this.store.cleaning;
+    if (!cleaning || this.cleaningCheckInMs > 0) return false;
+    const pieces = cleaning.staffTrashTargets(this);
+    if (pieces.length === 0 || this.store.fixtures.ofKind("trash").length === 0) return false;
+    const nearest = this.findClosestSpot(pieces.flatMap((piece) =>
+      cleaning.trashStandSpots(piece).map((spot) => ({ ...spot, piece }))));
+    if (!nearest || !this.findClosestSpot(this.trashcanSpots()) ||
+      !cleaning.claimTrashForStaff(this, nearest.spot.piece)) {
+      this.cleaningCheckInMs = JOB_RETRY_MS;
+      return false;
+    }
+    this.currentJob = { jobId: "clean", trash: nearest.spot.piece };
+    if (this.startPath(nearest.spot, nearest.path, "TO_LITTER")) return true;
+    cleaning.releaseStaffClaims(this);
+    return false;
+  }
+
+  // False once the player (or anyone) has taken the piece, or the store is closing.
+  isStillAfterTrash() {
+    const trash = this.currentJob?.trash;
+    return Boolean(trash && !this.clockOutRequested && this.store.cleaning?.isClaimedBy(trash, this));
+  }
+
+  beginCleaningAction(nextState) {
+    this.sprite.body.setVelocity(0, 0);
+    this.destination = null;
+    this.path = [];
+    this.state = nextState;
+    this.cleaningActionRemainingMs = TRASH_HANDLING_MS / getEmployeeJobSpeed(this.data.skillLevels, "clean");
+  }
+
+  updateCleaningAction(delta) {
+    const cleaning = this.store.cleaning;
+    if (this.state === "PICKING_UP_LITTER" && !this.isStillAfterTrash()) {
+      this.finishTask();
+      return;
+    }
+    this.cleaningActionRemainingMs -= delta;
+    if (this.cleaningActionRemainingMs > 0) return;
+    if (this.state === "PICKING_UP_LITTER") {
+      if (!cleaning.pickUpTrashForStaff(this, this.currentJob.trash)) {
+        this.finishTask();
+        return;
+      }
+      const job = this.currentJob;
+      if (!this.walkToTrashcan("TO_LITTER_BIN")) {
+        this.currentJob = job;
+        this.finishTask();
+      }
+      return;
+    }
+    cleaning.throwAwayStaffTrash(this);
+    this.finishTask();
+  }
+
+  arriveAtTrash() {
+    const trash = this.currentJob?.trash;
+    if (!this.isStillAfterTrash()) {
+      this.finishTask();
+      return;
+    }
+    const position = this.sprite.body.center ?? this.sprite;
+    const dx = trash.x - position.x;
+    const dy = trash.y - position.y;
+    if (Math.abs(dx) >= 1 || Math.abs(dy) >= 1) {
+      this.currentFacing = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? "left" : "right") : (dy < 0 ? "up" : "down");
+    }
+    this.beginCleaningAction("PICKING_UP_LITTER");
+  }
+
+  arriveAtTrashBin() {
+    const { trashcan } = this.currentJob;
+    if (!this.store.cleaning?.isStaffHoldingTrash(this)) {
+      this.finishTask();
+      return;
+    }
+    if (!this.store.fixtures.ofKind("trash").includes(trashcan)) {
+      if (!this.walkToTrashcan("TO_LITTER_BIN")) this.finishTask();
+      return;
+    }
+    this.beginCleaningAction("BINNING_LITTER");
   }
 
   findClosestSpot(spots) {
@@ -351,6 +456,10 @@ export class Employee {
       onRerouteUnavailable: (previousPath) => {
         this.path = previousPath;
         if (["TO_TRASHCAN", "TO_RETURN_CRATE"].includes(this.state)) this.returnCrate();
+        else if (CLEANING_WALK_STATES.includes(this.state)) {
+          this.sprite.body.setVelocity(0, 0);
+          this.finishTask();
+        }
       },
       onPortal: ({ x, y }) => this.sprite.body.reset(x, y),
       onPathUnavailable() {},
@@ -365,7 +474,7 @@ export class Employee {
   getWalkSpeed() {
     const jobId = ["TO_SHELF", "TO_CRATE", "TO_RETURN_CRATE", "TO_TRASHCAN"].includes(this.state)
       ? "stock_shelves"
-      : null;
+      : CLEANING_WALK_STATES.includes(this.state) ? "clean" : null;
     return WALK_SPEED * (jobId ? getEmployeeJobSpeed(this.data.skillLevels, jobId) : 1);
   }
 
@@ -403,6 +512,10 @@ export class Employee {
       this.discardEmptyCrate();
     } else if (this.state === "TO_REGISTER") {
       this.beginRegisterService();
+    } else if (this.state === "TO_LITTER") {
+      this.arriveAtTrash();
+    } else if (this.state === "TO_LITTER_BIN") {
+      this.arriveAtTrashBin();
     }
   }
 
@@ -578,8 +691,11 @@ export class Employee {
   }
 
   finishTask() {
+    // Trash still in hand goes back on the floor, so it's never lost or counted twice.
+    if (this.currentJob?.jobId === "clean") this.store.cleaning?.dropStaffTrash(this);
     this.currentJob = null;
     this.registerServiceRemainingMs = 0;
+    this.cleaningActionRemainingMs = 0;
     this.state = "IDLE";
     this.retryInMs = 0;
   }
@@ -622,6 +738,7 @@ export class Employee {
 
   destroy() {
     if (this.isDestroyed) return;
+    if (this.currentJob?.jobId === "clean") this.store.cleaning?.dropStaffTrash(this);
     this.isDestroyed = true;
     this.sprite.body.setVelocity(0, 0);
     this.store.removeEmployeeSprite(this.sprite);

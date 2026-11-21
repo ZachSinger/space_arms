@@ -12,12 +12,20 @@ import { formatMoneyAmount, roundMoney } from "./Money.js";
 const PRIORITY_LABELS = {
   register: "Prioritize Register",
   stock_shelves: "Prioritize Stocking",
+  clean: "Prioritize Cleaning",
+};
+
+const ORDER_NAMES = {
+  register: "Register",
+  stock_shelves: "Stocking",
+  clean: "Cleaning",
 };
 
 function renderSkillLevels(employee, stockLabel = "Stock") {
   return html`<div class="type-description employee-skill-levels">
     <span>Register:${employee.skillLevels.register}</span>
     <span>${stockLabel}:${employee.skillLevels.stock_shelves}</span>
+    <span>Cleaning:${employee.skillLevels.clean}</span>
   </div>`;
 }
 
@@ -119,6 +127,8 @@ export class EmployeeRenderer {
             <div class="employee-priority-options" role="group" aria-label="Job priority for ${employee.name}">
               ${priorityOptions}
             </div>
+            <p class="type-description employee-job-order">Job order: ${priorities
+              .map((jobId, index) => `${index + 1}. ${ORDER_NAMES[jobId]}`).join(", ")}</p>
           </div>
         `;
       });

@@ -12,6 +12,7 @@ let cacheDirectory;
 let Customer;
 let PATIENCE_MS;
 let getPatienceLevel;
+let CheckoutSystem;
 let GameState;
 let nextTestCrateId = 1;
 
@@ -40,6 +41,7 @@ before(async () => {
     }],
   });
   ({ Customer, PATIENCE_MS, getPatienceLevel } = await server.ssrLoadModule("/js/logic/Customer.js"));
+  ({ CheckoutSystem } = await server.ssrLoadModule("/js/systems/CheckoutSystem.js"));
   ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));
 });
 
@@ -51,7 +53,7 @@ after(async () => {
 const ITEMS = [{ id: "amo_01", baseCost: 5 }, { id: "big", baseCost: 50 }];
 const newGame = () => new GameState({ items: ITEMS, random: () => 0.5 });
 
-function queuedCustomer({ serving = () => false, storeTemporarilyClosed = false } = {}) {
+function queuedCustomer({ position = 1, maxPatienceMs = PATIENCE_MS, storeTemporarilyClosed = false } = {}) {
   const bubble = { list: [{ setFillStyle() {} }, { setText() {} }], setPosition() {}, destroyed: false };
   bubble.destroy = () => { bubble.destroyed = true; };
   const customer = Object.create(Customer.prototype);
@@ -63,6 +65,9 @@ function queuedCustomer({ serving = () => false, storeTemporarilyClosed = false 
   customer.cart = [{ itemId: "amo_01", price: 5 }, { itemId: "big", price: 50 }];
   customer.factionId = "mercenaries";
   customer.gameState = newGame();
+  customer.maxPatienceMs = maxPatienceMs;
+  customer.queuePosition = null;
+  customer.patienceRemainingMs = null;
   customer.patienceBubble = bubble;
   customer.patienceLevel = -1;
   customer.reactionEventsShown = new Set();
@@ -70,7 +75,6 @@ function queuedCustomer({ serving = () => false, storeTemporarilyClosed = false 
   customer.reactionRemainingMs = 0;
   customer.scene = {
     customerFlow: { temporarilyClosed: storeTemporarilyClosed },
-    checkoutSystem: { isServingCustomer: serving },
     showFloatingText: (...args) => floating.push(args),
     add: {
       graphics: () => {
@@ -101,8 +105,53 @@ function queuedCustomer({ serving = () => false, storeTemporarilyClosed = false 
     for (const { itemId } of cart) who.remove(itemId, 1);
   };
   customer.enterLeaving = () => { customer.state = "LEAVING"; };
-  customer.resetPatience();
+  if (position != null) customer.setQueuePosition(position);
   return { customer, angry, floating, bubble, reactionGraphics };
+}
+
+function queueHarness() {
+  const registers = ["one", "two"].map((id) => ({
+    id,
+    queuePoints: Array.from({ length: 8 }, (_, index) => ({ x: index * 32, y: 0 })),
+  }));
+  const checkoutWindow = {
+    cart: null,
+    onComplete: null,
+    isCheckingOut(cart) { return this.cart === cart; },
+    openForCustomer(cart, onComplete) { this.cart = cart; this.onComplete = onComplete; },
+    close() { this.cart = null; this.onComplete = null; },
+  };
+  const scene = {
+    fixtures: {
+      register: () => registers[0],
+      registers: () => registers,
+      get: (id) => registers.find((register) => register.id === id),
+    },
+    checkoutWindow,
+    controlMode: { allows: () => true },
+    gameState: { goBacks: { addCart() {} } },
+    eventBus: { emit() {} },
+    messages: { floatText() {} },
+  };
+  const checkout = new CheckoutSystem(scene);
+
+  function addCustomer(register, maxPatienceMs = PATIENCE_MS) {
+    const result = queuedCustomer({ position: null, maxPatienceMs });
+    const { customer } = result;
+    customer.registerPoint = register.queuePoints[0];
+    customer.targetRegisterId = register.id;
+    customer.setQueueTarget = (x, y) => { customer.queueTarget = { x, y }; };
+    customer.onJoinQueue = (who) => checkout.handleJoinQueue(who);
+    const onLeaveAngry = customer.onLeaveAngry;
+    customer.onLeaveAngry = (who, cart) => {
+      onLeaveAngry(who, cart);
+      checkout.handleAngryLeave(who, cart);
+    };
+    customer.joinQueue();
+    return customer;
+  }
+
+  return { registers, checkout, checkoutWindow, scene, addCustomer };
 }
 
 test("patience bubbles escalate from calm to urgent", () => {
@@ -112,19 +161,12 @@ test("patience bubbles escalate from calm to urgent", () => {
   assert.equal(getPatienceLevel(0), 2);
 });
 
-test("queued customers drain patience, hold while served, and leave angry at zero", () => {
-  let serving = true;
-  const { customer, angry, floating, bubble } = queuedCustomer({ serving: () => serving });
-  customer.update(PATIENCE_MS);
-  assert.equal(customer.patienceRemainingMs, PATIENCE_MS);
-
-  serving = false;
-  customer.update(PATIENCE_MS - 1);
+test("customers behind the front of the line leave angry when their waiting time runs out", () => {
+  const { customer, angry, floating, bubble } = queuedCustomer();
+  const startingPatience = PATIENCE_MS + 10000;
+  customer.update(startingPatience - 1);
   assert.equal(customer.state, "QUEUEING");
   assert.equal(customer.patienceLevel, 2);
-  customer.resetPatience(); // a sale at the register resets the next in line
-  customer.update(PATIENCE_MS - 1);
-  assert.equal(customer.state, "QUEUEING");
   customer.update(1);
 
   assert.equal(customer.state, "LEAVING");
@@ -137,17 +179,116 @@ test("queued customers drain patience, hold while served, and leave angry at zer
   assert.equal(bubble.destroyed, true);
 });
 
-test("queued customers do not lose patience while the store is temporarily closed", () => {
-  const { customer, angry } = queuedCustomer({ storeTemporarilyClosed: true });
-  customer.update(PATIENCE_MS);
+test("the front customer never runs out of patience, even without a cashier", () => {
+  const { customer, angry } = queuedCustomer({ position: 0 });
+  customer.update(PATIENCE_MS * 10);
   assert.equal(customer.state, "QUEUEING");
   assert.equal(customer.patienceRemainingMs, PATIENCE_MS);
+  assert.deepEqual(angry, []);
+});
+
+test("queued customers do not lose patience while the store is temporarily closed", () => {
+  const { customer, angry } = queuedCustomer({ storeTemporarilyClosed: true });
+  const startingPatience = PATIENCE_MS + 10000;
+  customer.update(startingPatience);
+  assert.equal(customer.state, "QUEUEING");
+  assert.equal(customer.patienceRemainingMs, startingPatience);
   assert.equal(angry.length, 0);
 
   customer.scene.customerFlow.temporarilyClosed = false;
-  customer.update(PATIENCE_MS);
+  customer.update(startingPatience);
   assert.equal(customer.state, "LEAVING");
   assert.equal(angry.length, 1);
+});
+
+test("joining and advancing in a line change patience without affecting other lines", () => {
+  const { registers, checkout, checkoutWindow, addCustomer } = queueHarness();
+  const [firstRegister, otherRegister] = registers;
+  const first = addCustomer(firstRegister);
+  const second = addCustomer(firstRegister);
+  const third = addCustomer(firstRegister, 24000);
+  const fourth = addCustomer(firstRegister);
+  const otherFirst = addCustomer(otherRegister);
+  const otherSecond = addCustomer(otherRegister);
+
+  assert.deepEqual(
+    [first, second, third, fourth, otherFirst, otherSecond].map((customer) => customer.patienceRemainingMs),
+    [40000, 50000, 44000, 70000, 40000, 50000],
+  );
+  second.updatePatience(9000);
+  third.updatePatience(12000);
+  fourth.updatePatience(8000);
+  const fifth = addCustomer(firstRegister);
+  assert.deepEqual(
+    [second, third, fourth, fifth].map((customer) => customer.patienceRemainingMs),
+    [41000, 32000, 62000, 80000],
+  );
+
+  second.leaveAngry();
+  assert.deepEqual(
+    [third, fourth, fifth].map((customer) => customer.patienceRemainingMs),
+    [37000, 67000, 85000],
+  );
+  assert.equal(otherSecond.patienceRemainingMs, 50000);
+
+  checkout.operatingRegister = true;
+  checkout.operatingRegisterFixture = firstRegister;
+  checkout.startCheckout(first);
+  checkoutWindow.onComplete();
+
+  assert.deepEqual(
+    [third, fourth, fifth].map((customer) => customer.patienceRemainingMs),
+    [24000, 72000, 90000],
+  );
+  assert.deepEqual(
+    [third, fourth, fifth].map((customer) => customer.queuePosition),
+    [0, 1, 2],
+  );
+  checkout.layoutRegisterLine(firstRegister);
+  assert.deepEqual(
+    [third, fourth, fifth].map((customer) => customer.patienceRemainingMs),
+    [24000, 72000, 90000],
+  );
+  assert.equal(otherSecond.patienceRemainingMs, 50000);
+
+  third.updatePatience(100000);
+  assert.equal(third.state, "QUEUEING");
+  assert.equal(third.patienceRemainingMs, 24000);
+});
+
+test("a customer who leaves after the third wrong change costs no extra reputation", async () => {
+  const { ReputationPenalties } = await server.ssrLoadModule("/js/systems/ReputationPenalties.js");
+  const handlers = new Map();
+  const floats = [];
+  const penalties = new ReputationPenalties({ messages: { floatText: (...args) => floats.push(args) } });
+  penalties.listen({ on: (event, handler) => handlers.set(event, handler) });
+  const { customer } = queuedCustomer();
+  const leftAngry = handlers.get(GAME_EVENTS.CUSTOMER_LEFT_ANGRY);
+
+  leftAngry({ customer, cart: [], reputationPenalty: false });
+  assert.equal(customer.gameState.reputation.pending.global, 0);
+  assert.equal(floats.length, 0);
+
+  leftAngry({ customer, cart: [] });
+  assert.equal(customer.gameState.reputation.pending.global, -1);
+});
+
+test("employee checkout and a front customer leaving both advance the line", () => {
+  const { registers, checkout, addCustomer } = queueHarness();
+  const register = registers[0];
+  const first = addCustomer(register);
+  const second = addCustomer(register);
+  const third = addCustomer(register);
+  const employee = { sprite: { x: 0, y: 0 }, currentJob: { register, customer: first } };
+  second.updatePatience(10000);
+  third.updatePatience(10000);
+
+  assert.equal(checkout.completeEmployeeCheckout(employee, first), true);
+  assert.equal(second.patienceRemainingMs, 40000);
+  assert.equal(third.patienceRemainingMs, 55000);
+  second.leaveAngry();
+  assert.equal(third.queuePosition, 0);
+  assert.equal(third.patienceRemainingMs, 40000);
 });
 
 test("returned items collect in the Go-Backs bin and pack into crates up to their capacity", () => {
@@ -269,19 +410,20 @@ test("returned items collect in the Go-Backs bin and pack into crates up to thei
 
 test("hiring staff spends the fee once and keeps the hire when player state is restored", () => {
   const state = newGame();
-  state.reputation.gain(72);
-  state.finishShift({ customersServed: 72, customersTurnedAway: 0 });
+  state.reputation.gain(90);
+  state.finishShift({ customersServed: 90, customersTurnedAway: 0 });
   state.endDay();
   assert.equal(state.hireEmployee("tavi_stock_clerk"), true);
   assert.equal(state.economy.credits, 1250);
   assert.deepEqual(state.staff.hired, ["tavi_stock_clerk"]);
   assert.deepEqual(state.staff.jobPriorities.tavi_stock_clerk, [
-    "register", "stock_shelves",
+    "register", "stock_shelves", "clean",
   ]);
-  assert.equal(state.staff.moveJobPriority("tavi_stock_clerk", "stock_shelves", -1), true);
+  assert.equal(state.staff.prioritizeJob("tavi_stock_clerk", "clean"), true);
   assert.deepEqual(state.staff.jobPriorities.tavi_stock_clerk, [
-    "stock_shelves", "register",
+    "clean", "register", "stock_shelves",
   ]);
+  assert.equal(state.staff.prioritizeJob("tavi_stock_clerk", "clean"), false, "already first");
   assert.equal(state.hireEmployee("tavi_stock_clerk"), false);
   assert.equal(state.economy.credits, 1250);
 
@@ -289,14 +431,14 @@ test("hiring staff spends the fee once and keeps the hire when player state is r
   let restored = GameState.fromSave(saved, { items: ITEMS });
   assert.deepEqual(restored.staff.hired, ["tavi_stock_clerk"]);
   assert.deepEqual(restored.staff.jobPriorities.tavi_stock_clerk, [
-    "stock_shelves", "register",
+    "clean", "register", "stock_shelves",
   ]);
   assert.equal(restored.economy.credits, 1250);
 
   delete saved.playerState.employeeJobPriorities;
   restored = GameState.fromSave(saved, { items: ITEMS });
   assert.deepEqual(restored.staff.jobPriorities.tavi_stock_clerk, [
-    "register", "stock_shelves",
+    "register", "stock_shelves", "clean",
   ]);
 });
 
@@ -313,11 +455,11 @@ test("completing a sale returns proceeds without directly changing player state"
   assert.equal(customer.state, "LEAVING");
 });
 
-test("only purchases of three or more items get the happy reaction", () => {
+test("purchasing three or more items does not trigger a happy reaction", () => {
   const { customer, reactionGraphics } = queuedCustomer();
   customer.cart.push({ itemId: "third", price: 10 });
 
   customer.completeSale();
 
-  assert.equal(reactionGraphics.length, 1);
+  assert.equal(reactionGraphics.length, 0);
 });

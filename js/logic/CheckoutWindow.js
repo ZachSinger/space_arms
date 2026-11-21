@@ -105,7 +105,6 @@ export class CheckoutWindow {
     this.uiWindow.element.dataset.padBack = "world";
     this.onComplete = null;
     this.mode = null; // "checkout" while ringing up a cart
-    this.onFirstScan = null; // the game resets the customer's patience when scanning starts
     this.isScanning = false;
     this.paymentBuffer = "";
     this.total = 0;
@@ -198,6 +197,7 @@ export class CheckoutWindow {
     this.cart = null;
     this.onComplete = null;
     this.onWrongChange = null;
+    this.onChangeFailed = null;
     this.cashPayment = null;
     this.chitPayment = null;
     this.stopChitTimer();
@@ -276,19 +276,22 @@ export class CheckoutWindow {
    * @param {{ itemId: string, price: number }[]} cart - prices in credits
    * @param {() => void} onComplete - fired when payment and change are correct
    * @param {{ cash?: boolean, exact?: boolean, currency?: string, chitCode?: string,
-   *   paymentType?: string, onWrongChange?: () => void, onChitFailed?: () => void }} [options]
+   *   paymentType?: string, onWrongChange?: () => void, onChangeFailed?: () => void,
+   *   onChitFailed?: () => void }} [options]
    *   exact: the customer pays the exact cash amount; rolled here if not given
+   *   onChangeFailed: the player handed over wrong change too many times; the sale is lost
    *   onChitFailed: the player pressed a wrong Chit key too many times; the sale is lost
    */
   openForCustomer(cart, onComplete, {
     cash = true, exact = null, currency = "credits", chitCode, paymentType, onWrongChange = null,
-    onChitFailed = null,
+    onChangeFailed = null, onChitFailed = null,
   } = {}) {
     this.mode = "checkout";
     this.stopChitTimer();
     this.cart = cart;
     this.onComplete = onComplete;
     this.onWrongChange = onWrongChange;
+    this.onChangeFailed = onChangeFailed;
     this.onChitFailed = onChitFailed;
     this.chitMistakes = 0;
     this.paymentBuffer = "";
@@ -410,7 +413,6 @@ export class CheckoutWindow {
       if (card.dataset.scanned === "true") return;
       card.dataset.scanned = "true";
       scannedCount += 1;
-      if (scannedCount === 1) this.onFirstScan?.();
 
       const index = Number(card.dataset.index);
       runningTotal = sumMoney([runningTotal, cart[index].price]);
@@ -854,8 +856,13 @@ export class CheckoutWindow {
       return;
     }
     playErrorBuzz();
+    if (result.lost) {
+      this.paymentStage = "lost";
+      this.onChangeFailed?.();
+      return;
+    }
     this.bodyElement.querySelector("#checkout-payment-feedback").textContent = result.penalty
-      ? "Wrong change refused. Lose 1 store reputation at the end of the shift. Correct the change and try again."
+      ? "Wrong change refused. Lose 1 store reputation at the end of the shift. One more mistake and the customer leaves."
       : "Wrong change refused. Correct it and try again. Another mistake will cost store reputation at the end of the shift.";
     if (result.penalty) this.onWrongChange?.();
   }

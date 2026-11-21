@@ -49,8 +49,33 @@ export async function runScriptedShift(harness, { employees = [], playSeconds = 
     };
   });
   await h.wait(playSeconds * 1000);
-  await h.game((scene) => { scene.shiftClock.elapsedMs = Math.max(scene.shiftClock.elapsedMs, 12 * 35 * 1000 - 500); });
-  await h.page.waitForFunction(() => window.__game.scene.getScene("scene-game").shift.ended, null, { timeout: 240000 });
+  await h.game((scene, finishWithoutStaff) => {
+    scene.shiftClock.elapsedMs = Math.max(scene.shiftClock.elapsedMs, 12 * 35 * 1000 - 500);
+    if (finishWithoutStaff) {
+      // The front customer no longer times out, so simulate checkout after closing.
+      window.__finishUnstaffedShift = setInterval(() => {
+        if (!scene.shiftClock.softClosed) return;
+        for (const register of scene.fixtures.registers()) {
+          const customer = scene.checkoutSystem.lineFor(register)[0];
+          if (!customer) continue;
+          scene.checkoutSystem.completeEmployeeCheckout({
+            currentJob: { register, customer },
+            sprite: register.sprite,
+          }, customer);
+        }
+      }, 100);
+    }
+  }, employees.length === 0);
+  try {
+    await h.page.waitForFunction(() => window.__game.scene.getScene("scene-game").shift.ended, null, { timeout: 240000 });
+  } finally {
+    if (employees.length === 0) {
+      await h.page.evaluate(() => {
+        clearInterval(window.__finishUnstaffedShift);
+        delete window.__finishUnstaffedShift;
+      });
+    }
+  }
   const after = await h.game((scene) => {
     const total = scene.catalogSystem.getInventoryItems()
       .reduce((sum, { offShelves, stock, inCustomerCarts }) => sum + offShelves + stock + inCustomerCarts, 0);

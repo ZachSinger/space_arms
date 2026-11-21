@@ -82,8 +82,9 @@ function storeTopic({ shopLevel, reputation }) {
     section("Store Level", `
       <p class="handbook-callout">${progress}</p>
       <p>Your Store Level is shown on the top bar. It goes up when a shift ends with enough
-        store reputation. Each new level unlocks something new, such as supplier contracts,
-        fixtures, staff, or more shop space. The <strong>Level Rewards</strong> page lists them all.</p>
+        store reputation. Every new level unlocks one or two things: supplier contracts, room
+        for more staff, or more shop space. The <strong>Level Rewards</strong> page lists
+        them all.</p>
       <p>You never lose a level, even if your reputation drops later.</p>`),
     section("Reputation", `
       <p>Store reputation goes up and down based on how customers are treated.</p>
@@ -92,7 +93,7 @@ function storeTopic({ shopLevel, reputation }) {
         "<strong>-1</strong> when a customer gets tired of waiting in line and leaves.",
         "<strong>-1</strong> when a customer can't find anything they came for, because it's out of stock everywhere in the shop.",
         "<strong>-1</strong> when a thrown crate hits a customer.",
-        "<strong>-1</strong> for handing a customer the wrong change. The first wrong try with each customer is only a warning.",
+        "<strong>-1</strong> for handing a customer the wrong change. The first wrong try with each customer is only a warning. The third wrong try loses the sale, but costs no more reputation.",
       ])}
       <p>Changes are added up during the shift and only count when the shift ends. The
         Finances tab shows the change so far.</p>
@@ -226,6 +227,7 @@ function customersTopic() {
         "Customers only buy an item if your price isn't too far above the market price. Each customer will pay a little more or less than the others.",
         "When your price is well below the market price, customers show they're happy about the good deal.",
         "When they're done, they line up at a register — if you have more than one, they pick the shortest line. If they wait too long, they leave angry.",
+        "Customers get 10 extra seconds for each person ahead when they join a line. Moving up gives them 5 more seconds unless they reach the front, where they won't leave because of waiting.",
       ])}`),
     section("Running the Register", `
       ${list([
@@ -293,11 +295,12 @@ function licensesTopic() {
 function employeesTopic() {
   return [
     section("How They Choose Their Tasks", `
-      <p>Each employee can do both jobs. When they're free, they try their priority first,
-        then do the other job if it needs doing:</p>
+      <p>Each employee can do every job. When they're free, they try their first job,
+        then go down their job order to the next job that needs doing:</p>
       ${list([
         "<strong>Run register:</strong> a register has customers in line and nobody — you or another employee — is working it. Each register is worked by one person at a time, so more registers let more staff ring up customers at once.",
         "<strong>Stock shelves:</strong> a crate anywhere in the shop or backroom has items, and a matching shelf spot has room.",
+        "<strong>Clean up trash:</strong> there is trash on the shop floor and a trashcan they can walk to. They pick up the nearest piece nobody else is going for, one at a time, and throw it in the nearest trashcan. If you pick up that piece first, they go for another one.",
       ])}
       <p>They take a matching crate — from the Loading Pad, the backroom, or the shop floor,
         top of a stack first — straight to its shelf spot. They only
@@ -309,12 +312,17 @@ function employeesTopic() {
         go back to their original spot when it is still clear.
         When a crate is empty, they carry it to the nearest reachable trashcan.</p>
       <p>Staff wear orange sleeves and dark work aprons. When carrying a crate,
-        they hold it above their head with both arms raised.</p>
-      <p>At closing time, they finish up and leave once the last customer is gone.</p>`),
+        they hold it above their head with both arms raised. When cleaning, they carry one
+        piece of trash at their side.</p>
+      <p>At closing time, they finish up and leave once the last customer is gone. Someone on
+        the way to a piece of trash leaves it where it is; someone already carrying trash
+        throws it away first.</p>`),
     section("How to Set Priorities", `
       <p>Open the <strong>Employee</strong> tab and find the employee under <strong>YOUR STAFF</strong>.
-        Choose <strong>Prioritize Register</strong> or <strong>Prioritize Stocking</strong>.
-        They try that job first, but still do the other when it needs doing.
+        Choose <strong>Prioritize Register</strong>, <strong>Prioritize Stocking</strong>, or
+        <strong>Prioritize Cleaning</strong> to make that their first job. The other jobs keep their
+        order behind it, shown under <strong>Job order</strong>.
+        They try their first job first, but still do the others when they need doing.
         You can only change this between shifts.</p>`),
     section("How to Hire", `
       ${list([
@@ -335,8 +343,8 @@ function employeesTopic() {
       ])}`),
     section("Job Levels & Training", `
       ${list([
-        `Each employee has two separate skills: <strong>Run register</strong> and <strong>Stock shelves</strong>.
-          Each starts at Level 1 and can reach Level ${MAX_EMPLOYEE_SKILL_LEVEL}.`,
+        `Each employee has three separate skills: <strong>Run register</strong>, <strong>Stock shelves</strong>,
+          and <strong>Clean up trash</strong>. Each starts at Level 1 and can reach Level ${MAX_EMPLOYEE_SKILL_LEVEL}.`,
         "Booking new training courses is not currently available.",
         "An already-booked course takes the entire next shift. That employee will not work in the shop, but you still pay their current wage when the shift starts.",
         "The skill improves when that shift ends. The higher wage starts with the following shift.",
@@ -344,6 +352,7 @@ function employeesTopic() {
           employees work ${Math.round((getEmployeeJobSpeed({ register: 3 }, "register") - 1) * 100)}% faster
           at Level 3 and ${getEmployeeJobSpeed({ register: 5 }, "register")} times normal speed at Level 5.`,
         "Stock shelves makes restocking trips faster with each level.",
+        "Clean up trash makes cleaning trips, and picking up and throwing away trash, faster with each level.",
         "Skills and higher wages are permanent.",
         "If an employee is already away training, wait until they return before changing On Shift / Off Shift.",
       ])}`),

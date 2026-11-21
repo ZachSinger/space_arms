@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { Events, GAME_EVENTS } from "../js/core/Events.js";
 import { createServer } from "vite";
 import { PLAYER_BODY_HEIGHT, PLAYER_BODY_WIDTH } from "../js/logic/Player.js";
+import { CleaningSystem } from "../js/modules/cleaning/CleaningSystem.js";
 
 let server;
 let cacheDirectory;
@@ -14,6 +15,7 @@ let Employee;
 let nextTestShelfSlotId = 1;
 let nextTestCrateId = 1;
 let REGISTER_SERVICE_MS_PER_ITEM;
+let TRASH_HANDLING_MS;
 let EmployeeRenderer;
 let EmployeeTraining;
 
@@ -57,7 +59,7 @@ before(async () => {
       },
     }],
   });
-  ({ Employee, REGISTER_SERVICE_MS_PER_ITEM } = await server.ssrLoadModule("/js/logic/Employee.js"));
+  ({ Employee, REGISTER_SERVICE_MS_PER_ITEM, TRASH_HANDLING_MS } = await server.ssrLoadModule("/js/logic/Employee.js"));
   ({ EmployeeRenderer } = await server.ssrLoadModule("/js/logic/EmployeeRenderer.js"));
   EmployeeTraining = await server.ssrLoadModule("/js/logic/EmployeeTraining.js");
 });
@@ -611,6 +613,143 @@ test("a stock clerk carries an empty crate to the nearest trashcan", () => {
   assert.equal(employee.state, "IDLE");
 });
 
+// A real cleaning module on a plain open sales floor, wired into the employee test store.
+function addCleaning(scene) {
+  const image = () => ({
+    destroyed: false,
+    setScale() { return this; },
+    setDepth() { return this; },
+    setPosition(x, y) { this.x = x; this.y = y; return this; },
+    destroy() { this.destroyed = true; },
+  });
+  let savedTrash = [];
+  const shop = {
+    textures: { exists: () => true },
+    add: { image },
+    room: { zones: [{ id: "base", gridX: 0, gridY: 0, gridW: 100, gridH: 100, salesFloor: true }], isWalkable: () => true },
+    fixtures: { all: () => [] },
+    gameState: { trash: { setPieces(list) { savedTrash = list; } }, reputation: { shopLevel: 1 } },
+    player: { currentFacing: "down", sprite: { x: 0, y: 0, depth: 3 } },
+  };
+  const cleaning = new CleaningSystem(shop);
+  scene.cleaning = cleaning;
+  return { cleaning, savedTrash: () => savedTrash };
+}
+
+function addCoworker(scene, id, jobPriorities) {
+  scene.gameState.staff.jobPriorities[id] = jobPriorities;
+  const coworker = new Employee({ id, name: id }, scene);
+  coworker.scene = scene;
+  scene.employees.push(coworker);
+  return coworker;
+}
+
+test("an employee who cleans first carries floor trash to a trashcan, making the store cleaner", () => {
+  const { employee } = makeEmployee({ jobPriorities: ["clean", "register", "stock_shelves"] });
+  const { cleaning, savedTrash } = addCleaning(employee.scene);
+  const far = cleaning.trash.add("paper", 600, 20);
+  const near = cleaning.trash.add("can", 100, 20);
+  assert.equal(cleaning.getCleanliness().trashCount, 2);
+
+  employee.startNextTask();
+  assert.equal(employee.state, "TO_LITTER");
+  assert.equal(employee.currentJob.trash, near, "the nearest piece first");
+  employee.arriveAtDestination();
+  assert.equal(employee.state, "PICKING_UP_LITTER");
+  employee.update(TRASH_HANDLING_MS);
+  assert.equal(employee.state, "TO_LITTER_BIN");
+  assert.deepEqual(cleaning.trash.pieces, [far]);
+  assert.equal(cleaning.getCleanliness().trashCount, 2, "carried trash still counts until it's thrown away");
+  assert.deepEqual(savedTrash(), [{ kind: "paper", x: 600, y: 20 }]);
+  assert.deepEqual(cleaning.serializeTrash(), [
+    { kind: "paper", x: 600, y: 20 }, { kind: "can", x: 100, y: 20 },
+  ], "a save mid-carry keeps the carried piece once");
+
+  employee.arriveAtDestination();
+  assert.equal(employee.state, "BINNING_LITTER");
+  employee.update(TRASH_HANDLING_MS);
+  assert.equal(employee.state, "IDLE");
+  assert.equal(near.sprite.destroyed, true);
+  assert.equal(cleaning.getCleanliness().trashCount, 1);
+  assert.deepEqual(cleaning.serializeTrash(), [{ kind: "paper", x: 600, y: 20 }]);
+
+  employee.data.skillLevels = { register: 1, stock_shelves: 1, clean: 5 };
+  employee.startNextTask();
+  assert.equal(employee.currentJob.trash, far);
+  employee.arriveAtDestination();
+  assert.ok(employee.cleaningActionRemainingMs < TRASH_HANDLING_MS, "skill speeds up picking up trash");
+});
+
+test("cleaning has no work without trash or the cleaning module, so the next job starts", () => {
+  const { employee } = makeEmployee({ jobPriorities: ["clean", "stock_shelves", "register"] });
+  employee.startNextTask();
+  assert.equal(employee.state, "TO_CRATE", "no cleaning module");
+
+  const other = makeEmployee({ jobPriorities: ["clean", "stock_shelves", "register"] }).employee;
+  addCleaning(other.scene);
+  other.startNextTask();
+  assert.equal(other.state, "TO_CRATE", "no trash on the floor");
+
+  const noCan = makeEmployee({ jobPriorities: ["clean", "stock_shelves", "register"], trashcans: [] }).employee;
+  addCleaning(noCan.scene).cleaning.trash.add("box", 100, 20);
+  noCan.startNextTask();
+  assert.notEqual(noCan.state, "TO_LITTER", "no trashcan to throw it in");
+});
+
+test("two employees and the player never collect the same piece of trash", () => {
+  const { employee } = makeEmployee({ jobPriorities: ["clean", "register", "stock_shelves"] });
+  const { cleaning } = addCleaning(employee.scene);
+  const first = cleaning.trash.add("can", 100, 20);
+  const second = cleaning.trash.add("paper", 300, 20);
+  const coworker = addCoworker(employee.scene, "sera_floor_assistant", ["clean", "register", "stock_shelves"]);
+
+  employee.startNextTask();
+  coworker.startNextTask();
+  assert.equal(employee.currentJob.trash, first);
+  assert.equal(coworker.currentJob.trash, second, "a claimed piece is left to the employee going for it");
+
+  // The player grabs the first piece before the employee gets there.
+  assert.equal(cleaning.pickUpTrash(first), true);
+  employee.update(16);
+  assert.equal(employee.state, "IDLE");
+  assert.equal(cleaning.pickUpTrashForStaff(employee, first), false);
+  employee.startNextTask();
+  assert.notEqual(employee.state, "TO_LITTER", "the only other piece is already claimed");
+
+  coworker.arriveAtDestination();
+  coworker.update(TRASH_HANDLING_MS);
+  assert.equal(cleaning.isStaffHoldingTrash(coworker), true);
+  assert.equal(cleaning.pickUpTrash(second), false, "the player can't take trash an employee is carrying");
+  assert.equal(cleaning.getCleanliness().trashCount, 2, "one in the player's hands, one in the coworker's");
+});
+
+test("closing never loses or duplicates trash an employee is after or carrying", () => {
+  const { employee } = makeEmployee({ jobPriorities: ["clean", "register", "stock_shelves"] });
+  const { cleaning, savedTrash } = addCleaning(employee.scene);
+  const piece = cleaning.trash.add("can", 100, 20);
+
+  employee.startNextTask();
+  employee.requestClockOut();
+  employee.update(16);
+  assert.equal(employee.isReadyToClockOut(), true, "trash not yet picked up is left for later");
+  assert.deepEqual(cleaning.trash.pieces, [piece]);
+  assert.equal(piece.claimedBy, null);
+
+  employee.clockOutRequested = false;
+  employee.startNextTask();
+  employee.arriveAtDestination();
+  employee.update(TRASH_HANDLING_MS);
+  employee.requestClockOut();
+  employee.update(16);
+  assert.equal(employee.state, "TO_LITTER_BIN", "carried trash still goes in the trashcan");
+
+  employee.destroy();
+  assert.equal(cleaning.isStaffHoldingTrash(employee), false);
+  assert.deepEqual(cleaning.trash.pieces, [piece], "trash in hand when staff leave goes back on the floor");
+  assert.equal(savedTrash().length, 1);
+  assert.equal(cleaning.getCleanliness().trashCount, 1);
+});
+
 test("staff skip routing to same-room spots that cannot beat the best walk, keeping ties and doors exact", () => {
   const { employee } = makeEmployee();
   employee.sprite.body.center = { x: 0, y: 0 };
@@ -793,7 +932,7 @@ test("the employee panel offers one selected priority for each saved job order",
     hiredEmployeeIds: ["tavi_stock_clerk"],
     activeEmployeeIds: [],
     employeeJobPriorities: {
-      tavi_stock_clerk: ["stock_shelves", "register"],
+      tavi_stock_clerk: ["stock_shelves", "register", "clean"],
     },
     credits: 1000,
     canHire: true,
@@ -802,14 +941,22 @@ test("the employee panel offers one selected priority for each saved job order",
   const stocking = EmployeeRenderer.generateHTML(options);
   assert.match(stocking, /data-employee-priority-job="register" aria-pressed="false"/);
   assert.match(stocking, /data-employee-priority-job="stock_shelves" aria-pressed="true"/);
+  assert.match(stocking, /data-employee-priority-job="clean" aria-pressed="false"/);
   assert.match(stocking, />Prioritize Register<\/button>/);
   assert.match(stocking, />Prioritize Stocking<\/button>/);
+  assert.match(stocking, />Prioritize Cleaning<\/button>/);
+  assert.match(stocking, /Job order: 1\. Stocking, 2\. Register, 3\. Cleaning/);
 
   const register = EmployeeRenderer.generateHTML({
-    ...options, employeeJobPriorities: { tavi_stock_clerk: ["register", "stock_shelves"] },
+    ...options, employeeJobPriorities: { tavi_stock_clerk: ["register", "stock_shelves", "clean"] },
   });
   assert.match(register, /data-employee-priority-job="register" aria-pressed="true"/);
   assert.match(register, /data-employee-priority-job="stock_shelves" aria-pressed="false"/);
+  const cleaning = EmployeeRenderer.generateHTML({
+    ...options, employeeJobPriorities: { tavi_stock_clerk: ["clean", "register", "stock_shelves"] },
+  });
+  assert.match(cleaning, /data-employee-priority-job="clean" aria-pressed="true"/);
+  assert.match(cleaning, /Job order: 1\. Cleaning, 2\. Register, 3\. Stocking/);
   const duringShift = EmployeeRenderer.generateHTML({ ...options, canHire: false });
   assert.match(duringShift, /data-employee-priority-job="register" aria-pressed="false"\s+disabled/);
   assert.match(duringShift, /data-employee-priority-job="stock_shelves" aria-pressed="true"\s+disabled/);
@@ -819,8 +966,8 @@ test("the employee panel offers one selected priority for each saved job order",
     hiredEmployeeIds: ["tavi_stock_clerk", "sera_floor_assistant"],
     shopLevel: 7,
     employeeJobPriorities: {
-      tavi_stock_clerk: ["register", "stock_shelves"],
-      sera_floor_assistant: ["stock_shelves", "register"],
+      tavi_stock_clerk: ["register", "stock_shelves", "clean"],
+      sera_floor_assistant: ["stock_shelves", "register", "clean"],
     },
   });
   assert.match(twoEmployees, /data-employee-priority-id="tavi_stock_clerk"\s+data-employee-priority-job="register" aria-pressed="true"/);
@@ -831,7 +978,7 @@ test("the employee panel switches staff on and off shift, only between shifts", 
   const options = {
     hiredEmployeeIds: ["tavi_stock_clerk"],
     activeEmployeeIds: [],
-    employeeJobPriorities: { tavi_stock_clerk: ["register", "stock_shelves"] },
+    employeeJobPriorities: { tavi_stock_clerk: ["register", "stock_shelves", "clean"] },
     credits: 1000,
     canHire: true,
     shopLevel: 4,
@@ -905,7 +1052,7 @@ test("the employee panel explains the Shop Level 4 staff limit before anyone can
   const locked = EmployeeRenderer.generateHTML({ ...options, shopLevel: 1 });
   assert.match(locked, /can(?:'|&#39;)t have employees yet/);
   assert.match(locked, /Shop Level 4/);
-  assert.match(locked, /72 store reputation/);
+  assert.match(locked, /90 store reputation/);
   assert.match(locked, /Hired: 0 of 0/);
   assert.match(locked, /data-hire-employee-id="kel_supply_runner"[\s\S]*?disabled/);
   assert.match(locked, />\s*FULL\s*<\/button>/);

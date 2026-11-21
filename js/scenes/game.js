@@ -208,7 +208,6 @@ export class GameScene extends Phaser.Scene {
   buildCheckout() {
     this.checkoutSystem = new CheckoutSystem(this);
     this.checkoutWindow = new CheckoutWindow(this.windowManager);
-    this.checkoutWindow.onFirstScan = () => this.checkoutSystem.operatingLine()[0]?.resetPatience();
     this.checkoutWindow.getRegisterScreenArea = () => this.checkoutSystem.getRegisterScreenArea();
     this.shelfStockingWindow = new ShelfStockingWindow(this);
   }

@@ -215,31 +215,31 @@ function createExpansionHarness({ shopLevel, credits }) {
 }
 
 test("store expansions require their level, credits, and previous purchases", () => {
-  const locked = createExpansionHarness({ shopLevel: 4, credits: 5000 });
+  const locked = createExpansionHarness({ shopLevel: 5, credits: 5000 });
   assert.equal(locked.scene.fixtureSystem.expansionOptions()[0].levelMet, false);
   assert.equal(locked.scene.fixtureSystem.buyExpansion("expansion_west"), false);
   assert.equal(locked.scene.gameState.economy.credits, 5000);
-  assert.match(locked.messages[0], /Shop Level 5/);
+  assert.match(locked.messages[0], /Shop Level 6/);
 
-  const poor = createExpansionHarness({ shopLevel: 5, credits: 3999 });
+  const poor = createExpansionHarness({ shopLevel: 6, credits: 3999 });
   assert.equal(poor.scene.fixtureSystem.buyExpansion("expansion_west"), false);
   assert.equal(poor.scene.room.zones.find((zone) => zone.id === "expansion_west").locked, true);
   assert.equal(poor.scene.gameState.economy.credits, 3999);
 
-  const open = createExpansionHarness({ shopLevel: 5, credits: 4000 });
+  const open = createExpansionHarness({ shopLevel: 6, credits: 4000 });
   open.scene.shiftClock.started = true;
   assert.equal(open.scene.fixtureSystem.buyExpansion("expansion_west"), false);
   assert.equal(open.scene.gameState.economy.credits, 4000);
   assert.match(open.messages[0], /while the store is closed/);
 
-  const wrongOrder = createExpansionHarness({ shopLevel: 30, credits: 100000 });
+  const wrongOrder = createExpansionHarness({ shopLevel: 50, credits: 100000 });
   assert.equal(wrongOrder.scene.fixtureSystem.buyExpansion("expansion_a"), false);
   assert.equal(wrongOrder.scene.gameState.economy.credits, 100000);
   assert.match(wrongOrder.messages[0], /in order/);
 });
 
 test("buying the first store expansion deducts credits and records a receipt line", () => {
-  const harness = createExpansionHarness({ shopLevel: 5, credits: 4000 });
+  const harness = createExpansionHarness({ shopLevel: 6, credits: 4000 });
   const { scene } = harness;
   assert.equal(scene.fixtureSystem.expansionOptions()[0].canAfford, true);
   assert.equal(scene.fixtureSystem.buyExpansion("expansion_west"), true);
@@ -257,23 +257,23 @@ test("buying the first store expansion deducts credits and records a receipt lin
 });
 
 test("backroom expansions require their level, credits, and previous purchases", () => {
-  const locked = createExpansionHarness({ shopLevel: 12, credits: 20000 });
+  const locked = createExpansionHarness({ shopLevel: 21, credits: 20000 });
   assert.equal(locked.scene.fixtureSystem.backroomOptions()[0].levelMet, false);
   assert.equal(locked.scene.fixtureSystem.buyBackroomUpgrade(BACKROOM_UPGRADE_ORDER[0]), false);
-  assert.match(locked.messages[0], /Shop Level 13/);
+  assert.match(locked.messages[0], /Shop Level 22/);
 
-  const poor = createExpansionHarness({ shopLevel: 13, credits: 3999 });
+  const poor = createExpansionHarness({ shopLevel: 22, credits: 3999 });
   assert.equal(poor.scene.fixtureSystem.buyBackroomUpgrade(BACKROOM_UPGRADE_ORDER[0]), false);
   assert.equal(poor.scene.gameState.economy.credits, 3999);
   assert.match(poor.messages[0], /costs 4,000\./);
 
-  const wrongOrder = createExpansionHarness({ shopLevel: 27, credits: 20000 });
+  const wrongOrder = createExpansionHarness({ shopLevel: 46, credits: 20000 });
   assert.equal(wrongOrder.scene.fixtureSystem.buyBackroomUpgrade(BACKROOM_UPGRADE_ORDER[1]), false);
   assert.match(wrongOrder.messages[0], /in order/);
 });
 
 test("buying all backroom expansions records costs and opens the wider room", () => {
-  const harness = createExpansionHarness({ shopLevel: 27, credits: 19000 });
+  const harness = createExpansionHarness({ shopLevel: 46, credits: 19000 });
   const { scene } = harness;
   for (const id of BACKROOM_UPGRADE_ORDER) {
     assert.equal(scene.fixtureSystem.buyBackroomUpgrade(id), true);
@@ -452,35 +452,35 @@ test("the shift-end event, receipt, and save observers see the applied reputatio
   scene.saves = new SaveSystem(scene, { write: async () => true });
   scene.staffSystem = { clear() {} };
   scene.customerFlow = new CustomerFlow(scene);
-  scene.shift.customersServed = 16;
+  scene.shift.customersServed = 21;
   scene.shift.loanOffer = () => ({ available: false, amount: 0, repayTotal: 0 });
   state.subscribe((current) => {
     if (current.calendar.awaitingEndDay && scene.saves.canSaveOffShift()) {
       savedStates.push(current.toSave().playerState);
     }
   });
-  state.reputation.gain(16, "scavengers");
+  state.reputation.gain(21, "scavengers");
   state.reputation.lose(1, "mercenaries");
   assert.equal(state.reputation.global, 0);
-  assert.equal(scene.shift.financesView().pendingReputationChange, 15);
+  assert.equal(scene.shift.financesView().pendingReputationChange, 20);
 
   scene.shift.end();
-  assert.equal(state.reputation.global, 15);
+  assert.equal(state.reputation.global, 20);
   assert.equal(state.reputation.shopLevel, 2);
   assert.equal(scene.shiftClock.started, false);
   assert.deepEqual(events, [{
     name: GAME_EVENTS.SHIFT_ENDED,
     details: {
-      served: 16,
+      served: 21,
       turnedAway: 0,
-      reputation: 15,
-      factionReputation: { scavengers: 16, mercenaries: -1, explorers: 0 },
+      reputation: 20,
+      factionReputation: { scavengers: 21, mercenaries: -1, explorers: 0 },
     },
   }]);
-  assert.equal(scene.shift.financesView().today.reputationChange, 15);
+  assert.equal(scene.shift.financesView().today.reputationChange, 20);
   assert.equal(scene.shift.financesView().pendingReputationChange, null);
   assert.equal(savedStates.length, 1);
-  assert.equal(savedStates[0].globalReputation, 15);
+  assert.equal(savedStates[0].globalReputation, 20);
   assert.equal(savedStates[0].shopLevel, 2);
   assert.match(messages[0], /Shop Level 2 reached/);
   assert.match(messages[0], /Frontier Survival Kit.*Contracts tab/);
@@ -503,7 +503,7 @@ test("a shift that earns multiple levels announces each implemented unlock", () 
   scene.staffSystem = { clear() {} };
   scene.customerFlow = new CustomerFlow(scene);
   scene.shift.customersServed = 60;
-  state.reputation.gain(72);
+  state.reputation.gain(90);
   scene.shift.end();
   assert.equal(state.reputation.shopLevel, 4);
   assert.match(messages[0], /Shop Level 4 reached/);
@@ -511,27 +511,27 @@ test("a shift that earns multiple levels announces each implemented unlock", () 
   assert.match(messages[0], /You can now have 1 employee hired at once \(Employee tab\)/);
 
   state.endDay();
-  state.reputation.gain(42);
+  state.reputation.gain(48);
   scene.shift.end();
   assert.equal(state.reputation.shopLevel, 5);
   assert.match(messages[1], /Shop Level 5 reached/);
-  assert.doesNotMatch(messages[1], /Contracts unlocked|employees? hired at once/);
-  assert.match(messages[1], /Sales-floor expansion available to buy in the Layout tab/);
+  assert.doesNotMatch(messages[1], /Contracts unlocked|employees? hired at once|Sales-floor expansion/);
   assert.doesNotMatch(messages[1], /Some later level rewards are not in the game yet/);
 
   state.endDay();
-  state.reputation.gain(51);
+  state.reputation.gain(180);
   scene.shift.end();
   assert.equal(state.reputation.shopLevel, 6);
   assert.match(messages[2], /Shop Level 6 reached/);
   assert.match(messages[2], /Lyra Casual Wear.*Contracts tab/);
+  assert.match(messages[2], /Sales-floor expansion available to buy in the Layout tab/);
   assert.doesNotMatch(messages[2], /Some later level rewards are not in the game yet/);
 });
 
-test("a shift from Shop Level 6 to 30 announces all remaining reward types", () => {
+test("a shift from Shop Level 6 to 37 announces all remaining reward types", () => {
   const state = newGame();
   state.reputation.shopLevel = 6;
-  state.reputation.global = 165;
+  state.reputation.global = 318;
   const scene = Object.create(GameScene.prototype);
   const messages = [];
   Object.assign(scene, {
@@ -546,12 +546,12 @@ test("a shift from Shop Level 6 to 30 announces all remaining reward types", () 
   scene.staffSystem = { clear() {} };
   scene.customerFlow = new CustomerFlow(scene);
   scene.shift.customersServed = 60;
-  state.reputation.gain(3924);
+  state.reputation.gain(10044);
   scene.shift.end();
 
-  assert.equal(state.reputation.shopLevel, 30);
+  assert.equal(state.reputation.shopLevel, 37);
   assert.match(messages[0], /You can now have 6 employees hired at once/);
-  assert.match(messages[0], /Breach-Tech Heavy Tools/);
+  assert.match(messages[0], /Aulin NT Firearms/);
   assert.match(messages[0], /Sales-floor expansions available to buy/);
   assert.match(messages[0], /Backroom expansions available to buy/);
   assert.doesNotMatch(messages[0], /Some later level rewards are not in the game yet/);
@@ -575,7 +575,7 @@ test("level-up messages do not reannounce contracts or staff already owned in ol
   scene.staffSystem = { clear() {} };
   scene.customerFlow = new CustomerFlow(scene);
   scene.shift.customersServed = 60;
-  state.reputation.gain(72);
+  state.reputation.gain(90);
   scene.shift.end();
   assert.match(messages[0], /Shop Level 4 reached/);
   assert.doesNotMatch(messages[0], /Contracts unlocked|Standard Pistol Ammo|Staff unlocked/);
@@ -621,12 +621,12 @@ test("the actual hire action explains the level lock and allows hiring after the
   const staffSystem = new StaffSystem(scene);
   staffSystem.canManage = () => true;
   assert.equal(staffSystem.hire("tavi_stock_clerk"), false);
-  assert.match(warnings[0], /Shop Level 4.*72 store reputation/);
+  assert.match(warnings[0], /Shop Level 4.*90 store reputation/);
   assert.equal(state.economy.credits, 1500);
   assert.equal(autosaves, 0);
 
-  state.reputation.gain(72);
-  state.finishShift({ customersServed: 72, customersTurnedAway: 0 });
+  state.reputation.gain(90);
+  state.finishShift({ customersServed: 90, customersTurnedAway: 0 });
   assert.equal(staffSystem.hire("tavi_stock_clerk"), true);
   assert.equal(state.economy.credits, 1250);
   assert.equal(autosaves, 1);
@@ -716,7 +716,7 @@ test("actual store price edits preserve cents and explain invalid prices", () =>
   assert.match(warnings[0], /two decimal places/);
 });
 
-test("customers queue without opening the register or freezing patience while the tablet is open", () => {
+test("customers queue without opening the register while the tablet is open", () => {
   const { scene, checkout, tablet } = createRegisterHarness();
   tablet.isOpen = true;
   const first = { cart: [{ itemId: "rifle", price: 100 }] };
@@ -726,13 +726,10 @@ test("customers queue without opening the register or freezing patience while th
   assert.deepEqual(scene.checkoutSystem.lineFor(scene.fixtures.register()), [first, second]);
   assert.equal(checkout.uiWindow.isOpen, false);
   assert.deepEqual(checkout.openedCarts, []);
-  assert.equal(scene.checkoutSystem.isServingCustomer(first), false);
-
   tablet.isOpen = false;
   scene.checkoutSystem.resumeRegisterCheckout();
   assert.equal(checkout.uiWindow.isOpen, true);
   assert.deepEqual(checkout.openedCarts, [first.cart]);
-  assert.equal(scene.checkoutSystem.isServingCustomer(first), false, "the player's checkout never freezes patience");
 });
 
 test("hiding checkout for the tablet preserves scanned items and payment progress on return", () => {
@@ -746,7 +743,6 @@ test("hiding checkout for the tablet preserves scanned items and payment progres
   checkout.suspend();
   assert.equal(checkout.uiWindow.isOpen, false);
   assert.equal(checkout.isScanning, false);
-  assert.equal(scene.checkoutSystem.isServingCustomer(customer), false);
   scene.checkoutSystem.resumeRegisterCheckout();
   assert.equal(checkout.uiWindow.isOpen, false);
 

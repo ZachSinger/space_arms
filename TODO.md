@@ -107,11 +107,17 @@ notice something that needs doing but isn't being done right now.
 - [x] Implement the planned rewards at Shop Levels 2-30, including assigning every
       supplier contract to a level, fixture licenses, staff, and sales-floor and backroom
       expansions.
-- [x] Level 5, 9, 17, 24, and 30 unlock sales-floor expansions for purchase in order.
+- [x] Level 6, 13, 32, 42, and 49 unlock sales-floor expansions for purchase in order.
       Each costs credits, requires the listed Shop Level, and can only be bought while
       the store is closed.
-- [x] Level 13, 20, and 27 unlock paid backroom expansions for purchase in order while
+- [x] Level 22, 37, and 46 unlock paid backroom expansions for purchase in order while
       the store is closed.
+- [x] Spread unlocks across Shop Levels 2-50: every level unlocks one or two things, staff
+      limits and expansions mostly get their own level, guns never arrive before their ammo, and
+      brand attachments follow their guns. See [StoreLevel.md](documentation/StoreLevel.md).
+- [x] Move each weapon and ammunition product into a contract that unlocks with its matching
+      weapon or ammo: scatter-rifle with Scatter & Breach Munitions, RPG with Artillery &
+      Explosives, and heavy pistol/rifle ammo with Pre-War Ammunition.
 - [ ] Playtest the [Store Level roadmap](documentation/StoreLevel.md) and adjust reputation
       thresholds, especially whether 15 is reasonable by the end of the first shift.
 
@@ -141,7 +147,7 @@ notice something that needs doing but isn't being done right now.
   - [x] Slice 1: customers drop trash, carry it to a trashcan, cleanliness in the top bar,
         customers get upset or walk out, trash is saved.
   - [ ] Slice 2: dirt marks, the Mop Bucket fixture, and mopping.
-  - [ ] Employees who clean.
+  - [x] Employees who clean.
 - [ ] Hovercart (new design, Store Level 7): follows the player carrying crate stacks,
       Gear Modifier button, charging station. See [documentation/modules/Hovercart.md](documentation/modules/Hovercart.md).
 - [ ] Presentation Level: decorations that customers expect; low presentation blocks

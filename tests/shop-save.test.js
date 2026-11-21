@@ -58,6 +58,25 @@ test("hands-on shelves and empty carried or dropped crates survive save validati
   assert.throws(() => validateShopSave(data, database), /shelf stack does not fit/);
 });
 
+test("older saves keep access to heavy ammo they could already order", () => {
+  const old = snapshot();
+  old.layoutVersion = 12;
+  old.playerState.activeLicenses = ["lic_start_ammo"];
+  const migrated = validateShopSave(old, database);
+  assert.ok(migrated.playerState.activeLicenses.includes("lic_edge_antique_ammo"));
+
+  const oldWithoutAmmo = snapshot();
+  oldWithoutAmmo.layoutVersion = 12;
+  oldWithoutAmmo.playerState.activeLicenses = ["lic_edge_antique"];
+  assert.ok(!validateShopSave(oldWithoutAmmo, database).playerState.activeLicenses
+    .includes("lic_edge_antique_ammo"));
+
+  const current = snapshot();
+  current.playerState.activeLicenses = ["lic_start_ammo"];
+  assert.ok(!validateShopSave(current, database).playerState.activeLicenses
+    .includes("lic_edge_antique_ammo"));
+});
+
 test("old three-level Budget Shelves keep their level and excess boxes go to Go-Backs once", () => {
   const data = snapshot();
   data.fixtures.push({
@@ -307,7 +326,7 @@ test("invalid saved inventory and economy are rejected before restoration", () =
   const corruptions = [
     (data) => { data.playerState.credits = NaN; },
     (data) => { data.playerState.shopLevel = 0; },
-    (data) => { data.playerState.shopLevel = 31; },
+    (data) => { data.playerState.shopLevel = 51; },
     (data) => { data.playerState.pendingReputation = { global: 1, factions: {} }; },
     (data) => { data.playerState.activeLicenses.push("unknown"); },
     (data) => { data.playerState.storePrices.wpn_rif_01 = 0; },
@@ -356,7 +375,7 @@ test("saves from before employees existed still load", () => {
 test("employee skills remain valid after firing, while booked training requires hired non-maxed staff", () => {
   const data = snapshot();
   data.playerState.employeeSkills = {
-    tavi_stock_clerk: { register: 2, stock_shelves: 1 },
+    tavi_stock_clerk: { register: 2, stock_shelves: 1, clean: 1 },
   };
   assert.doesNotThrow(() => validateShopSave(data, database));
   data.playerState.employeeTraining = { tavi_stock_clerk: "register" };
@@ -422,11 +441,41 @@ test("version 9 saves remove storage fixtures, refund purchases, and move stock 
     { itemId: "wpn_rif_01", quantity: 40 },
   ]);
   assert.deepEqual(restored.playerState.activeLicenses, ["lic_corp_aulin"]);
-  assert.deepEqual(restored.playerState.employeeJobPriorities, { tavi_stock_clerk: ["stock_shelves", "register"] });
-  assert.deepEqual(restored.playerState.employeeSkills, { tavi_stock_clerk: { register: 2, stock_shelves: 3 } });
+  assert.deepEqual(restored.playerState.employeeJobPriorities, { tavi_stock_clerk: ["stock_shelves", "register", "clean"] });
+  assert.deepEqual(restored.playerState.employeeSkills, { tavi_stock_clerk: { register: 2, stock_shelves: 3, clean: 1 } });
   assert.deepEqual(restored.playerState.employeeTraining, { tavi_stock_clerk: "stock_shelves" });
   assert.equal(data.fixtures.some((fixture) => fixture.type === "locker_single"), true,
     "migration does not mutate the source save");
+});
+
+test("saves from before the cleaning job add it last for each employee, at Level 1", () => {
+  const data = snapshot();
+  data.layoutVersion = 11;
+  data.playerState.hiredEmployees = ["tavi_stock_clerk", "dax_stock_clerk"];
+  data.playerState.employeeJobPriorities = {
+    tavi_stock_clerk: ["stock_shelves", "register"],
+    dax_stock_clerk: ["register", "stock_shelves"],
+  };
+  data.playerState.employeeSkills = { tavi_stock_clerk: { register: 2, stock_shelves: 4 } };
+  data.playerState.employeeTraining = { tavi_stock_clerk: "register" };
+  const copy = structuredClone(data);
+
+  const restored = validateShopSave(data, database);
+  assert.equal(restored.layoutVersion, SHOP_LAYOUT_VERSION);
+  assert.deepEqual(restored.playerState.employeeJobPriorities, {
+    tavi_stock_clerk: ["stock_shelves", "register", "clean"],
+    dax_stock_clerk: ["register", "stock_shelves", "clean"],
+  });
+  assert.deepEqual(restored.playerState.employeeSkills, {
+    tavi_stock_clerk: { register: 2, stock_shelves: 4, clean: 1 },
+  });
+  assert.deepEqual(restored.playerState.employeeTraining, { tavi_stock_clerk: "register" });
+  assert.deepEqual(data, copy, "the save being loaded is not changed");
+
+  // A current save must already list the cleaning job.
+  const current = structuredClone(copy);
+  current.layoutVersion = SHOP_LAYOUT_VERSION;
+  assert.throws(() => validateShopSave(current, database), /invalid employee/);
 });
 
 test("saves using the old detached backroom are rejected as unsupported", () => {

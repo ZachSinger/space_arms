@@ -17,8 +17,8 @@ factions get no customers: nobody goes to a burger joint for motorcycle parts.
 
 Every MVP faction has at least one license that needs no earned
 faction reputation: Basic Rations & Water for Explorers is available at Shop
-Level 1; Scrap-Yard Ballistics for Scavengers and Standard Munitions for
-Mercenaries become available at Shop Level 2.
+Level 1; Scrap-Yard Sidearms for Scavengers and Standard Pistol Ammo for
+Mercenaries become available at Shop Level 3.
 
 Store reputation sets the store's baseline traffic. Stock adjusts that total.
 Employees never bring in customers; they help serve the ones who come. The
@@ -77,13 +77,12 @@ increase to guarantee one visitor per active faction.
   Even at zero or negative reputation, that faction can still send customers.
 - A faction can only be active if the player is licensed to sell something it
   wants. If a customer from an active faction finds none of those items
-  assigned to shelves, they leave without a reputation penalty and show a
-  hint about the kind of stock they want.
+  assigned to shelves, they leave without a message or reputation penalty.
 - If eligible shelf slots exist but their stock is sold out, existing Primary
   shortage rules apply. Assigned, sold-out slots still define the store's
   assortment. Restocking eligible items lets the player recover through sales.
 - Faction-specific licenses may depend on faction reputation, but each faction
-  has an early license that needs no earned faction reputation. Level 2 opens
+  has an early license that needs no earned faction reputation. Level 3 opens
   the initial Scavenger and Mercenary contracts.
 
 ## Scalers

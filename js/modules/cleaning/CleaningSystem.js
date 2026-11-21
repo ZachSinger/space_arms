@@ -26,6 +26,9 @@ export class CleaningSystem {
     this.shop = shop;
     this.trash = new TrashField(shop, (x, y) => this.isOpenTrashSpot(x, y));
     this.heldTrash = null;
+    // Employee -> the piece of trash they're carrying to a trashcan.
+    /** @type {Map<object, object>} */
+    this.staffHeldTrash = new Map();
     if (shop.interactables) {
       this.unregisterInteractions = shop.interactables.registerProvider("cleaning", () => [{
         id: "cleaning",
@@ -111,6 +114,8 @@ export class CleaningSystem {
 
   pickUpTrash(piece) {
     if (!this.trash.take(piece)) return false;
+    // The player wins any race: an employee walking to this piece gives up and picks another.
+    piece.claimedBy = null;
     this.heldTrash = piece;
     this.syncHeldTrash();
     this.syncSavedTrash();
@@ -160,6 +165,107 @@ export class CleaningSystem {
     sprite.setDepth(player.depth + (facing === "up" ? -0.5 : 0.5));
   }
 
+  // ---- Employees who clean (js/logic/Employee.js reaches these through its store interface,
+  // so staff code never imports this module and simply finds no cleaning work without it.)
+
+  /**
+   * Floor trash an employee may go for: every piece no other employee is already after.
+   * @param {object} holder - the employee
+   */
+  staffTrashTargets(holder) {
+    return this.trash.pieces.filter((piece) => !piece.claimedBy || piece.claimedBy === holder);
+  }
+
+  /**
+   * Where an employee can stand to pick up a piece: on it, or one step away on any side.
+   * @param {{ x: number, y: number }} piece
+   */
+  trashStandSpots(piece) {
+    const ahead = CLEANING_TUNING.trashPickupAheadPx;
+    return [{ x: piece.x, y: piece.y }, ...Object.values(PLAYER_FACING_STEPS).map((step) => ({
+      x: piece.x - step.x * ahead,
+      y: piece.y - step.y * ahead,
+    }))];
+  }
+
+  isTrashOnFloor(piece) {
+    return this.trash.pieces.includes(piece);
+  }
+
+  // Reserves a floor piece for one employee so nobody else heads for it. Drops any older claim.
+  claimTrashForStaff(holder, piece) {
+    if (!this.isTrashOnFloor(piece) || (piece.claimedBy && piece.claimedBy !== holder)) return false;
+    this.releaseStaffClaims(holder);
+    piece.claimedBy = holder;
+    return true;
+  }
+
+  isClaimedBy(piece, holder) {
+    return this.isTrashOnFloor(piece) && piece.claimedBy === holder;
+  }
+
+  releaseStaffClaims(holder) {
+    for (const piece of this.trash.pieces) if (piece.claimedBy === holder) piece.claimedBy = null;
+  }
+
+  pickUpTrashForStaff(holder, piece) {
+    if (this.staffHeldTrash.has(holder) || !this.isClaimedBy(piece, holder) || !this.trash.take(piece)) return false;
+    piece.claimedBy = null;
+    this.staffHeldTrash.set(holder, piece);
+    this.syncStaffHeldTrash();
+    this.syncSavedTrash();
+    return true;
+  }
+
+  isStaffHoldingTrash(holder) {
+    return this.staffHeldTrash.has(holder);
+  }
+
+  throwAwayStaffTrash(holder) {
+    const piece = this.staffHeldTrash.get(holder);
+    if (!piece) return false;
+    this.staffHeldTrash.delete(holder);
+    piece.sprite.destroy();
+    return true;
+  }
+
+  /**
+   * Puts an employee's carried trash back on the floor at their feet (or, with no open floor
+   * there, where they picked it up) and drops their claims. Safe to call when they hold nothing.
+   * @param {object} holder - the employee
+   */
+  dropStaffTrash(holder) {
+    this.releaseStaffClaims(holder);
+    const piece = this.staffHeldTrash.get(holder);
+    if (!piece) return false;
+    this.staffHeldTrash.delete(holder);
+    const sprite = holder.sprite;
+    const feet = sprite && { x: sprite.body?.center?.x ?? sprite.x, y: sprite.body?.bottom ?? sprite.y };
+    const spot = feet && Number.isFinite(feet.x) && Number.isFinite(feet.y) && this.isOpenTrashSpot(feet.x, feet.y)
+      ? feet
+      : { x: piece.x, y: piece.y };
+    this.trash.place(piece, spot.x, spot.y);
+    this.trash.moveOffBlockedSpots();
+    this.syncSavedTrash();
+    return true;
+  }
+
+  // Carried trash rides beside the employee, like the player's.
+  syncStaffHeldTrash() {
+    for (const [holder, piece] of this.staffHeldTrash) {
+      const sprite = holder.sprite;
+      if (!sprite || !piece.sprite) continue;
+      const side = { left: -14, right: 14, down: 12, up: -12 }[holder.currentFacing] ?? 12;
+      piece.sprite.setPosition(sprite.x + side, sprite.y - 4);
+      piece.sprite.setDepth((sprite.depth ?? 0) + (holder.currentFacing === "up" ? -0.5 : 0.5));
+    }
+  }
+
+  clearStaffHeldTrash() {
+    for (const piece of this.staffHeldTrash.values()) piece.sprite.destroy();
+    this.staffHeldTrash.clear();
+  }
+
   getCleanliness() {
     const shop = this.shop;
     const salesExpansions = EXPANSION_ORDER.filter((id) =>
@@ -168,7 +274,7 @@ export class CleaningSystem {
       salesExpansions,
       shopLevel: shop.gameState.reputation.shopLevel,
     });
-    const trashCount = this.trash.count + (this.heldTrash ? 1 : 0);
+    const trashCount = this.trash.count + (this.heldTrash ? 1 : 0) + this.staffHeldTrash.size;
     return { score: getCleanlinessScore(max, trashCount), max, trashCount };
   }
 
@@ -212,6 +318,8 @@ export class CleaningSystem {
         };
       trash.push({ kind: this.heldTrash.kind, x: spot.x, y: spot.y });
     }
+    // Trash an employee is carrying is saved back where they picked it up.
+    for (const piece of this.staffHeldTrash.values()) trash.push({ kind: piece.kind, x: piece.x, y: piece.y });
     return trash;
   }
 
@@ -222,6 +330,7 @@ export class CleaningSystem {
   load(list) {
     this.heldTrash?.sprite.destroy();
     this.heldTrash = null;
+    this.clearStaffHeldTrash();
     this.trash.load(list);
     this.syncSavedTrash();
   }
@@ -233,6 +342,7 @@ export class CleaningSystem {
 
   update(time) {
     this.updateHighlight(time);
+    this.syncStaffHeldTrash();
   }
 
   updateHighlight(time) {
@@ -246,6 +356,7 @@ export class CleaningSystem {
     this.unregisterInteractions?.();
     this.heldTrash?.sprite.destroy();
     this.heldTrash = null;
+    this.clearStaffHeldTrash();
     this.trash.destroy();
   }
 }

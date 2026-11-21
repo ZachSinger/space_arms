@@ -16,13 +16,13 @@ import { MIN_SUPPLY_RATIO, MAX_SUPPLY_RATIO } from "../js/logic/Market.js";
 import { EMPLOYEE_HIRE_COST, EMPLOYEE_BASE_WAGE } from "../js/logic/EmployeeTraining.js";
 
 // --- Player model (ideal-but-plausible play; every result below depends on these) ---
-const SERVE_CAP_PER_SHIFT = 40; // customers one register can realistically ring up in a 5-min shift
 const STOCK_SCALER = CUSTOMER_POOL_TUNING.stockScalerMaximum; // shelves kept full
 const AVG_UNITS_PER_CUSTOMER = 2.5; // between neutral (2) and faction (3-3.5) buyers
 const AVG_SUPPLY_RATIO = (MIN_SUPPLY_RATIO + MAX_SUPPLY_RATIO) / 2; // avg crate cost vs base
 const SELL_AT = 1.0; // player prices at market, which hovers around base cost
 
 const money = (value) => Math.round(value).toLocaleString("en-US");
+const maximumLevel = SHOP_LEVEL_TIERS[SHOP_LEVEL_TIERS.length - 1].level;
 
 // --- Reputation / level timeline ---------------------------------------------------
 function simulateDays(maxDays = 365) {
@@ -34,7 +34,7 @@ function simulateDays(maxDays = 365) {
     const level = [...SHOP_LEVEL_TIERS].reverse().find((tier) => reputation >= tier.reputation).level;
     const staff = getStaffLimit(level);
     const pool = Math.round(getStoreRepPool(reputation) * STOCK_SCALER);
-    const served = Math.min(pool, SERVE_CAP_PER_SHIFT);
+    const served = pool;
     // Revenue model: units sold at ~base price; goods cost the supply ratio of base.
     const assortment = affordableAssortment(level);
     const unitsSold = served * AVG_UNITS_PER_CUSTOMER;
@@ -49,7 +49,7 @@ function simulateDays(maxDays = 365) {
       if (!levelReachedOnDay.has(reached)) levelReachedOnDay.set(reached, day);
     }
     rows.push({ day, level: newLevel, reputation, pool, served, profit, cash });
-    if (newLevel >= 30 && rows.length > 1 && rows.at(-2).level >= 30) break;
+    if (newLevel >= maximumLevel && rows.length > 1 && rows.at(-2).level >= maximumLevel) break;
   }
   return { rows, levelReachedOnDay };
 }
@@ -73,12 +73,12 @@ function affordableAssortment(level) {
 const { rows, levelReachedOnDay } = simulateDays();
 
 console.log("SPACE ARMS DEALER - BALANCE AUDIT");
-console.log("Model: serve cap " + SERVE_CAP_PER_SHIFT + "/shift, shelves full, " +
+console.log("Model: every arriving customer served, no reputation losses, shelves full, " +
   AVG_UNITS_PER_CUSTOMER + " items/customer, selling at market (~base), " +
   "goods cost " + Math.round(AVG_SUPPLY_RATIO * 100) + "% of base, median-priced assortment.");
 console.log("");
 
-console.log("=== LEVEL TIMELINE (target: Level 30 around day 100) ===");
+console.log("=== LEVEL TIMELINE (first four clean shifts: one level each; later levels: several shifts) ===");
 console.log("level | rep needed | day reached | money on that day | unlocks");
 for (const tier of SHOP_LEVEL_TIERS) {
   const day = levelReachedOnDay.get(tier.level);
@@ -100,9 +100,9 @@ for (const tier of SHOP_LEVEL_TIERS) {
   );
 }
 
-const day30 = [...levelReachedOnDay.entries()].find(([level]) => level === 30)?.[1];
+const maximumLevelDay = levelReachedOnDay.get(maximumLevel);
 console.log("");
-console.log(`Level 30 reached on day ${day30 ?? "NEVER (within a year)"}; target ~100.`);
+console.log(`Level ${maximumLevel} reached on day ${maximumLevelDay ?? "NEVER (within a year)"}.`);
 console.log("");
 
 console.log("=== DAILY SNAPSHOT (every 5 days) ===");
@@ -165,8 +165,8 @@ console.log(`All expansions: ${money(totalExpansions)}`);
 console.log(`All staff hires (${STAFF_LIMIT_LEVELS.length}): ${money(totalStaff)}`);
 console.log(`~12 big shelves: ${money(sampleShelves)}`);
 console.log(`TOTAL spendable: ~${money(allSinks)}`);
-const atDay30 = rows.find((row) => row.day === (day30 ?? rows.at(-1).day)) ?? rows.at(-1);
-console.log(`Cash when hitting max level (model): ${money(atDay30.cash)}`);
+const atMaximumLevel = rows.find((row) => row.day === (maximumLevelDay ?? rows.at(-1).day)) ?? rows.at(-1);
+console.log(`Cash when hitting max level (model): ${money(atMaximumLevel.cash)}`);
 console.log("");
 
 console.log("=== DATA SMELLS ===");

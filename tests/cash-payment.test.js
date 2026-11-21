@@ -79,18 +79,26 @@ test("click adds, right-click removes, and the drawer never runs out", () => {
   assert.throws(() => cash.adjustChange(2, 1), /Invalid drawer/);
 });
 
-test("wrong change is refused, first mistake warns, later mistakes penalize", () => {
+test("wrong change is refused: first mistake warns, second penalizes, third loses the sale", () => {
   const cash = new CashPayment(12.34, 20);
-  assert.deepEqual(cash.handOver(), { accepted: false, penalty: false });
-  assert.deepEqual(cash.handOver(), { accepted: false, penalty: true });
-  assert.deepEqual(cash.handOver(), { accepted: false, penalty: true });
+  assert.deepEqual(cash.handOver(), { accepted: false, penalty: false, lost: false });
+  assert.deepEqual(cash.handOver(), { accepted: false, penalty: true, lost: false });
+  assert.deepEqual(cash.handOver(), { accepted: false, penalty: false, lost: true });
   for (const { units, count } of splitCash(cash.changeDueUnits)) {
     for (let i = 0; i < count; i += 1) cash.adjustChange(units, 1);
   }
-  assert.equal(cash.changeUnits, 766);
-  assert.deepEqual(cash.handOver(), { accepted: true, penalty: false });
-  assert.deepEqual(cash.handOver(), { accepted: false, penalty: false });
-  cash.adjustChange(1, 1);
-  assert.equal(cash.changeUnits, 766);
+  assert.deepEqual(cash.handOver(), { accepted: false, penalty: false, lost: false },
+    "a lost sale can't be finished afterwards");
+
+  const corrected = new CashPayment(12.34, 20);
+  assert.equal(corrected.handOver().accepted, false);
+  for (const { units, count } of splitCash(corrected.changeDueUnits)) {
+    for (let i = 0; i < count; i += 1) corrected.adjustChange(units, 1);
+  }
+  assert.equal(corrected.changeUnits, 766);
+  assert.deepEqual(corrected.handOver(), { accepted: true, penalty: false, lost: false });
+  assert.deepEqual(corrected.handOver(), { accepted: false, penalty: false, lost: false });
+  corrected.adjustChange(1, 1);
+  assert.equal(corrected.changeUnits, 766);
   assert.equal(new CashPayment(20, 20).handOver().accepted, true);
 });

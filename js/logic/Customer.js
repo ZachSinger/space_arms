@@ -12,7 +12,7 @@ import {
   showCharacterFacing,
 } from "./CustomerSprites.js";
 import { CUSTOMER_COLLISION_HEIGHT, CUSTOMER_COLLISION_WIDTH } from "./CharacterDimensions.js";
-import { BARGAIN_PRICE_RATIO, createCustomerBuyList } from "./CustomerBuyLists.js";
+import { BARGAIN_PRICE_RATIO, CUSTOMER_FACTION_IDS, createCustomerBuyList } from "./CustomerBuyLists.js";
 import { transferItems } from "./InventoryTransfer.js";
 import { sumMoney } from "./Money.js";
 import { BASE_PATIENCE_MS, getPatienceMs, planShelfRoute, rollCustomerTraits } from "./CustomerTraits.js";
@@ -38,7 +38,8 @@ const MAX_WALK_MS = 60000;
 const PROGRESS_DISTANCE = 24; // px from the last checkpoint that counts as a step forward
 const CUSTOMER_REACTION_MS = 1800;
 const CUSTOMER_REACTION_FADE_MS = 300;
-const BIG_PURCHASE_ITEM_COUNT = 3;
+const QUEUE_JOIN_POSITION_BONUS_MS = 10000;
+const QUEUE_ADVANCE_BONUS_MS = 5000;
 // How long a customer stands looking at a shelf before taking anything from it.
 const BROWSE_SHELF_MS = Object.freeze([1500, 3500]);
 // Chance to look around another stocked shelf before heading to the next planned shelf.
@@ -126,6 +127,7 @@ export class Customer {
     this.cart = []; // [{ itemId, price }]
     this.priceTolerance = gameRandom.float(MIN_PRICE_TOLERANCE, MAX_PRICE_TOLERANCE);
     this.queueTarget = null; // set by the scene once this customer has a spot in line
+    this.queuePosition = null;
     this.patienceRemainingMs = null; // only ticks once queued
     this.patienceBubble = null;
     this.patienceLevel = -1;
@@ -524,19 +526,9 @@ export class Customer {
   finishShoppingPhase() {
     if (this.shoppingPhase === "primary") {
       if (this.shoppingPlan.primaryItemIds.length === 0) {
-        const hints = {
-          scavengers: "No matching stock. Scavengers want older gear.",
-          mercenaries: "No matching stock. Mercenaries want weapons, ammo, or armor.",
-          explorers: "No matching stock. Explorers want tools or survival gear.",
-        };
-        const hint = this.factionId ? hints[this.factionId] : "No products are on the shelves yet.";
-        if (this.factionId && !hint) throw new Error(`Unknown customer faction: ${this.factionId}`);
-        this.store.showFloatingText(
-          this.sprite.x,
-          this.sprite.y - 50,
-          hint,
-          "#38bdf8",
-        );
+        if (this.factionId && !CUSTOMER_FACTION_IDS.includes(this.factionId)) {
+          throw new Error(`Unknown customer faction: ${this.factionId}`);
+        }
         this.enterLeaving();
         return;
       }
@@ -627,25 +619,35 @@ export class Customer {
   joinQueue() {
     this.state = "QUEUEING";
     this.queueTarget = { x: this.registerPoint.x, y: this.registerPoint.y };
-    this.resetPatience();
     this.onJoinQueue(this);
   }
 
-  resetPatience() {
-    this.patienceRemainingMs = this.maxPatienceMs ?? PATIENCE_MS;
+  /**
+   * @param {number} position - zero-based position in this register's line
+   */
+  setQueuePosition(position) {
+    const previousPosition = this.queuePosition;
+    if (previousPosition == null) {
+      this.patienceRemainingMs = (this.maxPatienceMs ?? PATIENCE_MS) +
+        position * QUEUE_JOIN_POSITION_BONUS_MS;
+    } else if (position === 0 && previousPosition !== 0) {
+      this.patienceRemainingMs = this.maxPatienceMs ?? PATIENCE_MS;
+    } else if (position > 0 && position < previousPosition) {
+      this.patienceRemainingMs += QUEUE_ADVANCE_BONUS_MS;
+    }
+    this.queuePosition = position;
   }
 
   /**
-   * Drains while waiting in line, except while served or while the store is temporarily closed.
+   * Drains behind the front of the line, except while the store is temporarily closed.
    * @param {number} delta - ms
    */
   updatePatience(delta) {
     if (this.patienceRemainingMs == null) return;
-    if (!this.store.customerFlow.temporarilyClosed &&
-      !this.store.checkoutSystem?.isServingCustomer?.(this)) {
+    if (this.queuePosition !== 0 && !this.store.customerFlow.temporarilyClosed) {
       this.patienceRemainingMs = Math.max(0, this.patienceRemainingMs - delta);
     }
-    if (this.patienceRemainingMs <= 0) {
+    if (this.queuePosition !== 0 && this.patienceRemainingMs <= 0) {
       this.leaveAngry();
       return;
     }
@@ -681,6 +683,7 @@ export class Customer {
   }
 
   clearPatience() {
+    this.queuePosition = null;
     this.patienceRemainingMs = null;
     this.patienceLevel = -1;
     this.patienceBubble?.destroy();
@@ -783,11 +786,11 @@ export class Customer {
   }
 
   // Bible Steps 12/51: abandons the cart for the scene to process, then leaves.
-  leaveAngry() {
+  leaveAngry({ reputationPenalty = true } = {}) {
     this.showReaction("left-angry", "angry");
     const cart = this.cart.map((entry) => ({ ...entry }));
     this.clearPatience();
-    this.onLeaveAngry?.(this, cart);
+    this.onLeaveAngry?.(this, cart, { reputationPenalty });
     this.enterLeaving();
   }
 
@@ -804,9 +807,6 @@ export class Customer {
   // Finish the customer's sale state and return proceeds for the scene's sale event.
   completeSale() {
     const total = sumMoney(this.cart.map((entry) => entry.price));
-    if (this.cart.length >= BIG_PURCHASE_ITEM_COUNT) {
-      this.showReaction("large-purchase", "happy");
-    }
     this.clearPatience();
     this.enterLeaving();
     return total;

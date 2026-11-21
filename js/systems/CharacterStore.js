@@ -49,6 +49,8 @@ export function createEmployeeStore(scene) {
     get floorStacks() { return scene.floorStacks; },
     get eventBus() { return scene.eventBus; },
     get player() { return scene.player; },
+    // Optional cleaning module (null when disabled): the "clean" job then has no work.
+    get cleaning() { return scene.cleaningSystem ?? null; },
     get crateMotionPaused() { return scene.crateSystem.motionPaused; },
   };
 }

@@ -30,8 +30,9 @@ export class ReputationPenalties {
   listen(eventBus) {
     eventBus.on(GAME_EVENTS.CUSTOMER_HIT_BY_CRATE, ({ customer }) =>
       this.penalize(customer, CRATE_HIT_REPUTATION_PENALTY, "Customer hit!"));
-    eventBus.on(GAME_EVENTS.CUSTOMER_LEFT_ANGRY, ({ customer }) =>
-      this.penalize(customer, ANGRY_REPUTATION_PENALTY, "Left angry!"));
+    eventBus.on(GAME_EVENTS.CUSTOMER_LEFT_ANGRY, ({ customer, reputationPenalty = true }) => {
+      if (reputationPenalty) this.penalize(customer, ANGRY_REPUTATION_PENALTY, "Left angry!");
+    });
     eventBus.on(GAME_EVENTS.CUSTOMER_MISSING_PRIMARY, ({ customer, itemNames }) =>
       this.penalize(customer, MISSING_PRIMARY_REPUTATION_PENALTY, `Out of stock:\n${itemNames.join("\n")}`));
   }

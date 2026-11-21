@@ -23,7 +23,8 @@
   "employeeJobPriorities": {
    "tavi_stock_clerk": [
     "register",
-    "stock_shelves"
+    "stock_shelves",
+    "clean"
    ]
   },
   "employeeSkills": {},
@@ -827,7 +828,7 @@
   "loading_pad",
   "sales_floor"
  ],
- "layoutVersion": 11,
+ "layoutVersion": 12,
  "crates": [
   {
    "kind": "item",

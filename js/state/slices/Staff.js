@@ -88,14 +88,15 @@ export class Staff extends Slice {
     return true;
   }
 
-  moveJobPriority(employeeId, jobId, direction) {
-    if (!this.hired.includes(employeeId) || !Number.isInteger(direction) || Math.abs(direction) !== 1) return false;
+  // Puts one job first; the others keep their order behind it.
+  prioritizeJob(employeeId, jobId) {
+    if (!this.hired.includes(employeeId)) return false;
     const priorities = this.jobPriorities[employeeId];
     if (!Array.isArray(priorities)) throw new Error(`Employee ${employeeId} has no saved job priorities.`);
     const index = priorities.indexOf(jobId);
-    const targetIndex = index + direction;
-    if (index < 0 || targetIndex < 0 || targetIndex >= priorities.length) return false;
-    [priorities[index], priorities[targetIndex]] = [priorities[targetIndex], priorities[index]];
+    if (index <= 0) return false;
+    priorities.splice(index, 1);
+    priorities.unshift(jobId);
     this.changed();
     return true;
   }

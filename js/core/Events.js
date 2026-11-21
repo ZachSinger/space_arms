@@ -14,7 +14,7 @@
  * Every event the game announces, and what it carries.
  * @typedef {object} GameEventPayloads
  * @property {{ customer: object, itemId: string | null }} "customer-hit-by-crate"
- * @property {{ customer: object, cart: object[] }} "customer-left-angry"
+ * @property {{ customer: object, cart: object[], reputationPenalty?: boolean }} "customer-left-angry"
  * @property {{ customer: object, itemIds: string[], itemNames: string[] }} "customer-missing-primary"
  * @property {{ customer: object, total: number }} "customer-sale-completed"
  * @property {{ kind: string, itemId: string | null, typeId: string | null, quantity: number }} "crate-picked-up"

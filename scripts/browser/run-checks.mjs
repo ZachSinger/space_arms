@@ -88,7 +88,7 @@ try {
     for (const employees of [[], ["tavi_stock_clerk", "sera_floor_assistant"]]) {
       const errorsBefore = h.errors().length;
       const result = await runScriptedShift(h, { employees, playSeconds: quick ? 60 : 150 });
-      // With no staff nobody works the register, so no sales are expected.
+      // The no-staff shift uses a simulated cashier only after closing.
       const failures = checkScriptedShift(result, { expectSales: employees.length > 0 });
       failures.push(...h.errors().slice(errorsBefore).map((problem) => `${problem.type}: ${problem.text}`));
       const { log, frames } = result.after;

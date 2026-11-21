@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { DayLedger, isValidLedgerData, summarizeReceipt } from "../js/logic/DayLedger.js";
 import { FinancesRenderer } from "../js/logic/FinancesRenderer.js";
+import { createCustomerPool, getStoreRepPool } from "../js/logic/CustomerPooling.js";
+import { getShopLevelRequirement } from "../js/logic/ShopProgression.js";
 
 let server;
 let cacheDirectory;
@@ -56,8 +58,8 @@ const balanceOf = (state) => state.economy.dayLedger.openingCredits +
   state.economy.dayLedger.lines.reduce((sum, line) => sum + line.amount, 0);
 
 function unlockStaff(state) {
-  state.reputation.gain(72);
-  state.finishShift({ customersServed: 72, customersTurnedAway: 0 });
+  state.reputation.gain(90);
+  state.finishShift({ customersServed: 90, customersTurnedAway: 0 });
   state.endDay();
 }
 
@@ -90,37 +92,37 @@ test("store and faction reputation changes are applied together at the end of th
   assert.deepEqual(state.reputation.factions, { scavengers: 4, mercenaries: -2, explorers: 0 });
 });
 
-test("shop levels rise after a shift and the first staff spot opens at Level 4 with 72 reputation", () => {
+test("shop levels rise after a shift and the first staff spot opens at Level 4 with 90 reputation", () => {
   const state = newGame();
-  state.reputation.gain(16);
-  state.reputation.lose(2);
+  state.reputation.gain(20);
+  state.reputation.lose(1);
   assert.equal(state.reputation.global, 0);
   assert.equal(state.reputation.shopLevel, 1);
-  state.finishShift({ customersServed: 14, customersTurnedAway: 0 });
-  assert.equal(state.reputation.global, 14);
+  state.finishShift({ customersServed: 20, customersTurnedAway: 0 });
+  assert.equal(state.reputation.global, 19);
   assert.equal(state.reputation.shopLevel, 1);
   assert.equal(state.hireEmployee("tavi_stock_clerk"), false);
 
   state.endDay();
   state.reputation.gain(1);
-  assert.equal(state.reputation.global, 14);
+  assert.equal(state.reputation.global, 19);
   assert.equal(state.reputation.shopLevel, 1);
   state.finishShift({ customersServed: 1, customersTurnedAway: 0 });
-  assert.equal(state.reputation.global, 15);
+  assert.equal(state.reputation.global, 20);
   assert.equal(state.reputation.shopLevel, 2);
   assert.equal(state.hireEmployee("tavi_stock_clerk"), false);
 
   state.endDay();
-  state.reputation.gain(24);
-  state.finishShift({ customersServed: 24, customersTurnedAway: 0 });
-  assert.equal(state.reputation.global, 39);
+  state.reputation.gain(30);
+  state.finishShift({ customersServed: 30, customersTurnedAway: 0 });
+  assert.equal(state.reputation.global, 50);
   assert.equal(state.reputation.shopLevel, 3);
   assert.equal(state.hireEmployee("tavi_stock_clerk"), false);
 
   state.endDay();
-  state.reputation.gain(32);
-  state.finishShift({ customersServed: 32, customersTurnedAway: 0 });
-  assert.equal(state.reputation.global, 71);
+  state.reputation.gain(39);
+  state.finishShift({ customersServed: 39, customersTurnedAway: 0 });
+  assert.equal(state.reputation.global, 89);
   assert.equal(state.reputation.shopLevel, 3);
   assert.equal(state.hireEmployee("tavi_stock_clerk"), false);
 
@@ -128,11 +130,11 @@ test("shop levels rise after a shift and the first staff spot opens at Level 4 w
   state.reputation.gain(1);
   assert.equal(state.reputation.shopLevel, 3);
   state.finishShift({ customersServed: 1, customersTurnedAway: 0 });
-  assert.equal(state.reputation.global, 72);
+  assert.equal(state.reputation.global, 90);
   assert.equal(state.reputation.shopLevel, 4);
 
   state.endDay();
-  state.reputation.lose(67);
+  state.reputation.lose(85);
   state.finishShift({ customersServed: 0, customersTurnedAway: 0 });
   assert.equal(state.reputation.global, 5);
   assert.equal(state.reputation.shopLevel, 4);
@@ -146,7 +148,7 @@ test("older saves keep reputation and hired staff and derive their initial shop 
   const saved = newGame().toSave().playerState;
   delete saved.shopLevel;
   delete saved.pendingReputation;
-  saved.globalReputation = 15;
+  saved.globalReputation = 20;
   assert.equal(loadPlayer(saved).reputation.shopLevel, 2);
 
   saved.globalReputation = 2;
@@ -156,15 +158,17 @@ test("older saves keep reputation and hired staff and derive their initial shop 
   assert.equal(restored.reputation.global, 2);
   assert.equal(restored.reputation.shopLevel, 1);
   assert.deepEqual(restored.staff.hired, ["tavi_stock_clerk"]);
-  assert.equal(restored.staff.moveJobPriority("tavi_stock_clerk", "stock_shelves", -1), true);
+  assert.equal(restored.staff.prioritizeJob("tavi_stock_clerk", "stock_shelves"), true);
 });
 
 test("older level-capped saves catch up to earned reputation without reducing saved levels", () => {
   const saved = newGame().toSave().playerState;
   saved.shopLevel = 2;
-  saved.globalReputation = 72;
+  saved.globalReputation = 90;
   assert.equal(loadPlayer(saved).reputation.shopLevel, 4);
   saved.shopLevel = 4;
+  saved.globalReputation = 72;
+  assert.equal(loadPlayer(saved).reputation.shopLevel, 4, "an old earned level survives the slower curve");
   saved.globalReputation = -5;
   assert.equal(loadPlayer(saved).reputation.shopLevel, 4);
 });
@@ -181,17 +185,65 @@ test("previously signed contracts and hired staff remain owned below their new u
   assert.equal(restored.catalog.owns("lic_start_apparel"), true);
   assert.equal(restored.catalog.owns("lic_start_surplus"), true);
   assert.deepEqual(restored.staff.hired, ["tavi_stock_clerk"]);
-  assert.equal(restored.staff.moveJobPriority("tavi_stock_clerk", "stock_shelves", -1), true);
+  assert.equal(restored.staff.prioritizeJob("tavi_stock_clerk", "stock_shelves"), true);
 });
 
 test("one shift can earn multiple levels without applying reputation early", () => {
   const state = newGame();
-  state.reputation.gain(4089);
+  const highestRequirement = getShopLevelRequirement(50);
+  state.reputation.gain(highestRequirement);
   assert.equal(state.reputation.global, 0);
   assert.equal(state.reputation.shopLevel, 1);
   state.finishShift({ customersServed: 1, customersTurnedAway: 0 });
-  assert.equal(state.reputation.global, 4089);
-  assert.equal(state.reputation.shopLevel, 30);
+  assert.equal(state.reputation.global, highestRequirement);
+  assert.equal(state.reputation.shopLevel, 50);
+  assert.equal(reload(state).reputation.shopLevel, 50);
+});
+
+function finishCleanShift(state, stockCoverage) {
+  const baseCustomers = getStoreRepPool(state.reputation.global);
+  const pool = createCustomerPool({
+    storeReputation: state.reputation.global,
+    factionReputation: state.reputation.factions,
+    activeFactions: new Set(),
+    shelfPlacements: [{ itemId: "ration", quantity: Math.floor(baseCustomers * 2 * stockCoverage) }],
+    getItem: () => ITEMS[0],
+  });
+  state.reputation.gain(pool.totalCustomers);
+  state.finishShift({ customersServed: pool.totalCustomers, customersTurnedAway: 0 });
+}
+
+test("serving every customer without penalties earns one level in each of the first four shifts", () => {
+  for (const stockCoverage of [1, 1.1, 1.25]) {
+    const state = newGame();
+    for (let shift = 1; shift <= 4; shift += 1) {
+      finishCleanShift(state, stockCoverage);
+      assert.equal(state.reputation.shopLevel, shift + 1, `shift ${shift}, stock coverage ${stockCoverage}`);
+      state.endDay();
+    }
+  }
+});
+
+test("later levels take multiple clean shifts even when every arriving customer is served", () => {
+  for (const stockCoverage of [1, 1.1, 1.25]) {
+    const state = newGame();
+    let previousLevel = 1;
+    let lastLevelShift = 0;
+    for (let shift = 1; shift <= 300 && state.reputation.shopLevel < 50; shift += 1) {
+      finishCleanShift(state, stockCoverage);
+      const level = state.reputation.shopLevel;
+      if (level > previousLevel) {
+        assert.equal(level, previousLevel + 1, "clean shifts do not skip levels");
+        if (level >= 6) {
+          assert.ok(shift - lastLevelShift >= 2, `Level ${level}, stock coverage ${stockCoverage}`);
+        }
+        previousLevel = level;
+        lastLevelShift = shift;
+      }
+      state.endDay();
+    }
+    assert.equal(state.reputation.shopLevel, 50);
+  }
 });
 
 test("pending reputation survives a player-state round trip without being applied early", () => {
@@ -356,7 +408,7 @@ test("training rejects unaffordable and unhired staff and older saves start with
   delete oldSave.playerState.employeeTraining;
   const restored = GameState.fromSave(oldSave, { items: ITEMS });
   assert.deepEqual(restored.staff.profile("tavi_stock_clerk").skillLevels, {
-    register: 1, stock_shelves: 1,
+    register: 1, stock_shelves: 1, clean: 1,
   });
   assert.deepEqual(restored.staff.training, {});
 });
