@@ -3,18 +3,14 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { SettingsPanel } from "../js/logic/SettingsPanel.js";
 
-test("settings and dialogue styles live in their own window stylesheets", async () => {
-  const [shared, settings, dialogue] = await Promise.all([
+test("settings styles live in their own window stylesheet", async () => {
+  const [shared, settings] = await Promise.all([
     readFile(new URL("../styles/space_dealer_window.css", import.meta.url), "utf8"),
     readFile(new URL("../styles/windows/settings.css", import.meta.url), "utf8"),
-    readFile(new URL("../styles/windows/dialogue.css", import.meta.url), "utf8"),
   ]);
   assert.match(settings, /\.settings-window\s*\{/);
   assert.match(settings, /\.settings-actions\s*\{/);
   assert.doesNotMatch(shared, /\.settings-window\s*\{/);
-  assert.match(dialogue, /\.dialogue-window\s*\{/);
-  assert.match(dialogue, /\.dialogue-continue\.visible\s*\{/);
-  assert.doesNotMatch(shared, /\.dialogue-window\s*\{/);
 });
 
 test("resolution preview updates the frame and cancel restores the previous choice", async (t) => {

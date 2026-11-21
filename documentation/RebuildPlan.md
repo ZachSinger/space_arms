@@ -400,6 +400,13 @@ Use one way, and give each window its own style file. Done one window at a time.
 
 **Done when:** every window uses one pattern and every screenshot matches.
 
+**Phase 7 finished:** every tablet tab and window builds its markup with the `html` helper, and
+styles are split into `tokens.css`, the shared `space_dealer_window.css`, and one file per window
+under `styles/windows/`. Rules no page used were removed (including the old dialogue window's
+file). The remaining forced overrides are intentional: hidden/pad-only/keyboard-only switches,
+the pad-focus cursor, and two checkout widths that must beat inline sizes. All eight tablet tabs
+were screenshot-compared before and after the cleanup at a fixed window size and match.
+
 ### Phase 8 — Modules plug in (2 sessions)
 
 **In plain words:** finish turning Cleaning into a self-contained add-on, and use it to set the

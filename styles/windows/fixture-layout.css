@@ -33,8 +33,7 @@
 
 .fixtures-catalog-list,
 .fixtures-owned-list,
-.layout-expansions-list,
-.layout-fixture-list {
+.layout-expansions-list {
   flex: 1;
   min-height: 0;
   display: flex;
