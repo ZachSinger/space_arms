@@ -315,6 +315,16 @@ it took tells us whether the rest of the plan's sizes are right.
 **Done when:** `game.js` only creates and connects systems (target under 500 lines), and
 tests don't need to fake the whole shop.
 
+> **Phase 3 finished (3.13–3.23):** after the planned steps, the last pieces left the shop file:
+> staff decisions, saving, player controls, crate handling, prices and licenses, reputation penalties, the player's
+> reach and facing checks, the Go-Backs "!" badge, the main-menu prompt, and the people depth
+> sort. Every system now shows messages through `shop.messages`. `game.js` is about 440 lines:
+> setup is a short list of named steps (map, register, people, crates, pause, systems, shutdown,
+> session), plus the frame update. Tests build the real systems on a light scene instead of
+> faking each scene method. Known leftovers, kept on purpose: the scene still exposes the crate
+> lists and held trash as shortcuts, because the crate physics (shared with the crate and shelf
+> labs) and the customer/staff "store" read them by those names.
+
 **Milestone check:** a 5-minute feel check (walk, stock, throw, register, backroom, End Day).
 
 ### Phase 4 — Shared movement core (3 sessions)

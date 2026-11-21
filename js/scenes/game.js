@@ -136,18 +136,24 @@ export class GameScene extends Phaser.Scene {
     this.shift = new ShiftSystem(this);
     this.staffSystem = new StaffSystem(this);
 
+    this.buildMap();
+    this.buildCheckout();
+    this.buildPeople();
+    this.buildCrates();
+    this.listenForPause();
+    this.buildSystems();
+    this.cleanUpOnShutdown();
+    this.startSession();
+  }
+
+  // Room, doors, areas, fixtures, and the walk grid.
+  buildMap() {
     // Shop map: the authored tile room (see RoomLayout.js).
     this.room = new TileRoom(this);
     this.cameraRig = new CameraRig(this);
 
     // Static obstacles besides the room's own walls (shelves and other fixtures).
     this.obstacleGroup = this.physics.add.staticGroup();
-
-    const salesFloor = getZone("sales_floor");
-    const zonePixelX = salesFloor.gridX * TILE_SIZE;
-    const zonePixelY = salesFloor.gridY * TILE_SIZE;
-    const zonePixelW = salesFloor.gridW * TILE_SIZE;
-    const zonePixelH = salesFloor.gridH * TILE_SIZE;
 
     // The shop's public doorway (see getStoreDoorCell): customers spawn just inside it and
     // leave back out through it. The back wall stays drawn behind the door.
@@ -196,12 +202,24 @@ export class GameScene extends Phaser.Scene {
     };
     // Customers leave by walking back out through the same door.
     this.exitPoint = { x: doorwayPoint.x, y: this.storeDoor.y + DOORWAY_FEET_OFFSET };
+  }
 
+  // The register and the shelf window.
+  buildCheckout() {
     this.checkoutSystem = new CheckoutSystem(this);
     this.checkoutWindow = new CheckoutWindow(this.windowManager);
     this.checkoutWindow.onFirstScan = () => this.checkoutSystem.operatingLine()[0]?.resetPatience();
     this.checkoutWindow.getRegisterScreenArea = () => this.checkoutSystem.getRegisterScreenArea();
     this.shelfStockingWindow = new ShelfStockingWindow(this);
+  }
+
+  // Physics groups for customers and staff, and the player.
+  buildPeople() {
+    const salesFloor = getZone("sales_floor");
+    const zonePixelX = salesFloor.gridX * TILE_SIZE;
+    const zonePixelY = salesFloor.gridY * TILE_SIZE;
+    const zonePixelW = salesFloor.gridW * TILE_SIZE;
+    const zonePixelH = salesFloor.gridH * TILE_SIZE;
 
     // Customers collide with walls and fixtures but not the register (they queue flush
     // against it) and not each other. The pathfinder can't route around moving customers,
@@ -223,7 +241,10 @@ export class GameScene extends Phaser.Scene {
     // The register is its own group so customers (who share obstacleGroup) can queue
     // flush against it; the player still collides with it.
     this.physics.add.collider(this.player.sprite, this.registerGroup);
+  }
 
+  // The Loading Pad, crate physics, and the crate bar.
+  buildCrates() {
     // Loading Pad: ordered crates spawn here and must be hauled in by hand. It fills the
     // two floor rows against the backroom's bottom wall.
     const loadingPad = getLoadingPadBounds();
@@ -252,7 +273,10 @@ export class GameScene extends Phaser.Scene {
     this.markedStackBase = null;
     this.markedFromTop = 0;
     this.crateSystem.createViews();
+  }
 
+  // Pausing a started shift freezes the register, held buttons, and crates.
+  listenForPause() {
     this.shiftClock.subscribe(({ started, isPaused }) => {
       const paused = started && isPaused;
       // Paused time must freeze the register too, or the player could ring up for free.
@@ -263,6 +287,10 @@ export class GameScene extends Phaser.Scene {
       }
       this.crateSystem.setMotionPaused(paused);
     });
+  }
+
+  // Modules, controls, the tablet, debug tools, and event wiring.
+  buildSystems() {
     this.customers = [];
     this.employees = [];
     this.gameModules = new ModuleHost(this);
@@ -304,7 +332,9 @@ export class GameScene extends Phaser.Scene {
     DebugTools.showButtons(!this.realMode);
     this.debugTools = this.realMode ? null : new DebugTools(this);
     this.debugTools?.install();
+  }
 
+  cleanUpOnShutdown() {
     this.events.once("shutdown", () => {
       this.eventBus.clear();
       this.debugInfo?.destroy();
@@ -321,7 +351,10 @@ export class GameScene extends Phaser.Scene {
       this.checkoutWindow.destroy();
       this.windowManager.destroy();
     });
+  }
 
+  // Loads the save or test area, then starts autosave and live refreshes.
+  startSession() {
     if (this.savedShopData) this.saves.loadAtStart(this.savedShopData);
     this.sandboxRoom = !this.sandbox ? null
       : this.lab === "ui" ? setupUiLab(this) : setupSandboxRoom(this);
