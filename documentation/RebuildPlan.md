@@ -343,6 +343,11 @@ walking code. Make one shared version with room for their differences.
 **Done when:** one walking implementation, characters don't touch the scene, the scripted
 shift's give-up and stuck counts are unchanged, and the walking feel check passes.
 
+**Phase 4 finished (4.1–4.3):** customers and employees both walk with the shared `Mover`, and
+they reach the shop only through the narrow store from `CharacterStore`. Scripted-shift counts
+are unchanged. The optional step 4 waits for a feature that needs it; the walking feel check
+is still outstanding.
+
 ### Phase 5 — Input contexts, actions, and hints (3 sessions)
 
 **In plain words:** today the hint bar is a long hand-written list of situations, and every
@@ -369,6 +374,11 @@ match what the button does.
 **Done when:** the old hint and interact functions are gone, a new interactable needs no
 edits outside its own file, and the controls feel check passes.
 
+**Phase 5 finished (5.1–5.7, with 3.20):** input contexts live in `input/`, every interactable
+registers its own actions in `interaction/`, the handbook's controls come from the same list,
+and the old scene-level hint and interact functions are gone. Hint wording tests pass word for
+word. The controls feel check is still outstanding.
+
 ### Phase 6 — Containers (3 sessions)
 
 **In plain words:** every place that holds stock has its own rules today. Give them all one
@@ -383,6 +393,11 @@ hovercart (crates you can stock from without holding them).
 4. Split "crates in your hands" from "crates you can stock from" (Part 2, idea 8).
 
 **Done when:** nothing changes stock except through the container rules.
+
+**Phase 6 finished (6.1–6.4):** every stock holder has a stable ID, one location, and put-in and
+take-out permissions; deliveries, Go-Backs, sales, and abandoned carts go through transfers,
+sources, and sinks; and a test of thousands of random moves checks the stock ledger. The
+5-minute feel check below is still outstanding.
 
 **Milestone check:** a 5-minute feel check (stocking from crates and the pad, Go-Backs, checkout).
 
@@ -456,6 +471,12 @@ checked, and equal routes still pick the same spot.
 Icon atlases and further art squeezing were measured and skipped: item pictures are already
 shrunk at build time, floor and wall art is shown larger than its source at the closest zoom,
 and lossless re-saving would save only ~320 KB (4%) while visibly changing some pictures.
+
+**Phase 9 finished (automated part):** the busy-shop speed check averages ~1.9 ms per frame,
+the game's files are ~14.75 MB, and the packaged-app check passed after the rebuild: the
+packaged Windows app started, opened a new game and the tablet, saved, and read the save back
+with no errors (the real save folder was backed up first and restored byte-for-byte).
+Still outstanding: the 10-minute feel check, which needs a person playing.
 
 ### Total
 
