@@ -46,7 +46,7 @@ export function setupUiLab(scene) {
       scene.managerTablet.openWindow();
       scene.managerTablet.switchTab(button.dataset.tabletTab);
     } else if (button.hasAttribute("data-send-customer")) {
-      if (!scene.customerFlow.hasRoom()) scene.showShopMessage("The shop is full right now.");
+      if (!scene.customerFlow.hasRoom()) scene.messages.show("The shop is full right now.");
       else scene.customerFlow.spawn(null);
     }
   };

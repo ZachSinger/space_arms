@@ -82,7 +82,7 @@ test("cleaning owns floor trash, keeps held trash in the score, and saves it at 
     },
     checkoutSystem: { operatingRegister: false },
     gameState: { trash: new Trash(), reputation: { shopLevel: 5 } },
-    showGameMessage() {},
+    messages: { show() {}, floatText() {} },
   };
   const cleaning = new CleaningSystem(shop);
 

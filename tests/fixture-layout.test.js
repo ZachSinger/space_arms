@@ -21,7 +21,7 @@ test("shelf and trashcan crates cannot enter placement mode in the backroom", ()
       fixtureSystem: { canRearrange: () => true },
       carriedCrate: crate,
       areas: { playerArea: "backroom" },
-      showShopMessage: (message) => messages.push(message),
+      messages: { show: (message) => messages.push(message) },
     };
     placement.start = () => assert.fail(`${typeId} placement should not start in the backroom.`);
 

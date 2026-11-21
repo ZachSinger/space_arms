@@ -146,14 +146,14 @@ export class FixturePlacement {
    */
   begin(id) {
     if (!this.scene.fixtureSystem.canRearrange()) {
-      this.scene.showShopMessage("Fixtures can only move while the store is closed.");
+      this.scene.messages.show("Fixtures can only move while the store is closed.");
       return false;
     }
     const original = this.scene.fixtures.get(id);
     if (!original) throw new Error(`Unknown fixture: ${id}`);
     const areaBlock = this.scene.fixtureSystem.moveAreaBlockReason(original);
     if (areaBlock) {
-      this.scene.showShopMessage(areaBlock);
+      this.scene.messages.show(areaBlock);
       return false;
     }
     return this.start(original.type, original, null);
@@ -166,13 +166,13 @@ export class FixturePlacement {
    */
   beginFromCrate(crate) {
     if (!this.scene.fixtureSystem.canRearrange()) {
-      this.scene.showShopMessage("Fixtures can only be placed while the store is closed.");
+      this.scene.messages.show("Fixtures can only be placed while the store is closed.");
       return false;
     }
     if (crate !== this.scene.carriedCrate || crate?.kind !== "fixture") return false;
     const spec = getFixtureType(crate.typeId);
     if (this.scene.areas.playerArea === AREA.BACKROOM && spec) {
-      this.scene.showShopMessage("Fixtures can only be placed on the sales floor.");
+      this.scene.messages.show("Fixtures can only be placed on the sales floor.");
       return false;
     }
     return this.start(crate.typeId, null, crate);

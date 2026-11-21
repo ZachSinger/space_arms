@@ -95,8 +95,7 @@ function createHarness(write = async () => true) {
     customers: [],
     credits: 436,
     hud: { renderSaveState: (state) => controls.push(state) },
-    showShopMessage: (message) => messages.push(message),
-    messages: { closeSaveError() {} },
+    messages: { closeSaveError() {}, show: (message) => messages.push(message) },
   });
   scene.saves = new SaveSystem(scene, {
     write: async (payload) => {
@@ -202,7 +201,7 @@ function createExpansionHarness({ shopLevel, credits }) {
       },
     },
     cameraRig: { refresh() { cameraRefreshes++; }, reset() { cameraRefreshes++; } },
-    showShopMessage(message) { messages.push(message); },
+    messages: { show(message) { messages.push(message); } },
   });
   scene.saves = new SaveSystem(scene, { write: async () => true });
   scene.saves.requestAutosave = () => { autosaves++; };
@@ -358,7 +357,7 @@ test("temporarily closing the store pauses arrivals and reschedules them on reop
       getElapsedMs: () => elapsedMs,
     },
     hud: { renderStoreStatus: (closed) => storeStates.push(closed) },
-    showGameMessage: (message) => messages.push(message),
+    messages: { show: (message) => messages.push(message) },
   });
   const flow = new CustomerFlow(scene);
   flow.schedule = [
@@ -447,7 +446,7 @@ test("the shift-end event, receipt, and save observers see the applied reputatio
     room: { zones: ZONES },
     fixturePlacement: { active: false },
     eventBus: { emit: (name, details) => events.push({ name, details }) },
-    showGameMessage: (message) => messages.push(message),
+    messages: { show: (message) => messages.push(message) },
   });
   scene.shift = new ShiftSystem(scene);
   scene.saves = new SaveSystem(scene, { write: async () => true });
@@ -498,7 +497,7 @@ test("a shift that earns multiple levels announces each implemented unlock", () 
     hud: { renderStoreStatus() {} },
     room: { zones: ZONES },
     eventBus: { emit() {} },
-    showGameMessage: (message) => messages.push(message),
+    messages: { show: (message) => messages.push(message) },
   });
   scene.shift = new ShiftSystem(scene);
   scene.staffSystem = { clear() {} };
@@ -541,7 +540,7 @@ test("a shift from Shop Level 6 to 30 announces all remaining reward types", () 
     hud: { renderStoreStatus() {} },
     room: { zones: ZONES.map((zone) => ({ ...zone })) },
     eventBus: { emit() {} },
-    showGameMessage: (message) => messages.push(message),
+    messages: { show: (message) => messages.push(message) },
   });
   scene.shift = new ShiftSystem(scene);
   scene.staffSystem = { clear() {} };
@@ -570,7 +569,7 @@ test("level-up messages do not reannounce contracts or staff already owned in ol
     hud: { renderStoreStatus() {} },
     room: { zones: ZONES },
     eventBus: { emit() {} },
-    showGameMessage: (message) => messages.push(message),
+    messages: { show: (message) => messages.push(message) },
   });
   scene.shift = new ShiftSystem(scene);
   scene.staffSystem = { clear() {} };
@@ -616,8 +615,7 @@ test("the actual hire action explains the level lock and allows hiring after the
   let autosaves = 0;
   const scene = {
     gameState: state,
-    showShopMessage: (message) => warnings.push(message),
-    showGameMessage() {},
+    messages: { show: (message) => warnings.push(message) },
     saves: { requestAutosave: () => { autosaves += 1; } },
   };
   const staffSystem = new StaffSystem(scene);
@@ -639,27 +637,25 @@ test("taking an employee off shift is between shifts only, stops wages, and keep
   state.reputation.shopLevel = 4;
   assert.equal(state.hireEmployee("tavi_stock_clerk"), true);
   const creditsAfterHire = state.economy.credits;
-  const warnings = [];
   const messages = [];
   let autosaves = 0;
   const scene = {
     gameState: state,
     employees: [],
-    showShopMessage: (message) => warnings.push(message),
-    showGameMessage: (message) => messages.push(message),
+    messages: { show: (message) => messages.push(message) },
     saves: { requestAutosave: () => { autosaves += 1; } },
   };
   const staffSystem = new StaffSystem(scene);
   staffSystem.canManage = () => false;
 
   assert.equal(staffSystem.setOnShift("tavi_stock_clerk", false), false);
-  assert.match(warnings[0], /between shifts/);
+  assert.match(messages[0], /between shifts/);
   assert.deepEqual(state.staff.offShift, []);
 
   staffSystem.canManage = () => true;
   assert.equal(staffSystem.setOnShift("tavi_stock_clerk", false), true);
   assert.deepEqual(state.staff.hired, ["tavi_stock_clerk"]);
-  assert.match(messages[0], /Off Shift.*won't be paid/i);
+  assert.match(messages[1], /Off Shift.*won't be paid/i);
   assert.equal(staffSystem.payWages(), 0);
   assert.equal(state.economy.credits, creditsAfterHire);
   staffSystem.spawnWorking();
@@ -681,8 +677,7 @@ test("training can only be booked between shifts and trainees are paid without s
   const scene = {
     gameState: state,
     employees: [],
-    showShopMessage: (message) => warnings.push(message),
-    showGameMessage() {},
+    messages: { show: (message) => warnings.push(message) },
     saves: { requestAutosave: () => { autosaves += 1; } },
   };
   const staffSystem = new StaffSystem(scene);
@@ -709,7 +704,7 @@ test("actual store price edits preserve cents and explain invalid prices", () =>
   const prices = new Map([["ration", 10]]);
   const warnings = [];
   scene.gameState = { catalog: { setPrice: (id, price) => prices.set(id, price) } };
-  scene.showShopMessage = (message) => warnings.push(message);
+  scene.messages = { show: (message) => warnings.push(message) };
   scene.catalogSystem = new CatalogSystem(scene);
   assert.equal(scene.catalogSystem.setStorePrice("ration", 10.23), true);
   assert.equal(prices.get("ration"), 10.23);
@@ -858,7 +853,7 @@ test("the register refuses a player whose hands are full of crates", () => {
       teleportTo(x, y) { sprite.x = x; sprite.y = y; }, forceFacing() {} },
     carriedCrates: [{ id: "crate_1" }],
     carriedCrate: { id: "crate_1" },
-    showShopMessage: (text) => messages.push(text),
+    messages: { show: (text) => messages.push(text) },
   });
   scene.crateSystem = { getCarriedCrates: () => scene.carriedCrates, syncCarriedCrate() {}, syncFloorStacks() {} };
   scene.checkoutSystem = new CheckoutSystem(scene);
@@ -879,7 +874,7 @@ test("a customer arriving while the player holds crates near the register never 
   scene.checkoutSystem.operatingRegisterFixture = null;
   scene.carriedCrates = [{ id: "crate_1" }];
   scene.checkoutSystem.getNearbyRegisterTarget = () => scene.fixtures.register();
-  scene.showShopMessage = () => {};
+  scene.messages = { show() {} };
   scene.checkoutSystem.handleJoinQueue({ cart: [{ itemId: "rifle", price: 100 }] });
   assert.equal(checkout.uiWindow.isOpen, false);
   assert.equal(scene.checkoutSystem.operatingRegister, false);

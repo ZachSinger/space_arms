@@ -161,12 +161,12 @@ export class CustomerFlow {
         index < this.nextArrival ? arrival : { ...arrival, atMs: arrival.atMs + closedDuration });
       this.clearTemporaryClosure();
       hud.renderStoreStatus(false);
-      this.shop.showGameMessage("Store reopened. Customer arrivals have resumed.", "#38bdf8");
+      this.shop.messages.show("Store reopened. Customer arrivals have resumed.", "#38bdf8");
     } else {
       this.temporarilyClosed = true;
       this.temporarilyClosedSinceMs = shiftClock.getElapsedMs();
       hud.renderStoreStatus(true);
-      this.shop.showGameMessage(
+      this.shop.messages.show(
         "Store temporarily closed. Customers inside can finish shopping; new arrivals are paused.",
         "#f59e0b",
       );

@@ -326,33 +326,33 @@ export class FixtureSystem {
     const scene = this.shop;
     if (!order.includes(zoneId)) throw new Error(`Unknown ${unknown}: ${zoneId}`);
     if (!this.canExpand()) {
-      scene.showShopMessage(`${closed} can only be bought while the store is closed.`);
+      scene.messages.show(`${closed} can only be bought while the store is closed.`);
       return false;
     }
     const zone = this.#zone(zoneId);
     if (!zone) throw new Error(`Unknown ${unknown}: ${zoneId}`);
     if (!zone.locked) {
-      scene.showShopMessage(`${zone.name} is already open.`);
+      scene.messages.show(`${zone.name} is already open.`);
       return false;
     }
     if (zoneId !== order.find((id) => this.#zone(id)?.locked)) {
-      scene.showShopMessage(`Buy ${inOrder} in order.`);
+      scene.messages.show(`Buy ${inOrder} in order.`);
       return false;
     }
     const { reputation, economy } = scene.gameState;
     if (reputation.shopLevel < zone.requiredShopLevel) {
-      scene.showShopMessage(`Reach Shop Level ${zone.requiredShopLevel} to buy ${zone.name}.`);
+      scene.messages.show(`Reach Shop Level ${zone.requiredShopLevel} to buy ${zone.name}.`);
       return false;
     }
     if (economy.credits < zone.cost) {
-      scene.showShopMessage(`${zone.name} costs ${formatMoneyAmount(zone.cost)}.`);
+      scene.messages.show(`${zone.name} costs ${formatMoneyAmount(zone.cost)}.`);
       return false;
     }
 
     economy.spend(zone.cost, { category: "expansions", label: zone.name });
     this.openZone(zoneId);
     scene.saves.requestAutosave();
-    scene.showShopMessage(`${zone.name} is open.`);
+    scene.messages.show(`${zone.name} is open.`);
     return true;
   }
 
@@ -407,13 +407,13 @@ export class FixtureSystem {
   move(id, gx, gy, rotation) {
     const scene = this.shop;
     if (!this.canRearrange()) {
-      scene.showShopMessage("Fixtures can only move while the store is closed.");
+      scene.messages.show("Fixtures can only move while the store is closed.");
       return false;
     }
     if (!this.fixtures.get(id)) throw new Error(`Unknown fixture: ${id}`);
     const result = this.checkMove(id, gx, gy, rotation);
     if (!result.valid) {
-      scene.showShopMessage(result.reason);
+      scene.messages.show(result.reason);
       return false;
     }
     this.applyLayout(this.layoutWithMove(id, gx, gy, rotation), result);
@@ -530,7 +530,7 @@ export class FixtureSystem {
     const layout = this.fixtures.layout().filter((entry) => entry.id !== fixture.id);
     const result = validateFixtureLayout(layout, { ...this.layoutOptions(), requireSalesFloor: false });
     if (!result.valid) {
-      scene.showShopMessage(result.reason);
+      scene.messages.show(result.reason);
       return false;
     }
     if (scene.shelfStockingWindow?.fixture === fixture) scene.shelfStockingWindow.uiWindow.close();
@@ -551,7 +551,7 @@ export class FixtureSystem {
     if (!fixture) throw new Error(`Unknown fixture: ${id}`);
     const reason = this.crateBlockReason(fixture);
     if (reason) {
-      scene.showShopMessage(reason);
+      scene.messages.show(reason);
       return false;
     }
     if (!this.#removePlaced(fixture)) return false;
@@ -570,7 +570,7 @@ export class FixtureSystem {
     const fixture = this.fixtures.get(id);
     const reason = this.saleBlockReason(fixture);
     if (reason) {
-      scene.showShopMessage(reason);
+      scene.messages.show(reason);
       return false;
     }
     const spec = getFixtureType(fixture.type);
@@ -594,7 +594,7 @@ export class FixtureSystem {
     const scene = this.shop;
     const reason = this.crateSaleBlockReason(crate);
     if (reason) {
-      scene.showShopMessage(reason);
+      scene.messages.show(reason);
       return false;
     }
     const spec = getFixtureType(crate.typeId);
@@ -634,7 +634,7 @@ export class FixtureSystem {
     const id = this.fixtures.nextId(crate.typeId);
     const result = this.checkPlacement(crate.typeId, gx, gy, rotation);
     if (!result.valid) {
-      scene.showShopMessage(result.reason);
+      scene.messages.show(result.reason);
       return false;
     }
 

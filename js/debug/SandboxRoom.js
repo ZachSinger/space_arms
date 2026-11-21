@@ -172,7 +172,7 @@ export function setupSandboxRoom(scene) {
       scene.fixtureViews.refreshStockDisplay(shelf);
     }
     gameState.shop.changed();
-    scene.showShopMessage("Test room: every shelf is full.");
+    scene.messages.show("Test room: every shelf is full.");
   };
 
   const onClick = (event) => {

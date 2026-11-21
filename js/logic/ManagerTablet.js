@@ -322,7 +322,7 @@ export class ManagerTablet {
       ? this.scene.fixtureSystem.saleBlockReason(target)
       : this.scene.fixtureSystem.crateSaleBlockReason(target);
     if (reason) {
-      this.scene.showShopMessage(reason);
+      this.scene.messages.show(reason);
       return;
     }
     const typeId = kind === "placed" ? target.type : target.typeId;
@@ -341,12 +341,12 @@ export class ManagerTablet {
   confirmFixtureSale() {
     const sale = this.fixturesTab.saleConfirmation;
     if (!sale) {
-      this.scene.showShopMessage("Choose a fixture to sell first.");
+      this.scene.messages.show("Choose a fixture to sell first.");
       return;
     }
     this.fixturesTab.saleConfirmation = null;
     if (sale.kind === "placed" && this.scene.fixtures.get(sale.target.id) !== sale.target) {
-      this.scene.showShopMessage("That fixture is no longer available.");
+      this.scene.messages.show("That fixture is no longer available.");
       this.refreshLayoutPanels();
       return;
     }
@@ -366,7 +366,7 @@ export class ManagerTablet {
     this.fixturesTab.purchaseNotice = `Bought ${name}. Its crate is waiting on the Loading Pad.`;
     if (!this.scene.fixtureSystem.buy(typeId)) {
       this.fixturesTab.purchaseNotice = "";
-      this.scene.showShopMessage("Fixture purchase is unavailable. Check its license, cost, and requirements.");
+      this.scene.messages.show("Fixture purchase is unavailable. Check its license, cost, and requirements.");
     }
   }
 
@@ -377,7 +377,7 @@ export class ManagerTablet {
     if (!license) throw new Error(`Unknown supplier license: ${licenseId}.`);
     if (this.gameState.catalog.owns(licenseId)) return; // already owned
     if (!license.isUnlocked(this.gameState)) {
-      this.scene.showShopMessage("This contract is locked. Check its requirements in the Contracts tab.");
+      this.scene.messages.show("This contract is locked. Check its requirements in the Contracts tab.");
       return;
     }
     if (!license.canAfford(this.gameState)) return; // can't afford it

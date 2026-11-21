@@ -28,20 +28,20 @@ export class StaffSystem {
     const { shop, staff } = this;
     const employee = staff.profile(employeeId);
     if (!this.canManage()) {
-      shop.showShopMessage("Staff can only be hired between shifts.");
+      shop.messages.show("Staff can only be hired between shifts.");
       return false;
     }
     if (staff.hired.includes(employeeId)) return false;
     const staffLimitReason = getStaffLimitReason(shop.gameState.reputation.shopLevel, staff.hired.length);
     if (staffLimitReason) {
-      shop.showShopMessage(staffLimitReason);
+      shop.messages.show(staffLimitReason);
       return false;
     }
     if (!shop.gameState.hireEmployee(employeeId)) {
-      shop.showShopMessage(`Not enough money. Hiring ${employee.name} costs ${employee.hireCost}.`);
+      shop.messages.show(`Not enough money. Hiring ${employee.name} costs ${employee.hireCost}.`);
       return false;
     }
-    shop.showGameMessage(
+    shop.messages.show(
       `${employee.name} hired and On Shift. Their wage of ${employee.wagePerShift} is due at each shift start.`,
       STAFF_MESSAGE_COLOR,
     );
@@ -53,15 +53,15 @@ export class StaffSystem {
     const { shop, staff } = this;
     const employee = staff.profile(employeeId);
     if (!this.canManage()) {
-      shop.showShopMessage("Staff can only be set On Shift or Off Shift between shifts.");
+      shop.messages.show("Staff can only be set On Shift or Off Shift between shifts.");
       return false;
     }
     if (staff.training[employeeId]) {
-      shop.showShopMessage(`${employee.name} is away training next shift. They're available again once they return.`);
+      shop.messages.show(`${employee.name} is away training next shift. They're available again once they return.`);
       return false;
     }
     if (!staff.setOnShift(employeeId, onShift)) return false;
-    shop.showGameMessage(
+    shop.messages.show(
       onShift
         ? `${employee.name} is On Shift. They'll work and be paid ${employee.wagePerShift} each shift.`
         : `${employee.name} is Off Shift. They'll stay home and won't be paid until you set them On Shift.`,
@@ -86,15 +86,15 @@ export class StaffSystem {
     const { shop } = this;
     const reason = this.trainingBlockReason(employeeId, jobId);
     if (reason) {
-      shop.showShopMessage(reason);
+      shop.messages.show(reason);
       return false;
     }
     if (!shop.gameState.trainEmployee(employeeId, jobId)) {
-      shop.showShopMessage("Training is no longer available. Check the employee's skill and your money.");
+      shop.messages.show("Training is no longer available. Check the employee's skill and your money.");
       return false;
     }
     const employee = this.staff.profile(employeeId);
-    shop.showGameMessage(
+    shop.messages.show(
       `${employee.name} will be away training next shift. Their wage of ${employee.wagePerShift} is still due.`,
       STAFF_MESSAGE_COLOR,
     );
@@ -105,7 +105,7 @@ export class StaffSystem {
   moveJobPriority(employeeId, jobId, direction) {
     const { shop } = this;
     if (!this.canManage()) {
-      shop.showShopMessage("Staff job priorities can only be changed between shifts.");
+      shop.messages.show("Staff job priorities can only be changed between shifts.");
       return false;
     }
     if (!this.staff.moveJobPriority(employeeId, jobId, direction)) return false;

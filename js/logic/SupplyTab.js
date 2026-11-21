@@ -78,7 +78,7 @@ export class SupplyTab {
       candidate.set(itemId, count);
       const nextSummary = this.scene.supply.orderSummary(candidate);
       if (!nextSummary.canPlace) {
-        this.scene.showShopMessage(nextSummary.problem);
+        this.scene.messages.show(nextSummary.problem);
         playErrorBuzz();
         return;
       }

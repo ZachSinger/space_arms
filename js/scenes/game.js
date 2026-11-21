@@ -33,7 +33,7 @@ import { setupSandboxRoom } from "../debug/SandboxRoom.js";
 import { setupUiLab } from "../debug/UiLab.js";
 import { ShelfStockingWindow } from "../logic/ShelfStockingWindow.js";
 import { REGISTER_FRONT_OVERLAP, fixtureFacing } from "../logic/FixtureLayout.js";
-import { Messages, SHOP_MESSAGE_COLOR } from "../world/Messages.js";
+import { Messages } from "../world/Messages.js";
 import { ShiftSystem } from "../systems/ShiftSystem.js";
 import { StaffSystem } from "../systems/StaffSystem.js";
 import { SaveSystem } from "../systems/SaveSystem.js";
@@ -343,20 +343,6 @@ export class GameScene extends Phaser.Scene {
       this.goBacksBadge.refresh();
     });
     this.shiftClock.subscribe(() => this.saves.updateControls());
-  }
-
-  // --- On-screen messages and menus ---
-
-  showShopMessage(message) {
-    this.messages.show(message, SHOP_MESSAGE_COLOR);
-  }
-
-  showGameMessage(message, color = SHOP_MESSAGE_COLOR) {
-    this.messages.show(message, color);
-  }
-
-  showFloatingText(x, y, text, color) {
-    this.messages.floatText(x, y, text, color);
   }
 
   // --- Frame update and shift flow ---

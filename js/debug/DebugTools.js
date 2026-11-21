@@ -94,12 +94,12 @@ export class DebugTools {
     const zone = order.map((id) => scene.room.zones.find((candidate) => candidate.id === id))
       .find((candidate) => candidate?.locked);
     if (!zone) {
-      scene.showShopMessage(`Every ${areaName} upgrade is already open.`);
+      scene.messages.show(`Every ${areaName} upgrade is already open.`);
       return false;
     }
     scene.fixtureSystem.openZone(zone.id);
     scene.saves.requestAutosave();
-    scene.showShopMessage(`Debug: ${zone.name} is open.`);
+    scene.messages.show(`Debug: ${zone.name} is open.`);
     return true;
   }
 
@@ -110,7 +110,7 @@ export class DebugTools {
     const { scene } = this;
     const { gameState } = scene;
     if (scene.fixtures.shelves().length > 0) {
-      scene.showShopMessage("Quickstart only works before you place a shelf.");
+      scene.messages.show("Quickstart only works before you place a shelf.");
       return false;
     }
     const shelfType = "shelf_budget_2x2";
@@ -127,7 +127,7 @@ export class DebugTools {
 
     const door = getStoreDoorCell();
     if (!scene.fixtureSystem.findNearestCell(shelfType, door)) {
-      scene.showShopMessage("Quickstart couldn't find room for the shelf.");
+      scene.messages.show("Quickstart couldn't find room for the shelf.");
       return false;
     }
 
@@ -181,7 +181,7 @@ export class DebugTools {
 
     for (const shelf of shelves) scene.fixtureViews.refreshStockDisplay(shelf);
     gameState.shop.changed();
-    scene.showShopMessage(shelves.length > 1 ? "Quickstart: shelves stocked." : "Quickstart: shelf stocked.");
+    scene.messages.show(shelves.length > 1 ? "Quickstart: shelves stocked." : "Quickstart: shelf stocked.");
     return true;
   }
 }

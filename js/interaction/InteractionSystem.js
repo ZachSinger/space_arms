@@ -105,7 +105,7 @@ export class InteractionSystem {
       return;
     }
     if (shop.heldTrash) {
-      shop.showGameMessage(`Face a trashcan and press ${controlLabel("interact")} to throw the trash away, ` +
+      shop.messages.show(`Face a trashcan and press ${controlLabel("interact")} to throw the trash away, ` +
         `or press ${controlLabel("putDown")} to drop it.`, "#94a3b8");
       return;
     }
@@ -115,13 +115,13 @@ export class InteractionSystem {
     if (shop.carriedCrate?.kind === "item") {
       const nearby = this.getNearbyFixture();
       if (nearby) throw new Error(`Fixture "${nearby.id}" has no interaction action.`);
-      shop.showGameMessage(shop.fixtureSystem.getNearbyTrashcan()
+      shop.messages.show(shop.fixtureSystem.getNearbyTrashcan()
         ? "Only empty crates go in the trashcan."
         : "Too far from a shelf", "#94a3b8");
       return;
     }
 
-    shop.showGameMessage("Nothing nearby to interact with", "#94a3b8");
+    shop.messages.show("Nothing nearby to interact with", "#94a3b8");
   }
 
   updateHint() {

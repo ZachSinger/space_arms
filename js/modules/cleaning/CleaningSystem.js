@@ -121,7 +121,7 @@ export class CleaningSystem {
     if (!this.heldTrash) return false;
     this.heldTrash.sprite.destroy();
     this.heldTrash = null;
-    this.shop.showGameMessage("Trash thrown away. The store is cleaner.", "#10b981");
+    this.shop.messages.show("Trash thrown away. The store is cleaner.", "#10b981");
     return true;
   }
 
@@ -139,7 +139,7 @@ export class CleaningSystem {
     ];
     const spot = spots.find(({ x, y }) => this.isOpenTrashSpot(x, y));
     if (!spot) {
-      this.shop.showGameMessage(this.shop.areas.playerArea === AREA.BACKROOM
+      this.shop.messages.show(this.shop.areas.playerArea === AREA.BACKROOM
         ? "Trash can only be dropped out on the shop floor."
         : "No room to drop the trash here.", "#94a3b8");
       return false;
@@ -189,7 +189,7 @@ export class CleaningSystem {
     const walkOut = verdict === "walk-out";
     const penalty = walkOut ? CLEANING_TUNING.walkOutReputationLoss : CLEANING_TUNING.upsetReputationLoss;
     this.shop.gameState.reputation.lose(penalty);
-    this.shop.showFloatingText(
+    this.shop.messages.floatText(
       customer.sprite.x,
       customer.sprite.y - 50,
       `${walkOut ? "Too dirty! Leaving." : "This store is dirty."}\n-${penalty} store reputation\nat shift end`,

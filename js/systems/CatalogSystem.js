@@ -33,7 +33,7 @@ export class CatalogSystem {
    */
   setStorePrice(itemId, price) {
     if (!isMoney(price) || price < 1) {
-      this.shop.showShopMessage("Enter a price of at least 1, with no more than two decimal places.");
+      this.shop.messages.show("Enter a price of at least 1, with no more than two decimal places.");
       return false;
     }
     this.shop.gameState.catalog.setPrice(itemId, price);

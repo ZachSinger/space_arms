@@ -190,7 +190,7 @@ function createHarness({ carrying = false } = {}) {
     },
   });
   const messages = [];
-  scene.showGameMessage = (text) => messages.push(text);
+  scene.messages.show = (text) => messages.push(text);
   scene.input = { keyboard: {
     removeCapture(key) { removedCaptures.push(key); },
     on(name, handler) { handlers.set(name, handler); },
@@ -203,6 +203,7 @@ function createHarness({ carrying = false } = {}) {
 test("unchanged hints are not redrawn and the latest hint returns after a warning", (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const { scene } = createHarness();
+  delete scene.messages.show; // test the real message box, not the harness recorder
   const messages = scene.messages;
   const renderHint = messages.renderHint.bind(messages);
   let renders = 0;
@@ -1329,6 +1330,7 @@ test("warnings take priority over crate hints and restore the current hint after
   });
   t.mock.method(globalThis, "clearTimeout", () => {});
   const h = createHarness();
+  delete h.scene.messages.show; // test the real message box, not the harness recorder
   const target = crate();
   h.scene.restockCrates = [target];
   h.scene.interactionSystem.updateHint();
@@ -2035,7 +2037,7 @@ test("selling an empty placed fixture pays half, updates walkable space, and pre
     payments.push({ amount, ...entry });
   };
   const messages = [];
-  scene.showShopMessage = (message) => messages.push(message);
+  scene.messages.show = (message) => messages.push(message);
 
   assert.equal(scene.fixtureSystem.sell("register"), false);
   assert.match(messages.at(-1), /last register cannot be sold/);
@@ -2119,7 +2121,7 @@ test("fixture crates can be sold on the loading pad or while carried, only once 
   const paid = [];
   const messages = [];
   scene.gameState.economy.add = (amount, entry) => paid.push({ amount, ...entry });
-  scene.showShopMessage = (message) => messages.push(message);
+  scene.messages.show = (message) => messages.push(message);
   let closed = true;
   scene.fixtureSystem.canRearrange = () => closed;
   const padCrate = {

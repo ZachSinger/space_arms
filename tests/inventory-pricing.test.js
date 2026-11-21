@@ -426,7 +426,7 @@ test("contract signing enforces each shop level without spending credits early",
   const tablet = Object.create(ManagerTablet.prototype);
   tablet.gameState = state;
   tablet.scene = {
-    showShopMessage: (message) => warnings.push(message),
+    messages: { show: (message) => warnings.push(message) },
     catalogSystem: { recalculateActiveFactions() {} },
   };
   tablet.handleSignContract("lic_start_apparel");
@@ -753,7 +753,7 @@ function createSupplyHarness(credits) {
         freePadSpots: 9,
       }),
     },
-    showShopMessage: (message) => warnings.push(message),
+    messages: { show: (message) => warnings.push(message) },
   };
   const supplyTab = new SupplyTab(tablet.scene);
   supplyTab.redraw = () => { refreshes += 1; };
@@ -831,7 +831,7 @@ test("a removed fixture cannot be sold through an old confirmation", () => {
   tablet.scene = {
     fixtures: { displayName: () => "BUDGET SHELF 2x4", get: () => undefined },
     fixtureSystem: { saleBlockReason: () => null },
-    showShopMessage: (message) => messages.push(message),
+    messages: { show: (message) => messages.push(message) },
   };
   tablet.refreshLayoutPanels = () => {};
   tablet.prepareFixtureSale("placed", shelf);

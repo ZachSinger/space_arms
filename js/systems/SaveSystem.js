@@ -138,11 +138,11 @@ export class SaveSystem {
   async saveManually() {
     const { shop } = this;
     if (shop.sandbox) {
-      shop.showShopMessage("Test areas are never saved.");
+      shop.messages.show("Test areas are never saved.");
       return;
     }
     if (this.loadFailed || shop.shift.starting || !this.canSaveOffShift()) {
-      shop.showShopMessage(this.loadFailed
+      shop.messages.show(this.loadFailed
         ? "Cannot save after a load error. Your existing save has not been overwritten."
         : "Finish the shift before saving.");
       return;
@@ -153,7 +153,7 @@ export class SaveSystem {
       this.autosaveBlocked = false;
       shop.messages.closeSaveError();
       this.setStatus(SAVED_STATUS);
-      shop.showShopMessage("Game saved.");
+      shop.messages.show("Game saved.");
     } catch (error) {
       this.handleError(error);
     } finally {

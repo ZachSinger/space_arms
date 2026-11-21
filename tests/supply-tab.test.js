@@ -15,8 +15,10 @@ test("the Supply tab owns order changes and clears only a successfully placed or
         return true;
       },
     },
-    showShopMessage() {
-      assert.fail("A valid order should not show an error");
+    messages: {
+      show() {
+        assert.fail("A valid order should not show an error");
+      },
     },
   };
   const tab = new SupplyTab(scene);

@@ -7,7 +7,7 @@ export function createCustomerStore(scene) {
     findPath: (...args) => scene.navigation.store.findPath(...args),
     getItem: (itemId) => database.getItem(itemId),
     getStorePrice: (...args) => scene.catalogSystem.getStorePrice(...args),
-    showFloatingText: (...args) => scene.showFloatingText(...args),
+    showFloatingText: (...args) => scene.messages.floatText(...args),
     getRandomBrowseShelf: (...args) => scene.customerFlow.getRandomBrowseShelf(...args),
     refreshShelfStockDisplay: (...args) => scene.fixtureViews?.refreshStockDisplay(...args),
     noteCustomerGaveUp: (...args) => scene.customerFlow?.noteGaveUp(...args),
@@ -30,7 +30,7 @@ export function createEmployeeStore(scene) {
     getBehindRegisterPoint: (register) => scene.checkoutSystem.behindRegisterPoint(register),
     syncFloorStacks: (...args) => scene.crateSystem.syncFloorStacks(...args),
     refreshShelfStockDisplay: (...args) => scene.fixtureViews.refreshStockDisplay(...args),
-    showShopMessage: (...args) => scene.showShopMessage(...args),
+    showShopMessage: (message) => scene.messages.show(message),
     createEmployeeSprite(x, y, texture, width, height) {
       const sprite = addCharacterSprite(scene, x, y, texture, width, height).setDepth(3);
       scene.employeeGroup.add(sprite);

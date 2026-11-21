@@ -149,7 +149,7 @@ export class CrateSystem {
 
   getActions() {
     const shop = this.shop;
-    const say = (message, color = "#94a3b8") => () => shop.showGameMessage(message, color);
+    const say = (message, color = "#94a3b8") => () => shop.messages.show(message, color);
     const holding = this.getCarriedCrates().length;
     const top = this.carriedCrate;
     if (shop.checkoutSystem.operatingRegister) {
@@ -303,7 +303,7 @@ export class CrateSystem {
     if (marked === base) {
       const { x, y } = base.sprite;
       if (!base.pickUp(shop.player.sprite)) {
-        shop.showGameMessage("Wait for crate to stop", "#f59e0b");
+        shop.messages.show("Wait for crate to stop", "#f59e0b");
         return false;
       }
       this.restockCrates = this.restockCrates.filter((crate) => crate !== base);
@@ -354,7 +354,7 @@ export class CrateSystem {
       ? crate.findThrowPosition(shop.player.sprite, velocityX, velocityY)
       : crate.findDropPosition(x, y, shop.player.sprite, [], undefined, shop.player.currentFacing);
     if (!position) {
-      shop.showGameMessage(throwing ? "No room to throw crate" : "No room to drop crate", "#94a3b8");
+      shop.messages.show(throwing ? "No room to throw crate" : "No room to drop crate", "#94a3b8");
       return false;
     }
     if (throwing) crate.startThrow(shop.player.sprite, velocityX, velocityY);
@@ -374,7 +374,7 @@ export class CrateSystem {
     const position = bottom.findDropPosition(shop.player.sprite.x, shop.player.sprite.y,
       shop.player.sprite, [], undefined, shop.player.currentFacing);
     if (!position) {
-      shop.showGameMessage("No room to set the stack down", "#94a3b8");
+      shop.messages.show("No room to set the stack down", "#94a3b8");
       return false;
     }
     bottom.drop(position.x, position.y, 0, 0, this.motionPaused);
@@ -454,7 +454,7 @@ export class CrateSystem {
     }
     if (moved === 0) return 0;
     const left = floorCrate.quantity;
-    this.shop.showGameMessage(left > 0
+    this.shop.messages.show(left > 0
       ? `Moved ${moved} ${name} into your crate. ${left} didn't fit and stay in the crate on the floor.`
       : `Moved ${moved} ${name} into your crate. The crate on the floor is now empty.`, "#22c55e");
     return moved;
@@ -512,7 +512,7 @@ export class CrateSystem {
   throwTopCrate() {
     const { x, y } = this.shop.player.sprite.body.velocity;
     if (this.motionPaused || (x === 0 && y === 0)) {
-      this.shop.showGameMessage(`To throw a crate, walk and press ${controlLabel("crate")}.`, "#94a3b8");
+      this.shop.messages.show(`To throw a crate, walk and press ${controlLabel("crate")}.`, "#94a3b8");
       return false;
     }
     return this.dropTopCrate(true);
@@ -525,12 +525,12 @@ export class CrateSystem {
   returnEmptyCratesToTrashcan() {
     const shop = this.shop;
     if (!shop.fixtureSystem.getNearbyTrashcan()) {
-      shop.showGameMessage("Move closer to a trashcan.", "#94a3b8");
+      shop.messages.show("Move closer to a trashcan.", "#94a3b8");
       return false;
     }
     const empties = this.heldEmptyCrates();
     if (empties.length === 0) {
-      shop.showGameMessage("Only empty crates go in the trashcan.", "#94a3b8");
+      shop.messages.show("Only empty crates go in the trashcan.", "#94a3b8");
       return false;
     }
     for (const crate of empties) {
@@ -538,7 +538,7 @@ export class CrateSystem {
       crate.destroy();
     }
     shop.gameState.crates.changed();
-    shop.showGameMessage(empties.length === 1
+    shop.messages.show(empties.length === 1
       ? "Empty crate put in the trashcan."
       : `${empties.length} empty crates put in the trashcan.`, "#10b981");
     return true;
@@ -547,7 +547,7 @@ export class CrateSystem {
   takeEmptyCrateFromTrashcan() {
     const shop = this.shop;
     if (this.getCarriedCrates().length > 0) {
-      shop.showGameMessage("Put your crates down before taking an empty crate.", "#94a3b8");
+      shop.messages.show("Put your crates down before taking an empty crate.", "#94a3b8");
       return false;
     }
     const crate = this.createItemCrate(null, 0, shop.player.sprite.x, shop.player.sprite.y);
@@ -557,7 +557,7 @@ export class CrateSystem {
     }
     this.addCarriedCrate(crate);
     shop.gameState.crates.changed();
-    shop.showGameMessage("Took a free empty crate.", "#10b981");
+    shop.messages.show("Took a free empty crate.", "#10b981");
     return true;
   }
 

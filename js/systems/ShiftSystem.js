@@ -51,11 +51,11 @@ export class ShiftSystem {
     const { gameState } = shop;
     if (this.starting || shop.saves.loadFailed || !shop.saves.canSaveOffShift()) return;
     if (gameState.calendar.awaitingEndDay) {
-      shop.showShopMessage("End the day first: click END DAY at the top.");
+      shop.messages.show("End the day first: click END DAY at the top.");
       return;
     }
     if (shop.fixturePlacement.active) {
-      shop.showShopMessage("Finish or cancel fixture placement before starting the shift.");
+      shop.messages.show("Finish or cancel fixture placement before starting the shift.");
       return;
     }
     this.starting = true;
@@ -74,7 +74,7 @@ export class ShiftSystem {
     shop.hud.renderStoreStatus(false);
     const wages = shop.staffSystem.payWages();
     if (wages > 0) {
-      shop.showGameMessage(`Employee wages paid: ${wages}.`, "#f59e0b");
+      shop.messages.show(`Employee wages paid: ${wages}.`, "#f59e0b");
     }
     this.resetStartingTotals();
     shop.shiftClock.startNewShift();
@@ -126,7 +126,7 @@ export class ShiftSystem {
     });
     const levelMessage = this.levelUpMessage(previousLevel);
     this.showClosingSequence();
-    if (levelMessage) shop.showGameMessage(levelMessage, "#10b981");
+    if (levelMessage) shop.messages.show(levelMessage, "#10b981");
   }
 
   // What a new Shop Level opened up, or "" when the level didn't change.
@@ -241,13 +241,13 @@ export class ShiftSystem {
     shop.gameState.endDay();
     const { day } = shop.gameState.calendar;
     if (this.loanOffer().available) {
-      shop.showGameMessage(
+      shop.messages.show(
         `Day ${day} begins. You have nothing left to sell and can't afford a supply order. Open Finances to take an emergency loan.`,
         "#f59e0b",
       );
       return true;
     }
-    shop.showGameMessage(`Day ${day} begins. Market prices have changed.`, "#10b981");
+    shop.messages.show(`Day ${day} begins. Market prices have changed.`, "#10b981");
     return true;
   }
 
@@ -273,7 +273,7 @@ export class ShiftSystem {
     const offer = this.loanOffer();
     if (!offer.available) return false;
     this.shop.gameState.economy.takeLoan(offer.amount, offer.repayTotal);
-    this.shop.showGameMessage(
+    this.shop.messages.show(
       `Emergency loan received: ${formatMoneyAmount(offer.amount)}. You owe ${formatMoneyAmount(offer.repayTotal)}, paid back from your sales.`,
       "#f59e0b",
     );
@@ -283,7 +283,7 @@ export class ShiftSystem {
 
   payOffLoan() {
     if (!this.shop.gameState.economy.payOffLoan()) return false;
-    this.shop.showGameMessage("Emergency loan paid off.", "#10b981");
+    this.shop.messages.show("Emergency loan paid off.", "#10b981");
     this.shop.saves.requestAutosave();
     return true;
   }

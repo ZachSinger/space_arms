@@ -212,16 +212,16 @@ export class CheckoutSystem {
     shop.gameState.shop.changed();
     const crates = (count) => `${count} ${count === 1 ? "crate" : "crates"}`;
     if (packed === 0) {
-      if (!quiet) shop.showGameMessage("No clear floor space for the Go-Backs crates. Trying again shortly.", "#f59e0b");
+      if (!quiet) shop.messages.show("No clear floor space for the Go-Backs crates. Trying again shortly.", "#f59e0b");
     } else if (packed < loads.length) {
       if (!quiet) {
-        shop.showGameMessage(`Packed ${crates(packed)} of Go-Backs. ` +
+        shop.messages.show(`Packed ${crates(packed)} of Go-Backs. ` +
           "There wasn't floor space for the rest, so they're still in the bin.", "#f59e0b");
       }
     } else if (floorStacksPlaced === 0) {
-      shop.showGameMessage(`Packed the Go-Backs into ${crates(packed)} in the backroom.`, "#10b981");
+      shop.messages.show(`Packed the Go-Backs into ${crates(packed)} in the backroom.`, "#10b981");
     } else {
-      shop.showGameMessage(`Packed the Go-Backs into ${crates(packed)}. ` +
+      shop.messages.show(`Packed the Go-Backs into ${crates(packed)}. ` +
         "The backroom was full, so some crates sit out in the store.", "#10b981");
     }
     return packed;
@@ -391,7 +391,7 @@ export class CheckoutSystem {
     if (!register) return;
     // Working the counter needs empty hands; crates would lock the player in place.
     if (shop.crateSystem.getCarriedCrates().length > 0) {
-      shop.showShopMessage("Put down what you're carrying before working the register.");
+      shop.messages.show("Put down what you're carrying before working the register.");
       return;
     }
 
@@ -631,7 +631,7 @@ export class CheckoutSystem {
     if (shop.checkoutWindow.isCheckingOut(customer.cart)) shop.checkoutWindow.close();
     const total = customer.completeSale();
     shop.eventBus.emit(GAME_EVENTS.CUSTOMER_SALE_COMPLETED, { customer, total });
-    shop.showFloatingText(
+    shop.messages.floatText(
       employee.sprite.x,
       employee.sprite.y - 50,
       `Sale completed: ${formatTransactionTotal(total)}`,
