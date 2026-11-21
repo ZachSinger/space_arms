@@ -67,3 +67,12 @@ export function getEmployeeTrainingOffer(employeeId, skillLevels, jobId) {
     nextWagePerShift: trained.wagePerShift,
   };
 }
+
+export function getEmployeeTrainingBlockReason({ canManage, isHired, isTraining, offer, credits }) {
+  if (!canManage) return "Book employee training between shifts.";
+  if (!isHired) return "Hire this employee before booking training.";
+  if (isTraining) return "This employee already has training booked.";
+  if (!offer) return `This skill is already at Level ${MAX_EMPLOYEE_SKILL_LEVEL}.`;
+  if (credits < offer.cost) return `Training costs ${offer.cost}. You don't have enough money.`;
+  return null;
+}

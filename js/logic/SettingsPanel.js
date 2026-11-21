@@ -6,6 +6,11 @@
 // Text size persists in localStorage; display settings live in the Electron window.
 import { setGameDisplaySettings } from "./GameViewport.js";
 import { getSavedCursorMode, setCursorMode } from "./GameCursor.js";
+import {
+  BINDING_GROUPS, bindingConflict, bindingForEvent, bindingLabel, defaultBindings, getBindings, setBindings,
+} from "../input/KeyBindings.js";
+import { getControllerLabelStyle, setControllerLabelStyle } from "../input/InputDevice.js";
+import { html } from "../core/html.js";
 
 export class SettingsPanel {
   static textSizeStorageKey = "space-arms-dealer.text-size";
@@ -23,8 +28,21 @@ export class SettingsPanel {
     this.element = document.createElement("div");
     this.element.className = "retro-window settings-window hidden";
     this.element.innerHTML = `
-      <div class="settings-content custom-scrollbar">
+      <div class="settings-header">
         <div class="settings-title">SETTINGS</div>
+        <div class="settings-tabs">
+          <button class="retro-tab-btn active" data-settings-tab="display">DISPLAY &amp; CURSOR</button>
+          <button class="retro-tab-btn" data-settings-tab="controls">KEYBOARD &amp; MOUSE</button>
+          <button class="retro-tab-btn" data-settings-tab="controller">CONTROLLER</button>
+        </div>
+        <p class="settings-binding-status" role="status"></p>
+        <div class="settings-capture-actions hidden">
+          <button class="settings-clear-binding">CLEAR CONTROL</button>
+          <button class="settings-assign-escape">ASSIGN ESCAPE</button>
+        </div>
+      </div>
+      <div class="settings-content custom-scrollbar">
+        <div class="settings-display">
         <label class="settings-field">
           <span>CURSOR</span>
           <select class="settings-cursor">
@@ -54,11 +72,34 @@ export class SettingsPanel {
           </select>
         </label>
         <div class="settings-status"></div>
+        </div>
+        <div class="settings-controls hidden">
+          <h2>Keyboard &amp; mouse controls</h2>
+          <p>Choose a control, then press a key or mouse button to change it.</p>
+          <p>Mouse clicks inside menus, shelves and the register stay the same. Payment entry keeps its normal keys.</p>
+          <div class="settings-binding-list"></div>
+        </div>
+        <div class="settings-controller hidden">
+          <label class="settings-field">
+            <span>CONTROLLER BUTTON NAMES</span>
+            <select class="settings-controller-layout">
+              <option value="automatic">AUTOMATIC</option>
+              <option value="xbox">XBOX</option>
+              <option value="playstation">PLAYSTATION</option>
+              <option value="nintendo">NINTENDO</option>
+            </select>
+            <span>Automatic uses the controller name when it recognizes it. Otherwise, it uses Xbox button names.</span>
+            <span>This changes the button names in instructions and help, not what the buttons do.</span>
+          </label>
+        </div>
       </div>
       <div class="settings-actions">
+        <button class="action-btn settings-defaults hidden">RESTORE DEFAULTS</button>
+        <div class="settings-action-right">
         <button class="action-btn settings-cancel">CANCEL</button>
         <button class="action-btn warning settings-apply">APPLY</button>
         <button class="action-btn settings-accept">ACCEPT</button>
+        </div>
       </div>
     `;
 
@@ -70,9 +111,34 @@ export class SettingsPanel {
     );
     this.textSizeSelect = this.element.querySelector(".settings-text-size");
     this.cursorSelect = this.element.querySelector(".settings-cursor");
+    this.controllerLayoutSelect = this.element.querySelector(".settings-controller-layout");
     this.status = this.element.querySelector(".settings-status");
+    this.bindingStatus = this.element.querySelector(".settings-binding-status");
+    this.bindingList = this.element.querySelector(".settings-binding-list");
+    this.clearBindingButton = this.element.querySelector(".settings-clear-binding");
+    this.captureActions = this.element.querySelector(".settings-capture-actions");
+    this.bindings = getBindings();
     SettingsPanel.applyTextSize(SettingsPanel.getSavedTextSize());
 
+    this.element.querySelectorAll("[data-settings-tab]").forEach((button) => {
+      button.addEventListener("click", () => this.selectTab(button.dataset.settingsTab));
+    });
+    this.element.querySelector(".settings-defaults").addEventListener("click", () => {
+      this.bindings = defaultBindings();
+      this.previewBindings();
+      this.bindingStatus.textContent = "Default controls restored. Select Apply or Accept to keep them.";
+    });
+    this.bindingList.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-binding-action]");
+      if (!button) return;
+      this.capture = { action: button.dataset.bindingAction, slot: Number(button.dataset.bindingSlot) };
+      button.classList.add("capturing");
+      this.bindingStatus.textContent = `Changing ${button.dataset.bindingLabel}. Press a key or mouse button. Escape cancels; use Assign Escape to bind it.`;
+      this.captureActions.classList.remove("hidden");
+      button.focus();
+    });
+    this.clearBindingButton.addEventListener("click", () => this.clearCapturedBinding());
+    this.element.querySelector(".settings-assign-escape").addEventListener("click", () => this.assignCapturedBinding("Escape"));
     this.element
       .querySelector(".settings-cancel")
       .addEventListener("click", () => this.run(() => this.cancel()));
@@ -83,7 +149,7 @@ export class SettingsPanel {
 
     this.element
       .querySelector(".settings-accept")
-      .addEventListener("click", () => this.close());
+      .addEventListener("click", () => this.run(() => this.close()));
 
     this.select.addEventListener("change", () => this.run(() => this.previewResolution()));
     this.displayModeSelect.addEventListener("change", () =>
@@ -93,6 +159,9 @@ export class SettingsPanel {
       this.previewTextSize(),
     );
     this.cursorSelect.addEventListener("change", () => setCursorMode(this.cursorSelect.value));
+    this.controllerLayoutSelect.addEventListener("change", () =>
+      setControllerLabelStyle(this.controllerLayoutSelect.value),
+    );
     this.handleEscape = (event) => {
       if (event.key !== "Escape" || this.element.classList.contains("hidden")) return;
       event.preventDefault();
@@ -100,6 +169,125 @@ export class SettingsPanel {
       void this.run(() => this.cancel());
     };
     document.addEventListener("keydown", this.handleEscape, true);
+    this.handleBindingInput = (event) => this.captureBinding(event);
+    this.handleBindingClick = (event) => {
+      if (this.suppressClick) {
+        this.suppressClick = false;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    };
+    this.handleBindingContextMenu = (event) => {
+      if (!this.suppressContextMenu) return;
+      this.suppressContextMenu = false;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    };
+    window.addEventListener("keydown", this.handleBindingInput, true);
+    window.addEventListener("mousedown", this.handleBindingInput, true);
+    window.addEventListener("click", this.handleBindingClick, true);
+    window.addEventListener("contextmenu", this.handleBindingContextMenu, true);
+  }
+
+  get isCapturing() { return Boolean(this.capture); }
+
+  selectTab(tab) {
+    this.stopCapture();
+    for (const button of this.element.querySelectorAll("[data-settings-tab]")) {
+      const selected = button.dataset.settingsTab === tab;
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-selected", String(selected));
+    }
+    this.element.querySelector(".settings-display").classList.toggle("hidden", tab !== "display");
+    this.element.querySelector(".settings-controls").classList.toggle("hidden", tab !== "controls");
+    this.element.querySelector(".settings-controller").classList.toggle("hidden", tab !== "controller");
+    this.element.querySelector(".settings-defaults").classList.toggle("hidden", tab !== "controls");
+  }
+
+  renderBindings() {
+    this.bindingList.innerHTML = String(html`
+      <table class="settings-binding-table">
+        <thead><tr><th>ACTION</th><th>CONTROL 1</th><th>CONTROL 2</th></tr></thead>
+        <tbody>${BINDING_GROUPS.map(({ title, actions }) => html`
+          <tr class="settings-binding-group"><th colspan="3">${title}</th></tr>
+          ${actions.map(({ id, label }) => html`
+            <tr><td>${label}</td>${this.bindings[id].map((binding, slot) => html`
+              <td><button class="settings-binding${binding ? "" : " empty"}"
+                data-binding-action="${id}" data-binding-slot="${slot}" data-binding-label="${label}"
+                aria-label="${label}, control ${slot + 1}: ${bindingLabel(binding)}">${bindingLabel(binding)}</button></td>
+            `)}</tr>
+          `)}
+        `)}</tbody>
+      </table>`);
+  }
+
+  previewBindings() {
+    const previousCapture = this.capture;
+    setBindings(this.bindings);
+    this.stopCapture();
+    this.renderBindings();
+    if (previousCapture) {
+      this.bindingList.querySelector(
+        `[data-binding-action="${previousCapture.action}"][data-binding-slot="${previousCapture.slot}"]`,
+      )?.focus({ preventScroll: true });
+    }
+  }
+
+  stopCapture() {
+    this.capture = null;
+    this.bindingList.querySelectorAll(".capturing").forEach((button) => button.classList.remove("capturing"));
+    this.captureActions.classList.add("hidden");
+    this.bindingStatus.textContent = "";
+  }
+
+  clearCapturedBinding() {
+    if (!this.capture) return;
+    const { action, slot } = this.capture;
+    if (!this.bindings[action][1 - slot]) {
+      this.bindingStatus.textContent = "Each action needs at least one control.";
+      return;
+    }
+    this.bindings[action][slot] = null;
+    this.previewBindings();
+  }
+
+  captureBinding(event) {
+    if (!this.capture || this.element.classList.contains("hidden")) {
+      if (event.type === "mousedown") {
+        this.suppressClick = false;
+        this.suppressContextMenu = false;
+      }
+      return;
+    }
+    if (event.type === "mousedown" && event.target.closest?.(".settings-capture-actions")) return;
+    if (event.type === "mousedown" && !event.isTrusted) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (event.type === "mousedown" && event.button === 0) this.suppressClick = true;
+    if (event.type === "mousedown" && event.button === 2) this.suppressContextMenu = true;
+    if (event.type === "keydown" && event.key === "Escape") {
+      this.stopCapture();
+      return;
+    }
+    if (event.repeat) return;
+    const value = bindingForEvent(event);
+    if (!value) {
+      this.bindingStatus.textContent = "That key or mouse button cannot be assigned. Try another.";
+      return;
+    }
+    this.assignCapturedBinding(value);
+  }
+
+  assignCapturedBinding(value) {
+    if (!this.capture) return;
+    const { action, slot } = this.capture;
+    const conflict = bindingConflict(this.bindings, action, slot, value);
+    if (conflict) {
+      this.bindingStatus.textContent = `${bindingLabel(value)} is already used for ${conflict}. Choose another control.`;
+      return;
+    }
+    this.bindings[action][slot] = value;
+    this.previewBindings();
   }
 
   async run(action) {
@@ -108,6 +296,7 @@ export class SettingsPanel {
     } catch (error) {
       console.error("Settings action failed:", error);
       this.status.textContent = `Could not apply settings: ${error.message}`;
+      this.bindingStatus.textContent = `Could not apply settings: ${error.message}`;
     }
   }
 
@@ -120,12 +309,19 @@ export class SettingsPanel {
       displayMode: settings?.displayMode,
       textSize: SettingsPanel.getSavedTextSize(),
       cursorMode: getSavedCursorMode(),
+      controllerLabelStyle: getControllerLabelStyle(),
+      controls: getBindings(),
     };
+    this.bindings = getBindings();
+    this.renderBindings();
+    this.selectTab("display");
     this.select.disabled = this.displayModeSelect.disabled = !settings;
     if (settings) this.syncDisplaySettings(settings);
     else this.status.textContent = "Display settings are available in the desktop game. Text size and cursor work here.";
     this.textSizeSelect.value = this.settingsSnapshot.textSize;
     this.cursorSelect.value = this.settingsSnapshot.cursorMode;
+    this.controllerLayoutSelect.value = this.settingsSnapshot.controllerLabelStyle;
+    setControllerLabelStyle(this.settingsSnapshot.controllerLabelStyle);
 
     this.element.classList.remove("hidden");
     this.onOpen?.();
@@ -163,17 +359,24 @@ export class SettingsPanel {
       this.textSizeSelect.value,
     );
     setCursorMode(this.cursorSelect.value, { persist: true });
+    setControllerLabelStyle(this.controllerLayoutSelect.value, { persist: true });
+    setBindings(this.bindings, { persist: true });
+    this.stopCapture();
     this.element.classList.add("hidden");
     this.onClose?.();
   }
 
   destroy() {
     document.removeEventListener("keydown", this.handleEscape, true);
+    window.removeEventListener("keydown", this.handleBindingInput, true);
+    window.removeEventListener("mousedown", this.handleBindingInput, true);
+    window.removeEventListener("click", this.handleBindingClick, true);
+    window.removeEventListener("contextmenu", this.handleBindingContextMenu, true);
     this.element.remove();
   }
 
   async cancel() {
-    const { resolution, displayMode, textSize, cursorMode } = this.settingsSnapshot;
+    const { resolution, displayMode, textSize, cursorMode, controllerLabelStyle, controls } = this.settingsSnapshot;
 
     // Restore the mode first; switching modes can resize the window.
     if (window.desktopApi && displayMode !== this.appliedDisplayMode) {
@@ -188,6 +391,12 @@ export class SettingsPanel {
     SettingsPanel.applyTextSize(textSize);
     this.cursorSelect.value = cursorMode;
     setCursorMode(cursorMode);
+    this.controllerLayoutSelect.value = controllerLabelStyle;
+    setControllerLabelStyle(controllerLabelStyle);
+    if (controls) {
+      this.bindings = controls;
+      setBindings(controls);
+    }
     this.close();
   }
 
@@ -229,10 +438,14 @@ export class SettingsPanel {
       displayMode: settings?.displayMode,
       textSize: this.textSizeSelect.value,
       cursorMode: this.cursorSelect.value,
+      controllerLabelStyle: this.controllerLayoutSelect.value,
+      controls: getBindings(),
     };
     if (settings) this.syncDisplaySettings(settings);
     localStorage.setItem(SettingsPanel.textSizeStorageKey, this.textSizeSelect.value);
     setCursorMode(this.cursorSelect.value, { persist: true });
+    setControllerLabelStyle(this.controllerLayoutSelect.value, { persist: true });
+    setBindings(this.bindings, { persist: true });
   }
 
   static getSavedTextSize() {

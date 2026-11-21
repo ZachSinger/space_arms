@@ -31,6 +31,7 @@ export class PauseMenu {
         this.uiWindow.element.classList.remove("active");
       },
       onClose: () => {
+        shop.managerTablet?.refreshHandbookPanel();
         if (!this.isOpen) return;
         this.uiWindow.element.classList.remove("hidden");
         shop.windowManager.focusWindow(this.uiWindow);

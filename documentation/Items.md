@@ -10,9 +10,6 @@ Crates being filled from those shelves use the same 20-unit limit. New delivered
 contain one full shelf space's worth. Older crates can contain more and can be emptied
 onto several shelf spaces.
 
-The dimensions and stack values listed below still apply to legacy shelves and
-other inventory systems. They do not determine the new Budget Shelves' capacity.
-
 ## What each Items.json property does today
 
 | Property | What it controls |
@@ -22,9 +19,6 @@ other inventory systems. They do not determine the new Budget Shelves' capacity.
 | `flavor` | Description text stored in the catalog, but not currently displayed or used by gameplay. |
 | `tags` | What kind of product it is: customer interests, firearm/ammunition matching, and crate artwork use these. |
 | `boxSize` | Space taken by one product in a shelf space or crate. Both hold 20 space units: `2` means 10 products; `4` means 5. This also sets quantity per newly ordered crate. |
-| `dimensions.w`, `dimensions.h` | Width and height under the old shelf-packing rules, plus old-save conversion and a debug stock filter. Current Budget Shelf spaces ignore these. |
-| `slots` | Old capacity-based inventory size. Go-Backs and save validation still calculate it, but Go-Backs has unlimited capacity. It no longer limits the player or current shelves. |
-| `stackSize` | Maximum quantity stacked under the old shelf rules. Still needed to interpret old saves; it does not set current shelf or crate quantities. |
 | `baseCost` | Starting market price per product, before market changes. Also sets valid market-price ranges when reading saves. It is not the final supplier or selling price. |
 | `license` | Supplier contract required before this product can be ordered. |
 | `ammo` | The ammunition type a firearm uses, or that an ammunition product supplies. Customers use it to buy matching ammunition. |
@@ -32,8 +26,7 @@ other inventory systems. They do not determine the new Budget Shelves' capacity.
 | `fits` | Intended attachment compatibility. Stored, but attachment installation is not implemented, so currently unused. |
 | `image` | Product artwork used in inventory, ordering, checkout, and shelf displays. |
 
-`slots` was also used by the removed hovercart's capacity system. It is not exclusively
-a hovercart field. No item property currently controls a hovercart.
+No item property currently controls a hovercart.
 
 The Scrap-Iron Autopistol has base cost 25 and box size 2: 10 fit in **each shelf space**
 and 10 arrive in each crate. A shelf with several spaces can hold several groups of 10.

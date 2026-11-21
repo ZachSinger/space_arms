@@ -92,24 +92,6 @@ test("older saves keep access to heavy ammo they could already order", () => {
     .includes("lic_edge_antique_ammo"));
 });
 
-test("old three-level Budget Shelves keep their level and excess boxes go to Go-Backs once", () => {
-  const data = snapshot();
-  data.fixtures.push({
-    id: "old-budget", type: "shelf_budget_2x4", gx: 17, gy: 2,
-    placements: [{ itemId: "wpn_hvy_01", gx: 0, gy: 2, w: 3, h: 1, rotated: false, quantity: 8 }],
-  });
-  const migrated = validateShopSave(data, database);
-  const shelf = migrated.fixtures.at(-1);
-  assert.equal(shelf.type, "shelf_budget_3x4");
-  assert.equal(shelf.stockingVersion, 1);
-  assert.deepEqual(shelf.placements[0], {
-    itemId: "wpn_hvy_01", gx: 0, gy: 2, w: 1, h: 1, rotated: false, quantity: 1,
-  });
-  assert.equal(migrated.playerState.goBacks.find((entry) => entry.itemId === "wpn_hvy_01").quantity, 7);
-  assert.deepEqual(validateShopSave(migrated, database), migrated);
-  assert.equal(data.fixtures.at(-1).placements[0].quantity, 8);
-});
-
 test("shop saves preserve layout, all inventory locations, prices, factions, and market state", async () => {
   const entries = new Map();
   const storage = createSaveStorage({ localStorage: {
@@ -608,16 +590,11 @@ test("crate ID migration does not repair malformed crate save fields", () => {
   assert.throws(() => validateShopSave(invalidCounter, database), /invalid next crate id/);
 });
 
-test("older shelf saves still load stacks within the legacy depth rule", () => {
+test("shelf saves reject more items than one shelf space holds", () => {
   const data = snapshot();
-  delete data.fixtures[0].stockingVersion;
-  Object.assign(data.fixtures[0].placements[0], { w: 2, quantity: 4 }); // rifle: legacy 12 / 3 = 4
-  const migrated = validateShopSave(data, database);
-  assert.equal(migrated.fixtures[0].stockingVersion, 1);
-  assert.deepEqual(migrated.fixtures[0].placements[0], {
-    itemId: "wpn_rif_01", gx: 0, gy: 0, w: 1, h: 1, rotated: false, quantity: 4,
-  });
-  data.fixtures[0].placements[0].quantity = 5;
+  data.fixtures[0].placements[0].quantity = 5; // rifle: box size 4, so 5 fill a space
+  assert.doesNotThrow(() => validateShopSave(data, database));
+  data.fixtures[0].placements[0].quantity = 6;
   assert.throws(() => validateShopSave(data, database), /shelf stack does not fit/);
 });
 

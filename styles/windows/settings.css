@@ -2,8 +2,8 @@
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: min(520px, calc(100% - 40px));
-  height: min(560px, calc(100% - 40px));
+  width: min(970px, calc(100% - 40px));
+  height: min(760px, calc(100% - 40px));
   z-index: 700;
   pointer-events: auto;
   overflow: hidden;
@@ -14,10 +14,16 @@
   flex: 1;
   min-height: 0;
   flex-direction: column;
-  gap: 24px;
-  padding: 22px;
+  padding: 18px 22px;
   overflow-y: auto;
 }
+
+.settings-header { padding: 22px 22px 0; }
+.settings-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; border-bottom: 1px solid var(--color-border-subtle); }
+.settings-tabs .retro-tab-btn { flex: 1 1 auto; }
+.settings-display { display: flex; flex-direction: column; gap: 24px; }
+.settings-display.hidden, .settings-controls.hidden, .settings-controller.hidden, .settings-defaults.hidden,
+.settings-capture-actions.hidden { display: none; }
 
 .settings-title {
   color: var(--color-text-main);
@@ -52,6 +58,14 @@
   font: inherit;
 }
 
+.settings-controller-layout {
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-base);
+  color: var(--color-text-main);
+  padding: 10px;
+  font: inherit;
+}
+
 .settings-status {
   color: var(--color-border-active);
   font-size: var(--font-size-14);
@@ -61,9 +75,38 @@
   position: sticky;
   bottom: 0;
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 8px;
   padding: 14px 22px;
   border-top: 1px solid var(--color-border-subtle);
   background: var(--color-panel);
+}
+
+.settings-action-right { display: flex; gap: 8px; margin-left: auto; }
+.settings-controls h2 { font-size: var(--font-size-18); margin-bottom: 10px; }
+.settings-controls > p { color: var(--color-text-muted); font-size: var(--font-size-14); line-height: 1.5; }
+.settings-binding-status:not(:empty) { color: var(--color-border-active); font-size: var(--font-size-14); line-height: 1.4; margin: 10px 0; }
+.settings-capture-actions button {
+  margin-bottom: 10px; padding: 6px 10px; font: inherit; color: var(--color-text-main);
+  border: 1px solid var(--color-border-subtle); background: #1e293b; cursor: pointer;
+}
+.settings-binding-list { margin-top: 16px; border: 1px solid var(--color-border-subtle); background: var(--color-bg-base); }
+.settings-binding-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.settings-binding-table th, .settings-binding-table td { padding: 7px 10px; text-align: left; }
+.settings-binding-table thead th { color: var(--color-text-muted); font-size: var(--font-size-12); }
+.settings-binding-table th:not(:first-child), .settings-binding-table td:not(:first-child) { width: 155px; }
+.settings-binding-table tbody td { border-top: 1px solid #253247; font-size: var(--font-size-14); }
+.settings-binding-table .settings-binding-group th { color: #7dd3fc; background: #111f31; font-size: var(--font-size-14); }
+.settings-binding {
+  width: 100%; padding: 6px; font: inherit; color: var(--color-text-main); background: #1e293b;
+  border: 1px solid #475569; border-radius: 4px; cursor: pointer;
+}
+.settings-binding.empty { color: var(--color-text-muted); border-style: dashed; background: var(--color-panel); }
+.settings-binding.capturing { color: white; border-color: var(--color-border-active); background: #0369a1; }
+
+@media (max-width: 700px) {
+  .settings-binding-table th:not(:first-child), .settings-binding-table td:not(:first-child) { width: 110px; }
+  .settings-binding-table th, .settings-binding-table td { padding: 6px 5px; }
+  .settings-actions { padding: 10px; gap: 4px; }
+  .settings-actions .action-btn { padding: 6px; }
 }

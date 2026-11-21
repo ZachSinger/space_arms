@@ -51,8 +51,8 @@ test("the summary explains a full loading pad or missing credits in plain words"
 
 test("an ordered crate holds exactly one full Budget Shelf 2x2 space of its item", () => {
   for (const [boxSize, quantity] of [[1, 20], [3, 6], [6, 3], [14, 1], [20, 1]]) {
-    assert.equal(getCrateOrderQuantity({ boxSize, stackSize: 10 }), quantity, `box size ${boxSize}`);
-    assert.equal(getCrateOrderQuantity({ boxSize, stackSize: 10 }), getSlotItemLimit(boxSize));
+    assert.equal(getCrateOrderQuantity({ boxSize }), quantity, `box size ${boxSize}`);
+    assert.equal(getCrateOrderQuantity({ boxSize }), getSlotItemLimit(boxSize));
   }
 });
 

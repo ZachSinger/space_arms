@@ -22,7 +22,7 @@ test("shelved items sort to the top of the Supply tab, most urgent first", () =>
 });
 
 test("the Supply tab keeps crate ordering and cost details in its split-panel layout", () => {
-  const item = { id: "rations", name: "Basic Rations", image: null, stackSize: 10, boxSize: 1 };
+  const item = { id: "rations", name: "Basic Rations", image: null, boxSize: 1 };
   const scene = {
     supply: {
       restockableItems: () => [{
@@ -61,8 +61,7 @@ test("the Supply tab escapes item data in text and attributes", () => {
   const item = {
     id: 'rations" onmouseover="run()',
     name: '<img src=x onerror="run()"> & Supply',
-    image: 'images/" onerror="run()',
-    stackSize: 10,
+    image: 'images/" onerror="run()',
     boxSize: 1,
   };
   const scene = {

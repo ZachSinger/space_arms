@@ -2,11 +2,13 @@
 // FILE: ShelfFixture.js
 // ==========================================
 // A sales shelf with per-placement quantities shared by stocking, customers, and saves.
-// Hands-on Budget Shelves hold one item kind per space, up to 20 box-size units.
-// Legacy shelves pack by item dimensions and cap stackSize by shelf stackDepth.
+// Each space holds one item kind, up to 20 box-size units.
 // See also: InventoryPool.js (the stock API this class mirrors).
 import { database } from "../scenes/boot.js";
-import { getShelfSlotCapacity, getShelfItemFootprint } from "./FixtureLayout.js";
+import { getShelfSlotCapacity } from "./FixtureLayout.js";
+
+// Every item fills exactly one shelf space.
+const FOOTPRINT = Object.freeze({ w: 1, h: 1 });
 
 let nextGeneratedFixtureId = 1;
 
@@ -18,7 +20,6 @@ export class ShelfFixture {
     this.y = data.y;
     this.gridDimensions = data.gridDimensions; // map footprint in tiles, not the item grid
     this.displayGrid = data.displayGrid;
-    this.stackDepth = data.stackDepth;
     this.handsOn = data.handsOn === true;
     this.nextPlacementId = data.nextPlacementId ?? 1;
     if (!Number.isSafeInteger(this.nextPlacementId) || this.nextPlacementId < 1) {
@@ -83,7 +84,7 @@ export class ShelfFixture {
   }
 
   getPlacementCapacity(placement) {
-    return getShelfSlotCapacity(this.stackDepth, database.getItem(placement.itemId), this.handsOn);
+    return getShelfSlotCapacity(database.getItem(placement.itemId));
   }
 
   occupiedCellsFor(placement) {
@@ -132,7 +133,7 @@ export class ShelfFixture {
       throw new RangeError("Shelf placement quantity must be a non-negative integer.");
     }
 
-    const { w, h } = getShelfItemFootprint(item, rotated, this.handsOn);
+    const { w, h } = FOOTPRINT;
     if (!this.canPlaceAt(gx, gy, w, h)) return null;
 
     const placement = { id: this.createPlacementId(), itemId, gx, gy, w, h, rotated, quantity };
@@ -157,8 +158,7 @@ export class ShelfFixture {
    * @param {boolean} rotated
    */
   attachPlacement(placement, gx, gy, rotated) {
-    const item = database.getItem(placement.itemId);
-    const { w, h } = getShelfItemFootprint(item, rotated, this.handsOn);
+    const { w, h } = FOOTPRINT;
     if (!this.canPlaceAt(gx, gy, w, h)) return false;
 
     Object.assign(placement, { gx, gy, w, h, rotated });

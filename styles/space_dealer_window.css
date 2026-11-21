@@ -139,7 +139,8 @@ main {
 / MODULAR UI COMPONENTS (BUTTONS AND SLOTS)                         /
 / ================================================================= */
 
-.retro-tab-btn {
+.retro-tab-btn,
+.employee-training-skill {
   --bg-color: #1e293b;
   background: var(--bg-color);
   background-size:
@@ -157,7 +158,8 @@ main {
   transition: all 0.1s ease;
 }
 
-.retro-tab-btn:hover {
+.retro-tab-btn:hover,
+.employee-training-skill:hover {
   --bg-color: #334155;
   color: var(--color-text-main);
 }
@@ -166,7 +168,8 @@ main {
   color: #ffffff;
 }
 
-.retro-tab-btn.active {
+.retro-tab-btn.active,
+.employee-training-skill.active {
   --bg-color: #0284c7;
   border-color: var(--color-border-active);
   color: #ffffff;

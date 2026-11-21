@@ -7,6 +7,7 @@ import {
 } from "./CashPayment.js";
 import { formatTransactionTotal, toCents } from "./Money.js";
 import { html } from "../core/html.js";
+import { controlLabel } from "../input/InputDevice.js";
 
 // The number printed on a bill or coin; its shape shows which it is.
 export function cashFaceValue({ kind, units }, currency = "credits") {
@@ -126,7 +127,7 @@ export class CheckoutRenderer {
             </div>
             <div class="cash-change-pile" id="checkout-change-pile">No change selected.</div>
             <div class="cash-instructions kbd-only">Click a bill or coin to add it. Right-click to remove one.</div>
-            <div class="cash-instructions pad-only">Press A on a bill or coin to add it. Press X to remove one.</div>
+            <div class="cash-instructions pad-only">Press ${controlLabel("tenderAdd", "gamepad")} on a bill or coin to add it. Press ${controlLabel("tenderRemove", "gamepad")} to remove one.</div>
           </div>` : ""}
         ${renderChit(chitPayment)}
       </div>

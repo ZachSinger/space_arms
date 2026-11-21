@@ -39,7 +39,7 @@ before(async () => {
       },
       load(id) {
         if (id === "\0employee-test-database") {
-          return "export const database = { getItem: (id) => ({ id, slots: 1 }) };";
+          return "export const database = { getItem: (id) => ({ id }) };";
         }
         if (id === "\0employee-test-sprites") {
           return `export const CHARACTER_ORIGIN_Y = 50 / 64;
@@ -1062,7 +1062,7 @@ test("the employee panel renders draggable jobs in saved order with alternate mo
   assert.match(stocking, /data-employee-priority-job="clean" data-employee-priority-move="down"\s+disabled/);
   assert.match(stocking, /aria-label="Move Register up for Tavi/);
   assert.match(stocking, />Move down<\/button>/);
-  assert.match(stocking, /Job order: 1\. Stocking, 2\. Register, 3\. Cleaning/);
+  assert.match(stocking, /<h4 class="employee-section-title">Job priorities<\/h4>/);
 
   const register = EmployeeRenderer.generateHTML({
     ...options, employeeJobPriorities: { tavi_stock_clerk: ["register", "stock_shelves", "clean"] },
@@ -1072,7 +1072,7 @@ test("the employee panel renders draggable jobs in saved order with alternate mo
     ...options, employeeJobPriorities: { tavi_stock_clerk: ["clean", "register", "stock_shelves"] },
   });
   assert.ok(cleaning.indexOf('data-employee-job="clean"') < cleaning.indexOf('data-employee-job="register"'));
-  assert.match(cleaning, /Job order: 1\. Cleaning, 2\. Register, 3\. Stocking/);
+  assert.ok(cleaning.indexOf('data-employee-job="register"') < cleaning.indexOf('data-employee-job="stock_shelves"'));
   const duringShift = EmployeeRenderer.generateHTML({ ...options, canHire: false });
   assert.match(duringShift, /role="listitem" draggable="false"/);
   assert.match(duringShift, /data-employee-priority-job="register" data-employee-priority-move="down"\s+disabled/);
@@ -1118,7 +1118,7 @@ test("the employee panel switches staff on and off shift, only between shifts", 
   assert.doesNotMatch(training, /data-employee-shift-id/);
 });
 
-test("the hiring and staff panels show compact levels without training controls", () => {
+test("the hiring and staff panels show compact skill levels", () => {
   const options = {
     hiredEmployeeIds: ["tavi_stock_clerk"], activeEmployeeIds: [],
     employeeJobPriorities: {}, credits: 1000, canHire: true, shopLevel: 4,
@@ -1132,8 +1132,63 @@ test("the hiring and staff panels show compact levels without training controls"
   assert.match(html, /Tavi<\/h3>[\s\S]*?Register:2<\/span>[\s\S]*?Stocking:1<\/span>/);
   assert.match(html, /employee-candidate-wage">50<\/div>/);
   assert.match(html, /employee-hire-cost">250<\/div>/);
-  assert.doesNotMatch(html, /Skills:|data-train-employee|data-confirm-employee-training|credits per shift/);
+  assert.doesNotMatch(html, /Skills:|credits per shift/);
   assert.doesNotMatch(html.slice(html.indexOf("Your Staff")), /On Shift: works and is paid each shift/);
+});
+
+test("training preview shows the selected skill's actual level, speed, price, wage, and absence", () => {
+  const options = {
+    hiredEmployeeIds: ["tavi_stock_clerk"], activeEmployeeIds: [], employeeJobPriorities: {},
+    credits: 1000, canHire: true, shopLevel: 4,
+    employeeSkills: { tavi_stock_clerk: { register: 2, stock_shelves: 1, clean: 1 } },
+  };
+  const register = EmployeeRenderer.generateHTML(options);
+  assert.match(register, /data-employee-training-job="register"\s+data-employee-training-action="select" aria-pressed="true"/);
+  assert.match(register, /Register training<\/strong>[\s\S]*Level 2 → 3/);
+  assert.match(register, /Register speed: 120% → 150% of Level 1 speed/);
+  assert.match(register, /Training price: <strong>375<\/strong>/);
+  assert.match(register, /Wages after training: <strong>60 per shift worked or spent in training<\/strong>/);
+  assert.match(register, /Tavi will miss the entire next shift\s+and still be paid 55/);
+  assert.match(register, /data-employee-training-action="book"\s+aria-label="Book Register training for Tavi"/);
+
+  const cleaning = EmployeeRenderer.generateHTML({
+    ...options, employeeTrainingSelection: { tavi_stock_clerk: "clean" },
+  });
+  assert.match(cleaning, /data-employee-training-job="clean"\s+data-employee-training-action="select" aria-pressed="true"/);
+  assert.match(cleaning, /Cleaning speed: 100% → 120% of Level 1 speed/);
+  assert.match(cleaning, /aria-label="Book Cleaning training for Tavi"/);
+});
+
+test("training explains and disables booking when a course is unavailable", () => {
+  const options = {
+    hiredEmployeeIds: ["tavi_stock_clerk"], activeEmployeeIds: [], employeeJobPriorities: {},
+    credits: 1000, canHire: true, shopLevel: 4,
+  };
+  const maxed = EmployeeRenderer.generateHTML({
+    ...options, employeeSkills: { tavi_stock_clerk: { register: 5 } },
+  });
+  assert.match(maxed, /Level 5 \(maximum\)/);
+  assert.match(maxed, /This skill is already at Level 5/);
+  assert.match(maxed, /data-employee-training-action="book" disabled/);
+  assert.doesNotMatch(maxed, /Level 6/);
+  assert.doesNotMatch(maxed, /will miss the entire next shift/);
+
+  const unaffordable = EmployeeRenderer.generateHTML({ ...options, credits: 249 });
+  assert.match(unaffordable, /Training costs 250. You don&#39;t have enough money/);
+  assert.match(unaffordable, /data-employee-training-action="book" disabled/);
+
+  const duringShift = EmployeeRenderer.generateHTML({ ...options, canHire: false });
+  assert.match(duringShift, /Book employee training between shifts/);
+  assert.match(duringShift, /data-employee-training-action="book" disabled/);
+
+  const booked = EmployeeRenderer.generateHTML({
+    ...options, employeeTraining: { tavi_stock_clerk: "stock_shelves" },
+    employeeTrainingSelection: { tavi_stock_clerk: "clean" },
+  });
+  assert.match(booked, /Tavi has Stocking\s+training booked/);
+  assert.match(booked, /This employee already has training booked/);
+  assert.match(booked, /data-employee-training-action="book" disabled/);
+  assert.doesNotMatch(booked, /Training price:|Wages after training:/);
 });
 
 test("skill levels speed up shelf stocking and register service", () => {

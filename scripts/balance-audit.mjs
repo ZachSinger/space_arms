@@ -146,7 +146,7 @@ for (const spec of Object.values(FIXTURE_TYPES)) {
   }
   const slots = spec.shelfRows * spec.shelfColumns;
   const caps = [1, 2, 4].map((boxSize) =>
-    getCrateOrderQuantity({ boxSize, dimensions: { w: 1, h: 1 } }));
+    getCrateOrderQuantity({ boxSize }));
   console.log(
     spec.name.padEnd(22) + " | " + money(spec.price).padStart(6) + " | " + String(slots).padStart(5) +
     " | " + caps.join("/") + " per slot | " + money(getFixtureResaleValue(spec.id)),

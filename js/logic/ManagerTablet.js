@@ -6,7 +6,7 @@
 import { UIWindow } from "./UIWindow.js";
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from "./GameViewport.js";
 import { InventoryTab, INVENTORY_PRICE_CONTROL_SELECTOR } from "./InventoryTab.js";
-import { EmployeeTab, EMPLOYEE_PRIORITY_SELECTOR } from "./EmployeeTab.js";
+import { EmployeeTab, EMPLOYEE_PRIORITY_SELECTOR, EMPLOYEE_TRAINING_SELECTOR } from "./EmployeeTab.js";
 import { ContractsTab } from "./ContractsTab.js";
 import { SupplyTab } from "./SupplyTab.js";
 import { FixturesTab } from "./FixturesTab.js";
@@ -57,7 +57,7 @@ function renderTextStylesPage() {
 }
 
 const TABLET_KEYBOARD_CONTROL_SELECTOR =
-  `${INVENTORY_PRICE_CONTROL_SELECTOR}, ${EMPLOYEE_PRIORITY_SELECTOR}`;
+  `${INVENTORY_PRICE_CONTROL_SELECTOR}, ${EMPLOYEE_PRIORITY_SELECTOR}, ${EMPLOYEE_TRAINING_SELECTOR}`;
 
 /**
  * The single Tablet window; owns tab switching and refreshes panels when game state changes.

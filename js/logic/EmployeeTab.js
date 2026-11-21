@@ -5,6 +5,7 @@
 import { EmployeeRenderer } from "./EmployeeRenderer.js";
 
 export const EMPLOYEE_PRIORITY_SELECTOR = "button[data-employee-priority-id]";
+export const EMPLOYEE_TRAINING_SELECTOR = "button[data-employee-training-id]";
 
 export class EmployeeTab {
   /** @param {GameScene} scene @param {GameState} gameState */
@@ -14,9 +15,15 @@ export class EmployeeTab {
     this.panel = null;
     this.renderPanel = null;
     this.draggedJob = null;
+    this.trainingSelection = {};
   }
 
   draw() {
+    for (const employeeId of this.gameState.staff.hired) {
+      if (this.trainingSelection[employeeId] === undefined) {
+        this.trainingSelection[employeeId] = this.gameState.staff.training[employeeId] ?? "register";
+      }
+    }
     return EmployeeRenderer.generateHTML({
       hiredEmployeeIds: this.gameState.staff.hired,
       offShiftEmployeeIds: this.gameState.staff.offShift,
@@ -26,6 +33,7 @@ export class EmployeeTab {
       canHire: this.scene.staffSystem.canManage(),
       employeeSkills: this.gameState.staff.skills,
       employeeTraining: this.gameState.staff.training,
+      employeeTrainingSelection: this.trainingSelection,
       shopLevel: this.gameState.reputation.shopLevel,
     });
   }
@@ -58,6 +66,10 @@ export class EmployeeTab {
         move: activeElement.dataset.employeePriorityMove,
       }
       : null;
+    const focusedTraining = activeElement && this.panel.contains(activeElement) &&
+      activeElement.matches(EMPLOYEE_TRAINING_SELECTOR)
+      ? { ...activeElement.dataset }
+      : null;
     const scrollPositions = Array.from(
       this.panel.querySelectorAll("[data-employee-scroll]"),
       (element) => ({ name: element.dataset.employeeScroll, top: element.scrollTop }),
@@ -82,6 +94,18 @@ export class EmployeeTab {
       );
       (sameMove ?? replacement)?.focus({ preventScroll: true });
     }
+    if (focusedTraining) {
+      const buttons = Array.from(this.panel.querySelectorAll(EMPLOYEE_TRAINING_SELECTOR));
+      const same = buttons.find((button) => !button.disabled &&
+        button.dataset.employeeTrainingId === focusedTraining.employeeTrainingId &&
+        button.dataset.employeeTrainingJob === focusedTraining.employeeTrainingJob &&
+        button.dataset.employeeTrainingAction === focusedTraining.employeeTrainingAction);
+      const selectedSkill = buttons.find((button) => !button.disabled &&
+        button.dataset.employeeTrainingId === focusedTraining.employeeTrainingId &&
+        button.dataset.employeeTrainingJob === focusedTraining.employeeTrainingJob &&
+        button.dataset.employeeTrainingAction === "select");
+      (same ?? selectedSkill)?.focus({ preventScroll: true });
+    }
   }
 
   /** @param {MouseEvent} event */
@@ -100,6 +124,22 @@ export class EmployeeTab {
         shiftButton.dataset.employeeShiftId,
         shiftButton.dataset.employeeShiftOn === "true",
       );
+      this.redraw();
+      return;
+    }
+
+    const trainingButton = event.target.closest(EMPLOYEE_TRAINING_SELECTOR);
+    if (trainingButton) {
+      if (trainingButton.disabled) return;
+      const { employeeTrainingId: employeeId, employeeTrainingJob: jobId, employeeTrainingAction: action } =
+        trainingButton.dataset;
+      if (action === "select") {
+        this.trainingSelection[employeeId] = jobId;
+      } else if (action === "book") {
+        this.scene.staffSystem.train(employeeId, jobId);
+      } else {
+        throw new Error(`Unknown employee training action: ${action}.`);
+      }
       this.redraw();
       return;
     }

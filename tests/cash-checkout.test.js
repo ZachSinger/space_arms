@@ -236,6 +236,22 @@ test("cash customers hand over money once scanning ends, with no total to key in
     '1.23 - <span class="checkout-paid">5.00</span>');
 });
 
+test("handing over change uses the rebound crate control", async (t) => {
+  const { defaultBindings, setBindings } = await server.ssrLoadModule("/js/input/KeyBindings.js");
+  const bindings = defaultBindings();
+  bindings.crate[0] = "KeyZ";
+  setBindings(bindings);
+  t.after(() => setBindings(defaultBindings()));
+  const h = harness();
+  h.checkout.paymentStage = "change";
+  let attempts = 0;
+  h.checkout.handOverChange = () => { attempts += 1; };
+  h.checkout.handleNumpadKeydown({ code: "Space", key: " ", preventDefault() {} });
+  assert.equal(attempts, 0);
+  h.checkout.handleNumpadKeydown({ code: "KeyZ", key: "z", preventDefault() {} });
+  assert.equal(attempts, 1);
+});
+
 test("the held scan gesture is released before customer cash can be swept up", (context) => {
   context.mock.timers.enable({ apis: ["setTimeout"] });
   const h = harness();

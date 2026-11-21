@@ -6,6 +6,7 @@
 // See also: SupplyOrder.js (order rules), InteractionSystem.handleInteract (crate hauling).
 import { html } from "../core/html.js";
 import { DELIVERY_FEE, getCrateOrderQuantity } from "./SupplyOrder.js";
+import { controlLabel } from "../input/InputDevice.js";
 
 /**
  * How an item is doing on the shop's shelves, for the Supply tab's badge.
@@ -89,7 +90,7 @@ export class SupplyRenderer {
         </div>
         <hr class="divider-thick supply-divider">
         <section class="supply-catalog">
-          <div class="pad-only supply-controller-hint">Press A to add a crate. Press X to remove one.</div>
+          <div class="pad-only supply-controller-hint">Press ${controlLabel("tenderAdd", "gamepad")} to add a crate. Press ${controlLabel("tenderRemove", "gamepad")} to remove one. Left/right moves between the item list and order buttons; up/down moves through either.</div>
           <div class="supply-column-header">
             <span></span>
             <span></span>

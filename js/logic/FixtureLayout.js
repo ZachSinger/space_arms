@@ -69,20 +69,11 @@ const LEGACY_FIXTURE_TYPES = {
 };
 
 /**
- * Hands-on spaces hold 20 box-size units; legacy slots cap stackSize by stackDepth.
- * @param {number} stackDepth
+ * Each shelf space holds one item kind, up to 20 box-size units.
  * @param {object} item
- * @param {boolean} handsOn
  */
-export function getShelfSlotCapacity(stackDepth, item, handsOn = false) {
-  if (handsOn) return getSlotItemLimit(item?.boxSize);
-  if (!item?.stackSize) return 0;
-  return Math.min(item.stackSize, stackDepth);
-}
-
-export function getShelfItemFootprint(item, rotated = false, handsOn = false) {
-  if (handsOn) return { w: 1, h: 1 };
-  return rotated ? { w: item.dimensions.h, h: item.dimensions.w } : { ...item.dimensions };
+export function getShelfSlotCapacity(item) {
+  return getSlotItemLimit(item?.boxSize);
 }
 
 export function getShelfDisplayGrid(fixtureType) {

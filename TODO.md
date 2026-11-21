@@ -8,8 +8,8 @@ notice something that needs doing but isn't being done right now.
       No gameplay changes during the rebuild; features wait for the phase they depend on.
 
 ## Base-loop follow-ups
-- [ ] Employee Training: add course-booking controls for the existing skill/training
-      system. Playtest per-item stocking across Levels 1-5 before finalizing the balance.
+- [x] Employee Training: add course-booking controls for the existing skill/training system.
+- [ ] Employee Training: playtest per-item stocking across Levels 1-5 before finalizing the balance.
 - [x] Multi-register support. Registers are buyable in any number; each needs queue space
       on its own. One line per register with customers picking the shortest; one employee
       can man each register at once; the player works whichever register they stand behind.
@@ -93,6 +93,7 @@ notice something that needs doing but isn't being done right now.
       drawn above them instead of snagging on it.
 - [x] Controller support: walking, dashing, every action, and a menu highlight for every
       window, with on-screen prompts that switch to controller buttons.
+- [x] Keyboard and mouse control rebinding in Settings, with two controls per action.
 - [ ] Try the controller on a real Xbox/PlayStation pad (so far only tested with a
       simulated one), including the Steam Deck.
 - [ ] Fine-tune the controller after real-pad playtesting: stick feel, dash timing, menu
@@ -233,15 +234,13 @@ notice something that needs doing but isn't being done right now.
       go to the nearest reachable trashcan instead.
 - [x] A way to see how many of each item you own in total: the Inventory tab now has
       "On Shelves" and "In Crates" columns (crates anywhere, including ones being carried).
-- [ ] Employee training: bring it back after the menu cleanup (design talk first).
+- [x] Employee training: bring it back after the menu cleanup.
 - [x] Employees wear matching orange-sleeved staff uniforms instead of a green tint,
       keeping their own faces and matching raised-arm carrying poses.
 - [ ] Cleanliness: replaced by the fuller Cleaning module design. See
       [documentation/modules/Cleaning.md](documentation/modules/Cleaning.md).
 - [x] Contract pacing: split the big contracts into about 70 small ones (2–5 products each);
       Store Levels 1–5 now offer 15 products instead of 55. Old saves keep everything they owned.
-- [ ] Shift pacing: the player is stuck on the register all shift. Talk through day length,
-      time speed, and customer flow.
 - [ ] Revamp pricing and its effects on customers. Right now the only point of setting
       prices is remembering to press "Mkt price" on each item once before each shift. Pricing
       should be a real decision with clear trade-offs (design talk first).

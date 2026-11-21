@@ -13,7 +13,7 @@ import {
   EMERGENCY_LOAN_REPAYMENT_RATE,
   EMERGENCY_LOAN_TARGET_BALANCE,
 } from "./EmergencyLoan.js";
-import { CONTROL_HELP, controlLabel } from "../input/InputDevice.js";
+import { getControlHelp, controlLabel } from "../input/InputDevice.js";
 import { formatMoneyAmount } from "./Money.js";
 import {
   MAX_EMPLOYEE_SKILL_LEVEL, EMPLOYEE_MILESTONE_LEVELS, getEmployeeJobSpeed,
@@ -117,15 +117,15 @@ function storeTopic({ shopLevel, reputation }) {
         `A see-through copy of the fixture appears. You can walk while placing it.
           Move it with the <span class="kbd-only">mouse</span><span class="pad-only">right stick</span>,
           turn it with ${key("rotate")}, and
-          <span class="kbd-only">click</span><span class="pad-only">press A</span> to place it.
-          <span class="kbd-only">Esc or right-click</span><span class="pad-only">X</span> cancels.`,
+          use ${key("place")} to place it.
+          ${key("cancelFixture")} cancels.`,
         "Every fixture uses a Collision Box: its body box fits the visible fixture, and its blue projection box extends out in front. The register also needs a projection box behind it for the cashier. Keep blue areas free of furniture; people can walk through them. The body outline turns red if placement is blocked.",
         "A fixture can't block a doorway or cut off part of the shop. Customers need room to line up in front of or beside each register.",
       ])}
       <p>Fixtures can be placed or moved whenever the store is <strong>closed</strong>,
         including after pressing <strong>CLOSE STORE</strong> during a shift. To move one that's
         already placed (including the register), face it with empty hands and hold
-        <span class="kbd-only">Ctrl</span><span class="pad-only">A</span>, or use
+        ${key("moveFixture")}, or use
         <strong>MOVE</strong> in the Fixtures tab. Its contents move with it.</p>
       <p>An empty fixture can be packed back into a crate, or sold for half of what it cost.
         Your shop always keeps at least one register.</p>`),
@@ -196,11 +196,11 @@ function stockingTopic() {
         "A thin cyan light marks the side of each Budget Shelf that customers shop from. It fades on and off once every three seconds.",
         "While you carry a crate of items, every shelf in the shop that has a space for that item pulses with a green outline, even if that space is sold out.",
         `Press ${key("interact")} at a 2x2 through 2x4 or 3x2 through 3x4 Budget Shelf to see its front up close, whichever way it faces in the shop.`,
-        "Hold the left mouse button on a shelf space to place boxes one by one from your carried crates. Each space holds one kind of item. Small boxes fit twenty to a space; the largest fit one.",
-        "Carrying more than one crate of items? While the shelf is open, press Q (Y on a controller) to pick which crate stocks next. That crate glows green in your crate list on the right side of the screen. It's used for empty spaces, and for spaces that hold its item.",
+        `Hold <span class="kbd-only">the left mouse button on a shelf space</span><span class="pad-only">${controlLabel("tenderAdd", "gamepad")} on the highlighted shelf space</span> to place boxes one by one from your carried crates. Each space holds one kind of item. Small boxes fit twenty to a space; the largest fit one.`,
+        `Carrying more than one crate of items? While the shelf is open, press ${key("putDown")} to pick which crate stocks next. That crate glows green in your crate list on the right side of the screen. It's used for empty spaces, and for spaces that hold its item.`,
         "Shelf spaces show a picture of their item. A green border marks spaces that match an item in your crates, even when the space is sold out. Point the mouse at a space to see the item's name and how many are on it in the bar at the bottom of the screen.",
-        "A sold-out space keeps its item, and customers keep looking for that item there. Until you clear it, only that item can be stocked there. Right-click a sold-out space to clear it, so customers stop looking there and you can stock something else.",
-        "Hold the right mouse button to take boxes back into an empty crate, or a crate of the same item with room left. You can work while carrying up to three crates; the highest matching crate is used.",
+        `A sold-out space keeps its item, and customers keep looking for that item there. Until you clear it, only that item can be stocked there. <span class="kbd-only">Right-click</span><span class="pad-only">Press ${controlLabel("tenderRemove", "gamepad")} on</span> a sold-out space to clear it, so customers stop looking there and you can stock something else.`,
+        `Hold <span class="kbd-only">the right mouse button</span><span class="pad-only">${controlLabel("tenderRemove", "gamepad")} on the highlighted shelf space</span> to take boxes back into an empty crate, or a crate of the same item with room left. You can work while carrying up to three crates; the highest matching crate is used.`,
         "The shop keeps running. Customers take boxes from the front first, including while you stock. Each stocked space has an orange price sticker on its top-right corner showing what customers pay for one; it turns grey and says SOLD OUT when the space is empty. Click a sticker to change that item's price: type a new price, or use -10%, +10%, or MARKET (today's market price). Press Esc to put the price box away.",
         `Empty crates stay in your hands. Beside a trashcan on the sales floor, press ${key("interact")} to put all your held empty crates in it. Filled crates stay in your hands. Press ${key("interact")} with completely empty hands to take one free empty crate. ${key("putDown")} still puts crates on the floor; it does not put them in the trashcan.`,
       ])}`),
@@ -237,8 +237,8 @@ function customersTopic() {
         `<strong>Cash:</strong> take the customer's cash, then give back their change from the drawer. The large CURRENT CHANGE amount is what you have counted out; CHANGE OWED is what the customer needs back. CURRENT CHANGE turns green when it matches exactly and red when it's too much. Press ${key("handOverChange")} to hand it over. Some customers pay the exact amount, so there's no change to give.`,
         "<strong>Scavengers:</strong> most pay in M-Scrips. 120 M-Scrips equal 1 credit; if the price doesn't convert to a whole M-Scrip, round the amount up. Their bills come in 1, 5, 10, 25, 50, 100, 500, and 1,000 M-Scrips. The sale still earns its listed price in credits, and any change is in M-Scrips.",
         "<strong>Explorers:</strong> most pay with a travel Chit. The Chit shows its value and a code made of 2 to 5 digits, each from 1 to 4. Enter the code with the arrow keys or the on-screen buttons (up = 1, down = 2, left = 3, right = 4); on a controller, use the D-pad. You have 10 seconds to enter the whole code, and the bar under your input shows the time left. The clock starts over only after a mistake. A wrong direction, or running out of time, resets the code. After three mistakes in one sale, the Explorer gives up and leaves angry: you lose the sale and store reputation, and their items go to the Go-Backs bin. The sale completes when you enter the last digit correctly, and the Explorer takes the Chit back. No change is given.",
-        "Release the mouse button after scanning. Start a new click or click-and-hold to collect the customer's cash.",
-        `To step away, press ${key("interact")} again<span class="pad-only"> or B</span>. The sale waits for you exactly as you left it.`,
+        `<span class="kbd-only">Release the mouse button after scanning. Start a new click or click-and-hold to collect the customer's cash.</span><span class="pad-only">Hold ${controlLabel("tenderAdd", "gamepad")} to collect the customer's bills and coins one after another. Counting change still adds just one bill or coin per press.</span>`,
+        `To step away, press ${key("interact")} again<span class="pad-only"> or ${controlLabel("cancel", "gamepad")}</span>. The sale waits for you exactly as you left it.`,
       ])}
       <p>Staff can also run the register. See <strong>Employees</strong>.</p>`),
   ].join("");
@@ -321,7 +321,7 @@ function employeesTopic() {
         throws it away first.</p>`),
     section("How to Set Priorities", `
       <p>Open the <strong>Employee</strong> tab and find the employee under <strong>YOUR STAFF</strong>.
-        Drag the jobs under <strong>Job order</strong> to arrange them from highest priority
+        Drag the jobs under <strong>Job priorities</strong> to arrange them from highest priority
         at the top to lowest at the bottom. You can also use each job's <strong>Move up</strong>
         and <strong>Move down</strong> buttons.
         They try the top job first, but still do the others when they need doing.
@@ -347,8 +347,9 @@ function employeesTopic() {
       ${list([
         `Each employee has three separate skills: <strong>Run register</strong>, <strong>Stock shelves</strong>,
           and <strong>Clean up trash</strong>. Each starts at Level 1 and can reach Level ${MAX_EMPLOYEE_SKILL_LEVEL}.`,
-        "Booking new training courses is not currently available.",
-        "An already-booked course takes the entire next shift. That employee will not work in the shop, but you still pay their current wage when the shift starts.",
+        "Between shifts, choose a skill under that employee's Training section. Check the price, speed, and new wage, then book the course.",
+        "Each course costs more than that employee's previous course, whichever skill it trains.",
+        "A booked course takes the entire next shift. That employee will not work in the shop, but you still pay their current wage when the shift starts.",
         "The skill improves when that shift ends. The higher wage starts with the following shift.",
         `Run register gains a larger speed boost at Levels ${EMPLOYEE_MILESTONE_LEVELS.join(" and ")}:
           employees work ${Math.round((getEmployeeJobSpeed({ register: 3 }, "register") - 1) * 100)}% faster
@@ -386,22 +387,26 @@ function levelsTopic({ shopLevel, licenses }) {
 }
 
 function controlsTopic() {
-  const rows = CONTROL_HELP
+  const rows = getControlHelp()
     .map(({ label, keyboard, gamepad }) => String(html`
       <tr><td>${label}</td><td>${keyboard}</td><td>${gamepad}</td></tr>
     `))
     .join("");
   return [
     section("Controls", `
+      <p>Change keyboard and mouse controls in Settings. Each action can have two controls;
+        select one to change it, or restore the defaults. Escape still closes menus.
+        Mouse clicks inside menus, shelves and the register stay the same; payment entry
+        keeps its normal keys.</p>
       <table class="handbook-table">
         <thead><tr><th>Action</th><th>Keyboard</th><th>Controller</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>`),
     section("Menus on a Controller", `
       ${list([
-        "D-pad or left stick moves the yellow highlight. A selects. B goes back.",
-        "LB and RB switch tablet tabs. The right stick scrolls.",
-        "Start jumps to the buttons on the top bar.",
+        `D-pad or left stick moves the yellow highlight. ${controlLabel("interact", "gamepad")} selects. ${controlLabel("cancel", "gamepad")} goes back.`,
+        `${controlLabel("zoomOut", "gamepad")} and ${controlLabel("zoomIn", "gamepad")} switch tablet tabs. The right stick scrolls.`,
+        `${controlLabel("start", "gamepad")} jumps to the buttons on the top bar.`,
       ])}`),
   ].join("");
 }

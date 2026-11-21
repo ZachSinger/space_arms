@@ -1,6 +1,6 @@
 // Whole-save check: runs after upgradeShopSave and before anything is applied, so the game
 // only ever applies a complete, valid save in the current format.
-import { getFixtureType, getShelfDisplayGrid, getShelfSlotCapacity, getShelfItemFootprint, isFixturePosition, isValidFixtureRotation } from "../logic/FixtureLayout.js";
+import { getFixtureType, getShelfDisplayGrid, getShelfSlotCapacity, isFixturePosition, isValidFixtureRotation } from "../logic/FixtureLayout.js";
 import employeeRoster from "../../data/Employees.json" with { type: "json" };
 import { EMPLOYEE_JOB_IDS } from "../logic/EmployeeJobs.js";
 import { MAX_EMPLOYEE_SKILL_LEVEL } from "../logic/EmployeeTraining.js";
@@ -15,7 +15,6 @@ import { CUSTOMER_FACTION_IDS } from "../logic/CustomerBuyLists.js";
 import { isValidTrashList } from "../modules/cleaning/Litter.js";
 import { integer, isRecord, requireSave } from "./saveHelpers.js";
 import { SHOP_LAYOUT_VERSION } from "./migrations/index.js";
-import { LEGACY_SHELF_STACK_DEPTH } from "./migrations/shelfStocking.js";
 
 
 /**
@@ -39,7 +38,7 @@ export function checkShopSave(data, database) {
       const item = itemById.get(entry?.itemId);
       requireSave(item && integer(entry.quantity, 1) && !ids.has(item.id), "invalid inventory entry.");
       ids.add(item.id);
-      used += item.slots * entry.quantity;
+      used += entry.quantity;
     }
     requireSave(used <= capacity, "inventory exceeds its capacity.");
   };
@@ -159,10 +158,8 @@ export function checkShopSave(data, database) {
     if (spec.kind === "shelf") {
       requireSave(entry.nextPlacementId === undefined || integer(entry.nextPlacementId, 1),
         "invalid shelf placement ID counter.");
-      const handsOn = spec.artLayout === "budget";
-      requireSave(entry.stockingVersion === undefined || handsOn && entry.stockingVersion === 1,
+      requireSave(entry.stockingVersion === undefined || entry.stockingVersion === 1,
         "unknown shelf stocking version.");
-      const newStocking = handsOn && entry.stockingVersion === 1;
       const displayGrid = getShelfDisplayGrid(spec);
       requireSave(Array.isArray(entry.placements), "missing shelf contents.");
       const occupied = new Set();
@@ -176,21 +173,13 @@ export function checkShopSave(data, database) {
         requireSave(item && typeof placement.rotated === "boolean" &&
           integer(placement.gx, 0) && integer(placement.gy, 0) &&
           integer(placement.quantity, 0), "invalid shelf stack.");
-        const { w, h } = getShelfItemFootprint(item, placement.rotated, newStocking);
-        requireSave(placement.w === w && placement.h === h &&
-          placement.gx + w <= displayGrid.w && placement.gy + h <= displayGrid.h &&
-          placement.quantity <= (newStocking
-            ? getShelfSlotCapacity(spec.stackDepth, item, true)
-            : Math.max(getShelfSlotCapacity(spec.stackDepth, item),
-              Math.floor(LEGACY_SHELF_STACK_DEPTH / item.stackSize))),
+        requireSave(placement.w === 1 && placement.h === 1 &&
+          placement.gx < displayGrid.w && placement.gy < displayGrid.h &&
+          placement.quantity <= getShelfSlotCapacity(item),
         "shelf stack does not fit.");
-        for (let dy = 0; dy < h; dy += 1) {
-          for (let dx = 0; dx < w; dx += 1) {
-            const key = `${placement.gx + dx},${placement.gy + dy}`;
-            requireSave(!occupied.has(key), "overlapping shelf stacks.");
-            occupied.add(key);
-          }
-        }
+        const key = `${placement.gx},${placement.gy}`;
+        requireSave(!occupied.has(key), "overlapping shelf stacks.");
+        occupied.add(key);
       }
     }
   }

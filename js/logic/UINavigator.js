@@ -12,6 +12,8 @@
 //   data-pad-row        one stop for a whole row; A clicks its [data-pad-a], X its [data-pad-x]
 //   data-pad-world      on a window: the controller drives the world instead (placement)
 //   data-pad-back="world"  on a window: B goes to the game instead of acting as Esc
+//   data-pad-hold       keep a pointer press down until the face button is released
+//   data-pad-repeat     repeat primary clicks at this interval (ms), within the same screen
 //   "pad-alt" event     cancelable; call preventDefault() when the screen used it
 import { PAD } from "../input/GamepadInput.js";
 import { getInputDevice } from "../input/InputDevice.js";
@@ -56,9 +58,13 @@ export class UINavigator {
     this.lostIdentity = null;
     this.lastCenter = null;
     this.hudOpen = false;
+    this.onBlur = () => this.stopActions();
+    if (typeof window !== "undefined") window.addEventListener("blur", this.onBlur);
   }
 
   destroy() {
+    this.stopActions();
+    if (typeof window !== "undefined") window.removeEventListener("blur", this.onBlur);
     this.setHighlight(null);
     this.setHudOpen(false);
   }
@@ -104,24 +110,26 @@ export class UINavigator {
       // A whole row is one stop; the buttons inside it are reached with A and X instead.
       const row = element.closest("[data-pad-row]");
       return (!row || row === element) &&
-        !element.closest(".retro-window-header, .checkout-paused, .hidden") &&
+        !element.closest(".retro-window-header, .tablet-tab-bar, .settings-tabs, .checkout-paused, .hidden") &&
         element.getClientRects().length > 0;
     });
   }
 
   /**
    * Run one frame of controller input against the top screen.
-   * @param {import("./GamepadInput.js").GamepadInput} pad
+   * @param {import("../input/GamepadInput.js").GamepadInput} pad
    * @param {number} delta - ms since last frame
    * @returns {boolean} true if a screen took the input (the world should ignore it)
    */
   handle(pad, delta = 16) {
     const scope = this.getScope();
     if (scope !== this.scope) {
+      this.stopActions();
       this.scope = scope;
       this.focused = null;
       this.lostIdentity = null;
       this.lastCenter = null;
+      this.supplyRowIdentity = null;
     }
     if (!scope) {
       this.setHighlight(null);
@@ -131,8 +139,24 @@ export class UINavigator {
     const targets = this.getTargets(scope);
     if (!this.focused || !targets.includes(this.focused)) this.recoverFocus(targets);
 
+    if (this.held && (!pad.isDown(this.held.padButton) || !this.held.element.isConnected)) this.stopHold();
+    if (getInputDevice() !== "gamepad") this.stopActions();
     if (pad.navDirection) this.move(pad.navDirection, targets);
-    if (pad.justPressed(PAD.A)) this.activate(scope);
+    if (pad.justPressed(PAD.A)) {
+      const interval = Number(this.focused?.dataset.padRepeat);
+      this.activate(scope);
+      this.repeating = interval > 0 ? { scope, interval, elapsed: 0 } : null;
+    } else if (this.repeating) {
+      if (!pad.isDown(PAD.A) || this.repeating.scope !== scope || !this.focused?.hasAttribute("data-pad-repeat")) {
+        this.repeating = null;
+      } else {
+        this.repeating.elapsed += delta;
+        if (this.repeating.elapsed >= this.repeating.interval) {
+          this.repeating.elapsed %= this.repeating.interval;
+          this.activate(scope);
+        }
+      }
+    }
     if (pad.justPressed(PAD.X)) this.secondary();
     if (pad.justPressed(PAD.Y)) this.alt(scope);
     if (pad.justPressed(PAD.B)) this.back(scope);
@@ -168,6 +192,23 @@ export class UINavigator {
   move(direction, targets) {
     const current = this.focused;
     if (!current) return;
+    this.stopActions();
+    const supply = current.closest(".supply-panel");
+    if (supply) {
+      const rows = targets.filter((element) => supply.contains(element) && element.hasAttribute("data-pad-row"));
+      const actions = targets.filter((element) => supply.contains(element) &&
+        element.matches("[data-supply-clear], [data-supply-place]"));
+      const inList = Boolean(current.closest(".supply-list"));
+      if (direction === "left" || direction === "right") {
+        if (inList && direction === "right" && actions.length) this.focus(actions[0]);
+        else if (!inList && direction === "left") {
+          const row = rows.find((element) => identityOf(element) === this.supplyRowIdentity) ?? rows[0];
+          if (row) this.focus(row);
+        }
+        return;
+      }
+      targets = inList ? rows : actions;
+    }
     if (current instanceof HTMLSelectElement && (direction === "left" || direction === "right")) {
       this.stepSelect(current, direction === "left" ? -1 : 1);
       return;
@@ -180,8 +221,10 @@ export class UINavigator {
   }
 
   focus(element) {
+    if (element !== this.focused) this.stopHold();
     this.focused = element;
     if (!element) return;
+    if (element.closest(".supply-list")) this.supplyRowIdentity = identityOf(element);
     element.scrollIntoView?.({ block: "nearest", inline: "nearest" });
     // Hover effects (shelf placement preview, item tooltips) follow the cursor.
     for (const type of ["mouseover", "mouseenter", "pointerenter", "mousemove"]) {
@@ -207,7 +250,11 @@ export class UINavigator {
       clientX: x,
       clientY: y,
       button,
-      buttons: type === "mousedown" ? 1 << button : 0,
+      buttons: type === "mousedown" || type === "pointerdown" ? { 0: 1, 1: 4, 2: 2 }[button] ?? 0 : 0,
+      detail: ["mousedown", "mouseup", "click"].includes(type) ? 1 : 0,
+      pointerId: 1,
+      pointerType: "mouse",
+      isPrimary: true,
     });
     element.dispatchEvent(event);
     return event;
@@ -225,6 +272,10 @@ export class UINavigator {
       this.stepSelect(element, 1);
       return;
     }
+    if (element.hasAttribute("data-pad-hold")) {
+      this.startHold(element, PAD.A, 0);
+      return;
+    }
     this.click(element);
     if (scope.id === "persistent-hud") this.setHudOpen(false);
   }
@@ -240,12 +291,34 @@ export class UINavigator {
   secondary() {
     const element = this.focused;
     if (!element) return;
+    if (element.hasAttribute("data-pad-hold")) {
+      this.startHold(element, PAD.X, 2);
+      return;
+    }
     if (element.hasAttribute("data-pad-row")) {
       const button = element.querySelector("[data-pad-x]:not([disabled])");
       if (button) this.click(button);
       return;
     }
     this.dispatchMouse(element, "contextmenu", { button: 2 });
+  }
+
+  startHold(element, padButton, button) {
+    this.stopActions();
+    this.held = { element, padButton, button };
+    this.dispatchMouse(element, "pointerdown", { button });
+  }
+
+  stopHold() {
+    if (!this.held) return;
+    const { element, button } = this.held;
+    this.held = null;
+    this.dispatchMouse(element.isConnected ? element : document.body, "pointerup", { button });
+  }
+
+  stopActions() {
+    this.stopHold();
+    this.repeating = null;
   }
 
   alt(scope) {
@@ -255,6 +328,7 @@ export class UINavigator {
   }
 
   back(scope) {
+    this.stopActions();
     if (scope.classList.contains("settings-window")) {
       scope.querySelector(".settings-cancel")?.click();
       return;
@@ -274,15 +348,20 @@ export class UINavigator {
   }
 
   switchTab(scope, step, button) {
-    const tabs = [...scope.querySelectorAll(".retro-tab-btn")].filter((tab) => tab.getClientRects().length > 0);
+    const tabs = [...scope.querySelectorAll(".tablet-tab-bar .retro-tab-btn, .settings-tabs .retro-tab-btn")]
+      .filter((tab) => tab.getClientRects().length > 0);
     if (tabs.length === 0) {
       this.onUnhandled?.(button, scope);
       return;
     }
     const current = Math.max(0, tabs.findIndex((tab) => tab.classList.contains("active")));
     const next = tabs[(current + step + tabs.length) % tabs.length];
+    this.stopActions();
     next.click();
-    this.focus(next);
+    this.focused = null;
+    this.lostIdentity = null;
+    this.lastCenter = null;
+    this.recoverFocus(this.getTargets(scope));
   }
 
   /**

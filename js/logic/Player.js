@@ -111,10 +111,11 @@ export class Player {
   update(delta) {
     const canMove = this.inputEnabled && this.scene.input.keyboard.enabled &&
       this.scene.controlMode.allows("move");
-    const left = this.cursors.left.isDown || this.wasd.left.isDown;
-    const right = this.cursors.right.isDown || this.wasd.right.isDown;
-    const up = this.cursors.up.isDown || this.wasd.up.isDown;
-    const down = this.cursors.down.isDown || this.wasd.down.isDown;
+    const mapped = this.scene.controls?.isActionDown?.bind(this.scene.controls);
+    const left = mapped ? mapped("moveLeft") : this.cursors.left.isDown || this.wasd.left.isDown;
+    const right = mapped ? mapped("moveRight") : this.cursors.right.isDown || this.wasd.right.isDown;
+    const up = mapped ? mapped("moveUp") : this.cursors.up.isDown || this.wasd.up.isDown;
+    const down = mapped ? mapped("moveDown") : this.cursors.down.isDown || this.wasd.down.isDown;
 
     let vx = 0;
     let vy = 0;
@@ -134,7 +135,7 @@ export class Player {
     }
 
     let speed = MOVE_SPEED;
-    const wantsDash = (vx !== 0 || vy !== 0) && (this.dashKey.isDown || Boolean(pad?.dash));
+    const wantsDash = (vx !== 0 || vy !== 0) && ((mapped ? mapped("dash") : this.dashKey.isDown) || Boolean(pad?.dash));
     if (wantsDash && !this.exhausted && this.stamina > 0) {
       const dashSeconds = Math.min(delta / 1000, this.stamina / STAMINA_DRAIN_PER_SECOND);
       this.stamina = Math.max(0, this.stamina - dashSeconds * STAMINA_DRAIN_PER_SECOND);

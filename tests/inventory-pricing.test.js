@@ -634,6 +634,62 @@ test("employee tab routes hiring and shift actions to the staff system", () => {
   ]);
 });
 
+test("employee training choices stay independent and booking uses the chosen skill", () => {
+  const { body, scene, tablet } = createHarness();
+  const bookings = [];
+  scene.staffSystem.train = (...args) => { bookings.push(args); return true; };
+  let redraws = 0;
+  tablet.employeeTab.redraw = () => { redraws += 1; };
+  const control = (employeeId, jobId, action, disabled = false) => Object.assign(new TestElement(), {
+    dataset: {
+      employeeTrainingId: employeeId, employeeTrainingJob: jobId, employeeTrainingAction: action,
+    },
+    disabled,
+    closest(selector) { return selector === "button[data-employee-training-id]" ? this : null; },
+  });
+
+  body.emit("click", { target: control("tavi_stock_clerk", "stock_shelves", "select") });
+  body.emit("click", { target: control("sera_floor_assistant", "clean", "select") });
+  assert.deepEqual(tablet.employeeTab.trainingSelection, {
+    tavi_stock_clerk: "stock_shelves", sera_floor_assistant: "clean",
+  });
+  assert.deepEqual(bookings, []);
+  body.emit("click", { target: control("tavi_stock_clerk", "stock_shelves", "book") });
+  body.emit("click", { target: control("sera_floor_assistant", "clean", "book", true) });
+  assert.deepEqual(bookings, [["tavi_stock_clerk", "stock_shelves"]]);
+  assert.equal(redraws, 3);
+});
+
+test("a loaded training skill stays selected after that course finishes", () => {
+  const { scene, tablet } = createHarness();
+  const id = "tavi_stock_clerk";
+  scene.gameState.reputation.shopLevel = 4;
+  scene.gameState.staff.hired = [id];
+  scene.gameState.staff.jobPriorities[id] = ["register", "stock_shelves", "clean"];
+  scene.gameState.staff.training[id] = "clean";
+  assert.match(tablet.employeeTab.draw(),
+    /data-employee-training-job="clean"\s+data-employee-training-action="select" aria-pressed="true"/);
+
+  delete scene.gameState.staff.training[id];
+  scene.gameState.staff.skills[id] = { register: 1, stock_shelves: 1, clean: 2 };
+  const finished = tablet.employeeTab.draw();
+  assert.match(finished, /data-employee-training-job="clean"\s+data-employee-training-action="select" aria-pressed="true"/);
+  assert.match(finished, /Cleaning speed: 120% → 140% of Level 1 speed/);
+});
+
+test("focused training buttons release game controls until focus leaves", () => {
+  const h = createHarness();
+  const button = Object.assign(new TestElement(), {
+    matches(selector) {
+      return selector.split(",").some((part) => part.trim() === "button[data-employee-training-id]");
+    },
+  });
+  h.focus(button);
+  assert.equal(h.keyboard.enabled, false);
+  h.focus(null);
+  assert.equal(h.keyboard.enabled, true);
+});
+
 test("employee jobs drag within one staff list and remain movable with keyboard buttons", () => {
   const { body, scene, tablet } = createHarness();
   const employeeId = "tavi_stock_clerk";
@@ -724,6 +780,51 @@ test("employee tab refresh preserves each column's scroll and priority focus", (
     employeeTab.redraw();
     assert.deepEqual(after.map(({ scrollTop }) => scrollTop), [140, 72]);
     assert.deepEqual(newButton.focusOptions, { preventScroll: true });
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+test("employee training refresh preserves scroll and focus, including after booking", () => {
+  const previousDocument = globalThis.document;
+  const oldButton = {
+    dataset: {
+      employeeTrainingId: "tavi_stock_clerk", employeeTrainingJob: "clean", employeeTrainingAction: "book",
+    },
+    matches: (selector) => selector === "button[data-employee-training-id]",
+  };
+  const book = { dataset: { ...oldButton.dataset }, disabled: false, focus: (options) => { book.focusOptions = options; } };
+  const skill = {
+    dataset: { ...oldButton.dataset, employeeTrainingAction: "select" },
+    focus: (options) => { skill.focusOptions = options; },
+  };
+  const before = { dataset: { employeeScroll: "staff" }, scrollTop: 140 };
+  const after = { dataset: { employeeScroll: "staff" }, scrollTop: 0 };
+  let rendered = false;
+  const panel = {
+    contains: (element) => element === oldButton,
+    querySelectorAll(selector) {
+      if (selector === "[data-employee-scroll]") return [rendered ? after : before];
+      if (selector === "button[data-employee-training-id]") return [skill, book];
+      return [];
+    },
+    set innerHTML(markup) { rendered = Boolean(markup); },
+  };
+  const employeeTab = new EmployeeTab({}, {});
+  employeeTab.panel = panel;
+  employeeTab.renderPanel = () => "updated";
+  globalThis.document = { activeElement: oldButton };
+  try {
+    employeeTab.redraw();
+    assert.equal(after.scrollTop, 140);
+    assert.deepEqual(book.focusOptions, { preventScroll: true });
+
+    book.disabled = true;
+    delete book.focusOptions;
+    employeeTab.redraw();
+    assert.equal(after.scrollTop, 140);
+    assert.equal(book.focusOptions, undefined);
+    assert.deepEqual(skill.focusOptions, { preventScroll: true });
   } finally {
     globalThis.document = previousDocument;
   }

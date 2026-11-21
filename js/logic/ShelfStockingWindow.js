@@ -8,9 +8,10 @@ import { getItemCrateCategory } from "./CrateCategory.js";
 import { moveShelfCrateItem } from "./LiveShelfStocking.js";
 import { adjustStorePrice, formatMoneyAmount } from "./Money.js";
 import tilesetManifest from "../../data/TilesetManifest.json" with { type: "json" };
-import { getInputDevice } from "../input/InputDevice.js";
+import { controlLabel, getInputDevice } from "../input/InputDevice.js";
 import { DESIGN_HEIGHT, getGameScale } from "./GameViewport.js";
 import { html } from "../core/html.js";
+import { matchesBinding } from "../input/KeyBindings.js";
 
 const TEXTURE_PATHS = new Map(tilesetManifest.map(({ key, path }) => [key, path]));
 
@@ -46,7 +47,7 @@ export class ShelfStockingWindow {
     this.onRelease = () => this.stopHolding();
     this.onBlur = () => this.stopHolding();
     this.onKey = (event) => {
-      if (!this.uiWindow.isOpen) return;
+      if (!this.uiWindow.isOpen || this.scene.gamePaused) return;
       // Esc (or the controller's B) closes the price widget before the shelf window.
       if (this.priceWidget && event.key === "Escape") {
         event.preventDefault();
@@ -56,38 +57,38 @@ export class ShelfStockingWindow {
       }
       // E and other letters are typing while the price box has focus.
       if (event.target?.matches?.("input")) return;
-      if (event.code === "KeyQ") {
+      if (matchesBinding("putDown", event)) {
         event.preventDefault();
         event.stopImmediatePropagation();
         if (!event.repeat) this.chooseNextCrate();
         return;
       }
-      if (event.code === "KeyE" && !event.repeat) {
+      if (matchesBinding("interact", event) && !event.repeat) {
         event.preventDefault();
         event.stopImmediatePropagation();
         this.uiWindow.close();
       }
     };
+    this.onMouseAction = (event) => {
+      if (!this.uiWindow.isOpen || this.scene.gamePaused || event.target !== scene.game.canvas) return;
+      if (matchesBinding("putDown", event)) this.chooseNextCrate();
+      else if (matchesBinding("interact", event)) this.uiWindow.close();
+      else return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    };
     document.addEventListener("pointerup", this.onRelease);
     window.addEventListener("blur", this.onBlur);
     window.addEventListener("keydown", this.onKey, true);
+    window.addEventListener("mousedown", this.onMouseAction);
     // The controller's Y does what Q does here.
     this.uiWindow.element.addEventListener("pad-alt", (event) => {
       event.preventDefault();
       this.chooseNextCrate();
     });
-    this.body.addEventListener("contextmenu", (event) => {
-      event.preventDefault();
-      const cell = event.target.closest("[data-shelf-cell]");
-      if (cell && getInputDevice() === "gamepad") {
-        this.selected = Number(cell.dataset.shelfCell);
-        if (this.clearIfSoldOut(this.selected)) return;
-        this.holding = { index: this.selected, pull: true };
-        this.moveOne();
-        this.stopHolding();
-      }
-    });
+    this.body.addEventListener("contextmenu", (event) => event.preventDefault());
     this.body.addEventListener("pointerdown", (event) => {
+      if (this.scene.gamePaused) return;
       if (this.priceWidget && !event.target.closest(".shelf-price-widget, [data-shelf-price]")) {
         this.closePriceWidget();
       }
@@ -202,6 +203,7 @@ export class ShelfStockingWindow {
         const cell = document.createElement("button");
         cell.type = "button";
         cell.dataset.shelfCell = this.cells.length;
+        cell.dataset.padHold = "";
         cell.className = "shelf-stocking-cell";
         const [left, right] = art.columns[gx];
         const [top, bottom] = art.rows[gy];
@@ -253,7 +255,7 @@ export class ShelfStockingWindow {
   }
 
   moveOne() {
-    if (!this.holding || !this.uiWindow.isOpen ||
+    if (!this.holding || !this.uiWindow.isOpen || this.scene.gamePaused ||
       !this.uiWindow.element.classList.contains("active")) {
       this.stopHolding();
       return;
@@ -264,7 +266,7 @@ export class ShelfStockingWindow {
       this.getStockingCrate());
     this.notice = result.reservedFor
       ? `This space is saved for ${database.getItem(result.reservedFor).name}, which is sold out. ` +
-        `To put something else here, ${getInputDevice() === "gamepad" ? "press X on" : "right-click"} the space to clear it first.`
+        `To put something else here, ${getInputDevice() === "gamepad" ? `press ${controlLabel("tenderRemove", "gamepad")} on` : "right-click"} the space to clear it first.`
       : result.message;
     if (!result.moved) this.stopHolding();
     else this.scene.gameState.shop.changed();
@@ -475,5 +477,6 @@ export class ShelfStockingWindow {
     document.removeEventListener("pointerup", this.onRelease);
     window.removeEventListener("blur", this.onBlur);
     window.removeEventListener("keydown", this.onKey, true);
+    window.removeEventListener("mousedown", this.onMouseAction);
   }
 }

@@ -122,7 +122,6 @@ export class DebugTools {
     const shelfType = "shelf_budget_2x2";
     const shelfSpec = getFixtureType(shelfType);
     const items = database.getAllItems()
-      .filter((item) => item.dimensions.w === 1 && item.dimensions.h === 1)
       .filter((item) => {
         const license = database.getLicense(item.license);
         return gameState.catalog.owns(item.license) || license?.isUnlocked(gameState);

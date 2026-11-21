@@ -255,9 +255,13 @@ test("keyboard and controller zoom only work on the sales floor", (t) => {
     controls.handleGamepad(0, 16);
     pressed = null;
   };
+  const pressKey = (code) => {
+    handlers.get("keydown")({ code, type: "keydown", preventDefault() {} });
+    handlers.get("keyup")({ code, type: "keyup" });
+  };
   const actions = [
-    { name: "Page Up", direction: 1, press: () => handlers.get("keydown-PAGE_UP")() },
-    { name: "Page Down", direction: -1, press: () => handlers.get("keydown-PAGE_DOWN")() },
+    { name: "Page Up", direction: 1, press: () => pressKey("PageUp") },
+    { name: "Page Down", direction: -1, press: () => pressKey("PageDown") },
     { name: "RB", direction: 1, press: () => pressPad(PAD.RB) },
     { name: "LB", direction: -1, press: () => pressPad(PAD.LB) },
   ];

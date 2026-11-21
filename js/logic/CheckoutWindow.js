@@ -22,6 +22,8 @@ import {
   playErrorBuzz,
 } from "./Sfx.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
+import { matchesBinding } from "../input/KeyBindings.js";
+import { controlLabel } from "../input/InputDevice.js";
 
 // Belt layout (px) and animation speeds.
 const CARD_SIZE = 72;
@@ -116,6 +118,12 @@ export class CheckoutWindow {
 
     // Global, so a drag-scan works even if it doesn't start on a card.
     this.handleMouseDown = (event) => {
+      if (event.target?.tagName === "CANVAS" && this.usesSpaceKey() && matchesBinding("crate", event)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        this.handOverChange("keyboard");
+        return;
+      }
       this.isScanning = event.button === 0 && !this.paused;
       this.lastPointer = { x: event.clientX, y: event.clientY };
     };
@@ -172,7 +180,7 @@ export class CheckoutWindow {
     }
 
     if (this.paymentStage === "change") {
-      if (event.key === " ") {
+      if (matchesBinding("crate", event)) {
         event.preventDefault();
         this.handOverChange("keyboard");
       }
@@ -688,7 +696,7 @@ export class CheckoutWindow {
         <div class="cash-tender-title">THE CUSTOMER HANDS YOU ${formatCashAmount(this.cashPayment.tenderUnits, this.cashPayment.currency).toUpperCase()}</div>
         <div class="cash-tender-area"></div>
         <div class="cash-tender-hint kbd-only">Release the mouse button, then click each bill${this.cashPayment.currency === "credits" ? " or coin" : ""} or click and hold to sweep across them.</div>
-        <div class="cash-tender-hint pad-only">Press A on each bill${this.cashPayment.currency === "credits" ? " or coin" : ""} to take it.</div>
+        <div class="cash-tender-hint pad-only">Press ${controlLabel("tenderAdd", "gamepad")} to take the selected bill${this.cashPayment.currency === "credits" ? " or coin" : ""}. Hold it to collect them one after another.</div>
       </div>`;
     const area = overlay.querySelector(".cash-tender-area");
     this.cashPayment.tenderPieces.forEach((piece, index) => {
@@ -696,6 +704,9 @@ export class CheckoutWindow {
       const element = document.createElement("button");
       element.type = "button";
       element.className = `cash-loose cash-${piece.kind}`;
+      element.dataset.tenderIndex = String(index);
+      element.dataset.padAutofocus = "";
+      element.dataset.padRepeat = "80";
       element.setAttribute("aria-label", `Take ${piece.label}`);
       element.innerHTML = html`<span class="cash-value">${cashFaceValue(piece, this.cashPayment.currency)}</span>`;
       // Random spot and tilt inside the area, kept clear of its edges.

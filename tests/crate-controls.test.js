@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { ControlMode } from "../js/input/ControlMode.js";
 import { PlayerControls } from "../js/input/PlayerControls.js";
+import { defaultBindings, setBindings } from "../js/input/KeyBindings.js";
 import { Events, GAME_EVENTS } from "../js/core/Events.js";
 import { InteractableRegistry } from "../js/interaction/InteractableRegistry.js";
 import { InteractionSystem } from "../js/interaction/InteractionSystem.js";
@@ -56,7 +57,7 @@ before(async () => {
       },
       load(id) {
         if (id === "\0crate-controls-test-database") {
-          return 'export const database = { getItem: (id) => ({ id, name: "Test item", slots: id === "single" ? 1 : 2, boxSize: id === "single" ? 1 : 2, dimensions: { w: 2, h: 1 }, stackSize: 3 }), getAllItems: () => [{ id: "rifle", name: "Test rifle", boxSize: 1 }, { id: "pistol", name: "Test pistol", boxSize: 3 }] };';
+          return 'export const database = { getItem: (id) => ({ id, name: "Test item", boxSize: id === "single" ? 1 : 2 }), getAllItems: () => [{ id: "rifle", name: "Test rifle", boxSize: 1 }, { id: "pistol", name: "Test pistol", boxSize: 3 }] };';
         }
       },
     }],
@@ -348,18 +349,25 @@ function keyEvent({ inUi = false, repeat = false } = {}) {
   };
 }
 
+function pressKey(h, type, key, event = keyEvent()) {
+  event.type = type;
+  event.code = { SPACE: "Space", Q: "KeyQ", CTRL: "ControlLeft", Z: "KeyZ" }[key];
+  h.handlers.get(type)(event);
+  return event;
+}
+
 // A quick press and release of SPACE or Q.
 function tap(h, key = "SPACE") {
-  h.handlers.get(`keydown-${key}`)(keyEvent());
-  h.handlers.get(`keyup-${key}`)(keyEvent());
+  pressKey(h, "keydown", key);
+  pressKey(h, "keyup", key);
 }
 
 // Holding SPACE or Q long enough to count as a hold, then letting go.
 function hold(h, key = "SPACE") {
-  h.handlers.get(`keydown-${key}`)(keyEvent());
+  pressKey(h, "keydown", key);
   h.scene.time.now += HOLD_KEY_MS;
   h.scene.controls.updateCratePress();
-  h.handlers.get(`keyup-${key}`)(keyEvent());
+  pressKey(h, "keyup", key);
 }
 
 // A floor stack: the bottom crate on the floor, the rest sitting on it.
@@ -710,25 +718,81 @@ test("fixture movement prefers the faced shelf when a trashcan is also nearby", 
 
 test("Space and Q wait to tell a tap from a hold, and Space leaves focused UI controls alone", () => {
   const h = createHarness();
-  assert.deepEqual([...h.handlers.keys()].sort(),
-    ["keydown-CTRL", "keydown-Q", "keydown-SPACE", "keyup-CTRL", "keyup-Q", "keyup-SPACE"]);
+  assert.deepEqual([...h.handlers.keys()].sort(), ["keydown", "keyup"]);
   assert.deepEqual(h.removedCaptures, ["SPACE"]);
   const [nearby] = floorStack(h.scene, 1);
 
   const inUi = keyEvent({ inUi: true });
-  h.handlers.get("keydown-SPACE")(inUi);
+  pressKey(h, "keydown", "SPACE", inUi);
   assert.equal(inUi.defaultPrevented, false);
   assert.equal(h.scene.controls.cratePress, null);
 
   const press = keyEvent();
-  h.handlers.get("keydown-SPACE")(press);
+  pressKey(h, "keydown", "SPACE", press);
   assert.equal(press.defaultPrevented, true);
   assert.equal(h.scene.carriedCrate, null, "nothing happens until the key is released or held");
-  h.handlers.get("keydown-SPACE")(keyEvent({ repeat: true }));
-  h.handlers.get("keyup-SPACE")(keyEvent());
+  pressKey(h, "keydown", "SPACE", keyEvent({ repeat: true }));
+  pressKey(h, "keyup", "SPACE");
   assert.equal(h.scene.carriedCrate, nearby);
   assert.equal(h.scene.controls.cratePress, null);
   assert.deepEqual(h.messages, []);
+});
+
+test("rebound crate controls replace the old key and still support tap and hold", (t) => {
+  const bindings = defaultBindings();
+  bindings.crate[0] = "KeyZ";
+  setBindings(bindings);
+  t.after(() => setBindings(defaultBindings()));
+  const h = createHarness();
+  const [bottom, top] = floorStack(h.scene, 2);
+  tap(h);
+  assert.equal(h.scene.carriedCrate, null);
+  h.scene.crateSystem.markNextCrateDown();
+  hold(h, "Z");
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [bottom, top]);
+});
+
+test("replayed keyboard events do not finish a later crate press", () => {
+  const h = createHarness();
+  const [, top] = floorStack(h.scene, 2);
+  const firstUp = pressKey(h, "keyup", "SPACE");
+  pressKey(h, "keydown", "SPACE");
+  h.handlers.get("keyup")(firstUp);
+  assert.equal(h.scene.carriedCrate, null);
+  pressKey(h, "keyup", "SPACE");
+  assert.equal(h.scene.carriedCrate, top);
+});
+
+test("mouse buttons assigned to game actions do not also open clicked fixtures", async (t) => {
+  const { defaultBindings: defaults, setBindings: set } = await server.ssrLoadModule("/js/input/KeyBindings.js");
+  const bindings = defaults();
+  bindings.crate[0] = "Mouse1";
+  set(bindings);
+  t.after(() => set(defaults()));
+  const canvas = {};
+  const handlers = [];
+  const image = () => ({
+    setDisplaySize() { return this; },
+    setDepth() { return this; },
+    setInteractive() { return this; },
+    on(name, handler) { if (name === "pointerdown") handlers.push(handler); },
+  });
+  let opened = 0;
+  const scene = {
+    game: { canvas },
+    add: { image },
+    obstacleGroup: { add() {} },
+    registerGroup: { add() {} },
+    fixtureSystem: { tryOpenFixtureWindow() { opened += 1; } },
+    checkoutSystem: { openRegisterWindow() { opened += 1; } },
+  };
+  const views = new FixtureViews(scene);
+  views.drawFixture({ x: 0, y: 0, gridDimensions: { w: 1, h: 1 } }, "shelf");
+  views.drawRegister({ x: 0, y: 0, type: "register_basic", gridDimensions: { w: 1, h: 1 } });
+  for (const handler of handlers) handler({ event: { type: "pointerdown", button: 1, target: canvas } });
+  assert.equal(opened, 0);
+  for (const handler of handlers) handler({ event: { type: "pointerdown", button: 0, target: canvas } });
+  assert.equal(opened, 2);
 });
 
 test("tapping Space picks up the marked crate; holding takes it and every crate above it", () => {
@@ -742,11 +806,11 @@ test("tapping Space picks up the marked crate; holding takes it and every crate 
   assert.deepEqual(h.scene.floorStacks.get(bottom), [middle]);
   assert.deepEqual(h.scene.player.sprite.body.velocity, { x: 160, y: 0 }, "picking up never stops the player");
 
-  h.handlers.get("keydown-Q")(keyEvent());
-  h.handlers.get("keyup-Q")(keyEvent());
+  pressKey(h, "keydown", "Q");
+  pressKey(h, "keyup", "Q");
   assert.deepEqual(h.scene.floorStacks.get(bottom), [middle, top]);
   // Ctrl moves the arrow down to the middle crate; holding Space takes it and the top one.
-  h.handlers.get("keydown-CTRL")(keyEvent());
+  pressKey(h, "keydown", "CTRL");
   assert.equal(h.scene.crateSystem.markedFloorStack().marked, middle);
   hold(h);
   assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [middle, top]);
@@ -928,11 +992,11 @@ test("Space throws your only crate while walking with no arrow showing, and expl
   h.scene.player.sprite.body.velocity = velocity;
   upper.drop = () => { throw new Error("Throws must not teleport to the clearance position"); };
 
-  h.handlers.get("keydown-SPACE")(keyEvent());
+  pressKey(h, "keydown", "SPACE");
   assert.deepEqual(upper.thrownWith, [h.scene.player.sprite, velocity.x, velocity.y], "throws on the press itself");
   assert.equal(h.scene.player.sprite.body.velocity, velocity);
   upper.isStationary = () => false; // still flying, so the arrow can't mark it
-  h.handlers.get("keyup-SPACE")(keyEvent());
+  pressKey(h, "keyup", "SPACE");
   assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), []);
   h.scene.restockCrates = h.scene.restockCrates.filter((c) => c !== upper);
   carry(h.scene, [lower]);

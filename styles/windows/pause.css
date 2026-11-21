@@ -38,3 +38,6 @@
   display: none;
 }
 [data-game-cursor="software"] #game-cursor.cursor-visible { display: block; }
+body[data-input-device="gamepad"],
+body[data-input-device="gamepad"] * { cursor: none !important; }
+body[data-input-device="gamepad"] #game-cursor { display: none !important; }

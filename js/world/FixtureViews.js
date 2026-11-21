@@ -12,6 +12,7 @@ import { ShelfItemDisplay } from "../logic/ShelfItemDisplay.js";
 import { getFixtureTexture, hasFacingTextures } from "../logic/FixtureTexture.js";
 import { fixtureArtInset, fixtureFootprint, fixtureRotation, getFixtureType } from "../logic/FixtureLayout.js";
 import { TILE_SIZE } from "../logic/RoomLayout.js";
+import { isWorldMouseBinding } from "../input/KeyBindings.js";
 
 export class FixtureViews {
   /** @param {object} shop - the game scene, with obstacleGroup and registerGroup made */
@@ -116,7 +117,9 @@ export class FixtureViews {
     fixture.sprite = image;
     image.setInteractive({ useHandCursor: true });
     image.on("pointerdown", (pointer) => {
-      if (pointer.event?.target === scene.game.canvas) scene.fixtureSystem.tryOpenFixtureWindow(fixture);
+      if (pointer.event?.target === scene.game.canvas && !isWorldMouseBinding(pointer.event)) {
+        scene.fixtureSystem.tryOpenFixtureWindow(fixture);
+      }
     });
   }
 
@@ -132,7 +135,9 @@ export class FixtureViews {
       .setDepth(2)
       .setInteractive({ useHandCursor: true });
     sprite.on("pointerdown", (pointer) => {
-      if (pointer.event?.target === scene.game.canvas) scene.checkoutSystem.openRegisterWindow();
+      if (pointer.event?.target === scene.game.canvas && !isWorldMouseBinding(pointer.event)) {
+        scene.checkoutSystem.openRegisterWindow();
+      }
     });
     scene.registerGroup.add(sprite); // see registerGroup in create()
     fixture.sprite = sprite;

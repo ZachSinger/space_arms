@@ -13,6 +13,7 @@ import { getFixtureTexture, hasFacingTextures } from "./FixtureTexture.js";
 import { PAD } from "../input/GamepadInput.js";
 import { getInputDevice } from "../input/InputDevice.js";
 import { fixturePlacementContext } from "./FixturePlacementContext.js";
+import { matchesBinding } from "../input/KeyBindings.js";
 
 const PAD_CURSOR_SPEED = 240;
 const VALID_COLOR = 0x10b981;
@@ -54,28 +55,31 @@ export class FixturePlacement {
       // Ignore clicks that land on DOM windows over the canvas.
       if (!this.active || !scene.controlMode.allows("rotateFixture") ||
         pointer.event?.target !== scene.game.canvas) return;
-      if (pointer.rightButtonDown()) {
+      if (matchesBinding("cancel", pointer.event)) {
         this.cancel();
         return;
       }
-      if (!pointer.leftButtonDown()) return;
+      if (matchesBinding("rotate", pointer.event)) {
+        this.rotate();
+        return;
+      }
+      if (!matchesBinding("place", pointer.event)) return;
       this.padPoint = null;
       this.updatePreview(pointer);
       this.confirm();
     };
     scene.input.on("pointerdown", this.handlePointerDown);
-    this.handleRotateKey = () => {
+    this.handlePlacementKey = (event) => {
       if (!this.active || !scene.controlMode.allows("rotateFixture")) return;
-      this.rotate();
-    };
-    scene.input.keyboard.on("keydown-R", this.handleRotateKey);
-    // Marked consumed so the Esc that cancels placement doesn't also pause the shift.
-    this.handleEscape = (event) => {
-      if (!this.active || event.key !== "Escape" || event.repeat) return;
+      if (event.repeat || event.target?.closest?.("#ui-layer")) return;
+      if (matchesBinding("rotate", event)) this.rotate();
+      else if (matchesBinding("place", event)) this.confirm();
+      else if (matchesBinding("cancel", event)) this.cancel();
+      else return;
+      event.preventDefault();
       scene.windowManager.consumedEvents.add(event);
-      this.cancel();
     };
-    document.addEventListener("keydown", this.handleEscape);
+    document.addEventListener("keydown", this.handlePlacementKey);
     this.handleDocumentMouseMove = (event) => {
       if (!this.active) return;
       // Real mouse movement takes over from the controller.
@@ -300,8 +304,7 @@ export class FixturePlacement {
   destroy() {
     this.finish();
     this.scene.input.off("pointerdown", this.handlePointerDown);
-    this.scene.input.keyboard.off("keydown-R", this.handleRotateKey);
-    document.removeEventListener("keydown", this.handleEscape);
+    document.removeEventListener("keydown", this.handlePlacementKey);
     document.removeEventListener("mousemove", this.handleDocumentMouseMove, true);
     this.graphics.destroy();
     this.placedGraphics.destroy();

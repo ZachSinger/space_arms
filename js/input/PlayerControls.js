@@ -14,6 +14,7 @@ import { GamepadInput, PAD } from "./GamepadInput.js";
 import { setInputDevice } from "./InputDevice.js";
 import { UINavigator } from "../logic/UINavigator.js";
 import { HOLD_KEY_MS } from "../logic/CrateStack.js";
+import { bindingForEvent, isBound, isBoundAnywhere, matchesBinding } from "./KeyBindings.js";
 
 const PAUSE_GUARDED_EVENTS = [
   "keydown", "mousedown", "pointerdown", "click", "dblclick",
@@ -33,6 +34,7 @@ export class PlayerControls {
     this.padInput = null;
     this.uiNavigator = null;
     this.highlightTrashKey = null;
+    this.heldBindings = new Map();
   }
 
   /** Binds every key, guard, and controller; all are removed when the scene shuts down. */
@@ -40,25 +42,19 @@ export class PlayerControls {
     const shop = this.shop;
     this.bindPauseInputGuard();
 
-    // E opens fixtures or delivers/places crates; holding Ctrl facing a fixture picks it up
-    // to move. Space picks crates up and Q puts them down (tap: one crate, hold: a stack);
-    // Q with empty hands packs the Go-Backs. See bindCrateKeys.
-    shop.input.keyboard.on("keydown-E", (event) => {
-      if (!event.repeat) shop.interactionSystem.handleInteract();
-    });
     this.bindCrateKeys();
-    // Hold H: every piece of trash on the floor lights up, even behind shelves.
-    this.highlightTrashKey = shop.cleaningSystem ? shop.input.keyboard.addKey("H", false) : null;
+    this.highlightTrashKey = shop.cleaningSystem ? { get isDown() {
+      return shop.controls.isActionDown("highlightTrash");
+    } } : null;
 
-    // I or Tab opens the tablet and, while it's open, closes it again.
     const handleTabletKey = (event) => {
-      if (event.code !== "KeyI" && event.code !== "Tab") return;
+      if (!matchesBinding("tablet", event)) return;
       if (shop.controlMode.getMode() === CONTROL_MODES.PAUSED) return;
       if (event.code === "Tab") event.preventDefault();
       if (event.repeat) return;
       const tablet = shop.managerTablet;
       if (tablet.uiWindow.isOpen) {
-        if (event.code === "KeyI" && event.target?.matches?.("input, textarea")) return;
+        if (event.target?.matches?.("input, textarea")) return;
         tablet.uiWindow.close();
       } else if (shop.controlMode.allows("tablet")) {
         tablet.openWindow();
@@ -66,25 +62,28 @@ export class PlayerControls {
     };
     document.addEventListener("keydown", handleTabletKey);
 
-    // The sales-floor camera: PageUp zooms in, PageDown zooms out (never past the whole shop).
-    this.bindKey("keydown-PAGE_UP", "cameraZoom", () => shop.cameraRig.zoomBy(1));
-    this.bindKey("keydown-PAGE_DOWN", "cameraZoom", () => shop.cameraRig.zoomBy(-1));
-    // The shift clock's manual pause: freezes time entirely so the player can think.
-    this.bindKey("keydown-P", "pause", (event) => {
-      if (!event.repeat) this.togglePause();
-    });
-    // Esc pauses too, unless it just closed a window. Other screens on top block pausing
-    // anyway; the register doesn't, so Esc pauses there like P.
-    // A plain window listener rather than Phaser's: some browsers cancel Esc before the page
-    // sees it, and Phaser ignores cancelled keys. This runs after WindowManager's document
-    // listener, so a press that closed a window is already marked consumed.
-    const handleEscPause = (event) => {
-      if (event.key !== "Escape" || event.repeat) return;
+    const handlePause = (event) => {
+      if (!matchesBinding("pause", event) || event.repeat) return;
       if (shop.windowManager.isConsumed(event)) return;
       if (!shop.controlMode.allows("pause")) return;
       this.togglePause();
     };
-    window.addEventListener("keydown", handleEscPause);
+    window.addEventListener("keydown", handlePause);
+    const handleMouseDown = (event) => {
+      if (event.target !== shop.game.canvas) return;
+      this.handleBoundDown(event);
+      if (matchesBinding("tablet", event)) handleTabletKey(event);
+      if (matchesBinding("pause", event)) handlePause(event);
+    };
+    const handleMouseUp = (event) => this.handleBoundUp(event);
+    const handleKeyUp = (event) => {
+      if (!shop.input.keyboard.enabled) this.handleBoundUp(event);
+    };
+    const handleBlur = () => this.cancelPresses();
+    window.addEventListener("mousedown", handleMouseDown);
+    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("keyup", handleKeyUp, true);
+    window.addEventListener("blur", handleBlur);
 
     // Controller: the same actions as the keys above (see handleGamepad), plus a menu cursor
     // for every window.
@@ -95,13 +94,18 @@ export class PlayerControls {
 
     shop.events.once("shutdown", () => {
       document.removeEventListener("keydown", handleTabletKey);
-      window.removeEventListener("keydown", handleEscPause);
+      window.removeEventListener("keydown", handlePause);
+      window.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("keyup", handleKeyUp, true);
+      window.removeEventListener("blur", handleBlur);
       this.uiNavigator.destroy();
     });
   }
 
   /** Pausing drops any half-finished press, so nothing fires on resume. */
   cancelPresses() {
+    this.heldBindings.clear();
     this.cratePress = null;
     this.interactPress = null;
     this.fixtureMovePress = null;
@@ -130,14 +134,15 @@ export class PlayerControls {
   handlePausedInput(event) {
     const shop = this.shop;
     if (shop.controlMode.getMode() !== CONTROL_MODES.PAUSED) return;
+    if (shop.pauseMenu?.settings?.isCapturing) return;
     if (event.target?.closest?.("#pause-menu, #pause-confirmation, .settings-window")) return;
     if (shop.pauseMenu?.settingsOpen && event.type === "keydown" && event.key === "Escape") return;
     if (event.type !== "keydown" && event.target?.closest?.("#hud-pause-btn")) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     // Handle resume before window-close handlers or Phaser see the key.
-    if (event.type === "keydown" && !event.repeat &&
-      (event.code === "KeyP" || event.key === "Escape")) {
+    if ((event.type === "keydown" || event.type === "mousedown" || event.type === "pointerdown") && !event.repeat &&
+      matchesBinding("pause", event)) {
       this.togglePause();
     }
   }
@@ -150,7 +155,7 @@ export class PlayerControls {
   /**
    * One frame of controller input. A screen on top gets it through the menu cursor;
    * otherwise each button runs the same action as its keyboard key:
-   *   A = E (interact)   X = Space (pick up / throw)   Y = Q (put down; packs the Go-Backs with empty hands)
+   *   A = interact   X = pick up / throw   Y = put down
    *   R3 (right stick click) = Ctrl (green arrow one crate down)   Back = I (tablet)
    *   LB/RB = PageDown/PageUp (zoom)   Start = top bar (pause, start shift, save, ...)
    *   B = leave the register   left stick / D-pad = walk   triggers = dash
@@ -287,29 +292,58 @@ export class PlayerControls {
     if (action?.target === press.fixture) action.perform();
   }
 
-  // Space picks up and Q puts down. Each waits for release to tell a tap (one crate) from a
-  // hold (a stack); a hold fires as soon as the key has been down for HOLD_KEY_MS.
   bindCrateKeys() {
-    const shop = this.shop;
-    const keyboard = shop.input.keyboard;
-    // Cursor keys capture Space by default, which blocks focused UI controls.
+    const keyboard = this.shop.input.keyboard;
     keyboard.removeCapture("SPACE");
-    keyboard.on("keydown-SPACE", (event) => {
-      if (event.target?.closest?.("#ui-layer")) return;
+    const seen = new WeakSet();
+    const once = (handler) => (event) => {
+      if (seen.has(event)) return;
+      seen.add(event);
+      handler(event);
+    };
+    keyboard.on("keydown", once((event) => this.handleBoundDown(event)));
+    keyboard.on("keyup", once((event) => this.handleBoundUp(event)));
+  }
+
+  isActionDown(action) {
+    return [...this.heldBindings.values()].some((binding) => isBound(action, binding));
+  }
+
+  handleBoundDown(event) {
+    const shop = this.shop;
+    if (event.target?.closest?.("#ui-layer") || event.repeat) return;
+    const binding = bindingForEvent(event);
+    if (!binding) return;
+    if (event.type === "keydown" && isBoundAnywhere(binding)) event.preventDefault();
+    const alreadyDown = (action) => this.isActionDown(action);
+    const interactDown = alreadyDown("interact");
+    const crateDown = alreadyDown("crate");
+    const putDownDown = alreadyDown("putDown");
+    const nextCrateDown = alreadyDown("nextCrate");
+    this.heldBindings.set(event.code || binding, binding);
+    if (shop.controlMode.allows("cameraZoom")) {
+      if (matchesBinding("zoomIn", event)) shop.cameraRig.zoomBy(1);
+      if (matchesBinding("zoomOut", event)) shop.cameraRig.zoomBy(-1);
+    }
+    if (shop.controlMode.getMode?.() === CONTROL_MODES.PLACING) return;
+    if (!interactDown && matchesBinding("interact", event)) shop.interactionSystem.handleInteract();
+    if (!crateDown && matchesBinding("crate", event) && !shop.checkoutWindow?.usesSpaceKey()) {
       event.preventDefault();
-      if (event.repeat || shop.checkoutWindow?.usesSpaceKey()) return;
       this.startCratePress("pickUp");
-    });
-    keyboard.on("keydown-Q", (event) => {
-      if (!event.repeat) this.startCratePress("putDown");
-    });
-    keyboard.on("keyup-SPACE", () => this.endCratePress("pickUp"));
-    keyboard.on("keyup-Q", () => this.endCratePress("putDown"));
-    keyboard.on("keydown-CTRL", (event) => {
-      if (!event.repeat) this.startFixtureMovePress();
+    }
+    if (!putDownDown && matchesBinding("putDown", event)) this.startCratePress("putDown");
+    if (!nextCrateDown && matchesBinding("nextCrate", event)) {
+      this.startFixtureMovePress();
       shop.crateSystem.markNextCrateDown();
-    });
-    keyboard.on("keyup-CTRL", () => { this.fixtureMovePress = null; });
+    }
+  }
+
+  handleBoundUp(event) {
+    const binding = bindingForEvent(event);
+    if (binding) this.heldBindings.delete(event.code || binding);
+    if (matchesBinding("crate", event) && !this.isActionDown("crate")) this.endCratePress("pickUp");
+    if (matchesBinding("putDown", event) && !this.isActionDown("putDown")) this.endCratePress("putDown");
+    if (matchesBinding("nextCrate", event) && !this.isActionDown("nextCrate")) this.fixtureMovePress = null;
   }
 
   allowsCrateAction() {

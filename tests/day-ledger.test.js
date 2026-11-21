@@ -32,7 +32,7 @@ before(async () => {
       },
       load(id) {
         if (id === "\0ledger-test-database") {
-          return "export const database = { getItem: (id) => ({ id, name: id, slots: 1 }) };";
+          return "export const database = { getItem: (id) => ({ id, name: id }) };";
         }
       },
     }],

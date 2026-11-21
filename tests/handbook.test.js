@@ -4,6 +4,8 @@ import licenseData from "../data/Licenses.json" with { type: "json" };
 import { SupplierLicense } from "../js/logic/Licenses.js";
 import { HANDBOOK_TOPICS, HandbookRenderer, getLevelRewards } from "../js/logic/HandbookRenderer.js";
 import { escapeHtml } from "../js/core/html.js";
+import { defaultBindings, setBindings } from "../js/input/KeyBindings.js";
+import { setControllerLabelStyle } from "../js/input/InputDevice.js";
 
 const licenses = licenseData.map((data) => new SupplierLicense(data));
 const render = (topic, shopLevel = 1, reputation = 0) =>
@@ -84,8 +86,27 @@ test("the controls table uses the same labels as live action hints", () => {
   assert.match(html, /<td>Use or open<\/td><td>E<\/td><td>A<\/td>/);
   assert.match(html, /<td>Put a crate down \(hold: your whole stack\)<\/td><td>Q<\/td><td>Y<\/td>/);
   assert.match(html, /<td>Pick up a fixture to move it[^<]*<\/td><td>Hold Ctrl<\/td><td>Hold A<\/td>/);
-  assert.match(html, /<td>Manager&#39;s Tablet<\/td><td>I or Tab<\/td><td>Back \/ View<\/td>/);
-  assert.match(html, /<td>Zoom \(sales floor only\)<\/td><td>Page Up \/ Page Down<\/td><td>LB \/ RB<\/td>/);
+  assert.match(html, /<td>Manager&#39;s Tablet<\/td><td>I or Tab<\/td><td>View<\/td>/);
+  assert.match(html, /<td>Zoom in \(sales floor only\)<\/td><td>Page Up<\/td><td>RB<\/td>/);
+  assert.match(html, /<td>Zoom out \(sales floor only\)<\/td><td>Page Down<\/td><td>LB<\/td>/);
+});
+
+test("controller menu instructions use the selected button-name layout", (t) => {
+  setControllerLabelStyle("playstation");
+  t.after(() => setControllerLabelStyle("automatic"));
+  const html = render("controls");
+  assert.match(html, /✕ selects\. ○ goes back\./);
+  assert.match(html, /L1 and R1 switch tablet tabs/);
+  assert.match(html, /Options jumps to the buttons on the top bar/);
+});
+
+test("the handbook reflects changed controls", (t) => {
+  const bindings = defaultBindings();
+  bindings.interact[0] = "Mouse1";
+  setBindings(bindings);
+  t.after(() => setBindings(defaultBindings()));
+  assert.match(render("controls"), /<td>Use or open<\/td><td>Middle click<\/td><td>A<\/td>/);
+  assert.match(render("store"), /<span class="kbd-only">Middle click<\/span>/);
 });
 
 test("the handbook explains paid training absences, permanent skills, and on/off shift", () => {
@@ -106,8 +127,9 @@ test("the handbook explains paid training absences, permanent skills, and on/off
   assert.match(html, /highest priority\s+at the top/);
   assert.match(html, /Move up/);
   assert.match(html, /Move down/);
-  assert.match(html, /Booking new training courses is not currently available/);
-  assert.doesNotMatch(html, /select TRAIN|CONFIRM TRAINING|Use <strong>UP<\/strong>/);
+  assert.match(html, /choose a skill under that employee's Training section/);
+  assert.match(html, /Each course costs more than that employee's previous course/);
+  assert.doesNotMatch(html, /Booking new training courses is not currently available/);
   assert.doesNotMatch(html, /fire|let go|LET GO|rehir|TAKE OFF|PUT ON/i);
 });
 

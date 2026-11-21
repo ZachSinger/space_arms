@@ -4,7 +4,7 @@
 // The player's staff decisions between shifts (hiring, On/Off Shift, training, job order),
 // paying wages at shift start, and putting working staff on the floor.
 import { getStaffLimitReason } from "../logic/ShopProgression.js";
-import { getEmployeeTrainingOffer } from "../logic/EmployeeTraining.js";
+import { getEmployeeTrainingBlockReason, getEmployeeTrainingOffer } from "../logic/EmployeeTraining.js";
 import { Employee } from "../logic/Employee.js";
 
 const STAFF_MESSAGE_COLOR = "#10b981";
@@ -74,12 +74,13 @@ export class StaffSystem {
   trainingBlockReason(employeeId, jobId) {
     const { shop, staff } = this;
     const offer = getEmployeeTrainingOffer(employeeId, staff.skills[employeeId], jobId);
-    if (!this.canManage()) return "Book employee training between shifts.";
-    if (!staff.hired.includes(employeeId)) return "Hire this employee before booking training.";
-    if (staff.training[employeeId]) return "This employee already has training booked.";
-    if (!offer) return "This skill is already at Level 5.";
-    if (shop.gameState.economy.credits < offer.cost) return `Training costs ${offer.cost}. You don't have enough money.`;
-    return null;
+    return getEmployeeTrainingBlockReason({
+      canManage: this.canManage(),
+      isHired: staff.isHired(employeeId),
+      isTraining: Boolean(staff.training[employeeId]),
+      offer,
+      credits: shop.gameState.economy.credits,
+    });
   }
 
   train(employeeId, jobId) {

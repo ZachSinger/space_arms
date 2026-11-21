@@ -33,8 +33,6 @@ export function createFixtureModel({
       ...base,
       displayType: "universal",
       displayGrid: getShelfDisplayGrid(spec),
-      // Per-placement slot cap, not a shared pool -- see ShelfFixture.getPlacementCapacity.
-      stackDepth: spec.stackDepth,
       handsOn: spec.artLayout === "budget",
       placements,
       nextPlacementId,

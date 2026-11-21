@@ -6,7 +6,9 @@ import employeeRoster from "../../data/Employees.json" with { type: "json" };
 import { html } from "../core/html.js";
 import { EMPLOYEE_JOBS } from "./EmployeeJobs.js";
 import { getStaffLimit, getStaffLimitReason } from "./ShopProgression.js";
-import { getEmployeeProfile } from "./EmployeeTraining.js";
+import {
+  getEmployeeJobSpeed, getEmployeeProfile, getEmployeeTrainingBlockReason, getEmployeeTrainingOffer,
+} from "./EmployeeTraining.js";
 import { formatMoneyAmount, roundMoney } from "./Money.js";
 
 const ORDER_NAMES = {
@@ -23,6 +25,56 @@ function renderSkillLevels(employee, stockLabel = "Stock") {
   </div>`;
 }
 
+function renderTraining(employee, selectedJobId, trainingJobId, canManage, credits) {
+  const label = ORDER_NAMES[selectedJobId];
+  if (!label) throw new Error(`Unknown training skill: ${selectedJobId}.`);
+  const offer = getEmployeeTrainingOffer(employee.id, employee.skillLevels, selectedJobId);
+  const currentLevel = employee.skillLevels[selectedJobId];
+  const currentSpeed = Math.round(getEmployeeJobSpeed(employee.skillLevels, selectedJobId) * 100);
+  const nextSpeed = offer && Math.round(getEmployeeJobSpeed({
+    ...employee.skillLevels, [selectedJobId]: offer.targetLevel,
+  }, selectedJobId) * 100);
+  const reason = getEmployeeTrainingBlockReason({
+    canManage,
+    isHired: true,
+    isTraining: Boolean(trainingJobId),
+    offer,
+    credits,
+  });
+  return html`
+    <hr class="divider-thin">
+    <h4 class="employee-section-title">Training</h4>
+    <p class="employee-training-hint">Choose a skill:</p>
+    <div class="employee-training-skills" role="group" aria-label="Training skill for ${employee.name}">
+      ${EMPLOYEE_JOBS.map(({ id }) => html`
+        <button type="button" class="employee-training-skill${id === selectedJobId ? " active" : ""}"
+          data-employee-training-id="${employee.id}" data-employee-training-job="${id}"
+          data-employee-training-action="select" aria-pressed="${String(id === selectedJobId)}"
+          aria-label="Choose ${ORDER_NAMES[id]} training for ${employee.name}">${ORDER_NAMES[id]}</button>
+      `)}
+    </div>
+    <div class="employee-training-preview">
+      <div class="employee-training-title">
+        <strong>${label} training</strong>
+        <span>${offer ? `Level ${currentLevel} → ${offer.targetLevel}` : `Level ${currentLevel} (maximum)`}</span>
+      </div>
+      <p>${label} speed: ${currentSpeed}%${offer ? ` → ${nextSpeed}%` : ""} of Level 1 speed</p>
+      ${offer && !trainingJobId ? html`
+        <p>Training price: <strong>${formatMoneyAmount(offer.cost)}</strong></p>
+        <p>Wages after training: <strong>${formatMoneyAmount(offer.nextWagePerShift)} per shift worked or spent in training</strong></p>
+      ` : null}
+      ${trainingJobId ? html`<p class="employee-training-away">${employee.name} has ${ORDER_NAMES[trainingJobId]}
+        training booked and is away for the training shift. Their current wage of ${formatMoneyAmount(employee.wagePerShift)} is still paid.</p>`
+        : offer ? html`<p class="employee-training-away">${employee.name} will miss the entire next shift
+          and still be paid ${formatMoneyAmount(employee.wagePerShift)} if training is booked.</p>` : null}
+      <button type="button" class="action-btn employee-training-book"
+        data-employee-training-id="${employee.id}" data-employee-training-job="${selectedJobId}"
+        data-employee-training-action="book" ${reason ? "disabled" : ""}
+        aria-label="Book ${label} training for ${employee.name}">Book ${label} training</button>
+      ${reason ? html`<p class="employee-training-reason">${reason}</p>` : null}
+    </div>`;
+}
+
 export class EmployeeRenderer {
   static generateHTML({
     hiredEmployeeIds,
@@ -33,6 +85,7 @@ export class EmployeeRenderer {
     canHire,
     employeeSkills = {},
     employeeTraining = {},
+    employeeTrainingSelection = {},
     shopLevel,
   }) {
     const hired = new Set(hiredEmployeeIds);
@@ -93,6 +146,7 @@ export class EmployeeRenderer {
           `;
         });
         const trainingJobId = employeeTraining[employee.id];
+        const selectedTrainingJobId = employeeTrainingSelection[employee.id] ?? trainingJobId ?? "register";
         const isOnShift = !offShift.has(employee.id);
         const shiftTitle = canHire ? "" : "Change On Shift or Off Shift between shifts.";
         const shiftButton = (on) => html`
@@ -124,12 +178,12 @@ export class EmployeeRenderer {
             <p class="type-description">Wages: ${employee.wagePerShift}</p>
             ${canHire ? null : html`<p class="type-description">Change priority or On Shift / Off Shift between shifts.</p>`}
             <hr class="divider-thin">
-            <p class="type-description">Drag jobs top to bottom: highest priority first. Or use Move up / down.</p>
+            <h4 class="employee-section-title">Job priorities</h4>
+            <p class="employee-training-hint">Drag jobs to reorder them. The top job comes first.</p>
             <div class="employee-priority-options" role="list" aria-label="Job priority for ${employee.name}">
               ${priorityOptions}
             </div>
-            <p class="type-description employee-job-order">Job order: ${priorities
-              .map((jobId, index) => `${index + 1}. ${ORDER_NAMES[jobId]}`).join(", ")}</p>
+            ${renderTraining(employee, selectedTrainingJobId, trainingJobId, canHire, credits)}
           </div>
         `;
       });

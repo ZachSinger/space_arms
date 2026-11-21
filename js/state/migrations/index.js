@@ -11,13 +11,12 @@
 //   layoutVersion 13  before the Scrap-Iron Autopistol price cut
 //   layoutVersion 14  current
 // Any may also be from before the contract split (no `contractsSplit`), hold retired
-// fixtures, crates, licenses, or a hovercart, or hold shelves stocked under the old rule.
+// fixtures, crates, licenses, or a hovercart.
 import { requireSave, isRecord } from "../saveHelpers.js";
 import { upgradeFixtureEntries } from "./fixtureEntries.js";
 import { retireRemovedEquipment } from "./retiredEquipment.js";
 import { migrateRemovedEmployeeJob } from "./employeeJobs.js";
 import { upgradeContractSplit } from "./contractSplit.js";
-import { upgradeShelfStocking } from "./shelfStocking.js";
 import { upgradeCrateIds } from "./crateIds.js";
 import { addEmployeeCleaningJob } from "./cleaningJob.js";
 import { migratePreWarAmmoContract } from "./preWarAmmoContract.js";
@@ -38,7 +37,6 @@ export const SAVE_UPGRADES = [
   { name: "retired equipment refund", always: true, run: retireRemovedEquipment },
   { name: "retired employee job", fromVersion: 9, run: migrateRemovedEmployeeJob },
   { name: "contract split", always: true, run: upgradeContractSplit },
-  { name: "hands-on shelf stocking", always: true, run: upgradeShelfStocking },
   { name: "stable crate IDs", fromVersion: 10, run: upgradeCrateIds },
   { name: "employee cleaning job", fromVersion: 11, run: addEmployeeCleaningJob },
   { name: "pre-war ammo contract", fromVersion: 12, run: migratePreWarAmmoContract },

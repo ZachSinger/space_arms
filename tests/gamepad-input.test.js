@@ -137,7 +137,7 @@ test("on-screen prompts name the key or the controller button", () => {
   assert.equal(controlLabel("putDown", "gamepad"), "Y");
   assert.equal(controlLabel("nextCrate", "keyboard"), "Ctrl");
   assert.equal(controlLabel("nextCrate", "gamepad"), "Right stick click");
-  assert.equal(controlLabel("goBacks", "gamepad"), "Y");
+  assert.equal(controlLabel("cancelFixture", "gamepad"), "X");
   assert.throws(() => controlLabel("jump"));
 });
 

@@ -39,10 +39,7 @@ export class InventoryPool {
   }
 
   usedCapacity() {
-    return this.stock.reduce((sum, entry) => {
-      const item = database.getItem(entry.itemId);
-      return sum + entry.quantity * (item?.slots || 1);
-    }, 0);
+    return this.stock.reduce((sum, entry) => sum + entry.quantity, 0);
   }
 
   getRemainingCapacity() {
@@ -50,10 +47,8 @@ export class InventoryPool {
   }
 
   getRemainingUnitsFor(itemId) {
-    const item = database.getItem(itemId);
-    const itemSize = item?.slots;
-    if (!itemSize || !Number.isFinite(itemSize)) return 0;
-    return Math.floor(this.getRemainingCapacity() / itemSize);
+    if (!database.getItem(itemId)) return 0;
+    return this.getRemainingCapacity();
   }
 
   // First stock entry with quantity left, or null if the pool is empty.
