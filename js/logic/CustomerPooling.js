@@ -33,9 +33,6 @@ export const CUSTOMER_POOL_TUNING = Object.freeze({
   shelfTypesForMaximumAttraction: 3,
   // Faction rep at which a faction's attraction weight doubles (halves at the negative).
   factionRepForDoubleTrafficWeight: 250,
-  // Employees add up to +100% traffic, each one adding less than the last.
-  maximumEmployeeBonus: 1,
-  employeeFalloff: 0.8,
   // Random arrival offset as a fraction of the even spacing between customers.
   arrivalJitterFraction: 0.35,
 });
@@ -85,16 +82,6 @@ export function getStoreRepPool(reputation) {
   const last = curve[curve.length - 1];
   return last.customers + CUSTOMER_POOL_TUNING.storeRepTailGrowth *
     Math.log1p((reputation - last.reputation) / CUSTOMER_POOL_TUNING.storeRepTailSoftness);
-}
-
-/**
- * Pool multiplier from staff, from 1 (none) approaching 2.
- * @param {number} employeeCount
- */
-export function getEmployeeScaler(employeeCount = 0) {
-  const count = Math.max(0, employeeCount);
-  return 1 + CUSTOMER_POOL_TUNING.maximumEmployeeBonus *
-    (1 - CUSTOMER_POOL_TUNING.employeeFalloff ** count);
 }
 
 /**
@@ -182,13 +169,11 @@ export function createCustomerPool({
   activeFactions,
   shelfPlacements,
   getItem,
-  employeeCount = 0,
   tieBreakOffset = 0,
 }) {
   const factions = CUSTOMER_FACTION_IDS.filter((id) => activeFactions.has(id));
   const baseCustomers = getStoreRepPool(storeReputation);
-  const employeeScaler = getEmployeeScaler(employeeCount);
-  const preStockPool = baseCustomers * employeeScaler;
+  const preStockPool = baseCustomers;
   const groups = [{
     factionId: null,
     weight: 1,
@@ -253,9 +238,7 @@ export function createCustomerPool({
     stockScaler,
     calculation: {
       storeReputation,
-      employeeCount,
       baseCustomers,
-      employeeScaler,
       averageUnitsPerCustomer,
       expectedDemand,
       shelfStockUnits,

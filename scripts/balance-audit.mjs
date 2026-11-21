@@ -8,7 +8,7 @@
 import items from "../data/Items.json" with { type: "json" };
 import licenseData from "../data/Licenses.json" with { type: "json" };
 import { SHOP_LEVEL_TIERS, STAFF_LIMIT_LEVELS, getStaffLimit } from "../js/logic/ShopProgression.js";
-import { getStoreRepPool, getEmployeeScaler, CUSTOMER_POOL_TUNING } from "../js/logic/CustomerPooling.js";
+import { getStoreRepPool, CUSTOMER_POOL_TUNING } from "../js/logic/CustomerPooling.js";
 import { ZONES } from "../js/logic/RoomLayout.js";
 import { getFixtureType, FIXTURE_TYPES, getFixtureResaleValue } from "../js/logic/FixtureLayout.js";
 import { getCrateOrderQuantity, DELIVERY_FEE } from "../js/logic/SupplyOrder.js";
@@ -33,7 +33,7 @@ function simulateDays(maxDays = 365) {
   for (let day = 1; day <= maxDays; day += 1) {
     const level = [...SHOP_LEVEL_TIERS].reverse().find((tier) => reputation >= tier.reputation).level;
     const staff = getStaffLimit(level);
-    const pool = Math.round(getStoreRepPool(reputation) * getEmployeeScaler(staff) * STOCK_SCALER);
+    const pool = Math.round(getStoreRepPool(reputation) * STOCK_SCALER);
     const served = Math.min(pool, SERVE_CAP_PER_SHIFT);
     // Revenue model: units sold at ~base price; goods cost the supply ratio of base.
     const assortment = affordableAssortment(level);

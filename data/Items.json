@@ -274,7 +274,7 @@
     "dimensions": { "w": 1, "h": 1 },
     "slots": 1,
     "stackSize": 3,
-    "baseCost": 75,
+    "baseCost": 53,
     "ammo": "Pistol Light Caliber",
     "license": "lic_start_surplus",
     "image": "img/Icons_Extracted/Weapons/Pistols/derringer-twin-barrel-brass-wood.png"

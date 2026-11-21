@@ -136,7 +136,7 @@ other inventory systems. They do not determine the new Budget Shelves' capacity.
 
 - _Flavor:_ A tiny, twin-barrel kinetic pistol that easily fits in an asteroid miner's boot.
 - _Tags:_ `['Firearm', 'Surplus', 'Old', 'Pistol']`
-- _Stats:_ Dim: 1x1 | Stack: 1 | Base Cost: 75 | Ammo: Pistol Light Caliber
+- _Stats:_ Dim: 1x1 | Stack: 1 | Base Cost: 53 | Ammo: Pistol Light Caliber
 
 ## Category 3: [Firearm] + [Heavy]
 

@@ -57,7 +57,6 @@ export class CustomerFlow {
       activeFactions: shop.gameState.catalog.activeFactions,
       shelfPlacements,
       getItem: (itemId) => database.getItem(itemId),
-      employeeCount: shop.gameState.staff.working().length,
       tieBreakOffset: shop.gameState.calendar.day,
     });
   }

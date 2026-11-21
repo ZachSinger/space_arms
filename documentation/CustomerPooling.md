@@ -20,10 +20,11 @@ faction reputation: Basic Rations & Water for Explorers is available at Shop
 Level 1; Scrap-Yard Ballistics for Scavengers and Standard Munitions for
 Mercenaries become available at Shop Level 2.
 
-Store reputation sets the store's baseline traffic. Stock and employees adjust
-that total. The first-pass tuning values are in `CustomerPooling.js`.
+Store reputation sets the store's baseline traffic. Stock adjusts that total.
+Employees never bring in customers; they help serve the ones who come. The
+first-pass tuning values are in `CustomerPooling.js`.
 
-`Pre-Stock Pool = Store Rep Curve x Employee Scaler`
+`Pre-Stock Pool = Store Rep Curve`
 
 `Calculated Pool = Pre-Stock Pool x Overall Stock Scaler`
 
@@ -124,21 +125,6 @@ All numerical values below are initial tuning values, not final balance.
 - Faction-specific shelf assortment also influences the *allocation* weights,
   not this total-pool calculation. Do not multiply the total by faction stock
   a second time.
-
-### Employee Scaler
-
-Apply the same employee scaler once to the total pool:
-
-`Employee Scaler = 1 + Max Employee Bonus x (1 - Falloff ^ Employees)`
-
-- Starting values: `Max Employee Bonus = 1.0`, `Falloff = 0.8`; the scaler
-  approaches but never exceeds 2.0.
-- Example: 0 employees = 1.00x, 1 = 1.20x, 2 = 1.36x, 3 = 1.49x,
-  5 = 1.67x, 10 = 1.89x.
-- Each hire increases traffic less than the previous one, and staff alone
-  cannot grow the pool without limit. Wages are an additional cost.
-- The employee system is not implemented yet, so the current employee count is
-  0 and this scaler remains 1.0.
 
 ## Arrivals
 
