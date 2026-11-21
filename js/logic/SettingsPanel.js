@@ -5,6 +5,7 @@
 // immediately; APPLY keeps them as the new cancel point, CANCEL reverts to the last one.
 // Text size persists in localStorage; display settings live in the Electron window.
 import { setGameDisplaySettings } from "./GameViewport.js";
+import { getSavedCursorMode, setCursorMode } from "./GameCursor.js";
 
 export class SettingsPanel {
   static textSizeStorageKey = "space-arms-dealer.text-size";
@@ -24,6 +25,14 @@ export class SettingsPanel {
     this.element.innerHTML = `
       <div class="settings-content custom-scrollbar">
         <div class="settings-title">SETTINGS</div>
+        <label class="settings-field">
+          <span>CURSOR</span>
+          <select class="settings-cursor">
+            <option value="hardware">HARDWARE (SYSTEM-DRAWN)</option>
+            <option value="software">SOFTWARE (GAME-DRAWN)</option>
+          </select>
+          <span>Both use the custom game cursor. Hardware follows your mouse with less delay.</span>
+        </label>
         <label class="settings-field">
           <span>RESOLUTION</span>
           <select class="settings-resolution"></select>
@@ -60,41 +69,63 @@ export class SettingsPanel {
       ".settings-display-mode",
     );
     this.textSizeSelect = this.element.querySelector(".settings-text-size");
+    this.cursorSelect = this.element.querySelector(".settings-cursor");
     this.status = this.element.querySelector(".settings-status");
     SettingsPanel.applyTextSize(SettingsPanel.getSavedTextSize());
 
     this.element
       .querySelector(".settings-cancel")
-      .addEventListener("click", () => this.cancel());
+      .addEventListener("click", () => this.run(() => this.cancel()));
 
     this.element
       .querySelector(".settings-apply")
-      .addEventListener("click", () => this.saveSnapshot());
+      .addEventListener("click", () => this.run(() => this.saveSnapshot()));
 
     this.element
       .querySelector(".settings-accept")
       .addEventListener("click", () => this.close());
 
-    this.select.addEventListener("change", () => this.previewResolution());
+    this.select.addEventListener("change", () => this.run(() => this.previewResolution()));
     this.displayModeSelect.addEventListener("change", () =>
-      this.previewDisplayMode(),
+      this.run(() => this.previewDisplayMode()),
     );
     this.textSizeSelect.addEventListener("change", () =>
       this.previewTextSize(),
     );
+    this.cursorSelect.addEventListener("change", () => setCursorMode(this.cursorSelect.value));
+    this.handleEscape = (event) => {
+      if (event.key !== "Escape" || this.element.classList.contains("hidden")) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      void this.run(() => this.cancel());
+    };
+    document.addEventListener("keydown", this.handleEscape, true);
+  }
+
+  async run(action) {
+    try {
+      await action();
+    } catch (error) {
+      console.error("Settings action failed:", error);
+      this.status.textContent = `Could not apply settings: ${error.message}`;
+    }
   }
 
   // Show the panel, refreshing options and recording the current settings to revert to.
   async open() {
-    const settings = await window.desktopApi.getDisplaySettings();
+    const settings = window.desktopApi ? await window.desktopApi.getDisplaySettings() : null;
 
     this.settingsSnapshot = {
-      resolution: settings.current,
-      displayMode: settings.displayMode,
+      resolution: settings?.current,
+      displayMode: settings?.displayMode,
       textSize: SettingsPanel.getSavedTextSize(),
+      cursorMode: getSavedCursorMode(),
     };
-    this.syncDisplaySettings(settings);
+    this.select.disabled = this.displayModeSelect.disabled = !settings;
+    if (settings) this.syncDisplaySettings(settings);
+    else this.status.textContent = "Display settings are available in the desktop game. Text size and cursor work here.";
     this.textSizeSelect.value = this.settingsSnapshot.textSize;
+    this.cursorSelect.value = this.settingsSnapshot.cursorMode;
 
     this.element.classList.remove("hidden");
     this.onOpen?.();
@@ -131,26 +162,32 @@ export class SettingsPanel {
       SettingsPanel.textSizeStorageKey,
       this.textSizeSelect.value,
     );
+    setCursorMode(this.cursorSelect.value, { persist: true });
     this.element.classList.add("hidden");
     this.onClose?.();
   }
 
   destroy() {
+    document.removeEventListener("keydown", this.handleEscape, true);
     this.element.remove();
   }
 
   async cancel() {
-    const { resolution, displayMode, textSize } = this.settingsSnapshot;
+    const { resolution, displayMode, textSize, cursorMode } = this.settingsSnapshot;
 
     // Restore the mode first; switching modes can resize the window.
-    if (displayMode !== this.appliedDisplayMode) {
+    if (window.desktopApi && displayMode !== this.appliedDisplayMode) {
       await window.desktopApi.setDisplayMode(displayMode);
     }
 
-    const restored = await window.desktopApi.setResolution(resolution);
-    this.syncDisplaySettings(restored);
+    if (window.desktopApi) {
+      const restored = await window.desktopApi.setResolution(resolution);
+      this.syncDisplaySettings(restored);
+    }
     this.textSizeSelect.value = textSize;
     SettingsPanel.applyTextSize(textSize);
+    this.cursorSelect.value = cursorMode;
+    setCursorMode(cursorMode);
     this.close();
   }
 
@@ -185,14 +222,17 @@ export class SettingsPanel {
 
   // APPLY: make the current settings the new point CANCEL reverts to.
   async saveSnapshot() {
-    const settings = await window.desktopApi.getDisplaySettings();
+    const settings = window.desktopApi ? await window.desktopApi.getDisplaySettings() : null;
 
     this.settingsSnapshot = {
-      resolution: settings.current,
-      displayMode: settings.displayMode,
+      resolution: settings?.current,
+      displayMode: settings?.displayMode,
       textSize: this.textSizeSelect.value,
+      cursorMode: this.cursorSelect.value,
     };
-    this.syncDisplaySettings(settings);
+    if (settings) this.syncDisplaySettings(settings);
+    localStorage.setItem(SettingsPanel.textSizeStorageKey, this.textSizeSelect.value);
+    setCursorMode(this.cursorSelect.value, { persist: true });
   }
 
   static getSavedTextSize() {

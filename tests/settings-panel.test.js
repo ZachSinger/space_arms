@@ -52,10 +52,11 @@ test("resolution preview updates the frame and cancel restores the previous choi
     select,
     displayModeSelect: { value: "fullscreen" },
     textSizeSelect: { value: "default" },
+    cursorSelect: { value: "hardware" },
     status: { textContent: "" },
     appliedResolution: large,
     appliedDisplayMode: "fullscreen",
-    settingsSnapshot: { resolution: large, displayMode: "fullscreen", textSize: "default" },
+    settingsSnapshot: { resolution: large, displayMode: "fullscreen", textSize: "default", cursorMode: "hardware" },
     close() { this.closed = true; },
   });
 

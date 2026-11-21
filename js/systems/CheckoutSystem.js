@@ -600,6 +600,9 @@ export class CheckoutSystem {
       paymentType: customer.checkoutPayment.type,
       chitCode: customer.checkoutPayment.code,
       onWrongChange: () => shop.gameState.reputation.lose(1),
+      onCashAttempt: (attempt) => shop.debugInfo?.record("cash-handover", {
+        customerId: shop.debugInfo.identifyCustomer(customer), ...attempt,
+      }),
       // The third wrong change loses the sale; the reputation was already lost on the second.
       onChangeFailed: () => customer.leaveAngry({ reputationPenalty: false }),
       // Three Chit mistakes (wrong keys or running out of time) in one order: the customer gives up and storms out.

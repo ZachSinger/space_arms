@@ -264,7 +264,7 @@ test("drawer clicks and right-clicks adjust change, and Space rejects mistakes u
   const h = harness();
   h.checkout.startTakingPayment();
   h.takeAll();
-  h.button.listeners.get("click")();
+  h.button.listeners.get("mousedown")({ button: 0, preventDefault() {} });
   assert.equal(h.elements.get("#checkout-change-selected").innerHTML, "0.01");
   const current = h.elements.get("#checkout-change-current").classList;
   assert.equal(current.contains("change-exact") || current.contains("change-over"), false);
@@ -322,6 +322,24 @@ test("a third wrong change hand-over loses the sale without another penalty", ()
   h.checkout.handOverChange();
   assert.equal(failed, 1);
   assert.equal(h.completed(), 0);
+});
+
+test("handover diagnostics preserve the amount tested even after change is corrected", () => {
+  const h = harness();
+  const attempts = [];
+  h.checkout.onCashAttempt = (attempt) => attempts.push(attempt);
+  h.checkout.startTakingPayment();
+  h.takeAll();
+  h.checkout.cashPayment.change = new Map([[1, 376]]);
+  h.checkout.handOverChange("keyboard");
+  h.checkout.cashPayment.adjustChange(1, 1);
+  h.checkout.handOverChange("keyboard");
+  assert.equal(attempts[0].selectedUnits, 376);
+  assert.equal(attempts[0].dueUnits, 377);
+  assert.equal(attempts[0].accepted, false);
+  assert.deepEqual(attempts[0].pieces, [[1, 376]]);
+  assert.equal(attempts[1].selectedUnits, 377);
+  assert.equal(attempts[1].accepted, true);
 });
 
 test("held Space and a hidden register cannot hand over change", () => {
@@ -407,6 +425,34 @@ test("Explorer Chit keyboard input resets mistakes and completes on the last rig
   assert.equal(h.checkout.paymentStage, "complete");
   assert.equal(h.completed(), 1);
   assert.equal(prevented, 4);
+});
+
+test("the last coin counts on mouse-down before Space hands over change", () => {
+  const h = harness();
+  h.checkout.startTakingPayment();
+  h.takeAll();
+  h.checkout.cashPayment.change = new Map([[1, 376]]);
+  h.checkout.refreshCash();
+
+  h.button.listeners.get("mousedown")({ button: 0, preventDefault() {} });
+  assert.equal(h.checkout.cashPayment.changeUnits, h.checkout.cashPayment.changeDueUnits);
+
+  h.checkout.handleNumpadKeydown({ key: " ", preventDefault() {} });
+  assert.equal(h.checkout.paymentStage, "complete");
+  assert.equal(h.completed(), 1);
+});
+
+test("drawer denominations still respond to keyboard-generated clicks without double-counting mouse clicks", () => {
+  const h = harness();
+  h.checkout.startTakingPayment();
+  h.takeAll();
+
+  h.button.listeners.get("mousedown")({ button: 0, preventDefault() {} });
+  h.button.listeners.get("click")({ detail: 1 });
+  assert.equal(h.checkout.cashPayment.changeUnits, 1);
+
+  h.button.listeners.get("click")({ detail: 0 });
+  assert.equal(h.checkout.cashPayment.changeUnits, 2);
 });
 
 test("a five-digit Chit stays open until the fifth direction is entered", () => {

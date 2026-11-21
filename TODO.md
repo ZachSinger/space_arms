@@ -8,6 +8,8 @@ notice something that needs doing but isn't being done right now.
       No gameplay changes during the rebuild; features wait for the phase they depend on.
 
 ## Base-loop follow-ups
+- [ ] Employee Training: add course-booking controls for the existing skill/training
+      system. Playtest per-item stocking across Levels 1-5 before finalizing the balance.
 - [x] Multi-register support. Registers are buyable in any number; each needs queue space
       on its own. One line per register with customers picking the shortest; one employee
       can man each register at once; the player works whichever register they stand behind.
@@ -58,8 +60,7 @@ notice something that needs doing but isn't being done right now.
 - [ ] Play at least three shifts from a new game without debug keys. Check whether sales
       cover stock orders and wages, customers are served through closing, and saving and
       continuing between shifts works.
-- [ ] Page Up / Page Down still zoom the sales floor while the player is in the backroom.
-      In the backroom they should zoom only the backroom window instead.
+- [x] Zoom controls work only on the sales floor, not in the backroom or other rooms.
 - [x] Decide what happens if wages put the player in debt and they run out of sellable
       stock. For now, an emergency loan in the Finances tab tops credits up to 1,000; the
       player owes 25% extra, repaid from 25% of each later day's sales (provisional numbers).
@@ -155,6 +156,9 @@ notice something that needs doing but isn't being done right now.
       (notes unfinished).
 
 ## Playtest follow-ups
+- [ ] Reproduce the report of correct-looking change being rejected once, then accepted
+      on a second Space press. Numerical checks passed; checkout now records each handover's
+      displayed amount, exact amount owed/selected, input, and held mouse state in Debug Info.
 - [x] Cash drawer mockup: all customers pay cash, with unlimited 1/5/10/20 credit bills
       and 1/5/10/25/50 cent coins. The customer first holds out their cash over a blurred
       screen as soon as scanning ends (no keypad), and each piece is clicked or swept to take it; about 1 in 4 pay exact, skipping change.

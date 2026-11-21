@@ -45,7 +45,8 @@ These answer the open questions in the design above.
 ### Employees who clean
 - Cleaning is a third employee job, **Clean up trash**, next to Run register and Stock
   shelves. Like the others it has its own skill (Level 1–5, trained the same way) and its own
-  place in the job order. The staff panel's **Prioritize Cleaning** button puts it first.
+  place in the job order. Drag Cleaning to the desired position in the staff panel, or use
+  **Move up / down**; highest priority is at the top. The saved order changes between shifts only.
 - An employee works down their job order and takes the first job that has work. Cleaning has
   work when there is floor trash nobody else is going for and a trashcan they can reach.
   Without the cleaning module, cleaning never has work.
@@ -56,8 +57,10 @@ These answer the open questions in the design above.
   one. If you pick it up first, they give up on it and choose again.
 - Skill makes the whole trip faster: walking, picking up, and throwing away (+20% speed per
   level, the same as the other jobs).
-- At closing they leave trash they haven't picked up yet and throw away trash they're
-  already carrying, so they never hold up the end of the shift. If they're removed from the
+- At 20:00 they finish the cleaning task already underway, including picking up the claimed
+  piece and throwing it away. They take no new cleaning or stocking jobs, but still serve
+  customers already inside at the register before walking out through the public front
+  door. The shift waits until they reach the exit. If they're removed from the
   store while carrying trash, it goes back on the floor; it's never lost or counted twice.
 - Saves from before this job (save format 11 and older) add Clean up trash to the end of each
   employee's job order, at Level 1.

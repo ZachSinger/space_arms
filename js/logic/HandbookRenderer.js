@@ -134,7 +134,7 @@ function storeTopic({ shopLevel, reputation }) {
         "Press <strong>START SHIFT</strong> on the top bar. The game saves first.",
         "Staff wages are paid as the shift starts, even if that takes your money below 0.",
         "The shift clock runs from 08:00 to 20:00, about 7 minutes of play.",
-        "<strong>PAUSE</strong> freezes the clock and everyone in the shop. All controls and menus are locked until you resume. Press P, Esc, controller Start, or <strong>RESUME</strong> to continue.",
+        "<strong>PAUSE</strong>, P, or Esc opens the pause menu and freezes the entire shop, including animations. The menu offers Resume, Save Game, Load Game, Settings, Exit to Main Menu, and Exit to Desktop. Saving is available only between shifts; Exit to Desktop is available in the desktop game.",
         "<strong>CLOSE STORE</strong> stops new customers from coming in for a while. Customers already inside keep shopping, and the clock keeps running. <strong>REOPEN STORE</strong> lets them in again.",
       ])}
       <p>Some things can only be done between shifts: hiring staff, changing their job order,
@@ -314,15 +314,17 @@ function employeesTopic() {
       <p>Staff wear orange sleeves and dark work aprons. When carrying a crate,
         they hold it above their head with both arms raised. When cleaning, they carry one
         piece of trash at their side.</p>
-      <p>At closing time, they finish up and leave once the last customer is gone. Someone on
+      <p>At 20:00, they finish their current task and keep serving customers already
+        inside the shop. They do not start new stocking or cleaning jobs. Once their
+        remaining register work is finished, they walk out the front door. Someone on
         the way to a piece of trash leaves it where it is; someone already carrying trash
         throws it away first.</p>`),
     section("How to Set Priorities", `
       <p>Open the <strong>Employee</strong> tab and find the employee under <strong>YOUR STAFF</strong>.
-        Choose <strong>Prioritize Register</strong>, <strong>Prioritize Stocking</strong>, or
-        <strong>Prioritize Cleaning</strong> to make that their first job. The other jobs keep their
-        order behind it, shown under <strong>Job order</strong>.
-        They try their first job first, but still do the others when they need doing.
+        Drag the jobs under <strong>Job order</strong> to arrange them from highest priority
+        at the top to lowest at the bottom. You can also use each job's <strong>Move up</strong>
+        and <strong>Move down</strong> buttons.
+        They try the top job first, but still do the others when they need doing.
         You can only change this between shifts.</p>`),
     section("How to Hire", `
       ${list([
@@ -351,7 +353,7 @@ function employeesTopic() {
         `Run register gains a larger speed boost at Levels ${EMPLOYEE_MILESTONE_LEVELS.join(" and ")}:
           employees work ${Math.round((getEmployeeJobSpeed({ register: 3 }, "register") - 1) * 100)}% faster
           at Level 3 and ${getEmployeeJobSpeed({ register: 5 }, "register")} times normal speed at Level 5.`,
-        "Stock shelves makes restocking trips faster with each level.",
+        "Stock shelves makes restocking trips faster with each level. At the shelf, an employee puts down one item at a time: about one second per item at Level 1, improving to about 0.56 seconds at Level 5. Stocking 15 items takes 15 of these pauses.",
         "Clean up trash makes cleaning trips, and picking up and throwing away trash, faster with each level.",
         "Skills and higher wages are permanent.",
         "If an employee is already away training, wait until they return before changing On Shift / Off Shift.",

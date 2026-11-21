@@ -8,11 +8,12 @@ import { validateShopSave } from "../js/logic/ShopSave.js";
 import { SHOP_LAYOUT_VERSION } from "../js/state/migrations/index.js";
 import { upgradeContractSplit } from "../js/state/migrations/contractSplit.js";
 import { migratePreWarAmmoContract } from "../js/state/migrations/preWarAmmoContract.js";
+import { repriceScrapAutopistol } from "../js/state/migrations/scrapAutopistolPrice.js";
 
 const dir = new URL("./golden-saves/", import.meta.url);
 const read = (name) => JSON.parse(readFileSync(new URL(name, dir), "utf8"));
 const upgradeExpected = (data) => ({
-  ...migratePreWarAmmoContract(upgradeContractSplit(data)),
+  ...repriceScrapAutopistol(migratePreWarAmmoContract(upgradeContractSplit(data)), database),
   layoutVersion: SHOP_LAYOUT_VERSION,
 });
 const database = new DatabaseManager();

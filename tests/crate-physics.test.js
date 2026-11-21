@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Crate, CRATE_STACK_SPACING, INTERACT_RANGE, THROW_ACCELERATION_MS } from "../js/logic/Crate.js";
+import { CrateWorld } from "../js/world/CrateWorld.js";
 
 function createScene(obstacles = []) {
   const scene = {
@@ -134,6 +135,24 @@ function createScene(obstacles = []) {
   };
   return scene;
 }
+
+test("pushing and dropping agree on exact bottom-wall contact for both crate kinds", () => {
+  const wall = { enable: true, left: 0, right: 500, top: 400, bottom: 500 };
+  const scene = createScene([wall]);
+  for (const kind of ["item", "fixture"]) {
+    const crate = new Crate(scene, "item", 1, 200, 386, { kind, typeId: "shelf_budget_3x4" });
+    const blocked = (y) => {
+      const rect = crate.getFloorBounds(200, y);
+      return CrateWorld.prototype.isCrateSpaceBlocked.call({ shop: scene }, {
+        left: rect.left, top: rect.top, width: rect.right - rect.left, height: rect.bottom - rect.top,
+      });
+    };
+    assert.equal(crate.isDropPositionClear(200, 386), true);
+    assert.equal(blocked(386), false, "touching the wall is allowed even if overlapRect returns it");
+    assert.equal(crate.isDropPositionClear(200, 386.01), false);
+    assert.equal(blocked(386.01), true, "neither action lets the base enter the wall");
+  }
+});
 
 test("three carried crates stay straight, cover the lids below, and draw newest in front", () => {
   const scene = createScene();

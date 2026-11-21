@@ -53,6 +53,7 @@ export class PlayerControls {
     // I or Tab opens the tablet and, while it's open, closes it again.
     const handleTabletKey = (event) => {
       if (event.code !== "KeyI" && event.code !== "Tab") return;
+      if (shop.controlMode.getMode() === CONTROL_MODES.PAUSED) return;
       if (event.code === "Tab") event.preventDefault();
       if (event.repeat) return;
       const tablet = shop.managerTablet;
@@ -65,11 +66,13 @@ export class PlayerControls {
     };
     document.addEventListener("keydown", handleTabletKey);
 
-    // The shop camera: PageUp zooms in, PageDown zooms out (never past the whole shop).
+    // The sales-floor camera: PageUp zooms in, PageDown zooms out (never past the whole shop).
     this.bindKey("keydown-PAGE_UP", "cameraZoom", () => shop.cameraRig.zoomBy(1));
     this.bindKey("keydown-PAGE_DOWN", "cameraZoom", () => shop.cameraRig.zoomBy(-1));
     // The shift clock's manual pause: freezes time entirely so the player can think.
-    this.bindKey("keydown-P", "pause", () => shop.shiftClock.togglePause());
+    this.bindKey("keydown-P", "pause", (event) => {
+      if (!event.repeat) this.togglePause();
+    });
     // Esc pauses too, unless it just closed a window. Other screens on top block pausing
     // anyway; the register doesn't, so Esc pauses there like P.
     // A plain window listener rather than Phaser's: some browsers cancel Esc before the page
@@ -79,7 +82,7 @@ export class PlayerControls {
       if (event.key !== "Escape" || event.repeat) return;
       if (shop.windowManager.isConsumed(event)) return;
       if (!shop.controlMode.allows("pause")) return;
-      shop.shiftClock.togglePause();
+      this.togglePause();
     };
     window.addEventListener("keydown", handleEscPause);
 
@@ -127,14 +130,21 @@ export class PlayerControls {
   handlePausedInput(event) {
     const shop = this.shop;
     if (shop.controlMode.getMode() !== CONTROL_MODES.PAUSED) return;
+    if (event.target?.closest?.("#pause-menu, #pause-confirmation, .settings-window")) return;
+    if (shop.pauseMenu?.settingsOpen && event.type === "keydown" && event.key === "Escape") return;
     if (event.type !== "keydown" && event.target?.closest?.("#hud-pause-btn")) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     // Handle resume before window-close handlers or Phaser see the key.
     if (event.type === "keydown" && !event.repeat &&
       (event.code === "KeyP" || event.key === "Escape")) {
-      shop.shiftClock.togglePause();
+      this.togglePause();
     }
+  }
+
+  togglePause() {
+    if (this.shop.pauseMenu) this.shop.pauseMenu.toggle();
+    else this.shop.shiftClock.togglePause();
   }
 
   /**
@@ -156,9 +166,10 @@ export class PlayerControls {
     if (mode === CONTROL_MODES.LOADING && !shop.saves.loadFailed) return;
     if (mode === CONTROL_MODES.PAUSED) {
       if (pad.justPressed(PAD.START)) {
-        shop.shiftClock.togglePause();
+        this.togglePause();
         this.uiNavigator.setHudOpen(false);
       }
+      if (shop.pauseMenu) this.uiNavigator.handle(pad, delta);
       return;
     }
 

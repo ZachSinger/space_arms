@@ -39,8 +39,8 @@ Design is specified in detail in `documentation/` — consult it before inventin
 ## Build and Test
 
 - `npm install` — install deps.
-- `npm run dev` — Vite dev server (`localhost:5173`); open it directly in a browser for fast iteration without Electron.
-- `npm start` — launches Electron pointed at `localhost:5173`; **requires `npm run dev` already running**.
+- `npm start` — launches Electron and starts its Vite development server (`localhost:5173`).
+- `npm run dev` — starts Vite for browser-only play; use `npm run dev -- --open` to open it automatically.
 - `npm run build` — Vite build into `dist/`; the `copy-runtime-assets` plugin copies `data/` and only referenced images, optimizing item pictures in the build without changing their originals (fails if art is missing).
 - `npm run package` — build plus electron-builder; produces `release\win-unpacked\Space Arms Dealer.exe`, which runs without the dev server. Needs the gitignored `img/Icons_Extracted/` art present locally. Saves stay in `%APPDATA%\space-arms-dealer` for both dev and packaged builds.
 - Run regression tests with `node --test tests/*.test.js` (PowerShell: `node --test (Get-ChildItem tests -Filter '*.test.js').FullName`). No linter or formatter is configured.

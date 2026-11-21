@@ -8,7 +8,8 @@
 //   layoutVersion 10  before crates had stable IDs
 //   layoutVersion 11  before employees had the cleaning job
 //   layoutVersion 12  before heavy ammo moved into its own contract
-//   layoutVersion 13  current
+//   layoutVersion 13  before the Scrap-Iron Autopistol price cut
+//   layoutVersion 14  current
 // Any may also be from before the contract split (no `contractsSplit`), hold retired
 // fixtures, crates, licenses, or a hovercart, or hold shelves stocked under the old rule.
 import { requireSave, isRecord } from "../saveHelpers.js";
@@ -20,9 +21,10 @@ import { upgradeShelfStocking } from "./shelfStocking.js";
 import { upgradeCrateIds } from "./crateIds.js";
 import { addEmployeeCleaningJob } from "./cleaningJob.js";
 import { migratePreWarAmmoContract } from "./preWarAmmoContract.js";
+import { repriceScrapAutopistol } from "./scrapAutopistolPrice.js";
 
 // The fixture-retirement upgrade removes stock fixtures and moves their contents into Go-Backs.
-export const SHOP_LAYOUT_VERSION = 13;
+export const SHOP_LAYOUT_VERSION = 14;
 const OLDEST_SUPPORTED_VERSION = 9;
 
 /**
@@ -40,6 +42,7 @@ export const SAVE_UPGRADES = [
   { name: "stable crate IDs", fromVersion: 10, run: upgradeCrateIds },
   { name: "employee cleaning job", fromVersion: 11, run: addEmployeeCleaningJob },
   { name: "pre-war ammo contract", fromVersion: 12, run: migratePreWarAmmoContract },
+  { name: "scrap autopistol price", fromVersion: 13, run: repriceScrapAutopistol },
 ];
 
 /**

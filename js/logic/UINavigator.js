@@ -83,7 +83,7 @@ export class UINavigator {
       if (hud && !hud.classList.contains("hidden")) return hud;
       this.setHudOpen(false);
     }
-    const cash = document.querySelector(".cash-tender-overlay:not(.hidden)");
+    const cash = document.querySelector(".cash-tender-overlay:not(.hidden):not(.checkout-paused)");
     if (cash) return cash;
     const active = document.querySelector(".retro-window.active:not(.hidden)");
     if (active && !active.hasAttribute("data-pad-world")) return active;

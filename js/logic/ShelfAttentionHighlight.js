@@ -38,7 +38,8 @@ export class ShelfAttentionHighlight {
     this.scene = scene;
     this.fixture = fixture;
     this.active = false;
-    this.graphics = scene.add.graphics().setDepth(3).setVisible(false);
+    // Canvas-only overlay; DOM HUD/windows remain above the entire world canvas.
+    this.graphics = scene.add.graphics().setDepth(Number.MAX_SAFE_INTEGER).setVisible(false);
   }
 
   // Kept for the shelf-display interface; the outline is drawn from the fixture each frame.

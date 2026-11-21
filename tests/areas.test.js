@@ -2,6 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { AREA, Areas } from "../js/world/Areas.js";
 import { CameraRig } from "../js/world/CameraRig.js";
+import { CONTROL_MODES } from "../js/input/ControlMode.js";
+import { PAD } from "../js/input/GamepadInput.js";
+import { PlayerControls } from "../js/input/PlayerControls.js";
 import { InteractableRegistry } from "../js/interaction/InteractableRegistry.js";
 import { Navigation } from "../js/world/Navigation.js";
 
@@ -210,4 +213,72 @@ test("the framed camera uses the active module room bounds, title, and point sel
   rig.refreshBackroomWindow();
   assert.equal(camera.visible, false);
   assert.equal(frame.hidden, true);
+});
+
+test("keyboard and controller zoom only work on the sales floor", (t) => {
+  const { scene, areas } = harness();
+  registerRange(areas);
+  const handlers = new Map();
+  scene.input = { keyboard: {
+    on(name, handler) { handlers.set(name, handler); },
+    removeCapture() {},
+  } };
+  scene.events = { once() {} };
+  scene.controlMode = { allows: () => true, getMode: () => CONTROL_MODES.WALKING };
+  scene.checkoutWindow = { usesChitInput: () => false, usesSpaceKey: () => false };
+  scene.checkoutSystem = { operatingRegister: false };
+  scene.cameras = { main: { zoom: 1 } };
+  let refreshes = 0;
+  const rig = scene.cameraRig = Object.assign(Object.create(CameraRig.prototype), {
+    shop: scene,
+    zoom: 1,
+    refresh() { refreshes += 1; },
+  });
+  const oldWindow = globalThis.window;
+  const oldDocument = globalThis.document;
+  globalThis.window = { addEventListener() {}, removeEventListener() {} };
+  globalThis.document = { addEventListener() {}, removeEventListener() {} };
+  t.after(() => {
+    if (oldWindow === undefined) delete globalThis.window;
+    else globalThis.window = oldWindow;
+    if (oldDocument === undefined) delete globalThis.document;
+    else globalThis.document = oldDocument;
+  });
+
+  const controls = new PlayerControls(scene);
+  controls.install();
+  let pressed = null;
+  controls.padInput = { poll() {}, hadInput: false, justPressed: (button) => button === pressed };
+  controls.uiNavigator = { handle: () => false };
+  const pressPad = (button) => {
+    pressed = button;
+    controls.handleGamepad(0, 16);
+    pressed = null;
+  };
+  const actions = [
+    { name: "Page Up", direction: 1, press: () => handlers.get("keydown-PAGE_UP")() },
+    { name: "Page Down", direction: -1, press: () => handlers.get("keydown-PAGE_DOWN")() },
+    { name: "RB", direction: 1, press: () => pressPad(PAD.RB) },
+    { name: "LB", direction: -1, press: () => pressPad(PAD.LB) },
+  ];
+
+  for (const { name, direction, press } of actions) {
+    const before = rig.zoom;
+    press();
+    assert.ok(direction > 0 ? rig.zoom > before : rig.zoom < before, name);
+  }
+  for (const area of [AREA.BACKROOM, "range"]) {
+    areas.playerArea = area;
+    for (const { name, press } of actions) {
+      const before = rig.zoom;
+      const refreshesBefore = refreshes;
+      press();
+      assert.equal(rig.zoom, before, `${name} in ${area}`);
+      assert.equal(refreshes, refreshesBefore, `${name} in ${area} does not refresh the camera`);
+    }
+  }
+  areas.playerArea = AREA.SHOP;
+  const before = rig.zoom;
+  pressPad(PAD.RB);
+  assert.ok(rig.zoom > before, "zoom works again after returning to the sales floor");
 });

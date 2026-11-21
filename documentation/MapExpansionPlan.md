@@ -3,9 +3,10 @@
 ## Camera: player-controlled zoom
 
 A new game starts zoomed so the shop the player owns fills the area below the
-top status bar. PageUp zooms in (down to about 8 tile rows on screen) and
-PageDown zooms out, never further than the point where the whole owned shop
-fits. When the shop doesn't fit at the chosen zoom, the camera follows the
+top status bar. On the sales floor, PageUp zooms in (down to about 8 tile rows on
+screen) and PageDown zooms out, never further than the point where the whole owned
+shop fits. Zoom controls do nothing in the backroom and other rooms. When the shop
+doesn't fit at the chosen zoom, the camera follows the
 player, kept within the owned rooms. Buying an expansion keeps the current zoom;
 the player can zoom out to see more if they want. Resizing the window keeps the
 same amount of shop visible. See `CameraRig.refresh()` (js/world/CameraRig.js).

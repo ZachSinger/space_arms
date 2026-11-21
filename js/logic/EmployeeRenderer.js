@@ -9,12 +9,6 @@ import { getStaffLimit, getStaffLimitReason } from "./ShopProgression.js";
 import { getEmployeeProfile } from "./EmployeeTraining.js";
 import { formatMoneyAmount, roundMoney } from "./Money.js";
 
-const PRIORITY_LABELS = {
-  register: "Prioritize Register",
-  stock_shelves: "Prioritize Stocking",
-  clean: "Prioritize Cleaning",
-};
-
 const ORDER_NAMES = {
   register: "Register",
   stock_shelves: "Stocking",
@@ -83,13 +77,19 @@ export class EmployeeRenderer {
           !EMPLOYEE_JOBS.every(({ id }) => priorities.includes(id))) {
           throw new Error(`Invalid job priorities for ${employee.name}.`);
         }
-        const priorityOptions = EMPLOYEE_JOBS.map(({ id }) => {
-          const label = PRIORITY_LABELS[id];
-          if (!label) throw new Error(`Unknown employee job: ${id}`);
+        const priorityOptions = priorities.map((id, index) => {
+          const label = ORDER_NAMES[id];
           return html`
-            <button type="button" class="action-btn" data-employee-priority-id="${employee.id}"
-              data-employee-priority-job="${id}" aria-pressed="${String(priorities[0] === id)}"
-              ${canHire ? "" : "disabled"} aria-label="${label} for ${employee.name}">${label}</button>
+            <div role="listitem" draggable="${String(canHire)}"
+              data-employee-job-id="${employee.id}" data-employee-job="${id}">
+              <span>${index + 1}. ${label}</span>
+              ${["up", "down"].map((direction) => html`
+                <button type="button" class="action-btn" data-employee-priority-id="${employee.id}"
+                  data-employee-priority-job="${id}" data-employee-priority-move="${direction}"
+                  ${!canHire || (direction === "up" ? index === 0 : index === priorities.length - 1) ? "disabled" : ""}
+                  aria-label="Move ${label} ${direction} for ${employee.name}">Move ${direction}</button>
+              `)}
+            </div>
           `;
         });
         const trainingJobId = employeeTraining[employee.id];
@@ -124,7 +124,8 @@ export class EmployeeRenderer {
             <p class="type-description">Wages: ${employee.wagePerShift}</p>
             ${canHire ? null : html`<p class="type-description">Change priority or On Shift / Off Shift between shifts.</p>`}
             <hr class="divider-thin">
-            <div class="employee-priority-options" role="group" aria-label="Job priority for ${employee.name}">
+            <p class="type-description">Drag jobs top to bottom: highest priority first. Or use Move up / down.</p>
+            <div class="employee-priority-options" role="list" aria-label="Job priority for ${employee.name}">
               ${priorityOptions}
             </div>
             <p class="type-description employee-job-order">Job order: ${priorities

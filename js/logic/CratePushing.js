@@ -84,21 +84,29 @@ export function solveCratePush({
     let budget = maxMoved - carriedWeight;
 
     const slideAgainstStatic = (rect, v) => {
-      const fits = (candidate) => !isBlocked(reach(rect, candidate, dt));
+      // Contact skin finds crates, not walls: reserve only the space actually moved.
+      const fits = (candidate) => !isBlocked({
+        ...rect, left: rect.left + candidate.x * dt, top: rect.top + candidate.y * dt,
+      });
       if (fits(v)) return v;
-      // Creep in smaller steps so a crate finishes flush against a wall instead of
-      // stopping a whole step early.
-      for (const fraction of [0.5, 0.25, 0.125]) {
-        const crept = scale(v, fraction);
-        if (fits(crept)) return crept;
-      }
+      const creep = (candidate) => {
+        if (!fits({ x: 0, y: 0 })) return { x: 0, y: 0 };
+        let low = 0;
+        let high = 1;
+        for (let step = 0; step < 16; step += 1) {
+          const fraction = (low + high) / 2;
+          if (fits(scale(candidate, fraction))) low = fraction;
+          else high = fraction;
+        }
+        return scale(candidate, low);
+      };
+      const crept = creep(v);
+      if (Math.hypot(crept.x, crept.y) > EPSILON) return crept;
       for (const axis of [v.x && { x: v.x, y: 0 }, v.y && { x: 0, y: v.y }]) {
         if (!axis) continue;
         if (fits(axis)) return axis;
-        for (const fraction of [0.5, 0.25, 0.125]) {
-          const crept = scale(axis, fraction);
-          if (fits(crept)) return crept;
-        }
+        const slid = creep(axis);
+        if (Math.hypot(slid.x, slid.y) > EPSILON) return slid;
       }
       return { x: 0, y: 0 };
     };
@@ -107,7 +115,14 @@ export function solveCratePush({
       let out = mover ? slideAgainstStatic(rect, v) : { ...v };
       for (const crate of crates) {
         if (crate === mover || inChain.has(crate)) continue;
-        if (overlaps(rect, crate.rect)) {
+        const penetration = depthInside(rect, crate.rect);
+        const next = {
+          ...rect, left: rect.left + out.x * dt, top: rect.top + out.y * dt,
+        };
+        // Small integration overlaps are still push contact, not an embedded mover.
+        const pushContact = !crate.locked && penetration <= CONTACT_SKIN &&
+          depthInside(next, crate.rect) > penetration + EPSILON;
+        if (penetration > 0 && !pushContact) {
           // Allow escape and sliding along an edge, but not movement through the crate.
           const centerX = rect.left + rect.width / 2;
           const centerY = rect.top + rect.height / 2;

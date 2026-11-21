@@ -267,9 +267,17 @@
   padding: 6px 10px;
 }
 
-.checkout-payment.counting-change > .checkout-payment-prompt,
-.checkout-payment.counting-change > .checkout-payment-feedback:empty {
+.checkout-payment.counting-change > .checkout-payment-prompt {
   display: none;
+}
+
+.checkout-payment.counting-change > .checkout-payment-feedback {
+  height: 3.6em;
+  line-height: 1.2;
+}
+
+.checkout-payment.counting-change > .checkout-payment-feedback:empty {
+  visibility: hidden;
 }
 
 .counting-change .cash-checkout {

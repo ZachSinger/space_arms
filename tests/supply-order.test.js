@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { summarizeSupplyOrder, MAX_CRATES_PER_ORDER, DELIVERY_FEE, getCrateOrderQuantity } from "../js/logic/SupplyOrder.js";
 import { getSlotItemLimit } from "../js/logic/ShelfSlotStocking.js";
+import items from "../data/Items.json" with { type: "json" };
 
 const context = (overrides = {}) => ({
   getCrateCost: (itemId) => ({ ammo: 40, rations: 10 })[itemId],
@@ -53,4 +54,10 @@ test("an ordered crate holds exactly one full Budget Shelf 2x2 space of its item
     assert.equal(getCrateOrderQuantity({ boxSize, stackSize: 10 }), quantity, `box size ${boxSize}`);
     assert.equal(getCrateOrderQuantity({ boxSize, stackSize: 10 }), getSlotItemLimit(boxSize));
   }
+});
+
+test("Scrap-Iron Autopistol deliveries fill a shelf space with ten pistols", () => {
+  const pistol = items.find(({ id }) => id === "wpn_pis_02");
+  assert.equal(getCrateOrderQuantity(pistol), 10);
+  assert.equal(getSlotItemLimit(pistol.boxSize), 10);
 });

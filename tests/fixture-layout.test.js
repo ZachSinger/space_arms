@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { STARTING_FIXTURES, FIXTURE_POSITION_STEP, FIXTURE_SNAP_STEP, FIXTURE_FRONT_CLEARANCE, fixtureAccessCells, fixtureAtWorldPoint, fixtureBounds, fixtureCells, fixtureFacing, fixtureFacingStep, fixtureFootprint, fixtureFrontClearance, fixtureProjectionBoxes, fixturesOverlap, fixtureStandingSpot, cellKey, getFixtureType, isFixturePosition, migrateFixtureEntry, planRegisterQueue, snapFixturePosition, validateFixtureLayout, fixtureInteractionDistance } from "../js/logic/FixtureLayout.js";
+import { FIXTURE_TYPES, STARTING_FIXTURES, FIXTURE_POSITION_STEP, FIXTURE_SNAP_STEP, FIXTURE_FRONT_CLEARANCE, fixtureAccessCells, fixtureAtWorldPoint, fixtureBounds, fixtureCells, fixtureFacing, fixtureFacingStep, fixtureFootprint, fixtureFrontClearance, fixtureProjectionBoxes, fixturesOverlap, fixtureStandingSpot, cellKey, getFixtureType, isFixturePosition, migrateFixtureEntry, planRegisterQueue, snapFixturePosition, validateFixtureLayout, fixtureInteractionDistance } from "../js/logic/FixtureLayout.js";
 import { FixturePlacement } from "../js/logic/FixturePlacement.js";
 import { FixturePlacementGrid } from "../js/logic/FixturePlacementGrid.js";
 import { PAD } from "../js/input/GamepadInput.js";
@@ -1276,6 +1276,53 @@ test("fixtures can sit between floor squares in eighth-of-a-tile steps", () => {
   assert.match(validateFixtureLayout(overlapping, createRoom({ expanded: true })).reason, /cannot overlap/);
   const touching = [...layout, { id: "shelf_2", type: "shelf_budget_2x2", gx: 18.5, gy: 4.25 }];
   assert.equal(validateFixtureLayout(touching, createRoom({ expanded: true })).valid, true);
+});
+
+test("all current shelves permit touching backs without allowing blocked fronts", () => {
+  for (const { id: type, kind } of Object.values(FIXTURE_TYPES)) {
+    if (kind !== "shelf") continue;
+    for (const rotation of [0, 1, 2, 3]) {
+      const first = { id: "first", type, gx: 16, gy: 5, rotation };
+      const second = { ...first, id: "second", rotation: (rotation + 2) % 4 };
+      const a = fixtureBounds(first);
+      const b = fixtureBounds(second);
+      if (rotation === 0) second.gy += a.top - b.bottom;
+      if (rotation === 1) second.gx += a.right - b.left;
+      if (rotation === 2) second.gy += a.bottom - b.top;
+      if (rotation === 3) second.gx += a.left - b.right;
+      assert.equal(fixturesOverlap(first, second), false, `${type}, facing ${rotation}: backs touch`);
+      const sameFacing = { ...second, rotation };
+      assert.equal(fixturesOverlap(first, sameFacing), true, `${type}: keep the front accessible`);
+    }
+  }
+  const upper = { id: "upper", type: "shelf_budget_2x2", gx: 17, gy: 4.25, rotation: 2 };
+  const lower = { id: "lower", type: upper.type, gx: 17, gy: 5, rotation: 0 };
+  const result = validateFixtureLayout([upper, lower, ...STARTING_FIXTURES.filter((f) => f.type === "register_basic")],
+    createRoom({ expanded: true }));
+  assert.equal(result.valid, true, result.reason);
+  assert.ok(result.accessCells.get("upper").length && result.accessCells.get("lower").length);
+});
+
+test("pictured back-to-back shelves may overlap upright artwork at half-tile foot separation", () => {
+  const types = Object.values(FIXTURE_TYPES).filter((spec) => spec.kind === "shelf").map((spec) => spec.id);
+  const options = createRoom({ expanded: true });
+  const register = STARTING_FIXTURES.find((f) => f.type === "register_basic");
+  for (const upperType of types) {
+    for (const lowerType of types) {
+      const upper = { id: "upper", type: upperType, gx: 17, gy: 4.25, rotation: 2 };
+      const lower = { id: "lower", type: lowerType, gx: 17, gy: 4.75, rotation: 0 };
+      assert.ok(fixtureBounds(lower).top < fixtureBounds(upper).bottom, "upright pictures overlap");
+      for (const pair of [[upper, lower], [lower, upper]]) {
+        const result = validateFixtureLayout([register, ...pair], options);
+        assert.equal(result.valid, true, `${upperType}/${lowerType}: ${result.reason}`);
+        assert.ok(result.accessCells.get("upper").length && result.accessCells.get("lower").length);
+      }
+      assert.equal(fixturesOverlap(upper, { ...lower, gy: 4.625 }), true, "feet cannot overlap");
+      assert.equal(fixturesOverlap(upper, { ...lower, rotation: 2 }), true, "same-facing fronts stay clear");
+      assert.equal(fixturesOverlap({ ...upper, rotation: 0 }, { ...lower, rotation: 2 }), true,
+        "front-to-front shelves still need their aisle");
+    }
+  }
 });
 
 test("a shelf facing down can push back into the wall until its feet line up with every other shelf's", () => {

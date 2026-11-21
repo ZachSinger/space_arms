@@ -7,6 +7,7 @@ import "../../styles/windows/shelf-stocking.css";
 import "../../styles/space_dealer_window.css";
 import "../../styles/windows/hud.css";
 import "../../styles/windows/settings.css";
+import "../../styles/windows/pause.css";
 import "../../styles/windows/checkout.css";
 import "../../styles/windows/contracts.css";
 import "../../styles/windows/employee.css";
@@ -22,6 +23,7 @@ import { BootScene } from "./boot.js";
 import { ShelfLabScene } from "./shelfLab.js";
 import { CrateLabScene } from "./crateLab.js";
 import { watchKeyboardAndMouse } from "../input/InputDevice.js";
+import { installGameCursor } from "../logic/GameCursor.js";
 import {
   DESIGN_HEIGHT,
   DESIGN_WIDTH,
@@ -32,6 +34,8 @@ import {
 
 // Touching the keyboard or mouse switches on-screen prompts back from controller buttons.
 watchKeyboardAndMouse();
+const removeGameCursor = installGameCursor();
+window.addEventListener("beforeunload", removeGameCursor, { once: true });
 
 const gameContainer = document.getElementById("game-container");
 let game;

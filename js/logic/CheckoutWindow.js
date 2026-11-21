@@ -174,7 +174,7 @@ export class CheckoutWindow {
     if (this.paymentStage === "change") {
       if (event.key === " ") {
         event.preventDefault();
-        this.handOverChange();
+        this.handOverChange("keyboard");
       }
       return;
     }
@@ -197,6 +197,7 @@ export class CheckoutWindow {
     this.cart = null;
     this.onComplete = null;
     this.onWrongChange = null;
+    this.onCashAttempt = null;
     this.onChangeFailed = null;
     this.cashPayment = null;
     this.chitPayment = null;
@@ -277,20 +278,21 @@ export class CheckoutWindow {
    * @param {() => void} onComplete - fired when payment and change are correct
    * @param {{ cash?: boolean, exact?: boolean, currency?: string, chitCode?: string,
    *   paymentType?: string, onWrongChange?: () => void, onChangeFailed?: () => void,
-   *   onChitFailed?: () => void }} [options]
+   *   onChitFailed?: () => void, onCashAttempt?: (attempt: object) => void }} [options]
    *   exact: the customer pays the exact cash amount; rolled here if not given
    *   onChangeFailed: the player handed over wrong change too many times; the sale is lost
    *   onChitFailed: the player pressed a wrong Chit key too many times; the sale is lost
    */
   openForCustomer(cart, onComplete, {
     cash = true, exact = null, currency = "credits", chitCode, paymentType, onWrongChange = null,
-    onChangeFailed = null, onChitFailed = null,
+    onChangeFailed = null, onChitFailed = null, onCashAttempt = null,
   } = {}) {
     this.mode = "checkout";
     this.stopChitTimer();
     this.cart = cart;
     this.onComplete = onComplete;
     this.onWrongChange = onWrongChange;
+    this.onCashAttempt = onCashAttempt;
     this.onChangeFailed = onChangeFailed;
     this.onChitFailed = onChitFailed;
     this.chitMistakes = 0;
@@ -549,9 +551,15 @@ export class CheckoutWindow {
           playKeypadClick();
           this.refreshCash();
         };
-        button.addEventListener("click", () => adjust(1));
-        // Keep focus off drawer buttons, or Space would also press the last one clicked.
-        button.addEventListener("mousedown", (event) => event.preventDefault());
+        button.addEventListener("mousedown", (event) => {
+          if (event.button === 0) adjust(1);
+          // Keep focus off drawer buttons, or Space would also press the last one clicked.
+          event.preventDefault();
+        });
+        // Preserve keyboard activation; mouse clicks have already been counted on mousedown.
+        button.addEventListener("click", (event) => {
+          if (event.detail === 0) adjust(1);
+        });
         button.addEventListener("contextmenu", (event) => {
           event.preventDefault();
           adjust(-1);
@@ -561,7 +569,7 @@ export class CheckoutWindow {
       this.bodyElement.querySelector("#checkout-cash").addEventListener("pad-alt", (event) => {
         if (this.paymentStage !== "change") return;
         event.preventDefault();
-        this.handOverChange();
+        this.handOverChange("controller");
       });
     }
   }
@@ -846,9 +854,22 @@ export class CheckoutWindow {
       : "No change selected.";
   }
 
-  handOverChange() {
+  handOverChange(input = "button") {
     if (this.paymentStage !== "change") return;
     const result = this.cashPayment.handOver();
+    this.onCashAttempt?.({
+      input,
+      currency: this.cashPayment.currency,
+      totalUnits: this.cashPayment.totalUnits,
+      tenderUnits: this.cashPayment.tenderUnits,
+      dueUnits: this.cashPayment.changeDueUnits,
+      selectedUnits: this.cashPayment.changeUnits,
+      displayedSelected: this.bodyElement.querySelector("#checkout-change-selected").textContent,
+      pieces: [...this.cashPayment.change],
+      mouseHeld: this.isScanning,
+      accepted: result.accepted,
+      mistakes: this.cashPayment.mistakes,
+    });
     if (result.accepted) {
       this.paymentStage = "complete";
       playSaleComplete();

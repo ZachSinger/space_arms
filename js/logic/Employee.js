@@ -24,15 +24,22 @@ const WALK_BODY = { width: PLAYER_BODY_WIDTH, height: PLAYER_BODY_HEIGHT, avoidS
 export const REGISTER_SERVICE_MS_PER_ITEM = 5000;
 // Bending down for a piece of trash, and dropping it in the trashcan, at cleaning Level 1.
 export const TRASH_HANDLING_MS = 600;
+// Provisional Level 1 pause for each individual item placed on a shelf.
+export const STOCKING_MS_PER_ITEM = 1000;
 const CLEANING_WALK_STATES = Object.freeze(["TO_LITTER", "TO_LITTER_BIN"]);
 const CLEANING_ACTION_STATES = Object.freeze(["PICKING_UP_LITTER", "BINNING_LITTER"]);
 
 export class Employee {
-  constructor(employeeData, store) {
+  constructor(employeeData, store, {
+    exitPoint = null, exitDoor = null, getClosingCustomers = () => [],
+  } = {}) {
     if (!store || typeof store.findPath !== "function") {
       throw new Error("Employee requires a store interface with findPath.");
     }
     this.store = store;
+    this.exitPoint = exitPoint;
+    this.exitDoor = exitDoor;
+    this.getClosingCustomers = getClosingCustomers;
     this.data = employeeData;
     this.state = "IDLE";
     this.currentJob = null;
@@ -40,6 +47,8 @@ export class Employee {
     this.destination = null;
     this.registerServiceRemainingMs = 0;
     this.cleaningActionRemainingMs = 0;
+    this.stockingRemainingMs = 0;
+    this.stockingUnitsRemaining = 0;
     // After finding no reachable trash or trashcan, wait this long before looking again.
     this.cleaningCheckInMs = 0;
     this.path = [];
@@ -59,6 +68,18 @@ export class Employee {
   update(delta = 0) {
     if (this.isDestroyed) return;
     this.cleaningCheckInMs -= delta;
+    if (this.state === "WAITING_EXIT") {
+      this.retryInMs -= delta;
+      if (this.retryInMs <= 0) this.walkOut();
+      this.updateFacing();
+      return;
+    }
+    if (this.state === "WAITING_REGISTER") {
+      this.retryInMs -= delta;
+      if (this.retryInMs <= 0) this.finishClosingRegisterWork();
+      this.updateFacing();
+      return;
+    }
     if (this.state === "WAITING_CRATE_RETURN") {
       this.retryInMs -= delta;
       if (this.retryInMs <= 0) this.returnCrate();
@@ -68,27 +89,20 @@ export class Employee {
     if (this.state === "IDLE" || this.state === "ON_BREAK") {
       this.retryInMs -= delta;
       if (this.clockOutRequested) {
-        if (this.jobPriorities.includes("register") &&
-          this.store.checkoutSystem.anyRegisterLineWaiting() && this.retryInMs <= 0) {
-          this.startRegisterJob();
-        }
-        this.updateFacing();
+        this.finishClosingRegisterWork();
         return;
       }
       if (this.retryInMs <= 0) this.startNextTask();
     } else if (this.state === "TO_BREAKROOM") {
       this.retryInMs -= delta;
       if (this.retryInMs <= 0) {
-        if (this.clockOutRequested) {
-          if (this.jobPriorities.includes("register")) this.startRegisterJob();
-          if (this.state === "TO_BREAKROOM") this.retryInMs = BREAK_CHECK_MS;
-        } else {
-          this.startNextTask();
-        }
+        this.startNextTask();
       }
     }
     if (this.state === "SERVING_REGISTER") {
       this.updateRegisterService(delta);
+    } else if (this.state === "STOCKING_SHELF") {
+      this.updateStocking(delta);
     } else if (CLEANING_ACTION_STATES.includes(this.state)) {
       this.updateCleaningAction(delta);
     } else if (this.state === "TO_LITTER" && !this.isStillAfterTrash()) {
@@ -96,11 +110,14 @@ export class Employee {
       this.finishTask();
     } else if ([
       "TO_SHELF", "TO_CRATE", "TO_RETURN_CRATE", "TO_TRASHCAN",
-      "TO_REGISTER", "TO_BREAKROOM", ...CLEANING_WALK_STATES,
+      "TO_REGISTER", "TO_BREAKROOM", "TO_CLOSING_REGISTER", "TO_EXIT", ...CLEANING_WALK_STATES,
     ].includes(this.state)) {
       if (["TO_SHELF", "TO_RETURN_CRATE", "TO_TRASHCAN"].includes(this.state) &&
         this.currentJob.crate.isCarried) {
         this.currentJob.crate.followCarrier(this.sprite, 0, EMPLOYEE_CRATE_HOLD_OFFSET);
+      }
+      if (this.state === "TO_EXIT" && this.exitDoor?.door.isNear(this.sprite)) {
+        this.exitDoor.letIn(this.sprite);
       }
       this.followPath(delta);
       if (["TO_SHELF", "TO_RETURN_CRATE", "TO_TRASHCAN"].includes(this.state) &&
@@ -112,6 +129,10 @@ export class Employee {
   }
 
   startNextTask() {
+    if (this.clockOutRequested) {
+      this.finishClosingRegisterWork();
+      return;
+    }
     for (const jobId of this.jobPriorities) {
       if (jobId === "register") {
         if (this.findRegisterJob()) {
@@ -237,7 +258,7 @@ export class Employee {
 
   walkTo(point, nextState) {
     const from = this.sprite.body.center ?? this.sprite;
-    const path = this.store.findPath(from.x, from.y, point.x, point.y, WALK_BODY);
+    const path = this.store.findPath(from.x, from.y, point.x, point.y, this.walkBody());
     return this.startPath(point, path, nextState);
   }
 
@@ -327,10 +348,10 @@ export class Employee {
     return false;
   }
 
-  // False once the player (or anyone) has taken the piece, or the store is closing.
+  // False once the player (or anyone) has taken the claimed piece.
   isStillAfterTrash() {
     const trash = this.currentJob?.trash;
-    return Boolean(trash && !this.clockOutRequested && this.store.cleaning?.isClaimedBy(trash, this));
+    return Boolean(trash && this.store.cleaning?.isClaimedBy(trash, this));
   }
 
   beginCleaningAction(nextState) {
@@ -426,7 +447,7 @@ export class Employee {
 
   startPath(point, path, nextState) {
     if (path === null) {
-      this.currentJob = null;
+      if (!this.currentJob?.crate?.isCarried) this.currentJob = null;
       this.state = this.state === "ON_BREAK" ? "ON_BREAK" : "IDLE";
       this.retryInMs = this.state === "ON_BREAK" ? BREAK_CHECK_MS : JOB_RETRY_MS;
       this.sprite.body.setVelocity(0, 0);
@@ -445,7 +466,7 @@ export class Employee {
     if (!this.store?.findPath) throw new Error("Employee requires a store route interface.");
     return new Mover(this, {
       findPath: (fromX, fromY, toX, toY) =>
-        this.store.findPath(fromX, fromY, toX, toY, WALK_BODY),
+        this.store.findPath(fromX, fromY, toX, toY, this.walkBody()),
       canFindPath: () => Boolean(this.store.findPath),
       getSpeed: () => this.getWalkSpeed(),
       replanIntervalMs: 200,
@@ -471,6 +492,10 @@ export class Employee {
     return this.mover;
   }
 
+  walkBody() {
+    return this.state === "TO_EXIT" ? { ...WALK_BODY, avoidStoreDoor: false } : WALK_BODY;
+  }
+
   getWalkSpeed() {
     const jobId = ["TO_SHELF", "TO_CRATE", "TO_RETURN_CRATE", "TO_TRASHCAN"].includes(this.state)
       ? "stock_shelves"
@@ -486,7 +511,13 @@ export class Employee {
   }
 
   arriveAtDestination() {
-    if (this.state === "TO_BREAKROOM") {
+    if (this.state === "TO_EXIT") {
+      this.destroy();
+    } else if (this.state === "TO_CLOSING_REGISTER") {
+      this.state = "WAITING_REGISTER";
+      this.destination = null;
+      this.retryInMs = 0;
+    } else if (this.state === "TO_BREAKROOM") {
       this.sprite.setVisible(false);
       this.state = "ON_BREAK";
       this.destination = null;
@@ -530,15 +561,33 @@ export class Employee {
       return;
     }
 
-    transferItems(crate, shelf, itemId, quantity, {
-      destinationEntry: placement,
-      eventBus: this.store.eventBus,
-      sourceName: "loading-pad",
-      destinationName: "shelf",
-    });
-    this.store.refreshShelfStockDisplay(shelf);
-    this.store.gameState.shop.changed();
+    this.sprite.body.setVelocity(0, 0);
+    this.path = [];
+    this.destination = null;
+    this.state = "STOCKING_SHELF";
+    this.stockingUnitsRemaining = quantity;
+    this.stockingRemainingMs = STOCKING_MS_PER_ITEM /
+      getEmployeeJobSpeed(this.data.skillLevels, "stock_shelves");
+  }
 
+  updateStocking(delta) {
+    const { crate, shelf, placement, itemId } = this.currentJob;
+    this.stockingRemainingMs -= delta;
+    while (this.stockingRemainingMs <= 0 && this.stockingUnitsRemaining > 0) {
+      const { moved } = transferItems(crate, shelf, itemId, 1, {
+        destinationEntry: placement,
+        eventBus: this.store.eventBus,
+        sourceName: "loading-pad",
+        destinationName: "shelf",
+      });
+      if (moved === 0) break;
+      this.stockingUnitsRemaining -= moved;
+      this.store.refreshShelfStockDisplay(shelf);
+      this.store.gameState.shop.changed();
+      this.stockingRemainingMs += STOCKING_MS_PER_ITEM /
+        getEmployeeJobSpeed(this.data.skillLevels, "stock_shelves");
+    }
+    if (this.stockingUnitsRemaining > 0 && this.stockingRemainingMs > 0) return;
     if (crate.quantity <= 0) {
       if (!this.walkToTrashcan()) this.returnCrate();
       return;
@@ -696,16 +745,53 @@ export class Employee {
     this.currentJob = null;
     this.registerServiceRemainingMs = 0;
     this.cleaningActionRemainingMs = 0;
+    this.stockingRemainingMs = 0;
+    this.stockingUnitsRemaining = 0;
     this.state = "IDLE";
     this.retryInMs = 0;
+    if (this.clockOutRequested) this.finishClosingRegisterWork();
   }
 
   requestClockOut() {
+    if (this.isDestroyed || this.clockOutRequested) return;
     this.clockOutRequested = true;
+    if (!this.currentJob) this.finishClosingRegisterWork();
+  }
+
+  finishClosingRegisterWork() {
+    if (this.startRegisterJob()) return;
+    const customersStillShopping = this.getClosingCustomers().some(
+      (customer) => !customer.isDestroyed && customer.state !== "LEAVING",
+    );
+    if (!this.store.checkoutSystem.anyRegisterLineWaiting() && !customersStillShopping) {
+      this.walkOut();
+      return;
+    }
+    this.sprite.setVisible(true);
+    this.sprite.body.setVelocity(0, 0);
+    const position = this.sprite.body.center ?? this.sprite;
+    const area = this.store.areas.areaAt?.(position.x, position.y) ?? areaAt(position.y);
+    // Wait on the sales floor for shoppers still inside, not hidden on a backroom break.
+    if (area !== AREA.SHOP &&
+      this.walkTo(this.store.areas.arrivalIn(AREA.SHOP), "TO_CLOSING_REGISTER")) return;
+    this.state = "WAITING_REGISTER";
+    this.destination = null;
+    this.path = [];
+    this.retryInMs = BREAK_CHECK_MS;
+  }
+
+  walkOut() {
+    if (!this.exitPoint) throw new Error("Employee requires a public exit point to clock out.");
+    this.state = "TO_EXIT";
+    if (!this.walkTo(this.exitPoint, "TO_EXIT")) {
+      this.state = "WAITING_EXIT";
+      this.retryInMs = JOB_RETRY_MS;
+      this.sprite.setVisible(true);
+    }
   }
 
   isReadyToClockOut() {
-    return this.state === "IDLE" || this.state === "ON_BREAK";
+    return this.isDestroyed;
   }
 
   // Walks in the direction of travel, or holds the standing pose in the last facing.
@@ -724,7 +810,7 @@ export class Employee {
   }
 
   isCarryingCrate() {
-    return ["TO_SHELF", "TO_RETURN_CRATE", "TO_TRASHCAN", "WAITING_CRATE_RETURN"].includes(this.state) &&
+    return ["TO_SHELF", "STOCKING_SHELF", "TO_RETURN_CRATE", "TO_TRASHCAN", "WAITING_CRATE_RETURN"].includes(this.state) &&
       Boolean(this.currentJob?.crate.isCarried);
   }
 

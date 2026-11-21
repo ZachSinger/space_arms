@@ -26,7 +26,7 @@ test("the pulse rests at the start of each beat and peaks halfway through", () =
 test("the outline follows the shelf's turned body box and disappears once the crate is put down", () => {
   const strokes = [];
   const graphics = {
-    setDepth() { return this; },
+    setDepth(depth) { this.depth = depth; return this; },
     setVisible(visible) { this.visible = visible; return this; },
     clear() { strokes.length = 0; return this; },
     lineStyle(width, color) { this.color = color; return this; },
@@ -37,6 +37,7 @@ test("the outline follows the shelf's turned body box and disappears once the cr
   fixture.rotation = 1; // turned sideways: 1 tile wide, 2 tall
   const scene = { add: { graphics: () => graphics }, crateSystem: { getStockableCrates: () => stockable } };
   const highlight = new ShelfAttentionHighlight(scene, fixture);
+  assert.ok(graphics.depth > 20000, "the outline draws above people, carried crates, and world markers");
   highlight.update(0);
   assert.equal(graphics.visible, true);
   const inner = strokes.at(-1);

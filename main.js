@@ -123,6 +123,7 @@ const pendingFileWrites = new Set();
 // Serialize writes so two saves (or two captures) never interleave.
 let saveQueue = Promise.resolve();
 let debugQueue = Promise.resolve();
+let developmentServer = null;
 // One debug folder per app run, created on the first capture.
 let debugSession = null;
 
@@ -154,6 +155,12 @@ const createWindow = () => {
 ipcMain.handle("display:get-settings", (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   return getDisplaySettings(win);
+});
+
+ipcMain.handle("app:quit", async () => {
+  await Promise.all([...pendingFileWrites]);
+  app.quit();
+  return true;
 });
 
 ipcMain.handle("display:set-resolution", (event, resolution) => {
@@ -215,13 +222,31 @@ ipcMain.handle("display:set-mode", (event, mode) => {
   return getDisplaySettings(win);
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  if (app.isPackaged === false) {
+    const { createServer } = await import("vite");
+    developmentServer = await createServer({
+      server: { port: 5173, strictPort: true },
+    });
+    await developmentServer.listen();
+  }
+
   protocol.handle("app", serveGameFile);
   createWindow();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+}).catch((error) => {
+  console.error("Could not start the game:", error);
+  app.quit();
+});
+
+app.on("before-quit", () => {
+  if (!developmentServer) return;
+  const server = developmentServer;
+  developmentServer = null;
+  void server.close();
 });
 
 app.on("window-all-closed", () => {

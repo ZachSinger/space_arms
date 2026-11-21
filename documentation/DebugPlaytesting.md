@@ -2,11 +2,14 @@
 
 ## Starting the desktop game
 
-From the project directory, run `npm run dev`, then run `npm start` in a second
-terminal. Leave both running while playing. Restart Electron after changes to
-`main.js` or `preload.cjs`; refreshing only the renderer does not reload those files.
+From the project directory, run `npm start`. It starts the Vite development server
+and opens the desktop game. Leave it running while playing. Restart Electron after
+changes to `main.js` or `preload.cjs`; refreshing only the renderer does not reload
+those files.
 Desktop and browser saves are separate; switching to desktop does not import the
 browser's saved game.
+
+For browser-only play, run `npm run dev -- --open` in its own terminal.
 
 ## Shelf Test Room
 
@@ -37,8 +40,9 @@ someone in, and you serve them at the register as usual.
 
 ## Capturing a session
 
-Click **Debug Info** in the top HUD at any point, including while paused or
-before opening the store. Each successful click writes two numbered files:
+Click **Debug Info** in the top HUD, including before opening the store.
+If paused, choose **Resume** first: the pause menu blocks background HUD buttons.
+Each successful click writes two numbered files:
 
 - `0001-screen.png`: the entire game window, including HUD and open menus.
 - `0001-info.txt`: a readable header followed by a formatted JSON state dump.
@@ -61,8 +65,9 @@ producing a canvas-only screenshot without the menus.
 
 Gameplay is not paused or altered by capturing. The report records the state at
 the click and the screenshot's later capture timestamp; they can be a few frames
-apart. Use the existing PAUSE button first if an exact stationary comparison is
-important. Taking a capture must not close menus or cancel a shelf move.
+apart. If you pause to inspect the scene, resume before clicking Debug Info;
+captures are not exact paused-state snapshots. Taking a capture must not close
+menus or cancel a shelf move.
 
 ## What the report contains
 
@@ -122,6 +127,25 @@ and slows down. While it is still launching it cannot be picked up; once it is
 sliding, the player bumps into it and can pick it up. This applies to both item
 and fixture crates.
 
+### Shelf backs, pushing, and restocking outlines
+
+- In the Shelf Test Room, put an up-facing shelf above a down-facing shelf.
+  Their feet can sit half a tile (32 world pixels) apart: the upright pictures
+  overlap above the bases, rather than needing a gap as tall as the artwork.
+  This applies to every current shelf size, including mixed sizes. Same-facing
+  and front-to-front shelves still need their standing space; sideways backs
+  may touch without overlapping their artwork.
+- Hold a movement key against a loose crate: a small contact overlap must not stop
+  the push. Locked pad crates, walls, and the four-crate movement limit still block it.
+- Push a crate to the bottom wall, then pick it up and put it down there. Both
+  actions allow its base to touch the wall without requiring an extra gap.
+- Carry matching stock past people and floor stacks. The pulsing shelf outline
+  stays above everything in the world canvas; HUD and menu windows stay above it.
+
+The push solver treats up to two pixels of inward contact overlap as push contact.
+Its contact margin finds nearby crates only; wall checks use the actual moved base,
+and near-wall steps shorten to the available space rather than reserving that margin.
+
 Before a playtest, the assistant should give one specific question to investigate
 and a short list of capture checkpoints. Afterward, provide the session folder
 path and say which capture shows the problem. The assistant can then read those
@@ -131,6 +155,13 @@ when the assistant has access to the same filesystem.
 For an unexpected bug, click Debug Info immediately, then describe what you
 expected and what actually happened. If practical, capture again after the next
 action that changes the symptom.
+
+### Investigating a wrong-change rejection
+
+A false wrong-change rejection currently cannot be reproduced. Every handover
+records the exact selected and owed amounts, displayed amount, input, and
+`mouseHeld` in a `cash-handover` diagnostic event. If it happens, capture Debug Info
+immediately afterward so those values can be compared with the displayed result.
 
 ## First playtest: faction eligibility and the traffic snapshot
 

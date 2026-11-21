@@ -58,6 +58,21 @@ test("hands-on shelves and empty carried or dropped crates survive save validati
   assert.throws(() => validateShopSave(data, database), /shelf stack does not fit/);
 });
 
+test("old pistol market prices are halved once without changing player selling prices", () => {
+  const old = snapshot();
+  old.layoutVersion = 13;
+  old.market.prices.wpn_pis_02 = 55;
+  old.playerState.storePrices.wpn_pis_02 = 70;
+  const migrated = validateShopSave(old, database);
+  assert.equal(migrated.market.prices.wpn_pis_02, 27.5);
+  assert.equal(migrated.playerState.storePrices.wpn_pis_02, 70);
+  assert.equal(old.market.prices.wpn_pis_02, 55);
+  assert.deepEqual(validateShopSave(migrated, database), migrated);
+  const invalid = snapshot();
+  invalid.market.prices.wpn_pis_02 = 55;
+  assert.throws(() => validateShopSave(invalid, database), /invalid market price for wpn_pis_02/);
+});
+
 test("older saves keep access to heavy ammo they could already order", () => {
   const old = snapshot();
   old.layoutVersion = 12;

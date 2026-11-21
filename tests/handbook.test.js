@@ -85,6 +85,7 @@ test("the controls table uses the same labels as live action hints", () => {
   assert.match(html, /<td>Put a crate down \(hold: your whole stack\)<\/td><td>Q<\/td><td>Y<\/td>/);
   assert.match(html, /<td>Pick up a fixture to move it[^<]*<\/td><td>Hold Ctrl<\/td><td>Hold A<\/td>/);
   assert.match(html, /<td>Manager&#39;s Tablet<\/td><td>I or Tab<\/td><td>Back \/ View<\/td>/);
+  assert.match(html, /<td>Zoom \(sales floor only\)<\/td><td>Page Up \/ Page Down<\/td><td>LB \/ RB<\/td>/);
 });
 
 test("the handbook explains paid training absences, permanent skills, and on/off shift", () => {
@@ -102,8 +103,9 @@ test("the handbook explains paid training absences, permanent skills, and on/off
   assert.match(html, /On Shift &amp; Off Shift/);
   assert.match(html, /stay home and aren't paid/);
   assert.match(html, /not available/);
-  assert.match(html, /Prioritize Register/);
-  assert.match(html, /Prioritize Stocking/);
+  assert.match(html, /highest priority\s+at the top/);
+  assert.match(html, /Move up/);
+  assert.match(html, /Move down/);
   assert.match(html, /Booking new training courses is not currently available/);
   assert.doesNotMatch(html, /select TRAIN|CONFIRM TRAINING|Use <strong>UP<\/strong>/);
   assert.doesNotMatch(html, /fire|let go|LET GO|rehir|TAKE OFF|PUT ON/i);

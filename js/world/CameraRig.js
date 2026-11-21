@@ -106,6 +106,7 @@ export class CameraRig {
   }
 
   zoomBy(direction) {
+    if (this.shop.areas.playerArea !== AREA.SHOP) return;
     this.zoom = (this.zoom ?? this.shop.cameras.main.zoom) * CAMERA_ZOOM_STEP ** direction;
     this.refresh();
   }

@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { HUDController } from "../js/logic/HUDController.js";
 import { ControlMode } from "../js/input/ControlMode.js";
 import { PlayerControls } from "../js/input/PlayerControls.js";
+import { UINavigator } from "../js/logic/UINavigator.js";
 import { GAME_EVENTS } from "../js/core/Events.js";
 import { SupplierLicense } from "../js/logic/Licenses.js";
 import { ContractRenderer } from "../js/logic/ContractRenderer.js";
@@ -37,7 +37,7 @@ before(async () => {
   globalThis.Phaser = { Scene: class {} };
   const licenses = JSON.parse(await readFile(new URL("../data/Licenses.json", import.meta.url), "utf8"));
   globalThis.__progressionTestLicenses = licenses.map((data) => new SupplierLicense(data));
-  cacheDirectory = await mkdtemp(join(tmpdir(), "space-arms-manual-save-test-"));
+  cacheDirectory = await mkdtemp(join(fileURLToPath(new URL("..", import.meta.url)), ".manual-save-test-"));
   server = await createServer({
     root: fileURLToPath(new URL("..", import.meta.url)),
     configFile: false,
@@ -148,6 +148,7 @@ test("pause consumes menu, mouse and keyboard actions, leaving only resume avail
     stopImmediatePropagation() { this.blocked = true; },
     ...options,
   });
+
   for (const input of [
     event("keydown", { code: "KeyE" }),
     event("keydown", { code: "Tab" }),
@@ -172,6 +173,76 @@ test("pause consumes menu, mouse and keyboard actions, leaving only resume avail
   const normalClick = event("click");
   scene.controls.handlePausedInput(normalClick);
   assert.equal(normalClick.blocked, false);
+});
+
+test("a paused scene polls menu input without updating any world systems", () => {
+  let polls = 0;
+  const scene = Object.create(GameScene.prototype);
+  Object.assign(scene, {
+    gamePaused: true,
+    worldElapsedMs: 345,
+    controls: { handleGamepad: () => { polls += 1; } },
+  });
+  scene.update(1000, 16);
+  scene.update(9000, 32);
+  assert.equal(polls, 2);
+  assert.equal(scene.worldElapsedMs, 345);
+});
+
+test("a paused cash handover cannot take the controller away from the pause menu", (t) => {
+  const originalDocument = globalThis.document;
+  t.after(() => {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  });
+  const cash = {};
+  const menu = { hasAttribute: () => false };
+  globalThis.document = {
+    querySelector(selector) {
+      if (selector === ".cash-tender-overlay:not(.hidden)") return cash;
+      if (selector === ".retro-window.active:not(.hidden)") return menu;
+      return null;
+    },
+  };
+  assert.equal(new UINavigator().getScope(), menu);
+});
+
+test("explicit pause freezes physics, animations, tweens, timers, and resumes them", (t) => {
+  const originalDocument = globalThis.document;
+  t.after(() => {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  });
+  const calls = [];
+  const animation = { playState: "running", pause: () => calls.push("dom-pause"), play: () => calls.push("dom-resume") };
+  globalThis.document = { body: { classList: { toggle() {} } }, getAnimations: () => [animation] };
+  const scene = Object.create(GameScene.prototype);
+  const toggle = (name) => ({ setPaused: (paused) => calls.push(`${name}:${paused}`) });
+  const engine = (name) => ({
+    pause: () => calls.push(`${name}-pause`), resume: () => calls.push(`${name}-resume`),
+    pauseAll: () => calls.push(`${name}-pause`), resumeAll: () => calls.push(`${name}-resume`),
+  });
+  Object.assign(scene, {
+    gamePaused: false, time: { paused: false },
+    checkoutWindow: toggle("checkout"),
+    crateSystem: { setMotionPaused: (paused) => calls.push(`crates:${paused}`) },
+    messages: { timers: toggle("messages") },
+    controls: { cancelPresses() {} }, shelfStockingWindow: { stopHolding() {} },
+    physics: { world: engine("physics") }, anims: engine("animations"),
+    tweens: engine("tweens"), sound: engine("sound"),
+  });
+  scene.setGamePaused(true);
+  assert.equal(scene.time.paused, true);
+  scene.setGamePaused(true);
+  assert.equal(calls.filter((value) => value === "physics-pause").length, 1);
+  scene.setGamePaused(false);
+  assert.equal(scene.time.paused, false);
+  assert.deepEqual(calls, [
+    "checkout:true", "crates:true", "messages:true", "physics-pause", "animations-pause",
+    "tweens-pause", "sound-pause", "dom-pause",
+    "checkout:false", "crates:false", "messages:false", "physics-resume", "tweens-resume",
+    "animations-resume", "sound-resume", "dom-resume",
+  ]);
 });
 
 const ITEMS = [{ id: "ration", baseCost: 10 }];
@@ -666,6 +737,38 @@ test("taking an employee off shift is between shifts only, stops wages, and keep
   assert.deepEqual(restored.staff.offShift, ["tavi_stock_clerk"]);
   assert.equal(staffSystem.setOnShift("tavi_stock_clerk", true), true);
   assert.equal(staffSystem.payWages(), 50);
+});
+
+test("moving employee jobs preserves full order and saves only valid between-shift changes", () => {
+  const state = newGame();
+  state.reputation.shopLevel = 4;
+  state.hireEmployee("tavi_stock_clerk");
+  const messages = [];
+  let autosaves = 0;
+  const staffSystem = new StaffSystem({
+    gameState: state,
+    messages: { show: (message) => messages.push(message) },
+    saves: { requestAutosave: () => { autosaves += 1; } },
+  });
+  const employeeId = "tavi_stock_clerk";
+  state.staff.jobPriorities[employeeId] = ["register", "stock_shelves", "clean"];
+  staffSystem.canManage = () => false;
+  assert.equal(staffSystem.moveJob(employeeId, "clean", 1), false);
+  assert.match(messages[0], /between shifts/);
+  assert.deepEqual(state.staff.jobPriorities[employeeId], ["register", "stock_shelves", "clean"]);
+  staffSystem.canManage = () => true;
+  assert.equal(staffSystem.moveJob(employeeId, "clean", 1), true);
+  assert.deepEqual(state.staff.jobPriorities[employeeId], ["register", "clean", "stock_shelves"]);
+  assert.equal(staffSystem.moveJob(employeeId, "register", 2), true);
+  assert.deepEqual(reload(state).staff.jobPriorities[employeeId], ["clean", "stock_shelves", "register"]);
+  for (const [id, job, index] of [
+    [employeeId, "register", 2], [employeeId, "register", -1],
+    [employeeId, "clean", 3], [employeeId, "unknown", 1],
+    ["not-hired", "clean", 1], [employeeId, "clean", 0.5],
+  ]) {
+    assert.equal(staffSystem.moveJob(id, job, index), false);
+  }
+  assert.equal(autosaves, 2);
 });
 
 test("training can only be booked between shifts and trainees are paid without spawning for work", () => {

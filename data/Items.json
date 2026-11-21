@@ -155,14 +155,14 @@
   },
   {
     "id": "wpn_pis_02",
-    "boxSize": 3,
+    "boxSize": 2,
     "name": "Scrap-Iron Autopistol",
     "flavor": "A heavy, crude ballistic pistol manufactured from reclaimed ship plating. Cheap and prone to overheating.",
     "tags": ["Firearm", "Surplus", "Old", "Pistol"],
     "dimensions": { "w": 1, "h": 1 },
     "slots": 1,
     "stackSize": 2,
-    "baseCost": 50,
+    "baseCost": 25,
     "ammo": "Pistol Light Caliber",
     "license": "lic_start_surplus",
     "image": "img/Icons_Extracted/Weapons/Pistols/revolver-rusty-bandaged-grip.png"
@@ -467,7 +467,7 @@
     "dimensions": { "w": 2, "h": 1 },
     "slots": 2,
     "stackSize": 3,
-    "baseCost": 80,
+    "baseCost": 50,
     "license": "lic_start_armor_melee",
     "image": "img/Icons_Extracted/Weapons/Melee/machete-black-handle.png"
   },

@@ -8,6 +8,7 @@
 // sample. Fades scheduled against the audio clock could land entirely in the past when that
 // clock ran ahead of the page, which silently dropped short beeps like the scan.
 let sharedContext = null;
+let paused = false;
 const buffers = new Map();
 
 // Each note: wave shape, pitch, start offset, length, and its volume curve as
@@ -32,8 +33,15 @@ function getContext() {
     sharedContext = new AudioContextClass();
   }
   // Browsers start sound muted until the player clicks or presses a key.
-  if (sharedContext.state === "suspended") sharedContext.resume().catch(() => {});
+  if (!paused && sharedContext.state === "suspended") sharedContext.resume().catch(() => {});
   return sharedContext;
+}
+
+export function setSfxPaused(value) {
+  paused = value;
+  if (!sharedContext) return;
+  const operation = value ? sharedContext.suspend() : sharedContext.resume();
+  operation.catch((error) => console.error("Could not change game sound pause state:", error));
 }
 
 // Band-limited like the Web Audio oscillators, so the beeps sound the same as before.

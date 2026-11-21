@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "vite";
 import { summarizeSupplyOrder, DELIVERY_FEE } from "../js/logic/SupplyOrder.js";
@@ -26,7 +25,7 @@ class TestElement {}
 
 before(async () => {
   globalThis.Element = TestElement;
-  cacheDirectory = await mkdtemp(join(tmpdir(), "space-arms-pricing-test-"));
+  cacheDirectory = await mkdtemp(join(fileURLToPath(new URL("..", import.meta.url)), ".pricing-test-"));
   server = await createServer({
     root: fileURLToPath(new URL("..", import.meta.url)),
     configFile: false,
@@ -633,6 +632,66 @@ test("employee tab routes hiring and shift actions to the staff system", () => {
     ["shift", "tavi_stock_clerk", false],
     ["redraw"],
   ]);
+});
+
+test("employee jobs drag within one staff list and remain movable with keyboard buttons", () => {
+  const { body, scene, tablet } = createHarness();
+  const employeeId = "tavi_stock_clerk";
+  const priorities = ["register", "stock_shelves", "clean"];
+  tablet.employeeTab.gameState.staff.jobPriorities[employeeId] = priorities;
+  const moves = [];
+  scene.staffSystem.moveJob = (...args) => {
+    moves.push(args);
+    const from = priorities.indexOf(args[1]);
+    priorities.splice(from, 1);
+    priorities.splice(args[2], 0, args[1]);
+    return true;
+  };
+  tablet.employeeTab.redraw = () => {};
+  const row = (id, job) => Object.assign(new TestElement(), {
+    dataset: { employeeJobId: id, employeeJob: job },
+    getAttribute: () => "true",
+    getBoundingClientRect: () => ({ top: 10, height: 20 }),
+    closest: function(selector) { return selector === "[data-employee-job-id]" ? this : null; },
+  });
+  const event = (target, clientY = 25) => ({
+    target, clientY, prevented: false,
+    preventDefault() { this.prevented = true; },
+    dataTransfer: { setData() {} },
+  });
+  body.emit("dragstart", event(row(employeeId, "register")));
+  const over = event(row(employeeId, "clean"));
+  body.emit("dragover", over);
+  assert.equal(over.prevented, true);
+  body.emit("drop", event(row(employeeId, "clean")));
+  assert.deepEqual(priorities, ["stock_shelves", "clean", "register"]);
+  assert.deepEqual(moves[0], [employeeId, "register", 2]);
+
+  body.emit("dragstart", event(row(employeeId, "register")));
+  body.emit("drop", event(row("sera_floor_assistant", "clean")));
+  assert.equal(moves.length, 1, "a drop on another employee cannot change their jobs");
+  body.emit("dragstart", event(row(employeeId, "register")));
+  scene.staffSystem.canManage = () => false;
+  body.emit("drop", event(row(employeeId, "stock_shelves"), 12));
+  assert.equal(moves.length, 1, "starting a shift during the drag cancels the change");
+  const blocked = event(row(employeeId, "register"));
+  body.emit("dragstart", blocked);
+  assert.equal(blocked.prevented, true);
+  scene.staffSystem.canManage = () => true;
+
+  const button = Object.assign(new TestElement(), {
+    dataset: { employeePriorityId: employeeId, employeePriorityJob: "register", employeePriorityMove: "up" },
+    getAttribute: () => null,
+    closest: function(selector) { return selector === "button[data-employee-priority-id]" ? this : null; },
+  });
+  body.emit("click", { target: button });
+  assert.deepEqual(priorities, ["stock_shelves", "register", "clean"]);
+  button.dataset.employeePriorityMove = "down";
+  body.emit("click", { target: button });
+  assert.deepEqual(priorities, ["stock_shelves", "clean", "register"]);
+  button.disabled = true;
+  body.emit("click", { target: button });
+  assert.equal(moves.length, 3);
 });
 
 test("employee tab refresh preserves each column's scroll and priority focus", () => {

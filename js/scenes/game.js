@@ -55,6 +55,8 @@ import { PlayerControls } from "../input/PlayerControls.js";
 import { database } from "./boot.js"; // the exported DatabaseManager singleton
 import { installSceneTextSize } from "../logic/GameTextSize.js";
 import { gameRandom, randomSeed } from "../core/Random.js";
+import { PauseMenu } from "../logic/PauseMenu.js";
+import { setSfxPaused } from "../logic/Sfx.js";
 
 // How far below the doorway cell's center a customer's feet must be for their head to stay
 // under the top of the door opening (opening top is 24px above center, heads ~42px tall,
@@ -89,6 +91,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
+    this.gamePaused = false;
+    this.worldElapsedMs = 0;
+    this.pausedDomAnimations = [];
     gameRandom.reseed(this.seed);
     installSceneTextSize(this, Phaser);
     this.eventBus = new Events({ strict: true });
@@ -277,15 +282,43 @@ export class GameScene extends Phaser.Scene {
   // Pausing a started shift freezes the register, held buttons, and crates.
   listenForPause() {
     this.shiftClock.subscribe(({ started, isPaused }) => {
-      const paused = started && isPaused;
-      // Paused time must freeze the register too, or the player could ring up for free.
-      this.checkoutWindow.setPaused(paused);
-      if (paused) {
-        this.controls.cancelPresses();
-        this.shelfStockingWindow.stopHolding();
-      }
-      this.crateSystem.setMotionPaused(paused);
+      const paused = (started && isPaused) || Boolean(this.pauseMenu?.isOpen);
+      this.setGamePaused(paused);
+      if (started && isPaused) this.pauseMenu?.open();
     });
+  }
+
+  setGamePaused(paused, { shutdown = false } = {}) {
+    if (paused === this.gamePaused) return;
+    this.gamePaused = paused;
+    if (!shutdown) {
+      this.checkoutWindow.setPaused(paused);
+      this.crateSystem.setMotionPaused(paused);
+      this.messages.timers.setPaused(paused);
+    }
+    setSfxPaused(paused);
+    this.time.paused = paused;
+    document.body.classList.toggle("game-paused", paused);
+    if (paused) {
+      this.controls.cancelPresses();
+      this.shelfStockingWindow.stopHolding();
+      this.physics.world.pause();
+      this.anims.pauseAll();
+      this.tweens.pauseAll();
+      this.sound.pauseAll();
+      this.pausedDomAnimations = document.getAnimations().filter((animation) => animation.playState === "running");
+      this.pausedDomAnimations.forEach((animation) => animation.pause());
+    } else {
+      // Scene plugins tear themselves down before our shutdown listener runs.
+      if (!shutdown) {
+        this.physics.world.resume();
+        this.tweens.resumeAll();
+      }
+      this.anims.resumeAll();
+      this.sound.resumeAll();
+      this.pausedDomAnimations.forEach((animation) => animation.play());
+      this.pausedDomAnimations = [];
+    }
   }
 
   // Modules, controls, the tablet, debug tools, and event wiring.
@@ -318,6 +351,7 @@ export class GameScene extends Phaser.Scene {
     // Constructed after the fixtures exist: its Supply tab reads their stock immediately
     // on construction (via SupplyRenderer -> supply.restockableItems()).
     this.managerTablet = new ManagerTablet(this.windowManager, this.gameState, this);
+    this.pauseMenu = new PauseMenu(this);
     // REAL games run without the debug recorder; every call site uses debugInfo?.
     this.debugInfo = this.realMode ? null : new DebugInfo(this);
     this.reputationPenalties = new ReputationPenalties(this);
@@ -338,6 +372,7 @@ export class GameScene extends Phaser.Scene {
       this.eventBus.clear();
       this.debugInfo?.destroy();
       this.debugTools?.destroy();
+      this.pauseMenu.destroy();
       this.fixturePlacement.destroy();
       this.managerTablet.uiWindow.onClose = null;
       this.managerTablet.inventoryTab.destroy();
@@ -381,14 +416,17 @@ export class GameScene extends Phaser.Scene {
 
   update(time, delta) {
     this.controls.handleGamepad(time, delta);
+    if (this.gamePaused) return;
+    this.worldElapsedMs += delta;
     if (this.controlMode.getMode() !== CONTROL_MODES.PAUSED) this.fixturePlacement.update();
     this.debugTools?.update();
     this.crateWorld.update(delta);
-    // The front door opens only for customers: arrivals hold it open themselves, and
-    // leaving customers open it on approach. It ignores the player.
+    // Customers and employees hold the public door open on their way out.
     this.storeDoorAnimation.update(delta, [
       ...this.customers.map((customer) =>
         !customer.isDestroyed && customer.state === "LEAVING" ? customer.sprite : null),
+      ...this.employees.map((employee) =>
+        !employee.isDestroyed && employee.state === "TO_EXIT" ? employee.sprite : null),
     ]);
     this.areas.update(delta);
     // Pausing a started shift freezes time entirely: customers and arrivals included.
@@ -426,8 +464,8 @@ export class GameScene extends Phaser.Scene {
     this.interactionSystem.updateHint();
     this.crateSystem.updateCrateMarker();
     for (const fixture of this.fixtures.shelves()) {
-      fixture.stockDisplay?.update(time);
-      fixture.facingLight?.update(time);
+      fixture.stockDisplay?.update(this.worldElapsedMs);
+      fixture.facingLight?.update(this.worldElapsedMs);
     }
     this.customerFlow.refreshPool(delta);
     this.customerFlow.spawnScheduled();

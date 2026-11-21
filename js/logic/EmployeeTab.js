@@ -13,6 +13,7 @@ export class EmployeeTab {
     this.gameState = gameState;
     this.panel = null;
     this.renderPanel = null;
+    this.draggedJob = null;
   }
 
   draw() {
@@ -40,6 +41,10 @@ export class EmployeeTab {
     this.panel = panel;
     this.renderPanel = renderPanel;
     eventRoot.addEventListener("click", (event) => this.handleClick(event));
+    eventRoot.addEventListener("dragstart", (event) => this.handleDragStart(event));
+    eventRoot.addEventListener("dragover", (event) => this.handleDragOver(event));
+    eventRoot.addEventListener("drop", (event) => this.handleDrop(event));
+    eventRoot.addEventListener("dragend", () => { this.draggedJob = null; });
   }
 
   redraw() {
@@ -50,6 +55,7 @@ export class EmployeeTab {
       ? {
         employeeId: activeElement.dataset.employeePriorityId,
         jobId: activeElement.dataset.employeePriorityJob,
+        move: activeElement.dataset.employeePriorityMove,
       }
       : null;
     const scrollPositions = Array.from(
@@ -67,9 +73,14 @@ export class EmployeeTab {
     if (focusedPriority) {
       const replacement = Array.from(this.panel.querySelectorAll(EMPLOYEE_PRIORITY_SELECTOR)).find(
         (button) => button.dataset.employeePriorityId === focusedPriority.employeeId &&
-          button.dataset.employeePriorityJob === focusedPriority.jobId,
+          button.dataset.employeePriorityJob === focusedPriority.jobId && !button.disabled,
       );
-      replacement?.focus({ preventScroll: true });
+      const sameMove = Array.from(this.panel.querySelectorAll(EMPLOYEE_PRIORITY_SELECTOR)).find(
+        (button) => button.dataset.employeePriorityId === focusedPriority.employeeId &&
+          button.dataset.employeePriorityJob === focusedPriority.jobId &&
+          button.dataset.employeePriorityMove === focusedPriority.move && !button.disabled,
+      );
+      (sameMove ?? replacement)?.focus({ preventScroll: true });
     }
   }
 
@@ -95,10 +106,64 @@ export class EmployeeTab {
 
     const priorityButton = event.target.closest(EMPLOYEE_PRIORITY_SELECTOR);
     if (!priorityButton || priorityButton.getAttribute("aria-pressed") === "true") return;
+    if (priorityButton.disabled) return;
+    if (priorityButton.dataset.employeePriorityMove) {
+      const employeeId = priorityButton.dataset.employeePriorityId;
+      const jobId = priorityButton.dataset.employeePriorityJob;
+      const index = this.gameState.staff.jobPriorities[employeeId].indexOf(jobId);
+      this.scene.staffSystem.moveJob(
+        employeeId, jobId, index + (priorityButton.dataset.employeePriorityMove === "up" ? -1 : 1),
+      );
+      this.redraw();
+      return;
+    }
     const changed = this.scene.staffSystem.prioritizeJob(
       priorityButton.dataset.employeePriorityId,
       priorityButton.dataset.employeePriorityJob,
     );
     if (!changed) this.redraw();
+  }
+
+  jobRow(event) {
+    if (!(event.target instanceof Element) || !this.panel.contains(event.target)) return null;
+    return event.target.closest("[data-employee-job-id]");
+  }
+
+  handleDragStart(event) {
+    this.draggedJob = null;
+    const row = this.jobRow(event);
+    if (!row || !this.scene.staffSystem.canManage() || row.getAttribute("draggable") !== "true") {
+      event.preventDefault();
+      return;
+    }
+    this.draggedJob = { employeeId: row.dataset.employeeJobId, jobId: row.dataset.employeeJob };
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", row.dataset.employeeJob);
+  }
+
+  handleDragOver(event) {
+    const row = this.jobRow(event);
+    if (!row || !this.draggedJob || row.dataset.employeeJobId !== this.draggedJob.employeeId ||
+      !this.scene.staffSystem.canManage()) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  }
+
+  handleDrop(event) {
+    const dragged = this.draggedJob;
+    this.draggedJob = null;
+    const row = this.jobRow(event);
+    if (!row || !dragged || row.dataset.employeeJobId !== dragged.employeeId ||
+      !this.scene.staffSystem.canManage()) return;
+    event.preventDefault();
+    const priorities = this.gameState.staff.jobPriorities[dragged.employeeId];
+    const fromIndex = priorities.indexOf(dragged.jobId);
+    const rowIndex = priorities.indexOf(row.dataset.employeeJob);
+    const bounds = row.getBoundingClientRect();
+    const insertion = rowIndex + (event.clientY >= bounds.top + bounds.height / 2 ? 1 : 0);
+    this.scene.staffSystem.moveJob(
+      dragged.employeeId, dragged.jobId, insertion - (fromIndex < insertion ? 1 : 0),
+    );
+    this.redraw();
   }
 }

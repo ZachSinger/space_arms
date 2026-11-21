@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld("desktopApi", {
   setDisplayMode: (mode) => ipcRenderer.invoke("display:set-mode", mode),
   saveGame: (payload) => ipcRenderer.invoke("save:write", payload),
   loadGame: () => ipcRenderer.invoke("save:read"),
+  quitGame: () => ipcRenderer.invoke("app:quit"),
   captureDebugInfo: (snapshot) => ipcRenderer.invoke("debug:capture", snapshot),
   openDebugFolder: () => ipcRenderer.invoke("debug:open-folder"),
 });

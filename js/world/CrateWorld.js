@@ -180,6 +180,8 @@ export class CrateWorld {
     if (left < bounds.left || top < bounds.top || left + width > bounds.right || top + height > bounds.bottom) {
       return true;
     }
-    return this.shop.physics.overlapRect(left, top, width, height, false, true).some((body) => body.enable);
+    return this.shop.physics.overlapRect(left, top, width, height, false, true).some((body) =>
+      body.enable && left < body.right && left + width > body.left &&
+      top < body.bottom && top + height > body.top);
   }
 }

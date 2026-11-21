@@ -56,7 +56,7 @@ export const CONTROL_HELP = Object.freeze([
   controlHelp("Manager's Tablet", controlLabel("tablet", "keyboard"), controlLabel("tablet", "gamepad")),
   controlHelp("Pause or resume the shift", "P or Esc (when not paused, Esc closes an open window first)",
     "Start, then PAUSE; Start to resume"),
-  controlHelp("Zoom", "Page Up / Page Down", "LB / RB"),
+  controlHelp("Zoom (sales floor only)", "Page Up / Page Down", "LB / RB"),
   controlHelp("Move a fixture while placing it", "Mouse", "Right stick"),
   controlHelp("Turn a fixture or shelf item", controlLabel("rotate", "keyboard"), controlLabel("rotate", "gamepad")),
   controlHelp("Cancel fixture placement", "Esc or right-click", "X"),

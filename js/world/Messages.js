@@ -5,6 +5,7 @@
 // (a short warning, or the current button hint when no warning is showing), text that
 // floats up in the map, and the save/load error window.
 import { UIWindow } from "../logic/UIWindow.js";
+import { PausableTimers } from "../core/Clock.js";
 
 export const SHOP_MESSAGE_COLOR = "#f59e0b";
 const HINT_COLOR = "#38bdf8";
@@ -21,6 +22,7 @@ export class Messages {
     this.scene = scene;
     this.element = element;
     this.timeout = null;
+    this.timers = new PausableTimers();
     this.warningShowing = false;
     this.hint = "";
     this.hintSet = false;
@@ -36,19 +38,19 @@ export class Messages {
    */
   show(message, color = SHOP_MESSAGE_COLOR) {
     const { element } = this;
-    clearTimeout(this.timeout);
+    this.timeout?.cancel();
     this.warningShowing = true;
     element.textContent = message;
     element.style.setProperty("--game-message-color", color);
     element.classList.remove("hidden", "fading", "context-message");
-    this.timeout = setTimeout(() => {
+    this.timeout = this.timers.after(MESSAGE_SHOWN_MS, () => {
       element.classList.add("fading");
-      this.timeout = setTimeout(() => {
+      this.timeout = this.timers.after(MESSAGE_FADE_MS, () => {
         this.timeout = null;
         this.warningShowing = false;
         this.renderHint();
-      }, MESSAGE_FADE_MS);
-    }, MESSAGE_SHOWN_MS);
+      });
+    });
   }
 
   setHint(text) {
@@ -131,7 +133,7 @@ export class Messages {
   }
 
   destroy() {
-    clearTimeout(this.timeout);
+    this.timers.clear();
     this.timeout = null;
     this.element.classList.add("hidden");
   }

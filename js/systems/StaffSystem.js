@@ -113,6 +113,17 @@ export class StaffSystem {
     return true;
   }
 
+  moveJob(employeeId, jobId, targetIndex) {
+    const { shop } = this;
+    if (!this.canManage()) {
+      shop.messages.show("Staff job priorities can only be changed between shifts.");
+      return false;
+    }
+    if (!this.staff.moveJob(employeeId, jobId, targetIndex)) return false;
+    shop.saves.requestAutosave();
+    return true;
+  }
+
   // Wages are paid up front, even into the red (bible Step 32), one receipt line each.
   payWages() {
     let total = 0;
@@ -130,7 +141,11 @@ export class StaffSystem {
 
   spawnWorking() {
     this.shop.employees = this.staff.working()
-      .map((employeeId) => new Employee(this.staff.profile(employeeId), this.shop.employeeStore));
+      .map((employeeId) => new Employee(this.staff.profile(employeeId), this.shop.employeeStore, {
+        exitPoint: this.shop.exitPoint,
+        exitDoor: this.shop.storeDoorAnimation,
+        getClosingCustomers: () => this.shop.customers,
+      }));
   }
 
   clear() {

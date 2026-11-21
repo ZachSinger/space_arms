@@ -34,6 +34,8 @@ export const SHELF_FEET_BELOW_WALL = 1 / 4;
 // Shelf art never reaches outside the shelf's own space, so facing shelves this close apart
 // still never hide each other.
 export const FIXTURE_FRONT_CLEARANCE = 1 / 2;
+// Upright shelf backs can share projected artwork, but their floor bases need this depth.
+const SHELF_BACK_TO_BACK_DEPTH = 1 / 2;
 // px, the feet box every walker (customers, staff, the player) must fit through.
 const WALKING_BODY_WIDTH = Math.max(PLAYER_BODY_WIDTH, CUSTOMER_COLLISION_WIDTH);
 const WALKING_BODY_HEIGHT = Math.max(PLAYER_BODY_HEIGHT, CUSTOMER_COLLISION_HEIGHT);
@@ -212,9 +214,20 @@ export function rectanglesOverlap(a, b) {
 export function fixturesOverlap(a, b) {
   const first = fixtureBounds(a);
   const second = fixtureBounds(b);
-  return rectanglesOverlap(first, second) ||
+  return (rectanglesOverlap(first, second) && !shelfBacksFit(a, b, first, second)) ||
     fixtureProjectionBoxes(a).some((projection) => rectanglesOverlap(projection, second)) ||
     fixtureProjectionBoxes(b).some((projection) => rectanglesOverlap(first, projection));
+}
+
+function shelfBacksFit(a, b, first, second) {
+  if (getFixtureType(a.type).kind !== "shelf" || getFixtureType(b.type).kind !== "shelf") return false;
+  const down = fixtureFacing(a) === "down" ? first : fixtureFacing(b) === "down" ? second : null;
+  const up = fixtureFacing(a) === "up" ? first : fixtureFacing(b) === "up" ? second : null;
+  if (!down || !up || down.bottom < up.bottom) return false;
+  // Unlike spun art, both upright pictures rise above their feet. Only outward-facing
+  // backs share that height; fronts and all other fixture pairs keep their full body box.
+  const base = (bounds) => ({ ...bounds, top: Math.max(bounds.top, bounds.bottom - SHELF_BACK_TO_BACK_DEPTH) });
+  return !rectanglesOverlap(base(down), base(up));
 }
 
 // The range of floor squares the fixture covers by more than a sliver.
