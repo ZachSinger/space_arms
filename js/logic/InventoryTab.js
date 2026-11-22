@@ -117,6 +117,7 @@ export class InventoryTab {
     if (entry && profit) {
       profit.outerHTML = InventoryRenderer.generateProfitHTML(entry.storePrice, entry.unitCost);
     }
+    this.refreshMarketPinButton(itemId);
   }
 
   /** @param {KeyboardEvent} event */
@@ -151,12 +152,37 @@ export class InventoryTab {
    * @param {"decrease" | "increase" | "market"} action
    */
   handlePriceAdjustment(itemId, action) {
+    if (action === "pin") {
+      const { marketPricePinnedItems } = this.scene.gameState.catalog;
+      this.scene.catalogSystem.setMarketPricePinned(itemId, !marketPricePinnedItems.has(itemId));
+      this.redraw();
+      return;
+    }
     const nextPrice = adjustStorePrice(
       this.scene.catalogSystem.getStorePrice(itemId),
       this.scene.gameState.market.getPrice(itemId),
       action,
     );
-    if (nextPrice !== null) this.scene.catalogSystem.setStorePrice(itemId, nextPrice);
+    if (nextPrice !== null) {
+      this.scene.catalogSystem.setStorePrice(itemId, nextPrice);
+      this.redraw();
+    }
+  }
+
+  refreshMarketPinButton(itemId) {
+    const pinned = this.scene.gameState.catalog.marketPricePinnedItems.has(itemId);
+    const item = this.scene.catalogSystem.getInventoryItems()
+      .find((entry) => entry.item.id === itemId)?.item;
+    const button = Array.from(this.panel.querySelectorAll(INVENTORY_PRICE_BUTTON_SELECTOR)).find(
+      (candidate) => candidate.dataset.priceItemId === itemId && candidate.dataset.priceAction === "pin",
+    );
+    if (!button || !item) return;
+    button.textContent = pinned ? "FOLLOWING MARKET" : "FOLLOW MARKET";
+    button.setAttribute("aria-pressed", String(pinned));
+    button.setAttribute("aria-label", `${pinned ? "Stop following" : "Follow"} market price for ${item.name}`);
+    button.title = pinned
+      ? "This price will match the market whenever it changes."
+      : "Automatically match the market price whenever it changes.";
   }
 
   destroy() {

@@ -133,8 +133,12 @@ export class CustomerFlow {
       gameState: shop.gameState,
       spawnBounds: shop.customerSpawnBounds,
       onJoinQueue: (arrivingCustomer) => shop.checkoutSystem.handleJoinQueue(arrivingCustomer),
-      onLeaveAngry: (angryCustomer, cart, { reputationPenalty = true } = {}) => {
-        shop.eventBus.emit(GAME_EVENTS.CUSTOMER_LEFT_ANGRY, { customer: angryCustomer, cart, reputationPenalty });
+      onLeaveAngry: (angryCustomer, cart, {
+        reputationPenalty = true, factionReputationPenalty = true,
+      } = {}) => {
+        shop.eventBus.emit(GAME_EVENTS.CUSTOMER_LEFT_ANGRY, {
+          customer: angryCustomer, cart, reputationPenalty, factionReputationPenalty,
+        });
       },
       onMissingPrimary: (customer, itemIds, itemNames) => {
         shop.eventBus.emit(GAME_EVENTS.CUSTOMER_MISSING_PRIMARY, { customer, itemIds, itemNames });
@@ -186,7 +190,7 @@ export class CustomerFlow {
    * @param {string | null} factionId
    * @param {string[]} [traits]
    */
-  shoppingPlan(factionId, traits = []) {
+  shoppingPlan(factionId, traits = [], bargainTolerance = BARGAIN_PRICE_RATIO) {
     const shop = this.shop;
     const shelves = shop.fixtures.shelves();
     const shelfItemIds = shelves.flatMap((shelf) => shelf.placements.map((placement) => placement.itemId));
@@ -194,7 +198,8 @@ export class CustomerFlow {
     buyList.bonusItemIds = addDiscountBonusItem(
       buyList,
       shelfItemIds,
-      (itemId) => shop.catalogSystem.getStorePrice(itemId) <= shop.gameState.market.getPrice(itemId) * BARGAIN_PRICE_RATIO,
+      (itemId) =>
+        shop.catalogSystem.getStorePrice(itemId) <= shop.gameState.market.getPrice(itemId) * bargainTolerance,
     );
     buyList.bonusItemIds = addTraitBonusItems(buyList, shelfItemIds, traits);
     const targetIds = new Set([

@@ -81,6 +81,21 @@ after(async () => {
   if (cacheDirectory) await rm(cacheDirectory, { recursive: true, force: true });
 });
 
+test("Inventory shows whether an item follows the market price", () => {
+  const html = InventoryRenderer.generateHTML([{
+    item: { id: "rifle", name: "Rifle" },
+    stock: 1,
+    offShelves: 0,
+    unitCost: 80,
+    storePrice: 100,
+    marketPricePinned: true,
+  }]);
+
+  assert.match(html, /FOLLOWING MARKET/);
+  assert.match(html, /aria-pressed="true"/);
+  assert.match(html, /This price will match the market whenever it changes/);
+});
+
 function createHarness() {
   const events = () => ({
     listeners: new Map(),
@@ -171,6 +186,7 @@ function createHarness() {
     },
     focus() { focus(this); },
     blur() { if (document.activeElement === this) focus(null); },
+    setAttribute(name, value) { this[name] = value; },
   });
   const panel = {
     controls: [],
@@ -274,8 +290,14 @@ function createHarness() {
       setStorePrice(itemId, price) {
         if (!isMoney(price) || price < 1) return false;
         prices.set(itemId, price);
+        gameState.catalog.setPrice(itemId, price);
         gameState.shop.changed();
         return true;
+      },
+      setMarketPricePinned(itemId, pinned) {
+        gameState.catalog.setMarketPricePinned(itemId, pinned, marketPrices.get(itemId));
+        if (pinned) prices.set(itemId, marketPrices.get(itemId));
+        gameState.shop.changed();
       },
       getInventoryItems() {
         return ["rifle", "pistol"].map((itemId) => ({
@@ -286,6 +308,7 @@ function createHarness() {
           marketPrice: marketPrices.get(itemId),
           unitCost: unitCosts.get(itemId),
           storePrice: prices.get(itemId),
+          marketPricePinned: gameState.catalog.marketPricePinnedItems.has(itemId),
         }));
       },
     },
@@ -392,6 +415,18 @@ test("price buttons update the displayed value and retain keyboard focus", () =>
   assert.equal(h.list.scrollTop, 37);
   h.focus(null);
   assert.equal(h.keyboard.enabled, true);
+});
+
+test("Inventory can keep an item at market price until the player changes it", () => {
+  const h = createHarness();
+  h.click("rifle", "pin");
+
+  assert.equal(h.scene.catalogSystem.getStorePrice("rifle"), 275);
+  assert.equal(h.scene.gameState.catalog.marketPricePinnedItems.has("rifle"), true);
+
+  h.click("rifle", "increase");
+  assert.equal(h.scene.catalogSystem.getStorePrice("rifle"), 302.5);
+  assert.equal(h.scene.gameState.catalog.marketPricePinnedItems.has("rifle"), false);
 });
 
 test("committing a typed price updates profit without replacing the next price button", async () => {

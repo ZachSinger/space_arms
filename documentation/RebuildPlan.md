@@ -451,8 +451,7 @@ This does not implement the future modules' gameplay.
 1. Per-frame work only when something changes (shelf glow, hints, pool refresh).
 2. Pathfinding: cache the walk grid per layout, reuse paths, and limit searches per frame.
    Only coarsen the grid if measurements demand it and the scripted shift shows the same routes.
-3. The slow fixture-placement overlay.
-4. Icons: shrink them to display size and pack them into atlases. The build's art copier
+3. Icons: shrink them to display size and pack them into atlases. The build's art copier
    learns about atlases.
 
 **Done when:**

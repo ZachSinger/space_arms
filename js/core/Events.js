@@ -14,8 +14,9 @@
  * Every event the game announces, and what it carries.
  * @typedef {object} GameEventPayloads
  * @property {{ customer: object, itemId: string | null }} "customer-hit-by-crate"
- * @property {{ customer: object, cart: object[], reputationPenalty?: boolean }} "customer-left-angry"
+ * @property {{ customer: object, cart: object[], reputationPenalty?: boolean, factionReputationPenalty?: boolean }} "customer-left-angry"
  * @property {{ customer: object, itemIds: string[], itemNames: string[] }} "customer-missing-primary"
+ * @property {{ customer: object, reaction: "bargain" | "skipped" | "disgusted" }} "customer-price-reaction"
  * @property {{ customer: object, total: number }} "customer-sale-completed"
  * @property {{ kind: string, itemId: string | null, typeId: string | null, quantity: number }} "crate-picked-up"
  * @property {{ kind: string, itemId: string | null, typeId: string | null, quantity: number, thrown: boolean, x: number, y: number }} "crate-dropped"
@@ -31,6 +32,7 @@ export const GAME_EVENTS = Object.freeze({
   CUSTOMER_HIT_BY_CRATE: "customer-hit-by-crate",
   CUSTOMER_LEFT_ANGRY: "customer-left-angry",
   CUSTOMER_MISSING_PRIMARY: "customer-missing-primary",
+  CUSTOMER_PRICE_REACTION: "customer-price-reaction",
   CUSTOMER_SALE_COMPLETED: "customer-sale-completed",
   CRATE_PICKED_UP: "crate-picked-up",
   CRATE_DROPPED: "crate-dropped",

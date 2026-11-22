@@ -103,6 +103,12 @@ export function checkShopSave(data, database) {
   requireSave(isRecord(player.storePrices) && Object.entries(player.storePrices).every(
     ([id, price]) => itemById.has(id) && isMoney(price) && price >= 1,
   ), "invalid store price.");
+  if (player.marketPricePinnedItems !== undefined) {
+    requireSave(Array.isArray(player.marketPricePinnedItems) &&
+      new Set(player.marketPricePinnedItems).size === player.marketPricePinnedItems.length &&
+      player.marketPricePinnedItems.every((id) => itemById.has(id)),
+    "invalid market price pins.");
+  }
   // Optional so saves from before the Go-Backs bin existed still load.
   if (player.goBacks !== undefined) stockCapacity(player.goBacks, Infinity);
   const market = data.market;
@@ -120,6 +126,10 @@ export function checkShopSave(data, database) {
     `invalid market price for ${item.id}.`);
     requireSave(Number.isFinite(ratio) && ratio >= MIN_SUPPLY_RATIO && ratio <= MAX_SUPPLY_RATIO,
       `invalid supplier rate for ${item.id}.`);
+  }
+  for (const itemId of player.marketPricePinnedItems ?? []) {
+    requireSave(player.storePrices[itemId] === market.prices[itemId],
+      `pinned store price does not match the market price for ${itemId}.`);
   }
   // Receipts are optional so saves from before End Day existed still load.
   if (player.dayLedger !== undefined) {

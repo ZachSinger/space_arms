@@ -170,8 +170,6 @@ Nothing is measurably slow today, but several things will get worse as the shop 
 - **Pathfinding uses a very fine grid.** It works in 8-pixel steps and may check up to 50,000
   spots per search. With a full shop, many customers, employees, and drones, this is the first
   thing likely to stutter.
-- **The fixture-placement overlay takes about 10 seconds to draw.** This is already a known
-  to-do.
 - **Item icons are oversized.** Each small icon is stored at up to 0.5 MB. Shrinking them and
   packing them into one sheet would cut the 51 MB build to a fraction and speed up loading.
 - **The game code is one 2 MB file.** That's fine for a desktop game, but it would shrink

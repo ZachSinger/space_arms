@@ -327,6 +327,9 @@ test("invalid saved inventory and economy are rejected before restoration", () =
     (data) => { data.playerState.pendingReputation = { global: 1, factions: {} }; },
     (data) => { data.playerState.activeLicenses.push("unknown"); },
     (data) => { data.playerState.storePrices.wpn_rif_01 = 0; },
+    (data) => { data.playerState.marketPricePinnedItems = ["unknown"]; },
+    (data) => { data.playerState.marketPricePinnedItems = ["wpn_rif_01", "wpn_rif_01"]; },
+    (data) => { data.playerState.marketPricePinnedItems = ["wpn_rif_01"]; },
     (data) => { data.market.day = 0; },
     (data) => { data.market.prices.wpn_rif_01 = 100000; },
     (data) => { data.market.supplyRatios.wpn_rif_01 = 0; },
@@ -354,6 +357,16 @@ test("invalid saved inventory and economy are rejected before restoration", () =
     corrupt(data);
     assert.throws(() => validateShopSave(data, database), /Invalid saved game/);
   }
+});
+
+test("a pinned item saves only when its store price matches today's market", () => {
+  const data = snapshot();
+  data.playerState.marketPricePinnedItems = ["wpn_rif_01"];
+  data.playerState.storePrices.wpn_rif_01 = data.market.prices.wpn_rif_01;
+  assert.doesNotThrow(() => validateShopSave(data, database));
+
+  data.playerState.storePrices.wpn_rif_01 += 1;
+  assert.throws(() => validateShopSave(data, database), /pinned store price does not match/);
 });
 
 test("saves from before the Go-Backs bin existed still load", () => {

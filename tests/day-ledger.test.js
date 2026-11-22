@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
+import { Events, GAME_EVENTS } from "../js/core/Events.js";
 import { DayLedger, isValidLedgerData, summarizeReceipt } from "../js/logic/DayLedger.js";
 import { FinancesRenderer } from "../js/logic/FinancesRenderer.js";
 import { createCustomerPool, getStoreRepPool } from "../js/logic/CustomerPooling.js";
@@ -14,6 +15,7 @@ let server;
 let cacheDirectory;
 let GameState;
 let HUDController;
+let ShiftSystem;
 
 before(async () => {
   cacheDirectory = await mkdtemp(join(tmpdir(), "space-arms-ledger-test-"));
@@ -39,6 +41,7 @@ before(async () => {
   });
   ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));
   ({ HUDController } = await server.ssrLoadModule("/js/logic/HUDController.js"));
+  ({ ShiftSystem } = await server.ssrLoadModule("/js/systems/ShiftSystem.js"));
 });
 
 after(async () => {
@@ -457,13 +460,82 @@ test("ending a day closes the receipt and starts the next day from the closing b
   const receipt = state.endDay();
   assert.equal(receipt.day, 1);
   assert.equal(receipt.closingCredits, 2000);
-  assert.deepEqual(receipt.shift, { customersServed: 4, customersTurnedAway: 1 });
+  assert.deepEqual(receipt.shift, {
+    customersServed: 4,
+    customersTurnedAway: 1,
+    priceReactions: { bargain: 0, skipped: 0, disgusted: 0 },
+  });
   assert.equal(state.calendar.awaitingEndDay, false);
   assert.deepEqual(state.economy.dayReceipts, [receipt]);
   assert.equal(state.economy.dayLedger.day, 2);
   assert.equal(state.economy.dayLedger.openingCredits, 2000);
   assert.equal(state.economy.dayLedger.openingReputation, 3);
   assert.deepEqual(state.economy.dayLedger.lines, []);
+});
+
+test("the receipt counts each customer's price reactions and bargain sales add store-only reputation", () => {
+  const state = newGame();
+  const shift = new ShiftSystem({ gameState: state });
+  shift.recordSale = () => {};
+  const events = new Events({ strict: true });
+  shift.listen(events);
+  const first = { id: "customer-1", factionId: "explorers", boughtBargainItem: true };
+  const second = { id: "customer-2", factionId: "mercenaries", boughtBargainItem: false };
+  events.emit(GAME_EVENTS.CUSTOMER_PRICE_REACTION, { customer: first, reaction: "bargain" });
+  events.emit(GAME_EVENTS.CUSTOMER_PRICE_REACTION, { customer: first, reaction: "bargain" });
+  events.emit(GAME_EVENTS.CUSTOMER_PRICE_REACTION, { customer: first, reaction: "skipped" });
+  events.emit(GAME_EVENTS.CUSTOMER_PRICE_REACTION, { customer: second, reaction: "skipped" });
+  events.emit(GAME_EVENTS.CUSTOMER_PRICE_REACTION, { customer: second, reaction: "disgusted" });
+  events.emit(GAME_EVENTS.CUSTOMER_SALE_COMPLETED, { customer: first, total: 10 });
+
+  assert.deepEqual(shift.priceReactionCounts, { bargain: 1, skipped: 2, disgusted: 1 });
+  assert.equal(state.reputation.pending.global, 2);
+  assert.deepEqual(state.reputation.pending.factions, {
+    scavengers: 0, mercenaries: 0, explorers: 1,
+  });
+  state.finishShift({
+    customersServed: shift.customersServed,
+    customersTurnedAway: 0,
+    priceReactions: shift.priceReactionCounts,
+  });
+  const receipt = state.endDay();
+  assert.deepEqual(receipt.shift.priceReactions, { bargain: 1, skipped: 2, disgusted: 1 });
+
+  const html = FinancesRenderer.generateHTML({
+    day: 1,
+    shiftRunning: false,
+    pendingReputationChange: null,
+    awaitingEndDay: false,
+    canEndDay: false,
+    today: summarizeReceipt(receipt, receipt.closingCredits, receipt.closingReputation),
+    receipts: [],
+    lifetime: { daysCompleted: 1, totalSales: 0, customersServed: 1 },
+  });
+  assert.match(html, /Customers pleased by a bargain/);
+  assert.match(html, /Customers who skipped items because of price/);
+  assert.match(html, /Customers who left because prices were outrageous/);
+  assert.match(html, /Customers pleased by a bargain<\/span><span class="finances-value">1<\/span>/);
+  assert.match(html, /Customers who skipped items because of price<\/span><span class="finances-value">2<\/span>/);
+  assert.match(html, /Customers who left because prices were outrageous<\/span><span class="finances-value">1<\/span>/);
+});
+
+test("pinned item prices follow the market, save with the shop, and stop following after manual repricing", () => {
+  const rolls = [0.5, 1, 0];
+  const state = new GameState({ items: ITEMS, random: () => rolls.shift() ?? 0.5 });
+  const initialMarketPrice = state.market.getPrice("ration");
+  state.catalog.setMarketPricePinned("ration", true, initialMarketPrice);
+  state.finishShift({ customersServed: 0, customersTurnedAway: 0 });
+  state.endDay();
+  assert.notEqual(state.market.getPrice("ration"), initialMarketPrice);
+  assert.equal(state.catalog.storePrices.ration, state.market.getPrice("ration"));
+
+  const restored = reload(state);
+  assert.ok(restored.catalog.marketPricePinnedItems.has("ration"));
+  restored.catalog.setPrice("ration", 5);
+  assert.equal(restored.catalog.marketPricePinnedItems.has("ration"), false);
+  restored.finishShift({ customersServed: 0, customersTurnedAway: 0 });
+  restored.endDay();
+  assert.equal(restored.catalog.storePrices.ration, 5);
 });
 
 test("receipts and the waiting-to-end-day state survive saving and loading", () => {

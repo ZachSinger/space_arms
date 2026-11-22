@@ -13,6 +13,16 @@ import { summarizeReceipt } from "../logic/DayLedger.js";
 import { formatMoneyAmount, sumMoney } from "../logic/Money.js";
 import { sinkItems } from "../logic/InventoryTransfer.js";
 
+const PRICE_REACTION_TYPES = Object.freeze(["bargain", "skipped", "disgusted"]);
+
+function emptyPriceReactionCounts() {
+  return { bargain: 0, skipped: 0, disgusted: 0 };
+}
+
+function emptyPriceReactionCustomers() {
+  return Object.fromEntries(PRICE_REACTION_TYPES.map((type) => [type, new Set()]));
+}
+
 export class ShiftSystem {
   constructor(shop) {
     this.shop = shop;
@@ -20,6 +30,8 @@ export class ShiftSystem {
     // Guards end() from firing more than once per shift.
     this.ended = false;
     this.customersServed = 0;
+    this.priceReactionCounts = emptyPriceReactionCounts();
+    this.priceReactionCustomers = emptyPriceReactionCustomers();
     this.creditsAtStart = shop.gameState.economy.credits;
     this.reputationAtStart = shop.gameState.reputation.global;
     this.closingOverlay = null;
@@ -27,9 +39,19 @@ export class ShiftSystem {
 
   // Every completed sale goes on today's receipt and counts toward the shift's summary.
   listen(eventBus) {
+    eventBus.on(GAME_EVENTS.CUSTOMER_PRICE_REACTION, ({ customer, reaction }) => {
+      const customers = this.priceReactionCustomers[reaction];
+      if (!customers) throw new Error(`Unknown customer price reaction: ${reaction}.`);
+      if (customers.has(customer)) return;
+      customers.add(customer);
+      this.priceReactionCounts[reaction] += 1;
+    });
     eventBus.on(GAME_EVENTS.CUSTOMER_SALE_COMPLETED, ({ customer }) => {
       this.recordSale(customer);
       this.shop.gameState.reputation.gain(1, customer.factionId, { customer });
+      if (customer.boughtBargainItem) {
+        this.shop.gameState.reputation.gain(1, null, { customer });
+      }
       this.customersServed += 1;
       this.shop.debugInfo?.recordCustomer("customer-sale-completed", customer);
     });
@@ -83,6 +105,8 @@ export class ShiftSystem {
     shop.staffSystem.spawnWorking();
     shop.saves.setStatus("Checkpoint saved. Autosaving resumes after this shift.");
     this.customersServed = 0;
+    this.priceReactionCounts = emptyPriceReactionCounts();
+    this.priceReactionCustomers = emptyPriceReactionCustomers();
     gameState.reputation.startShift();
     shop.eventBus.emit(GAME_EVENTS.SHIFT_STARTED, { pool: shop.customerFlow.pool });
     shop.managerTablet.refreshLayoutPanels();
@@ -117,6 +141,7 @@ export class ShiftSystem {
     gameState.finishShift({
       customersServed: this.customersServed,
       customersTurnedAway: gameState.reputation.customersTurnedAway,
+      priceReactions: { ...this.priceReactionCounts },
     });
     shop.eventBus.emit(GAME_EVENTS.SHIFT_ENDED, {
       served: this.customersServed,

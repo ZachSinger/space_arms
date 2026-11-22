@@ -110,7 +110,7 @@ export class GameState {
 
   /**
    * Records how the shift went and waits for the player to end the day.
-   * @param {{ customersServed: number, customersTurnedAway: number }} results
+   * @param {{ customersServed: number, customersTurnedAway: number, priceReactions?: { bargain: number, skipped: number, disgusted: number } }} results
    */
   finishShift(results) {
     const totals = this.reputation.totalsAfterShift();
@@ -126,6 +126,7 @@ export class GameState {
    */
   endDay() {
     this.market.advanceDay();
+    this.catalog.syncPinnedMarketPrices(this.market);
     this.calendar.nextDay();
     return this.economy.closeDay(this.calendar.day, this.reputation.global);
   }

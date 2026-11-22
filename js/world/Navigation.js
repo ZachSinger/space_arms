@@ -529,7 +529,7 @@ export class Navigation {
 
 export const FLOOR_NODE_STEP = NAVIGATION_TUNING.walkStepPx;
 
-// Reused between checks; the placement overlay runs thousands of them while scanning.
+// Reused between floor-reachability checks.
 let buffers = null;
 
 function nextBuffers(size) {

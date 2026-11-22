@@ -273,6 +273,24 @@ test("a customer who leaves after the third wrong change costs no extra reputati
   assert.equal(customer.gameState.reputation.pending.global, -1);
 });
 
+test("a customer who leaves over an outrageous price only costs store reputation", async () => {
+  const { ReputationPenalties } = await server.ssrLoadModule("/js/systems/ReputationPenalties.js");
+  const handlers = new Map();
+  const floats = [];
+  const penalties = new ReputationPenalties({ messages: { floatText: (...args) => floats.push(args) } });
+  penalties.listen({ on: (event, handler) => handlers.set(event, handler) });
+  const { customer } = queuedCustomer();
+
+  handlers.get(GAME_EVENTS.CUSTOMER_LEFT_ANGRY)({
+    customer, cart: [], factionReputationPenalty: false,
+  });
+
+  assert.equal(customer.gameState.reputation.pending.global, -1);
+  assert.equal(customer.gameState.reputation.pending.factions.mercenaries, 0);
+  assert.match(floats[0][2], /-1 store reputation/);
+  assert.doesNotMatch(floats[0][2], /Mercenaries reputation/);
+});
+
 test("employee checkout and a front customer leaving both advance the line", () => {
   const { registers, checkout, addCustomer } = queueHarness();
   const register = registers[0];

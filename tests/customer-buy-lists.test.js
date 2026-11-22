@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   addDiscountBonusItem, createCustomerBuyList, CUSTOMER_BUY_LIST_TUNING,
-  BARGAIN_PRICE_RATIO, DISCOUNT_BONUS_CHANCE,
+  BARGAIN_PRICE_RATIO, DISCOUNT_BONUS_CHANCE, MAX_DISCOUNT_BONUS_ITEMS,
   createCustomerItemQuantities,
 } from "../js/logic/CustomerBuyLists.js";
 
@@ -86,7 +86,7 @@ test("Explorers can choose either a Tool or Survival gear as a primary", () => {
   );
 });
 
-test("customers sometimes add one extra bargain item when an unrequested item is 10% below market", () => {
+test("customers sometimes add up to two extra bargain items they did not plan to buy", () => {
   const buyList = { primaryItemIds: ["tool"], bonusItemIds: ["survival"] };
   const result = addDiscountBonusItem(
     buyList,
@@ -96,7 +96,8 @@ test("customers sometimes add one extra bargain item when an unrequested item is
   );
   assert.equal(BARGAIN_PRICE_RATIO, 0.9);
   assert.equal(DISCOUNT_BONUS_CHANCE, 0.5);
-  assert.deepEqual(result, ["survival", "apparel"]);
+  assert.equal(MAX_DISCOUNT_BONUS_ITEMS, 2);
+  assert.deepEqual(result, ["survival", "apparel", "old_ration"]);
   assert.deepEqual(buyList.bonusItemIds, ["survival"]);
 });
 

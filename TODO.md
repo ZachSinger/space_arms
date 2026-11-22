@@ -157,9 +157,8 @@ notice something that needs doing but isn't being done right now.
       (notes unfinished).
 
 ## Playtest follow-ups
-- [ ] Reproduce the report of correct-looking change being rejected once, then accepted
-      on a second Space press. Numerical checks passed; checkout now records each handover's
-      displayed amount, exact amount owed/selected, input, and held mouse state in Debug Info.
+- [x] Fixed change sometimes being rejected on the first Space press: the final bill or coin
+      is counted when the mouse button is pressed, before Space can hand over the change.
 - [x] Cash drawer mockup: all customers pay cash, with unlimited 1/5/10/20 credit bills
       and 1/5/10/25/50 cent coins. The customer first holds out their cash over a blurred
       screen as soon as scanning ends (no keypad), and each piece is clicked or swept to take it; about 1 in 4 pay exact, skipping change.
@@ -241,9 +240,11 @@ notice something that needs doing but isn't being done right now.
       [documentation/modules/Cleaning.md](documentation/modules/Cleaning.md).
 - [x] Contract pacing: split the big contracts into about 70 small ones (2–5 products each);
       Store Levels 1–5 now offer 15 products instead of 55. Old saves keep everything they owned.
-- [ ] Revamp pricing and its effects on customers. Right now the only point of setting
-      prices is remembering to press "Mkt price" on each item once before each shift. Pricing
-      should be a real decision with clear trade-offs (design talk first).
+- [x] Revamp item pricing: customers have slightly varied bargain, item-skip, and disgust
+      thresholds; bargain purchases can earn one store-reputation bonus per customer, and
+      outrageous prices make customers leave. Price reactions appear in the Finances receipt.
+      Inventory prices can be pinned to follow market changes; customers may pick up to two
+      extra bargain items. Design and implementation are complete.
 - [ ] Highlight trash on a controller. Keyboard holds H; every controller button is already
       used, so this needs a button chosen.
 
@@ -265,21 +266,12 @@ notice something that needs doing but isn't being done right now.
       move any stack over the new cap into the Go-Backs bin on load.
 
 ## Debug Tools
-- [ ] Speed up the `\` fixture-placement overlay. It can take about 10 seconds to finish
-      filling in; revisit it later since it is a debug aid.
 - [x] Desktop HUD "Debug Info": numbered full-window PNG screenshots and readable
       live-state reports in local playtest sessions, with recent events/errors and
       customer-pool calculations. See `documentation/DebugPlaytesting.md`.
 - [x] Spawn-customer debug key (Y key): lets one random customer in right away.
 - [x] Quickstart debug key (K key, before any shelf is placed): signs needed supply
       contracts, places a Budget Shelf near the door, and stocks it with four low-cost items.
-- [x] Tile-grid overlay (G key, `DebugTools.toggleGrid`): draws a 1px line every
-      TILE_SIZE across the whole authored map (including locked/not-yet-built zones), on
-      top of everything else. Added after discovering fixtures weren't sitting on tile boundaries -- their
-      positions were computed as a fractional percentage of the zone's raw pixel
-      width/height, which only lines up with the grid by coincidence. Use this any time a
-      fixture looks even slightly off to confirm it before chasing the wrong cause -- see
-      `gridAlignedCenter()` in game.js for the correct way to position one instead.
 
 ## Art / Assets
 - [x] Replace the shelves' placeholder shapes with proper shelf artwork. The Budget Shelf

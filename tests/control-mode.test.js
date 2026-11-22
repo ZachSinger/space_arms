@@ -84,10 +84,8 @@ test("each mode exposes only its declared actions", () => {
   const controls = new ControlMode(scene);
 
   assert.equal(controls.allows("move"), true);
-  assert.equal(controls.allows("debugGrid"), true);
   scene.fixturePlacement.active = true;
   assert.equal(controls.allows("rotateFixture"), true);
-  assert.equal(controls.allows("debugGrid"), true);
   assert.equal(controls.allows("debug"), false);
   assert.equal(controls.allows("crate"), false);
 
@@ -95,7 +93,6 @@ test("each mode exposes only its declared actions", () => {
   assert.equal(controls.allows("rotateFixture"), false);
   scene.shift.starting = true;
   assert.equal(controls.allows("pause"), false);
-  assert.equal(controls.allows("debugGrid"), false);
 });
 
 test("manual pause overrides register, placement and menus and allows only resume", () => {
@@ -107,7 +104,7 @@ test("manual pause overrides register, placement and menus and allows only resum
   const controls = new ControlMode(scene);
   assert.equal(controls.getMode(), CONTROL_MODES.PAUSED);
   assert.equal(controls.allows("pause"), true);
-  for (const action of ["move", "interact", "crate", "goBacks", "tablet", "debug", "debugGrid", "cameraZoom", "rotateFixture"]) {
+  for (const action of ["move", "interact", "crate", "goBacks", "tablet", "debug", "cameraZoom", "rotateFixture"]) {
     assert.equal(controls.allows(action), false, action);
   }
   scene.shiftClock.isPaused = false;

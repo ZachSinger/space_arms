@@ -40,6 +40,12 @@ export class CatalogSystem {
     return true;
   }
 
+  /** @param {string} itemId @param {boolean} pinned */
+  setMarketPricePinned(itemId, pinned) {
+    const { catalog, market } = this.shop.gameState;
+    catalog.setMarketPricePinned(itemId, pinned, market.getPrice(itemId));
+  }
+
   // Inventory tab rows: every owned item, including items currently held by customers.
   getInventoryItems() {
     const shop = this.shop;
@@ -79,6 +85,7 @@ export class CatalogSystem {
         marketPrice: shop.gameState.market.getPrice(item.id),
         unitCost: roundMoney(shop.supply.crateCost(item) / getCrateOrderQuantity(item)),
         storePrice: this.getStorePrice(item.id),
+        marketPricePinned: shop.gameState.catalog.marketPricePinnedItems?.has(item.id) ?? false,
       }));
   }
 

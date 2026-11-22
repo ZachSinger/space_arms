@@ -13,11 +13,11 @@ const REGISTER_WINDOWS = new Set(["checkout-window", "go-backs-window"]);
 const CONTROL_PROFILES = Object.freeze({
   [CONTROL_MODES.LOADING]: new Set(),
   [CONTROL_MODES.PAUSED]: new Set(["pause"]),
-  [CONTROL_MODES.PLACING]: new Set(["move", "rotateFixture", "cameraZoom", "debugGrid"]),
+  [CONTROL_MODES.PLACING]: new Set(["move", "rotateFixture", "cameraZoom"]),
   [CONTROL_MODES.MODAL]: new Set(),
-  [CONTROL_MODES.REGISTER]: new Set(["interact", "crate", "goBacks", "tablet", "debug", "debugGrid", "pause", "cameraZoom"]),
-  [CONTROL_MODES.CARRYING]: new Set(["move", "interact", "crate", "goBacks", "tablet", "debug", "debugGrid", "pause", "cameraZoom"]),
-  [CONTROL_MODES.WALKING]: new Set(["move", "interact", "crate", "goBacks", "tablet", "debug", "debugGrid", "pause", "cameraZoom"]),
+  [CONTROL_MODES.REGISTER]: new Set(["interact", "crate", "goBacks", "tablet", "debug", "pause", "cameraZoom"]),
+  [CONTROL_MODES.CARRYING]: new Set(["move", "interact", "crate", "goBacks", "tablet", "debug", "pause", "cameraZoom"]),
+  [CONTROL_MODES.WALKING]: new Set(["move", "interact", "crate", "goBacks", "tablet", "debug", "pause", "cameraZoom"]),
 });
 
 export class ControlMode {

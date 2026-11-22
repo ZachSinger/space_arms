@@ -13,7 +13,10 @@ function copyReceipt(receipt) {
   return {
     ...receipt,
     lines: receipt.lines.map((line) => ({ ...line })),
-    shift: receipt.shift ? { ...receipt.shift } : null,
+    shift: receipt.shift ? {
+      ...receipt.shift,
+      ...(receipt.shift.priceReactions ? { priceReactions: { ...receipt.shift.priceReactions } } : {}),
+    } : null,
   };
 }
 
@@ -99,7 +102,7 @@ export class Economy extends Slice {
     return payment;
   }
 
-  /** @param {{ customersServed: number, customersTurnedAway: number }} results */
+  /** @param {{ customersServed: number, customersTurnedAway: number, priceReactions?: { bargain: number, skipped: number, disgusted: number } }} results */
   recordShift(results) {
     this.dayLedger.recordShift(results);
   }

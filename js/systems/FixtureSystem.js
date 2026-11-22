@@ -259,14 +259,14 @@ export class FixtureSystem {
   }
 
   // Layout options with the player and loose crates as bodies a fixture must not land on.
-  #layoutOptionsAroundBodies(connectivityCache) {
+  #layoutOptionsAroundBodies() {
     const { player, restockCrates } = this.shop;
     const bodies = [player.sprite.body, ...restockCrates.map((crate) => crate.sprite.body)];
-    return { ...this.layoutOptions(
+    return this.layoutOptions(
       bodies.filter((body) => body.enable).map((body) => ({
         left: body.left, right: body.right, top: body.top, bottom: body.bottom,
       })),
-    ), connectivityCache };
+    );
   }
 
   canRearrange() {
@@ -386,14 +386,14 @@ export class FixtureSystem {
    * @param {number} [rotation]
    * @returns {{ valid: boolean, reason?: string }} validateFixtureLayout's result
    */
-  checkMove(id, gx, gy, rotation, connectivityCache = null) {
+  checkMove(id, gx, gy, rotation) {
     const { playerArea } = this.shop.areas;
     const areaBlock = this.moveAreaBlockReason(this.fixtures.get(id));
     if (areaBlock) return { valid: false, reason: areaBlock };
     if (areaAtRow(Math.floor(gy)) !== playerArea) {
       return { valid: false, reason: playerArea === AREA.BACKROOM ? "Keep it in the backroom." : "Keep it on the sales floor." };
     }
-    return validateFixtureLayout(this.layoutWithMove(id, gx, gy, rotation), this.#layoutOptionsAroundBodies(connectivityCache));
+    return validateFixtureLayout(this.layoutWithMove(id, gx, gy, rotation), this.#layoutOptionsAroundBodies());
   }
 
   /**
@@ -614,10 +614,10 @@ export class FixtureSystem {
    * @param {number} gy
    * @param {number} [rotation] - quarter turns clockwise
    */
-  checkPlacement(typeId, gx, gy, rotation = 0, connectivityCache = null) {
+  checkPlacement(typeId, gx, gy, rotation = 0) {
     const id = this.fixtures.nextId(typeId);
     const layout = [...this.fixtures.layout(), { id, type: typeId, gx, gy, rotation }];
-    return validateFixtureLayout(layout, this.#layoutOptionsAroundBodies(connectivityCache));
+    return validateFixtureLayout(layout, this.#layoutOptionsAroundBodies());
   }
 
   /**

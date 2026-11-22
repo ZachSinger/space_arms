@@ -382,7 +382,6 @@ export function validateFixtureLayout(placements, {
   occupiedRectangles = [], gridSize = getAuthoredGridSize(), queueSize = 6, requireSalesFloor = true,
   links = [], backroomBounds = null, reservedRectangles = [], doorwayClearanceRectangles = [],
   fixtureReservedCells = reservedCells,
-  connectivityCache = null,
 }) {
   const invalid = (reason) => ({ valid: false, reason });
   if (!Array.isArray(placements)) return invalid("The fixture layout is invalid.");
@@ -478,17 +477,6 @@ export function validateFixtureLayout(placements, {
       back: isRegister ? fixtureAccessCells(placement, true) : [],
     };
   });
-  // The caller scopes this cache to a fixed room/layout snapshot.
-  const cacheKey = connectivityCache && JSON.stringify(
-    placements.map((placement) => [
-      placement.id, placement.type, placement.gx, placement.gy, fixtureRotation(placement),
-    ]),
-  );
-  if (connectivityCache?.has(cacheKey)) return connectivityCache.get(cacheKey);
-  const remember = (result) => {
-    connectivityCache?.set(cacheKey, result);
-    return result;
-  };
   const canWalk = (gx, gy) => isWalkable(gx, gy) && !blockedCells.has(`${gx},${gy}`);
   // Everyone walks on the same size of feet box (customers, staff, and the player).
   const reachableFloor = (solids) => {
@@ -513,13 +501,13 @@ export function validateFixtureLayout(placements, {
   const floor = reachableFloor(placements.map(fixturePixelBounds));
   // Otherwise whatever is through the door gets the blame.
   if (links.some((pair) => pair.some((cell) => isWalkable(cell.gx, cell.gy) && !floor.reachesCell(cell)))) {
-    return remember(invalid("Keep a path open to the backroom door."));
+    return invalid("Keep a path open to the backroom door.");
   }
   const access = new Map();
   const accessCells = new Map();
   for (const { id, type, placement, isRegister, front, back } of requirements) {
     if ([...front, ...back].some((cell) => doorwayCells.has(cellKey(cell)))) {
-      return remember(invalid(`The ${isRegister ? "front and back" : "front"} of ${getFixtureType(type).name} can't face into a doorway.`));
+      return invalid(`The ${isRegister ? "front and back" : "front"} of ${getFixtureType(type).name} can't face into a doorway.`);
     }
     const reachableCells = (cells, behind = false) => cells.filter((cell) =>
       !doorwayCells.has(cellKey(cell)) &&
@@ -528,12 +516,12 @@ export function validateFixtureLayout(placements, {
     const usableFront = reachableCells(front);
     const usableBack = isRegister ? reachableCells(back, true) : [];
     if (usableFront.length === 0 || (isRegister && usableBack.length === 0)) {
-      return remember(invalid(`Keep the front${isRegister ? " and back" : ""} of ${getFixtureType(type).name} accessible.`));
+      return invalid(`Keep the front${isRegister ? " and back" : ""} of ${getFixtureType(type).name} accessible.`);
     }
     access.set(id, usableFront[Math.floor(usableFront.length / 2)]);
     accessCells.set(id, usableFront);
   }
-  if (floor.hasCutOffFloor()) return remember(invalid("This placement cuts off part of the shop."));
+  if (floor.hasCutOffFloor()) return invalid("This placement cuts off part of the shop.");
 
   // One checkout line per register. Earlier registers' lines reserve their floor so the
   // next register's line can't be planned through them.
@@ -637,7 +625,7 @@ export function validateFixtureLayout(placements, {
   for (const register of registers) {
     const queue = planQueueFor(register);
     if (!queue) {
-      return remember(invalid("Leave room in front of each register for its customer queue."));
+      return invalid("Leave room in front of each register for its customer queue.");
     }
     queuePointsById.set(register.id, queue.queuePoints);
     firstQueue ??= queue;
@@ -646,11 +634,11 @@ export function validateFixtureLayout(placements, {
       queueFloorReserved.add(`${Math.floor(point.x / TILE_SIZE)},${Math.floor(point.y / TILE_SIZE)}`);
     }
   }
-  return remember({
+  return {
     valid: true, reason: "Click to place. Contents stay on the fixture.",
     blockedCells, access, accessCells, queuePointsById,
     queueCells: firstQueue.queueCells, queuePoints: firstQueue.queuePoints,
-  });
+  };
 }
 
 const ORTHOGONAL_STEPS = [[0, 1], [0, -1], [1, 0], [-1, 0]];

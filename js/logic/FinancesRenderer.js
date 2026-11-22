@@ -87,6 +87,9 @@ function renderReceipt(receipt, { final, pendingReputationChange = null }) {
     reputationChange === 0 ? "No change" : `${reputationChange > 0 ? "+" : ""}${reputationChange}`)}
         ${shift ? row("Customers served", shift.customersServed) : ""}
         ${shift ? row("Customers turned away (store was full)", shift.customersTurnedAway, shift.customersTurnedAway > 0 ? "spent" : "") : ""}
+        ${shift ? row("Customers pleased by a bargain", shift.priceReactions?.bargain ?? 0) : ""}
+        ${shift ? row("Customers who skipped items because of price", shift.priceReactions?.skipped ?? 0) : ""}
+        ${shift ? row("Customers who left because prices were outrageous", shift.priceReactions?.disgusted ?? 0) : ""}
       </div>
     </div>
   `;

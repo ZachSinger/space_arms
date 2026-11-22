@@ -20,8 +20,10 @@ export const CUSTOMER_BUY_LIST_TUNING = Object.freeze({
   },
 });
 
+export const MIN_BARGAIN_PRICE_RATIO = 0.8;
 export const BARGAIN_PRICE_RATIO = 0.9;
 export const DISCOUNT_BONUS_CHANCE = 0.5;
+export const MAX_DISCOUNT_BONUS_ITEMS = 2;
 
 // Most wants are one unit; larger purchases give identical stock a reason to be stacked.
 export function createCustomerItemQuantities(itemIds, random = gameRandom) {
@@ -144,7 +146,7 @@ export function createCustomerBuyList(factionId, shelfItemIds, getItem, random =
 }
 
 /**
- * Give a customer a chance to add one extra item priced at least 10% below market.
+ * Give a customer a chance to add up to two extra bargain-priced items.
  * @param {{ primaryItemIds: string[], bonusItemIds: string[] }} buyList
  * @param {string[]} shelfItemIds
  * @param {(id: string) => boolean} isBargain
@@ -157,6 +159,10 @@ export function addDiscountBonusItem(buyList, shelfItemIds, isBargain, random = 
   if (candidates.length === 0 || random() >= DISCOUNT_BONUS_CHANCE) {
     return buyList.bonusItemIds;
   }
-  const index = Math.floor(Math.max(0, Math.min(1 - Number.EPSILON, random())) * candidates.length);
-  return [...buyList.bonusItemIds, candidates[index]];
+  const extras = [];
+  while (extras.length < MAX_DISCOUNT_BONUS_ITEMS && candidates.length > 0) {
+    const index = Math.floor(Math.max(0, Math.min(1 - Number.EPSILON, random())) * candidates.length);
+    extras.push(candidates.splice(index, 1)[0]);
+  }
+  return [...buyList.bonusItemIds, ...extras];
 }

@@ -1,12 +1,11 @@
 // ==========================================
 // FILE: DebugTools.js
 // ==========================================
-// Dev-build shortcuts: tile grids (G, \), spawn a customer (Y), Quickstart (K), and the HUD
+// Dev-build shortcuts: spawn a customer (Y), Quickstart (K), and the HUD
 // buttons that open expansions for free, run Quickstart, or skip ahead 4 shifts.
 // REAL games never create this.
 import { database } from "../scenes/boot.js";
-import { TILE_SIZE, getTotalGridSize, getStoreDoorCell, EXPANSION_ORDER, BACKROOM_UPGRADE_ORDER } from "../logic/RoomLayout.js";
-import { FixturePlacementGrid } from "../logic/FixturePlacementGrid.js";
+import { getStoreDoorCell, EXPANSION_ORDER, BACKROOM_UPGRADE_ORDER } from "../logic/RoomLayout.js";
 import { getFixtureType, validateFixtureLayout } from "../logic/FixtureLayout.js";
 import { DELIVERY_FEE, MAX_CRATES_PER_ORDER, getCrateOrderQuantity } from "../logic/SupplyOrder.js";
 import { sinkItems, sourceItems } from "../logic/InventoryTransfer.js";
@@ -26,17 +25,11 @@ export class DebugTools {
 
   constructor(scene) {
     this.scene = scene;
-    this.gridOverlays = new Map();
-    this.placementGrid = null;
     this.buttons = [];
   }
 
   install() {
     const { scene } = this;
-    scene.controls.bindKey("keydown-G", "debug", () => this.toggleGrid());
-    scene.controls.bindKey("keydown-BACK_SLASH", "debugGrid", (event) => {
-      if (!event.repeat) this.toggleGrid(8, 0x00ff00, 1);
-    });
     scene.controls.bindKey("keydown-Y", "debug", () => scene.customerFlow.spawn(null));
     scene.controls.bindKey("keydown-K", "debug", () => this.quickstart());
 
@@ -50,47 +43,9 @@ export class DebugTools {
     for (const { element, handler } of this.buttons) element.addEventListener("click", handler);
   }
 
-  update() {
-    this.placementGrid?.update();
-  }
-
   destroy() {
-    for (const grid of this.gridOverlays.values()) grid.destroy();
-    this.gridOverlays.clear();
-    this.placementGrid?.destroy();
-    this.placementGrid = null;
     for (const { element, handler } of this.buttons) element.removeEventListener("click", handler);
     this.buttons = [];
-  }
-
-  // World-pixel grids over the shop map, locked zones included. Depth 9998 sits
-  // just under the player (9999) so it draws over every fixture, making off-grid ones obvious.
-  // The 8-pixel grid is the fixture placement grid instead, shown only while placing.
-  toggleGrid(spacing = TILE_SIZE, color = 0x00ffff, alpha = 0.5) {
-    if (spacing === 8) {
-      this.placementGrid ??= new FixturePlacementGrid(this.scene);
-      this.placementGrid.toggle();
-      return;
-    }
-    let graphics = this.gridOverlays.get(spacing);
-    if (!graphics) {
-      const { gridW, gridH } = getTotalGridSize();
-      const width = gridW * TILE_SIZE;
-      const height = gridH * TILE_SIZE;
-
-      graphics = this.scene.add.graphics().setDepth(9998);
-      graphics.lineStyle(1, color, alpha);
-      for (let x = 0; x <= width; x += spacing) {
-        graphics.lineBetween(x, 0, x, height);
-      }
-      for (let y = 0; y <= height; y += spacing) {
-        graphics.lineBetween(0, y, width, y);
-      }
-      graphics.setVisible(false);
-      this.gridOverlays.set(spacing, graphics);
-    }
-
-    graphics.setVisible(!graphics.visible);
   }
 
   // HUD debug buttons: opens the next sales-floor expansion or backroom upgrade for free,

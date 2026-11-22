@@ -375,43 +375,19 @@ test("debug upgrade buttons open the next zone free, even at Level 1 with the st
   assert.equal(scene.gameState.economy.credits, 0);
 });
 
-test("the placement grid toggle stays hidden outside placement and independent of the tile grid", () => {
-  const scene = { fixturePlacement: { active: false } };
-  const debugTools = new DebugTools(scene);
-  const created = [];
-  scene.add = {
-    graphics() {
-      const graphics = {
-        visible: true,
-        lines: [],
-        clear() { return this; },
-        setDepth(depth) { this.depth = depth; return this; },
-        lineStyle(...style) { this.style = style; return this; },
-        lineBetween(...line) { this.lines.push(line); return this; },
-        setVisible(visible) { this.visible = visible; return this; },
-      };
-      created.push(graphics);
-      return graphics;
-    },
+test("debug shortcuts bind only the spawn-customer and Quickstart keys", (t) => {
+  const originalDocument = globalThis.document;
+  t.after(() => {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  });
+  globalThis.document = { getElementById: () => null };
+  const bindings = new Map();
+  const scene = {
+    controls: { bindKey: (key, action, handler) => bindings.set(key, { action, handler }) },
   };
-
-  debugTools.toggleGrid(8, 0x00ff00, 1);
-  const fine = created[0];
-  assert.equal(fine.visible, false);
-  assert.equal(debugTools.placementGrid.enabled, true);
-  assert.equal(fine.depth, 9998);
-
-  debugTools.toggleGrid();
-  const coarse = created[1];
-  assert.equal(coarse.visible, true);
-  assert.deepEqual(coarse.style, [1, 0x00ffff, 0.5]);
-  debugTools.toggleGrid(8, 0x00ff00, 1);
-  assert.equal(fine.visible, false);
-  assert.equal(debugTools.placementGrid.enabled, false);
-  assert.equal(coarse.visible, true);
-  debugTools.toggleGrid(8, 0x00ff00, 1);
-  assert.equal(debugTools.placementGrid.enabled, true);
-  assert.equal(created.length, 2);
+  new DebugTools(scene).install();
+  assert.deepEqual([...bindings.keys()], ["keydown-Y", "keydown-K"]);
 });
 
 test("temporarily closing the store pauses arrivals and reschedules them on reopening", () => {

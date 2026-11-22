@@ -20,11 +20,13 @@ export class InventoryRenderer {
 
   /**
    * Render just the Inventory tab's content; the hosting window owns the tab chrome.
-   * @param {{ item: object, stock: number, offShelves: number, unitCost: number, storePrice: number }[]} entries - stock is on shelves, offShelves is in crates; prices in credits
+   * @param {{ item: object, stock: number, offShelves: number, unitCost: number, storePrice: number, marketPricePinned?: boolean }[]} entries
    * @returns {string}
    */
   static generateHTML(entries) {
-    const rows = entries.map(({ item, stock, offShelves = 0, unitCost, storePrice }, index) => {
+    const rows = entries.map(({
+      item, stock, offShelves = 0, unitCost, storePrice, marketPricePinned = false,
+    }, index) => {
       const icon = item.image
         ? html`<img class="item-icon" src="${item.image}" alt="" />`
         : html`<div class="item-icon"></div>`;
@@ -46,6 +48,14 @@ export class InventoryRenderer {
               <button type="button" data-price-action="market" data-price-item-id="${item.id}"
                 aria-label="Set price to market for ${item.name}" title="Set price to current market price">MKT</button>
             </div>
+            <button type="button" class="inventory-market-pin" data-price-action="pin"
+              data-price-item-id="${item.id}" aria-pressed="${marketPricePinned}"
+              aria-label="${marketPricePinned ? "Stop following" : "Follow"} market price for ${item.name}"
+              title="${marketPricePinned
+    ? "This price will match the market whenever it changes."
+    : "Automatically match the market price whenever it changes."}">
+              ${marketPricePinned ? "FOLLOWING MARKET" : "FOLLOW MARKET"}
+            </button>
           </div>
           ${raw(this.generateProfitHTML(storePrice, unitCost))}
         </div>

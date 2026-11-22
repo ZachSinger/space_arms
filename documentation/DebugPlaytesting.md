@@ -101,20 +101,11 @@ Transparent padding around the fixture image is not part of its body box.
 The doorway's full visible width stays clear for one floor tile immediately in front
 of it; the glass door's clear area is narrower than the public double door's.
 
-Press `\` to enable or disable the translucent solid green placement overlay. It appears only
-while moving or placing a fixture and shows the floor that the fixture's body can
-cover in at least one valid position. Other fixtures show their solid footprints
-without blue standing-area outlines; the fixture being placed still shows its own blue outline.
-The checks include its size, facing, standing space, other fixtures, walls,
-locked areas, player/crate bodies, and checkout access. The grid fills in as
-checks finish and updates when the fixture is turned or the available space changes.
-This optional coverage overlay uses two-pixel blocks; individual body-box outlines
-are not rounded to those blocks.
+While moving or placing a fixture, other fixtures show their solid footprints
+without blue standing-area outlines; the fixture being placed shows its own blue outline.
 Access checks use the character-sized standing area and its route, rather than treating
 every touched floor tile as completely blocked.
-Placement snaps to an 8-pixel grid. The overlay shows which of those positions
-are valid without changing collision rules.
-The existing `G` shortcut independently toggles the larger cyan floor-tile grid.
+Placement snaps to an 8-pixel grid.
 
 The bottom bar shows the picture, name, and count of the crate under the green arrow; the
 cards above its right end list the carried crates, top crate first. The arrow only marks a

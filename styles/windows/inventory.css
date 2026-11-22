@@ -49,6 +49,22 @@
   border-color: var(--color-border-active);
 }
 
+.inventory-market-pin {
+  padding: 3px 4px;
+  background: var(--color-bg-base);
+  border: var(--button-border-width) solid var(--color-border-subtle);
+  border-radius: var(--button-radius);
+  color: var(--color-text-main);
+  font: inherit;
+  font-size: var(--font-size-11);
+  cursor: pointer;
+}
+
+.inventory-market-pin:hover,
+.inventory-market-pin[aria-pressed="true"] {
+  border-color: var(--color-border-active);
+}
+
 .inventory-price-input {
   width: 100%;
   box-sizing: border-box;

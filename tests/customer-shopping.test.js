@@ -557,6 +557,8 @@ function makeCustomer({ factionId = "scavengers", plan }) {
   const missingPrimaryEvents = [];
   const inventoryTransfers = [];
   const reactionGraphics = [];
+  const priceReactions = [];
+  const angryLeaves = [];
   const addReactionGraphics = () => {
     const graphic = {
       x: 0,
@@ -581,6 +583,7 @@ function makeCustomer({ factionId = "scavengers", plan }) {
   };
   const eventBus = new Events();
   eventBus.on(GAME_EVENTS.INVENTORY_TRANSFERRED, (event) => inventoryTransfers.push(event));
+  eventBus.on(GAME_EVENTS.CUSTOMER_PRICE_REACTION, (event) => priceReactions.push(event));
   const customer = Object.create(Customer.prototype);
   customer.id = `test-customer-${nextTestCustomerId++}`;
   customer.location = { kind: "customer-cart", customerId: customer.id };
@@ -609,20 +612,26 @@ function makeCustomer({ factionId = "scavengers", plan }) {
   customer.shoppingPlan = plan;
   customer.state = "SEEK_SHELF";
   customer.cart = [];
-  customer.priceTolerance = 1.3;
+  customer.bargainTolerance = 0.9;
+  customer.priceTolerance = 1.15;
+  customer.priceDisgustTolerance = 1.6;
+  customer.boughtBargainItem = false;
   customer.registerPoint = { x: 900, y: 900 };
   customer.onReserveShelfSlot = (_shelf) => _shelf.standPoint;
   customer.onReserveQueueSlot = () => ({ x: 900, y: 900 });
   customer.onJoinQueue = () => {};
   customer.onMissingPrimary = (who, itemIds, itemNames) =>
     missingPrimaryEvents.push({ customer: who, itemIds, itemNames });
+  customer.onLeaveAngry = (who, cart, options) => angryLeaves.push({ customer: who, cart, options });
   customer.setDestination = (x, y, onArrive) => {
     if (x < 900 && y < 900) onArrive();
   };
   customer.enterLeaving = () => { customer.state = "LEAVING"; };
+  customer.clearPatience = () => {};
   customer.primaryBought = new Set();
   customer.primaryMissing = new Set();
   customer.priceRejectedItemIds = new Set();
+  customer.priceReactionKinds = new Set();
   customer.bonusBought = new Set();
   customer.bonusAttempted = new Set();
   customer.purchasedFirearms = new Set();
@@ -640,6 +649,8 @@ function makeCustomer({ factionId = "scavengers", plan }) {
     missingPrimaryEvents,
     inventoryTransfers,
     reactionGraphics,
+    priceReactions,
+    angryLeaves,
   };
 }
 
@@ -1001,7 +1012,7 @@ test("a customer stops looking at a shelf if it sells out during the pause", () 
 
 test("customers react happily when they pick up an item priced at least 10% below market", () => {
   const shelf = fixture({ x: 100, y: 100 }, [{ itemId: "bargain", quantity: 1 }]);
-  const { customer, reactionGraphics } = makeCustomer({
+  const { customer, reactionGraphics, priceReactions } = makeCustomer({
     factionId: null,
     plan: { primaryItemIds: [], bonusItemIds: [], matchingAmmoIdsByFirearm: {}, shelfStops: [] },
   });
@@ -1015,6 +1026,46 @@ test("customers react happily when they pick up an item priced at least 10% belo
   assert.deepEqual(customer.cart, [{ itemId: "bargain", price: 90 }]);
   assert.equal(reactionGraphics.length, 1);
   assert.equal(customer.reactionEventsShown.has("good-deal"), true);
+  assert.equal(customer.boughtBargainItem, true);
+  assert.deepEqual(priceReactions.map(({ reaction }) => reaction), ["bargain"]);
+});
+
+test("customers skip items above their limit and keep looking for other planned items", () => {
+  const primary = fixture({ x: 100, y: 100 }, [{ itemId: "main", quantity: 1 }]);
+  const bonus = fixture({ x: 200, y: 100 }, [{ itemId: "optional", quantity: 1 }]);
+  const plan = {
+    primaryItemIds: ["main"],
+    bonusItemIds: ["optional"],
+    matchingAmmoIdsByFirearm: {},
+    shelfStops: [
+      { fixture: primary, standPoint: primary.standPoint },
+      { fixture: bonus, standPoint: bonus.standPoint },
+    ],
+  };
+  const { customer, priceReactions } = makeCustomer({ plan });
+  customer.scene.getStorePrice = (itemId) => itemId === "main" ? 116 : 100;
+  customer.visitNextShelf("primary");
+
+  assert.deepEqual(customer.cart.map(({ itemId }) => itemId), ["optional"]);
+  assert.deepEqual(priceReactions.map(({ reaction }) => reaction), ["skipped"]);
+  assert.equal(customer.state, "SEEK_REGISTER");
+});
+
+test("a price beyond the disgust threshold makes the customer leave without faction reputation loss", () => {
+  const shelf = fixture({ x: 100, y: 100 }, [{ itemId: "wanted", quantity: 1 }]);
+  const { customer, priceReactions, angryLeaves } = makeCustomer({
+    plan: { primaryItemIds: ["wanted"], bonusItemIds: [], matchingAmmoIdsByFirearm: {}, shelfStops: [] },
+  });
+  customer.scene.getStorePrice = () => 160;
+  customer.fixture = shelf;
+  customer.phaseItemIds = ["wanted"];
+  customer.shoppingPhase = "primary";
+  customer.visitNextShelfStop = () => {};
+  customer.shopAtCurrentShelf();
+
+  assert.equal(customer.state, "LEAVING");
+  assert.deepEqual(priceReactions.map(({ reaction }) => reaction), ["disgusted"]);
+  assert.equal(angryLeaves[0].options.factionReputationPenalty, false);
 });
 
 test("customers report all missing primary items once and skip bonuses when none are in stock", () => {

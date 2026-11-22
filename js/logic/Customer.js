@@ -12,7 +12,10 @@ import {
   showCharacterFacing,
 } from "./CustomerSprites.js";
 import { CUSTOMER_COLLISION_HEIGHT, CUSTOMER_COLLISION_WIDTH } from "./CharacterDimensions.js";
-import { BARGAIN_PRICE_RATIO, CUSTOMER_FACTION_IDS, createCustomerBuyList } from "./CustomerBuyLists.js";
+import {
+  BARGAIN_PRICE_RATIO, CUSTOMER_FACTION_IDS, createCustomerBuyList, MIN_BARGAIN_PRICE_RATIO,
+} from "./CustomerBuyLists.js";
+import { GAME_EVENTS } from "../core/Events.js";
 import { transferItems } from "./InventoryTransfer.js";
 import { sumMoney } from "./Money.js";
 import { BASE_PATIENCE_MS, getPatienceMs, planShelfRoute, rollCustomerTraits } from "./CustomerTraits.js";
@@ -25,9 +28,11 @@ const SPEED = 100; // px/s
 const CRATE_YIELD_STEP_MS = 400;
 const CRATE_YIELD_WAIT_MS = 600;
 const CRATE_YIELD_STEP_SPEED = 0.6; // share of walking speed
-// Bible Step 52: each customer accepts up to this random markup over the market price.
-export const MIN_PRICE_TOLERANCE = 1.0;
-export const MAX_PRICE_TOLERANCE = 1.3;
+// Customer price reactions vary slightly inside shared ranges.
+export const MIN_PRICE_TOLERANCE = 1.1;
+export const MAX_PRICE_TOLERANCE = 1.2;
+export const MIN_PRICE_DISGUST_TOLERANCE = 1.5;
+export const MAX_PRICE_DISGUST_TOLERANCE = 1.7;
 // Safety nets (ms) so an unreachable destination can never block the shift from ending.
 // The seeking and leaving limits count only time spent stuck: any real step forward resets
 // them, so a long walk across a big shop never trips them. The walking limit caps the whole
@@ -125,7 +130,12 @@ export class Customer {
 
     this.state = "SEEK_SHELF";
     this.cart = []; // [{ itemId, price }]
+    this.bargainTolerance = gameRandom.float(MIN_BARGAIN_PRICE_RATIO, BARGAIN_PRICE_RATIO);
     this.priceTolerance = gameRandom.float(MIN_PRICE_TOLERANCE, MAX_PRICE_TOLERANCE);
+    this.priceDisgustTolerance = gameRandom.float(
+      MIN_PRICE_DISGUST_TOLERANCE, MAX_PRICE_DISGUST_TOLERANCE,
+    );
+    this.boughtBargainItem = false;
     this.queueTarget = null; // set by the scene once this customer has a spot in line
     this.queuePosition = null;
     this.patienceRemainingMs = null; // only ticks once queued
@@ -170,7 +180,7 @@ export class Customer {
     this.trashDropAtWalkMs = cleaningProfile?.trashDropAtWalkMs ?? null;
     this.trashWalkMs = 0;
     this.shoppingPlan = getShoppingPlan
-      ? getShoppingPlan(this.factionId, this.traits)
+      ? getShoppingPlan(this.factionId, this.traits, this.bargainTolerance)
       : createCustomerBuyList(this.factionId, [], () => null);
     this.shelfStops = this.shoppingPlan.shelfStops || [];
     this.shelfStopIndex = 0;
@@ -178,6 +188,7 @@ export class Customer {
     this.primaryBought = new Set();
     this.primaryMissing = new Set();
     this.priceRejectedItemIds = new Set();
+    this.priceReactionKinds = new Set();
     this.bonusBought = new Set();
     this.bonusAttempted = new Set();
     this.purchasedFirearms = new Set();
@@ -262,13 +273,25 @@ export class Customer {
 
   // --- Shopping ---
 
-  /**
-   * True if the store price is within this customer's tolerance over the market price.
-   * @param {string} itemId
-   */
-  acceptsPrice(itemId) {
+  /** @param {string} itemId */
+  getPriceReaction(itemId) {
     const marketPrice = this.store.gameState.market.getPrice(itemId);
-    return this.store.getStorePrice(itemId) <= marketPrice * this.priceTolerance;
+    const storePrice = this.store.getStorePrice(itemId);
+    if (storePrice >= marketPrice * this.priceDisgustTolerance) return "disgusted";
+    if (storePrice > marketPrice * this.priceTolerance) return "skipped";
+    if (storePrice <= marketPrice * this.bargainTolerance) return "bargain";
+    return "acceptable";
+  }
+
+  /** @param {"bargain" | "skipped" | "disgusted"} reaction */
+  recordPriceReaction(reaction) {
+    if (!this.priceReactionKinds) this.priceReactionKinds = new Set();
+    if (this.priceReactionKinds.has(reaction)) return;
+    this.priceReactionKinds.add(reaction);
+    this.store.eventBus?.emit(GAME_EVENTS.CUSTOMER_PRICE_REACTION, {
+      customer: this,
+      reaction,
+    });
   }
 
   getRemainingUnitsFor(itemId) {
@@ -474,8 +497,17 @@ export class Customer {
           ["Pistol", "Rifle", "Heavy"].includes(tag),
         ))) continue;
 
-      if (!this.acceptsPrice(itemId)) {
+      const priceReaction = this.getPriceReaction(itemId);
+      if (priceReaction === "disgusted") {
+        this.priceRejectedItemIds.add(itemId);
+        this.recordPriceReaction("disgusted");
+        this.reportPriceIssues();
+        this.leaveAngry({ factionReputationPenalty: false });
+        return;
+      }
+      if (priceReaction === "skipped") {
         this.showReaction("price-too-high", "disappointed");
+        this.recordPriceReaction("skipped");
         this.priceRejectedItemIds.add(itemId);
         continue;
       }
@@ -494,9 +526,10 @@ export class Customer {
       }
       if (moved === 0) continue;
       this.store.refreshShelfStockDisplay?.(this.fixture);
-      if (this.store.getStorePrice(itemId) <=
-        this.store.gameState.market.getPrice(itemId) * BARGAIN_PRICE_RATIO) {
+      if (priceReaction === "bargain") {
+        this.boughtBargainItem = true;
         this.showReaction("good-deal", "happy");
+        this.recordPriceReaction("bargain");
       }
       if (this.shoppingPhase === "primary") this.primaryBought.add(itemId);
       else this.bonusBought.add(itemId);
@@ -545,7 +578,7 @@ export class Customer {
         ),
       );
       if (this.primaryMissing.size > 0) this.reportMissingPrimary();
-      if (this.primaryBought.size === 0) {
+      if (this.primaryBought.size === 0 && this.priceRejectedItemIds.size === 0) {
         this.reportPriceIssues();
         this.enterLeaving();
         return;
@@ -786,11 +819,11 @@ export class Customer {
   }
 
   // Bible Steps 12/51: abandons the cart for the scene to process, then leaves.
-  leaveAngry({ reputationPenalty = true } = {}) {
+  leaveAngry({ reputationPenalty = true, factionReputationPenalty = true } = {}) {
     this.showReaction("left-angry", "angry");
     const cart = this.cart.map((entry) => ({ ...entry }));
     this.clearPatience();
-    this.onLeaveAngry?.(this, cart, { reputationPenalty });
+    this.onLeaveAngry?.(this, cart, { reputationPenalty, factionReputationPenalty });
     this.enterLeaving();
   }
 

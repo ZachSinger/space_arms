@@ -419,7 +419,6 @@ export class GameScene extends Phaser.Scene {
     if (this.gamePaused) return;
     this.worldElapsedMs += delta;
     if (this.controlMode.getMode() !== CONTROL_MODES.PAUSED) this.fixturePlacement.update();
-    this.debugTools?.update();
     this.crateWorld.update(delta);
     // Customers and employees hold the public door open on their way out.
     this.storeDoorAnimation.update(delta, [
