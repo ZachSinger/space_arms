@@ -6,6 +6,9 @@ import {
   bindingConflict, bindingForEvent, defaultBindings, getBindings, isWorldMouseBinding, matchesBinding, setBindings, validateBindings,
 } from "../js/input/KeyBindings.js";
 import { getControllerLabelStyle, setControllerLabelStyle } from "../js/input/InputDevice.js";
+import {
+  defaultControllerBindings, getControllerBindings, setControllerBindings, swapControllerBinding,
+} from "../js/input/ControllerBindings.js";
 
 test("settings styles live in their own window stylesheet", async () => {
   const [shared, settings] = await Promise.all([
@@ -26,8 +29,11 @@ test("resolution preview updates the frame and cancel restores the previous choi
   const small = { width: 1280, height: 720 };
   const resolutions = [small, large];
   const displaySize = { width: 2560, height: 1440 };
+  const defaultController = defaultControllerBindings();
+  const changedController = swapControllerBinding(defaultController, "interact", 5).bindings;
   t.after(() => {
     setControllerLabelStyle("automatic");
+    setControllerBindings(defaultController);
     if (previousWindow === undefined) delete globalThis.window;
     else globalThis.window = previousWindow;
     if (previousDocument === undefined) delete globalThis.document;
@@ -103,11 +109,14 @@ test("resolution preview updates the frame and cancel restores the previous choi
     settingsSnapshot: {
       resolution: large, displayMode: "fullscreen", textSize: "default", cursorMode: "hardware",
       controllerLabelStyle: "nintendo",
+      controllerBindings: defaultController,
     },
+    controllerBindings: changedController,
     controllerLayoutSelect: { value: "playstation" },
     close() { this.closed = true; },
   });
   setControllerLabelStyle("playstation");
+  setControllerBindings(changedController);
 
   await panel.previewResolution();
   assert.deepEqual(panel.appliedResolution, small);
@@ -120,6 +129,7 @@ test("resolution preview updates the frame and cancel restores the previous choi
   assert.equal(panel.select.value, "1920x1080");
   assert.equal(panel.controllerLayoutSelect.value, "nintendo");
   assert.equal(getControllerLabelStyle(), "nintendo");
+  assert.deepEqual(getControllerBindings(), defaultController);
   assert.equal(panel.closed, true);
   assert.equal(events.filter((event) => event === "game-viewport-changed").length, 2);
 });

@@ -11,6 +11,7 @@
 
 import { CONTROL_MODES } from "./ControlMode.js";
 import { GamepadInput, PAD } from "./GamepadInput.js";
+import { controllerButtonFor } from "./ControllerBindings.js";
 import { setInputDevice } from "./InputDevice.js";
 import { UINavigator } from "../logic/UINavigator.js";
 import { HOLD_KEY_MS } from "../logic/CrateStack.js";
@@ -155,10 +156,10 @@ export class PlayerControls {
   /**
    * One frame of controller input. A screen on top gets it through the menu cursor;
    * otherwise each button runs the same action as its keyboard key:
-   *   A = interact   X = pick up / throw   Y = put down
-   *   R3 (right stick click) = Ctrl (green arrow one crate down)   Back = I (tablet)
-   *   LB/RB = PageDown/PageUp (zoom)   Start = top bar (pause, start shift, save, ...)
-   *   B = leave the register   left stick / D-pad = walk   triggers = dash
+   *   Default buttons: A = interact   X = pick up / throw   Y = put down
+   *   R3 = move the green arrow down   Back = tablet   LB/RB = zoom
+   *   Start = top bar   B = leave the register / dash   triggers = dash
+   *   Button actions can be remapped in Settings; the left stick and D-pad walk.
    * @param {number} time
    * @param {number} delta
    */
@@ -174,10 +175,15 @@ export class PlayerControls {
       });
     }
     if (pad.hadInput) setInputDevice("gamepad");
+    const settings = shop.pauseMenu?.settings;
+    if (settings?.isCapturingController) {
+      for (const button of pad.pressed) settings.captureControllerButton(button);
+      return;
+    }
     const mode = shop.controlMode.getMode();
     if (mode === CONTROL_MODES.LOADING && !shop.saves.loadFailed) return;
     if (mode === CONTROL_MODES.PAUSED) {
-      if (pad.justPressed(PAD.START)) {
+      if (pad.justPressedAction("pause")) {
         this.togglePause();
         this.uiNavigator.setHudOpen(false);
       }
@@ -185,8 +191,8 @@ export class PlayerControls {
       return;
     }
 
-    if (pad.justPressed(PAD.START)) this.uiNavigator.toggleHud();
-    if (pad.justPressed(PAD.BACK)) {
+    if (pad.justPressedAction("pause")) this.uiNavigator.toggleHud();
+    if (pad.justPressedAction("tablet")) {
       if (shop.managerTablet.uiWindow.isOpen) shop.managerTablet.uiWindow.close();
       else if (shop.controlMode.allows("tablet")) shop.managerTablet.openWindow();
     }
@@ -208,24 +214,33 @@ export class PlayerControls {
     if (mode === CONTROL_MODES.PLACING) {
       shop.fixturePlacement.handlePad(pad, delta);
     } else {
-      if (pad.justPressed(PAD.A)) this.startInteractPress({ button: PAD.A });
-      if (pad.justPressed(PAD.X) && !shop.checkoutWindow.usesSpaceKey()) {
-        this.startCratePress("pickUp", { button: PAD.X });
+      if (pad.justPressedAction("interact")) {
+        this.startInteractPress({ button: controllerButtonFor("interact") });
       }
-      if (pad.justPressed(PAD.Y)) this.startCratePress("putDown", { button: PAD.Y });
-      if (pad.justPressed(PAD.R3)) shop.crateSystem.markNextCrateDown();
-      if (pad.justPressed(PAD.B) && shop.checkoutSystem.operatingRegister) shop.checkoutSystem.endRegisterSession();
+      if (pad.justPressedAction("crate") && !shop.checkoutWindow.usesSpaceKey()) {
+        this.startCratePress("pickUp", { button: controllerButtonFor("crate") });
+      }
+      if (pad.justPressedAction("putDown")) {
+        this.startCratePress("putDown", { button: controllerButtonFor("putDown") });
+      }
+      if (pad.justPressedAction("nextCrate")) shop.crateSystem.markNextCrateDown();
+      if (pad.justPressedAction("cancel") && shop.checkoutSystem.operatingRegister) {
+        shop.checkoutSystem.endRegisterSession();
+      }
     }
-    if (pad.justPressed(PAD.LB)) this.handleUnusedMenuButton(PAD.LB);
-    if (pad.justPressed(PAD.RB)) this.handleUnusedMenuButton(PAD.RB);
+    if (pad.justPressedAction("zoomOut")) this.handleUnusedMenuButton(controllerButtonFor("zoomOut"));
+    if (pad.justPressedAction("zoomIn")) this.handleUnusedMenuButton(controllerButtonFor("zoomIn"));
   }
 
   // Buttons the open screen had no use for, e.g. B or Y while ringing up a customer.
   handleUnusedMenuButton(button) {
     const shop = this.shop;
-    if (button === PAD.B && shop.checkoutSystem.operatingRegister) shop.checkoutSystem.endRegisterSession();
-    if ((button === PAD.LB || button === PAD.RB) && shop.controlMode.allows("cameraZoom")) {
-      shop.cameraRig.zoomBy(button === PAD.RB ? 1 : -1);
+    if (button === controllerButtonFor("cancel") && shop.checkoutSystem.operatingRegister) {
+      shop.checkoutSystem.endRegisterSession();
+    }
+    if ((button === controllerButtonFor("zoomOut") || button === controllerButtonFor("zoomIn")) &&
+      shop.controlMode.allows("cameraZoom")) {
+      shop.cameraRig.zoomBy(button === controllerButtonFor("zoomIn") ? 1 : -1);
     }
   }
 

@@ -9,7 +9,14 @@ import { getSavedCursorMode, setCursorMode } from "./GameCursor.js";
 import {
   BINDING_GROUPS, bindingConflict, bindingForEvent, bindingLabel, defaultBindings, getBindings, setBindings,
 } from "../input/KeyBindings.js";
-import { getControllerLabelStyle, setControllerLabelStyle } from "../input/InputDevice.js";
+import {
+  CONTROLLER_ACTIONS, defaultControllerBindings, getControllerBindings, setControllerBindings,
+  swapControllerBinding,
+} from "../input/ControllerBindings.js";
+import { PAD } from "../input/GamepadInput.js";
+import {
+  controllerButtonLabel, getControllerLabelStyle, getResolvedControllerLabelStyle, setControllerLabelStyle,
+} from "../input/InputDevice.js";
 import { html } from "../core/html.js";
 
 export class SettingsPanel {
@@ -89,8 +96,14 @@ export class SettingsPanel {
               <option value="nintendo">NINTENDO</option>
             </select>
             <span>Automatic uses the controller name when it recognizes it. Otherwise, it uses Xbox button names.</span>
-            <span>This changes the button names in instructions and help, not what the buttons do.</span>
           </label>
+          <h2>Controller buttons</h2>
+          <p>Choose an action, then press the controller button you want to use. If another action uses that button, the two assignments switch. Press the D-pad to stop listening; the D-pad, sticks, and triggers keep their current jobs.</p>
+          <div class="settings-controller-bindings"></div>
+          <div class="settings-controller-capture-actions hidden">
+            <button class="settings-cancel-controller-capture">STOP LISTENING</button>
+          </div>
+          <button class="action-btn settings-controller-defaults">RESTORE DEFAULT BUTTONS</button>
         </div>
       </div>
       <div class="settings-actions">
@@ -115,9 +128,12 @@ export class SettingsPanel {
     this.status = this.element.querySelector(".settings-status");
     this.bindingStatus = this.element.querySelector(".settings-binding-status");
     this.bindingList = this.element.querySelector(".settings-binding-list");
+    this.controllerBindingList = this.element.querySelector(".settings-controller-bindings");
+    this.controllerCaptureActions = this.element.querySelector(".settings-controller-capture-actions");
     this.clearBindingButton = this.element.querySelector(".settings-clear-binding");
     this.captureActions = this.element.querySelector(".settings-capture-actions");
     this.bindings = getBindings();
+    this.controllerBindings = getControllerBindings();
     SettingsPanel.applyTextSize(SettingsPanel.getSavedTextSize());
 
     this.element.querySelectorAll("[data-settings-tab]").forEach((button) => {
@@ -139,6 +155,17 @@ export class SettingsPanel {
     });
     this.clearBindingButton.addEventListener("click", () => this.clearCapturedBinding());
     this.element.querySelector(".settings-assign-escape").addEventListener("click", () => this.assignCapturedBinding("Escape"));
+    this.controllerBindingList.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-controller-binding-action]");
+      if (button) this.startControllerCapture(button.dataset.controllerBindingAction);
+    });
+    this.element.querySelector(".settings-cancel-controller-capture")
+      .addEventListener("click", () => this.stopControllerCapture("Button selection stopped."));
+    this.element.querySelector(".settings-controller-defaults").addEventListener("click", () => {
+      this.controllerBindings = defaultControllerBindings();
+      this.previewControllerBindings();
+      this.bindingStatus.textContent = "Default controller buttons restored. Select Apply or Accept to keep them.";
+    });
     this.element
       .querySelector(".settings-cancel")
       .addEventListener("click", () => this.run(() => this.cancel()));
@@ -159,13 +186,18 @@ export class SettingsPanel {
       this.previewTextSize(),
     );
     this.cursorSelect.addEventListener("change", () => setCursorMode(this.cursorSelect.value));
-    this.controllerLayoutSelect.addEventListener("change", () =>
-      setControllerLabelStyle(this.controllerLayoutSelect.value),
-    );
+    this.controllerLayoutSelect.addEventListener("change", () => {
+      setControllerLabelStyle(this.controllerLayoutSelect.value);
+      this.renderControllerBindings();
+    });
     this.handleEscape = (event) => {
       if (event.key !== "Escape" || this.element.classList.contains("hidden")) return;
       event.preventDefault();
       event.stopImmediatePropagation();
+      if (this.controllerCapture) {
+        this.stopControllerCapture("Button selection stopped.");
+        return;
+      }
       void this.run(() => this.cancel());
     };
     document.addEventListener("keydown", this.handleEscape, true);
@@ -190,6 +222,7 @@ export class SettingsPanel {
   }
 
   get isCapturing() { return Boolean(this.capture); }
+  get isCapturingController() { return Boolean(this.controllerCapture); }
 
   selectTab(tab) {
     this.stopCapture();
@@ -221,6 +254,67 @@ export class SettingsPanel {
       </table>`);
   }
 
+  renderControllerBindings() {
+    const style = getResolvedControllerLabelStyle();
+    this.controllerBindingList.innerHTML = String(html`
+      <table class="settings-binding-table">
+        <thead><tr><th>ACTION</th><th>BUTTON</th></tr></thead>
+        <tbody>${CONTROLLER_ACTIONS.map(({ id, label }) => {
+          const button = this.controllerBindings[id];
+          const name = controllerButtonLabel(button, style);
+          const capturing = this.controllerCapture === id ? " capturing" : "";
+          return html`<tr><td>${label}</td><td><button class="settings-binding${capturing}"
+            data-controller-binding-action="${id}" data-controller-binding-label="${label}"
+            aria-label="${label}: ${name}">${name}</button></td></tr>`;
+        })}</tbody>
+      </table>`);
+  }
+
+  startControllerCapture(action) {
+    this.stopCapture();
+    this.controllerCapture = action;
+    const button = this.controllerBindingList.querySelector(
+      `[data-controller-binding-action="${action}"]`,
+    );
+    button?.classList.add("capturing");
+    this.controllerCaptureActions.classList.remove("hidden");
+    this.bindingStatus.textContent = `Changing ${button?.dataset.controllerBindingLabel}. Press a controller button; assigned actions will switch buttons if needed.`;
+    button?.focus();
+  }
+
+  captureControllerButton(button) {
+    if (!this.controllerCapture) return;
+    if ([PAD.UP, PAD.DOWN, PAD.LEFT, PAD.RIGHT].includes(button)) {
+      this.stopControllerCapture("Button selection stopped.");
+      return;
+    }
+    const action = this.controllerCapture;
+    let result;
+    try {
+      result = swapControllerBinding(this.controllerBindings, action, button);
+    } catch (error) {
+      this.bindingStatus.textContent = error.message;
+      return;
+    }
+    const oldButton = this.controllerBindings[action];
+    this.controllerBindings = result.bindings;
+    this.previewControllerBindings();
+    const buttonName = controllerButtonLabel(button);
+    if (result.replacedAction) {
+      const selectedLabel = CONTROLLER_ACTIONS.find(({ id }) => id === action).label;
+      const other = CONTROLLER_ACTIONS.find(({ id }) => id === result.replacedAction);
+      this.bindingStatus.textContent = `${selectedLabel} now uses ${buttonName}. ${other.label} now uses ${controllerButtonLabel(oldButton)}. Select Apply or Accept to keep these buttons.`;
+    } else {
+      this.bindingStatus.textContent = `That action already uses ${buttonName}. Select Apply or Accept to keep these buttons.`;
+    }
+  }
+
+  previewControllerBindings() {
+    setControllerBindings(this.controllerBindings);
+    this.stopControllerCapture();
+    this.renderControllerBindings();
+  }
+
   previewBindings() {
     const previousCapture = this.capture;
     setBindings(this.bindings);
@@ -235,9 +329,17 @@ export class SettingsPanel {
 
   stopCapture() {
     this.capture = null;
+    this.stopControllerCapture();
     this.bindingList.querySelectorAll(".capturing").forEach((button) => button.classList.remove("capturing"));
     this.captureActions.classList.add("hidden");
     this.bindingStatus.textContent = "";
+  }
+
+  stopControllerCapture(message = "") {
+    this.controllerCapture = null;
+    this.controllerBindingList?.querySelectorAll(".capturing").forEach((button) => button.classList.remove("capturing"));
+    this.controllerCaptureActions?.classList.add("hidden");
+    if (message) this.bindingStatus.textContent = message;
   }
 
   clearCapturedBinding() {
@@ -311,9 +413,12 @@ export class SettingsPanel {
       cursorMode: getSavedCursorMode(),
       controllerLabelStyle: getControllerLabelStyle(),
       controls: getBindings(),
+      controllerBindings: getControllerBindings(),
     };
     this.bindings = getBindings();
+    this.controllerBindings = getControllerBindings();
     this.renderBindings();
+    this.renderControllerBindings();
     this.selectTab("display");
     this.select.disabled = this.displayModeSelect.disabled = !settings;
     if (settings) this.syncDisplaySettings(settings);
@@ -322,6 +427,7 @@ export class SettingsPanel {
     this.cursorSelect.value = this.settingsSnapshot.cursorMode;
     this.controllerLayoutSelect.value = this.settingsSnapshot.controllerLabelStyle;
     setControllerLabelStyle(this.settingsSnapshot.controllerLabelStyle);
+    this.renderControllerBindings();
 
     this.element.classList.remove("hidden");
     this.onOpen?.();
@@ -361,6 +467,7 @@ export class SettingsPanel {
     setCursorMode(this.cursorSelect.value, { persist: true });
     setControllerLabelStyle(this.controllerLayoutSelect.value, { persist: true });
     setBindings(this.bindings, { persist: true });
+    setControllerBindings(this.controllerBindings, { persist: true });
     this.stopCapture();
     this.element.classList.add("hidden");
     this.onClose?.();
@@ -376,7 +483,9 @@ export class SettingsPanel {
   }
 
   async cancel() {
-    const { resolution, displayMode, textSize, cursorMode, controllerLabelStyle, controls } = this.settingsSnapshot;
+    const {
+      resolution, displayMode, textSize, cursorMode, controllerLabelStyle, controls, controllerBindings,
+    } = this.settingsSnapshot;
 
     // Restore the mode first; switching modes can resize the window.
     if (window.desktopApi && displayMode !== this.appliedDisplayMode) {
@@ -396,6 +505,10 @@ export class SettingsPanel {
     if (controls) {
       this.bindings = controls;
       setBindings(controls);
+    }
+    if (controllerBindings) {
+      this.controllerBindings = controllerBindings;
+      setControllerBindings(controllerBindings);
     }
     this.close();
   }
@@ -440,12 +553,14 @@ export class SettingsPanel {
       cursorMode: this.cursorSelect.value,
       controllerLabelStyle: this.controllerLayoutSelect.value,
       controls: getBindings(),
+      controllerBindings: getControllerBindings(),
     };
     if (settings) this.syncDisplaySettings(settings);
     localStorage.setItem(SettingsPanel.textSizeStorageKey, this.textSizeSelect.value);
     setCursorMode(this.cursorSelect.value, { persist: true });
     setControllerLabelStyle(this.controllerLayoutSelect.value, { persist: true });
     setBindings(this.bindings, { persist: true });
+    setControllerBindings(this.controllerBindings, { persist: true });
   }
 
   static getSavedTextSize() {

@@ -2,6 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { UINavigator } from "../js/logic/UINavigator.js";
 import { PAD } from "../js/input/GamepadInput.js";
+import {
+  controllerButtonFor, defaultControllerBindings, setControllerBindings, swapControllerBinding,
+} from "../js/input/ControllerBindings.js";
 import { setInputDevice } from "../js/input/InputDevice.js";
 
 function setup(t) {
@@ -51,6 +54,8 @@ function target(dataset = {}, rect = { left: 0, top: 0, right: 20, bottom: 20 })
 const pad = (pressed = [], down = pressed) => ({
   justPressed: (button) => pressed.includes(button),
   isDown: (button) => down.includes(button),
+  justPressedAction: (action) => pressed.includes(controllerButtonFor(action)),
+  isActionDown: (action) => down.includes(controllerButtonFor(action)),
   rightStick: { y: 0 },
 });
 
@@ -60,6 +65,19 @@ test("a controller click has mouse-click detail, not keyboard-click detail", (t)
   navigator.click(button);
   assert.deepEqual(button.events.map(({ type, detail }) => [type, detail]),
     [["mousedown", 1], ["mouseup", 1], ["click", 1]]);
+});
+
+test("the remapped use button activates the focused menu item", (t) => {
+  const navigator = setup(t);
+  const defaults = defaultControllerBindings();
+  const remapped = swapControllerBinding(defaults, "interact", PAD.RB).bindings;
+  setControllerBindings(remapped);
+  t.after(() => setControllerBindings(defaults));
+  const button = target();
+  navigator.testTargets = [button];
+
+  navigator.handle(pad([PAD.RB]));
+  assert.equal(button.events.find(({ type }) => type === "click")?.type, "click");
 });
 
 test("shelf controller holds keep the pointer down and release on button or screen changes", (t) => {

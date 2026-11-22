@@ -11,7 +11,7 @@ import { WindowManager } from "../logic/WindowManager.js";
 import { SaveManager } from "../../SaveManager.js";
 import { validateShopSave } from "../logic/ShopSave.js";
 import { database } from "./boot.js";
-import { GamepadInput, PAD } from "../input/GamepadInput.js";
+import { GamepadInput } from "../input/GamepadInput.js";
 import { UINavigator } from "../logic/UINavigator.js";
 import { setInputDevice } from "../input/InputDevice.js";
 
@@ -155,11 +155,15 @@ export class TitleScene extends Phaser.Scene {
     const pad = this.padInput;
     pad.poll(time);
     if (pad.hadInput) setInputDevice("gamepad");
+    if (this.settingsPanel.isCapturingController) {
+      for (const button of pad.pressed) this.settingsPanel.captureControllerButton(button);
+      return;
+    }
     if (this.uiNavigator.handle(pad, delta)) return;
     if (!this.input.keyboard.enabled) return;
     if (pad.navDirection === "up") this.selectCommand(-1);
     else if (pad.navDirection === "down") this.selectCommand(1);
-    if (pad.justPressed(PAD.A) || pad.justPressed(PAD.START)) this.activateCommand();
+    if (pad.justPressedAction("interact") || pad.justPressedAction("pause")) this.activateCommand();
   }
 
   /**

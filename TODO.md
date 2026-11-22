@@ -95,7 +95,7 @@ notice something that needs doing but isn't being done right now.
       simulated one), including the Steam Deck.
 - [ ] Fine-tune the controller after real-pad playtesting: stick feel, dash timing, menu
       highlight movement, and button prompts.
-- [ ] Add controller configuration and button-remapping options.
+- [x] Add controller configuration and button-remapping options.
 - [ ] Test the settings available from the main menu.
 
 ## Progression

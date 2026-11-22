@@ -23,7 +23,7 @@
 .settings-tabs .retro-tab-btn { flex: 1 1 auto; }
 .settings-display { display: flex; flex-direction: column; gap: 24px; }
 .settings-display.hidden, .settings-controls.hidden, .settings-controller.hidden, .settings-defaults.hidden,
-.settings-capture-actions.hidden { display: none; }
+.settings-capture-actions.hidden, .settings-controller-capture-actions.hidden { display: none; }
 
 .settings-title {
   color: var(--color-text-main);
@@ -83,8 +83,9 @@
 }
 
 .settings-action-right { display: flex; gap: 8px; margin-left: auto; }
-.settings-controls h2 { font-size: var(--font-size-18); margin-bottom: 10px; }
+.settings-controls h2, .settings-controller h2 { font-size: var(--font-size-18); margin-bottom: 10px; }
 .settings-controls > p { color: var(--color-text-muted); font-size: var(--font-size-14); line-height: 1.5; }
+.settings-controller > p { color: var(--color-text-muted); font-size: var(--font-size-14); line-height: 1.5; }
 .settings-binding-status:not(:empty) { color: var(--color-border-active); font-size: var(--font-size-14); line-height: 1.4; margin: 10px 0; }
 .settings-capture-actions button {
   margin-bottom: 10px; padding: 6px 10px; font: inherit; color: var(--color-text-main);
@@ -100,6 +101,11 @@
 .settings-binding {
   width: 100%; padding: 6px; font: inherit; color: var(--color-text-main); background: #1e293b;
   border: 1px solid #475569; border-radius: 4px; cursor: pointer;
+}
+.settings-controller-bindings { margin: 16px 0; border: 1px solid var(--color-border-subtle); background: var(--color-bg-base); }
+.settings-controller-capture-actions button, .settings-controller-defaults {
+  margin: 0 0 10px; padding: 6px 10px; font: inherit; color: var(--color-text-main);
+  border: 1px solid var(--color-border-subtle); background: #1e293b; cursor: pointer;
 }
 .settings-binding.empty { color: var(--color-text-muted); border-style: dashed; background: var(--color-panel); }
 .settings-binding.capturing { color: white; border-color: var(--color-border-active); background: #0369a1; }

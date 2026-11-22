@@ -3,14 +3,14 @@
 // ==========================================
 // Placement mode for moving an existing fixture or unpacking a fixture crate: a ghost
 // follows the cursor on the 8-pixel grid, with valid/invalid and standing-space outlines.
-// Left-click or A commits; right-click, Esc, or X cancels. Only while the store is closed.
+// Left-click or the mapped use button commits; right-click, Esc, or the crate button cancels.
+// Only while the store is closed.
 import { TILE_SIZE } from "./RoomLayout.js";
 import { AREA } from "../world/Areas.js";
 import {
   getFixtureType, fixtureAtWorldPoint, fixtureBounds, fixtureFootprint, fixtureProjectionBoxes,
 } from "./FixtureLayout.js";
 import { getFixtureTexture, hasFacingTextures } from "./FixtureTexture.js";
-import { PAD } from "../input/GamepadInput.js";
 import { getInputDevice } from "../input/InputDevice.js";
 import { fixturePlacementContext } from "./FixturePlacementContext.js";
 import { matchesBinding } from "../input/KeyBindings.js";
@@ -110,7 +110,7 @@ export class FixturePlacement {
   handlePad(pad, delta) {
     if (!this.active) return;
     if (getInputDevice() === "gamepad" || pad.rightStick.x || pad.rightStick.y ||
-      pad.justPressed(PAD.A) || pad.justPressed(PAD.Y)) this.usePadPoint();
+      pad.justPressedAction("interact") || pad.justPressedAction("putDown")) this.usePadPoint();
     if (pad.rightStick.x || pad.rightStick.y) {
       const camera = this.getPlacementCamera();
       const distance = PAD_CURSOR_SPEED * Math.min(delta, 50) / 1000;
@@ -118,9 +118,9 @@ export class FixturePlacement {
       this.padPoint.y = Math.max(camera.y, Math.min(camera.y + camera.height - 1, this.padPoint.y + pad.rightStick.y * distance));
       this.refreshPreview();
     }
-    if (pad.justPressed(PAD.Y)) this.rotate();
-    if (pad.justPressed(PAD.A)) this.confirm();
-    else if (pad.justPressed(PAD.X)) this.cancel();
+    if (pad.justPressedAction("putDown")) this.rotate();
+    if (pad.justPressedAction("interact")) this.confirm();
+    else if (pad.justPressedAction("crate")) this.cancel();
   }
 
   getPlacementCamera() {

@@ -6,52 +6,50 @@
 // CSS shows .kbd-only or .pad-only hint text.
 
 import { actionBindingLabel } from "./KeyBindings.js";
+import { controllerButtonFor } from "./ControllerBindings.js";
 
 let currentDevice = "keyboard";
 let controllerLabelStyle = null;
 const CONTROLLER_LABELS_STORAGE_KEY = "space-arms-dealer.controller-label-style";
 const CONTROLLER_LABEL_STYLES = Object.freeze(["automatic", "xbox", "playstation", "nintendo"]);
 
-const GAMEPAD_ACTIONS = Object.freeze({
-  interact: "bottom",
-  crate: "left",
-  putDown: "top",
-  nextCrate: "rightStick",
-  moveFixture: "bottom",
-  dash: "dash",
-  highlightTrash: "highlightTrash",
-  tablet: "back",
-  rotate: "top",
-  cancel: "right",
-  cancelFixture: "left",
-  handOverChange: "top",
-  place: "bottom",
-  tenderAdd: "bottom",
-  tenderRemove: "left",
-  start: "start",
-  zoomIn: "rightBumper",
-  zoomOut: "leftBumper",
-});
-
 const GAMEPAD_LAYOUTS = Object.freeze({
   xbox: Object.freeze({
-    bottom: "A", right: "B", left: "X", top: "Y",
-    leftBumper: "LB", rightBumper: "RB", leftTrigger: "LT", rightTrigger: "RT",
-    back: "View", start: "Start", rightStick: "Right stick click",
-    dash: "B or a trigger (LT or RT)", highlightTrash: "Left stick click (hold)",
+    0: "A", 1: "B", 2: "X", 3: "Y", 4: "LB", 5: "RB",
+    8: "View", 9: "Start", 10: "Left stick click", 11: "Right stick click",
+    leftTrigger: "LT", rightTrigger: "RT",
   }),
   playstation: Object.freeze({
-    bottom: "✕", right: "○", left: "□", top: "△",
-    leftBumper: "L1", rightBumper: "R1", leftTrigger: "L2", rightTrigger: "R2",
-    back: "Share/Create", start: "Options", rightStick: "Right stick click",
-    dash: "○ or a trigger (L2 or R2)", highlightTrash: "Left stick click (L3, hold)",
+    0: "✕", 1: "○", 2: "□", 3: "△", 4: "L1", 5: "R1",
+    8: "Share/Create", 9: "Options", 10: "Left stick click (L3)", 11: "Right stick click (R3)",
+    leftTrigger: "L2", rightTrigger: "R2",
   }),
   nintendo: Object.freeze({
-    bottom: "B", right: "A", left: "Y", top: "X",
-    leftBumper: "L", rightBumper: "R", leftTrigger: "ZL", rightTrigger: "ZR",
-    back: "Minus", start: "Plus", rightStick: "Right stick click",
-    dash: "A or a trigger (ZL or ZR)", highlightTrash: "Left stick click (hold)",
+    0: "B", 1: "A", 2: "Y", 3: "X", 4: "L", 5: "R",
+    8: "Minus", 9: "Plus", 10: "Left stick click", 11: "Right stick click",
+    leftTrigger: "ZL", rightTrigger: "ZR",
   }),
+});
+
+const GAMEPAD_ACTIONS = Object.freeze({
+  interact: "interact",
+  crate: "crate",
+  putDown: "putDown",
+  nextCrate: "nextCrate",
+  dash: "cancel",
+  highlightTrash: "highlightTrash",
+  moveFixture: "interact",
+  tablet: "tablet",
+  rotate: "putDown",
+  cancel: "cancel",
+  cancelFixture: "crate",
+  handOverChange: "putDown",
+  place: "interact",
+  tenderAdd: "interact",
+  tenderRemove: "crate",
+  start: "pause",
+  zoomIn: "zoomIn",
+  zoomOut: "zoomOut",
 });
 
 const controlHelp = (label, keyboard, gamepad) => Object.freeze({ label, keyboard, gamepad });
@@ -124,6 +122,12 @@ export function getResolvedControllerLabelStyle() {
   return "xbox";
 }
 
+export function controllerButtonLabel(button, style = getResolvedControllerLabelStyle()) {
+  const layout = GAMEPAD_LAYOUTS[style];
+  if (!layout || typeof layout[button] !== "string") throw new Error(`Unknown controller button: ${button}`);
+  return layout[button];
+}
+
 /**
  * @param {"automatic"|"xbox"|"playstation"|"nintendo"} style
  * @param {{persist?: boolean}} [options]
@@ -151,10 +155,19 @@ export function setInputDevice(device) {
  * @param {"keyboard"|"gamepad"} [device]
  */
 export function controlLabel(action, device = currentDevice) {
-  if (!(action in GAMEPAD_ACTIONS)) throw new Error(`Unknown control action: ${action}`);
   if (device === "gamepad") {
     const layout = GAMEPAD_LAYOUTS[getResolvedControllerLabelStyle()];
-    return layout[GAMEPAD_ACTIONS[action]];
+    if (action === "dash") {
+      return `${controllerButtonLabel(controllerButtonFor("cancel"))} or a trigger (${layout.leftTrigger} or ${layout.rightTrigger})`;
+    }
+    if (action === "highlightTrash") {
+      return `${controllerButtonLabel(controllerButtonFor("highlightTrash"))} (hold)`;
+    }
+    if (!(action in GAMEPAD_ACTIONS)) throw new Error(`Unknown control action: ${action}`);
+    return controllerButtonLabel(controllerButtonFor(GAMEPAD_ACTIONS[action]));
+  }
+  if (!(action in GAMEPAD_ACTIONS) && !["dash", "highlightTrash"].includes(action)) {
+    throw new Error(`Unknown control action: ${action}`);
   }
   const mapped = { moveFixture: "nextCrate", handOverChange: "crate", cancelFixture: "cancel" }[action] ?? action;
   return actionBindingLabel(mapped);

@@ -4,6 +4,7 @@ import { AREA, Areas } from "../js/world/Areas.js";
 import { CameraRig } from "../js/world/CameraRig.js";
 import { CONTROL_MODES } from "../js/input/ControlMode.js";
 import { PAD } from "../js/input/GamepadInput.js";
+import { controllerButtonFor } from "../js/input/ControllerBindings.js";
 import { PlayerControls } from "../js/input/PlayerControls.js";
 import { InteractableRegistry } from "../js/interaction/InteractableRegistry.js";
 import { Navigation } from "../js/world/Navigation.js";
@@ -248,7 +249,12 @@ test("keyboard and controller zoom only work on the sales floor", (t) => {
   const controls = new PlayerControls(scene);
   controls.install();
   let pressed = null;
-  controls.padInput = { poll() {}, hadInput: false, justPressed: (button) => button === pressed };
+  controls.padInput = {
+    poll() {},
+    hadInput: false,
+    justPressed: (button) => button === pressed,
+    justPressedAction: (action) => controllerButtonFor(action) === pressed,
+  };
   controls.uiNavigator = { handle: () => false };
   const pressPad = (button) => {
     pressed = button;

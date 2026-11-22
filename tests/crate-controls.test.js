@@ -16,6 +16,9 @@ import { HOLD_KEY_MS, MAX_CARRIED_CRATES, isSquarelyInFront } from "../js/logic/
 import { fixtureBounds, getFixtureType } from "../js/logic/FixtureLayout.js";
 import { FixtureRegistry } from "../js/logic/FixtureRegistry.js";
 import { PAD } from "../js/input/GamepadInput.js";
+import {
+  controllerButtonFor, defaultControllerBindings, setControllerBindings, swapControllerBinding,
+} from "../js/input/ControllerBindings.js";
 import { TILE_SIZE } from "../js/logic/RoomLayout.js";
 import { AREA, Areas } from "../js/world/Areas.js";
 import { sortPeopleByFeet } from "../js/world/Depth.js";
@@ -1097,7 +1100,13 @@ test("paused controller ignores register, tablet and menu controls; Start resume
     togglePause() { this.isPaused = !this.isPaused; },
   };
   scene.checkoutSystem.operatingRegister = true;
-  scene.controls.padInput = { poll() {}, hadInput: false, justPressed: () => true };
+  scene.controls.padInput = {
+    poll() {},
+    hadInput: false,
+    justPressed: () => true,
+    justPressedAction: (action) =>
+      scene.controls.padInput.justPressed(controllerButtonFor(action)),
+  };
   let hudClosed = false;
   scene.controls.uiNavigator = {
     handle() { assert.fail("Paused controller must not navigate menus"); },
@@ -1114,6 +1123,22 @@ test("paused controller ignores register, tablet and menu controls; Start resume
   assert.equal(hudClosed, true);
 });
 
+test("controller button capture takes input before gameplay or menu actions", () => {
+  const { scene } = createHarness();
+  const captured = [];
+  scene.pauseMenu = {
+    settings: {
+      isCapturingController: true,
+      captureControllerButton(button) { captured.push(button); },
+    },
+  };
+  scene.controls.padInput = { poll() {}, hadInput: false, pressed: new Set([PAD.A, PAD.X]) };
+  scene.controls.uiNavigator = { handle() { assert.fail("Captured buttons must not activate the menu"); } };
+
+  scene.controls.handleGamepad(0, 16);
+  assert.deepEqual(captured, [PAD.A, PAD.X]);
+});
+
 test("controller X and Y tell a tap from a hold the same way, and R3 moves the arrow down", () => {
   const h = createHarness();
   const goBacksPacks = addNearbyRegister(h.scene);
@@ -1123,6 +1148,8 @@ test("controller X and Y tell a tap from a hold the same way, and R3 moves the a
     poll() {}, hadInput: false,
     justPressed: (button) => pressed.has(button),
     isDown: (button) => down.has(button),
+    justPressedAction: (action) => pressed.has(controllerButtonFor(action)),
+    isActionDown: (action) => down.has(controllerButtonFor(action)),
   };
   h.scene.checkoutWindow = { usesChitInput: () => false, usesSpaceKey: () => false };
   h.scene.controls.uiNavigator = { handle: () => false };
@@ -1154,6 +1181,34 @@ test("controller X and Y tell a tap from a hold the same way, and R3 moves the a
   release(PAD.Y);
   assert.deepEqual(h.scene.floorStacks.get(bottom), [top]);
   assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [middle]);
+});
+
+test("the remapped crate button still picks up crates", (t) => {
+  const defaults = defaultControllerBindings();
+  const remapped = swapControllerBinding(defaults, "crate", PAD.RB).bindings;
+  setControllerBindings(remapped);
+  t.after(() => setControllerBindings(defaults));
+
+  const h = createHarness();
+  const [floorCrate] = floorStack(h.scene, 1);
+  const down = new Set();
+  let pressed = new Set();
+  h.scene.controls.padInput = {
+    poll() {}, hadInput: false,
+    justPressed: (button) => pressed.has(button),
+    isDown: (button) => down.has(button),
+    justPressedAction: (action) => pressed.has(controllerButtonFor(action)),
+    isActionDown: (action) => down.has(controllerButtonFor(action)),
+  };
+  h.scene.checkoutWindow = { usesChitInput: () => false, usesSpaceKey: () => false };
+  h.scene.controls.uiNavigator = { handle: () => false };
+  pressed = new Set([PAD.RB]);
+  down.add(PAD.RB);
+  h.scene.controls.handleGamepad(0, 16);
+  down.delete(PAD.RB);
+  h.scene.controls.updateCratePress();
+
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [floorCrate]);
 });
 
 test("E returns every held empty crate, preserving filled crates; Q only puts crates down", () => {

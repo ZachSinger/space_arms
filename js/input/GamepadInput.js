@@ -7,6 +7,8 @@
 // See also: UINavigator.js (menus), PlayerControls.js handleGamepad (world actions).
 
 // Standard-mapping button indexes, named after the Xbox layout.
+import { controllerButtonFor } from "./ControllerBindings.js";
+
 export const PAD = Object.freeze({
   A: 0,
   B: 1,
@@ -141,6 +143,14 @@ export class GamepadInput {
     return this.pressed.has(button);
   }
 
+  isActionDown(action) {
+    return this.isDown(controllerButtonFor(action));
+  }
+
+  justPressedAction(action) {
+    return this.justPressed(controllerButtonFor(action));
+  }
+
   /**
    * Walking direction: the D-pad as a full-speed direction, otherwise the left stick.
    * @returns {{x: number, y: number}}
@@ -152,13 +162,13 @@ export class GamepadInput {
     return { ...this.leftStick };
   }
 
-  // Holding B (thumb stays on the face buttons) or either trigger.
+  // Holding the mapped cancel button or either trigger.
   wantsDash() {
-    return this.down.has(PAD.B) || this.down.has(PAD.RT) || this.down.has(PAD.LT);
+    return this.isActionDown("cancel") || this.down.has(PAD.RT) || this.down.has(PAD.LT);
   }
 
-  // Holding the left stick in lights up all trash on the floor.
+  // Holding the mapped trash-highlight button lights up all trash on the floor.
   wantsTrashHighlight() {
-    return this.down.has(PAD.L3);
+    return this.isActionDown("highlightTrash");
   }
 }

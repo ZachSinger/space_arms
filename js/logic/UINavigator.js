@@ -3,9 +3,7 @@
 // ==========================================
 // Controller menu cursor for the DOM screens. Whichever screen is on top (settings, the top
 // bar, the customer's cash, or the focused window) becomes the scope; the D-pad or left
-// stick moves a highlight between its buttons and items, and the face buttons act on it:
-//   A  = left-click        X = right-click        Y = "pad-alt" event (screen-specific)
-//   B  = back (Esc)        LB/RB = previous/next tab        right stick = scroll
+// stick moves a highlight between its buttons and items, and mapped buttons act on it.
 // Clicks are faked as the same mouse events a real click sends, so every screen works with
 // no controller-specific code. Screens can opt in to more:
 //   data-pad-autofocus  where the cursor lands when its previous target disappears
@@ -15,7 +13,7 @@
 //   data-pad-hold       keep a pointer press down until the face button is released
 //   data-pad-repeat     repeat primary clicks at this interval (ms), within the same screen
 //   "pad-alt" event     cancelable; call preventDefault() when the screen used it
-import { PAD } from "../input/GamepadInput.js";
+import { controllerButtonFor } from "../input/ControllerBindings.js";
 import { getInputDevice } from "../input/InputDevice.js";
 import { pickNearest, pickNeighbor } from "./PadNavigation.js";
 
@@ -142,12 +140,12 @@ export class UINavigator {
     if (this.held && (!pad.isDown(this.held.padButton) || !this.held.element.isConnected)) this.stopHold();
     if (getInputDevice() !== "gamepad") this.stopActions();
     if (pad.navDirection) this.move(pad.navDirection, targets);
-    if (pad.justPressed(PAD.A)) {
+    if (pad.justPressedAction("interact")) {
       const interval = Number(this.focused?.dataset.padRepeat);
       this.activate(scope);
       this.repeating = interval > 0 ? { scope, interval, elapsed: 0 } : null;
     } else if (this.repeating) {
-      if (!pad.isDown(PAD.A) || this.repeating.scope !== scope || !this.focused?.hasAttribute("data-pad-repeat")) {
+      if (!pad.isActionDown("interact") || this.repeating.scope !== scope || !this.focused?.hasAttribute("data-pad-repeat")) {
         this.repeating = null;
       } else {
         this.repeating.elapsed += delta;
@@ -157,11 +155,11 @@ export class UINavigator {
         }
       }
     }
-    if (pad.justPressed(PAD.X)) this.secondary();
-    if (pad.justPressed(PAD.Y)) this.alt(scope);
-    if (pad.justPressed(PAD.B)) this.back(scope);
-    if (pad.justPressed(PAD.LB)) this.switchTab(scope, -1, PAD.LB);
-    if (pad.justPressed(PAD.RB)) this.switchTab(scope, 1, PAD.RB);
+    if (pad.justPressedAction("crate")) this.secondary();
+    if (pad.justPressedAction("putDown")) this.alt(scope);
+    if (pad.justPressedAction("cancel")) this.back(scope);
+    if (pad.justPressedAction("zoomOut")) this.switchTab(scope, -1, controllerButtonFor("zoomOut"));
+    if (pad.justPressedAction("zoomIn")) this.switchTab(scope, 1, controllerButtonFor("zoomIn"));
     if (pad.rightStick.y) this.scroll(scope, pad.rightStick.y * SCROLL_SPEED * delta / 1000);
 
     if (this.focused?.isConnected) {
@@ -273,7 +271,7 @@ export class UINavigator {
       return;
     }
     if (element.hasAttribute("data-pad-hold")) {
-      this.startHold(element, PAD.A, 0);
+      this.startHold(element, controllerButtonFor("interact"), 0);
       return;
     }
     this.click(element);
@@ -292,7 +290,7 @@ export class UINavigator {
     const element = this.focused;
     if (!element) return;
     if (element.hasAttribute("data-pad-hold")) {
-      this.startHold(element, PAD.X, 2);
+      this.startHold(element, controllerButtonFor("crate"), 2);
       return;
     }
     if (element.hasAttribute("data-pad-row")) {
@@ -324,7 +322,7 @@ export class UINavigator {
   alt(scope) {
     const event = new CustomEvent("pad-alt", { bubbles: true, cancelable: true });
     (this.focused ?? scope).dispatchEvent(event);
-    if (!event.defaultPrevented) this.onUnhandled?.(PAD.Y, scope);
+    if (!event.defaultPrevented) this.onUnhandled?.(controllerButtonFor("putDown"), scope);
   }
 
   back(scope) {
@@ -338,7 +336,7 @@ export class UINavigator {
       return;
     }
     if (scope.dataset.padBack === "world") {
-      this.onUnhandled?.(PAD.B, scope);
+      this.onUnhandled?.(controllerButtonFor("cancel"), scope);
       return;
     }
     // Esc, exactly as the keyboard sends it: shelves cancel placing, windows close.

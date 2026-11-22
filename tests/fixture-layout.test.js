@@ -3,6 +3,7 @@ import test from "node:test";
 import { FIXTURE_TYPES, STARTING_FIXTURES, FIXTURE_POSITION_STEP, FIXTURE_SNAP_STEP, FIXTURE_FRONT_CLEARANCE, fixtureAccessCells, fixtureAtWorldPoint, fixtureBounds, fixtureCells, fixtureFacing, fixtureFacingStep, fixtureFootprint, fixtureFrontClearance, fixtureProjectionBoxes, fixturesOverlap, fixtureStandingSpot, cellKey, getFixtureType, isFixturePosition, migrateFixtureEntry, planRegisterQueue, snapFixturePosition, validateFixtureLayout, fixtureInteractionDistance } from "../js/logic/FixtureLayout.js";
 import { FixturePlacement } from "../js/logic/FixturePlacement.js";
 import { PAD } from "../js/input/GamepadInput.js";
+import { controllerButtonFor } from "../js/input/ControllerBindings.js";
 import { getInputDevice, setInputDevice } from "../js/input/InputDevice.js";
 import { TileRoom } from "../js/logic/TileRoom.js";
 import { findGridPath } from "../js/world/Navigation.js";
@@ -346,6 +347,7 @@ test("controller walking and dashing leave the fixture cursor free for the right
     navDirection: "left",
     rightStick: { x: 0, y: 0 },
     justPressed: (button) => pressed.has(button),
+    justPressedAction: (action) => pressed.has(controllerButtonFor(action)),
   };
 
   placement.handlePad(pad, 50);
