@@ -146,7 +146,7 @@ function storeTopic({ shopLevel, reputation }) {
         the mop. You cannot carry trash or crates, use shelves, or work the register while
         holding it.</p>
       <p>Dirt and unfinished mopping are saved and stay overnight. Loading a save returns
-        the mop to its bucket. Employees clean trash, but do not mop dirt yet.</p>`),
+        the mop to its bucket. Employees on the Clean the store job also mop dirt.</p>`),
     section("Starting a Shift", `
       ${list([
         "Press <strong>START SHIFT</strong> on the top bar. The game saves first.",
