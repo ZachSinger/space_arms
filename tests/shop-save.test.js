@@ -27,6 +27,7 @@ function snapshot() {
     playerState: {
       credits: 1500, globalReputation: 2, customersTurnedAway: 0,
       factionReputation: { scavengers: 0, mercenaries: -1, explorers: 3 },
+      droneDeliveries: { nextOrderId: 1, activeOrder: null },
       hiredEmployees: [],
       activeLicenses: ["lic_corp_aulin"], storePrices: { wpn_rif_01: 123 },
       goBacks: [{ itemId: "wpn_rif_01", quantity: 40 }],
@@ -701,4 +702,50 @@ test("trash on the floor is saved, and unknown or off-map trash is rejected", ()
     /invalid trash/);
   assert.throws(() => validateShopSave({ ...snapshot(), trash: [{ kind: "can", x: -5, y: 400 }] }, database),
     /invalid trash/);
+});
+
+test("active remote orders save their single mixed crate and reject duplicate crates", () => {
+  const data = snapshot();
+  const items = [
+    { itemId: "wpn_rif_01", quantity: 3 },
+    { itemId: "amo_01", quantity: 4 },
+  ];
+  const orderCrate = {
+    id: "crate-3",
+    kind: "remote-order",
+    orderId: "remote-order-1",
+    requiredItems: items,
+    contents: [{ itemId: "wpn_rif_01", quantity: 1 }],
+    quantity: 1,
+  };
+  const stockCrate = { id: "crate-4", kind: "item", itemId: "amo_01", quantity: 2 };
+  data.playerState.droneDeliveries = {
+    nextOrderId: 2,
+    activeOrder: {
+      id: "remote-order-1",
+      receivedDay: 1,
+      expiresOnDay: 2,
+      items,
+      payout: 123,
+      reputation: 2,
+      crateId: orderCrate.id,
+    },
+  };
+  data.carriedCrates = [orderCrate, stockCrate];
+  data.carriedCrate = stockCrate;
+  data.nextCrateId = 5;
+
+  assert.deepEqual(validateShopSave(data, database), data);
+
+  const duplicate = structuredClone(data);
+  duplicate.crates.push({
+    ...orderCrate,
+    id: "crate-5",
+    x: 180,
+    y: 6656,
+    velocityX: 0,
+    velocityY: 0,
+  });
+  duplicate.nextCrateId = 6;
+  assert.throws(() => validateShopSave(duplicate, database), /does not match its crate/);
 });

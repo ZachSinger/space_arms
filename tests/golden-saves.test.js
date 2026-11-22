@@ -11,11 +11,15 @@ import { migratePreWarAmmoContract } from "../js/state/migrations/preWarAmmoCont
 import { repriceScrapAutopistol } from "../js/state/migrations/scrapAutopistolPrice.js";
 import { addRegisterAssignments } from "../js/state/migrations/registerAssignments.js";
 import { rebalanceItemPrices } from "../js/state/migrations/moneyRebalance.js";
+import { addDroneDeliveriesState } from "../js/state/migrations/droneDeliveries.js";
 
 const dir = new URL("./golden-saves/", import.meta.url);
 const read = (name) => JSON.parse(readFileSync(new URL(name, dir), "utf8"));
 const upgradeExpected = (data) => ({
-  ...rebalanceItemPrices(addRegisterAssignments(repriceScrapAutopistol(migratePreWarAmmoContract(upgradeContractSplit(data)))), database),
+  ...addDroneDeliveriesState(rebalanceItemPrices(
+    addRegisterAssignments(repriceScrapAutopistol(migratePreWarAmmoContract(upgradeContractSplit(data)))),
+    database,
+  )),
   layoutVersion: SHOP_LAYOUT_VERSION,
 });
 const database = new DatabaseManager();

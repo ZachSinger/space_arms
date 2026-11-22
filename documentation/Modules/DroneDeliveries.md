@@ -40,12 +40,17 @@ The Drone Terminal lets you fill orders from remote customers from the start of 
   crate area. This keeps remote-order work off the sales floor while keeping the terminal and
   incoming stock nearby.
 
-## Proposed first version (not yet confirmed by Zach)
-These fill gaps the notes above leave open. They are first-pass picks, not agreed design.
+## Implemented first-pass tuning (not confirmed by Zach)
 
-- **What's in an order:** only products you already have contracts for, and more of them than a
-  typical customer buys (exact size to be tuned in playtests).
-- **Pay:** the market price of everything in the order plus 30%, paid when the crate ships.
-- **Reputation:** shipping adds reputation; letting an order expire or cancelling it costs the
-  same amount.
-- **Finished crate color:** a teal not used by any other crate.
+The following values are implementation picks to make the feature playable, not agreed design.
+They should be reviewed against the game's balance before they are treated as final:
+
+- Each scheduled customer arrival is a 1% chance for a remote order. Customer factions do not
+  affect the order.
+- Orders contain 2–4 product types, with 3–8 of each. Products are limited to items covered by
+  the shop's current supplier licenses.
+- Shipping pays the order's market value plus 30%.
+- Shipping grants one store reputation per product type. Cancelling or expiring loses the same
+  amount.
+- An order received on one day expires at the end of the following day.
+- A complete order crate turns teal.

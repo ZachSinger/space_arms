@@ -925,6 +925,24 @@ test("tapping Q puts the top crate down and holding Q sets the whole stack down 
   assert.deepEqual(h.messages, [], "normal drops show no banner");
 });
 
+test("a remote order crate must be put down separately and can't be stacked", () => {
+  const h = createHarness();
+  const order = crate({ kind: "remote-order" });
+  const stock = crate();
+  carry(h.scene, [order, stock]);
+
+  h.scene.interactionSystem.updateHint();
+  assert.match(h.scene.messages.hint, /Hold Q: Put down the remote order crate separately/);
+  hold(h, "Q");
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [order, stock]);
+  assert.equal(h.messages.at(-1), "Put down the remote order crate separately.");
+
+  const [base] = floorStack(h.scene, 1);
+  h.scene.crateSystem.setCratesOnStack({ base }, 1);
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [order, stock]);
+  assert.equal(h.messages.at(-1), "Remote order crates can't be stacked.");
+});
+
 test("crates stay in your hands when there's no room to set them down", () => {
   const h = createHarness();
   const [lower, upper] = [crate(), crate()];

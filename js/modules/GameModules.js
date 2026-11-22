@@ -1,11 +1,13 @@
 import { CleaningSystem } from "./cleaning/CleaningSystem.js";
+import { DroneDeliverySystem } from "./droneDeliveries/DroneDeliverySystem.js";
 
 const MODULE_FACTORIES = Object.freeze({
   cleaning: (scene) => new CleaningSystem(scene),
+  droneDeliveries: (scene) => new DroneDeliverySystem(scene),
 });
 
 // Remove a module ID here to disable it for the whole game.
-export const ENABLED_GAME_MODULES = Object.freeze(["cleaning"]);
+export const ENABLED_GAME_MODULES = Object.freeze(["cleaning", "droneDeliveries"]);
 
 export class ModuleHost {
   /**
@@ -34,6 +36,10 @@ export class ModuleHost {
   /** @param {number} time @param {number} delta */
   update(time, delta) {
     for (const module of this.instances.values()) module.update?.(time, delta);
+  }
+
+  endDay() {
+    for (const module of this.instances.values()) module.endDay?.();
   }
 
   destroy() {

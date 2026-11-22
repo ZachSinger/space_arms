@@ -263,6 +263,7 @@ export class ShiftSystem {
   endDay() {
     if (!this.canEndDay()) return false;
     const shop = this.shop;
+    shop.gameModules.endDay();
     shop.gameState.endDay();
     const { day } = shop.gameState.calendar;
     if (this.loanOffer().available) {

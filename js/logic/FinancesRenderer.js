@@ -16,6 +16,7 @@ const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
 function describeLine({ category, label, quantity }) {
   switch (category) {
     case "sales": return `Sold ${label} (${plural(quantity, "item", "items")})`;
+    case "drone_deliveries": return `Remote order: ${label}`;
     case "stock_orders": return `Supply: ${label} (${plural(quantity, "crate", "crates")})`;
     case "delivery_fees": return `Delivery fees (${plural(quantity, "order", "orders")})`;
     case "fixtures": return `Fixture: ${label}${quantity > 1 ? ` (${quantity})` : ""}`;

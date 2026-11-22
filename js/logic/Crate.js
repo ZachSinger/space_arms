@@ -7,6 +7,7 @@
 import items from "../../data/Items.json" with { type: "json" };
 import { getCrateItemLimit } from "./ShelfSlotStocking.js";
 import { getItemCrateTint } from "./CrateCategory.js";
+import { REMOTE_ORDER_TUNING } from "./RemoteOrders.js";
 
 const ITEMS_BY_ID = new Map(items.map((item) => [item.id, item]));
 
@@ -56,13 +57,23 @@ function carrierFootprint(carrierSprite, margin = 4) {
  * Created by deliveries and fixture crating. Hand-stocked crates stay around when empty.
  */
 export class Crate {
-  constructor(scene, itemId, quantity, x, y, { id = null, kind = "item", typeId = null, tint = null } = {}) {
+  constructor(scene, itemId, quantity, x, y, {
+    id = null, kind = "item", typeId = null, tint = null,
+    orderId = null, requiredItems = [], contents = [],
+  } = {}) {
     this.scene = scene;
     this.id = id ?? scene.crateSystem?.createId?.() ?? `crate-local-${nextStandaloneCrateId++}`;
     this.kind = kind;
     this.typeId = kind === "fixture" ? typeId : null;
+    this.orderId = kind === "remote-order" ? orderId : null;
+    this.requiredItems = kind === "remote-order" ? requiredItems.map((entry) => ({ ...entry })) : [];
+    this.contents = kind === "remote-order"
+      ? new Map(contents.map(({ itemId: contentId, quantity: amount }) => [contentId, amount]))
+      : new Map();
     this.itemId = kind === "item" ? itemId : null;
-    this.quantity = kind === "item" ? quantity : 1;
+    this.quantity = kind === "item" ? quantity
+      : kind === "remote-order" ? [...this.contents.values()].reduce((sum, amount) => sum + amount, 0)
+        : 1;
     this.locationState = { kind: "world" };
     this.isThrown = false;
     this.isPushed = false;
@@ -77,6 +88,9 @@ export class Crate {
       .setDisplaySize(art.width, art.height)
       .setDepth(2);
     if (tint !== null) this.sprite.setTint?.(tint);
+    else if (kind === "remote-order" && this.isRemoteOrderComplete()) {
+      this.sprite.setTint?.(REMOTE_ORDER_TUNING.completeTint);
+    }
 
     scene.crateGroup.add(this.sprite);
     this.sprite.body
@@ -121,6 +135,10 @@ export class Crate {
   }
 
   canPut(itemId) {
+    if (this.kind === "remote-order") {
+      return this.requiredItems.some((entry) =>
+        entry.itemId === itemId && this.getAvailableUnitsFor(itemId) < entry.quantity);
+    }
     return this.kind === "item" && (this.quantity === 0 || this.itemId === itemId);
   }
 
@@ -147,10 +165,21 @@ export class Crate {
   }
 
   getAvailableUnitsFor(itemId) {
+    if (this.kind === "remote-order") return this.contents.get(itemId) ?? 0;
     return this.canTake() && this.itemId === itemId ? this.quantity : 0;
   }
 
   add(itemId, quantity) {
+    if (this.kind === "remote-order") {
+      if (!this.canPut(itemId)) return 0;
+      const required = this.requiredItems.find((entry) => entry.itemId === itemId).quantity;
+      const accepted = Math.min(quantity, required - this.getAvailableUnitsFor(itemId));
+      if (accepted <= 0) return 0;
+      this.contents.set(itemId, this.getAvailableUnitsFor(itemId) + accepted);
+      this.quantity += accepted;
+      if (this.isRemoteOrderComplete()) this.sprite?.setTint?.(REMOTE_ORDER_TUNING.completeTint);
+      return accepted;
+    }
     if (!this.canPut(itemId)) return 0;
     this.itemId = itemId;
     const tint = getItemCrateTint(ITEMS_BY_ID.get(itemId)?.tags);
@@ -160,11 +189,16 @@ export class Crate {
   }
 
   getRemainingUnitsFor(itemId) {
+    if (this.kind === "remote-order") {
+      const required = this.requiredItems.find((entry) => entry.itemId === itemId)?.quantity ?? 0;
+      return Math.max(0, required - this.getAvailableUnitsFor(itemId));
+    }
     if (!this.canPut(itemId)) return 0;
     return Math.max(0, getCrateItemLimit(ITEMS_BY_ID.get(itemId)?.boxSize) - this.quantity);
   }
 
   remove(itemId, quantity) {
+    if (this.kind === "remote-order") return 0;
     const removed = Math.min(this.getAvailableUnitsFor(itemId), quantity);
     this.quantity -= removed;
     // The last item out turns it back into a plain, uncolored empty crate.
@@ -173,6 +207,18 @@ export class Crate {
       this.sprite?.clearTint?.();
     }
     return removed;
+  }
+
+  isRemoteOrderComplete() {
+    return this.kind === "remote-order" && this.requiredItems.length > 0 &&
+      this.requiredItems.every((entry) => this.getAvailableUnitsFor(entry.itemId) >= entry.quantity);
+  }
+
+  resetRemoteOrderContents() {
+    if (this.kind !== "remote-order") throw new Error("Only a remote order crate can be reset.");
+    this.contents.clear();
+    this.quantity = 0;
+    this.sprite?.clearTint?.();
   }
 
   /**
@@ -616,7 +662,15 @@ export class Crate {
   serializePayload() {
     const payload = this.kind === "fixture"
       ? { kind: "fixture", typeId: this.typeId }
-      : { kind: "item", itemId: this.itemId, quantity: this.quantity };
+      : this.kind === "remote-order"
+        ? {
+          kind: "remote-order",
+          orderId: this.orderId,
+          requiredItems: this.requiredItems.map((entry) => ({ ...entry })),
+          contents: [...this.contents].map(([contentId, amount]) => ({ itemId: contentId, quantity: amount })),
+          quantity: this.quantity,
+        }
+        : { kind: "item", itemId: this.itemId, quantity: this.quantity };
     return this.id ? { id: this.id, ...payload } : payload;
   }
 

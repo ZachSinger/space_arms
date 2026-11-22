@@ -178,6 +178,14 @@ function orderingTopic() {
         "Orders arrive on the Loading Pad right away. You can order at any time, even during a shift.",
         "Each item shows how much of it is left on your shelves, so you can see what's running low.",
       ])}`),
+    section("Remote Orders", `
+      ${list([
+        "Remote orders can arrive during a shift. Only one can be open at a time.",
+        `Pick up the special order crate by the Drone Terminal in the backroom. Carry it to a shelf or stock crate, face it, and press ${key("interact")} to add one needed item at a time.`,
+        "The order crate can only hold the products and amounts shown at the terminal. To take packed items back out, reset or cancel the order at the terminal; the items go into the Go-Backs bin.",
+        "When every item is packed, set the order crate on the drone pad beside the terminal. It ships after a short wait, pays the amount shown, and adds store reputation.",
+        "The terminal shows the shipping deadline and the reputation gained or lost. Cancelling an order or letting it expire loses that reputation.",
+      ])}`),
     section("Ordering Fixtures", `
       ${list([
         "The <strong>Fixtures</strong> tab sells shelves, registers, and trashcans.",

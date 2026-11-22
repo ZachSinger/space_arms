@@ -69,6 +69,18 @@ export class CrateSystem {
     });
   }
 
+  createRemoteOrderCrate({ orderId, requiredItems, x, y }) {
+    const crate = new Crate(this.shop, null, 0, x, y, {
+      id: this.createId(),
+      kind: "remote-order",
+      orderId,
+      requiredItems,
+    });
+    this.restockCrates.push(crate);
+    this.shop.gameState.crates.changed();
+    return crate;
+  }
+
   getCarriedCrates() {
     if (Array.isArray(this.carriedCrates)) return this.carriedCrates;
     return this.carriedCrate ? [this.carriedCrate] : [];
@@ -168,6 +180,7 @@ export class CrateSystem {
 
     const actions = {};
     const stack = this.markedFloorStack();
+    const carryingRemoteOrder = this.getCarriedCrates().some((crate) => crate.kind === "remote-order");
     if (stack) {
       const lifted = stack.crates.length - stack.crates.indexOf(stack.marked);
       if (stack.marked.kind === "fixture" && holding > 0) {
@@ -207,10 +220,19 @@ export class CrateSystem {
 
     if (holding === 0) {
       // Nothing to put down.
+    } else if (carryingRemoteOrder) {
+      actions.putDown = {
+        tap: () => this.dropTopCrate(),
+        hold: say("Put down the remote order crate separately.", "#f59e0b"),
+        separatesRemoteOrder: true,
+      };
     } else if (stack && top.kind !== "fixture") {
       const room = FLOOR_STACK_MAX - stack.crates.length;
       let reason = null;
       if (stack.base.kind === "fixture") reason = "Crates can't be stacked on a fixture crate";
+      else if (stack.base.kind === "remote-order" || stack.marked.kind === "remote-order") {
+        reason = "Remote order crates can't be stacked";
+      }
       else if (stack.base.lockedToPad) reason = "Crates can't be stacked on the Loading Pad";
       else if (room <= 0) reason = `You can't stack any higher. Stacks can only be ${FLOOR_STACK_MAX} crates high.`;
       actions.putDown = reason
@@ -255,6 +277,9 @@ export class CrateSystem {
 
     if (putDown?.trash) {
       putDownHints.push(`${putKey}: Drop the trash on the floor`);
+    } else if (putDown?.separatesRemoteOrder) {
+      putDownHints.push(`Tap ${putKey}: Put your top crate down`);
+      if (holding > 1) putDownHints.push(`Hold ${putKey}: Put down the remote order crate separately`);
     } else if (putDown?.blocked) {
       putDownHints.push(putDown.reason);
     } else if (putDown?.onStack) {
@@ -332,6 +357,11 @@ export class CrateSystem {
     const shop = this.shop;
     const stack = this.getCarriedCrates();
     const placed = stack.slice(-count);
+    if (base.kind === "remote-order" ||
+      this.getCarriedCrates().some((crate) => crate.kind === "remote-order")) {
+      shop.messages.show("Remote order crates can't be stacked.", "#f59e0b");
+      return false;
+    }
     this.carriedCrates = stack.slice(0, -count);
     this.carriedCrate = this.carriedCrates.at(-1) ?? null;
     for (const crate of placed) crate.setStackedOn(base.id);
@@ -369,6 +399,10 @@ export class CrateSystem {
 
   dropWholeStack() {
     const shop = this.shop;
+    if (this.getCarriedCrates().some((crate) => crate.kind === "remote-order")) {
+      shop.messages.show("Put down the remote order crate separately.", "#f59e0b");
+      return false;
+    }
     const [bottom, ...rest] = this.getCarriedCrates();
     if (!bottom) return false;
     const position = bottom.findDropPosition(shop.player.sprite.x, shop.player.sprite.y,
@@ -464,6 +498,7 @@ export class CrateSystem {
   // "a crate of 6 Plasma Pistol", for hints.
   describeCrate(crate) {
     if (crate.kind === "fixture") return `the ${getFixtureType(crate.typeId).name} fixture crate`;
+    if (crate.kind === "remote-order") return "the remote order crate";
     if (crate.quantity === 0) return "an empty crate";
     return `a crate of ${crate.quantity} ${database.getItem(crate.itemId)?.name ?? "unknown items"}`;
   }
@@ -471,6 +506,11 @@ export class CrateSystem {
   // Picture, name, and count for the bottom bar and the holding cards.
   describeCrateForFooter(crate) {
     if (crate.kind === "fixture") return { name: `${getFixtureType(crate.typeId).name} fixture`, count: "", image: null };
+    if (crate.kind === "remote-order") return {
+      name: "Remote order",
+      count: `${crate.quantity} items`,
+      image: null,
+    };
     if (crate.quantity === 0) return { name: "Empty crate", count: "", image: null };
     const item = database.getItem(crate.itemId);
     return { name: item?.name ?? "Unknown item", count: `x${crate.quantity}`, image: item?.image ?? null };
@@ -562,6 +602,24 @@ export class CrateSystem {
     return true;
   }
 
+  removeRemoteOrderCrate(crate) {
+    if (crate?.kind !== "remote-order") throw new TypeError("Expected a remote order crate.");
+    if ((this.floorStacks.get(crate) ?? []).length) {
+      throw new Error("A remote order crate cannot be removed while other crates are stacked on it.");
+    }
+    for (const [base, above] of this.floorStacks) {
+      const remaining = above.filter((stacked) => stacked !== crate);
+      if (remaining.length !== above.length) {
+        if (remaining.length) this.floorStacks.set(base, remaining);
+        else this.floorStacks.delete(base);
+      }
+    }
+    this.restockCrates = this.restockCrates.filter((candidate) => candidate !== crate);
+    this.removeCarriedCrate(crate);
+    crate.destroy();
+    this.shop.gameState.crates.changed();
+  }
+
   serialize() {
     const payload = (crate, withPosition = false) => {
       if (!crate.id) crate.id = this.createId();
@@ -590,6 +648,14 @@ export class CrateSystem {
       const crate = entry.kind === "fixture"
         ? new Crate(shop, entry.itemId, entry.quantity, entry.x, entry.y,
           { id: entry.id, kind: "fixture", typeId: entry.typeId })
+        : entry.kind === "remote-order"
+          ? new Crate(shop, null, 0, entry.x, entry.y, {
+            id: entry.id,
+            kind: "remote-order",
+            orderId: entry.orderId,
+            requiredItems: entry.requiredItems,
+            contents: entry.contents,
+          })
         : this.createItemCrate(entry.itemId, entry.quantity, entry.x, entry.y, { id: entry.id });
       crate.applySave(entry);
       const onPad = entry.onPad ?? shop.supply.padRect.contains(entry.x, entry.y);
@@ -612,6 +678,14 @@ export class CrateSystem {
       const crate = entry.kind === "fixture"
         ? new Crate(shop, entry.itemId, entry.quantity, shop.player.sprite.x, shop.player.sprite.y,
           { id: entry.id, kind: "fixture", typeId: entry.typeId })
+        : entry.kind === "remote-order"
+          ? new Crate(shop, null, 0, shop.player.sprite.x, shop.player.sprite.y, {
+            id: entry.id,
+            kind: "remote-order",
+            orderId: entry.orderId,
+            requiredItems: entry.requiredItems,
+            contents: entry.contents,
+          })
         : this.createItemCrate(entry.itemId, entry.quantity, shop.player.sprite.x, shop.player.sprite.y,
           { id: entry.id });
       crate.pickUp(shop.player.sprite, { holderId: "player" });

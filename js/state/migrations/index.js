@@ -11,7 +11,8 @@
 //   layoutVersion 13  before the Scrap-Iron Autopistol price cut
 //   layoutVersion 14  before employees were assigned to registers
 //   layoutVersion 15  before the money rebalance repriced every item
-//   layoutVersion 16  current
+//   layoutVersion 16  before remote delivery orders
+//   layoutVersion 17  current
 // Any may also be from before the contract split (no `contractsSplit`), hold retired
 // fixtures, crates, licenses, or a hovercart.
 import { requireSave, isRecord } from "../saveHelpers.js";
@@ -25,9 +26,10 @@ import { migratePreWarAmmoContract } from "./preWarAmmoContract.js";
 import { repriceScrapAutopistol } from "./scrapAutopistolPrice.js";
 import { addRegisterAssignments } from "./registerAssignments.js";
 import { rebalanceItemPrices } from "./moneyRebalance.js";
+import { addDroneDeliveriesState } from "./droneDeliveries.js";
 
 // The fixture-retirement upgrade removes stock fixtures and moves their contents into Go-Backs.
-export const SHOP_LAYOUT_VERSION = 16;
+export const SHOP_LAYOUT_VERSION = 17;
 const OLDEST_SUPPORTED_VERSION = 9;
 
 /**
@@ -47,6 +49,7 @@ export const SAVE_UPGRADES = [
   { name: "scrap autopistol price", fromVersion: 13, run: repriceScrapAutopistol },
   { name: "register assignments", fromVersion: 14, run: addRegisterAssignments },
   { name: "money rebalance", fromVersion: 15, run: rebalanceItemPrices },
+  { name: "remote delivery orders", always: true, run: addDroneDeliveriesState },
 ];
 
 /**

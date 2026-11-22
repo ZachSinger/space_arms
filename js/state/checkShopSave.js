@@ -10,6 +10,7 @@ import { THROW_ACCELERATION_MS } from "../logic/Crate.js";
 import { FLOOR_STACK_MAX, MAX_CARRIED_CRATES } from "../logic/CrateStack.js";
 import { isValidLedgerData } from "../logic/DayLedger.js";
 import { isMoney, roundMoney } from "../logic/Money.js";
+import { REMOTE_ORDER_TUNING } from "../logic/RemoteOrders.js";
 import { isKnownShopLevel } from "../logic/ShopProgression.js";
 import { CUSTOMER_FACTION_IDS } from "../logic/CustomerBuyLists.js";
 import { isValidTrashList } from "../modules/cleaning/Litter.js";
@@ -166,6 +167,33 @@ export function checkShopSave(data, database) {
     requireSave(isRecord(loan) && isMoney(loan.balance) && loan.balance > 0 &&
       integer(loan.takenOnDay, 1) && loan.takenOnDay <= market.day, "invalid emergency loan.");
   }
+  const droneDeliveries = player.droneDeliveries;
+  requireSave(isRecord(droneDeliveries) && integer(droneDeliveries.nextOrderId, 1),
+    "invalid remote delivery state.");
+  const activeRemoteOrder = droneDeliveries.activeOrder;
+  if (activeRemoteOrder !== null) {
+    requireSave(isRecord(activeRemoteOrder) &&
+      typeof activeRemoteOrder.id === "string" &&
+      /^remote-order-[1-9]\d*$/.test(activeRemoteOrder.id) &&
+      Number(activeRemoteOrder.id.slice("remote-order-".length)) < droneDeliveries.nextOrderId &&
+      integer(activeRemoteOrder.receivedDay, 1) && activeRemoteOrder.receivedDay <= data.market?.day &&
+      activeRemoteOrder.expiresOnDay === activeRemoteOrder.receivedDay + REMOTE_ORDER_TUNING.daysUntilExpiry &&
+      data.market.day <= activeRemoteOrder.expiresOnDay &&
+      Array.isArray(activeRemoteOrder.items) &&
+      activeRemoteOrder.items.length >= REMOTE_ORDER_TUNING.minProductTypes &&
+      activeRemoteOrder.items.length <= REMOTE_ORDER_TUNING.maxProductTypes &&
+      new Set(activeRemoteOrder.items.map((entry) => entry?.itemId)).size === activeRemoteOrder.items.length &&
+      activeRemoteOrder.items.every((entry) => itemById.has(entry?.itemId) &&
+        integer(entry.quantity, REMOTE_ORDER_TUNING.minUnitsPerProduct) &&
+        entry.quantity <= REMOTE_ORDER_TUNING.maxUnitsPerProduct) &&
+      isMoney(activeRemoteOrder.payout) && activeRemoteOrder.payout > 0 &&
+      integer(activeRemoteOrder.reputation, 1) &&
+      activeRemoteOrder.reputation === activeRemoteOrder.items.length *
+        REMOTE_ORDER_TUNING.reputationPerProductType &&
+      typeof activeRemoteOrder.crateId === "string" &&
+      /^crate-[1-9]\d*$/.test(activeRemoteOrder.crateId),
+    "invalid active remote order.");
+  }
 
   const fixtureIds = new Set();
   const placementIds = new Set();
@@ -210,6 +238,7 @@ export function checkShopSave(data, database) {
     ZONES.filter((zone) => !zone.locked).every((zone) => data.unlockedZones.includes(zone.id)),
   "invalid unlocked rooms.");
   const seenCrateIds = new Set();
+  const remoteOrderCrates = [];
   let maximumCrateId = 0;
   const validateCrateContents = (crate, { registerId = true } = {}) => {
     requireSave(isRecord(crate), "invalid crate contents.");
@@ -224,6 +253,28 @@ export function checkShopSave(data, database) {
     const kind = crate.kind ?? "item";
     if (kind === "fixture") {
       requireSave(getFixtureType(crate.typeId), "unknown fixture crate.");
+      return;
+    }
+    if (kind === "remote-order") {
+      requireSave(typeof crate.orderId === "string" &&
+        /^remote-order-[1-9]\d*$/.test(crate.orderId) &&
+        Array.isArray(crate.requiredItems) &&
+        crate.requiredItems.length >= REMOTE_ORDER_TUNING.minProductTypes &&
+        crate.requiredItems.length <= REMOTE_ORDER_TUNING.maxProductTypes &&
+        new Set(crate.requiredItems.map((entry) => entry?.itemId)).size === crate.requiredItems.length &&
+        crate.requiredItems.every((entry) => itemById.has(entry?.itemId) &&
+          integer(entry.quantity, REMOTE_ORDER_TUNING.minUnitsPerProduct) &&
+          entry.quantity <= REMOTE_ORDER_TUNING.maxUnitsPerProduct) &&
+        Array.isArray(crate.contents) &&
+        new Set(crate.contents.map((entry) => entry?.itemId)).size === crate.contents.length &&
+        crate.contents.every((entry) => {
+          const requirement = crate.requiredItems.find((line) => line.itemId === entry?.itemId);
+          return requirement && integer(entry.quantity, 1) && entry.quantity <= requirement.quantity;
+        }) &&
+        integer(crate.quantity, 0) &&
+        crate.quantity === crate.contents.reduce((sum, entry) => sum + entry.quantity, 0),
+      "invalid remote order crate.");
+      if (registerId) remoteOrderCrates.push(crate);
       return;
     }
     requireSave(kind === "item" && integer(crate.quantity, 0) &&
@@ -275,15 +326,31 @@ export function checkShopSave(data, database) {
     requireSave((data.carriedCrates.length === 0) === (data.carriedCrate === null),
       "carried crate stack does not match the carried crate.");
     if (data.carriedCrates.length > 1) {
-      requireSave(data.carriedCrates.every((crate) => (crate.kind ?? "item") === "item"),
-        "only item crates can be stacked.");
+      const carriedOrders = data.carriedCrates.filter((crate) => crate.kind === "remote-order");
+      requireSave(carriedOrders.length <= 1 &&
+        data.carriedCrates.every((crate) => crate.kind === "item" || crate.kind === "remote-order"),
+      "only stock and one remote order crate can be carried together.");
+    }
+    if (activeRemoteOrder === null) {
+      requireSave(remoteOrderCrates.length === 0, "orphaned remote order crate.");
+    } else {
+      const [orderCrate] = remoteOrderCrates;
+      requireSave(remoteOrderCrates.length === 1 && orderCrate.id === activeRemoteOrder.crateId &&
+        orderCrate.orderId === activeRemoteOrder.id &&
+        orderCrate.requiredItems.length === activeRemoteOrder.items.length &&
+        activeRemoteOrder.items.every((item) =>
+          orderCrate.requiredItems.some((line) =>
+            line.itemId === item.itemId && line.quantity === item.quantity)),
+      "active remote order does not match its crate.");
     }
     if (data.carriedCrates.length) {
       const top = data.carriedCrates.at(-1);
       const single = data.carriedCrate;
       requireSave((top.kind ?? "item") === (single.kind ?? "item") &&
         top.id === single.id && top.itemId === single.itemId && top.typeId === single.typeId &&
-        top.quantity === single.quantity,
+        top.quantity === single.quantity && top.orderId === single.orderId &&
+        JSON.stringify(top.requiredItems ?? []) === JSON.stringify(single.requiredItems ?? []) &&
+        JSON.stringify(top.contents ?? []) === JSON.stringify(single.contents ?? []),
       "carried crate stack does not match its top crate.");
     }
   }

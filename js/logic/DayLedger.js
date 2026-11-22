@@ -8,6 +8,7 @@ import { isMoney, sumMoney } from "./Money.js";
 // Receipt sections, in display order.
 export const LEDGER_CATEGORIES = Object.freeze([
   "sales",
+  "drone_deliveries",
   "stock_orders",
   "delivery_fees",
   "fixtures",
