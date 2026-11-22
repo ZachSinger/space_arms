@@ -944,6 +944,21 @@ test("a remote order crate must be put down separately and can't be stacked", ()
   assert.equal(h.messages.at(-1), "Remote order crates can't be stacked.");
 });
 
+test("a second delivery crate cannot be carried and stored crates are not pickup targets", () => {
+  const h = createHarness();
+  const first = crate({ kind: "remote-order" });
+  carry(h.scene, [first]);
+  const [next] = floorStack(h.scene, 1, { kind: "remote-order" });
+  tap(h);
+  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [first]);
+  assert.match(h.messages.at(-1), /Put your delivery crate down/);
+  assert.equal(h.scene.crateSystem.pickUpFromStack({ base: next, crates: [next], marked: next }, false), false);
+  carry(h.scene, []);
+  next.inTerminal = true;
+  assert.equal(h.scene.crateSystem.findCrateInFront(), null);
+  assert.equal(h.scene.crateSystem.findCrateInFront({ moving: true }), null);
+});
+
 test("crates stay in your hands when there's no room to set them down", () => {
   const h = createHarness();
   const [lower, upper] = [crate(), crate()];

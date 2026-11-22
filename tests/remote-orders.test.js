@@ -7,12 +7,14 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { acceptRemoteOffer, createRemoteOrder, remoteOrderScaling } from "../js/logic/RemoteOrders.js";
 import { Crate } from "../js/logic/Crate.js";
+import { DroneDeliveries } from "../js/state/slices/DroneDeliveries.js";
 import { transferItems } from "../js/logic/InventoryTransfer.js";
 import { REMOTE_ORDER_CRATE_SPRITES } from "../js/modules/droneDeliveries/DroneTerminalArt.js";
 
 let server;
 let cacheDirectory;
 let DroneDeliverySystem;
+let formatRemoteDeadline;
 
 before(async () => {
   cacheDirectory = await mkdtemp(join(tmpdir(), "space-arms-remote-order-test-"));
@@ -24,12 +26,19 @@ before(async () => {
     optimizeDeps: { noDiscovery: true, include: [] },
     server: { middlewareMode: true },
   });
-  ({ DroneDeliverySystem } = await server.ssrLoadModule("/js/modules/droneDeliveries/DroneDeliverySystem.js"));
+  ({ DroneDeliverySystem, formatRemoteDeadline } =
+    await server.ssrLoadModule("/js/modules/droneDeliveries/DroneDeliverySystem.js"));
 });
 
 after(async () => {
   if (server) await server.close();
   if (cacheDirectory) await rm(cacheDirectory, { recursive: true, force: true });
+});
+
+test("remote order deadlines use relative wording and say today on the final day", () => {
+  assert.equal(formatRemoteDeadline(3, 1, "Expires"), "Expires in 3 days");
+  assert.equal(formatRemoteDeadline(7, 5, "Due"), "Due in 3 days");
+  assert.equal(formatRemoteDeadline(5, 5, "Due"), "Due today");
 });
 
 function createScene() {
@@ -41,8 +50,8 @@ function createScene() {
       this.displayHeight = height;
       return this;
     },
-    setTexture(key) { this.textureKey = key; return this; },
-    setFrame() { return this; },
+    setTexture(key, frame) { this.textureKey = key; this.frame = frame; return this; },
+    setFrame(frame) { this.frame = frame; return this; },
     setDepth() { return this; },
     setOrigin() { return this; },
     setTint() { return this; },
@@ -83,33 +92,40 @@ function createDeliveryFixture({ day = 1, contents = [["wpn_rif_01", 2]], offers
     reputation: 1,
     crateId: "crate-order",
   };
-  const crate = {
-    id: order.crateId,
+  const makeCrate = (id, orderId, x, y, contents = []) => ({
+    id,
     kind: "remote-order",
-    orderId: order.id,
+    orderId,
     isCarried: false,
-    sprite: { x: 120, y: 180 },
+    inTerminal: false,
+    remoteOrderLidOpen: false,
+    lidCalls: [],
+    sprite: {
+      x, y, active: true, visible: true,
+      body: { enable: true, stop() {} },
+      setPosition(x, y) { this.x = x; this.y = y; return this; },
+      setVisible(visible) { this.visible = visible; return this; },
+    },
     contents: new Map(contents),
     getAvailableUnitsFor(itemId) { return this.contents.get(itemId) ?? 0; },
     isRemoteOrderComplete() { return this.getAvailableUnitsFor("wpn_rif_01") >= 2; },
-  };
-  const crates = [crate];
+    isStationary: () => true,
+    getFloorBounds() {
+      return { left: this.sprite.x - 10, right: this.sprite.x + 10, top: this.sprite.y - 5, bottom: this.sprite.y + 5 };
+    },
+    setTerminalStored(stored) { this.inTerminal = stored; this.sprite.setVisible(!stored); },
+    animateRemoteOrderLid(open = true) { this.remoteOrderLidOpen = open; this.lidCalls.push(open); },
+  });
+  const crate = makeCrate(order.crateId, order.id, 120, 180, contents);
+  const crates = activeOrder === null ? [] : [crate];
   const returned = [];
   const changes = [];
   const messages = [];
-  const state = {
-    activeOrder: activeOrder === undefined ? order : activeOrder,
-    offers,
-    changed() { changes.push("changed"); },
-    open(next) { this.activeOrder = next; },
-    removeOffer(id) {
-      const offer = this.offers.find((entry) => entry.id === id) ?? null;
-      this.offers = this.offers.filter((entry) => entry.id !== id);
-      return offer;
-    },
-    updateActiveOrder(updates) { this.activeOrder = { ...this.activeOrder, ...updates }; },
-    close() { this.activeOrder = null; changes.push("closed"); },
-  };
+  const state = new DroneDeliveries();
+  state.activeOrder = activeOrder === undefined ? order : activeOrder;
+  state.offers = offers;
+  state.changed = () => changes.push("changed");
+  let nextReplacement = 0;
   const shop = {
     gameState: {
       calendar: { day },
@@ -129,18 +145,13 @@ function createDeliveryFixture({ day = 1, contents = [["wpn_rif_01", 2]], offers
       removeRemoteOrderCrate(target) {
         const index = crates.indexOf(target);
         if (index >= 0) crates.splice(index, 1);
+        target.sprite.active = false;
         changes.push(`removed:${target.id}`);
       },
       createRemoteOrderCrate(options) {
-        const replacement = {
-          id: "crate-replacement",
-          kind: "remote-order",
-          orderId: options.orderId,
-          isCarried: false,
-          contents: new Map(),
-          sprite: { x: options.x, y: options.y },
-          isRemoteOrderComplete: () => false,
-        };
+        nextReplacement += 1;
+        const replacement = makeCrate(nextReplacement === 1 ? "crate-replacement" : `crate-replacement-${nextReplacement}`,
+          options.orderId, options.x, options.y);
         crates.push(replacement);
         return replacement;
       },
@@ -159,6 +170,11 @@ function createDeliveryFixture({ day = 1, contents = [["wpn_rif_01", 2]], offers
     shop,
     orderState: state,
     pendingShipId: null,
+    terminalRaised: true,
+    terminalOpen: true,
+    terminalAnimation: null,
+    terminal: { setFrame(frame) { this.frame = frame; } },
+    terminalPad: { setFrame(frame) { this.frame = frame; } },
     refreshWindow() {},
   });
   return { system, shop, order, crate, state, returned, changes, crates, messages };
@@ -247,12 +263,14 @@ test("accepting an offer creates its crate; offers that run out or are declined 
   const fixture = createDeliveryFixture({
     day: 2,
     activeOrder: null,
-    offers: [offer("remote-order-2", 2), offer("remote-order-3", 2), offer("remote-order-4", 3)],
+    offers: [offer("remote-order-2", 2), offer("remote-order-3", 2), offer("remote-order-4", 3), offer("remote-order-5", 2)],
   });
   assert.equal(fixture.system.acceptOffer("remote-order-2"), true);
   assert.equal(fixture.state.activeOrder.crateId, "crate-replacement");
   assert.equal(fixture.state.activeOrder.expiresOnDay, 4);
-  assert.equal(fixture.system.acceptOffer("remote-order-3"), false);
+  assert.equal(fixture.system.acceptOffer("remote-order-3"), true);
+  assert.equal(fixture.state.orders.length, 2);
+  assert.ok(fixture.crates.every((crate) => crate.inTerminal));
 
   assert.equal(fixture.system.declineOffer("remote-order-4"), true);
   assert.equal(fixture.system.endDay(), true);
@@ -322,10 +340,114 @@ test("remote order crate switches from red to green and back when its contents r
   });
 
   assert.equal(crate.sprite.textureKey, REMOTE_ORDER_CRATE_SPRITES.incomplete.key);
+  crate.animateRemoteOrderLid();
+  assert.equal(crate.sprite.frame, 3);
   assert.equal(crate.add("wpn_rif_01", 1), 1);
   assert.equal(crate.sprite.textureKey, REMOTE_ORDER_CRATE_SPRITES.complete.key);
+  assert.equal(crate.sprite.frame, 3, "packing the last item must not close the lid");
   crate.resetRemoteOrderContents();
   assert.equal(crate.sprite.textureKey, REMOTE_ORDER_CRATE_SPRITES.incomplete.key);
+  assert.equal(crate.sprite.frame, 3, "resetting the contents keeps the crate open");
+  crate.animateRemoteOrderLid(false);
+  assert.equal(crate.sprite.frame, 0);
+});
+
+test("accepted orders survive selection, saving, and completing a different order", () => {
+  const fixture = createDeliveryFixture();
+  fixture.state.open({ ...fixture.order, id: "remote-order-2", crateId: "crate-2" });
+  fixture.state.select(fixture.order.id);
+  const restored = DroneDeliveries.fromSave(fixture.state.toSave());
+  assert.equal(restored.activeOrder.id, fixture.order.id);
+  assert.equal(restored.orders.length, 2);
+  assert.equal(restored.close("remote-order-2"), true);
+  assert.equal(restored.activeOrder.id, fixture.order.id);
+  assert.equal(restored.orders.length, 1);
+});
+
+test("an expired background order loses reputation without cancelling the selected order", () => {
+  const fixture = createDeliveryFixture({ day: 2 });
+  fixture.state.addOffer({ ...fixture.order, id: "remote-order-2", offerEndsDay: 2 });
+  fixture.system.acceptOffer("remote-order-2");
+  assert.equal(fixture.system.endDay(), true);
+  assert.equal(fixture.state.activeOrder.id, "remote-order-2");
+  assert.equal(fixture.state.orders.length, 1);
+  assert.deepEqual(fixture.returned, [{ itemId: "wpn_rif_01", quantity: 2 }]);
+  assert.ok(fixture.changes.includes("lose:1"));
+});
+
+test("pickup leaves the pad raised, and accepting another order swaps crates without closing the hatch", () => {
+  const fixture = createDeliveryFixture({ contents: [] });
+  const { system, crate, state } = fixture;
+  crate.inTerminal = true;
+  system.terminalRaised = false;
+  system.terminalOpen = false;
+  system.syncTerminalState();
+  system.updateTerminalAnimation(480);
+  assert.equal(crate.remoteOrderLidOpen, true);
+  crate.isCarried = true;
+  system.syncTerminalState();
+  assert.equal(system.terminalAnimation, null);
+  assert.equal(system.terminal.frame, 7);
+
+  state.addOffer({ ...fixture.order, id: "remote-order-2", offerEndsDay: 2 });
+  system.acceptOffer("remote-order-2");
+  system.syncTerminalState();
+  assert.ok(system.terminalAnimation.frames.every((frame) => frame >= 4));
+  system.updateTerminalAnimation(180);
+  assert.equal(system.terminal.frame, 4);
+  assert.equal(system.terminalOpen, true);
+  system.updateTerminalAnimation(180);
+  system.syncTerminalState();
+  system.updateTerminalAnimation(240);
+  assert.equal(system.terminal.frame, 7);
+  assert.equal(state.orders.length, 2);
+  const next = system.findOrderCrate();
+  assert.equal(next.inTerminal, false);
+  assert.equal(next.remoteOrderLidOpen, true);
+  assert.deepEqual(crate.lidCalls, [true], "the carried crate must not close during the swap");
+
+  system.selectOrder(crate.orderId);
+  system.syncTerminalState();
+  system.updateTerminalAnimation(180);
+  system.updateTerminalAnimation(180);
+  system.syncTerminalState();
+  system.updateTerminalAnimation(240);
+  assert.equal(next.inTerminal, true);
+  assert.equal(next.sprite.visible, false);
+  assert.equal(system.terminal.frame, 7, "the pad comes back up empty for the carried order");
+});
+
+test("shipping closes only the returned crate and keeps the hatch open until the last accepted order ships", () => {
+  const fixture = createDeliveryFixture();
+  const { system, state, crate } = fixture;
+  crate.sprite.setPosition(291, 6511);
+  crate.animateRemoteOrderLid();
+  state.addOffer({ ...fixture.order, id: "remote-order-2", offerEndsDay: 2 });
+  system.acceptOffer("remote-order-2");
+  state.select(crate.orderId);
+  system.updateDeliveryPad(0);
+  assert.deepEqual(crate.lidCalls, [true, false]);
+  assert.equal(crate.remoteOrderShipping, true);
+  assert.equal(crate.sprite.body.enable, false, "the terminal locks the accepted shipment against pickup or pushing");
+  system.updateDeliveryPad(700);
+  system.updateTerminalAnimation(180);
+  assert.equal(state.orders.length, 1);
+  assert.equal(system.terminalOpen, true);
+  assert.equal(system.terminal.frame, 4);
+  system.updateTerminalAnimation(180);
+  system.syncTerminalState();
+  system.updateTerminalAnimation(240);
+  const last = system.findOrderCrate();
+  assert.equal(last.remoteOrderLidOpen, true);
+  last.contents.set("wpn_rif_01", 2);
+  system.updateDeliveryPad(0);
+  system.updateDeliveryPad(700);
+  system.updateTerminalAnimation(180);
+  assert.equal(state.orders.length, 0);
+  system.syncTerminalState();
+  system.updateTerminalAnimation(240);
+  assert.equal(system.terminal.frame, 0);
+  assert.equal(system.terminalOpen, false);
 });
 
 test("stock transfers into the order crate one item at a time and cannot be taken back out", () => {

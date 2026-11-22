@@ -757,3 +757,34 @@ test("active remote orders save their single mixed crate and reject duplicate cr
   withOffer.playerState.droneDeliveries.offers = [{ ...offer, id: "remote-order-1" }];
   assert.throws(() => validateShopSave(withOffer, database), /invalid remote order offer/);
 });
+
+test("multiple accepted orders save separate carried and terminal crates and reject mismatches", () => {
+  const data = snapshot();
+  const items = [{ itemId: "wpn_rif_01", quantity: 3 }, { itemId: "amo_01", quantity: 4 }];
+  const order = (number, crateId) => ({
+    id: `remote-order-${number}`, receivedDay: 1, acceptedDay: 1, expiresOnDay: 3,
+    items, payout: 100, reputation: 2, crateId,
+  });
+  data.playerState.droneDeliveries = {
+    nextOrderId: 3, activeOrder: order(1, "crate-4"), otherOrders: [order(2, "crate-3")], offers: [],
+  };
+  const crate = (id, orderId) => ({
+    id, orderId, kind: "remote-order", requiredItems: items,
+    contents: [{ itemId: "wpn_rif_01", quantity: 1 }], quantity: 1, lidOpen: true, inTerminal: false,
+  });
+  data.crates.push({
+    ...crate("crate-3", "remote-order-2"), inTerminal: true, onPad: false,
+    x: 291, y: 6511, velocityX: 0, velocityY: 0,
+  });
+  data.carriedCrate = crate("crate-4", "remote-order-1");
+  data.carriedCrates = [data.carriedCrate];
+  data.nextCrateId = 5;
+  assert.deepEqual(validateShopSave(data, database), data);
+
+  const mismatched = structuredClone(data);
+  mismatched.playerState.droneDeliveries.otherOrders[0].crateId = "crate-4";
+  assert.throws(() => validateShopSave(mismatched, database), /does not match its crate/);
+  const carriedStored = structuredClone(data);
+  carriedStored.carriedCrates[0].inTerminal = true;
+  assert.throws(() => validateShopSave(carriedStored, database), /stored delivery crate cannot be carried/);
+});

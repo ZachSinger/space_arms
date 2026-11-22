@@ -102,6 +102,7 @@ export class SaveSystem {
     shop.cameraRig.refresh();
     shop.controls.cratePress = null;
     shop.crateSystem.load(data);
+    shop.gameModules?.get("droneDeliveries")?.restoreTerminal();
     shop.cleaningSystem?.load(data.trash ?? [], data.dirt ?? []);
     this.moveShelfOverflowToGoBacks();
     shop.fixtureViews.refreshStockDisplays();

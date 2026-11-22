@@ -120,6 +120,7 @@ export class CrateSystem {
     let best = null;
     let bestDistance = TILE_SIZE / 2;
     for (const crate of this.restockCrates) {
+      if (crate.inTerminal || crate.remoteOrderShipping) continue;
       if (crate.canPickUp() === moving) continue;
       if (!isInFacingCone(center, crate.sprite, shop.player.currentFacing)) continue;
       if (!moving && !isSquarelyInFront(shop.player.sprite.body, crate.getFloorBounds(),
@@ -187,6 +188,8 @@ export class CrateSystem {
         actions.pickUp = { tap: say("Put your crates down before picking up a fixture crate"), blocked: true };
       } else if (top?.kind === "fixture") {
         actions.pickUp = { tap: say("Put the fixture crate down before picking up another crate"), blocked: true };
+      } else if (stack.marked.kind === "remote-order" && carryingRemoteOrder) {
+        actions.pickUp = { tap: say("Put your delivery crate down before picking up another delivery crate"), blocked: true };
       } else if (this.combinableUnits(stack.marked) > 0) {
         actions.pickUp = {
           tap: () => this.combineIntoCarried(stack.marked),
@@ -324,6 +327,11 @@ export class CrateSystem {
   pickUpFromStack({ base, crates, marked }, withAbove) {
     const shop = this.shop;
     const lifted = withAbove ? crates.slice(crates.indexOf(marked)) : [marked];
+    if (lifted.some((crate) => crate.kind === "remote-order") &&
+      this.getCarriedCrates().some((crate) => crate.kind === "remote-order")) {
+      shop.messages.show("Put your delivery crate down before picking up another delivery crate", "#f59e0b");
+      return false;
+    }
     const above = this.floorStacks.get(base) ?? [];
     if (marked === base) {
       const { x, y } = base.sprite;
@@ -688,6 +696,10 @@ export class CrateSystem {
           })
         : this.createItemCrate(entry.itemId, entry.quantity, shop.player.sprite.x, shop.player.sprite.y,
           { id: entry.id });
+      if (crate.kind === "remote-order") {
+        crate.remoteOrderLidOpen = entry.lidOpen ?? true;
+        crate.setRemoteOrderAppearance(crate.isRemoteOrderComplete());
+      }
       crate.pickUp(shop.player.sprite, { holderId: "player" });
       return crate;
     });

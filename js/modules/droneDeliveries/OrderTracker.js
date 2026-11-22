@@ -15,7 +15,7 @@ let collapsedForSession = false;
  * @typedef {{ name: string, image: string | null, packed: number, needed: number,
  *   where: string, shortage: string }} OrderTrackerLine
  * @typedef {{ dueText: string, dueSoon: boolean, payText: string, packed: number, total: number,
- *   status: string, complete: boolean, lines: OrderTrackerLine[], offerNote?: string }} OrderTrackerView
+ *   status: string, complete: boolean, lines: OrderTrackerLine[], offerNote?: string, orderNumber?: string }} OrderTrackerView
  * @typedef {{ offersOnly: true, title: string, note: string }} OrderOffersView
  */
 
@@ -78,7 +78,7 @@ export class OrderTracker {
     this.element.innerHTML = String(html`
       <button type="button" class="order-tracker-heading" data-order-tracker-toggle
         title="${collapsedForSession ? "Show this order's item list" : "Shrink this card to one line"}">
-        <span class="order-tracker-title">REMOTE ORDER</span>
+        <span class="order-tracker-title">REMOTE ORDER${view.orderNumber ? ` ${view.orderNumber}` : ""}</span>
         <span class="order-tracker-progress">${view.packed} / ${view.total} packed</span>
         <span class="order-tracker-toggle">${collapsedForSession ? "SHOW" : "HIDE"}</span>
       </button>

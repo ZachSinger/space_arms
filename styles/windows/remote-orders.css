@@ -183,9 +183,163 @@
 }
 
 /* Drone Terminal window: each waiting order offer is boxed so its buttons clearly belong to it. */
+#drone-deliveries-window .retro-window-body {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.remote-order-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.remote-order-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.remote-order-tab {
+  flex: 1;
+  min-width: 0;
+  padding: 6px;
+  border: 1px solid #1e3a4a;
+  background: #0f172a;
+  color: #7c93a8;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-size-11);
+}
+
+.remote-order-tab.active {
+  border-color: #2dd4bf;
+  background: #0e3a4a;
+  color: #e6f6ff;
+}
+
+.remote-order-badge {
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 2px;
+  background: #f59e0b;
+  color: #111827;
+}
+
+.remote-order-empty {
+  padding: 24px 0;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.remote-order-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.remote-order-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+}
+
+.remote-order-image {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  background: #0b1622;
+}
+
+.remote-order-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: #e2e8f0;
+  font-size: var(--font-size-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remote-order-quantity {
+  min-width: 42px;
+  color: #e2e8f0;
+  font-size: var(--font-size-12);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.remote-order-line.complete .remote-order-name,
+.remote-order-line.complete .remote-order-quantity {
+  color: #10b981;
+}
+
+.remote-order-contract {
+  margin-left: 6px;
+  color: #f59e0b;
+  font-size: var(--font-size-11);
+}
+
+.remote-order-stats {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 6px 8px;
+  background: #0b1622;
+  font-size: var(--font-size-12);
+  white-space: nowrap;
+}
+
+.remote-order-pay {
+  color: #10b981;
+}
+
+.remote-order-reputation {
+  color: #60a5fa;
+}
+
+.remote-order-deadline {
+  color: #f59e0b;
+}
+
+.remote-order-deadline.urgent,
+.remote-order-cancel-cost {
+  color: #ef4444;
+}
+
+.remote-order-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.remote-order-actions .action-btn {
+  flex: 1;
+}
+
 .remote-order-offer {
   margin: 8px 0;
   padding: 8px;
   border: 1px solid #134e4a;
   border-radius: 4px;
+}
+
+.remote-order-ready,
+.remote-order-cancel-confirmation {
+  margin: 8px 0;
+  color: #10b981;
+  text-align: center;
+}
+
+.remote-order-cancel-confirmation {
+  padding: 12px 0;
+  color: #e2e8f0;
+}
+
+.remote-order-cancel-cost {
+  margin: 4px 0 12px;
 }

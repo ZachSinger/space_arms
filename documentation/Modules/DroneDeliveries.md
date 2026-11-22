@@ -8,12 +8,18 @@ The Drone Terminal lets you fill orders from remote customers from the start of 
   order before it expires.
 
 ## Filling an order
-- Each order produces a special kind of crate. With one drone, only one order is open at a time.
+- Each accepted order has its own special crate. Several orders can remain accepted at once;
+  each keeps its own deadline, contents, payment, and reputation.
+- Choose an accepted order in the terminal's ORDER tab to bring up its crate. Other crates
+  can wait inside the terminal, or stay wherever the player left them. Only one delivery crate
+  can be carried at a time, alongside ordinary stock crates.
 - Carry the order crate and grab the required stock from shelves or from existing crates:
   - **From crates:** each press of E pulls one needed item from a nearby crate, if any.
   - **From shelves:** press E next to the shelf. Without opening the shelf screen, it pulls one
     of the needed items into the crate, if the shelf has any.
 - Its light stays red while any items are missing and turns green when all items are packed.
+- The crate's lid opens when it first rises and stays open while carried or put down elsewhere.
+  It closes only when the completed crate is back on the terminal and accepted for shipping.
 - Set the finished crate on the pad next to the Drone Terminal. It ships itself and you are
   paid immediately.
 
@@ -25,6 +31,8 @@ The Drone Terminal lets you fill orders from remote customers from the start of 
 - Declining an offer, or letting it go away, never costs reputation.
 - Once accepted, an order must be shipped within a set number of shifts. Missing that deadline
   costs store reputation.
+- The terminal and order tracker show deadlines as time remaining, such as "Expires in 2 days"
+  or "Due today".
 - Orders can be filled any time, even after hours.
 
 ## Order crates are special
@@ -38,7 +46,8 @@ The Drone Terminal lets you fill orders from remote customers from the start of 
 
 ## Confirmed by Zach
 - Remote orders are available from the start of the game, not a later unlock.
-- The shop has one drone, so only one remote order can be open at a time.
+- The shop has one drone, but several remote orders can be accepted at once. The terminal
+  handles one crate at a time.
 - Orders come in by chance on the shift clock, from people who are not in the store. An order
   can arrive at any time during a shift.
 - Each in-game hour of a shift is a 15% chance for a new order offer.
@@ -56,10 +65,18 @@ The Drone Terminal lets you fill orders from remote customers from the start of 
 ## Approved terminal art in gameplay
 
 The gameplay terminal uses the approved door and platform animation at Fast speed, 60 ms per
-picture. The order crate uses its approved dark art and animates its lid as it arrives and when
-items are packed. The crate's separate red or green light shows whether the order is complete.
+picture. The order crate uses its approved dark art, opens its lid as it arrives, and closes
+it when accepted for shipping. The crate's separate red or green light shows whether the order is complete.
 The screen scrolls continuously on its own, independently of the doors, platform, and crate lid.
 See [DebugPlaytesting.md](../DebugPlaytesting.md) for the sprite sheets and screen alignment.
+
+Picking up a delivery crate leaves the platform raised and the hatch open. Accepting or
+choosing another order lowers the platform without closing the hatch, pauses briefly, and
+raises the next crate. A crate left on the platform waits inside the terminal during a swap;
+carried crates and crates left elsewhere are not moved. Choosing a carried order clears the
+platform for its return. Shipping lowers the closed crate, and the hatch stays open while any
+accepted orders remain. Only after the last accepted order ships, is cancelled, or expires
+does the terminal lower its empty platform and close the hatch.
 
 The terminal post and pad both block people. The pad is drawn on the floor layer, so it never
 covers the player. Crates can occupy the pad's surface without colliding with its people blocker.
@@ -76,8 +93,8 @@ They should be reviewed against the game's balance before they are treated as fi
   arrives during the Day 3 shift goes away when the Day 4 shift ends).
 - An accepted order must ship within 3 shifts, counting the shift it is accepted in (accepted
   during the Day 4 shift, due by the end of the Day 6 shift).
-- With one drone, only one accepted order can be open at a time. Its Accept buttons are
-  greyed out until it ships or is cancelled; offers can still arrive and wait meanwhile.
+- Accepting another offer keeps earlier accepted orders open and selects the new crate.
+  The ORDER tab lets the player switch between accepted orders.
 - Up to 1 offer can wait at once for store levels 1–10, 2 for 11–20, 3 for 21–30, 4 for
   31–40, and 5 from level 41. The hourly roll is skipped while every offer slot is full.
 - Orders contain 2–3 product types for store levels 1–10, up to 4 for 11–20, 5 for 21–30,

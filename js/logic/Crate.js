@@ -98,12 +98,21 @@ export class Crate {
       .setDisplaySize(art.width, art.height)
       .setDepth(2);
     if (tint !== null) this.sprite.setTint?.(tint);
+    this.remoteOrderLidOpen = false;
+    this.inTerminal = false;
+    this.remoteOrderShipping = false;
     if (kind === "remote-order" && scene.anims && !scene.anims.exists(art.animation)) {
       for (const appearance of Object.values(REMOTE_ORDER_CRATE_SPRITES)) {
         if (scene.anims.exists(appearance.animation)) continue;
         scene.anims.create({
           key: appearance.animation,
-          frames: [1, 2, 3, 2, 1, 0].map((frame) => ({ key: appearance.key, frame })),
+          frames: [0, 1, 2, 3].map((frame) => ({ key: appearance.key, frame })),
+          frameRate: 1000 / 60,
+          repeat: 0,
+        });
+        scene.anims.create({
+          key: `${appearance.animation}-close`,
+          frames: [3, 2, 1, 0].map((frame) => ({ key: appearance.key, frame })),
           frameRate: 1000 / 60,
           repeat: 0,
         });
@@ -137,6 +146,7 @@ export class Crate {
   }
 
   canPickUp() {
+    if (this.inTerminal || this.remoteOrderShipping) return false;
     return this.isPushed || this.isStationary() || this.isSliding();
   }
 
@@ -196,7 +206,6 @@ export class Crate {
       this.contents.set(itemId, this.getAvailableUnitsFor(itemId) + accepted);
       this.quantity += accepted;
       this.setRemoteOrderAppearance(this.isRemoteOrderComplete());
-      this.animateRemoteOrderLid();
       return accepted;
     }
     if (!this.canPut(itemId)) return 0;
@@ -239,15 +248,29 @@ export class Crate {
       ? REMOTE_ORDER_CRATE_SPRITES.complete
       : REMOTE_ORDER_CRATE_SPRITES.incomplete;
     this.sprite?.anims?.stop?.();
-    this.sprite?.setTexture?.(appearance.key, 0);
+    this.sprite?.setTexture?.(appearance.key, this.remoteOrderLidOpen ? 3 : 0);
   }
 
-  animateRemoteOrderLid() {
+  animateRemoteOrderLid(open = true) {
     if (this.kind !== "remote-order") return;
+    if (this.remoteOrderLidOpen === open) return;
+    this.remoteOrderLidOpen = open;
     const appearance = this.isRemoteOrderComplete()
       ? REMOTE_ORDER_CRATE_SPRITES.complete
       : REMOTE_ORDER_CRATE_SPRITES.incomplete;
-    this.sprite?.anims?.play?.(appearance.animation, true);
+    if (this.sprite.anims) this.sprite.anims.play(open ? appearance.animation : `${appearance.animation}-close`, true);
+    else this.sprite.setFrame?.(open ? 3 : 0);
+  }
+
+  setTerminalStored(stored) {
+    if (this.kind !== "remote-order" || this.isCarried) throw new Error("Only an uncarried delivery crate can enter the terminal.");
+    this.inTerminal = stored;
+    this.sprite.setVisible(!stored);
+    const body = this.sprite.body;
+    body.stop();
+    body.enable = !stored;
+    body.moves = !stored && !this.scene.crateSystem?.motionPaused;
+    if (!stored) body.reset(this.sprite.x, this.sprite.y);
   }
 
   resetRemoteOrderContents() {
@@ -678,7 +701,7 @@ export class Crate {
   }
 
   setPaused(paused) {
-    this.sprite.body.moves = !paused && !this.lockedToPad;
+    this.sprite.body.moves = !paused && !this.lockedToPad && !this.inTerminal;
   }
 
   // --- Saving ---
@@ -706,6 +729,8 @@ export class Crate {
           requiredItems: this.requiredItems.map((entry) => ({ ...entry })),
           contents: [...this.contents].map(([contentId, amount]) => ({ itemId: contentId, quantity: amount })),
           quantity: this.quantity,
+          lidOpen: this.remoteOrderLidOpen,
+          inTerminal: this.inTerminal,
         }
         : { kind: "item", itemId: this.itemId, quantity: this.quantity };
     return this.id ? { id: this.id, ...payload } : payload;
@@ -721,6 +746,11 @@ export class Crate {
       this.flight = { ...data.flight };
       this.isThrown = true;
       this.setThrowHeight(this.flight.height);
+    }
+    if (this.kind === "remote-order") {
+      this.remoteOrderLidOpen = data.lidOpen ?? true;
+      this.setRemoteOrderAppearance(this.isRemoteOrderComplete());
+      if (data.inTerminal) this.setTerminalStored(true);
     }
   }
 
