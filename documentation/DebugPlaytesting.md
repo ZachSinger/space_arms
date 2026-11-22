@@ -50,6 +50,14 @@ behind their tops and be hidden by them. A pretend customer walks a loop behind 
 `js/scenes/shelfCollisionLab.js` in all four facings, then walk into it from every side and
 behind it: you should stop only at its feet, and it should hide you when you're behind it.
 
+## Delivery Crate Lab
+
+On the title screen, choose **DEV**, then **DELIVERY CRATE LAB**. It shows the remote-order
+terminal beside the player. **PLAY ALL** shows the floor doors opening, the platform rising,
+the platform lowering, and the doors closing. The numbered buttons play one part at a time,
+and **LOOP ON/OFF** repeats the whole animation. The animation pictures are in
+`img/Generated/fixture_drone_terminal_sheet.png`.
+
 ## Capturing a session
 
 Click **Debug Info** in the top HUD, including before opening the store.
