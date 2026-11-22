@@ -35,6 +35,10 @@ export class CleaningSystem {
     // Employee -> the piece of trash they're carrying to a trashcan.
     /** @type {Map<object, object>} */
     this.staffHeldTrash = new Map();
+    // Employee -> { bucket, animation, clockMs } for the mop they took.
+    /** @type {Map<object, { bucket: object, animation: MopAnimation, clockMs: number }>} */
+    this.staffMops = new Map();
+    this.createMopAnimation = (actor) => new MopAnimation(shop, actor);
     if (shop.interactables) {
       this.unregisterInteractions = shop.interactables.registerProvider("cleaning", () => [{
         id: "cleaning",
@@ -139,7 +143,9 @@ export class CleaningSystem {
       if (bucket) return [{
         action: "interact", kind: "mop-bucket", target: bucket, priority: 5, range: 0,
         distanceFrom: () => 0,
-        hint: `${controlLabel("interact")}: Take the mop from the bucket`,
+        hint: this.isMopWithStaff(bucket)
+          ? "An employee is using this bucket's mop"
+          : `${controlLabel("interact")}: Take the mop from the bucket`,
         perform: () => this.takeMop(bucket),
       }];
     }
@@ -176,7 +182,13 @@ export class CleaningSystem {
       this.shop.messages.show("Face the mop bucket and move closer to take its mop.", "#94a3b8");
       return false;
     }
-    this.mopAnimation = new MopAnimation(this.shop, this.shop.player);
+    if (this.isMopWithStaff(bucket)) {
+      this.shop.messages.show("An employee is using this bucket's mop. They put it back when they're done.", "#94a3b8");
+      return false;
+    }
+    // The player wins any race: an employee walking to this bucket picks another one.
+    bucket.mopClaimedBy = null;
+    this.mopAnimation = this.createMopAnimation(this.shop.player);
     this.heldMop = bucket;
     return true;
   }
@@ -369,6 +381,100 @@ export class CleaningSystem {
     this.staffHeldTrash.clear();
   }
 
+  // ---- Employees who mop. Each bucket has one mop: the player, or one employee, uses it.
+
+  isMopWithStaff(bucket) {
+    return [...this.staffMops.values()].some((mop) => mop.bucket === bucket);
+  }
+
+  isMopFree(bucket, holder) {
+    if (this.heldMop === bucket) return false;
+    for (const [other, mop] of this.staffMops) if (other !== holder && mop.bucket === bucket) return false;
+    return !bucket.mopClaimedBy || bucket.mopClaimedBy === holder;
+  }
+
+  staffMopBuckets(holder) {
+    return this.shop.fixtures.ofKind("mop").filter((bucket) => this.isMopFree(bucket, holder));
+  }
+
+  staffDirtTargets(holder) {
+    return this.dirt.pieces.filter((mark) => !mark.claimedBy || mark.claimedBy === holder);
+  }
+
+  // Reserves a bucket's mop and a dirt mark (either may be null) for one employee.
+  claimMoppingForStaff(holder, { bucket = null, mark = null }) {
+    if (bucket && !this.isMopFree(bucket, holder)) return false;
+    if (mark && (!this.dirt.pieces.includes(mark) || (mark.claimedBy && mark.claimedBy !== holder))) return false;
+    this.releaseStaffMoppingClaims(holder);
+    if (bucket) bucket.mopClaimedBy = holder;
+    if (mark) mark.claimedBy = holder;
+    return true;
+  }
+
+  isDirtClaimedBy(mark, holder) {
+    return this.dirt.pieces.includes(mark) && mark.claimedBy === holder;
+  }
+
+  releaseStaffMoppingClaims(holder) {
+    for (const mark of this.dirt.pieces) if (mark.claimedBy === holder) mark.claimedBy = null;
+    for (const bucket of this.shop.fixtures.ofKind("mop")) {
+      if (bucket.mopClaimedBy === holder) bucket.mopClaimedBy = null;
+    }
+  }
+
+  isStaffHoldingMop(holder) {
+    return this.staffMops.has(holder);
+  }
+
+  staffMopBucket(holder) {
+    return this.staffMops.get(holder)?.bucket ?? null;
+  }
+
+  takeMopForStaff(holder, bucket) {
+    if (this.staffMops.has(holder) || !this.shop.fixtures.ofKind("mop").includes(bucket) ||
+      !this.isMopFree(bucket, holder)) return false;
+    bucket.mopClaimedBy = null;
+    this.staffMops.set(holder, { bucket, animation: this.createMopAnimation(holder), clockMs: 0 });
+    return true;
+  }
+
+  // One stroke of an employee's mop. Returns whether the mark is now clean.
+  mopDirtForStaff(holder, mark) {
+    const mop = this.staffMops.get(holder);
+    if (!mop || !this.isDirtClaimedBy(mark, holder)) return false;
+    mop.animation.press(mop.clockMs);
+    mark.progress = Math.min(1, mark.progress + 1 / CLEANING_TUNING.mopPressesPerSpot);
+    const clean = mark.progress >= 1 - Number.EPSILON;
+    if (clean) {
+      this.dirt.take(mark);
+      mark.sprite.destroy();
+    }
+    this.syncSavedDirt();
+    return clean;
+  }
+
+  // Draws an employee's mop; while scrubbing, their arms sweep it back and forth.
+  updateStaffMop(holder, delta, scrubbing) {
+    const mop = this.staffMops.get(holder);
+    if (!mop) return;
+    mop.clockMs += delta;
+    mop.animation.update(delta, scrubbing);
+  }
+
+  // The mop goes back in its bucket (wherever the employee is) and their claims are dropped.
+  returnStaffMop(holder) {
+    this.releaseStaffMoppingClaims(holder);
+    const mop = this.staffMops.get(holder);
+    if (!mop) return false;
+    this.staffMops.delete(holder);
+    mop.animation.destroy();
+    return true;
+  }
+
+  clearStaffMops() {
+    for (const holder of [...this.staffMops.keys()]) this.returnStaffMop(holder);
+  }
+
   getCleanliness() {
     const shop = this.shop;
     const salesExpansions = EXPANSION_ORDER.filter((id) =>
@@ -440,6 +546,7 @@ export class CleaningSystem {
     this.heldTrash?.sprite.destroy();
     this.heldTrash = null;
     this.clearStaffHeldTrash();
+    this.clearStaffMops();
     this.trash.load(list);
     this.dirt.load(dirt);
     this.syncSavedTrash();
@@ -497,6 +604,7 @@ export class CleaningSystem {
     this.heldTrash?.sprite.destroy();
     this.heldTrash = null;
     this.clearStaffHeldTrash();
+    this.clearStaffMops();
     this.trash.destroy();
     this.dirt.destroy();
   }

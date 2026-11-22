@@ -21,8 +21,6 @@ completed or no longer relevant.
       10-minute game session.
 - [ ] Add a first-shift tutorial for ordering products, collecting deliveries, stocking
       shelves, and setting prices. Wait until the map and core loop are close to final.
-- [ ] Let employees mop dirt using the shared four-direction mopping animation, after
-      the player's mopping appearance is approved. Employees currently clean trash only.
 
 ## Art and sound
 

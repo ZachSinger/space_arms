@@ -1,4 +1,4 @@
-﻿# Cleaning (module)
+# Cleaning (module)
 
 ## Mess
 As customers move through the store, they sometimes create smudges, filth, or scuffs, or leave
@@ -43,26 +43,39 @@ These answer the open questions in the design above.
 3. **Employees who clean (built):** see below.
 
 ### Employees who clean
-- Cleaning is a third employee job, **Clean up trash**, next to Run register and Stock
+- Cleaning is a third employee job, **Clean the store** (called Clean up trash before mopping), next to Run register and Stock
   shelves. Like the others it has its own skill (Level 1–5, trained the same way) and its own
   place in the job order. Drag Cleaning to the desired position in the staff panel, or use
   **Move up / down**; highest priority is at the top. The saved order changes between shifts only.
 - An employee works down their job order and takes the first job that has work. Cleaning has
-  work when there is floor trash nobody else is going for and a trashcan they can reach.
+  work when there is floor trash nobody else is going for and a trashcan they can reach, or
+  a dirt mark nobody else is going for and a Mop Bucket whose mop is free. Trash comes first.
   Without the cleaning module, cleaning never has work.
 - They walk to the nearest piece, pick it up (one at a time, carried at their side), walk to
   the nearest trashcan, and throw it away. The cleanliness level goes back up exactly as when
   you do it. Then they pick their next job again.
 - Each employee reserves the piece they're walking to, so two employees never go for the same
   one. If you pick it up first, they give up on it and choose again.
-- Skill makes the whole trip faster: walking, picking up, and throwing away (+20% speed per
-  level, the same as the other jobs).
+- Mopping: they reserve the nearest free bucket and the nearest dirt mark, take the mop,
+  and mop the mark with the same four-direction sweeping animation as the player. One sweep
+  equals one player press (8 per mark); a sweep takes 250 ms at Level 1, so a mark takes
+  about 2 seconds. The arms sweep faster as the skill goes up. After a mark, they move to the
+  next unreserved mark, and put the mop back in its bucket when none are left.
+- One mop per bucket: while an employee has it, the player can't take it and the bucket
+  can't be moved, crated, or sold. If the player takes the mop before the employee reaches
+  the bucket, the employee gives up and chooses again. The player and an employee can both
+  mop the same mark; whoever finishes it, the other moves on.
+- Skill makes the whole trip faster: walking, picking up, throwing away, and mopping (+20%
+  speed per level, the same as the other jobs).
 - At 20:00 they finish the cleaning task already underway, including picking up the claimed
   piece and throwing it away. They take no new cleaning or stocking jobs, but still serve
   customers already inside at the register before walking out through the public front
   door. The shift waits until they reach the exit. If they're removed from the
   store while carrying trash, it goes back on the floor; it's never lost or counted twice.
-- Saves from before this job (save format 11 and older) add Clean up trash to the end of each
+  Someone mopping finishes their current mark, then returns the mop without starting another.
+  A mop held by an employee who is removed, or when a save is loaded, goes straight back
+  into its bucket; employee mops are not saved.
+- Saves from before this job (save format 11 and older) add the cleaning job to the end of each
   employee's job order, at Level 1.
 
 ### Cleanliness level
@@ -117,8 +130,7 @@ for being bigger. Each customer rolls two numbers when they arrive:
   Held keys and repeated keydown events do not count as new presses.
 - The character's arms and mop sweep back and forth in all four facing directions.
   Faster fresh presses shorten the sweep; the animation settles when pressing stops.
-  The renderer supports every employee's four-direction artwork, but employee mopping
-  jobs are deferred until the player appearance is approved.
+  Employees use the same renderer on their own uniforms (see Employees who clean).
 - Dirt costs 2 cleanliness points until the mark is fully cleaned. Partial progress,
   position, and appearance persist overnight and through save/Continue. Loading returns
   the held mop to its bucket. The additive dirt save field is optional for older saves.
@@ -134,3 +146,5 @@ for being bigger. Each customer rolls two numbers when they arrive:
 presses, all four directions, different pressing speeds, carry restrictions, save/Continue,
 and the shared renderer with every employee uniform. `node scripts/browser/check-optional-cleaning.mjs`
 also checks preserved dirt and bucket behavior when the module is disabled.
+`node scripts/browser/employee-mopping.mjs` checks, in a real shift, that an employee fetches the
+mop, mops dirt in all four facing directions, and puts the mop back.

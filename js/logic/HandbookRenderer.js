@@ -335,7 +335,8 @@ function employeesTopic() {
         order to the first job that needs doing:</p>
       ${list([
         "<strong>Stock shelves:</strong> a crate anywhere in the shop or backroom has items, and a matching shelf spot has room.",
-        "<strong>Clean up trash:</strong> there is trash on the shop floor and a trashcan they can walk to. They pick up the nearest piece nobody else is going for, one at a time, and throw it in the nearest trashcan. If you pick up that piece first, they go for another one.",
+        "<strong>Clean the store:</strong> trash comes first. If there is trash on the shop floor and a trashcan they can walk to, they pick up the nearest piece nobody else is going for, one at a time, and throw it in the nearest trashcan. If you pick up that piece first, they go for another one.",
+        "When there is no trash to pick up, they mop dirt marks. They need a Mop Bucket whose mop nobody is using. They take the mop, mop the nearest dirt mark until it's gone, move on to the next mark, and put the mop back in its bucket when no dirt is left. While an employee has a bucket's mop, you can't take it, move the bucket, or sell it. If you take that mop before they get to the bucket, they choose another job.",
       ])}
       <p>They take a matching crate — from the Loading Pad, the backroom, or the shop floor,
         top of a stack first — straight to its shelf spot. They only
@@ -382,7 +383,7 @@ function employeesTopic() {
     section("Job Levels & Training", `
       ${list([
         `Each employee has three separate skills: <strong>Run register</strong>, <strong>Stock shelves</strong>,
-          and <strong>Clean up trash</strong>. Each starts at Level 1 and can reach Level ${MAX_EMPLOYEE_SKILL_LEVEL}.`,
+          and <strong>Clean the store</strong>. Each starts at Level 1 and can reach Level ${MAX_EMPLOYEE_SKILL_LEVEL}.`,
         "Between shifts, choose a skill under that employee's Training section. Check the price, speed, and new wage, then book the course.",
         "Each course costs more than that employee's previous course, whichever skill it trains.",
         "A booked course takes the entire next shift. That employee will not work in the shop, but you still pay their current wage when the shift starts.",
@@ -391,7 +392,7 @@ function employeesTopic() {
           employees work ${Math.round((getEmployeeJobSpeed({ register: 3 }, "register") - 1) * 100)}% faster
           at Level 3 and ${getEmployeeJobSpeed({ register: 5 }, "register")} times normal speed at Level 5.`,
         "Stock shelves makes restocking trips faster with each level. At the shelf, an employee puts down one item at a time: about one second per item at Level 1, improving to about 0.56 seconds at Level 5. Stocking 15 items takes 15 of these pauses.",
-        "Clean up trash makes cleaning trips, and picking up and throwing away trash, faster with each level.",
+        "Clean the store makes cleaning trips, picking up and throwing away trash, and mopping faster with each level. At Level 1, mopping one dirt mark takes about 2 seconds.",
         "Skills and higher wages are permanent.",
         "If an employee is already away training, wait until they return before changing On Shift / Off Shift.",
       ])}`),

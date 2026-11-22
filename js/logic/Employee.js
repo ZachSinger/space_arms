@@ -20,10 +20,13 @@ const BREAK_CHECK_MS = 100;
 const WALK_BODY = { width: PLAYER_BODY_WIDTH, height: PLAYER_BODY_HEIGHT, avoidStoreDoor: true };
 // Bending down for a piece of trash, and dropping it in the trashcan, at cleaning Level 1.
 export const TRASH_HANDLING_MS = 600;
+// One back-and-forth sweep of the mop at cleaning Level 1; a dirt mark takes the same number of
+// sweeps as the player's presses.
+export const MOP_STROKE_MS = 250;
 // Provisional Level 1 pause for each individual item placed on a shelf.
 export const STOCKING_MS_PER_ITEM = 1000;
-const CLEANING_WALK_STATES = Object.freeze(["TO_LITTER", "TO_LITTER_BIN"]);
-const CLEANING_ACTION_STATES = Object.freeze(["PICKING_UP_LITTER", "BINNING_LITTER"]);
+const CLEANING_WALK_STATES = Object.freeze(["TO_LITTER", "TO_LITTER_BIN", "TO_MOP_BUCKET", "TO_DIRT", "TO_RETURN_MOP"]);
+const CLEANING_ACTION_STATES = Object.freeze(["PICKING_UP_LITTER", "BINNING_LITTER", "MOPPING"]);
 
 export class Employee {
   constructor(employeeData, store, {
@@ -106,6 +109,12 @@ export class Employee {
     } else if (this.state === "TO_LITTER" && !this.isStillAfterTrash()) {
       this.sprite.body.setVelocity(0, 0);
       this.finishTask();
+    } else if (this.state === "TO_MOP_BUCKET" && this.currentJob.bucket.mopClaimedBy !== this) {
+      this.sprite.body.setVelocity(0, 0);
+      this.finishTask();
+    } else if (this.state === "TO_DIRT" && !this.isStillAfterDirt()) {
+      this.sprite.body.setVelocity(0, 0);
+      this.walkToNextDirt();
     } else if ([
       "TO_SHELF", "TO_CRATE", "TO_RETURN_CRATE", "TO_TRASHCAN",
       "TO_REGISTER", "TO_BREAKROOM", "TO_CLOSING_REGISTER", "TO_EXIT", ...CLEANING_WALK_STATES,
@@ -123,7 +132,13 @@ export class Employee {
         this.currentJob.crate.followCarrier(this.sprite, 0, EMPLOYEE_CRATE_HOLD_OFFSET);
       }
     }
-    if (!this.isDestroyed) this.updateFacing();
+    if (this.isDestroyed) return;
+    if (this.state === "MOPPING") {
+      this.store.cleaning?.updateStaffMop(this, delta, true);
+    } else {
+      this.updateFacing();
+      this.store.cleaning?.updateStaffMop(this, delta, false);
+    }
   }
 
   startNextTask() {
@@ -317,9 +332,14 @@ export class Employee {
   }
 
   trashcanSpots() {
+    return this.fixtureSpots(this.store.fixtures.ofKind("trash"));
+  }
+
+  // Standing spots one step outside each side of each fixture.
+  fixtureSpots(fixtures) {
     const reachX = PLAYER_BODY_WIDTH / 2 + 2;
     const reachY = PLAYER_BODY_HEIGHT / 2 + 2;
-    return this.store.fixtures.ofKind("trash").flatMap((fixture) => {
+    return fixtures.flatMap((fixture) => {
       const { w, h } = fixtureFootprint(fixture);
       const left = fixture.gx * TILE_SIZE;
       const top = fixture.gy * TILE_SIZE;
@@ -341,11 +361,16 @@ export class Employee {
     return this.startPath(closest.spot, closest.path, nextState);
   }
 
-  // Cleaning: the nearest piece of floor trash nobody else is after, then the nearest trashcan.
-  // No cleaning module, no trash, or no reachable trashcan means there's no cleaning work.
+  // Cleaning: trash first (the nearest piece nobody else is after, then the nearest trashcan),
+  // then dirt (fetch a free mop, mop the nearest marks, put the mop back). No cleaning module,
+  // no mess, or nowhere reachable to take it means there's no cleaning work.
   startCleaningJob() {
     const cleaning = this.store.cleaning;
     if (!cleaning || this.cleaningCheckInMs > 0) return false;
+    return this.startTrashJob(cleaning) || this.startMoppingJob(cleaning);
+  }
+
+  startTrashJob(cleaning) {
     const pieces = cleaning.staffTrashTargets(this);
     if (pieces.length === 0 || this.store.fixtures.ofKind("trash").length === 0) return false;
     const nearest = this.findClosestSpot(pieces.flatMap((piece) =>
@@ -359,6 +384,94 @@ export class Employee {
     if (this.startPath(nearest.spot, nearest.path, "TO_LITTER")) return true;
     cleaning.releaseStaffClaims(this);
     return false;
+  }
+
+  // Beside the mark, never on it, so the mop head lands on the dirt like the player's does.
+  dirtSpots(marks) {
+    const cleaning = this.store.cleaning;
+    return marks.flatMap((mark) => cleaning.trashStandSpots(mark).slice(1).map((spot) => ({ ...spot, mark })));
+  }
+
+  startMoppingJob(cleaning) {
+    const marks = cleaning.staffDirtTargets(this);
+    const buckets = cleaning.staffMopBuckets(this);
+    if (marks.length === 0 || buckets.length === 0) return false;
+    const toBucket = this.findClosestSpot(this.fixtureSpots(buckets));
+    const toDirt = this.findClosestSpot(this.dirtSpots(marks));
+    if (!toBucket || !toDirt ||
+      !cleaning.claimMoppingForStaff(this, { bucket: toBucket.spot.fixture, mark: toDirt.spot.mark })) {
+      this.cleaningCheckInMs = JOB_RETRY_MS;
+      return false;
+    }
+    this.currentJob = { jobId: "clean", bucket: toBucket.spot.fixture, dirt: toDirt.spot.mark };
+    if (this.startPath(toBucket.spot, toBucket.path, "TO_MOP_BUCKET")) return true;
+    cleaning.releaseStaffMoppingClaims(this);
+    return false;
+  }
+
+  isStillAfterDirt() {
+    const dirt = this.currentJob?.dirt;
+    return Boolean(dirt && this.store.cleaning?.isDirtClaimedBy(dirt, this));
+  }
+
+  arriveAtMopBucket() {
+    if (!this.store.cleaning?.takeMopForStaff(this, this.currentJob.bucket)) {
+      this.finishTask();
+      return;
+    }
+    this.walkToNextDirt();
+  }
+
+  // The claimed mark if it's still dirty, otherwise the nearest unclaimed one. At closing time
+  // the claimed mark still gets finished, but no new one is started.
+  walkToNextDirt() {
+    const cleaning = this.store.cleaning;
+    const job = this.currentJob;
+    const marks = this.isStillAfterDirt() ? [job.dirt]
+      : this.clockOutRequested ? [] : cleaning.staffDirtTargets(this);
+    const nearest = marks.length > 0 ? this.findClosestSpot(this.dirtSpots(marks)) : null;
+    if (nearest && cleaning.claimMoppingForStaff(this, { mark: nearest.spot.mark })) {
+      job.dirt = nearest.spot.mark;
+      if (this.startPath(nearest.spot, nearest.path, "TO_DIRT")) return true;
+      this.currentJob = job;
+    }
+    job.dirt = null;
+    return this.walkToReturnMop();
+  }
+
+  walkToReturnMop() {
+    const cleaning = this.store.cleaning;
+    const bucket = cleaning.staffMopBucket(this);
+    const route = bucket && this.store.fixtures.ofKind("mop").includes(bucket)
+      ? this.findClosestSpot(this.fixtureSpots([bucket])) : null;
+    if (route && this.startPath(route.spot, route.path, "TO_RETURN_MOP")) return true;
+    this.finishTask();
+    return false;
+  }
+
+  arriveAtDirt() {
+    if (!this.isStillAfterDirt()) {
+      this.walkToNextDirt();
+      return;
+    }
+    this.faceToward(this.currentJob.dirt);
+    this.beginCleaningAction("MOPPING");
+    // The first sweep starts right away.
+    this.cleaningActionRemainingMs = 0;
+  }
+
+  arriveToReturnMop() {
+    this.store.cleaning?.returnStaffMop(this);
+    this.finishTask();
+  }
+
+  faceToward(point) {
+    const position = this.sprite.body.center ?? this.sprite;
+    const dx = point.x - position.x;
+    const dy = point.y - position.y;
+    if (Math.abs(dx) >= 1 || Math.abs(dy) >= 1) {
+      this.currentFacing = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? "left" : "right") : (dy < 0 ? "up" : "down");
+    }
   }
 
   // False once the player (or anyone) has taken the claimed piece.
@@ -377,6 +490,10 @@ export class Employee {
 
   updateCleaningAction(delta) {
     const cleaning = this.store.cleaning;
+    if (this.state === "MOPPING") {
+      this.updateMopping(delta);
+      return;
+    }
     if (this.state === "PICKING_UP_LITTER" && !this.isStillAfterTrash()) {
       this.finishTask();
       return;
@@ -399,18 +516,35 @@ export class Employee {
     this.finishTask();
   }
 
+  // Each sweep is one stroke of progress, like one press of the player's button. Higher skill
+  // means quicker sweeps, and the arms visibly sweep faster to match.
+  updateMopping(delta) {
+    const job = this.currentJob;
+    if (job.finishingSweep) {
+      // The mark is clean; let the last sweep play out before walking off.
+      this.cleaningActionRemainingMs -= delta;
+      if (this.cleaningActionRemainingMs > 0) return;
+      job.finishingSweep = false;
+      this.walkToNextDirt();
+      return;
+    }
+    if (!this.isStillAfterDirt()) {
+      this.walkToNextDirt();
+      return;
+    }
+    this.cleaningActionRemainingMs -= delta;
+    if (this.cleaningActionRemainingMs > 0) return;
+    this.cleaningActionRemainingMs += MOP_STROKE_MS / getEmployeeJobSpeed(this.data.skillLevels, "clean");
+    if (this.store.cleaning.mopDirtForStaff(this, job.dirt)) job.finishingSweep = true;
+  }
+
   arriveAtTrash() {
     const trash = this.currentJob?.trash;
     if (!this.isStillAfterTrash()) {
       this.finishTask();
       return;
     }
-    const position = this.sprite.body.center ?? this.sprite;
-    const dx = trash.x - position.x;
-    const dy = trash.y - position.y;
-    if (Math.abs(dx) >= 1 || Math.abs(dy) >= 1) {
-      this.currentFacing = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? "left" : "right") : (dy < 0 ? "up" : "down");
-    }
+    this.faceToward(trash);
     this.beginCleaningAction("PICKING_UP_LITTER");
   }
 
@@ -560,6 +694,12 @@ export class Employee {
       this.arriveAtTrash();
     } else if (this.state === "TO_LITTER_BIN") {
       this.arriveAtTrashBin();
+    } else if (this.state === "TO_MOP_BUCKET") {
+      this.arriveAtMopBucket();
+    } else if (this.state === "TO_DIRT") {
+      this.arriveAtDirt();
+    } else if (this.state === "TO_RETURN_MOP") {
+      this.arriveToReturnMop();
     }
   }
 
@@ -780,8 +920,9 @@ export class Employee {
   }
 
   finishTask() {
-    // Trash still in hand goes back on the floor, so it's never lost or counted twice.
-    if (this.currentJob?.jobId === "clean") this.store.cleaning?.dropStaffTrash(this);
+    // Trash still in hand goes back on the floor, so it's never lost or counted twice, and a
+    // mop still in hand goes back in its bucket.
+    if (this.currentJob?.jobId === "clean") this.dropCleaningThings();
     this.currentJob = null;
     this.registerServiceRemainingMs = 0;
     this.cleaningActionRemainingMs = 0;
@@ -790,6 +931,11 @@ export class Employee {
     this.state = "IDLE";
     this.retryInMs = 0;
     if (this.clockOutRequested) this.finishClosingRegisterWork();
+  }
+
+  dropCleaningThings() {
+    this.store.cleaning?.dropStaffTrash(this);
+    this.store.cleaning?.returnStaffMop(this);
   }
 
   requestClockOut() {
@@ -864,7 +1010,7 @@ export class Employee {
 
   destroy() {
     if (this.isDestroyed) return;
-    if (this.currentJob?.jobId === "clean") this.store.cleaning?.dropStaffTrash(this);
+    if (this.currentJob?.jobId === "clean") this.dropCleaningThings();
     this.isDestroyed = true;
     this.sprite.body.setVelocity(0, 0);
     this.store.removeEmployeeSprite(this.sprite);

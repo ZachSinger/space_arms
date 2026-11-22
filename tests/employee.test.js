@@ -16,6 +16,7 @@ let nextTestCrateId = 1;
 let REGISTER_SERVICE_MS_PER_ITEM;
 let REGISTER_SERVICE_MS_PER_CUSTOMER;
 let TRASH_HANDLING_MS;
+let MOP_STROKE_MS;
 let STOCKING_MS_PER_ITEM;
 let EmployeeRenderer;
 let EmployeeTraining;
@@ -62,7 +63,7 @@ before(async () => {
       },
     }],
   });
-  ({ Employee, TRASH_HANDLING_MS, STOCKING_MS_PER_ITEM } = await server.ssrLoadModule("/js/logic/Employee.js"));
+  ({ Employee, TRASH_HANDLING_MS, MOP_STROKE_MS, STOCKING_MS_PER_ITEM } = await server.ssrLoadModule("/js/logic/Employee.js"));
   ({ EmployeeRenderer } = await server.ssrLoadModule("/js/logic/EmployeeRenderer.js"));
   EmployeeTraining = await server.ssrLoadModule("/js/logic/EmployeeTraining.js");
   ({ REGISTER_SERVICE_MS_PER_CUSTOMER, REGISTER_SERVICE_MS_PER_ITEM } = EmployeeTraining);
@@ -204,6 +205,7 @@ function makeEmployee({
   hasRegister = false,
   assignedToRegister = hasRegister && jobPriorities[0] === "register",
   trashcans = [{ id: "trash-near", type: "trash_can", gx: 2, gy: 1 }],
+  mopBuckets = [],
 } = {}) {
   const shelf = makeShelf(shelfQuantity, shelfCapacity, shelfPlacementCount);
   const crate = makeDeliveryCrate(crateQuantity);
@@ -220,7 +222,7 @@ function makeEmployee({
       shelves: () => [shelf],
       register: () => registerFixture,
       registers: () => registerFixture ? [registerFixture] : [],
-      ofKind: (kind) => kind === "trash" ? trashcans : [],
+      ofKind: (kind) => kind === "trash" ? trashcans : kind === "mop" ? mopBuckets : [],
     },
     employees: [],
     restockCrates: [crate],
@@ -770,17 +772,32 @@ function addCleaning(scene) {
     destroy() { this.destroyed = true; },
   });
   let savedTrash = [];
+  let savedDirt = [];
   const shop = {
     textures: { exists: () => true },
     add: { image },
     room: { zones: [{ id: "base", gridX: 0, gridY: 0, gridW: 100, gridH: 100, salesFloor: true }], isWalkable: () => true },
-    fixtures: { all: () => [] },
-    gameState: { trash: { setPieces(list) { savedTrash = list; } }, reputation: { shopLevel: 1 } },
+    fixtures: { all: () => [], ofKind: (kind) => scene.fixtures.ofKind(kind) },
+    gameState: {
+      trash: { setPieces(list) { savedTrash = list; }, setDirt(list) { savedDirt = list; } },
+      reputation: { shopLevel: 1 },
+    },
     player: { currentFacing: "down", sprite: { x: 0, y: 0, depth: 3 } },
   };
   const cleaning = new CleaningSystem(shop);
+  // Records what each employee's mop animation was asked to do.
+  const mops = new Map();
+  cleaning.createMopAnimation = (actor) => {
+    const mop = { presses: [], scrubFrames: 0, destroyed: false };
+    mops.set(actor, mop);
+    return {
+      press: (time) => mop.presses.push(time),
+      update: (delta, scrubbing) => { if (scrubbing) mop.scrubFrames += 1; },
+      destroy: () => { mop.destroyed = true; },
+    };
+  };
   scene.cleaning = cleaning;
-  return { cleaning, savedTrash: () => savedTrash };
+  return { cleaning, mops, savedTrash: () => savedTrash, savedDirt: () => savedDirt };
 }
 
 function addCoworker(scene, id, jobPriorities) {
@@ -893,6 +910,144 @@ test("closing never loses or duplicates trash an employee is after or carrying",
   assert.equal(savedTrash().length, 0);
   assert.equal(cleaning.getCleanliness().trashCount, 0);
   assert.equal(piece.sprite.destroyed, true);
+});
+
+function mopEmployee(options = {}) {
+  const bucket = { id: "bucket", type: "mop_bucket", gx: 5, gy: 1 };
+  const made = makeEmployee({
+    jobPriorities: ["clean", "register", "stock_shelves"], mopBuckets: [bucket], ...options,
+  });
+  return { ...made, bucket };
+}
+function mopUntilClean(employee) {
+  for (let stroke = 0; stroke < 100 && employee.state === "MOPPING"; stroke += 1) {
+    employee.update(MOP_STROKE_MS);
+  }
+}
+
+test("an employee who cleans fetches the mop, mops each dirt mark with the sweeping animation, and puts it back", () => {
+  const { employee, bucket } = mopEmployee();
+  const { cleaning, mops, savedDirt } = addCleaning(employee.scene);
+  const far = cleaning.dirt.add("scuff", 600, 20);
+  const near = cleaning.dirt.add("smudge", 100, 20);
+  assert.equal(cleaning.getCleanliness().score, 16);
+
+  employee.startNextTask();
+  assert.equal(employee.state, "TO_MOP_BUCKET");
+  assert.equal(employee.currentJob.dirt, near, "the nearest mark first");
+  employee.arriveAtDestination();
+  assert.equal(employee.state, "TO_DIRT");
+  assert.equal(cleaning.isMopWithStaff(bucket), true, "the player can't take a mop an employee has");
+  employee.arriveAtDestination();
+  assert.equal(employee.state, "MOPPING");
+
+  employee.update(MOP_STROKE_MS);
+  assert.equal(savedDirt().find((mark) => mark.kind === "smudge").progress, 1 / 8, "partial mopping is saved");
+  mopUntilClean(employee);
+  const mop = mops.get(employee);
+  assert.equal(mop.presses.length, 8, "one sweep per press the player would need");
+  assert.ok(mop.scrubFrames >= 8, "the arms sweep the mop while mopping");
+  assert.equal(near.sprite.destroyed, true);
+  assert.equal(employee.state, "TO_DIRT", "keeps the mop for the next mark");
+  assert.equal(employee.currentJob.dirt, far);
+
+  employee.arriveAtDestination();
+  mopUntilClean(employee);
+  assert.equal(employee.state, "TO_RETURN_MOP");
+  assert.equal(cleaning.getCleanliness().score, 20);
+  assert.deepEqual(savedDirt(), []);
+  employee.arriveAtDestination();
+  assert.equal(employee.state, "IDLE");
+  assert.equal(cleaning.isStaffHoldingMop(employee), false);
+  assert.equal(mop.destroyed, true);
+  assert.equal(cleaning.isMopWithStaff(bucket), false);
+});
+
+test("a higher cleaning level sweeps the mop faster", () => {
+  const sweepGap = (level) => {
+    const { employee } = mopEmployee();
+    const { cleaning, mops } = addCleaning(employee.scene);
+    cleaning.dirt.add("smudge", 100, 20);
+    employee.data.skillLevels = { register: 1, stock_shelves: 1, clean: level };
+    employee.startNextTask();
+    employee.arriveAtDestination();
+    employee.arriveAtDestination();
+    for (let frame = 0; frame < 60; frame += 1) employee.update(16);
+    const [first, second] = mops.get(employee).presses;
+    return second - first;
+  };
+  assert.ok(sweepGap(5) < sweepGap(1));
+});
+
+test("trash comes before dirt, and dirt needs a free mop", () => {
+  const { employee } = mopEmployee();
+  const { cleaning } = addCleaning(employee.scene);
+  cleaning.dirt.add("smudge", 100, 20);
+  cleaning.trash.add("can", 300, 20);
+  employee.startNextTask();
+  assert.equal(employee.state, "TO_LITTER");
+
+  const noBucket = makeEmployee({ jobPriorities: ["clean", "stock_shelves", "register"] }).employee;
+  addCleaning(noBucket.scene).cleaning.dirt.add("smudge", 100, 20);
+  noBucket.startNextTask();
+  assert.equal(noBucket.state, "TO_CRATE", "no mop bucket, no mopping");
+
+  const { employee: playerHasMop, bucket: playerBucket } = mopEmployee({ jobPriorities: ["clean", "stock_shelves", "register"] });
+  const withPlayer = addCleaning(playerHasMop.scene).cleaning;
+  withPlayer.dirt.add("smudge", 100, 20);
+  withPlayer.heldMop = playerBucket;
+  playerHasMop.startNextTask();
+  assert.equal(playerHasMop.state, "TO_CRATE", "the player is using the only mop");
+});
+
+test("two employees never share a mop, and the player can take a mop before an employee arrives", () => {
+  const { employee, bucket } = mopEmployee();
+  const { cleaning } = addCleaning(employee.scene);
+  cleaning.dirt.add("smudge", 100, 20);
+  cleaning.dirt.add("scuff", 300, 20);
+  const coworker = addCoworker(employee.scene, "sera_floor_assistant", ["clean", "register", "stock_shelves"]);
+  employee.startNextTask();
+  coworker.startNextTask();
+  assert.equal(employee.state, "TO_MOP_BUCKET");
+  assert.notEqual(coworker.state, "TO_MOP_BUCKET", "the only mop is spoken for");
+
+  cleaning.shop.player.sprite.body = { velocity: { x: 0, y: 0 } };
+  cleaning.getNearbyMopBucket = () => bucket;
+  cleaning.shop.crateSystem = { getCarriedCrates: () => [] };
+  cleaning.shop.messages = { show() {} };
+  assert.equal(cleaning.takeMop(bucket), true);
+  employee.update(16);
+  assert.equal(employee.state, "IDLE", "the employee gives up on the mop the player took");
+  assert.equal(cleaning.dirt.pieces.every((mark) => !mark.claimedBy), true);
+});
+
+test("closing finishes the dirt mark being mopped, then the mop goes back instead of starting another", () => {
+  const { employee } = mopEmployee();
+  const { cleaning, mops } = addCleaning(employee.scene);
+  const near = cleaning.dirt.add("smudge", 100, 20);
+  cleaning.dirt.add("scuff", 600, 20);
+  employee.startNextTask();
+  employee.arriveAtDestination();
+  employee.arriveAtDestination();
+  employee.update(MOP_STROKE_MS);
+  employee.requestClockOut();
+  assert.equal(employee.state, "MOPPING");
+  mopUntilClean(employee);
+  assert.equal(near.sprite.destroyed, true);
+  assert.equal(employee.state, "TO_RETURN_MOP");
+  employee.arriveAtDestination();
+  assert.equal(employee.state, "TO_EXIT");
+  assert.equal(cleaning.dirt.count, 1);
+  assert.equal(mops.get(employee).destroyed, true);
+
+  const { employee: leaving, bucket: leavingBucket } = mopEmployee();
+  const second = addCleaning(leaving.scene);
+  second.cleaning.dirt.add("smudge", 100, 20);
+  leaving.startNextTask();
+  leaving.arriveAtDestination();
+  leaving.destroy();
+  assert.equal(second.cleaning.isMopWithStaff(leavingBucket), false, "a mop is never lost with the employee");
+  assert.equal(second.cleaning.dirt.pieces[0].claimedBy, null);
 });
 
 test("staff skip routing to same-room spots that cannot beat the best walk, keeping ties and doors exact", () => {

@@ -291,6 +291,9 @@ export class FixtureSystem {
       return this.shop.cleaningSystem.heldMop === fixture
         ? "Put the mop back before moving its bucket." : "Put the mop back before moving fixtures.";
     }
+    if (this.shop.cleaningSystem?.isMopWithStaff?.(fixture)) {
+      return "An employee is using this bucket's mop. It can be moved once they put the mop back.";
+    }
     const area = areaAtRow(Math.floor(fixture.gy));
     if (area === this.shop.areas.playerArea) return null;
     const name = this.fixtures.displayName(fixture);
@@ -529,6 +532,9 @@ export class FixtureSystem {
     if (!fixture) return "Fixture not found.";
     if (!this.canRearrange()) return `Fixtures can only be ${action} while the store is closed.`;
     if (this.shop.cleaningSystem?.heldMop === fixture) return `Put the mop back before its bucket is ${action}.`;
+    if (this.shop.cleaningSystem?.isMopWithStaff?.(fixture)) {
+      return `An employee is using this bucket's mop. It can be ${action} once they put the mop back.`;
+    }
     if (getFixtureType(fixture.type).kind === "register" &&
       this.fixtures.ofKind("register").length <= 1) return `The last register cannot be ${action}.`;
     if (fixture instanceof ShelfFixture && fixture.placements.some((stack) => stack.quantity > 0)) {
