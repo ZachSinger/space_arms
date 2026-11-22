@@ -3,7 +3,8 @@
 // ==========================================
 // The small remote-order card under the top bar's left end. It shows the open order's items,
 // how many are packed, and where each item is in the shop right now. Clicking its heading
-// shrinks it to one line. It glows for a few seconds when a new order arrives.
+// shrinks it to one line. It glows for a few seconds when a new order offer arrives. With no
+// order accepted, it only says how many offers are waiting at the Drone Terminal.
 import { html } from "../../core/html.js";
 
 const NEW_ORDER_GLOW_MS = 6000;
@@ -14,7 +15,8 @@ let collapsedForSession = false;
  * @typedef {{ name: string, image: string | null, packed: number, needed: number,
  *   where: string, shortage: string }} OrderTrackerLine
  * @typedef {{ dueText: string, dueSoon: boolean, payText: string, packed: number, total: number,
- *   status: string, complete: boolean, lines: OrderTrackerLine[] }} OrderTrackerView
+ *   status: string, complete: boolean, lines: OrderTrackerLine[], offerNote?: string }} OrderTrackerView
+ * @typedef {{ offersOnly: true, title: string, note: string }} OrderOffersView
  */
 
 export class OrderTracker {
@@ -36,17 +38,29 @@ export class OrderTracker {
     this.glowTimer = null;
   }
 
-  /** @param {OrderTrackerView | null} view - null hides the card */
+  /** @param {OrderTrackerView | OrderOffersView | null} view - null hides the card */
   render(view) {
     this.view = view;
     const key = JSON.stringify([view, collapsedForSession]);
     if (key === this.key) return;
     this.key = key;
+    const offersOnly = Boolean(view && "offersOnly" in view);
     this.element.classList.toggle("hidden", !view);
-    this.element.classList.toggle("collapsed", collapsedForSession);
+    this.element.classList.toggle("collapsed", collapsedForSession && !offersOnly);
     this.element.classList.toggle("complete", Boolean(view?.complete));
     if (!view) {
       this.element.replaceChildren();
+      return;
+    }
+    if (offersOnly) {
+      this.element.innerHTML = String(html`
+        <div class="order-tracker-heading order-tracker-offers-heading">
+          <span class="order-tracker-title">${view.title}</span>
+        </div>
+        <div class="order-tracker-body">
+          <div class="order-tracker-status">${view.note}</div>
+        </div>
+      `);
       return;
     }
     const lines = view.lines.map((line) => html`
@@ -72,6 +86,7 @@ export class OrderTracker {
         <div class="order-tracker-due${view.dueSoon ? " soon" : ""}">${view.dueText} · ${view.payText}</div>
         <ul class="order-tracker-lines">${lines}</ul>
         <div class="order-tracker-status">${view.status}</div>
+        ${view.offerNote ? html`<div class="order-tracker-where">${view.offerNote}</div>` : ""}
       </div>
     `);
   }

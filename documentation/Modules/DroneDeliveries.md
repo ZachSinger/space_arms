@@ -18,8 +18,12 @@ The Drone Terminal lets you fill orders from remote customers from the start of 
   paid immediately.
 
 ## Deadlines
+- A new order arrives as an **offer** at the Drone Terminal. Accept it to get its crate, or
+  decline it. An offer only waits a limited number of days, then goes away on its own.
+- Declining an offer, or letting it go away, never costs reputation.
+- Once accepted, an order must be shipped within a set number of days. Missing that deadline
+  costs store reputation.
 - Orders can be filled any time, even after hours.
-- Most orders need to be filled before the next day (the day after the order is received).
 
 ## Order crates are special
 - These are the only crates in the game that can hold more than one kind of item.
@@ -35,6 +39,13 @@ The Drone Terminal lets you fill orders from remote customers from the start of 
 - The shop has one drone, so only one remote order can be open at a time.
 - Orders come in by chance on the shift clock, from people who are not in the store. An order
   can arrive at any time during a shift.
+- Each in-game hour of a shift is a 15% chance for a new order offer.
+- Orders use products from any supplier contract the store's level allows buying, whether or
+  not the store owns that contract yet.
+- Offers only exist for a limited number of days, and accepted orders must be filled within a
+  limited number of days. Not accepting an offer never loses reputation; failing to fill an
+  accepted order in time loses store reputation.
+- Orders scale with store level: more orders, and more varied orders, at higher levels.
 - Remote orders are generally larger than most customer orders.
 - The Drone Terminal and its pad are already placed in the top-right corner of the starting
   backroom, against the back wall. This keeps remote-order work off the sales floor while keeping
@@ -59,20 +70,27 @@ crate holds every item the order needs (requested by Zach).
 The following values are implementation picks to make the feature playable, not agreed design.
 They should be reviewed against the game's balance before they are treated as final:
 
-- Remote orders come from people outside the store, so customers walking in have nothing to do
-  with them. Each in-game hour of an open shift is a 10% chance for a remote order (about 72%
-  for at least one over a 12-hour shift) while no order is already open.
-- Orders contain 2–4 product types, with 3–8 of each. Products are limited to items covered by
-  the shop's current supplier licenses.
+- An offer waits at the terminal for 2 days, counting the day it arrives (an offer that
+  arrives on Day 3 goes away at the end of Day 4).
+- An accepted order must ship within 3 days, counting the day it is accepted (accepted on
+  Day 4, due by the end of Day 6).
+- With one drone, only one accepted order can be open at a time. Its Accept buttons are
+  greyed out until it ships or is cancelled; offers can still arrive and wait meanwhile.
+- Up to 1 offer can wait at once for store levels 1–10, 2 for 11–20, 3 for 21–30, 4 for
+  31–40, and 5 from level 41. The hourly roll is skipped while every offer slot is full.
+- Orders contain 2–3 product types for store levels 1–10, up to 4 for 11–20, 5 for 21–30,
+  and 6 from level 31, with 3–8 of each. Higher levels also allow more supplier contracts,
+  which adds more different products to choose from.
 - Shipping pays the order's market value plus 30%.
-- Shipping grants one store reputation per product type. Cancelling or expiring loses the same
-  amount.
-- An order received on one day expires at the end of the following day.
+- Shipping grants one store reputation per product type. Cancelling an accepted order or
+  missing its deadline loses the same amount.
 - The starting backroom has four usable floor columns rather than two, with its depth,
   Loading Pad size, and door position unchanged. This is mockup A's first-pass width, not a
   width selected by Zach; later backroom upgrades still add two columns each.
-- When an order arrives, a short bell chime plays, the bottom bar says where to find its item
-  list and crate, and the order card glows for 6 seconds.
+- When an offer arrives, a short bell chime plays, the bottom bar says to accept or decline it
+  at the Drone Terminal, and the order card glows for 6 seconds. While no order is accepted,
+  the card only says how many offers are waiting; while one is, its last line says how many
+  more offers are waiting.
 - An order card sits in the top-left corner while an order is open. It shows the deadline,
   payout, how many items are packed, and for each product: packed/needed, which rooms' shelves
   and crates hold it and how many, and a warning when the shop has fewer than still needed.

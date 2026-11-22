@@ -748,4 +748,12 @@ test("active remote orders save their single mixed crate and reject duplicate cr
   });
   duplicate.nextCrateId = 6;
   assert.throws(() => validateShopSave(duplicate, database), /does not match its crate/);
+
+  const withOffer = structuredClone(data);
+  const offer = { id: "remote-order-2", receivedDay: 1, offerEndsDay: 2, items, payout: 80, reputation: 2 };
+  withOffer.playerState.droneDeliveries.nextOrderId = 3;
+  withOffer.playerState.droneDeliveries.offers = [offer];
+  assert.deepEqual(validateShopSave(withOffer, database), withOffer);
+  withOffer.playerState.droneDeliveries.offers = [{ ...offer, id: "remote-order-1" }];
+  assert.throws(() => validateShopSave(withOffer, database), /invalid remote order offer/);
 });

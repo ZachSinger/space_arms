@@ -170,29 +170,47 @@ export function checkShopSave(data, database) {
   const droneDeliveries = player.droneDeliveries;
   requireSave(isRecord(droneDeliveries) && integer(droneDeliveries.nextOrderId, 1),
     "invalid remote delivery state.");
+  const remoteOrderIds = new Set();
+  const isRemoteOrder = (order) => isRecord(order) &&
+    typeof order.id === "string" &&
+    /^remote-order-[1-9]\d*$/.test(order.id) &&
+    !remoteOrderIds.has(order.id) &&
+    Number(order.id.slice("remote-order-".length)) < droneDeliveries.nextOrderId &&
+    integer(order.receivedDay, 1) && order.receivedDay <= data.market?.day &&
+    Array.isArray(order.items) &&
+    order.items.length >= REMOTE_ORDER_TUNING.minProductTypes &&
+    order.items.length <= REMOTE_ORDER_TUNING.maxProductTypes &&
+    new Set(order.items.map((entry) => entry?.itemId)).size === order.items.length &&
+    order.items.every((entry) => itemById.has(entry?.itemId) &&
+      integer(entry.quantity, REMOTE_ORDER_TUNING.minUnitsPerProduct) &&
+      entry.quantity <= REMOTE_ORDER_TUNING.maxUnitsPerProduct) &&
+    isMoney(order.payout) && order.payout > 0 &&
+    integer(order.reputation, 1) &&
+    order.reputation === order.items.length * REMOTE_ORDER_TUNING.reputationPerProductType;
   const activeRemoteOrder = droneDeliveries.activeOrder;
   if (activeRemoteOrder !== null) {
-    requireSave(isRecord(activeRemoteOrder) &&
-      typeof activeRemoteOrder.id === "string" &&
-      /^remote-order-[1-9]\d*$/.test(activeRemoteOrder.id) &&
-      Number(activeRemoteOrder.id.slice("remote-order-".length)) < droneDeliveries.nextOrderId &&
-      integer(activeRemoteOrder.receivedDay, 1) && activeRemoteOrder.receivedDay <= data.market?.day &&
-      activeRemoteOrder.expiresOnDay === activeRemoteOrder.receivedDay + REMOTE_ORDER_TUNING.daysUntilExpiry &&
+    // Orders saved before offers existed have no acceptedDay and were due the day after arriving.
+    const accepted = activeRemoteOrder?.acceptedDay;
+    requireSave(isRemoteOrder(activeRemoteOrder) &&
+      (accepted === undefined
+        ? activeRemoteOrder.expiresOnDay === activeRemoteOrder.receivedDay + 1
+        : integer(accepted, activeRemoteOrder.receivedDay) && accepted <= data.market.day &&
+          activeRemoteOrder.expiresOnDay === accepted + REMOTE_ORDER_TUNING.fillShifts - 1) &&
       data.market.day <= activeRemoteOrder.expiresOnDay &&
-      Array.isArray(activeRemoteOrder.items) &&
-      activeRemoteOrder.items.length >= REMOTE_ORDER_TUNING.minProductTypes &&
-      activeRemoteOrder.items.length <= REMOTE_ORDER_TUNING.maxProductTypes &&
-      new Set(activeRemoteOrder.items.map((entry) => entry?.itemId)).size === activeRemoteOrder.items.length &&
-      activeRemoteOrder.items.every((entry) => itemById.has(entry?.itemId) &&
-        integer(entry.quantity, REMOTE_ORDER_TUNING.minUnitsPerProduct) &&
-        entry.quantity <= REMOTE_ORDER_TUNING.maxUnitsPerProduct) &&
-      isMoney(activeRemoteOrder.payout) && activeRemoteOrder.payout > 0 &&
-      integer(activeRemoteOrder.reputation, 1) &&
-      activeRemoteOrder.reputation === activeRemoteOrder.items.length *
-        REMOTE_ORDER_TUNING.reputationPerProductType &&
       typeof activeRemoteOrder.crateId === "string" &&
       /^crate-[1-9]\d*$/.test(activeRemoteOrder.crateId),
     "invalid active remote order.");
+    remoteOrderIds.add(activeRemoteOrder.id);
+  }
+  const remoteOffers = droneDeliveries.offers ?? [];
+  requireSave(Array.isArray(remoteOffers), "invalid remote order offers.");
+  for (const offer of remoteOffers) {
+    requireSave(isRemoteOrder(offer) &&
+      offer.offerEndsDay === offer.receivedDay + REMOTE_ORDER_TUNING.offerShifts - 1 &&
+      data.market.day <= offer.offerEndsDay &&
+      offer.crateId === undefined && offer.acceptedDay === undefined,
+    "invalid remote order offer.");
+    remoteOrderIds.add(offer.id);
   }
 
   const fixtureIds = new Set();

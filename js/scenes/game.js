@@ -345,6 +345,7 @@ export class GameScene extends Phaser.Scene {
   buildSystems() {
     this.customers = [];
     this.employees = [];
+    this.database = database;
     this.gameModules = new ModuleHost(this);
     this.cleaningSystem = this.gameModules.get("cleaning");
     this.hud.setCleanlinessEnabled(Boolean(this.cleaningSystem));

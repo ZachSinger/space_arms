@@ -5,7 +5,7 @@ import { INTERACT_RANGE } from "../../logic/Crate.js";
 import { transferItems } from "../../logic/InventoryTransfer.js";
 import { fixtureBounds, fixtureFacing, fixtureInteractionDistance } from "../../logic/FixtureLayout.js";
 import { formatMoneyAmount } from "../../logic/Money.js";
-import { createRemoteOrder, REMOTE_ORDER_TUNING } from "../../logic/RemoteOrders.js";
+import { acceptRemoteOffer, createRemoteOrder, REMOTE_ORDER_TUNING, remoteOrderScaling } from "../../logic/RemoteOrders.js";
 import { TILE_SIZE, BACKROOM_GRID_Y } from "../../logic/RoomLayout.js";
 import { playOrderAlert } from "../../logic/Sfx.js";
 import { UIWindow } from "../../logic/UIWindow.js";
@@ -163,7 +163,11 @@ export class DroneDeliverySystem {
     this.windowBody = this.window.element.querySelector("[data-remote-order-content]");
     this.window.element.addEventListener("click", (event) => {
       if (!(event.target instanceof Element)) return;
-      if (event.target.closest("[data-remote-order-reset]")) this.resetOrder();
+      const accept = event.target.closest("[data-remote-order-accept]");
+      const decline = event.target.closest("[data-remote-order-decline]");
+      if (accept) this.acceptOffer(accept.getAttribute("data-remote-order-accept"));
+      else if (decline) this.declineOffer(decline.getAttribute("data-remote-order-decline"));
+      else if (event.target.closest("[data-remote-order-reset]")) this.resetOrder();
       else if (event.target.closest("[data-remote-order-cancel]")) this.cancelOrder();
     });
     // The interact key that opened the terminal also closes it, like the shelf window.
@@ -392,10 +396,11 @@ export class DroneDeliverySystem {
     this.guidanceMs = 0;
     if (!this.windowBody) return;
     const order = this.orderState.activeOrder;
+    const offers = this.renderOffers(Boolean(order));
     if (!order) {
       this.windowBody.innerHTML = String(html`
-        <p>No remote order is open. Orders may arrive during a shift.</p>
-        <p>The terminal and drone pad are in the backroom beside the shipping crate area.</p>
+        <p>No remote order is accepted. Order offers from buyers outside the store may arrive during a shift.</p>
+        ${raw(offers)}
       `);
       return;
     }
@@ -421,33 +426,103 @@ export class DroneDeliverySystem {
         </button>
       </div>
       <p>Resetting returns packed products to the Go-Backs bin and keeps the order open.</p>
+      ${raw(offers)}
     `);
   }
 
+  /** The waiting offers, each with its products, pay, and Accept and Decline buttons. */
+  renderOffers(orderOpen) {
+    const { offers } = this.orderState;
+    if (offers.length === 0) return "";
+    const fillDays = REMOTE_ORDER_TUNING.fillShifts;
+    const cards = offers.map((offer) => {
+      const rows = offer.items.map((line) => {
+        const item = this.getItem(line.itemId);
+        const note = this.ownsContractFor(item) ? "" : " (supplier contract not owned yet)";
+        return String(html`
+          <div class="remote-order-line">
+            <span>${item?.name ?? line.itemId}${note}</span><span>${line.quantity} wanted</span>
+          </div>
+        `);
+      }).join("");
+      return String(html`
+        <div class="remote-order-offer">
+          <div class="remote-order-lines">${raw(rows)}</div>
+          <p>Pays <strong>${formatMoneyAmount(offer.payout)}</strong> and adds ${offer.reputation} store
+            reputation when shipped. This offer goes away after Day ${offer.offerEndsDay}.</p>
+          <div class="remote-order-actions">
+            <button type="button" class="action-btn" data-remote-order-accept="${offer.id}"
+              ${orderOpen ? "disabled" : ""}>ACCEPT</button>
+            <button type="button" class="action-btn" data-remote-order-decline="${offer.id}">DECLINE</button>
+          </div>
+        </div>
+      `);
+    }).join("");
+    return String(html`
+      <h3>ORDER OFFERS</h3>
+      <p>After you accept an order, you have ${fillDays} days to ship it, counting the day you accept.
+        Declining an offer or letting it go away never costs store reputation.
+        ${orderOpen ? "Ship or cancel the current order before accepting another." : ""}</p>
+      ${raw(cards)}
+    `);
+  }
+
+  /** A buyer outside the store sends an order offer; it waits at the terminal until accepted. */
   receiveOrder() {
     const { gameState } = this.shop;
-    if (this.orderState.activeOrder) return false;
+    if (this.orderState.offers.length >= remoteOrderScaling(gameState.reputation.shopLevel).maxOffers) {
+      return false;
+    }
     const details = createRemoteOrder({
-      items: this.shop.gameState.items,
+      items: gameState.items,
       day: gameState.calendar.day,
+      shopLevel: gameState.reputation.shopLevel,
       random: gameRandom,
-      ownsLicense: (licenseId) => gameState.catalog.owns(licenseId),
+      licenseLevel: (licenseId) => this.shop.database?.getLicense(licenseId)?.requiredShopLevel,
       marketPrice: (itemId) => gameState.market.getPrice(itemId),
     });
     if (!details) return false;
     const id = this.orderState.allocateOrderId();
-    const crate = this.shop.crateSystem.createRemoteOrderCrate({
-      orderId: id,
-      requiredItems: details.items,
-      ...ORDER_CRATE_POSITION,
-    });
-    this.orderState.open({ id, ...details, crateId: crate.id });
+    this.orderState.addOffer({ id, ...details });
     playOrderAlert();
     this.tracker?.announce();
     this.shop.messages.show(
-      "New remote order! Its item list is in the top-left corner. Its crate is by the Drone Terminal in the backroom.",
+      "New remote order offer! Accept or decline it at the Drone Terminal in the backroom.",
       "#14b8a6",
     );
+    this.refreshWindow();
+    return true;
+  }
+
+  ownsContractFor(item) {
+    return !item?.license || this.shop.gameState.catalog?.owns(item.license) !== false;
+  }
+
+  acceptOffer(id) {
+    if (this.orderState.activeOrder) {
+      this.shop.messages.show("Ship or cancel the current remote order before accepting another.", "#f59e0b");
+      return false;
+    }
+    const offer = this.orderState.removeOffer(id);
+    if (!offer) return false;
+    const order = acceptRemoteOffer(offer, this.shop.gameState.calendar.day);
+    const crate = this.shop.crateSystem.createRemoteOrderCrate({
+      orderId: order.id,
+      requiredItems: order.items,
+      ...ORDER_CRATE_POSITION,
+    });
+    this.orderState.open({ ...order, crateId: crate.id });
+    this.shop.messages.show(
+      `Remote order accepted. Its crate is by the Drone Terminal. Ship it by the end of Day ${order.expiresOnDay}.`,
+      "#10b981",
+    );
+    this.refreshWindow();
+    return true;
+  }
+
+  declineOffer(id) {
+    if (!this.orderState.removeOffer(id)) return false;
+    this.shop.messages.show("Remote order offer declined. No store reputation lost.", "#94a3b8");
     this.refreshWindow();
     return true;
   }
@@ -459,7 +534,8 @@ export class DroneDeliverySystem {
     const hoursPassed = Math.floor(shiftClock.elapsedHours);
     while (this.hoursRolled < hoursPassed) {
       this.hoursRolled += 1;
-      if (this.orderState.activeOrder) continue;
+      const { maxOffers } = remoteOrderScaling(this.shop.gameState.reputation.shopLevel);
+      if (this.orderState.offers.length >= maxOffers) continue;
       if (gameRandom() < REMOTE_ORDER_TUNING.chancePerShiftHour) this.receiveOrder();
     }
   }
@@ -573,9 +649,15 @@ export class DroneDeliverySystem {
   refreshGuidance() {
     const order = this.orderState.activeOrder;
     const crate = order ? this.findOrderCrate(order) : null;
+    const offerCount = this.orderState.offers.length;
+    const offerWord = offerCount === 1 ? "offer is" : "offers are";
     if (!order || !crate) {
       this.markerSpots = [];
-      this.tracker?.render(null);
+      this.tracker?.render(offerCount === 0 ? null : {
+        offersOnly: true,
+        title: "REMOTE ORDER OFFERS",
+        note: `${offerCount} remote order ${offerWord} waiting at the Drone Terminal in the backroom.`,
+      });
       return;
     }
     const carrying = this.carriedOrderCrate() === crate;
@@ -590,9 +672,12 @@ export class DroneDeliverySystem {
       const sources = findOrderItemSources(line.itemId, context);
       if (carrying) markerSpots.push(...sources.filter((source) => source.kind !== "carried"));
       const available = sources.reduce((sum, source) => sum + source.quantity, 0);
+      const buyHint = this.ownsContractFor(item)
+        ? "Buy more in the Supply tab."
+        : "Your store doesn't own its supplier contract yet. Buy it in the Contracts tab first.";
       const shortage = available === 0
-        ? "None in the shop. Buy more in the Supply tab."
-        : available < remaining ? `Only ${available} in the shop. Buy more in the Supply tab.` : "";
+        ? `None in the shop. ${buyHint}`
+        : available < remaining ? `Only ${available} in the shop. ${buyHint}` : "";
       return { ...view, where: describeOrderSources(sources, (area) => this.areaName(area)), shortage };
     });
     this.markerSpots = markerSpots;
@@ -617,6 +702,7 @@ export class DroneDeliverySystem {
       status,
       complete,
       lines,
+      offerNote: offerCount === 0 ? "" : `${offerCount} more ${offerWord} waiting at the Drone Terminal.`,
     });
   }
 
@@ -767,9 +853,18 @@ export class DroneDeliverySystem {
     return true;
   }
 
+  // Offers past their last day go away for free; an accepted order past its deadline costs reputation.
   endDay() {
+    const today = this.shop.gameState.calendar.day;
+    let changed = false;
+    for (const offer of this.orderState.offers) {
+      if (offer.offerEndsDay <= today) changed = Boolean(this.orderState.removeOffer(offer.id)) || changed;
+    }
     const order = this.orderState.activeOrder;
-    if (!order || order.expiresOnDay > this.shop.gameState.calendar.day) return false;
+    if (!order || order.expiresOnDay > today) {
+      if (changed) this.refreshWindow();
+      return changed;
+    }
     const crate = this.findOrderCrate(order);
     if (!crate) throw new Error(`Remote order ${order.id} is missing its crate.`);
     this.returnContentsToGoBacks(order, crate);

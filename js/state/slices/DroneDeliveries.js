@@ -12,6 +12,8 @@ export class DroneDeliveries extends Slice {
     super();
     this.nextOrderId = 1;
     this.activeOrder = null;
+    // Order offers waiting at the terminal to be accepted or declined.
+    this.offers = [];
   }
 
   allocateOrderId() {
@@ -19,6 +21,19 @@ export class DroneDeliveries extends Slice {
     this.nextOrderId += 1;
     this.changed();
     return id;
+  }
+
+  addOffer(offer) {
+    this.offers = [...this.offers, copyOrder(offer)];
+    this.changed();
+  }
+
+  removeOffer(id) {
+    const offer = this.offers.find((entry) => entry.id === id) ?? null;
+    if (!offer) return null;
+    this.offers = this.offers.filter((entry) => entry.id !== id);
+    this.changed();
+    return copyOrder(offer);
   }
 
   open(order) {
@@ -43,6 +58,7 @@ export class DroneDeliveries extends Slice {
   adopt(next) {
     this.nextOrderId = next.nextOrderId;
     this.activeOrder = copyOrder(next.activeOrder);
+    this.offers = next.offers.map(copyOrder);
   }
 
   toSave() {
@@ -50,6 +66,7 @@ export class DroneDeliveries extends Slice {
       droneDeliveries: {
         nextOrderId: this.nextOrderId,
         activeOrder: copyOrder(this.activeOrder),
+        offers: this.offers.map(copyOrder),
       },
     };
   }
@@ -59,6 +76,7 @@ export class DroneDeliveries extends Slice {
     if (data.droneDeliveries) {
       state.nextOrderId = data.droneDeliveries.nextOrderId;
       state.activeOrder = copyOrder(data.droneDeliveries.activeOrder);
+      state.offers = (data.droneDeliveries.offers ?? []).map(copyOrder);
     }
     return state;
   }

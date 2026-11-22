@@ -50,6 +50,11 @@
   border-bottom: none;
 }
 
+.order-tracker-offers-heading {
+  cursor: default;
+  pointer-events: none;
+}
+
 .order-tracker-title {
   color: #2dd4bf;
   font-size: var(--font-size-14);
@@ -175,4 +180,12 @@
     animation: none;
     box-shadow: 0 0 0 3px #2dd4bf;
   }
+}
+
+/* Drone Terminal window: each waiting order offer is boxed so its buttons clearly belong to it. */
+.remote-order-offer {
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid #134e4a;
+  border-radius: 4px;
 }

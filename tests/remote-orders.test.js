@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
-import { createRemoteOrder } from "../js/logic/RemoteOrders.js";
+import { acceptRemoteOffer, createRemoteOrder, remoteOrderScaling } from "../js/logic/RemoteOrders.js";
 import { Crate } from "../js/logic/Crate.js";
 import { transferItems } from "../js/logic/InventoryTransfer.js";
 import { REMOTE_ORDER_CRATE_SPRITES } from "../js/modules/droneDeliveries/DroneTerminalArt.js";
@@ -73,7 +73,7 @@ function createScene() {
   return scene;
 }
 
-function createDeliveryFixture({ day = 1, contents = [["wpn_rif_01", 2]] } = {}) {
+function createDeliveryFixture({ day = 1, contents = [["wpn_rif_01", 2]], offers = [], activeOrder } = {}) {
   const order = {
     id: "remote-order-1",
     receivedDay: 1,
@@ -98,8 +98,15 @@ function createDeliveryFixture({ day = 1, contents = [["wpn_rif_01", 2]] } = {})
   const changes = [];
   const messages = [];
   const state = {
-    activeOrder: order,
+    activeOrder: activeOrder === undefined ? order : activeOrder,
+    offers,
     changed() { changes.push("changed"); },
+    open(next) { this.activeOrder = next; },
+    removeOffer(id) {
+      const offer = this.offers.find((entry) => entry.id === id) ?? null;
+      this.offers = this.offers.filter((entry) => entry.id !== id);
+      return offer;
+    },
     updateActiveOrder(updates) { this.activeOrder = { ...this.activeOrder, ...updates }; },
     close() { this.activeOrder = null; changes.push("closed"); },
   };
@@ -157,13 +164,14 @@ function createDeliveryFixture({ day = 1, contents = [["wpn_rif_01", 2]] } = {})
   return { system, shop, order, crate, state, returned, changes, crates, messages };
 }
 
-test("remote orders roll once per shift hour, without any customers, only while no order is open", () => {
+test("remote order offers roll once per shift hour, without any customers, only while an offer slot is free", () => {
   const system = Object.create(DroneDeliverySystem.prototype);
   let received = 0;
   const clock = { started: true, elapsedHours: 0 };
+  const reputation = { shopLevel: 1 };
   Object.assign(system, {
-    shop: { shiftClock: clock },
-    orderState: { activeOrder: null },
+    shop: { shiftClock: clock, gameState: { reputation } },
+    orderState: { activeOrder: { id: "accepted" }, offers: [] },
     hoursRolled: 0,
     receiveOrder() { received += 1; },
   });
@@ -175,43 +183,82 @@ test("remote orders roll once per shift hour, without any customers, only while 
   assert.equal(system.hoursRolled, 200);
   assert.ok(received > 0 && received < 60);
   received = 0;
-  system.orderState.activeOrder = { id: 1 };
+  system.orderState.offers = [{ id: "waiting" }];
   clock.elapsedHours = 400;
   system.updateOrderArrivals();
   assert.equal(received, 0);
+  reputation.shopLevel = 11;
+  clock.elapsedHours = 600;
+  system.updateOrderArrivals();
+  assert.ok(received > 0);
 });
 
-test("remote orders contain multiple licensed products and pay 30% above market value", () => {
+test("more offers can wait and orders hold more product types every 10 store levels", () => {
+  assert.deepEqual(remoteOrderScaling(1), { maxOffers: 1, maxProductTypes: 3 });
+  assert.deepEqual(remoteOrderScaling(10), { maxOffers: 1, maxProductTypes: 3 });
+  assert.deepEqual(remoteOrderScaling(11), { maxOffers: 2, maxProductTypes: 4 });
+  assert.deepEqual(remoteOrderScaling(50), { maxOffers: 5, maxProductTypes: 6 });
+});
+
+test("remote orders use any contract the store level allows, owned or not, and pay 30% above market value", () => {
+  const contractLevels = { weapons: 1, ammo: 1, tools: 2, future: 5 };
   const items = [
     { id: "one", license: "weapons" },
     { id: "two", license: "ammo" },
     { id: "three", license: "tools" },
-    { id: "locked", license: "unowned" },
+    { id: "later", license: "future" },
   ];
   const order = createRemoteOrder({
     items,
     day: 4,
+    shopLevel: 2,
     random: () => 0.5,
-    ownsLicense: (license) => license !== "unowned",
+    licenseLevel: (license) => contractLevels[license],
     marketPrice: () => 10,
   });
 
   assert.equal(order.receivedDay, 4);
-  assert.equal(order.expiresOnDay, 5);
+  assert.equal(order.offerEndsDay, 5);
   assert.equal(order.items.length, 3);
   assert.ok(order.items.every(({ itemId, quantity }) =>
-    items.some((item) => item.id === itemId && item.license !== "unowned") &&
-    quantity >= 3 && quantity <= 8));
+    itemId !== "later" && quantity >= 3 && quantity <= 8));
   const marketTotal = order.items.reduce((sum, line) => sum + line.quantity * 10, 0);
   assert.equal(order.payout, marketTotal * 1.3);
   assert.equal(order.reputation, 3);
   assert.equal(createRemoteOrder({
-    items: items.slice(0, 1),
+    items: items.slice(2),
     day: 1,
+    shopLevel: 2,
     random: () => 0.5,
-    ownsLicense: () => true,
+    licenseLevel: (license) => contractLevels[license],
     marketPrice: () => 10,
   }), null);
+
+  const accepted = acceptRemoteOffer({ id: "remote-order-1", ...order }, 5);
+  assert.equal(accepted.acceptedDay, 5);
+  assert.equal(accepted.expiresOnDay, 7);
+  assert.equal("offerEndsDay" in accepted, false);
+});
+
+test("accepting an offer creates its crate; offers that run out or are declined cost no reputation", () => {
+  const offer = (id, offerEndsDay) => ({
+    id, receivedDay: 1, offerEndsDay, items: [{ itemId: "wpn_rif_01", quantity: 3 }], payout: 50, reputation: 2,
+  });
+  const fixture = createDeliveryFixture({
+    day: 2,
+    activeOrder: null,
+    offers: [offer("remote-order-2", 2), offer("remote-order-3", 2), offer("remote-order-4", 3)],
+  });
+  assert.equal(fixture.system.acceptOffer("remote-order-2"), true);
+  assert.equal(fixture.state.activeOrder.crateId, "crate-replacement");
+  assert.equal(fixture.state.activeOrder.expiresOnDay, 4);
+  assert.equal(fixture.system.acceptOffer("remote-order-3"), false);
+
+  assert.equal(fixture.system.declineOffer("remote-order-4"), true);
+  assert.equal(fixture.system.endDay(), true);
+  assert.deepEqual(fixture.state.offers, []);
+  assert.ok(fixture.state.activeOrder);
+  assert.ok(!fixture.changes.some((change) => change.startsWith("lose:")));
 });
 
 test("reset returns packed stock and keeps the order open with a new empty crate", () => {
