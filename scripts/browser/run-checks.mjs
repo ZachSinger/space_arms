@@ -1,14 +1,17 @@
 // ==========================================
 // FILE: run-checks.mjs
 // ==========================================
-// Every browser check in one go (npm run check:game): two scripted shifts (no staff, two
-// staff), the targeted scenarios, the seeded replay, and the busy-shop speed test. Needs the local art in img/.
+// Every browser check in one go (npm run check:game): a clean three-shift playthrough, two
+// scripted shifts (no staff, two staff), the targeted scenarios, the seeded replay, and the
+// busy-shop speed test. Needs the local art in img/.
 //   node scripts/browser/run-checks.mjs                 everything
 //   node scripts/browser/run-checks.mjs --only=settings  check title-screen settings
+//   node scripts/browser/run-checks.mjs --only=three-shifts  clean three-shift playthrough
 //   node scripts/browser/run-checks.mjs --only=scenarios  just one part (shift | scenarios | replay | speed)
 //   node scripts/browser/run-checks.mjs --quick          shorter shifts, for quick re-checks
 import { startGame } from "./harness.mjs";
 import { runScriptedShift, checkScriptedShift } from "./scripted-shift.mjs";
+import { runThreeShiftCheck } from "./three-shifts.mjs";
 import { runScenarios } from "./scenarios.mjs";
 import { runReplayCheck } from "./replay.mjs";
 import { checkTitleSettings } from "./title-settings.mjs";
@@ -97,6 +100,21 @@ try {
     }
     failures.push(...h.errors().slice(errorsBefore).map((problem) => `${problem.type}: ${problem.text}`));
     record("main-menu settings controller remapping", failures);
+  }
+  if (!only || only === "three-shifts") {
+    const errorsBefore = h.errors().length;
+    let result;
+    try {
+      result = await runThreeShiftCheck(h);
+    } catch (error) {
+      result = {
+        name: "three shifts from a clean new game with save and continue",
+        failures: [`crashed: ${error.message}`],
+      };
+    }
+    result.failures.push(...h.errors().slice(errorsBefore)
+      .map((problem) => `${problem.type}: ${problem.text}`));
+    record(result.name, result.failures, result.detail);
   }
   if (!only || only === "shift") {
     for (const employees of [[], ["tavi_stock_clerk", "sera_floor_assistant"]]) {

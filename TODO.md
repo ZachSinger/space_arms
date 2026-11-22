@@ -54,9 +54,9 @@ notice something that needs doing but isn't being done right now.
 - [x] Add paid, ordered backroom expansion purchases at Shop Levels 13, 20, and 27.
       They cost credits, can only be bought while the store is closed, and replace the
       free B debug unlock.
-- [ ] Play at least three shifts from a new game without debug keys. Check whether sales
-      cover stock orders and wages, customers are served through closing, and saving and
-      continuing between shifts works.
+- [x] Automate three shifts from a clean new game without debug shortcuts. Verify sales
+      against stock orders and wages, customers clear before closing, and save/Continue
+      works between shifts.
 - [x] Zoom controls work only on the sales floor, not in the backroom or other rooms.
 - [x] Decide what happens if wages put the player in debt and they run out of sellable
       stock. For now, an emergency loan in the Finances tab tops credits up to 1,000; the
