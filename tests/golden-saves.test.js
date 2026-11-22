@@ -1,4 +1,4 @@
-﻿// Golden saves: real saves captured from the pre-rebuild game (scripts/browser/make-golden-saves.mjs).
+// Golden saves: real saves captured from the pre-rebuild game (scripts/browser/make-golden-saves.mjs).
 // Every rebuild step must still read each one exactly the way the original game did.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -9,11 +9,12 @@ import { SHOP_LAYOUT_VERSION } from "../js/state/migrations/index.js";
 import { upgradeContractSplit } from "../js/state/migrations/contractSplit.js";
 import { migratePreWarAmmoContract } from "../js/state/migrations/preWarAmmoContract.js";
 import { repriceScrapAutopistol } from "../js/state/migrations/scrapAutopistolPrice.js";
+import { addRegisterAssignments } from "../js/state/migrations/registerAssignments.js";
 
 const dir = new URL("./golden-saves/", import.meta.url);
 const read = (name) => JSON.parse(readFileSync(new URL(name, dir), "utf8"));
 const upgradeExpected = (data) => ({
-  ...repriceScrapAutopistol(migratePreWarAmmoContract(upgradeContractSplit(data)), database),
+  ...addRegisterAssignments(repriceScrapAutopistol(migratePreWarAmmoContract(upgradeContractSplit(data)), database)),
   layoutVersion: SHOP_LAYOUT_VERSION,
 });
 const database = new DatabaseManager();

@@ -9,6 +9,7 @@ import { ManagerTablet } from "../logic/ManagerTablet.js";
 import { GameState } from "../state/GameState.js";
 import { HUDController } from "../logic/HUDController.js";
 import { DebugInfo } from "../debug/DebugInfo.js";
+import { RecentDiagnostics } from "../debug/RecentDiagnostics.js";
 import { DebugTools } from "../debug/DebugTools.js";
 import { Events, GAME_EVENTS } from "../core/Events.js";
 import { ControlMode, CONTROL_MODES } from "../input/ControlMode.js";
@@ -351,6 +352,7 @@ export class GameScene extends Phaser.Scene {
     // Constructed after the fixtures exist: its Supply tab reads their stock immediately
     // on construction (via SupplyRenderer -> supply.restockableItems()).
     this.managerTablet = new ManagerTablet(this.windowManager, this.gameState, this);
+    this.diagnostics = new RecentDiagnostics(this);
     this.pauseMenu = new PauseMenu(this);
     // REAL games run without the debug recorder; every call site uses debugInfo?.
     this.debugInfo = this.realMode ? null : new DebugInfo(this);
@@ -372,6 +374,7 @@ export class GameScene extends Phaser.Scene {
       this.eventBus.clear();
       this.debugInfo?.destroy();
       this.debugTools?.destroy();
+      this.diagnostics.destroy();
       this.pauseMenu.destroy();
       this.fixturePlacement.destroy();
       this.managerTablet.uiWindow.onClose = null;

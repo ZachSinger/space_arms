@@ -17,6 +17,7 @@ import { getControlHelp, controlLabel } from "../input/InputDevice.js";
 import { formatMoneyAmount } from "./Money.js";
 import {
   MAX_EMPLOYEE_SKILL_LEVEL, EMPLOYEE_MILESTONE_LEVELS, getEmployeeJobSpeed,
+  REGISTER_SERVICE_MS_PER_CUSTOMER, REGISTER_SERVICE_MS_PER_ITEM,
 } from "./EmployeeTraining.js";
 import { html, raw } from "../core/html.js";
 
@@ -226,7 +227,7 @@ function customersTopic() {
         "If nothing they came for is in stock anywhere in the shop, you lose 1 reputation.",
         "Customers only buy an item if your price isn't too far above the market price. Each customer will pay a little more or less than the others.",
         "When your price is well below the market price, customers show they're happy about the good deal.",
-        "When they're done, they line up at a register — if you have more than one, they pick the shortest line. If they wait too long, they leave angry.",
+        "When they're done, they line up at a register someone is working — you, or the employee assigned to it. If more than one register is being worked, they pick the shortest line. If nobody is at any register, they line up at any of them. If they wait too long, they leave angry.",
         "Customers get 10 extra seconds for each person ahead when they join a line. Moving up gives them 5 more seconds unless they reach the front, where they won't leave because of waiting.",
       ])}`),
     section("Running the Register", `
@@ -294,11 +295,28 @@ function licensesTopic() {
 
 function employeesTopic() {
   return [
-    section("How They Choose Their Tasks", `
-      <p>Each employee can do every job. When they're free, they try their first job,
-        then go down their job order to the next job that needs doing:</p>
+    section("Registers", `
+      <p>Each register is worked only by the employee you assign to it, and each employee can be
+        assigned to one register. On a shift, they go straight to their register and stay there the
+        whole shift, even when nobody is in line. They don't stock or clean while on a register.</p>
+      <p>When you step onto their register, they leave it and do their other jobs instead. Once
+        you step off, they come back as soon as they finish what they're doing.</p>
+      <p>Ringing up a customer at Level 1 takes ${REGISTER_SERVICE_MS_PER_CUSTOMER / 1000} seconds,
+        plus ${REGISTER_SERVICE_MS_PER_ITEM / 1000} second for each item they bought. A customer
+        buying 4 items takes ${(REGISTER_SERVICE_MS_PER_CUSTOMER + 4 * REGISTER_SERVICE_MS_PER_ITEM) / 1000} seconds.
+        Training Run register makes this faster.</p>
+      <p>To choose, open the <strong>Employee</strong> tab, find the employee under
+        <strong>YOUR STAFF</strong>, and pick a register under <strong>Register</strong>, or
+        <strong>NONE</strong> to keep them off the registers. If someone else already has that
+        register, they lose it. New hires are assigned to a free register if there is one.
+        You can only change this between shifts.</p>
+      <p>At 20:00, employees stay on their own register until every customer still inside has
+        left, then go home. Employees without a register go home once their current job is done.
+        They never move to a different register.</p>`),
+    section("Other Jobs", `
+      <p>Employees who aren't on a register, or whose register you're working, go down their job
+        order to the first job that needs doing:</p>
       ${list([
-        "<strong>Run register:</strong> a register has customers in line and nobody — you or another employee — is working it. Each register is worked by one person at a time, so more registers let more staff ring up customers at once.",
         "<strong>Stock shelves:</strong> a crate anywhere in the shop or backroom has items, and a matching shelf spot has room.",
         "<strong>Clean up trash:</strong> there is trash on the shop floor and a trashcan they can walk to. They pick up the nearest piece nobody else is going for, one at a time, and throw it in the nearest trashcan. If you pick up that piece first, they go for another one.",
       ])}
@@ -321,10 +339,11 @@ function employeesTopic() {
         throws it away first.</p>`),
     section("How to Set Priorities", `
       <p>Open the <strong>Employee</strong> tab and find the employee under <strong>YOUR STAFF</strong>.
-        Drag the jobs under <strong>Job priorities</strong> to arrange them from highest priority
+        Drag the jobs under <strong>Other jobs</strong> to arrange them from highest priority
         at the top to lowest at the bottom. You can also use each job's <strong>Move up</strong>
         and <strong>Move down</strong> buttons.
         They try the top job first, but still do the others when they need doing.
+        This only matters when they aren't working a register.
         You can only change this between shifts.</p>`),
     section("How to Hire", `
       ${list([

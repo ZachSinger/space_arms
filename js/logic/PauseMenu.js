@@ -1,6 +1,11 @@
 import { UIWindow } from "./UIWindow.js";
 import { SettingsPanel } from "./SettingsPanel.js";
 import { validateShopSave } from "./ShopSave.js";
+import { sendBugReport, validateBugReport } from "./BugReport.js";
+import { createDebugSnapshot } from "../debug/DebugInfo.js";
+import { getSavedCursorMode } from "./GameCursor.js";
+import { getBindings } from "../input/KeyBindings.js";
+import { getControllerLabelStyle, getInputDevice, getResolvedControllerLabelStyle } from "../input/InputDevice.js";
 import { database } from "../scenes/boot.js";
 
 export class PauseMenu {
@@ -20,6 +25,7 @@ export class PauseMenu {
           <button class="action-btn" data-pause-action="save">Save Game</button>
           <button class="action-btn" data-pause-action="load">Load Game</button>
           <button class="action-btn" data-pause-action="settings">Settings</button>
+          <button class="action-btn" data-pause-action="bug-report">Report a Problem</button>
           <button class="action-btn" data-pause-action="menu">Exit to Main Menu</button>
           <button class="action-btn" data-pause-action="desktop">Exit to Desktop</button>
         </div>
@@ -43,6 +49,36 @@ export class PauseMenu {
         <button class="action-btn" data-pause-confirm>Continue</button>
         <button class="action-btn" data-pause-cancel>Cancel</button>`,
     }, shop.windowManager);
+    this.bugReport = new UIWindow({
+      id: "bug-report-window", title: "REPORT A PROBLEM", width: "500px", height: "auto",
+      contentHTML: `
+        <div class="bug-report-form">
+          <p>Your report includes the current game state, settings, recent controls, errors, and current save, plus a screenshot if selected. Nothing is sent until you press Send Report.</p>
+          <label for="bug-report-title">Report title</label>
+          <input id="bug-report-title" type="text" maxlength="200">
+          <label for="bug-report-description">What happened?</label>
+          <textarea id="bug-report-description" maxlength="4000" rows="6"></textarea>
+          <label data-pad-row><input type="checkbox" data-bug-report-screenshot data-pad-a checked> Include a screenshot of the game window</label>
+          <p class="bug-report-status" role="status" aria-live="polite"></p>
+          <div class="bug-report-actions">
+            <button class="action-btn" data-bug-report-send>Send Report</button>
+            <button class="action-btn" data-bug-report-cancel>Cancel</button>
+          </div>
+        </div>`,
+    }, shop.windowManager);
+    this.bugReportTitle = this.bugReport.element.querySelector("#bug-report-title");
+    this.bugReportDescription = this.bugReport.element.querySelector("#bug-report-description");
+    this.bugReportScreenshot = this.bugReport.element.querySelector("[data-bug-report-screenshot]");
+    this.bugReportScreenshot.disabled = !window.desktopApi?.sendBugReport;
+    this.bugReportScreenshot.checked = !this.bugReportScreenshot.disabled;
+    this.bugReportScreenshot.title = this.bugReportScreenshot.disabled
+      ? "Screenshots are available in the desktop game." : "";
+    this.bugReportStatus = this.bugReport.element.querySelector(".bug-report-status");
+    this.bugReportSend = this.bugReport.element.querySelector("[data-bug-report-send]");
+    this.bugReport.element.querySelector("[data-bug-report-send]")
+      .addEventListener("click", () => void this.submitBugReport());
+    this.bugReport.element.querySelector("[data-bug-report-cancel]")
+      .addEventListener("click", () => this.bugReport.close());
     this.confirmation.element.querySelector("[data-pause-cancel]").addEventListener("click",
       () => this.confirmation.close());
     this.confirmation.element.querySelector("[data-pause-confirm]").addEventListener("click", () => {
@@ -74,7 +110,10 @@ export class PauseMenu {
     if (this.isOpen) return;
     this.uiWindow.openWindow();
     this.shade.classList.remove("hidden");
-    const menuElements = [this.uiWindow.element, this.confirmation.element, this.settings.element, this.shade];
+    const menuElements = [
+      this.uiWindow.element, this.confirmation.element, this.bugReport.element,
+      this.settings.element, this.shade,
+    ];
     for (const element of document.getElementById("ui-layer").children) {
       if (menuElements.includes(element) || element.inert) continue;
       element.inert = true;
@@ -99,6 +138,7 @@ export class PauseMenu {
   resume() {
     if (this.destroying) return;
     this.confirmation.close();
+    this.bugReport.close();
     this.shade.classList.add("hidden");
     this.restoreBackground();
     this.shop.setGamePaused(false);
@@ -138,6 +178,11 @@ export class PauseMenu {
 
   async activate(action) {
     if (action === "resume") this.uiWindow.close();
+    else if (action === "bug-report") {
+      this.bugReportStatus.textContent = "";
+      this.bugReport.openWindow();
+      this.bugReportTitle.focus();
+    }
     else if (action === "save") {
       await this.shop.saves.saveManually();
       this.status(this.shop.saves.status);
@@ -158,11 +203,91 @@ export class PauseMenu {
     }
   }
 
+  async submitBugReport() {
+    if (this.bugReportSend.disabled) return;
+    this.bugReportSend.disabled = true;
+    try {
+      const report = {
+        title: this.bugReportTitle.value,
+        message: this.bugReportDescription.value,
+        includeScreenshot: this.bugReportScreenshot.checked,
+      };
+      validateBugReport(report);
+      this.bugReportStatus.textContent = "Sending report...";
+      const customerIds = new Map(this.shop.customers.map((customer, index) => [customer, index + 1]));
+      let display = null;
+      let displayCaptureError = null;
+      if (window.desktopApi?.getDisplaySettings) {
+        try {
+          display = await window.desktopApi.getDisplaySettings();
+        } catch (error) {
+          displayCaptureError = error.message;
+        }
+      }
+      let saveFile = null;
+      let saveCaptureError = null;
+      try {
+        saveFile = {
+          version: 1,
+          savedAt: Date.now(),
+          data: { shop: this.shop.saves.serialize() },
+        };
+      } catch (error) {
+        saveCaptureError = error.message;
+      }
+      const controllers = [...(window.navigator.getGamepads?.() ?? [])]
+        .filter((pad) => pad && pad.connected !== false)
+        .map((pad) => ({
+          id: pad.id,
+          mapping: pad.mapping,
+          buttonCount: pad.buttons.length,
+          axisCount: pad.axes.length,
+          pressedButtons: pad.buttons.flatMap((button, index) => button.pressed ? [index] : []),
+        }));
+      report.sessionData = createDebugSnapshot(
+        this.shop,
+        (customer) => this.shop.debugInfo
+          ? this.shop.debugInfo.identifyCustomer(customer) : customerIds.get(customer),
+        this.shop.debugInfo?.recentEvents ?? this.shop.diagnostics?.events ?? [],
+        window,
+        {
+          recentErrors: this.shop.diagnostics?.errors ?? [],
+          recentInputs: this.shop.diagnostics?.inputs ?? [],
+          sessionDurationMs: this.shop.diagnostics
+            ? Date.now() - this.shop.diagnostics.startedAt : null,
+          settings: {
+            keyboardBindings: getBindings(),
+            textSize: SettingsPanel.getSavedTextSize(),
+            cursor: getSavedCursorMode(),
+            controllerLabelPreference: getControllerLabelStyle(),
+            resolvedControllerLabelStyle: getResolvedControllerLabelStyle(),
+            lastInputDevice: getInputDevice(),
+          },
+          controllers,
+          display: displayCaptureError ? { captureError: displayCaptureError } : display,
+          saveFile,
+          saveCaptureError,
+        },
+      );
+      if (window.desktopApi?.sendBugReport) await window.desktopApi.sendBugReport(report);
+      else await sendBugReport(report);
+      this.bugReportStatus.textContent = "Report sent. Thank you!";
+      this.bugReportTitle.value = "";
+      this.bugReportDescription.value = "";
+    } catch (error) {
+      console.error("Could not send bug report:", error);
+      this.bugReportStatus.textContent = `Report not sent: ${error.message} Your text has been kept.`;
+    } finally {
+      this.bugReportSend.disabled = false;
+    }
+  }
+
   destroy() {
     this.destroying = true;
     this.restoreBackground();
     this.shop.setGamePaused(false, { shutdown: true });
     this.settings.destroy();
+    this.bugReport.close();
     this.shade.remove();
   }
 }

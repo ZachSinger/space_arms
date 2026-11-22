@@ -93,6 +93,12 @@ export class GameState {
       this.staff.isHired(employeeId) || !this.economy.canAfford(employee.hireCost)) return false;
     this.staff.add(employeeId);
     this.economy.spend(employee.hireCost, { category: "hiring", label: employee.name });
+    // Register-first hires start on the first register nobody is assigned to.
+    if (employee.jobPriorities[0] === "register") {
+      const register = this.shop.fixtures.registers()
+        .find(({ id }) => !this.staff.registerAssignments[id]);
+      if (register) this.staff.assignRegister(employeeId, register.id);
+    }
     return true;
   }
 
@@ -136,6 +142,10 @@ export class GameState {
     const economy = this.economy.toSave();
     const reputation = this.reputation.toSave();
     const staff = this.staff.toSave();
+    // A register that was sold or packed up takes its assignment with it.
+    const placedRegisters = new Set(this.shop.fixtures.registers().map(({ id }) => id));
+    staff.registerAssignments = Object.fromEntries(Object.entries(staff.registerAssignments)
+      .filter(([registerId]) => placedRegisters.has(registerId)));
     const catalog = this.catalog.toSave();
     return {
       playerState: {

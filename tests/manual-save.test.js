@@ -163,6 +163,16 @@ test("pause consumes menu, mouse and keyboard actions, leaving only resume avail
   const resumeClick = event("click", { target: { closest: () => ({}) } });
   scene.controls.handlePausedInput(resumeClick);
   assert.equal(resumeClick.blocked, false);
+  for (const type of ["keydown", "pointerdown", "mousedown", "click"]) {
+    const reportInput = event(type, {
+      code: "KeyP",
+      target: { closest: (selector) => selector.includes("#bug-report-window") ? {} : null },
+    });
+    scene.controls.handlePausedInput(reportInput);
+    assert.equal(reportInput.blocked, false, `report form ${type}`);
+    assert.equal(reportInput.prevented, false, `report form ${type}`);
+    assert.equal(scene.shiftClock.isPaused, true);
+  }
   for (const key of [{ code: "KeyP" }, { key: "Escape" }]) {
     scene.shiftClock.isPaused = true;
     const resumeKey = event("keydown", key);
@@ -375,7 +385,7 @@ test("debug upgrade buttons open the next zone free, even at Level 1 with the st
   assert.equal(scene.gameState.economy.credits, 0);
 });
 
-test("debug shortcuts bind only the spawn-customer and Quickstart keys", (t) => {
+test("debug shortcuts bind the spawn-customer, Quickstart, and employee-testing keys", (t) => {
   const originalDocument = globalThis.document;
   t.after(() => {
     if (originalDocument === undefined) delete globalThis.document;
@@ -387,7 +397,19 @@ test("debug shortcuts bind only the spawn-customer and Quickstart keys", (t) => 
     controls: { bindKey: (key, action, handler) => bindings.set(key, { action, handler }) },
   };
   new DebugTools(scene).install();
-  assert.deepEqual([...bindings.keys()], ["keydown-Y", "keydown-K"]);
+  assert.deepEqual([...bindings.keys()], ["keydown-Y", "keydown-K", "keydown-L"]);
+});
+
+test("Employee Test refuses to run during a shift and changes nothing", () => {
+  const harness = createExpansionHarness({ shopLevel: 1, credits: 500 });
+  const { scene } = harness;
+  scene.shiftClock.started = true;
+
+  assert.equal(new DebugTools(scene).prepareEmployeeTesting(), false);
+  assert.equal(scene.gameState.reputation.shopLevel, 1);
+  assert.equal(scene.gameState.economy.credits, 500);
+  assert.equal(harness.autosaves, 0);
+  assert.match(harness.messages.at(-1), /only works before a shift starts/);
 });
 
 test("temporarily closing the store pauses arrivals and reschedules them on reopening", () => {

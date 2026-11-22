@@ -17,10 +17,26 @@
 }
 
 #pause-confirmation { z-index: 1002 !important; }
+#bug-report-window { z-index: 1004 !important; }
 .pause-shade:not(.hidden) ~ .settings-window { z-index: 1003; }
 .pause-actions { display: flex; flex-direction: column; gap: 10px; }
 .pause-actions .action-btn { text-align: center; }
 .pause-status { color: var(--color-text-muted); font-size: var(--font-size-14); }
+.bug-report-form { display: flex; flex-direction: column; gap: 10px; }
+.bug-report-form p { margin: 0; color: var(--color-text-muted); font-size: var(--font-size-14); }
+.bug-report-form label { font-weight: bold; }
+.bug-report-form input[type="text"],
+.bug-report-form textarea {
+  resize: vertical;
+  padding: 8px;
+  color: var(--color-text);
+  background: #0f172a;
+  border: 1px solid var(--color-border-subtle);
+  font: inherit;
+}
+.bug-report-form textarea { min-height: 120px; }
+.bug-report-status { min-height: 1.2em; }
+.bug-report-actions { display: flex; justify-content: flex-end; gap: 10px; }
 .game-paused :not(#pause-menu):not(#pause-confirmation) {
   animation-play-state: paused !important;
 }

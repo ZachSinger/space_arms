@@ -135,7 +135,7 @@ export class PlayerControls {
     const shop = this.shop;
     if (shop.controlMode.getMode() !== CONTROL_MODES.PAUSED) return;
     if (shop.pauseMenu?.settings?.isCapturing) return;
-    if (event.target?.closest?.("#pause-menu, #pause-confirmation, .settings-window")) return;
+    if (event.target?.closest?.("#pause-menu, #pause-confirmation, #bug-report-window, .settings-window")) return;
     if (shop.pauseMenu?.settingsOpen && event.type === "keydown" && event.key === "Escape") return;
     if (event.type !== "keydown" && event.target?.closest?.("#hud-pause-btn")) return;
     event.preventDefault();
@@ -166,6 +166,13 @@ export class PlayerControls {
     const shop = this.shop;
     const pad = this.padInput;
     pad.poll(time);
+    if (pad.pressed?.size) {
+      const buttonNames = Object.fromEntries(Object.entries(PAD).map(([name, index]) => [index, name]));
+      shop.diagnostics?.recordInput({
+        device: "gamepad",
+        buttons: [...pad.pressed].map((button) => buttonNames[button] ?? `button-${button}`),
+      });
+    }
     if (pad.hadInput) setInputDevice("gamepad");
     const mode = shop.controlMode.getMode();
     if (mode === CONTROL_MODES.LOADING && !shop.saves.loadFailed) return;

@@ -125,6 +125,32 @@ export class StaffSystem {
     return true;
   }
 
+  /** Puts an employee on a register for the whole shift (or on none). */
+  assignRegister(employeeId, registerId) {
+    const { shop, staff } = this;
+    if (!this.canManage()) {
+      shop.messages.show("Register assignments can only be changed between shifts.");
+      return false;
+    }
+    const register = registerId
+      ? shop.fixtures.registers().find(({ id }) => id === registerId)
+      : null;
+    if (registerId && !register) return false;
+    const previous = registerId ? staff.registerAssignments[registerId] : null;
+    if (!staff.assignRegister(employeeId, registerId)) return false;
+    const employee = staff.profile(employeeId);
+    const bumped = previous && previous !== employeeId ? staff.profile(previous) : null;
+    shop.messages.show(
+      register
+        ? `${employee.name} will work ${shop.fixtures.displayName(register)} all shift.` +
+          (bumped ? ` ${bumped.name} is no longer on a register.` : "")
+        : `${employee.name} won't work a register. They'll do their other jobs instead.`,
+      STAFF_MESSAGE_COLOR,
+    );
+    shop.saves.requestAutosave();
+    return true;
+  }
+
   // Wages are paid up front, even into the red (bible Step 32), one receipt line each.
   payWages() {
     let total = 0;

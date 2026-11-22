@@ -6,6 +6,12 @@
 // Every reach into the game's insides goes through the small `game` helpers at the top, so
 // when the rebuild moves things around only those helpers need updating.
 import { readFile, readdir } from "node:fs/promises";
+import { DatabaseManager } from "../../js/logic/DatabaseManager.js";
+import { upgradeContractSplit } from "../../js/state/migrations/contractSplit.js";
+import { migratePreWarAmmoContract } from "../../js/state/migrations/preWarAmmoContract.js";
+import { repriceScrapAutopistol } from "../../js/state/migrations/scrapAutopistolPrice.js";
+import { SHOP_LAYOUT_VERSION } from "../../js/state/migrations/index.js";
+import { addRegisterAssignments } from "../../js/state/migrations/registerAssignments.js";
 
 const GOLDEN = new URL("../../tests/golden-saves/", import.meta.url);
 
@@ -245,6 +251,8 @@ export const scenarios = {
   async "employee restocks a shelf and gets rid of the empty crate"(h) {
     await freshShop(h, { employees: ["tavi_stock_clerk"] });
     const target = await h.game((scene) => {
+      // Hiring puts Tavi on a register; take him off so stocking is his top job.
+      scene.gameState.staff.assignRegister("tavi_stock_clerk", null);
       const shelf = scene.fixtures.shelves()[0];
       const placement = shelf.placements[0];
       placement.quantity = 0;
@@ -318,7 +326,7 @@ export const scenarios = {
     for (const file of files) {
       const name = file.replace(".resaved.json", "");
       const save = JSON.parse(await readFile(new URL(`${name}.json`, GOLDEN), "utf8"));
-      const expected = JSON.parse(await readFile(new URL(file, GOLDEN), "utf8"));
+      const expected = await upgradeResaved(JSON.parse(await readFile(new URL(file, GOLDEN), "utf8")));
       await h.loadSave(save);
       const actual = await h.game((scene) => JSON.parse(scene.saves.lastSavedSnapshot));
       for (const fixture of actual.fixtures ?? []) {
@@ -334,10 +342,54 @@ export const scenarios = {
     }
     return failures;
   },
+
+  async "Employee Test builds a Level 5 shop ready to hire"(h) {
+    await h.newGame();
+    const result = await h.game((scene) => {
+      const ok = scene.debugTools.prepareEmployeeTesting();
+      const { gameState } = scene;
+      const shelves = scene.fixtures.shelves();
+      const spots = shelves.flatMap((shelf) => shelf.placements);
+      return {
+        ok,
+        level: gameState.reputation.shopLevel,
+        day: gameState.calendar.day,
+        money: gameState.economy.credits,
+        shelves: shelves.length,
+        spots: spots.length,
+        emptySpots: spots.filter((spot) => spot.quantity <= 0).length,
+        hired: gameState.hireEmployee("tavi_stock_clerk"),
+        message: document.getElementById("game-message")?.textContent ?? "",
+      };
+    });
+    const failures = [];
+    if (!result.ok) failures.push("Employee Test did not run");
+    if (result.level < 5) failures.push(`shop level ${result.level}, wanted at least 5`);
+    if (result.day < 3) failures.push(`still on day ${result.day}; no shifts were played`);
+    if (result.shelves < 1 || result.spots < 1) failures.push("no stocked shelves");
+    if (result.emptySpots > 0) failures.push(`${result.emptySpots} empty shelf spots`);
+    if (!result.hired) failures.push("could not hire an employee afterwards");
+    console.log("Employee Test result:", JSON.stringify(result));
+    return failures;
+  },
 };
 
 // A crate still flying when the game saved keeps moving for a frame or two after loading.
 const MOVING = /^save\.crates\.\d+\.(x|y|velocityX|velocityY|launch|flight)\b/;
+
+// The resaved snapshots predate later save upgrades; apply the same ones the unit tests do.
+let database = null;
+async function upgradeResaved(saved) {
+  if (!database) {
+    database = new DatabaseManager();
+    const data = (name) => readFile(new URL(`../../data/${name}`, import.meta.url), "utf8").then(JSON.parse);
+    database.loadItemsJSON(await data("Items.json"));
+    database.loadLicensesJSON(await data("Licenses.json"));
+  }
+  const save = addRegisterAssignments(repriceScrapAutopistol(
+    migratePreWarAmmoContract(upgradeContractSplit(saved)), database));
+  return { ...save, layoutVersion: SHOP_LAYOUT_VERSION };
+}
 
 function withoutShelfSlotIds(save) {
   return {
@@ -365,7 +417,8 @@ function firstDifference(expected, actual, path = "save") {
   if (typeof expected !== typeof actual || expected === null || actual === null || typeof expected !== "object") {
     return `${path} was ${JSON.stringify(expected)}, now ${JSON.stringify(actual)}`;
   }
-  const keys = new Set([...Object.keys(expected), ...Object.keys(actual)]);
+  // Fields added to saves after a snapshot was taken aren't lost data, so only arrays must match exactly.
+  const keys = new Set([...Object.keys(expected), ...(Array.isArray(expected) ? Object.keys(actual) : [])]);
   for (const key of keys) {
     const diff = firstDifference(expected[key], actual[key], `${path}.${key}`);
     if (diff) return diff;

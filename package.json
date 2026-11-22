@@ -26,6 +26,7 @@
     "files": [
       "main.js",
       "preload.cjs",
+      "js/logic/BugReport.js",
       "package.json",
       "dist/**/*"
     ],

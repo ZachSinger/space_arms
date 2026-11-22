@@ -20,6 +20,7 @@ export const LEDGER_CATEGORIES = Object.freeze([
   "training",
   "wages",
   "loan_repayments",
+  "debug",
 ]);
 
 const isWholeNumber = (value, minimum = Number.MIN_SAFE_INTEGER) =>

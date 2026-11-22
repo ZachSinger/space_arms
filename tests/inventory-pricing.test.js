@@ -336,7 +336,7 @@ function createHarness() {
       receipts: [],
       lifetime: { daysCompleted: 0, totalSales: 0, customersServed: 0 },
     }) },
-    fixtures: { all: () => [], displayName: () => "" },
+    fixtures: { all: () => [], registers: () => [], displayName: () => "" },
   };
   const tablet = new ManagerTablet({}, gameState, scene);
   const click = (itemId, action) => {
@@ -728,7 +728,8 @@ test("focused training buttons release game controls until focus leaves", () => 
 test("employee jobs drag within one staff list and remain movable with keyboard buttons", () => {
   const { body, scene, tablet } = createHarness();
   const employeeId = "tavi_stock_clerk";
-  const priorities = ["register", "stock_shelves", "clean"];
+  // "register" is saved in the order but hidden from the list; moves skip over it.
+  const priorities = ["stock_shelves", "register", "clean"];
   tablet.employeeTab.gameState.staff.jobPriorities[employeeId] = priorities;
   const moves = [];
   scene.staffSystem.moveJob = (...args) => {
@@ -750,36 +751,35 @@ test("employee jobs drag within one staff list and remain movable with keyboard 
     preventDefault() { this.prevented = true; },
     dataTransfer: { setData() {} },
   });
-  body.emit("dragstart", event(row(employeeId, "register")));
+  body.emit("dragstart", event(row(employeeId, "stock_shelves")));
   const over = event(row(employeeId, "clean"));
   body.emit("dragover", over);
   assert.equal(over.prevented, true);
   body.emit("drop", event(row(employeeId, "clean")));
-  assert.deepEqual(priorities, ["stock_shelves", "clean", "register"]);
-  assert.deepEqual(moves[0], [employeeId, "register", 2]);
+  assert.deepEqual(priorities.filter((job) => job !== "register"), ["clean", "stock_shelves"]);
 
-  body.emit("dragstart", event(row(employeeId, "register")));
+  body.emit("dragstart", event(row(employeeId, "stock_shelves")));
   body.emit("drop", event(row("sera_floor_assistant", "clean")));
   assert.equal(moves.length, 1, "a drop on another employee cannot change their jobs");
-  body.emit("dragstart", event(row(employeeId, "register")));
+  body.emit("dragstart", event(row(employeeId, "stock_shelves")));
   scene.staffSystem.canManage = () => false;
-  body.emit("drop", event(row(employeeId, "stock_shelves"), 12));
+  body.emit("drop", event(row(employeeId, "clean"), 12));
   assert.equal(moves.length, 1, "starting a shift during the drag cancels the change");
-  const blocked = event(row(employeeId, "register"));
+  const blocked = event(row(employeeId, "stock_shelves"));
   body.emit("dragstart", blocked);
   assert.equal(blocked.prevented, true);
   scene.staffSystem.canManage = () => true;
 
   const button = Object.assign(new TestElement(), {
-    dataset: { employeePriorityId: employeeId, employeePriorityJob: "register", employeePriorityMove: "up" },
+    dataset: { employeePriorityId: employeeId, employeePriorityJob: "stock_shelves", employeePriorityMove: "up" },
     getAttribute: () => null,
     closest: function(selector) { return selector === "button[data-employee-priority-id]" ? this : null; },
   });
   body.emit("click", { target: button });
-  assert.deepEqual(priorities, ["stock_shelves", "register", "clean"]);
+  assert.deepEqual(priorities.filter((job) => job !== "register"), ["stock_shelves", "clean"]);
   button.dataset.employeePriorityMove = "down";
   body.emit("click", { target: button });
-  assert.deepEqual(priorities, ["stock_shelves", "clean", "register"]);
+  assert.deepEqual(priorities.filter((job) => job !== "register"), ["clean", "stock_shelves"]);
   button.disabled = true;
   body.emit("click", { target: button });
   assert.equal(moves.length, 3);

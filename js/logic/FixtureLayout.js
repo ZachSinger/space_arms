@@ -41,6 +41,8 @@ const WALKING_BODY_WIDTH = Math.max(PLAYER_BODY_WIDTH, CUSTOMER_COLLISION_WIDTH)
 const WALKING_BODY_HEIGHT = Math.max(PLAYER_BODY_HEIGHT, CUSTOMER_COLLISION_HEIGHT);
 // How far the first customer may overlap the front of the register art, in pixels.
 export const REGISTER_FRONT_OVERLAP = 10;
+// A player pressed against a fixture can stop a hair inside its front edge (physics rounding).
+const FRONT_EDGE_TOLERANCE_PX = 0.5;
 const REGISTER_QUEUE_SPACING = 52;
 const MIN_REGISTER_QUEUE_SEPARATION = 32;
 
@@ -347,12 +349,14 @@ export function fixtureInteractionDistance(placement, { x, y }) {
   // Shared edges belong to the fixture on the right (or below), not both neighbors.
   const alongX = x >= left && x < right;
   const alongY = y >= top && y < bottom;
-  switch (fixtureFacing(placement)) {
-    case "down": return alongX && y >= bottom ? y - bottom : Infinity;
-    case "up": return alongX && y <= top ? top - y : Infinity;
-    case "left": return alongY && x <= left ? left - x : Infinity;
-    default: return alongY && x >= right ? x - right : Infinity;
-  }
+  // Walking into the front can leave the feet a rounding sliver inside the edge; that's touching.
+  const gap = {
+    down: alongX ? y - bottom : NaN,
+    up: alongX ? top - y : NaN,
+    left: alongY ? left - x : NaN,
+    right: alongY ? x - right : NaN,
+  }[fixtureFacing(placement)];
+  return gap >= -FRONT_EDGE_TOLERANCE_PX ? Math.max(0, gap) : Infinity;
 }
 
 /**

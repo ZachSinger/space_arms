@@ -1,8 +1,8 @@
 // ==========================================
 // FILE: DebugTools.js
 // ==========================================
-// Dev-build shortcuts: spawn a customer (Y), Quickstart (K), and the HUD
-// buttons that open expansions for free, run Quickstart, or skip ahead 4 shifts.
+// Dev-build shortcuts: spawn a customer (Y), Quickstart (K), employee testing (L), and HUD
+// buttons that open expansions for free, run Quickstart, skip shifts, or prepare employee testing.
 // REAL games never create this.
 import { database } from "../scenes/boot.js";
 import { getStoreDoorCell, EXPANSION_ORDER, BACKROOM_UPGRADE_ORDER } from "../logic/RoomLayout.js";
@@ -13,9 +13,12 @@ import { rollCustomerTraits } from "../logic/CustomerTraits.js";
 import { gameRandom } from "../core/Random.js";
 
 const DEBUG_BUTTON_IDS = ["hud-debug-info-btn", "hud-debug-shop-upgrade-btn",
-  "hud-debug-backroom-upgrade-btn", "hud-debug-quickstart-btn", "hud-debug-skip-shifts-btn"];
+  "hud-debug-backroom-upgrade-btn", "hud-debug-quickstart-btn", "hud-debug-skip-shifts-btn",
+  "hud-debug-employee-testing-btn"];
 const SHELF_TYPES = ["shelf_budget_2x2", "shelf_budget_2x3", "shelf_budget_2x4",
   "shelf_budget_3x2", "shelf_budget_3x3", "shelf_budget_3x4"];
+const EMPLOYEE_TEST_LEVEL = 5;
+const DEBUG_EMPLOYEE_FUNDS_LABEL = "Employee testing";
 
 export class DebugTools {
   // REAL games hide every debug HUD button; dev builds show them.
@@ -32,12 +35,14 @@ export class DebugTools {
     const { scene } = this;
     scene.controls.bindKey("keydown-Y", "debug", () => scene.customerFlow.spawn(null));
     scene.controls.bindKey("keydown-K", "debug", () => this.quickstart());
+    scene.controls.bindKey("keydown-L", "debug", () => this.prepareEmployeeTesting());
 
     this.buttons = [
       ["hud-debug-shop-upgrade-btn", () => this.unlockNextZone(EXPANSION_ORDER, "sales floor")],
       ["hud-debug-backroom-upgrade-btn", () => this.unlockNextZone(BACKROOM_UPGRADE_ORDER, "backroom")],
       ["hud-debug-quickstart-btn", () => this.quickstart({ shelfCount: 2, itemCount: 6 })],
       ["hud-debug-skip-shifts-btn", () => this.skipShifts(4)],
+      ["hud-debug-employee-testing-btn", () => this.prepareEmployeeTesting()],
     ].map(([id, handler]) => ({ element: document.getElementById(id), handler }))
       .filter(({ element }) => element);
     for (const { element, handler } of this.buttons) element.addEventListener("click", handler);
@@ -46,6 +51,50 @@ export class DebugTools {
   destroy() {
     for (const { element, handler } of this.buttons) element.removeEventListener("click", handler);
     this.buttons = [];
+  }
+
+  // L key / Employee Test button: plays shifts the way Skip Shifts does until the shop earns
+  // Level 5, restocks every shelf for the next shift, and tops money up to one hire if short.
+  prepareEmployeeTesting() {
+    const { scene } = this;
+    const { gameState } = scene;
+    if (scene.shiftClock.started || scene.shift.starting || gameState.calendar.awaitingEndDay ||
+      scene.fixturePlacement?.active) {
+      scene.messages.show("Employee Test only works before a shift starts. End the day first if needed.");
+      return false;
+    }
+
+    const startDay = gameState.calendar.day;
+    for (let shift = 0; shift < 12 && gameState.reputation.shopLevel < EMPLOYEE_TEST_LEVEL; shift += 1) {
+      this.signNextContract();
+      this.stockEveryItem();
+      this.simulateShift();
+      gameState.endDay();
+    }
+    // Earned honestly when possible; forced only if the simulated shifts fell short.
+    gameState.reputation.setShopLevel(Math.max(gameState.reputation.shopLevel, EMPLOYEE_TEST_LEVEL));
+    this.signNextContract();
+    this.stockEveryItem();
+    for (const shelf of scene.fixtures.shelves()) scene.fixtureViews.refreshStockDisplay(shelf);
+    scene.catalogSystem.recalculateActiveFactions();
+
+    const hireCost = gameState.staff.profile("tavi_stock_clerk").hireCost;
+    const fundsNeeded = Math.max(0, hireCost - gameState.economy.credits);
+    if (fundsNeeded > 0) {
+      gameState.economy.add(fundsNeeded, {
+        category: "debug",
+        label: DEBUG_EMPLOYEE_FUNDS_LABEL,
+      });
+    }
+    gameState.shop.changed();
+    scene.saves.requestAutosave();
+    const played = gameState.calendar.day - startDay;
+    scene.messages.show(
+      `Employee Test: played ${played} shift${played === 1 ? "" : "s"}. Shop Level ${gameState.reputation.shopLevel}, ` +
+      `money ${Math.round(gameState.economy.credits)}, shelves stocked. You can hire your first employee.`,
+      "#10b981",
+    );
+    return true;
   }
 
   // HUD debug buttons: opens the next sales-floor expansion or backroom upgrade for free,

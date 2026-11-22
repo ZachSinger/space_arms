@@ -6,8 +6,8 @@
 import { transferItems } from "./InventoryTransfer.js";
 import { employeeTextureFor, showEmployeeFacing, EMPLOYEE_CRATE_HOLD_OFFSET } from "./EmployeeSprites.js";
 import { EMPLOYEE_JOB_IDS } from "./EmployeeJobs.js";
-import { getEmployeeJobSpeed } from "./EmployeeTraining.js";
-import { fixtureFootprint } from "./FixtureLayout.js";
+import { getEmployeeJobSpeed, REGISTER_SERVICE_MS_PER_CUSTOMER, REGISTER_SERVICE_MS_PER_ITEM } from "./EmployeeTraining.js";
+import { fixtureFacing, fixtureFootprint } from "./FixtureLayout.js";
 import { PLAYER_BODY_HEIGHT, PLAYER_BODY_WIDTH } from "./Player.js";
 import { FLOOR_STACK_MAX } from "./CrateStack.js";
 import { TILE_SIZE } from "./RoomLayout.js";
@@ -18,10 +18,6 @@ const WALK_SPEED = 120;
 const JOB_RETRY_MS = 1000;
 const BREAK_CHECK_MS = 100;
 const WALK_BODY = { width: PLAYER_BODY_WIDTH, height: PLAYER_BODY_HEIGHT, avoidStoreDoor: true };
-// Scanning plus payment per cart item. Deliberately slower than a practiced player: a
-// rookie (level 1) keeps up with ~15 customers a shift and melts around 30+, so training
-// and extra registers matter (see scripts/staffing-sim.mjs).
-export const REGISTER_SERVICE_MS_PER_ITEM = 5000;
 // Bending down for a piece of trash, and dropping it in the trashcan, at cleaning Level 1.
 export const TRASH_HANDLING_MS = 600;
 // Provisional Level 1 pause for each individual item placed on a shelf.
@@ -101,6 +97,8 @@ export class Employee {
     }
     if (this.state === "SERVING_REGISTER") {
       this.updateRegisterService(delta);
+    } else if (this.state === "AT_REGISTER") {
+      this.updateAtRegister();
     } else if (this.state === "STOCKING_SHELF") {
       this.updateStocking(delta);
     } else if (CLEANING_ACTION_STATES.includes(this.state)) {
@@ -133,12 +131,11 @@ export class Employee {
       this.finishClosingRegisterWork();
       return;
     }
+    // An assigned register outranks every other job, unless the player is working it.
+    if (this.startRegisterJob()) return;
     for (const jobId of this.jobPriorities) {
       if (jobId === "register") {
-        if (this.findRegisterJob()) {
-          this.startRegisterJob();
-          return;
-        }
+        continue;
       } else if (jobId === "stock_shelves") {
         const job = this.findStockingJob();
         if (job) {
@@ -159,23 +156,39 @@ export class Employee {
     this.walkTo(this.store.areas.arrivalIn(AREA.BACKROOM), "TO_BREAKROOM");
   }
 
-  // The first register with customers waiting that neither the player nor another
-  // employee is already working, or null.
-  findRegisterJob() {
-    return this.store.fixtures.registers().find((register) =>
-      register.sprite &&
-      !this.store.checkoutSystem.isPlayerOperating(register) &&
-      this.store.checkoutSystem.lineFor(register).length > 0 &&
+  /** The placed register this employee is assigned to, or null. */
+  assignedRegister() {
+    const assignments = this.store.gameState.staff.registerAssignments ?? {};
+    const registerId = Object.keys(assignments).find((id) => assignments[id] === this.data.id);
+    return registerId
+      ? this.store.fixtures.registers().find((register) => register.id === registerId && register.sprite) ?? null
+      : null;
+  }
+
+  isRegisterFree(register) {
+    return Boolean(register?.sprite) && !this.store.checkoutSystem.isPlayerOperating(register) &&
       !this.store.employees.some((employee) =>
         employee !== this && employee.currentJob?.jobId === "register" &&
-        employee.currentJob?.register === register,
-      )) ?? null;
+        employee.currentJob?.register === register);
+  }
+
+  // Only ever the assigned register. At closing, only while it still has customers to serve.
+  findRegisterJob() {
+    const assigned = this.assignedRegister();
+    if (!assigned || !this.isRegisterFree(assigned)) return null;
+    return !this.clockOutRequested || this.assignedRegisterStillNeeded(assigned) ? assigned : null;
+  }
+
+  // At closing: customers are in this register's line, or still shopping and may join it.
+  assignedRegisterStillNeeded(register) {
+    return this.store.checkoutSystem.lineFor(register).length > 0 || this.getClosingCustomers().some(
+      (customer) => !customer.isDestroyed && customer.state !== "LEAVING");
   }
 
   startRegisterJob() {
     const register = this.findRegisterJob();
     if (!register) return false;
-    this.currentJob = { jobId: "register", register, customer: this.store.checkoutSystem.lineFor(register)[0] };
+    this.currentJob = { jobId: "register", register, customer: this.store.checkoutSystem.lineFor(register)[0] ?? null };
     return this.walkTo(this.store.getBehindRegisterPoint(register), "TO_REGISTER");
   }
 
@@ -700,31 +713,58 @@ export class Employee {
 
   beginRegisterService() {
     const register = this.currentJob?.register;
-    const customer = register ? this.store.checkoutSystem.lineFor(register)[0] : null;
-    if (!register || this.store.checkoutSystem.isPlayerOperating(register) || !customer) {
+    if (!register || !register.sprite || this.store.checkoutSystem.isPlayerOperating(register)) {
       this.finishTask();
       return;
     }
+    this.sprite.body.setVelocity(0, 0);
+    if (register.type) this.currentFacing = fixtureFacing(register);
+    const customer = this.store.checkoutSystem.lineFor(register)[0];
+    if (!customer) {
+      // Nobody waiting: stay behind the counter, unless closing time leaves no one to serve.
+      if (this.clockOutRequested && !this.assignedRegisterStillNeeded(register)) {
+        this.finishTask();
+        return;
+      }
+      this.currentJob.customer = null;
+      this.state = "AT_REGISTER";
+      return;
+    }
     this.currentJob.customer = customer;
-    this.registerServiceRemainingMs = Math.max(
-      REGISTER_SERVICE_MS_PER_ITEM,
-      customer.cart.length * REGISTER_SERVICE_MS_PER_ITEM,
-    ) / getEmployeeJobSpeed(this.data.skillLevels, "register");
+    this.registerServiceRemainingMs = (REGISTER_SERVICE_MS_PER_CUSTOMER +
+      customer.cart.length * REGISTER_SERVICE_MS_PER_ITEM) /
+      getEmployeeJobSpeed(this.data.skillLevels, "register");
     this.state = "SERVING_REGISTER";
+  }
+
+  updateAtRegister() {
+    const register = this.currentJob?.register;
+    if (!register || !register.sprite || this.store.checkoutSystem.isPlayerOperating(register)) {
+      this.finishTask();
+      return;
+    }
+    this.sprite.body.setVelocity(0, 0);
+    if (this.store.checkoutSystem.lineFor(register).length > 0 ||
+      (this.clockOutRequested && !this.assignedRegisterStillNeeded(register))) {
+      this.beginRegisterService();
+    }
   }
 
   updateRegisterService(delta) {
     const register = this.currentJob?.register;
     const customer = this.currentJob?.customer;
-    if (!register || this.store.checkoutSystem.isPlayerOperating(register) ||
-      this.store.checkoutSystem.lineFor(register)[0] !== customer) {
+    if (!register || this.store.checkoutSystem.isPlayerOperating(register)) {
       this.finishTask();
+      return;
+    }
+    if (this.store.checkoutSystem.lineFor(register)[0] !== customer) {
+      this.beginRegisterService();
       return;
     }
     this.registerServiceRemainingMs -= delta;
     if (this.registerServiceRemainingMs > 0) return;
     this.store.checkoutSystem.completeEmployeeCheckout(this, customer);
-    this.finishTask();
+    this.beginRegisterService();
   }
 
   /**
@@ -760,10 +800,10 @@ export class Employee {
 
   finishClosingRegisterWork() {
     if (this.startRegisterJob()) return;
-    const customersStillShopping = this.getClosingCustomers().some(
-      (customer) => !customer.isDestroyed && customer.state !== "LEAVING",
-    );
-    if (!this.store.checkoutSystem.anyRegisterLineWaiting() && !customersStillShopping) {
+    // Only the employee assigned to a register waits for it (for example, while the player
+    // is working it); everyone else goes home.
+    const assigned = this.assignedRegister();
+    if (!assigned || !this.assignedRegisterStillNeeded(assigned)) {
       this.walkOut();
       return;
     }

@@ -90,7 +90,7 @@ export function snapshotCustomer(customer, id) {
  * @param {object[]} recentEvents
  * @param {Window} environment
  */
-export function createDebugSnapshot(scene, identifyCustomer, recentEvents, environment = window) {
+export function createDebugSnapshot(scene, identifyCustomer, recentEvents, environment = window, diagnostics = {}) {
   const clock = scene.shiftClock;
   const camera = scene.cameras.main;
   return diagnosticCopy({
@@ -98,8 +98,14 @@ export function createDebugSnapshot(scene, identifyCustomer, recentEvents, envir
     requestedAt: new Date().toISOString(),
     environment: {
       userAgent: environment.navigator.userAgent,
+      language: environment.navigator.language,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      hardwareConcurrency: environment.navigator.hardwareConcurrency,
+      deviceMemoryGiB: environment.navigator.deviceMemory,
       viewport: { width: environment.innerWidth, height: environment.innerHeight },
       canvas: { width: scene.game.canvas.width, height: scene.game.canvas.height },
+      pixelRatio: environment.devicePixelRatio,
+      colorDepth: environment.screen?.colorDepth,
       fps: scene.game.loop.actualFps,
       camera: {
         scrollX: camera.scrollX, scrollY: camera.scrollY, zoom: camera.zoom,
@@ -127,6 +133,33 @@ export function createDebugSnapshot(scene, identifyCustomer, recentEvents, envir
       inputEnabled: scene.player.inputEnabled,
       operatingRegister: scene.checkoutSystem.operatingRegister,
     },
+    employees: (scene.employees ?? []).map((employee) => ({
+      id: employee.data.id,
+      name: employee.data.name,
+      skills: employee.data.skillLevels,
+      wagePerShift: employee.data.wagePerShift,
+      state: employee.state,
+      sprite: spriteState(employee.sprite),
+      destination: point(employee.destination),
+      path: employee.path?.map(point),
+      jobPriorities: employee.jobPriorities,
+      assignedRegisterId: employee.assignedRegister?.()?.id ?? null,
+      currentJob: employee.currentJob ? {
+        jobId: employee.currentJob.jobId,
+        registerId: employee.currentJob.register?.id ?? null,
+        customerId: employee.currentJob.customer
+          ? identifyCustomer(employee.currentJob.customer) : null,
+        shelfId: employee.currentJob.shelf?.id ?? null,
+        fixtureId: employee.currentJob.fixture?.id ?? null,
+        crate: employee.currentJob.crate?.serializePayload?.() ?? null,
+      } : null,
+      registerServiceRemainingMs: employee.registerServiceRemainingMs,
+      stockingRemainingMs: employee.stockingRemainingMs,
+      stockingUnitsRemaining: employee.stockingUnitsRemaining,
+      cleaningActionRemainingMs: employee.cleaningActionRemainingMs,
+      clockOutRequested: employee.clockOutRequested,
+      destroyed: employee.isDestroyed,
+    })),
     traffic: {
       tuning: CUSTOMER_POOL_TUNING,
       poolAtShiftStart: scene.customerFlow.poolAtShiftStart ?? scene.customerFlow.pool,
@@ -190,6 +223,17 @@ export function createDebugSnapshot(scene, identifyCustomer, recentEvents, envir
       autosaveQueued: scene.autosaveQueued,
     },
     recentEvents,
+    diagnostics: {
+      recentErrors: diagnostics.recentErrors ?? [],
+      recentInputs: diagnostics.recentInputs ?? [],
+      sessionDurationMs: diagnostics.sessionDurationMs ?? null,
+      settings: diagnostics.settings ?? null,
+      controllers: diagnostics.controllers ?? [],
+      display: diagnostics.display ?? null,
+      saveFile: diagnostics.saveFile ?? null,
+      saveCaptureError: diagnostics.saveCaptureError ?? null,
+    },
+    gameMode: scene.realMode ? "real" : "development",
   });
 }
 

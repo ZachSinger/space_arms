@@ -35,6 +35,10 @@ export class EmployeeTab {
       employeeTraining: this.gameState.staff.training,
       employeeTrainingSelection: this.trainingSelection,
       shopLevel: this.gameState.reputation.shopLevel,
+      registers: this.scene.fixtures.registers().map((register) => ({
+        id: register.id, name: this.scene.fixtures.displayName(register),
+      })),
+      registerAssignments: this.gameState.staff.registerAssignments,
     });
   }
 
@@ -128,6 +132,17 @@ export class EmployeeTab {
       return;
     }
 
+    const registerButton = event.target.closest("button[data-employee-register-id]");
+    if (registerButton) {
+      if (registerButton.disabled) return;
+      this.scene.staffSystem.assignRegister(
+        registerButton.dataset.employeeRegisterId,
+        registerButton.dataset.employeeRegister || null,
+      );
+      this.redraw();
+      return;
+    }
+
     const trainingButton = event.target.closest(EMPLOYEE_TRAINING_SELECTOR);
     if (trainingButton) {
       if (trainingButton.disabled) return;
@@ -150,10 +165,11 @@ export class EmployeeTab {
     if (priorityButton.dataset.employeePriorityMove) {
       const employeeId = priorityButton.dataset.employeePriorityId;
       const jobId = priorityButton.dataset.employeePriorityJob;
-      const index = this.gameState.staff.jobPriorities[employeeId].indexOf(jobId);
-      this.scene.staffSystem.moveJob(
-        employeeId, jobId, index + (priorityButton.dataset.employeePriorityMove === "up" ? -1 : 1),
-      );
+      const visible = this.visibleJobs(employeeId);
+      const neighbor = visible[visible.indexOf(jobId) + (priorityButton.dataset.employeePriorityMove === "up" ? -1 : 1)];
+      if (neighbor) {
+        this.scene.staffSystem.moveJob(employeeId, jobId, this.gameState.staff.jobPriorities[employeeId].indexOf(neighbor));
+      }
       this.redraw();
       return;
     }
@@ -196,14 +212,21 @@ export class EmployeeTab {
     if (!row || !dragged || row.dataset.employeeJobId !== dragged.employeeId ||
       !this.scene.staffSystem.canManage()) return;
     event.preventDefault();
-    const priorities = this.gameState.staff.jobPriorities[dragged.employeeId];
-    const fromIndex = priorities.indexOf(dragged.jobId);
-    const rowIndex = priorities.indexOf(row.dataset.employeeJob);
+    const visible = this.visibleJobs(dragged.employeeId);
+    const fromIndex = visible.indexOf(dragged.jobId);
+    const rowIndex = visible.indexOf(row.dataset.employeeJob);
     const bounds = row.getBoundingClientRect();
     const insertion = rowIndex + (event.clientY >= bounds.top + bounds.height / 2 ? 1 : 0);
-    this.scene.staffSystem.moveJob(
-      dragged.employeeId, dragged.jobId, insertion - (fromIndex < insertion ? 1 : 0),
-    );
+    const target = visible[insertion - (fromIndex < insertion ? 1 : 0)];
+    if (target && target !== dragged.jobId) {
+      this.scene.staffSystem.moveJob(dragged.employeeId, dragged.jobId,
+        this.gameState.staff.jobPriorities[dragged.employeeId].indexOf(target));
+    }
     this.redraw();
+  }
+
+  /** The job order shown in the tab; registers are assigned separately, so "register" is hidden. */
+  visibleJobs(employeeId) {
+    return this.gameState.staff.jobPriorities[employeeId].filter((jobId) => jobId !== "register");
   }
 }

@@ -87,6 +87,8 @@ export class EmployeeRenderer {
     employeeTraining = {},
     employeeTrainingSelection = {},
     shopLevel,
+    registers = [],
+    registerAssignments = {},
   }) {
     const hired = new Set(hiredEmployeeIds);
     const offShift = new Set(offShiftEmployeeIds);
@@ -130,7 +132,8 @@ export class EmployeeRenderer {
           !EMPLOYEE_JOBS.every(({ id }) => priorities.includes(id))) {
           throw new Error(`Invalid job priorities for ${employee.name}.`);
         }
-        const priorityOptions = priorities.map((id, index) => {
+        const visiblePriorities = priorities.filter((id) => id !== "register");
+        const priorityOptions = visiblePriorities.map((id, index) => {
           const label = ORDER_NAMES[id];
           return html`
             <div role="listitem" draggable="${String(canHire)}"
@@ -139,11 +142,26 @@ export class EmployeeRenderer {
               ${["up", "down"].map((direction) => html`
                 <button type="button" class="action-btn" data-employee-priority-id="${employee.id}"
                   data-employee-priority-job="${id}" data-employee-priority-move="${direction}"
-                  ${!canHire || (direction === "up" ? index === 0 : index === priorities.length - 1) ? "disabled" : ""}
+                  ${!canHire || (direction === "up" ? index === 0 : index === visiblePriorities.length - 1) ? "disabled" : ""}
                   aria-label="Move ${label} ${direction} for ${employee.name}">Move ${direction}</button>
               `)}
             </div>
           `;
+        });
+        const nameOf = (employeeId) => roster.find(({ id }) => id === employeeId)?.name ?? employeeId;
+        const ownRegisterId = registers.find(({ id }) => registerAssignments[id] === employee.id)?.id ?? "";
+        const registerOptions = [{ id: "", name: "NONE" }, ...registers].map(({ id, name }) => {
+          const holder = id ? registerAssignments[id] : null;
+          const takenBy = holder && holder !== employee.id ? nameOf(holder) : null;
+          const label = id ? `Assign ${employee.name} to ${name}` : `Keep ${employee.name} off the registers`;
+          return html`
+            <button type="button" class="action-btn" data-employee-register-id="${employee.id}"
+              data-employee-register="${id}" aria-pressed="${String(id === ownRegisterId)}"
+              ${canHire ? "" : "disabled"}
+              aria-label="${takenBy ? `${label}, replacing ${takenBy}` : label}"
+              title="${takenBy ? `${takenBy} works ${name} now. Choosing it takes ${takenBy} off.` : ""}">
+              ${name}${takenBy ? ` (${takenBy})` : ""}
+            </button>`;
         });
         const trainingJobId = employeeTraining[employee.id];
         const selectedTrainingJobId = employeeTrainingSelection[employee.id] ?? trainingJobId ?? "register";
@@ -176,10 +194,15 @@ export class EmployeeRenderer {
             ${renderSkillLevels(employee, "Stocking")}
             ${status}
             <p class="type-description">Wages: ${employee.wagePerShift}</p>
-            ${canHire ? null : html`<p class="type-description">Change priority or On Shift / Off Shift between shifts.</p>`}
+            ${canHire ? null : html`<p class="type-description">Change register, jobs, or On Shift / Off Shift between shifts.</p>`}
             <hr class="divider-thin">
-            <h4 class="employee-section-title">Job priorities</h4>
-            <p class="employee-training-hint">Drag jobs to reorder them. The top job comes first.</p>
+            <h4 class="employee-section-title">Register</h4>
+            <p class="employee-training-hint">They stay at this register all shift. When you step onto it, they do their other jobs until you leave.</p>
+            <div class="employee-register-options" role="group" aria-label="Register for ${employee.name}">
+              ${registerOptions}
+            </div>
+            <h4 class="employee-section-title">Other jobs</h4>
+            <p class="employee-training-hint">Off the register, they do these in order. Drag to reorder.</p>
             <div class="employee-priority-options" role="list" aria-label="Job priority for ${employee.name}">
               ${priorityOptions}
             </div>

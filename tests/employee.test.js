@@ -14,6 +14,7 @@ let Employee;
 let nextTestShelfSlotId = 1;
 let nextTestCrateId = 1;
 let REGISTER_SERVICE_MS_PER_ITEM;
+let REGISTER_SERVICE_MS_PER_CUSTOMER;
 let TRASH_HANDLING_MS;
 let STOCKING_MS_PER_ITEM;
 let EmployeeRenderer;
@@ -61,9 +62,10 @@ before(async () => {
       },
     }],
   });
-  ({ Employee, REGISTER_SERVICE_MS_PER_ITEM, TRASH_HANDLING_MS, STOCKING_MS_PER_ITEM } = await server.ssrLoadModule("/js/logic/Employee.js"));
+  ({ Employee, TRASH_HANDLING_MS, STOCKING_MS_PER_ITEM } = await server.ssrLoadModule("/js/logic/Employee.js"));
   ({ EmployeeRenderer } = await server.ssrLoadModule("/js/logic/EmployeeRenderer.js"));
   EmployeeTraining = await server.ssrLoadModule("/js/logic/EmployeeTraining.js");
+  ({ REGISTER_SERVICE_MS_PER_CUSTOMER, REGISTER_SERVICE_MS_PER_ITEM } = EmployeeTraining);
   ({ StaffSystem } = await server.ssrLoadModule("/js/systems/StaffSystem.js"));
   ({ ShiftSystem } = await server.ssrLoadModule("/js/systems/ShiftSystem.js"));
 });
@@ -200,6 +202,7 @@ function makeEmployee({
   crateQuantity = 5,
   jobPriorities = ["register", "stock_shelves"],
   hasRegister = false,
+  assignedToRegister = hasRegister && jobPriorities[0] === "register",
   trashcans = [{ id: "trash-near", type: "trash_can", gx: 2, gy: 1 }],
 } = {}) {
   const shelf = makeShelf(shelfQuantity, shelfCapacity, shelfPlacementCount);
@@ -229,7 +232,10 @@ function makeEmployee({
     findPath: () => [],
     getBehindRegisterPoint: () => ({ x: 80, y: 80 }),
     gameState: {
-      staff: { jobPriorities: { tavi_stock_clerk: jobPriorities } },
+      staff: {
+        jobPriorities: { tavi_stock_clerk: jobPriorities },
+        registerAssignments: assignedToRegister ? { register: "tavi_stock_clerk" } : {},
+      },
       shop: { changed() {} },
     },
     refreshShelfStockDisplay() {},
@@ -642,20 +648,20 @@ test("working staff receive the public exit and the shift waits for departure be
 
 test("clockout drains queued register customers as the final task, then walks out immediately", () => {
   const { employee, completedSales } = makeEmployee({ hasRegister: true });
+  const oneItemMs = REGISTER_SERVICE_MS_PER_CUSTOMER + REGISTER_SERVICE_MS_PER_ITEM;
   const line = employee.scene.checkoutSystem.lineFor();
   line.push({ cart: [{}] }, { cart: [{}] });
   employee.startNextTask();
   employee.requestClockOut();
   assert.equal(employee.state, "TO_REGISTER");
   employee.arriveAtDestination();
-  employee.update(REGISTER_SERVICE_MS_PER_ITEM - 1);
+  employee.update(oneItemMs - 1);
   assert.equal(completedSales.length, 0);
   employee.update(1);
   assert.equal(completedSales.length, 1);
-  assert.equal(employee.state, "TO_REGISTER");
+  assert.equal(employee.state, "SERVING_REGISTER", "the next customer is served without stepping away");
   assert.equal(employee.currentJob.customer, line[0]);
-  employee.arriveAtDestination();
-  employee.update(REGISTER_SERVICE_MS_PER_ITEM);
+  employee.update(oneItemMs);
   assert.equal(completedSales.length, 2);
   assert.equal(line.length, 0);
   assert.equal(employee.state, "TO_EXIT");
@@ -663,36 +669,59 @@ test("clockout drains queued register customers as the final task, then walks ou
   assert.equal(employee.isReadyToClockOut(), false);
 });
 
-test("closing employees wait visibly for shoppers inside, serve their later queue, and skip stocking", () => {
+test("closing employees stay on their own register for shoppers inside, serve them, and skip stocking", () => {
   for (const state of ["ON_BREAK", "TO_BREAKROOM"]) {
     const { employee, crate, completedSales } = makeEmployee({
-      hasRegister: true, jobPriorities: ["stock_shelves", "clean", "register"],
+      hasRegister: true, assignedToRegister: true, jobPriorities: ["stock_shelves", "clean", "register"],
     });
     const customer = { state: "BROWSING", cart: [{}] };
     employee.getClosingCustomers = () => [customer];
     employee.state = state;
     employee.sprite.setVisible(false);
-    employee.sprite.body.reset(20, 6560);
     employee.requestClockOut();
-    assert.equal(employee.state, "TO_CLOSING_REGISTER");
-    assert.equal(employee.sprite.visible, true);
-    assert.equal(employee.currentJob, null);
-    employee.sprite.body.reset(20, 20);
+    assert.equal(employee.state, "TO_REGISTER");
     employee.arriveAtDestination();
     employee.update(100);
-    assert.equal(employee.state, "WAITING_REGISTER");
+    assert.equal(employee.state, "AT_REGISTER", "waits behind the counter while a shopper is inside");
     assert.equal(crate.quantity, 5);
     customer.state = "QUEUEING";
     employee.scene.checkoutSystem.lineFor().push(customer);
     employee.update(100);
-    assert.equal(employee.state, "TO_REGISTER");
-    employee.arriveAtDestination();
+    assert.equal(employee.state, "SERVING_REGISTER");
     customer.state = "LEAVING";
-    employee.update(REGISTER_SERVICE_MS_PER_ITEM);
+    employee.update(REGISTER_SERVICE_MS_PER_CUSTOMER + REGISTER_SERVICE_MS_PER_ITEM);
     assert.equal(completedSales.length, 1);
     assert.equal(employee.state, "TO_EXIT");
     assert.equal(crate.quantity, 5);
   }
+});
+
+test("at closing, employees never serve a register they aren't assigned to", () => {
+  const { employee, completedSales } = makeEmployee({
+    hasRegister: true, assignedToRegister: false, jobPriorities: ["stock_shelves", "clean", "register"],
+  });
+  employee.scene.restockCrates = [];
+  employee.scene.checkoutSystem.lineFor().push({ state: "QUEUEING", cart: [{}] });
+  employee.getClosingCustomers = () => [{ state: "QUEUEING" }];
+  employee.requestClockOut();
+  assert.equal(employee.state, "TO_EXIT");
+  assert.equal(completedSales.length, 0);
+});
+
+test("at closing, a bumped employee waits for the player to leave their register, then serves it", () => {
+  const { employee, completedSales } = makeEmployee({ hasRegister: true });
+  const line = employee.scene.checkoutSystem.lineFor();
+  line.push({ state: "QUEUEING", cart: [{}] });
+  employee.getClosingCustomers = () => line;
+  employee.scene.checkoutSystem.operatingRegister = true;
+  employee.requestClockOut();
+  assert.equal(employee.state, "WAITING_REGISTER");
+  employee.scene.checkoutSystem.operatingRegister = false;
+  employee.update(10000);
+  assert.equal(employee.state, "TO_REGISTER");
+  employee.arriveAtDestination();
+  employee.update(REGISTER_SERVICE_MS_PER_CUSTOMER + REGISTER_SERVICE_MS_PER_ITEM);
+  assert.equal(completedSales.length, 1);
 });
 
 test("clocking out carries a partly stocked delivery into the backroom, freeing the Loading Pad", () => {
@@ -1007,20 +1036,55 @@ test("unreachable return spots keep the crate with its employee until a safe rou
   assert.equal(crate.isCarried, true);
 });
 
-test("the register is the first job when Tavi's priority order puts it first", () => {
-  const { employee, completedSales } = makeEmployee({ hasRegister: true });
+test("an assigned employee stays at their register all shift, ahead of every other job", () => {
+  const { employee, completedSales, crate } = makeEmployee({
+    hasRegister: true, assignedToRegister: true, jobPriorities: ["stock_shelves", "clean", "register"],
+  });
+  const line = employee.scene.checkoutSystem.lineFor(employee.scene.fixtures.register());
   const customer = { cart: [{ itemId: "amo_01", price: 4 }] };
-  employee.scene.checkoutSystem.lineFor(employee.scene.fixtures.register()).push(customer);
+  line.push(customer);
 
   employee.startNextTask();
-  assert.equal(employee.state, "TO_REGISTER");
-  assert.equal(employee.currentJob.customer, customer);
-
+  assert.equal(employee.state, "TO_REGISTER", "the register outranks stocking, whatever the job order");
   employee.beginRegisterService();
   assert.equal(employee.state, "SERVING_REGISTER");
-  employee.updateRegisterService(REGISTER_SERVICE_MS_PER_ITEM);
-  assert.equal(employee.state, "IDLE");
+  employee.updateRegisterService(REGISTER_SERVICE_MS_PER_CUSTOMER + REGISTER_SERVICE_MS_PER_ITEM);
   assert.deepEqual(completedSales, [{ employee, customer }]);
+  assert.equal(employee.state, "AT_REGISTER", "they wait behind the counter with nobody in line");
+  employee.update(5000);
+  assert.equal(employee.state, "AT_REGISTER");
+  assert.equal(crate.quantity, 5, "they don't leave to stock");
+
+  const next = { cart: [{}] };
+  line.push(next);
+  employee.update(16);
+  assert.equal(employee.state, "SERVING_REGISTER");
+  assert.equal(employee.currentJob.customer, next);
+});
+
+test("an unassigned employee never works a register during the shift", () => {
+  const { employee } = makeEmployee({ hasRegister: true, assignedToRegister: false });
+  employee.scene.checkoutSystem.lineFor().push({ cart: [{}] });
+  employee.startNextTask();
+  assert.equal(employee.state, "TO_CRATE");
+});
+
+test("the player bumps an employee off their register; they do other jobs, then come back", () => {
+  const { employee } = makeEmployee({ hasRegister: true, assignedToRegister: true });
+  const checkout = employee.scene.checkoutSystem;
+  employee.startNextTask();
+  employee.beginRegisterService();
+  assert.equal(employee.state, "AT_REGISTER");
+
+  checkout.operatingRegister = true;
+  employee.cancelRegisterJob(employee.scene.fixtures.register());
+  employee.update(16);
+  assert.equal(employee.state, "TO_CRATE", "with the register taken, they go stock instead");
+
+  checkout.operatingRegister = false;
+  employee.finishTask();
+  employee.update(16);
+  assert.equal(employee.state, "TO_REGISTER", "once the player leaves, their register comes first again");
 });
 
 test("trained skills speed up only their own stocking trips, delivery trips, and register service", () => {
@@ -1039,11 +1103,12 @@ test("trained skills speed up only their own stocking trips, delivery trips, and
   employee.scene.checkoutSystem.lineFor(employee.scene.fixtures.register()).push(customer);
   employee.currentJob = { jobId: "register", register: employee.scene.fixtures.register(), customer };
   employee.beginRegisterService();
-  // Two items at level 5 register speed (2.0x): half the per-item time each.
-  assert.equal(employee.registerServiceRemainingMs, REGISTER_SERVICE_MS_PER_ITEM);
+  // Two items at level 5 register speed (2.0x): half the Level 1 time.
+  assert.equal(employee.registerServiceRemainingMs,
+    (REGISTER_SERVICE_MS_PER_CUSTOMER + 2 * REGISTER_SERVICE_MS_PER_ITEM) / 2);
 });
 
-test("the employee panel renders draggable jobs in saved order with alternate move controls", () => {
+test("the employee panel hides Register from the job order and offers each register instead", () => {
   const options = {
     hiredEmployeeIds: ["tavi_stock_clerk"],
     activeEmployeeIds: [],
@@ -1053,29 +1118,27 @@ test("the employee panel renders draggable jobs in saved order with alternate mo
     credits: 1000,
     canHire: true,
     shopLevel: 4,
+    registers: [{ id: "register", name: "REGISTER 1" }, { id: "fixture-9", name: "REGISTER 2" }],
+    registerAssignments: { "fixture-9": "tavi_stock_clerk" },
   };
   const stocking = EmployeeRenderer.generateHTML(options);
   assert.match(stocking, /role="listitem" draggable="true"/);
-  assert.ok(stocking.indexOf('data-employee-job="stock_shelves"') < stocking.indexOf('data-employee-job="register"'));
-  assert.ok(stocking.indexOf('data-employee-job="register"') < stocking.indexOf('data-employee-job="clean"'));
+  assert.doesNotMatch(stocking, /data-employee-job="register"/);
+  assert.ok(stocking.indexOf('data-employee-job="stock_shelves"') < stocking.indexOf('data-employee-job="clean"'));
   assert.match(stocking, /data-employee-priority-job="stock_shelves" data-employee-priority-move="up"\s+disabled/);
   assert.match(stocking, /data-employee-priority-job="clean" data-employee-priority-move="down"\s+disabled/);
-  assert.match(stocking, /aria-label="Move Register up for Tavi/);
-  assert.match(stocking, />Move down<\/button>/);
-  assert.match(stocking, /<h4 class="employee-section-title">Job priorities<\/h4>/);
+  assert.match(stocking, /2\. Cleaning/);
+  assert.match(stocking, /data-employee-register="fixture-9" aria-pressed="true"/);
+  assert.match(stocking, /data-employee-register="register" aria-pressed="false"/);
+  assert.match(stocking, /data-employee-register="" aria-pressed="false"/);
 
-  const register = EmployeeRenderer.generateHTML({
-    ...options, employeeJobPriorities: { tavi_stock_clerk: ["register", "stock_shelves", "clean"] },
-  });
-  assert.ok(register.indexOf('data-employee-job="register"') < register.indexOf('data-employee-job="stock_shelves"'));
   const cleaning = EmployeeRenderer.generateHTML({
     ...options, employeeJobPriorities: { tavi_stock_clerk: ["clean", "register", "stock_shelves"] },
   });
-  assert.ok(cleaning.indexOf('data-employee-job="clean"') < cleaning.indexOf('data-employee-job="register"'));
-  assert.ok(cleaning.indexOf('data-employee-job="register"') < cleaning.indexOf('data-employee-job="stock_shelves"'));
+  assert.ok(cleaning.indexOf('data-employee-job="clean"') < cleaning.indexOf('data-employee-job="stock_shelves"'));
   const duringShift = EmployeeRenderer.generateHTML({ ...options, canHire: false });
   assert.match(duringShift, /role="listitem" draggable="false"/);
-  assert.match(duringShift, /data-employee-priority-job="register" data-employee-priority-move="down"\s+disabled/);
+  assert.match(duringShift, /data-employee-register="register" aria-pressed="false"\s+disabled/);
 
   const twoEmployees = EmployeeRenderer.generateHTML({
     ...options,
@@ -1086,8 +1149,8 @@ test("the employee panel renders draggable jobs in saved order with alternate mo
       sera_floor_assistant: ["stock_shelves", "register", "clean"],
     },
   });
-  assert.match(twoEmployees, /data-employee-job-id="tavi_stock_clerk" data-employee-job="register"/);
-  assert.match(twoEmployees, /data-employee-job-id="sera_floor_assistant" data-employee-job="stock_shelves"/);
+  assert.match(twoEmployees, /data-employee-job-id="tavi_stock_clerk" data-employee-job="stock_shelves"/);
+  assert.match(twoEmployees, /REGISTER 2 \(Tavi\)/, "Sera sees who already has a register");
 });
 
 test("the employee panel switches staff on and off shift, only between shifts", () => {

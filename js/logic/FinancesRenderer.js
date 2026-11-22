@@ -28,6 +28,7 @@ function describeLine({ category, label, quantity }) {
     case "wages": return `Wages paid to ${label}${quantity > 1 ? ` (${plural(quantity, "shift", "shifts")})` : ""}`;
     case "loans": return "Emergency loan received";
     case "loan_repayments": return `Emergency loan repayment${quantity > 1 ? ` (${plural(quantity, "payment", "payments")})` : ""}`;
+    case "debug": return `Debug test funds: ${label}`;
     default: throw new Error(`Unknown receipt category: ${category}`);
   }
 }

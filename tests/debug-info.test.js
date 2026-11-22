@@ -84,6 +84,21 @@ function environment(api) {
 
 test("debug snapshots detach raw runtime state without save validation or Phaser cycles", () => {
   const scene = fixtureScene();
+  scene.employees = [{
+    data: { id: "staff-1", name: "Rin", skillLevels: { register: 2 }, wagePerShift: 30 },
+    state: "SERVING_REGISTER",
+    sprite: { x: 60, y: 70 },
+    destination: { x: 80, y: 90 },
+    path: [{ x: 61, y: 70 }],
+    jobPriorities: ["register", "stock_shelves"],
+    currentJob: { jobId: "register", register: { id: "register-1" }, customer: scene.customers[0] },
+    registerServiceRemainingMs: 1200,
+    stockingRemainingMs: 0,
+    stockingUnitsRemaining: 0,
+    cleaningActionRemainingMs: 0,
+    clockOutRequested: false,
+    isDestroyed: false,
+  }];
   const snapshot = createDebugSnapshot(scene, () => 7, [], environment());
   assert.equal(snapshot.formatVersion, 1);
   assert.deepEqual(snapshot.player.activeFactions, ["mercenaries"]);
@@ -94,6 +109,8 @@ test("debug snapshots detach raw runtime state without save validation or Phaser
   assert.equal(snapshot.fixtures[0].placements[0].quantity, -1);
   assert.equal(snapshot.crates[0].velocityX, "NaN");
   assert.equal(snapshot.ui.fixtureId, "shelf_1");
+  assert.equal(snapshot.employees[0].currentJob.registerId, "register-1");
+  assert.equal(snapshot.employees[0].currentJob.customerId, 7);
   assert.equal(Object.hasOwn(snapshot.ui, "pendingShelfPlacement"), false);
   scene.shelfStockingWindow.uiWindow.isOpen = false;
   assert.equal(createDebugSnapshot(scene, () => 7, [], environment()).ui.fixtureId, null);
@@ -103,6 +120,24 @@ test("debug snapshots detach raw runtime state without save validation or Phaser
   assert.equal(snapshot.fixtures[0].placements[0].quantity, -1);
   assert.equal(snapshot.customers[0].cart[0].price, 5);
   assert.equal(scene.shiftClock.isPaused, false);
+});
+
+test("debug snapshots include report-only diagnostics without mutating game state", () => {
+  const scene = fixtureScene();
+  const snapshot = createDebugSnapshot(scene, () => 7, [], environment(), {
+    recentErrors: [{ type: "runtime-error", message: "Broken" }],
+    recentInputs: [{ device: "keyboard", code: "KeyW" }],
+    settings: { textSize: "larger" },
+    controllers: [{ id: "Test controller" }],
+    display: { displayMode: "windowed" },
+    saveFile: { version: 1 },
+  });
+  assert.deepEqual(snapshot.diagnostics.recentErrors, [{ type: "runtime-error", message: "Broken" }]);
+  assert.deepEqual(snapshot.diagnostics.recentInputs, [{ device: "keyboard", code: "KeyW" }]);
+  assert.deepEqual(snapshot.diagnostics.settings, { textSize: "larger" });
+  assert.deepEqual(snapshot.diagnostics.controllers, [{ id: "Test controller" }]);
+  assert.deepEqual(snapshot.diagnostics.display, { displayMode: "windowed" });
+  assert.deepEqual(snapshot.diagnostics.saveFile, { version: 1 });
 });
 
 test("one click captures once, retains customer IDs, opens the folder, and cleans up listeners", async () => {

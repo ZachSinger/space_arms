@@ -162,18 +162,28 @@
   flex-shrink: 0;
 }
 
-.employee-shift-toggle .action-btn {
+.employee-register-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.employee-shift-toggle .action-btn,
+.employee-register-options .action-btn {
   padding: 4px 8px;
   font-size: var(--font-size-11);
 }
 
-.employee-shift-toggle .action-btn[aria-pressed="false"] {
+.employee-shift-toggle .action-btn[aria-pressed="false"],
+.employee-register-options .action-btn[aria-pressed="false"] {
   --bg-color: #1f2937;
   border-color: #374151;
   color: #9ca3af;
 }
 
-.employee-shift-toggle .action-btn[aria-pressed="false"]:hover:not(:disabled) {
+.employee-shift-toggle .action-btn[aria-pressed="false"]:hover:not(:disabled),
+.employee-register-options .action-btn[aria-pressed="false"]:hover:not(:disabled) {
   --bg-color: #374151;
   color: #e5e7eb;
 }
@@ -182,7 +192,8 @@
   cursor: not-allowed;
 }
 
-.employee-shift-toggle .action-btn[aria-pressed="false"]:disabled {
+.employee-shift-toggle .action-btn[aria-pressed="false"]:disabled,
+.employee-register-options .action-btn[aria-pressed="false"]:disabled {
   opacity: 0.4;
 }
 

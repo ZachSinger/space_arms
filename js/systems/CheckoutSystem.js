@@ -454,6 +454,12 @@ export class CheckoutSystem {
     return this.operatingRegister && this.operatingRegisterFixture === register;
   }
 
+  /** Whether the player or the employee assigned to it is working this register this shift. */
+  isStaffed(register) {
+    return this.isPlayerOperating(register) ||
+      (this.shop.employees ?? []).some((employee) => employee.assignedRegister?.() === register);
+  }
+
   /** Whether any register has a customer waiting. */
 
   anyRegisterLineWaiting() {
@@ -503,7 +509,10 @@ export class CheckoutSystem {
 
   reserveQueueSlot(customer) {
     const shop = this.shop;
-    const registers = shop.fixtures.registers();
+    // Customers line up where someone is working; with no one at any register, anywhere.
+    const allRegisters = shop.fixtures.registers();
+    const staffed = allRegisters.filter((register) => this.isStaffed(register));
+    const registers = staffed.length > 0 ? staffed : allRegisters;
     const headedTo = (register) => shop.customers.filter((candidate) =>
       candidate !== customer && candidate.state === "SEEK_REGISTER" &&
       candidate.targetRegisterId === register.id).length;

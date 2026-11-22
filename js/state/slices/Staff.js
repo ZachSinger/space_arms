@@ -28,6 +28,29 @@ export class Staff extends Slice {
     // Employee id -> job they're away training in this shift.
     /** @type {Record<string, string>} */
     this.training = {};
+    // Register fixture id -> the one employee assigned to work it all shift.
+    /** @type {Record<string, string>} */
+    this.registerAssignments = {};
+  }
+
+  /** @param {string} employeeId @returns {string | null} register fixture id */
+  registerFor(employeeId) {
+    return Object.keys(this.registerAssignments)
+      .find((registerId) => this.registerAssignments[registerId] === employeeId) ?? null;
+  }
+
+  /**
+   * Puts an employee on one register (taking it from whoever had it), or on none.
+   * @param {string} employeeId
+   * @param {string | null} registerId
+   */
+  assignRegister(employeeId, registerId) {
+    if (!this.hired.includes(employeeId) || this.registerFor(employeeId) === registerId) return false;
+    const current = this.registerFor(employeeId);
+    if (current) delete this.registerAssignments[current];
+    if (registerId) this.registerAssignments[registerId] = employeeId;
+    this.changed();
+    return true;
   }
 
   /** @param {string} employeeId */
@@ -126,6 +149,7 @@ export class Staff extends Slice {
         this.hired.map((employeeId) => [employeeId, [...this.jobPriorities[employeeId]]])),
       employeeSkills: Object.fromEntries(Object.entries(this.skills).map(([id, levels]) => [id, { ...levels }])),
       employeeTraining: { ...this.training },
+      registerAssignments: { ...this.registerAssignments },
     };
   }
 
@@ -139,6 +163,7 @@ export class Staff extends Slice {
     ]));
     staff.skills = Object.fromEntries(Object.entries(data.employeeSkills ?? {}).map(([id, levels]) => [id, { ...levels }]));
     staff.training = { ...(data.employeeTraining ?? {}) };
+    staff.registerAssignments = { ...(data.registerAssignments ?? {}) };
     return staff;
   }
 }

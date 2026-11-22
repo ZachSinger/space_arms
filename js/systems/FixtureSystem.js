@@ -536,6 +536,10 @@ export class FixtureSystem {
     if (scene.shelfStockingWindow?.fixture === fixture) scene.shelfStockingWindow.uiWindow.close();
     scene.fixtureViews.hide(fixture);
     this.fixtures.remove(fixture.id);
+    const staff = scene.gameState.staff;
+    if (staff.registerAssignments[fixture.id]) {
+      staff.assignRegister(staff.registerAssignments[fixture.id], null);
+    }
     this.applyLayout(layout, result);
     return true;
   }

@@ -8,6 +8,8 @@ import { app, BrowserWindow, ipcMain, net, protocol, screen, shell } from "elect
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import fs from "fs/promises";
+import os from "os";
+import { sendBugReport, validateBugReport } from "./js/logic/BugReport.js";
 
 // ES modules have no __dirname.
 const __filename = fileURLToPath(import.meta.url);
@@ -161,6 +163,48 @@ ipcMain.handle("app:quit", async () => {
   await Promise.all([...pendingFileWrites]);
   app.quit();
   return true;
+});
+
+ipcMain.handle("bug-report:send", async (event, report) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win || win.isDestroyed()) throw new Error("The game window is unavailable.");
+  validateBugReport(report);
+  const rendererMetrics = app.getAppMetrics()
+    .find(({ pid }) => pid === event.sender.getOSProcessId()) ?? null;
+  let screenshotBlob;
+  if (report.includeScreenshot) {
+    const image = await event.sender.capturePage();
+    if (image.isEmpty()) throw new Error("The game window screenshot was empty.");
+    screenshotBlob = new Blob([image.toPNG()], { type: "image/png" });
+  }
+  return sendBugReport({
+    title: report.title,
+    message: report.message,
+    screenshotBlob,
+    sessionData: {
+      ...report.sessionData,
+      version: app.getVersion(),
+      platform: process.platform,
+      architecture: process.arch,
+      operatingSystemRelease: os.release(),
+      processor: {
+        model: os.cpus()[0]?.model ?? null,
+        logicalCoreCount: os.cpus().length,
+      },
+      memory: {
+        totalBytes: os.totalmem(),
+        freeBytes: os.freemem(),
+        gameProcess: rendererMetrics?.memory ?? null,
+      },
+      displays: screen.getAllDisplays().map(({ size, scaleFactor }) => ({ size, scaleFactor })),
+      runtimeVersions: {
+        electron: process.versions.electron,
+        chrome: process.versions.chrome,
+        node: process.versions.node,
+        v8: process.versions.v8,
+      },
+    },
+  });
 });
 
 ipcMain.handle("display:set-resolution", (event, resolution) => {

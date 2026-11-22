@@ -248,6 +248,8 @@ test("fixture interaction covers its entire front but not its sides or back", ()
   assert.equal(fixtureInteractionDistance(shelf, { x: left - 1, y: front + 20 }), Infinity);
   assert.equal(fixtureInteractionDistance(shelf, { x: right, y: front + 20 }), Infinity);
   assert.equal(fixtureInteractionDistance(shelf, { x: left + 20, y: front - 1 }), Infinity);
+  assert.equal(fixtureInteractionDistance(shelf, { x: left + 20, y: front - 0.00001 }), 0,
+    "a player pressed against the front can stop a hair inside it and still open the shelf");
 });
 
 function createRoom({ expanded = false } = {}) {

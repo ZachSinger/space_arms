@@ -19,9 +19,6 @@ notice something that needs doing but isn't being done right now.
       trained staff or 3 with rookies; ~80 needs 3 registers + 3 trained. This makes
       hire-and-build an alternative scaling path to training, so handing the store to
       employees stays a gradual, purchased transition (key for post-base modules).
-- [ ] Add a pre-shift meal, breakfast, or another preparation choice that boosts stamina,
-      carrying ability, or another character stat for that shift only. Decide the choices,
-      costs, and effects before building it.
 - [x] E at a trashcan returns all held empty crates, keeping filled
       crates; E only supplies a free crate with completely empty hands. Q puts crates down.
 - [x] Empty crates reduce the walking/dashing slowdown compared with filled crates.
@@ -223,8 +220,14 @@ notice something that needs doing but isn't being done right now.
     enough credits) instead of a popup message.
 
 ## Playtest follow-ups (employees, stock, pacing)
-- [ ] Bug reports: let players send a bug report from inside the game, and tell them how to
-      contact the developer.
+- [x] Bug reports: the pause menu sends a title, description, live game-state snapshot,
+      and optional desktop screenshot to the Cloudflare Worker relay for Discord.
+      Nothing is uploaded until the player presses Send Report; failed reports keep their text.
+- [x] Expand bug-report game info: employees, settings and controls, controller type, computer
+      details, recent button presses, error history, and the save file.
+- [ ] Error handling: catch errors and crashes anywhere in the game, record them, and send them
+      with reports. When something goes wrong, offer the player a pre-filled bug report if the
+      game can still show it; if it can't, offer one the next time the game starts.
 - [ ] Explore adding Steam achievements.
 - [x] Employee art: arms-up versions of employee sprites so they look right carrying crates,
       like the player does.
@@ -272,6 +275,9 @@ notice something that needs doing but isn't being done right now.
 - [x] Spawn-customer debug key (Y key): lets one random customer in right away.
 - [x] Quickstart debug key (K key, before any shelf is placed): signs needed supply
       contracts, places a Budget Shelf near the door, and stocks it with four low-cost items.
+- [x] Employee Test debug shortcut (L key or HUD button, before a shift): plays shifts like
+      Skip Shifts until the shop earns Level 5, restocks every shelf, and makes sure there's
+      enough money to hire one employee.
 
 ## Art / Assets
 - [x] Replace the shelves' placeholder shapes with proper shelf artwork. The Budget Shelf

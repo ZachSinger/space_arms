@@ -382,6 +382,29 @@ test("saves from before employees existed still load", () => {
   assert.doesNotThrow(() => validateShopSave(data, database));
 });
 
+test("older saves keep register-first staff on registers, and assignments must name placed registers and hired staff", () => {
+  const data = snapshot();
+  data.layoutVersion = 14;
+  data.playerState.shopLevel = 7;
+  data.playerState.hiredEmployees = ["sera_floor_assistant", "tavi_stock_clerk"];
+  data.playerState.employeeJobPriorities = {
+    sera_floor_assistant: ["stock_shelves", "register", "clean"],
+    tavi_stock_clerk: ["register", "stock_shelves", "clean"],
+  };
+  const upgraded = validateShopSave(data, database);
+  assert.deepEqual(upgraded.playerState.registerAssignments, { register: "tavi_stock_clerk" });
+
+  for (const invalid of [
+    { fixture_demo_01: "tavi_stock_clerk" },
+    { register: "dax_stock_clerk" },
+    [],
+  ]) {
+    assert.throws(() => validateShopSave({ ...upgraded, playerState: {
+      ...upgraded.playerState, registerAssignments: invalid,
+    } }, database), /invalid register assignments/);
+  }
+});
+
 test("employee skills remain valid after firing, while booked training requires hired non-maxed staff", () => {
   const data = snapshot();
   data.playerState.employeeSkills = {

@@ -94,6 +94,16 @@ export function checkShopSave(data, database) {
         (player.employeeSkills?.[employeeId]?.[jobId] ?? 1) < MAX_EMPLOYEE_SKILL_LEVEL),
     "invalid employee training.");
   }
+  if (player.registerAssignments !== undefined) {
+    const registerIds = data.fixtures
+      .filter((fixture) => getFixtureType(fixture.type)?.kind === "register").map(({ id }) => id);
+    const assigned = Object.values(isRecord(player.registerAssignments) ? player.registerAssignments : {});
+    requireSave(isRecord(player.registerAssignments) &&
+      Object.keys(player.registerAssignments).every((id) => registerIds.includes(id)) &&
+      assigned.every((id) => (player.hiredEmployees ?? []).includes(id)) &&
+      new Set(assigned).size === assigned.length,
+    "invalid register assignments.");
+  }
   requireSave(isRecord(player.factionReputation) &&
     CUSTOMER_FACTION_IDS.every((id) => integer(player.factionReputation[id])),
   "invalid faction reputation.");
