@@ -10,7 +10,8 @@
 //   layoutVersion 12  before heavy ammo moved into its own contract
 //   layoutVersion 13  before the Scrap-Iron Autopistol price cut
 //   layoutVersion 14  before employees were assigned to registers
-//   layoutVersion 15  current
+//   layoutVersion 15  before the money rebalance repriced every item
+//   layoutVersion 16  current
 // Any may also be from before the contract split (no `contractsSplit`), hold retired
 // fixtures, crates, licenses, or a hovercart.
 import { requireSave, isRecord } from "../saveHelpers.js";
@@ -23,9 +24,10 @@ import { addEmployeeCleaningJob } from "./cleaningJob.js";
 import { migratePreWarAmmoContract } from "./preWarAmmoContract.js";
 import { repriceScrapAutopistol } from "./scrapAutopistolPrice.js";
 import { addRegisterAssignments } from "./registerAssignments.js";
+import { rebalanceItemPrices } from "./moneyRebalance.js";
 
 // The fixture-retirement upgrade removes stock fixtures and moves their contents into Go-Backs.
-export const SHOP_LAYOUT_VERSION = 15;
+export const SHOP_LAYOUT_VERSION = 16;
 const OLDEST_SUPPORTED_VERSION = 9;
 
 /**
@@ -44,6 +46,7 @@ export const SAVE_UPGRADES = [
   { name: "pre-war ammo contract", fromVersion: 12, run: migratePreWarAmmoContract },
   { name: "scrap autopistol price", fromVersion: 13, run: repriceScrapAutopistol },
   { name: "register assignments", fromVersion: 14, run: addRegisterAssignments },
+  { name: "money rebalance", fromVersion: 15, run: rebalanceItemPrices },
 ];
 
 /**

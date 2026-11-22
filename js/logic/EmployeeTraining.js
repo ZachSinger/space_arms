@@ -7,8 +7,8 @@ export const MAX_EMPLOYEE_SKILL_LEVEL = 5;
 export const EMPLOYEE_SPEED_BONUS_PER_LEVEL = 20;
 export const EMPLOYEE_MILESTONE_SPEED_BONUS = 10;
 export const EMPLOYEE_MILESTONE_LEVELS = Object.freeze([3, 5]);
-export const EMPLOYEE_HIRE_COST = 250;
-export const EMPLOYEE_BASE_WAGE = 50;
+export const EMPLOYEE_HIRE_COST = 500;
+export const EMPLOYEE_BASE_WAGE = 100;
 // Level 1 checkout time: taking payment once per customer, plus scanning each cart item. A
 // rookie keeps up with a normal Shop Level 5 shift on one register (see scripts/staffing-sim.mjs).
 export const REGISTER_SERVICE_MS_PER_CUSTOMER = 2000;

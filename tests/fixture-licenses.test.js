@@ -94,7 +94,7 @@ test("redesigned contracts retain available, unaffordable, locked, and purchased
     shopLevel: 4,
     globalReputation: 0,
     factionReputation: { scavengers: 0, mercenaries: 0, explorers: 0 },
-    credits: 100,
+    credits: 200,
     activeLicenses: new Set(["lic_fixture_basics"]),
   }));
   assert.match(html, /data-license-id="lic_start_rations"/);
@@ -402,17 +402,17 @@ test("layout tab offers paid store expansions gated by shop level and purchase o
   assert.doesNotMatch(fixturesHTML, /Expansion|data-buy-expansion-id|data-buy-backroom-id/);
 });
 
-test("early supplier license prices reflect the value of their item catalogs", () => {
-  const expectedPrices = {
-    lic_start_rations: 25,
-    lic_start_survival: 25,
-    lic_start_surplus: 50,
-    lic_start_ammo: 200,
-    lic_start_armor_melee: 325,
-  };
-
-  for (const [licenseId, price] of Object.entries(expectedPrices)) {
-    assert.equal(licenseById.get(licenseId)?.baseCost, price, licenseId);
+test("supplier contracts cost more at each later shop level and never less", () => {
+  const paid = licenses
+    .filter((license) => license.requiredShopLevel)
+    .sort((a, b) => a.requiredShopLevel - b.requiredShopLevel);
+  for (let index = 1; index < paid.length; index += 1) {
+    const [earlier, later] = [paid[index - 1], paid[index]];
+    if (later.requiredShopLevel === earlier.requiredShopLevel) {
+      assert.equal(later.baseCost, earlier.baseCost, `${later.id} matches ${earlier.id}`);
+    } else {
+      assert.ok(later.baseCost > earlier.baseCost, `${later.id} costs more than ${earlier.id}`);
+    }
   }
 });
 

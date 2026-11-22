@@ -1320,8 +1320,8 @@ test("the hiring and staff panels show compact skill levels", () => {
   assert.ok(html.indexOf("employee-panel-divider") < html.indexOf('data-employee-scroll="hiring"'));
   assert.match(html, /Sera<\/h3>[\s\S]*?Register:1<\/span>[\s\S]*?Stock:1<\/span>/);
   assert.match(html, /Tavi<\/h3>[\s\S]*?Register:2<\/span>[\s\S]*?Stocking:1<\/span>/);
-  assert.match(html, /employee-candidate-wage">50<\/div>/);
-  assert.match(html, /employee-hire-cost">250<\/div>/);
+  assert.match(html, /employee-candidate-wage">100<\/div>/);
+  assert.match(html, /employee-hire-cost">500<\/div>/);
   assert.doesNotMatch(html, /Skills:|credits per shift/);
   assert.doesNotMatch(html.slice(html.indexOf("Your Staff")), /On Shift: works and is paid each shift/);
 });
@@ -1336,9 +1336,9 @@ test("training preview shows the selected skill's actual level, speed, price, wa
   assert.match(register, /data-employee-training-job="register"\s+data-employee-training-action="select" aria-pressed="true"/);
   assert.match(register, /Register training<\/strong>[\s\S]*Level 2 → 3/);
   assert.match(register, /Register speed: 120% → 150% of Level 1 speed/);
-  assert.match(register, /Training price: <strong>375<\/strong>/);
-  assert.match(register, /Wages after training: <strong>60 per shift worked or spent in training<\/strong>/);
-  assert.match(register, /Tavi will miss the entire next shift\s+and still be paid 55/);
+  assert.match(register, /Training price: <strong>750<\/strong>/);
+  assert.match(register, /Wages after training: <strong>120 per shift worked or spent in training<\/strong>/);
+  assert.match(register, /Tavi will miss the entire next shift\s+and still be paid 110/);
   assert.match(register, /data-employee-training-action="book"\s+aria-label="Book Register training for Tavi"/);
 
   const cleaning = EmployeeRenderer.generateHTML({
@@ -1363,8 +1363,8 @@ test("training explains and disables booking when a course is unavailable", () =
   assert.doesNotMatch(maxed, /Level 6/);
   assert.doesNotMatch(maxed, /will miss the entire next shift/);
 
-  const unaffordable = EmployeeRenderer.generateHTML({ ...options, credits: 249 });
-  assert.match(unaffordable, /Training costs 250. You don&#39;t have enough money/);
+  const unaffordable = EmployeeRenderer.generateHTML({ ...options, credits: 499 });
+  assert.match(unaffordable, /Training costs 500. You don&#39;t have enough money/);
   assert.match(unaffordable, /data-employee-training-action="book" disabled/);
 
   const duringShift = EmployeeRenderer.generateHTML({ ...options, canHire: false });
@@ -1424,10 +1424,10 @@ test("the employee panel explains the Shop Level 4 staff limit before anyone can
   }
   const hireCosts = [...unlocked.matchAll(/class="type-description employee-hire-cost">([^<]+)<\/div>/g)]
     .map(([, cost]) => cost);
-  assert.deepEqual(hireCosts, Array(6).fill("250"));
+  assert.deepEqual(hireCosts, Array(6).fill("500"));
   assert.match(unlocked, />\s*HIRE\s*<\/button>/);
 
-  const unaffordable = EmployeeRenderer.generateHTML({ ...options, shopLevel: 4, credits: 249.75 });
+  const unaffordable = EmployeeRenderer.generateHTML({ ...options, shopLevel: 4, credits: 499.75 });
   assert.match(unaffordable, /You need 0\.25 more/);
   assert.doesNotMatch(unaffordable, /credits/i);
   assert.match(unaffordable, /data-hire-employee-id="tavi_stock_clerk"\s+disabled/);

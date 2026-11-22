@@ -432,7 +432,7 @@ test("hiring staff spends the fee once and keeps the hire when player state is r
   state.finishShift({ customersServed: 90, customersTurnedAway: 0 });
   state.endDay();
   assert.equal(state.hireEmployee("tavi_stock_clerk"), true);
-  assert.equal(state.economy.credits, 1250);
+  assert.equal(state.economy.credits, 1000);
   assert.deepEqual(state.staff.hired, ["tavi_stock_clerk"]);
   assert.deepEqual(state.staff.jobPriorities.tavi_stock_clerk, [
     "register", "stock_shelves", "clean",
@@ -443,7 +443,7 @@ test("hiring staff spends the fee once and keeps the hire when player state is r
   ]);
   assert.equal(state.staff.prioritizeJob("tavi_stock_clerk", "clean"), false, "already first");
   assert.equal(state.hireEmployee("tavi_stock_clerk"), false);
-  assert.equal(state.economy.credits, 1250);
+  assert.equal(state.economy.credits, 1000);
 
   const saved = JSON.parse(JSON.stringify(state.toSave()));
   let restored = GameState.fromSave(saved, { items: ITEMS });
@@ -451,7 +451,7 @@ test("hiring staff spends the fee once and keeps the hire when player state is r
   assert.deepEqual(restored.staff.jobPriorities.tavi_stock_clerk, [
     "clean", "register", "stock_shelves",
   ]);
-  assert.equal(restored.economy.credits, 1250);
+  assert.equal(restored.economy.credits, 1000);
 
   delete saved.playerState.employeeJobPriorities;
   restored = GameState.fromSave(saved, { items: ITEMS });

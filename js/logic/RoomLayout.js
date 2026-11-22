@@ -62,7 +62,7 @@ export const ZONES = [
     locked: true,
     backroom: true,
     floorTile: BACKROOM_FLOOR_TILE,
-    cost: 4000,
+    cost: 17500,
     requiredShopLevel: 22,
   },
   {
@@ -75,7 +75,7 @@ export const ZONES = [
     locked: true,
     backroom: true,
     floorTile: BACKROOM_FLOOR_TILE,
-    cost: 6000,
+    cost: 86000,
     requiredShopLevel: 37,
   },
   {
@@ -88,7 +88,7 @@ export const ZONES = [
     locked: true,
     backroom: true,
     floorTile: BACKROOM_FLOOR_TILE,
-    cost: 9000,
+    cost: 199500,
     requiredShopLevel: 46,
   },
   // The top center of the ShopA map: the store's front door and the backroom door are both in its back wall.
@@ -113,7 +113,7 @@ export const ZONES = [
     locked: true,
     salesFloor: true,
     floorTile: SHOP_FLOOR_TILE,
-    cost: 4000,
+    cost: 2700,
     requiredShopLevel: 6,
   },
   {
@@ -126,7 +126,7 @@ export const ZONES = [
     locked: true,
     salesFloor: true,
     floorTile: SHOP_FLOOR_TILE,
-    cost: 5000,
+    cost: 6400,
     requiredShopLevel: 13,
   },
   // Runs under the West expansion, the Sales Floor, and Expansion A.
@@ -140,7 +140,7 @@ export const ZONES = [
     locked: true,
     salesFloor: true,
     floorTile: SHOP_FLOOR_TILE,
-    cost: 7500,
+    cost: 53000,
     requiredShopLevel: 32,
   },
   {
@@ -153,7 +153,7 @@ export const ZONES = [
     locked: true,
     salesFloor: true,
     floorTile: SHOP_FLOOR_TILE,
-    cost: 10000,
+    cost: 135500,
     requiredShopLevel: 42,
   },
   {
@@ -166,7 +166,7 @@ export const ZONES = [
     locked: true,
     salesFloor: true,
     floorTile: SHOP_FLOOR_TILE,
-    cost: 12500,
+    cost: 232000,
     requiredShopLevel: 49,
   },
 ];

@@ -471,7 +471,7 @@ test("contract signing enforces each shop level without spending credits early",
   state.reputation.shopLevel = 6;
   state.reputation.global = -5;
   tablet.handleSignContract("lic_start_apparel");
-  assert.equal(state.economy.credits, 1425);
+  assert.equal(state.economy.credits, 400);
   assert.equal(state.catalog.owns("lic_start_apparel"), true);
   assert.deepEqual(state.economy.dayLedger.lines.map((line) => line.category), ["licenses"]);
 });

@@ -11,6 +11,17 @@ const database = new DatabaseManager();
 database.loadItemsJSON(JSON.parse(await readFile(new URL("../data/Items.json", import.meta.url), "utf8")));
 database.loadLicensesJSON(JSON.parse(await readFile(new URL("../data/Licenses.json", import.meta.url), "utf8")));
 
+const previousBaseCosts = JSON.parse(await readFile(
+  new URL("../js/state/migrations/moneyRebalancePreviousPrices.json", import.meta.url), "utf8"));
+
+// Saves from before the money rebalance hold market prices from the old item base costs.
+function olderSave(data, version) {
+  data.layoutVersion = version;
+  const oldItems = database.getAllItems().map((item) => ({ ...item, baseCost: previousBaseCosts[item.id] }));
+  data.market = { ...data.market, ...new Market(oldItems, () => 0.5).serialize() };
+  return data;
+}
+
 function snapshot() {
   return {
     playerState: {
@@ -85,14 +96,15 @@ test("hands-on shelves and empty carried or dropped crates survive save validati
   assert.throws(() => validateShopSave(data, database), /shelf stack does not fit/);
 });
 
-test("old pistol market prices are halved once without changing player selling prices", () => {
+test("old pistol market prices are halved once, then both prices follow the money rebalance", () => {
   const old = snapshot();
-  old.layoutVersion = 13;
+  olderSave(old, 13);
   old.market.prices.wpn_pis_02 = 55;
   old.playerState.storePrices.wpn_pis_02 = 70;
   const migrated = validateShopSave(old, database);
-  assert.equal(migrated.market.prices.wpn_pis_02, 27.5);
-  assert.equal(migrated.playerState.storePrices.wpn_pis_02, 70);
+  // Halved to 27.5, then the rebalance moves the base cost from 25 to 8.
+  assert.equal(migrated.market.prices.wpn_pis_02, 8.8);
+  assert.equal(migrated.playerState.storePrices.wpn_pis_02, 22.4);
   assert.equal(old.market.prices.wpn_pis_02, 55);
   assert.deepEqual(validateShopSave(migrated, database), migrated);
   const invalid = snapshot();
@@ -102,13 +114,13 @@ test("old pistol market prices are halved once without changing player selling p
 
 test("older saves keep access to heavy ammo they could already order", () => {
   const old = snapshot();
-  old.layoutVersion = 12;
+  olderSave(old, 12);
   old.playerState.activeLicenses = ["lic_start_ammo"];
   const migrated = validateShopSave(old, database);
   assert.ok(migrated.playerState.activeLicenses.includes("lic_edge_antique_ammo"));
 
   const oldWithoutAmmo = snapshot();
-  oldWithoutAmmo.layoutVersion = 12;
+  olderSave(oldWithoutAmmo, 12);
   oldWithoutAmmo.playerState.activeLicenses = ["lic_edge_antique"];
   assert.ok(!validateShopSave(oldWithoutAmmo, database).playerState.activeLicenses
     .includes("lic_edge_antique_ammo"));
@@ -411,7 +423,7 @@ test("saves from before employees existed still load", () => {
 
 test("older saves keep register-first staff on registers, and assignments must name placed registers and hired staff", () => {
   const data = snapshot();
-  data.layoutVersion = 14;
+  olderSave(data, 14);
   data.playerState.shopLevel = 7;
   data.playerState.hiredEmployees = ["sera_floor_assistant", "tavi_stock_clerk"];
   data.playerState.employeeJobPriorities = {
@@ -477,7 +489,7 @@ test("saves from before fixture types existed load with types filled in", () => 
 
 test("version 9 saves remove storage fixtures, refund purchases, and move stock into Go-Backs", () => {
   const data = snapshot();
-  data.layoutVersion = 9;
+  olderSave(data, 9);
   data.fixtures.push({
     id: "old-locker", type: "locker_single", gx: 3, gy: 101,
     stock: [{ itemId: "srv_01", quantity: 5 }],
@@ -510,7 +522,7 @@ test("version 9 saves remove storage fixtures, refund purchases, and move stock 
 
 test("saves from before the cleaning job add it last for each employee, at Level 1", () => {
   const data = snapshot();
-  data.layoutVersion = 11;
+  olderSave(data, 11);
   data.playerState.hiredEmployees = ["tavi_stock_clerk", "dax_stock_clerk"];
   data.playerState.employeeJobPriorities = {
     tavi_stock_clerk: ["stock_shelves", "register"],
@@ -604,7 +616,7 @@ test("fixture crates can be saved on the floor or carried", () => {
 
 test("older saves gain stable unique crate IDs and a future ID counter", () => {
   const data = snapshot();
-  data.layoutVersion = 10;
+  olderSave(data, 10);
   data.crates[0].stack = [{ itemId: "amo_01", quantity: 3 }];
   data.carriedCrates = [
     { kind: "item", itemId: "srv_01", quantity: 1 },
@@ -638,17 +650,17 @@ test("older saves gain stable unique crate IDs and a future ID counter", () => {
 
 test("crate ID migration does not repair malformed crate save fields", () => {
   const missingCrates = snapshot();
-  missingCrates.layoutVersion = 10;
+  olderSave(missingCrates, 10);
   delete missingCrates.crates;
   assert.throws(() => validateShopSave(missingCrates, database), /missing crates/);
 
   const invalidStack = snapshot();
-  invalidStack.layoutVersion = 10;
+  olderSave(invalidStack, 10);
   invalidStack.carriedCrates = null;
   assert.throws(() => validateShopSave(invalidStack, database), /invalid carried crate stack/);
 
   const invalidCounter = snapshot();
-  invalidCounter.layoutVersion = 10;
+  olderSave(invalidCounter, 10);
   invalidCounter.nextCrateId = null;
   assert.throws(() => validateShopSave(invalidCounter, database), /invalid next crate id/);
 });

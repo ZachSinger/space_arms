@@ -295,13 +295,13 @@ test("every credit change is itemized, so the receipt always matches the balance
   state.economy.spend(75, { category: "licenses", label: "Aulin Arms" });
   assert.equal(state.hireEmployee("tavi_stock_clerk"), true);
   state.economy.spend(50, { category: "wages", label: "Tavi" });
-  assert.equal(state.economy.credits, 1325);
+  assert.equal(state.economy.credits, 1075);
   assert.equal(balanceOf(state), state.economy.credits);
   assert.deepEqual(state.economy.dayLedger.lines.find((line) => line.category === "hiring"),
-    { category: "hiring", label: "Tavi", amount: -250, quantity: 1 });
+    { category: "hiring", label: "Tavi", amount: -500, quantity: 1 });
   assert.throws(() => state.economy.spend(10), /Invalid receipt entry/);
   assert.throws(() => state.economy.add(-5, { category: "sales", label: "x" }), /Money earned must be non-negative/);
-  assert.equal(state.economy.credits, 1325);
+  assert.equal(state.economy.credits, 1075);
 });
 
 test("training takes a paid shift, survives saves, and permanently raises wages", () => {
@@ -309,15 +309,15 @@ test("training takes a paid shift, survives saves, and permanently raises wages"
   unlockStaff(state);
   assert.equal(state.hireEmployee("tavi_stock_clerk"), true);
   assert.equal(state.trainEmployee("tavi_stock_clerk", "register"), true);
-  assert.equal(state.economy.credits, 1000);
-  assert.equal(balanceOf(state), 1000);
+  assert.equal(state.economy.credits, 500);
+  assert.equal(balanceOf(state), 500);
   assert.deepEqual(state.staff.training, { tavi_stock_clerk: "register" });
   assert.equal(state.staff.profile("tavi_stock_clerk").skillLevels.register, 1);
-  assert.equal(state.staff.profile("tavi_stock_clerk").wagePerShift, 50);
+  assert.equal(state.staff.profile("tavi_stock_clerk").wagePerShift, 100);
   assert.equal(state.trainEmployee("tavi_stock_clerk", "stock_shelves"), false);
   assert.equal(state.staff.setOnShift("tavi_stock_clerk", false), false);
   assert.deepEqual(state.economy.dayLedger.lines.find(({ category }) => category === "training"), {
-    category: "training", label: "Tavi: Run register Level 2", quantity: 1, amount: -250,
+    category: "training", label: "Tavi: Run register Level 2", quantity: 1, amount: -500,
   });
 
   const restored = reload(state);
@@ -326,9 +326,10 @@ test("training takes a paid shift, survives saves, and permanently raises wages"
   const trained = restored.staff.profile("tavi_stock_clerk");
   assert.equal(trained.skillLevels.register, 2);
   assert.equal(trained.skillLevels.stock_shelves, 1);
-  assert.equal(trained.wagePerShift, 55);
+  assert.equal(trained.wagePerShift, 110);
   assert.deepEqual(restored.staff.training, {});
   assert.equal(restored.staff.setOnShift("tavi_stock_clerk", false), true);
+  restored.economy.add(1000, { category: "sales", label: "Training test" });
   assert.equal(restored.trainEmployee("tavi_stock_clerk", "register"), true);
   assert.equal(state.staff.profile("tavi_stock_clerk").skillLevels.register, 1);
 });
@@ -352,9 +353,9 @@ test("each course costs more than that employee's last, whichever skill it train
     assert.equal(state.trainEmployee("tavi_stock_clerk", jobId), false);
     assert.equal(state.economy.credits, before);
   }
-  assert.deepEqual(costs, Array.from({ length: 8 }, (_, index) => 250 + 125 * index));
-  assert.equal(state.staff.profile("tavi_stock_clerk").wagePerShift, 90);
-  assert.equal(state.staff.profile("tavi_stock_clerk").hireCost, 250);
+  assert.deepEqual(costs, Array.from({ length: 8 }, (_, index) => 500 + 250 * index));
+  assert.equal(state.staff.profile("tavi_stock_clerk").wagePerShift, 180);
+  assert.equal(state.staff.profile("tavi_stock_clerk").hireCost, 500);
 });
 
 test("every employee starts identical, and Store Level caps how many are hired at once", () => {
@@ -364,7 +365,7 @@ test("every employee starts identical, and Store Level caps how many are hired a
   for (const employee of fresh) {
     assert.deepEqual(
       [employee.hireCost, employee.wagePerShift],
-      [250, 50],
+      [500, 100],
     );
   }
   assert.equal(state.hireEmployee("kel_supply_runner"), false);
@@ -435,19 +436,19 @@ test("cent-priced sales, spending and receipts survive ending the day and saving
   state.economy.add(2.34, { category: "sales", label: "Ration" });
   state.economy.spend(25, { category: "delivery_fees", label: "Delivery fee" });
   assert.equal(state.hireEmployee("tavi_stock_clerk"), true);
-  assert.equal(state.economy.credits, 1228.57);
+  assert.equal(state.economy.credits, 978.57);
   assert.equal(state.economy.dayLedger.lines[0].amount, 3.57);
   state.finishShift({ customersServed: 2, customersTurnedAway: 0 });
   state.endDay();
   const restored = reload(state);
-  assert.equal(restored.economy.credits, 1228.57);
+  assert.equal(restored.economy.credits, 978.57);
   const closedReceipt = restored.economy.dayReceipts.at(-1);
-  assert.equal(closedReceipt.closingCredits, 1228.57);
+  assert.equal(closedReceipt.closingCredits, 978.57);
   assert.equal(isValidLedgerData(closedReceipt, { closed: true }), true);
   assert.equal(summarizeReceipt(closedReceipt, restored.economy.credits, 2).totalEarned, 3.57);
   assert.match(FinancesRenderer.generateHTML({
     ...financesView(), today: summarizeReceipt(closedReceipt, restored.economy.credits, 2),
-  }), /1,228\.57/);
+  }), /978\.57/);
 });
 
 test("ending a day closes the receipt and starts the next day from the closing balance", () => {
