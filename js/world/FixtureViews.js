@@ -10,7 +10,10 @@ import { ShelfAttentionHighlight } from "../logic/ShelfAttentionHighlight.js";
 import { ShelfFacingLight } from "../logic/ShelfFacingLight.js";
 import { ShelfItemDisplay } from "../logic/ShelfItemDisplay.js";
 import { getFixtureTexture, hasFacingTextures } from "../logic/FixtureTexture.js";
-import { fixtureArtInset, fixtureFootprint, fixtureRotation, getFixtureType } from "../logic/FixtureLayout.js";
+import {
+  fixtureArtInset, fixtureBounds, fixtureFootprint, fixtureRotation, getFixtureType,
+} from "../logic/FixtureLayout.js";
+import { FIXTURE_LIGHT_DEPTH_OFFSET, FIXTURE_STOCK_DEPTH_OFFSET, fixtureDepth } from "./Depth.js";
 import { TILE_SIZE } from "../logic/RoomLayout.js";
 import { isWorldMouseBinding } from "../input/KeyBindings.js";
 
@@ -37,6 +40,7 @@ export class FixtureViews {
       if (spec.artLayout === "budget") fixture.facingLight = new ShelfFacingLight(this.shop, fixture);
       fixture.stockItemsDisplay = new ShelfItemDisplay(this.shop, fixture, (itemId) => database.getItem(itemId));
       fixture.stockDisplay.sync();
+      this.layerDisplays(fixture);
     }
     this.shown.add(fixture);
     return fixture;
@@ -87,6 +91,15 @@ export class FixtureViews {
     body.halfHeight = height / 2;
     body.center.set(centerX, centerY);
     body.world.staticTree.insert(body);
+    sprite.setDepth(fixtureDepth(fixtureBounds(fixture).bottom * TILE_SIZE));
+    this.layerDisplays(fixture);
+  }
+
+  // A shelf's stock and facing light draw just over their own shelf, under any shelf in front.
+  layerDisplays(fixture) {
+    const depth = fixture.sprite.depth;
+    fixture.stockItemsDisplay?.container?.setDepth(depth + FIXTURE_STOCK_DEPTH_OFFSET);
+    fixture.facingLight?.graphics?.setDepth(depth + FIXTURE_LIGHT_DEPTH_OFFSET);
   }
 
   // Moves a shelf's stock display and highlight along with it.
@@ -112,7 +125,6 @@ export class FixtureViews {
     const width = fixture.gridDimensions.w * TILE_SIZE;
     const height = fixture.gridDimensions.h * TILE_SIZE;
     const image = scene.add.image(fixture.x, fixture.y, textureKey).setDisplaySize(width, height);
-    image.setDepth(2);
     scene.obstacleGroup.add(image); // solid -- customers walk up to it, not through it
     fixture.sprite = image;
     image.setInteractive({ useHandCursor: true });
@@ -132,7 +144,6 @@ export class FixtureViews {
     const sprite = scene.add
       .image(fixture.x, fixture.y, getFixtureType(fixture.type).texture)
       .setDisplaySize(fixture.gridDimensions.w * TILE_SIZE, fixture.gridDimensions.h * TILE_SIZE)
-      .setDepth(2)
       .setInteractive({ useHandCursor: true });
     sprite.on("pointerdown", (pointer) => {
       if (pointer.event?.target === scene.game.canvas && !isWorldMouseBinding(pointer.event)) {

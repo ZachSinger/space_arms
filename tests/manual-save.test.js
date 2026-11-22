@@ -1115,7 +1115,8 @@ test("all placeable fixture physics bodies use the same art-trimmed bounds as pl
   const sprite = { displayWidth: 0, displayHeight: 0, body,
     setTexture() { return this; },
     setDisplaySize(width, height) { this.displayWidth = width; this.displayHeight = height; return this; },
-    setPosition() { return this; }, setAngle(angle) { this.angle = angle; return this; } };
+    setPosition() { return this; }, setAngle(angle) { this.angle = angle; return this; },
+    setDepth(depth) { this.depth = depth; return this; } };
   for (const type of Object.keys(FIXTURE_TYPES)) {
     for (let rotation = 0; rotation < 4; rotation++) {
       const fixture = { type, x: 832, y: 192, rotation, sprite };
@@ -1192,6 +1193,7 @@ test("the budget shelf art fills its footprint in every direction; only the visi
     setDisplaySize(width, height) { this.displayWidth = width; this.displayHeight = height; return this; },
     setPosition() { return this; },
     setAngle(angle) { this.angle = angle; return this; },
+    setDepth(depth) { this.depth = depth; return this; },
   };
   for (let rotation = 0; rotation < 4; rotation++) {
     views.orient({ type: "shelf_budget_2x2", x: 100, y: 200, rotation, sprite });
