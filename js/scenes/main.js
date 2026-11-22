@@ -24,6 +24,7 @@ import { ShelfLabScene } from "./shelfLab.js";
 import { CrateLabScene } from "./crateLab.js";
 import { watchKeyboardAndMouse } from "../input/InputDevice.js";
 import { installGameCursor } from "../logic/GameCursor.js";
+import { ErrorReportPrompt } from "../debug/ErrorReportPrompt.js";
 import {
   DESIGN_HEIGHT,
   DESIGN_WIDTH,
@@ -34,6 +35,9 @@ import {
 
 // Touching the keyboard or mouse switches on-screen prompts back from controller buttons.
 watchKeyboardAndMouse();
+const errorReportPrompt = new ErrorReportPrompt(window);
+window.__earlyErrorCapture?.();
+window.addEventListener("beforeunload", () => errorReportPrompt.destroy(), { once: true });
 const removeGameCursor = installGameCursor();
 window.addEventListener("beforeunload", removeGameCursor, { once: true });
 

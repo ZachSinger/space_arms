@@ -36,6 +36,7 @@ test("native display choices work across modes and Windows display scaling", asy
       static fromWebContents(value) { return value === sender ? window : null; }
       constructor() {
         window = this;
+        this.webContents = { on() {} };
         this.content = [display.size.width, display.size.height];
         this.fullscreen = true;
         this.kiosk = false;

@@ -90,6 +90,46 @@
         <div id="holding-cards" class="holding-cards hidden"></div>
       </div>
     </div>
+    <dialog id="runtime-error-dialog" class="runtime-error-dialog" aria-labelledby="runtime-error-heading">
+      <div class="runtime-error-form">
+        <h2 id="runtime-error-heading">Something went wrong</h2>
+        <p>The game recorded an error. You can send a report to help us find the cause. Nothing is sent unless you choose Send Report.</p>
+        <label for="runtime-error-title">Report title</label>
+        <input data-runtime-error-title id="runtime-error-title" type="text" maxlength="200">
+        <label for="runtime-error-message">What happened?</label>
+        <textarea data-runtime-error-message id="runtime-error-message" maxlength="4000" rows="7"></textarea>
+        <p data-runtime-error-status class="runtime-error-status" role="status" aria-live="polite"></p>
+        <div class="runtime-error-actions">
+          <button data-runtime-error-dismiss class="action-btn" type="button">Not now</button>
+          <button data-runtime-error-send class="action-btn" type="button">Send Report</button>
+        </div>
+      </div>
+    </dialog>
+    <script>
+      window.__earlyErrorCapture = (() => {
+        const save = (type, error) => {
+          if (!window.desktopApi?.recordRuntimeError) return;
+          const record = {
+            type,
+            message: error?.message ?? String(error ?? "Unknown error"),
+            filename: error?.filename,
+            line: error?.lineno,
+            column: error?.colno,
+            stack: error?.error?.stack ?? error?.reason?.stack,
+          };
+          Promise.resolve().then(() => window.desktopApi.recordRuntimeError(record))
+            .catch((saveError) => console.error("Could not save startup error:", saveError));
+        };
+        const handleError = (event) => save("renderer-error", event);
+        const handleRejection = (event) => save("unhandled-rejection", event);
+        window.addEventListener("error", handleError, true);
+        window.addEventListener("unhandledrejection", handleRejection);
+        return () => {
+          window.removeEventListener("error", handleError, true);
+          window.removeEventListener("unhandledrejection", handleRejection);
+        };
+      })();
+    </script>
     <script type="module" src="/js/scenes/main.js"></script>
   </body>
 </html>

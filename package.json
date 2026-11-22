@@ -27,6 +27,7 @@
       "main.js",
       "preload.cjs",
       "js/logic/BugReport.js",
+      "js/logic/PendingErrors.js",
       "package.json",
       "dist/**/*"
     ],

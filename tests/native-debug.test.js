@@ -8,7 +8,7 @@ import { setImmediate } from "node:timers/promises";
 import { createServer } from "vite";
 import { runInNewContext } from "node:vm";
 
-test("preload exposes only the fixed debug capture and folder IPC commands", async () => {
+test("preload routes runtime error and debug calls through fixed IPC commands", async () => {
   let api;
   const calls = [];
   runInNewContext(await readFile(new URL("../preload.cjs", import.meta.url), "utf8"), {
@@ -18,9 +18,20 @@ test("preload exposes only the fixed debug capture and folder IPC commands", asy
     }),
   });
   const snapshot = { formatVersion: 1 };
+  const runtimeError = { type: "renderer-error", message: "Broken" };
+  const errorIds = ["error-1"];
+  api.recordRuntimeError(runtimeError);
+  api.getPendingRuntimeErrors();
+  api.clearPendingRuntimeErrors(errorIds);
   api.captureDebugInfo(snapshot);
   api.openDebugFolder();
-  assert.deepEqual(calls, [["debug:capture", snapshot], ["debug:open-folder"]]);
+  assert.deepEqual(calls, [
+    ["runtime-error:record", runtimeError],
+    ["runtime-error:list"],
+    ["runtime-error:clear", errorIds],
+    ["debug:capture", snapshot],
+    ["debug:open-folder"],
+  ]);
 });
 
 test("native debug captures keep numbered screenshot/report pairs and wait for writes on close", async (context) => {
@@ -33,12 +44,13 @@ test("native debug captures keep numbered screenshot/report pairs and wait for w
   let window;
   let openedPath;
   let openError = "";
+  let quitCalls = 0;
   let server;
   const errors = context.mock.method(console, "error", () => {});
   globalThis.__nativeDebugTest = {
     app: {
       getPath: () => directory, setPath() {}, getVersion: () => "1.0.0",
-      whenReady: () => Promise.resolve(), on() {},
+      whenReady: () => Promise.resolve(), on() {}, quit() { quitCalls += 1; },
     },
     protocol: { registerSchemesAsPrivileged() {}, handle() {} },
     net: {},
@@ -49,6 +61,10 @@ test("native debug captures keep numbered screenshot/report pairs and wait for w
       static fromWebContents(value) { return value === sender ? window : null; }
       constructor() {
         window = this;
+        this.webContents = {
+          handlers: new Map(),
+          on(name, handler) { this.handlers.set(name, handler); },
+        };
         this.handlers = new Map();
         this.destroyed = false;
         this.enabled = true;
@@ -100,6 +116,16 @@ test("native debug captures keep numbered screenshot/report pairs and wait for w
     assert.equal(await readFile(join(directory, "savegame.json"), "utf8"), "leave this save alone");
     assert.equal(await open(), true);
     assert.equal(openedPath, first.directory);
+    const handleRendererGone = window.webContents.handlers.get("render-process-gone");
+    handleRendererGone({}, { reason: "clean-exit", exitCode: 0 });
+    assert.equal(quitCalls, 0);
+    handleRendererGone({}, {
+      reason: "crashed", exitCode: 1,
+    });
+    assert.equal(quitCalls, 1);
+    const pendingErrors = JSON.parse(await readFile(join(directory, "pending-errors.json"), "utf8"));
+    assert.equal(pendingErrors[0].type, "renderer-process-gone");
+    assert.match(pendingErrors[0].message, /stopped unexpectedly/);
     openError = "OS refused";
     await assert.rejects(open(), /OS refused/);
 

@@ -10,6 +10,7 @@ import { fileURLToPath, pathToFileURL } from "url";
 import fs from "fs/promises";
 import os from "os";
 import { sendBugReport, validateBugReport } from "./js/logic/BugReport.js";
+import { PendingErrorStore } from "./js/logic/PendingErrors.js";
 
 // ES modules have no __dirname.
 const __filename = fileURLToPath(import.meta.url);
@@ -22,6 +23,24 @@ const DIST_DIRECTORY = path.join(__dirname, "dist");
 
 // Pin the save folder so it doesn't move with the packaged app's display name.
 app.setPath("userData", path.join(app.getPath("appData"), "space-arms-dealer"));
+const pendingErrors = new PendingErrorStore(path.join(app.getPath("userData"), "pending-errors.json"));
+
+function recordProcessError(type, error, extra = {}) {
+  try {
+    pendingErrors.append({
+      type,
+      message: error?.message ?? String(error),
+      stack: error?.stack,
+      ...extra,
+    });
+  } catch (saveError) {
+    console.error("Could not save process error:", saveError);
+  }
+}
+
+process.on("uncaughtExceptionMonitor", (error, origin) => {
+  recordProcessError("main-process-error", error, { reason: origin });
+});
 
 // A standard, secure scheme behaves like a website for relative paths, fetch, and storage.
 protocol.registerSchemesAsPrivileged([
@@ -143,6 +162,13 @@ const createWindow = () => {
 
   displayModes.set(win, "fullscreen");
   win.setMenuBarVisibility(false);
+  win.webContents.on("render-process-gone", (_event, details) => {
+    if (details.reason === "clean-exit") return;
+    recordProcessError("renderer-process-gone", new Error(
+      `The game window stopped unexpectedly (${details.reason}).`,
+    ), { exitCode: details.exitCode, reason: details.reason });
+    app.quit();
+  });
   win.on("close", (event) => {
     if (pendingFileWrites.size === 0) return;
     event.preventDefault();
@@ -206,6 +232,10 @@ ipcMain.handle("bug-report:send", async (event, report) => {
     },
   });
 });
+
+ipcMain.handle("runtime-error:record", (_event, error) => pendingErrors.append(error));
+ipcMain.handle("runtime-error:list", () => pendingErrors.read());
+ipcMain.handle("runtime-error:clear", (_event, ids) => pendingErrors.clear(ids).length);
 
 ipcMain.handle("display:set-resolution", (event, resolution) => {
   const win = BrowserWindow.fromWebContents(event.sender);
@@ -282,6 +312,7 @@ app.whenReady().then(async () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 }).catch((error) => {
+  recordProcessError("startup-error", error);
   console.error("Could not start the game:", error);
   app.quit();
 });

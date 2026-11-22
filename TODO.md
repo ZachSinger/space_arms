@@ -225,7 +225,7 @@ notice something that needs doing but isn't being done right now.
       Nothing is uploaded until the player presses Send Report; failed reports keep their text.
 - [x] Expand bug-report game info: employees, settings and controls, controller type, computer
       details, recent button presses, error history, and the save file.
-- [ ] Error handling: catch errors and crashes anywhere in the game, record them, and send them
+- [x] Error handling: catch errors and crashes anywhere in the game, record them, and send them
       with reports. When something goes wrong, offer the player a pre-filled bug report if the
       game can still show it; if it can't, offer one the next time the game starts.
 - [ ] Explore adding Steam achievements.

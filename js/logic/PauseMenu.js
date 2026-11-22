@@ -235,6 +235,15 @@ export class PauseMenu {
       } catch (error) {
         saveCaptureError = error.message;
       }
+      let pendingErrors = [];
+      let pendingErrorCaptureError = null;
+      if (window.desktopApi?.getPendingRuntimeErrors) {
+        try {
+          pendingErrors = await window.desktopApi.getPendingRuntimeErrors();
+        } catch (error) {
+          pendingErrorCaptureError = error.message;
+        }
+      }
       const controllers = [...(window.navigator.getGamepads?.() ?? [])]
         .filter((pad) => pad && pad.connected !== false)
         .map((pad) => ({
@@ -252,6 +261,8 @@ export class PauseMenu {
         window,
         {
           recentErrors: this.shop.diagnostics?.errors ?? [],
+          pendingErrors,
+          pendingErrorCaptureError,
           recentInputs: this.shop.diagnostics?.inputs ?? [],
           sessionDurationMs: this.shop.diagnostics
             ? Date.now() - this.shop.diagnostics.startedAt : null,
@@ -272,6 +283,18 @@ export class PauseMenu {
       if (window.desktopApi?.sendBugReport) await window.desktopApi.sendBugReport(report);
       else await sendBugReport(report);
       this.bugReportStatus.textContent = "Report sent. Thank you!";
+      const pendingErrorIds = pendingErrors.map((error) => error.id).filter(Boolean);
+      if (pendingErrorIds.length && window.desktopApi?.clearPendingRuntimeErrors) {
+        try {
+          await window.desktopApi.clearPendingRuntimeErrors(pendingErrorIds);
+          window.dispatchEvent(new CustomEvent("runtime-errors-reported", {
+            detail: pendingErrorIds,
+          }));
+        } catch (error) {
+          console.error("Report sent, but saved errors could not be cleared:", error);
+          this.bugReportStatus.textContent = "Report sent. Saved errors may be offered again next time.";
+        }
+      }
       this.bugReportTitle.value = "";
       this.bugReportDescription.value = "";
     } catch (error) {

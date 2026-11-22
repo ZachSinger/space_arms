@@ -37,6 +37,31 @@
 .bug-report-form textarea { min-height: 120px; }
 .bug-report-status { min-height: 1.2em; }
 .bug-report-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.runtime-error-dialog {
+  width: min(500px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  padding: 20px;
+  color: var(--color-text);
+  background: var(--color-panel);
+  border: 1px solid var(--color-border-subtle);
+}
+.runtime-error-dialog::backdrop { background: #020617c9; }
+.runtime-error-form { display: flex; flex-direction: column; gap: 10px; }
+.runtime-error-form h2 { margin: 0; font-size: var(--font-size-18); }
+.runtime-error-form p { margin: 0; color: var(--color-text-muted); font-size: var(--font-size-14); }
+.runtime-error-form label { font-weight: bold; }
+.runtime-error-form input,
+.runtime-error-form textarea {
+  resize: vertical;
+  padding: 8px;
+  color: var(--color-text);
+  background: #0f172a;
+  border: 1px solid var(--color-border-subtle);
+  font: inherit;
+}
+.runtime-error-form textarea { min-height: 120px; }
+.runtime-error-status { min-height: 1.2em; }
+.runtime-error-actions { display: flex; justify-content: flex-end; gap: 10px; }
 .game-paused :not(#pause-menu):not(#pause-confirmation) {
   animation-play-state: paused !important;
 }
