@@ -5,6 +5,9 @@ completed or no longer relevant.
 
 ## Current shop
 
+- [ ] Build [Drone Deliveries](documentation/Modules/DroneDeliveries.md) next: remote orders packed
+      into special mixed-item crates and shipped from a terminal pad. Confirm the proposed first
+      version at the end of that file with Zach before building.
 - [ ] Check the first-pass money balance during real shifts: whether each contract and expansion
       takes a sensible amount of saving, and whether fixtures, wages, and delivery fees still matter
       later on. Run `node scripts/balance-audit.mjs` for the modeled numbers.
@@ -48,8 +51,6 @@ completed or no longer relevant.
 - [ ] Add more ways to customize the shop, including tinting.
 - [ ] Add a [Shooting Range](documentation/modules/ShootingRange.md) with paid customer
       lanes, firearm tuning, and stairs down to the range.
-- [ ] Add [Drone Deliveries](documentation/modules/DroneDeliveries.md): remote orders packed
-      into special mixed-item crates and shipped from a terminal pad.
 - [ ] Add the new [Hovercart](documentation/modules/Hovercart.md) at Shop Level 7: a
       chargeable cart that follows the player and carries stacks of crates.
 - [ ] Add [Presentation Level](documentation/modules/Presentation.md): customers expect
