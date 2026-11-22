@@ -1,7 +1,8 @@
 import { roundMoney } from "./Money.js";
 
 export const REMOTE_ORDER_TUNING = Object.freeze({
-  chancePerCustomer: 0.06,
+  // Remote orders come from people outside the store, so they roll on the shift clock.
+  chancePerShiftHour: 0.1,
   minProductTypes: 2,
   maxProductTypes: 4,
   minUnitsPerProduct: 3,

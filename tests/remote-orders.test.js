@@ -157,6 +157,30 @@ function createDeliveryFixture({ day = 1, contents = [["wpn_rif_01", 2]] } = {})
   return { system, shop, order, crate, state, returned, changes, crates, messages };
 }
 
+test("remote orders roll once per shift hour, without any customers, only while no order is open", () => {
+  const system = Object.create(DroneDeliverySystem.prototype);
+  let received = 0;
+  const clock = { started: true, elapsedHours: 0 };
+  Object.assign(system, {
+    shop: { shiftClock: clock },
+    orderState: { activeOrder: null },
+    hoursRolled: 0,
+    receiveOrder() { received += 1; },
+  });
+  clock.elapsedHours = 0.99;
+  system.updateOrderArrivals();
+  assert.equal(system.hoursRolled, 0);
+  clock.elapsedHours = 200;
+  system.updateOrderArrivals();
+  assert.equal(system.hoursRolled, 200);
+  assert.ok(received > 0 && received < 60);
+  received = 0;
+  system.orderState.activeOrder = { id: 1 };
+  clock.elapsedHours = 400;
+  system.updateOrderArrivals();
+  assert.equal(received, 0);
+});
+
 test("remote orders contain multiple licensed products and pay 30% above market value", () => {
   const items = [
     { id: "one", license: "weapons" },

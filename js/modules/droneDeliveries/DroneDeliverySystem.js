@@ -73,7 +73,7 @@ export class DroneDeliverySystem {
     this.shop = shop;
     this.orderState = shop.gameState.droneDeliveries;
     this.itemsById = new Map(shop.gameState.items.map((item) => [item.id, item]));
-    this.arrivalCursor = 0;
+    this.hoursRolled = 0;
     this.pendingShipId = null;
     this.pendingShipMs = 0;
     this.visuals = [];
@@ -87,7 +87,7 @@ export class DroneDeliverySystem {
     this.buildWindow();
     this.tracker = new OrderTracker();
     this.unsubscribeShiftStarted = shop.eventBus.on(GAME_EVENTS.SHIFT_STARTED, () => {
-      this.arrivalCursor = 0;
+      this.hoursRolled = 0;
     });
   }
 
@@ -452,13 +452,15 @@ export class DroneDeliverySystem {
     return true;
   }
 
+  // One roll per shift hour passed, independent of who is in the store.
   updateOrderArrivals() {
-    const { shiftClock, customerFlow } = this.shop;
+    const { shiftClock } = this.shop;
     if (!shiftClock.started) return;
-    while (this.arrivalCursor < customerFlow.nextArrival) {
-      this.arrivalCursor += 1;
+    const hoursPassed = Math.floor(shiftClock.elapsedHours);
+    while (this.hoursRolled < hoursPassed) {
+      this.hoursRolled += 1;
       if (this.orderState.activeOrder) continue;
-      if (gameRandom() < REMOTE_ORDER_TUNING.chancePerCustomer) this.receiveOrder();
+      if (gameRandom() < REMOTE_ORDER_TUNING.chancePerShiftHour) this.receiveOrder();
     }
   }
 

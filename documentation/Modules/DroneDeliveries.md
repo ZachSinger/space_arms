@@ -33,8 +33,8 @@ The Drone Terminal lets you fill orders from remote customers from the start of 
 ## Confirmed by Zach
 - Remote orders are available from the start of the game, not a later unlock.
 - The shop has one drone, so only one remote order can be open at a time.
-- Orders come in by chance, much like how customers are generated, except factions don't matter.
-  An order can arrive at any time.
+- Orders come in by chance on the shift clock, from people who are not in the store. An order
+  can arrive at any time during a shift.
 - Remote orders are generally larger than most customer orders.
 - The Drone Terminal and its pad are already placed in the top-right corner of the starting
   backroom, against the back wall. This keeps remote-order work off the sales floor while keeping
@@ -59,8 +59,9 @@ crate holds every item the order needs (requested by Zach).
 The following values are implementation picks to make the feature playable, not agreed design.
 They should be reviewed against the game's balance before they are treated as final:
 
-- Each scheduled customer arrival is a 6% chance for a remote order. Customer factions do not
-  affect the order.
+- Remote orders come from people outside the store, so customers walking in have nothing to do
+  with them. Each in-game hour of an open shift is a 10% chance for a remote order (about 72%
+  for at least one over a 12-hour shift) while no order is already open.
 - Orders contain 2–4 product types, with 3–8 of each. Products are limited to items covered by
   the shop's current supplier licenses.
 - Shipping pays the order's market value plus 30%.
