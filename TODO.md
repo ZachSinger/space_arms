@@ -5,11 +5,6 @@ completed or no longer relevant.
 
 ## Current shop
 
-- [ ] Improve the new-game check: run at least three shifts without debug shortcuts, stock
-      a mix of available products, and compare sales with stock and delivery costs. Check
-      that customers can be served through closing and that saving and Continue work
-      between shifts. Continue until an employee can be hired and paid, so wages are
-      included too.
 - [ ] Check shop-level progression and customer traffic as reputation and stock change
       across normal shifts; adjust level thresholds and customer counts if needed. The
       intended starting pace is one level per fully served, penalty-free shift for the
