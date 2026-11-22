@@ -85,8 +85,8 @@ export class DeliveryCrateLabScene extends Phaser.Scene {
     if (!this.anims.exists(SCREEN_ANIMATION_KEY)) {
       this.anims.create({
         key: SCREEN_ANIMATION_KEY,
-        frames: this.anims.generateFrameNumbers(DRONE_TERMINAL_SCREEN_SPRITE.key, { start: 0, end: 7 }),
-        frameRate: 8,
+        frames: this.anims.generateFrameNumbers(DRONE_TERMINAL_SCREEN_SPRITE.key),
+        frameRate: 10,
         repeat: -1,
       });
     }

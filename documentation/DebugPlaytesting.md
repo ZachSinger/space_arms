@@ -72,8 +72,10 @@ and crate change; the raised crate can overlap the back of the pad but is clippe
 The original empty-platform sheet remains in `img/Generated/fixture_drone_terminal_sheet.png`.
 Both sheets use the same cleaned, dark outline without the original white-background halo.
 The terminal screen is a separate overlay in `img/Generated/fixture_drone_terminal_screen_sheet.png`
-(8 pictures, 16×15 each). It covers the screen at offset (10, 11) from the terminal picture's top-left
-and loops at 8 pictures per second, independently of the mechanical stages and their speed controls.
+(120 pictures, 16×15 each). Its readout lines scroll up one pixel per picture and wrap without a
+seam, so the scroll reads as endless. It covers the screen at offset (10, 11) from the terminal
+picture's top-left and plays at 10 pictures per second, independently of the mechanical stages and
+their speed controls.
 
 ## Capturing a session
 
