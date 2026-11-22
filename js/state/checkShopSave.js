@@ -13,6 +13,7 @@ import { isMoney, roundMoney } from "../logic/Money.js";
 import { isKnownShopLevel } from "../logic/ShopProgression.js";
 import { CUSTOMER_FACTION_IDS } from "../logic/CustomerBuyLists.js";
 import { isValidTrashList } from "../modules/cleaning/Litter.js";
+import { DIRT_KINDS } from "../modules/cleaning/CleaningArt.js";
 import { integer, isRecord, requireSave } from "./saveHelpers.js";
 import { SHOP_LAYOUT_VERSION } from "./migrations/index.js";
 
@@ -292,6 +293,13 @@ export function checkShopSave(data, database) {
   if (data.trash !== undefined) {
     requireSave(isValidTrashList(data.trash, { width: gridW * TILE_SIZE, height: gridH * TILE_SIZE }),
       "invalid trash on the floor.");
+  }
+  if (data.dirt !== undefined) {
+    requireSave(Array.isArray(data.dirt) && data.dirt.every((mark) => isRecord(mark) &&
+      DIRT_KINDS.includes(mark.kind) && Number.isFinite(mark.x) && mark.x >= 0 && mark.x <= gridW * TILE_SIZE &&
+      Number.isFinite(mark.y) && mark.y >= 0 && mark.y <= gridH * TILE_SIZE &&
+      Number.isFinite(mark.progress) && mark.progress >= 0 && mark.progress < 1),
+    "invalid dirt on the floor.");
   }
   return data;
 }

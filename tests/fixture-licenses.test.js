@@ -246,13 +246,15 @@ test("each fixture type is unlocked by its configured license", () => {
   }
 });
 
-test("the budget shelf has 2x2 slots, is a starter shelf, and is the cheapest fixture besides the trashcan", () => {
+test("the budget shelf has 2x2 slots, is a starter shelf, and costs less than other shelves and registers", () => {
   const budget = FIXTURE_TYPES.shelf_budget_2x2;
   assert.equal(budget.kind, "shelf");
   assert.deepEqual(getShelfDisplayGrid(budget), { w: 2, h: 2 });
   assert.equal(budget.licenseId, "lic_fixture_basics");
   for (const spec of Object.values(FIXTURE_TYPES)) {
-    if (spec !== budget && spec.kind !== "trash") assert.ok(budget.price < spec.price, `${spec.id} costs more`);
+    if (spec !== budget && ["shelf", "register"].includes(spec.kind)) {
+      assert.ok(budget.price < spec.price, `${spec.id} costs more`);
+    }
   }
 });
 

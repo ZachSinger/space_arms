@@ -39,6 +39,25 @@ function snapshot() {
   };
 }
 
+test("dirt styles and partial mopping survive saves; malformed dirt is rejected", () => {
+  const saved = snapshot();
+  saved.dirt = [
+    { kind: "smudge", x: 980, y: 270, progress: 0.25 },
+    { kind: "footprints", x: 1020, y: 290, progress: 0 },
+    { kind: "scuff", x: 1060, y: 280, progress: 0.5 },
+  ];
+  saved.fixtures.push({ id: "mop_bucket_01", type: "mop_bucket", gx: 19, gy: 3 });
+  assert.deepEqual(validateShopSave(saved, database), saved);
+  for (const invalid of [
+    { kind: "unknown" }, { x: -1 }, { y: Infinity }, { progress: -0.01 }, { progress: 1 },
+  ]) {
+    const broken = structuredClone(saved);
+    Object.assign(broken.dirt[0], invalid);
+    assert.throws(() => validateShopSave(broken, database), /invalid dirt/);
+  }
+  const old = snapshot();
+  assert.equal(validateShopSave(old, database).dirt, undefined, "older clean-floor saves still load");
+});
 test("hands-on shelves and empty carried or dropped crates survive save validation", () => {
   const data = snapshot();
   const shelf = {

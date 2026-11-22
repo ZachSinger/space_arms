@@ -61,6 +61,19 @@
     "integer": true,
     "description": "Earliest and latest walking time before a customer drops trash."
   },
+  "dirtDropChance": {
+    "value": 0.15,
+    "min": 0,
+    "max": 1,
+    "description": "Initial chance a customer leaves one dirt mark during their visit."
+  },
+  "mopPressesPerSpot": {
+    "value": 8,
+    "min": 1,
+    "max": 50,
+    "integer": true,
+    "description": "Fresh button presses needed to completely mop one dirt mark."
+  },
   "upsetReputationLoss": {
     "value": 1,
     "min": 0,

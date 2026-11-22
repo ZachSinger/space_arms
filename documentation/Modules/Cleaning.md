@@ -39,7 +39,7 @@ These answer the open questions in the design above.
 ### Build order
 1. **Slice 1 (built):** trash only. Customers drop trash, you pick it up and throw it in a
    trashcan, the store has a cleanliness level shown in the top bar, and customers judge it.
-2. **Slice 2 (next):** dirt marks and the mop.
+2. **Slice 2 (built):** dirt marks, Mop Bucket, and player mopping.
 3. **Employees who clean (built):** see below.
 
 ### Employees who clean
@@ -100,11 +100,37 @@ for being bigger. Each customer rolls two numbers when they arrive:
 - You can't pick up crates while holding trash.
 - If a fixture is placed on top of trash, the trash is pushed to the nearest open floor.
 
-### The mop (slice 2 plan)
+### Dirt and the mop
 - A cheap 1x1 **Mop Bucket** fixture, from the Basic Fixture Supply contract. You place it
   like a trashcan.
 - Face it with empty hands and press E to take the mop. Press E at the bucket again to put
   it back.
 - While holding the mop you can't carry crates or trash.
+- You also cannot use shelves or work the register while holding it.
 - No wheeling the bucket around: it would add walking without adding a real choice. Where you
   place the bucket is the choice.
+- New dirt marks randomly choose one of the three approved appearances: dark smudges,
+  footprints, or scuffs. Their appearance never changes when saving or loading.
+- The bucket and mop use the first mockup's yellow bucket and cotton mop; the progress
+  indicator uses its small horizontal blue bar.
+- Stand still, face the mark, and repeatedly press the current interaction button.
+  Held keys and repeated keydown events do not count as new presses.
+- The character's arms and mop sweep back and forth in all four facing directions.
+  Faster fresh presses shorten the sweep; the animation settles when pressing stops.
+  The renderer supports every employee's four-direction artwork, but employee mopping
+  jobs are deferred until the player appearance is approved.
+- Dirt costs 2 cleanliness points until the mark is fully cleaned. Partial progress,
+  position, and appearance persist overnight and through save/Continue. Loading returns
+  the held mop to its bucket. The additive dirt save field is optional for older saves.
+- Holding H highlights dirt as well as trash. Placing fixtures over dirt moves it to the
+  nearest open floor, preserving unfinished cleaning.
+- Starting values chosen during implementation, not balance targets: a 15% independent
+  chance of one dirt mark per customer, 1–6 seconds into walking; 8 fresh presses per
+  mark; bucket price 40. Dirt chance and press count live in `data/tuning/cleaning.json`;
+  bucket price lives in `data/Fixtures.json`.
+
+### Verification
+`node scripts/browser/mopping.mjs` checks buying and placing the bucket, real keyboard
+presses, all four directions, different pressing speeds, carry restrictions, save/Continue,
+and the shared renderer with every employee uniform. `node scripts/browser/check-optional-cleaning.mjs`
+also checks preserved dirt and bucket behavior when the module is disabled.

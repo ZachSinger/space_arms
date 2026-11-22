@@ -111,7 +111,7 @@ function storeTopic({ shopLevel, reputation }) {
         <strong>Layout</strong> tab. Each one needs a certain Store Level, costs money, and
         must be bought in order, between shifts.</p>`),
     section("Placing Fixtures", `
-      <p>Fixtures are your shelves, register, and trashcan.</p>
+      <p>Fixtures are your shelves, register, trashcan, and mop bucket.</p>
       ${list([
         "Buy one in the <strong>Fixtures</strong> tab. It arrives as a crate on the Loading Pad.",
         `Pick up the crate with ${key("crate")}, carry it to where you want it, and press ${key("interact")}.`,
@@ -130,6 +130,23 @@ function storeTopic({ shopLevel, reputation }) {
         <strong>MOVE</strong> in the Fixtures tab. Its contents move with it.</p>
       <p>An empty fixture can be packed back into a crate, or sold for half of what it cost.
         Your shop always keeps at least one register.</p>`),
+    section("Cleaning", `
+      <p>Customers sometimes leave trash and dirt on the sales floor. Each piece of trash
+        costs 1 cleanliness point; each dirt mark costs 2. Customers who find the store too
+        dirty cost you store reputation, and very dirty stores make them leave.</p>
+      <p>With empty hands, face trash and press ${key("interact")} to pick it up. Face a
+        trashcan and press ${key("interact")} to throw it away. Hold ${key("highlightTrash")}
+        to highlight trash and dirt, including marks hidden behind fixtures.</p>
+      <p>Buy a <strong>Mop Bucket</strong> in the Fixtures tab and place it on the sales
+        floor. With empty hands, face the front of the bucket and press ${key("interact")}
+        to take its mop. Stand still, face a dirt mark, and press ${key("interact")}
+        repeatedly until the small bar fills. Holding the button does not clean it.</p>
+      <p>Faster presses make your character mop faster. Cleaning the mark restores its
+        2 cleanliness points. Face the same bucket and press ${key("interact")} to return
+        the mop. You cannot carry trash or crates, use shelves, or work the register while
+        holding it.</p>
+      <p>Dirt and unfinished mopping are saved and stay overnight. Loading a save returns
+        the mop to its bucket. Employees clean trash, but do not mop dirt yet.</p>`),
     section("Starting a Shift", `
       ${list([
         "Press <strong>START SHIFT</strong> on the top bar. The game saves first.",

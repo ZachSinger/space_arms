@@ -10,6 +10,7 @@ function harness({ carried = [], heldTrash = null, trashcan = null, area = AREA.
   const shop = {
     areas: { playerArea: area },
     player,
+    checkoutSystem: { operatingRegister: false },
     fixtures: { ofKind: (kind) => kind === "trash" && trashcan ? [trashcan] : [] },
     fixtureSystem: { getNearbyTrashcan: () => shop.areas.playerArea === AREA.SHOP ? trashcan : null },
     crateSystem: {

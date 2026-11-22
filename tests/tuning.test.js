@@ -54,6 +54,8 @@ test("moved tuning numbers keep their old values", () => {
     cleanlinessJudgeMs: 3000,
     trashDropChance: 0.2,
     trashDropWalkMs: [1000, 6000],
+    dirtDropChance: 0.15,
+    mopPressesPerSpot: 8,
     upsetReputationLoss: 1,
     walkOutReputationLoss: 2,
     trashPickupAheadPx: 22,

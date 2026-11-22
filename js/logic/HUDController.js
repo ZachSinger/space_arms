@@ -106,8 +106,8 @@ export class HUDController {
         this.cleanlinessEl.parentElement.style.display = enabled ? '' : 'none';
     }
 
-    renderCleanliness({ score, max, trashCount }) {
-        const key = `${score}/${max}/${trashCount}`;
+    renderCleanliness({ score, max, trashCount, dirtCount = 0 }) {
+        const key = `${score}/${max}/${trashCount}/${dirtCount}`;
         if (!this.cleanlinessEl || key === this.cleanlinessKey) return;
         this.cleanlinessKey = key;
         this.cleanlinessEl.textContent = `${score}/${max}`;
@@ -115,8 +115,9 @@ export class HUDController {
         this.cleanlinessEl.classList.toggle('clean-warn', ratio < 0.75 && ratio >= 0.5);
         this.cleanlinessEl.classList.toggle('clean-bad', ratio < 0.5);
         const pieces = trashCount === 1 ? '1 piece of trash' : `${trashCount} pieces of trash`;
-        this.cleanlinessEl.title = `Store cleanliness. ${pieces} on the floor right now. ` +
-            'Customers drop trash; pick it up and put it in a trashcan. Hold H to light up every piece, even behind shelves. ' +
+        const dirt = dirtCount === 1 ? '1 dirt mark' : `${dirtCount} dirt marks`;
+        this.cleanlinessEl.title = `Store cleanliness. ${pieces} and ${dirt} right now. ` +
+            'Pick up trash and put it in a trashcan. Take the mop from its bucket to clean dirt. ' +
             'Customers who find the store too dirty cost you store reputation, and very dirty stores make them walk out.';
     }
 

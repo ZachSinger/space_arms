@@ -175,6 +175,26 @@
     "price": 500,
     "licenseId": "lic_fixture_basics"
   },
+  "mop_bucket": {
+    "id": "mop_bucket",
+    "name": "MOP BUCKET",
+    "kind": "mop",
+    "w": 1,
+    "h": 1,
+    "texture": "mop_bucket",
+    "facingTextures": {
+      "down": "mop_bucket", "left": "mop_bucket",
+      "up": "mop_bucket", "right": "mop_bucket"
+    },
+    "artInsets": {
+      "down": { "left": 0.25, "top": 0.234375, "right": 0.25, "bottom": 0.25 },
+      "left": { "left": 0.25, "top": 0.234375, "right": 0.25, "bottom": 0.25 },
+      "up": { "left": 0.25, "top": 0.234375, "right": 0.25, "bottom": 0.25 },
+      "right": { "left": 0.25, "top": 0.234375, "right": 0.25, "bottom": 0.25 }
+    },
+    "price": 40,
+    "licenseId": "lic_fixture_basics"
+  },
   "trash_can": {
     "id": "trash_can",
     "name": "TRASHCAN",

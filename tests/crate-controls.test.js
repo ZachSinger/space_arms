@@ -104,6 +104,8 @@ function bindCleaningSystem(scene) {
     trash: { count: 0, renderHighlight() {} },
     getActions: () => [],
     findTrashInFront: () => null,
+    findDirtInFront: () => null,
+    getNearbyMopBucket: () => null,
     isOpenTrashSpot: () => false,
     dropTrash: () => false,
     pickUpTrash: () => false,

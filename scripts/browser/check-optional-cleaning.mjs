@@ -39,11 +39,21 @@ try {
   assert.equal(initial.afterReturning, 0);
 
   const saved = JSON.parse(await readFile(new URL("../../tests/golden-saves/trash.json", import.meta.url), "utf8"));
+  saved.dirt = [{ kind: "footprints", x: 980, y: 280, progress: 0.375 }];
+  saved.fixtures.push({ id: "mop_bucket_optional", type: "mop_bucket", gx: 19, gy: 3 });
   await disabled.loadSave(saved);
   const loaded = await disabled.game((scene) => scene.saves.serialize());
   assert.deepEqual(loaded.trash, saved.trash);
+  assert.deepEqual(loaded.dirt, saved.dirt);
+  const mop = await disabled.game((scene) => ({
+    listed: scene.fixtureSystem.purchaseOptions().some(({ spec }) => spec.kind === "mop"),
+    purchased: scene.fixtureSystem.buy("mop_bucket"),
+    buckets: scene.fixtures.ofKind("mop").length,
+  }));
+  assert.deepEqual(mop, { listed: false, purchased: false, buckets: 1 });
   await disabled.loadSave(loaded);
   assert.deepEqual((await disabled.game((scene) => scene.saves.serialize())).trash, saved.trash);
+  assert.deepEqual((await disabled.game((scene) => scene.saves.serialize())).dirt, saved.dirt);
 
   await disabled.game((scene) => {
     scene.debugTools.quickstart({ shelfCount: 2, itemCount: 8 });
@@ -77,4 +87,4 @@ try {
 } finally {
   await enabled.close();
 }
-console.log("Optional cleaning: startup, customer, trashcan, HUD, and saved trash passed.");
+console.log("Optional cleaning: startup, customer, trashcan, HUD, and saved trash/dirt/bucket passed.");

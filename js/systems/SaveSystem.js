@@ -102,7 +102,7 @@ export class SaveSystem {
     shop.cameraRig.refresh();
     shop.controls.cratePress = null;
     shop.crateSystem.load(data);
-    shop.cleaningSystem?.load(data.trash ?? []);
+    shop.cleaningSystem?.load(data.trash ?? [], data.dirt ?? []);
     this.moveShelfOverflowToGoBacks();
     shop.fixtureViews.refreshStockDisplays();
     shop.catalogSystem.recalculateActiveFactions();

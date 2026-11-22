@@ -1,9 +1,9 @@
 // ==========================================
 // FILE: CleaningSystem.js
 // ==========================================
-// Store cleanliness and loose trash. The state slice keeps saved trash locations; TrashField
-// draws and moves those pieces in the Phaser world.
-import { fixtureFootprint } from "../../logic/FixtureLayout.js";
+// Store cleanliness, trash, and dirt. The state slice saves their locations and mopping
+// progress; the fields draw and relocate them in the Phaser world.
+import { fixtureBounds, fixtureFootprint } from "../../logic/FixtureLayout.js";
 import { TILE_SIZE, EXPANSION_ORDER } from "../../logic/RoomLayout.js";
 import { AREA } from "../../world/Areas.js";
 import { controlLabel } from "../../input/InputDevice.js";
@@ -12,6 +12,8 @@ import {
   judgeCleanliness,
 } from "./Litter.js";
 import { randomTrashKind, TrashField } from "./TrashField.js";
+import { DirtField, randomDirtKind } from "./DirtField.js";
+import { MopAnimation } from "./MopAnimation.js";
 
 const PLAYER_FACING_STEPS = Object.freeze({
   up: Object.freeze({ x: 0, y: -1 }),
@@ -25,7 +27,11 @@ export class CleaningSystem {
     this.id = "cleaning";
     this.shop = shop;
     this.trash = new TrashField(shop, (x, y) => this.isOpenTrashSpot(x, y));
+    this.dirt = new DirtField(shop, (x, y) => this.isOpenTrashSpot(x, y));
     this.heldTrash = null;
+    this.heldMop = null;
+    this.mopAnimation = null;
+    this.mopBar = null;
     // Employee -> the piece of trash they're carrying to a trashcan.
     /** @type {Map<object, object>} */
     this.staffHeldTrash = new Map();
@@ -61,6 +67,24 @@ export class CleaningSystem {
     return true;
   }
 
+  dropDirt(x, y) {
+    if (!this.isOpenTrashSpot(x, y)) return false;
+    this.dirt.add(randomDirtKind(), x, y);
+    this.syncSavedDirt();
+    return true;
+  }
+
+  getNearbyMopBucket() {
+    const shop = this.shop;
+    if (shop.areas.playerArea !== AREA.SHOP || shop.checkoutSystem.operatingRegister) return null;
+    return shop.fixtures.ofKind("mop").find((fixture) => {
+      if (!shop.interactionSystem.isPlayerFacingFixture(fixture)) return false;
+      const bounds = fixtureBounds(fixture);
+      const rect = Object.fromEntries(Object.entries(bounds).map(([key, value]) => [key, value * TILE_SIZE]));
+      return shop.interactionSystem.feetReachTo(shop.interactionSystem.getInteractionOrigin(), rect) <= 12;
+    }) ?? null;
+  }
+
   getActions() {
     const shop = this.shop;
     const carriedCrates = shop.crateSystem.getCarriedCrates();
@@ -80,6 +104,23 @@ export class CleaningSystem {
       }] : [];
     }
 
+    const bucket = this.getNearbyMopBucket();
+    if (this.heldMop) {
+      if (bucket === this.heldMop) return [{
+        action: "interact", kind: "mop-bucket", target: bucket, priority: 7, range: 0,
+        distanceFrom: () => 0,
+        hint: `${controlLabel("interact")}: Put the mop back in its bucket`,
+        perform: () => this.putAwayMop(),
+      }];
+      const dirt = this.findDirtInFront();
+      return dirt ? [{
+        action: "interact", kind: "dirt", target: dirt, priority: 6, range: 0,
+        distanceFrom: () => 0,
+        hint: `Press ${controlLabel("interact")} repeatedly to mop this dirt`,
+        perform: () => this.mopDirt(dirt),
+      }] : [];
+    }
+
     if (carriedCrates.length === 0) {
       const piece = this.findTrashInFront();
       if (piece) {
@@ -95,24 +136,86 @@ export class CleaningSystem {
           perform: () => this.pickUpTrash(piece),
         }];
       }
+      if (bucket) return [{
+        action: "interact", kind: "mop-bucket", target: bucket, priority: 5, range: 0,
+        distanceFrom: () => 0,
+        hint: `${controlLabel("interact")}: Take the mop from the bucket`,
+        perform: () => this.takeMop(bucket),
+      }];
     }
 
     return [];
   }
 
   findTrashInFront() {
+    return this.findMessInFront(this.trash);
+  }
+
+  findDirtInFront() {
+    return this.findMessInFront(this.dirt);
+  }
+
+  findMessInFront(field) {
     const shop = this.shop;
     if (shop.areas.playerArea === AREA.BACKROOM || shop.checkoutSystem.operatingRegister) return null;
     const step = PLAYER_FACING_STEPS[shop.player.currentFacing];
     if (!step) return null;
     const { center } = shop.player.sprite.body;
-    return this.trash.findNear({
+    return field.findNear({
       x: center.x + step.x * CLEANING_TUNING.trashPickupAheadPx,
       y: center.y + step.y * CLEANING_TUNING.trashPickupAheadPx,
     }, CLEANING_TUNING.trashPickupReachPx);
   }
 
+  takeMop(bucket) {
+    if (this.heldMop || this.heldTrash || this.shop.crateSystem.getCarriedCrates().length > 0) {
+      this.shop.messages.show("Empty your hands before taking the mop.", "#f59e0b");
+      return false;
+    }
+    if (this.getNearbyMopBucket() !== bucket) {
+      this.shop.messages.show("Face the mop bucket and move closer to take its mop.", "#94a3b8");
+      return false;
+    }
+    this.mopAnimation = new MopAnimation(this.shop, this.shop.player);
+    this.heldMop = bucket;
+    return true;
+  }
+
+  putAwayMop() {
+    if (!this.heldMop) return false;
+    this.mopAnimation?.destroy();
+    this.mopAnimation = null;
+    this.heldMop = null;
+    this.mopBar?.setVisible(false);
+    return true;
+  }
+
+  mopDirt(mark) {
+    const shop = this.shop;
+    if (!this.heldMop || this.findDirtInFront() !== mark) {
+      shop.messages.show("Take the mop, then face the dirt and move closer.", "#94a3b8");
+      return false;
+    }
+    if (shop.player.sprite.body.velocity.x || shop.player.sprite.body.velocity.y) {
+      shop.messages.show("Stand still while mopping the dirt.", "#94a3b8");
+      return false;
+    }
+    this.mopAnimation.press(shop.worldElapsedMs);
+    mark.progress = Math.min(1, mark.progress + 1 / CLEANING_TUNING.mopPressesPerSpot);
+    if (mark.progress >= 1 - Number.EPSILON) {
+      this.dirt.take(mark);
+      mark.sprite.destroy();
+      shop.messages.show("Dirt cleaned. The store is cleaner.", "#10b981");
+    }
+    this.syncSavedDirt();
+    return true;
+  }
+
   pickUpTrash(piece) {
+    if (this.heldMop) {
+      this.shop.messages.show("Put the mop back before picking up trash.", "#f59e0b");
+      return false;
+    }
     if (!this.trash.take(piece)) return false;
     // The player wins any race: an employee walking to this piece gives up and picks another.
     piece.claimedBy = null;
@@ -275,7 +378,8 @@ export class CleaningSystem {
       shopLevel: shop.gameState.reputation.shopLevel,
     });
     const trashCount = this.trash.count + (this.heldTrash ? 1 : 0) + this.staffHeldTrash.size;
-    return { score: getCleanlinessScore(max, trashCount), max, trashCount };
+    const dirtCount = this.dirt.count;
+    return { score: getCleanlinessScore(max, trashCount, dirtCount), max, trashCount, dirtCount };
   }
 
   getCleanlinessPercent() {
@@ -327,22 +431,55 @@ export class CleaningSystem {
     this.shop.gameState.trash.setPieces(this.trash.serialize());
   }
 
-  load(list) {
+  syncSavedDirt() {
+    this.shop.gameState.trash.setDirt(this.dirt.serialize());
+  }
+
+  load(list, dirt = []) {
+    this.putAwayMop();
     this.heldTrash?.sprite.destroy();
     this.heldTrash = null;
     this.clearStaffHeldTrash();
     this.trash.load(list);
+    this.dirt.load(dirt);
     this.syncSavedTrash();
+    this.syncSavedDirt();
   }
 
   moveOffBlockedSpots() {
     this.trash.moveOffBlockedSpots();
+    this.dirt.moveOffBlockedSpots();
     this.syncSavedTrash();
+    this.syncSavedDirt();
   }
 
-  update(time) {
+  update(time, delta) {
     this.updateHighlight(time);
     this.syncStaffHeldTrash();
+    if (!this.heldMop) return;
+    const shop = this.shop;
+    const moving = Boolean(shop.player.sprite.body.velocity.x || shop.player.sprite.body.velocity.y);
+    if (moving) {
+      this.mopAnimation.motion.active = false;
+    }
+    const canScrub = shop.controlMode.allows("interact") && !moving &&
+      (!shop.shiftClock.started || !shop.shiftClock.isPaused);
+    this.mopAnimation.update(canScrub ? delta : 0, canScrub);
+    const mark = canScrub ? this.findDirtInFront() : null;
+    if (!mark) {
+      this.mopBar?.setVisible(false);
+      return;
+    }
+    this.mopBar ??= shop.add.graphics().setDepth(9999);
+    const player = shop.player.sprite;
+    const scale = shop.cameraRig.popupScale(player.x, player.y);
+    const x = player.x - 24 * scale;
+    const y = player.y - player.displayHeight * player.originY - 12 * scale;
+    const g = this.mopBar.clear().setVisible(true);
+    g.fillStyle(0x080d1a).fillRoundedRect(x, y, 48 * scale, 8 * scale, 2 * scale);
+    g.lineStyle(scale, 0x93a6c4).strokeRoundedRect(x, y, 48 * scale, 8 * scale, 2 * scale);
+    g.fillStyle(0x22364c).fillRect(x + 2 * scale, y + 2 * scale, 44 * scale, 4 * scale);
+    g.fillStyle(0x38bdf8).fillRect(x + 2 * scale, y + 2 * scale, 44 * scale * mark.progress, 4 * scale);
   }
 
   updateHighlight(time) {
@@ -350,13 +487,17 @@ export class CleaningSystem {
     const show = Boolean(shop.controls?.highlightTrashKey?.isDown) && shop.controlMode.allows("crate") &&
       shop.areas.playerArea !== AREA.BACKROOM;
     this.trash.renderHighlight(show, time);
+    this.dirt.renderHighlight(show, time);
   }
 
   destroy() {
     this.unregisterInteractions?.();
+    this.putAwayMop();
+    this.mopBar?.destroy();
     this.heldTrash?.sprite.destroy();
     this.heldTrash = null;
     this.clearStaffHeldTrash();
     this.trash.destroy();
+    this.dirt.destroy();
   }
 }

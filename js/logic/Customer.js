@@ -178,6 +178,7 @@ export class Customer {
     this.cleanlinessJudged = false;
     this.cleanlinessTimerMs = 0;
     this.trashDropAtWalkMs = cleaningProfile?.trashDropAtWalkMs ?? null;
+    this.dirtDropAtWalkMs = cleaningProfile?.dirtDropAtWalkMs ?? null;
     this.trashWalkMs = 0;
     this.shoppingPlan = getShoppingPlan
       ? getShoppingPlan(this.factionId, this.traits, this.bargainTolerance)
@@ -807,15 +808,17 @@ export class Customer {
     return verdict;
   }
 
-  // At most one piece of trash per customer, dropped partway through their walking.
+  // At most one trash piece and one dirt mark per customer, dropped during their walking.
   updateTrashDrop(delta) {
-    if (this.trashDropAtWalkMs == null) return;
+    if (this.trashDropAtWalkMs == null && this.dirtDropAtWalkMs == null) return;
     this.trashWalkMs += delta;
-    if (this.trashWalkMs < this.trashDropAtWalkMs) return;
     const body = this.sprite.body;
-    if (this.cleaning.dropTrash(this.sprite.x, body?.bottom ?? this.sprite.y)) this.trashDropAtWalkMs = null;
-    // Not a good spot (e.g. the doorway): try again a moment later.
-    else this.trashDropAtWalkMs += 500;
+    for (const [timer, drop] of [["trashDropAtWalkMs", "dropTrash"], ["dirtDropAtWalkMs", "dropDirt"]]) {
+      if (this[timer] == null || this.trashWalkMs < this[timer]) continue;
+      if (this.cleaning[drop](this.sprite.x, body?.bottom ?? this.sprite.y)) this[timer] = null;
+      // Not a good spot (e.g. the doorway): try again a moment later.
+      else this[timer] += 500;
+    }
   }
 
   // Bible Steps 12/51: abandons the cart for the scene to process, then leaves.

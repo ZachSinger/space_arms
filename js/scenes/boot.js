@@ -14,6 +14,7 @@ import { BACKROOM_TILE_ASSETS } from "../logic/BackroomTiles.js";
 import { BACKROOM_DOOR_SPRITE, STORE_DOOR_SPRITE } from "../logic/SlidingDoor.js";
 import { PLAYER_CARRY_SPRITE, PLAYER_SPRITE, registerPlayerAnimations } from "../logic/Player.js";
 import { FIXTURE_CRATE_SPRITE, ITEM_CRATE_SPRITE } from "../logic/Crate.js";
+import { ensureCleaningTextures } from "../modules/cleaning/CleaningArt.js";
 
 // The game-wide static data lookup, imported by logic modules as `database`.
 export const database = new DatabaseManager();
@@ -48,6 +49,7 @@ export class BootScene extends Phaser.Scene {
 
   create() {
     installSceneTextSize(this, Phaser);
+    ensureCleaningTextures(this);
     // Pixel art drawn larger or smaller than its sheet stays crisp.
     for (const key of [PLAYER_SPRITE.key, PLAYER_CARRY_SPRITE.key, STORE_DOOR_SPRITE.key, BACKROOM_DOOR_SPRITE.key,
       ITEM_CRATE_SPRITE.key, FIXTURE_CRATE_SPRITE.key,

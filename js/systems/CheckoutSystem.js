@@ -71,7 +71,7 @@ export class CheckoutSystem {
             }]
             : [
               { action: "register", hint: `${controlLabel("interact")}: Activate Register` },
-              ...(shop.crateSystem.getCarriedCrates().length === 0 && !shop.heldTrash ? [{
+              ...(shop.crateSystem.getCarriedCrates().length === 0 && !shop.heldTrash && !shop.cleaningSystem?.heldMop ? [{
                 action: "interact",
                 hint: `${controlLabel("interact")}: Activate Register`,
                 perform: () => this.tryOpenRegister(),
@@ -374,7 +374,7 @@ export class CheckoutSystem {
     if (this.operatingRegister) return;
     if (!register) return;
     // Working the counter needs empty hands; crates would lock the player in place.
-    if (shop.crateSystem.getCarriedCrates().length > 0) {
+    if (shop.crateSystem.getCarriedCrates().length > 0 || shop.cleaningSystem?.heldMop) {
       shop.messages.show("Put down what you're carrying before working the register.");
       return;
     }
