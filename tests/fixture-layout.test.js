@@ -1111,21 +1111,21 @@ test("all current shelves permit touching backs without allowing blocked fronts"
   assert.ok(result.accessCells.get("upper").length && result.accessCells.get("lower").length);
 });
 
-test("pictured back-to-back shelves may overlap upright artwork at half-tile foot separation", () => {
+test("pictured back-to-back shelves may overlap upright artwork at quarter-tile foot separation", () => {
   const types = Object.values(FIXTURE_TYPES).filter((spec) => spec.kind === "shelf").map((spec) => spec.id);
   const options = createRoom({ expanded: true });
   const register = STARTING_FIXTURES.find((f) => f.type === "register_basic");
   for (const upperType of types) {
     for (const lowerType of types) {
       const upper = { id: "upper", type: upperType, gx: 17, gy: 4.25, rotation: 2 };
-      const lower = { id: "lower", type: lowerType, gx: 17, gy: 4.75, rotation: 0 };
+      const lower = { id: "lower", type: lowerType, gx: 17, gy: 4.5, rotation: 0 };
       assert.ok(fixtureBounds(lower).top < fixtureBounds(upper).bottom, "upright pictures overlap");
       for (const pair of [[upper, lower], [lower, upper]]) {
         const result = validateFixtureLayout([register, ...pair], options);
         assert.equal(result.valid, true, `${upperType}/${lowerType}: ${result.reason}`);
         assert.ok(result.accessCells.get("upper").length && result.accessCells.get("lower").length);
       }
-      assert.equal(fixturesOverlap(upper, { ...lower, gy: 4.625 }), true, "feet cannot overlap");
+      assert.equal(fixturesOverlap(upper, { ...lower, gy: 4.375 }), true, "feet cannot overlap");
       assert.equal(fixturesOverlap(upper, { ...lower, rotation: 2 }), true, "same-facing fronts stay clear");
       assert.equal(fixturesOverlap({ ...upper, rotation: 0 }, { ...lower, rotation: 2 }), true,
         "front-to-front shelves still need their aisle");

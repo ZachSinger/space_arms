@@ -35,7 +35,7 @@ export const SHELF_FEET_BELOW_WALL = 1 / 4;
 // still never hide each other.
 export const FIXTURE_FRONT_CLEARANCE = 1 / 2;
 // Upright shelf backs can share projected artwork, but their floor bases need this depth.
-const SHELF_BACK_TO_BACK_DEPTH = 1 / 2;
+const SHELF_BACK_TO_BACK_DEPTH = 1 / 4;
 // px, the feet box every walker (customers, staff, the player) must fit through.
 const WALKING_BODY_WIDTH = Math.max(PLAYER_BODY_WIDTH, CUSTOMER_COLLISION_WIDTH);
 const WALKING_BODY_HEIGHT = Math.max(PLAYER_BODY_HEIGHT, CUSTOMER_COLLISION_HEIGHT);
