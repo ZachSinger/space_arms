@@ -4,12 +4,14 @@
 // Every browser check in one go (npm run check:game): two scripted shifts (no staff, two
 // staff), the targeted scenarios, the seeded replay, and the busy-shop speed test. Needs the local art in img/.
 //   node scripts/browser/run-checks.mjs                 everything
+//   node scripts/browser/run-checks.mjs --only=settings  check title-screen settings
 //   node scripts/browser/run-checks.mjs --only=scenarios  just one part (shift | scenarios | replay | speed)
 //   node scripts/browser/run-checks.mjs --quick          shorter shifts, for quick re-checks
 import { startGame } from "./harness.mjs";
 import { runScriptedShift, checkScriptedShift } from "./scripted-shift.mjs";
 import { runScenarios } from "./scenarios.mjs";
 import { runReplayCheck } from "./replay.mjs";
+import { checkTitleSettings } from "./title-settings.mjs";
 
 const args = process.argv.slice(2);
 const only = args.find((arg) => arg.startsWith("--only="))?.slice(7) ?? null;
@@ -84,6 +86,18 @@ const record = (name, failures, detail = "") => {
 
 const h = await startGame();
 try {
+  if (!only || only === "settings") {
+    const errorsBefore = h.errors().length;
+    let failures;
+    try {
+      await checkTitleSettings(h);
+      failures = [];
+    } catch (error) {
+      failures = [`crashed: ${error.message}`];
+    }
+    failures.push(...h.errors().slice(errorsBefore).map((problem) => `${problem.type}: ${problem.text}`));
+    record("main-menu settings controller remapping", failures);
+  }
   if (!only || only === "shift") {
     for (const employees of [[], ["tavi_stock_clerk", "sera_floor_assistant"]]) {
       const errorsBefore = h.errors().length;

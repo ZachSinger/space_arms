@@ -96,7 +96,7 @@ notice something that needs doing but isn't being done right now.
 - [ ] Fine-tune the controller after real-pad playtesting: stick feel, dash timing, menu
       highlight movement, and button prompts.
 - [x] Add controller configuration and button-remapping options.
-- [ ] Test the settings available from the main menu.
+- [x] Test the settings available from the main menu.
 
 ## Progression
 - [x] New shops start at 0 reputation. Store and faction reputation changes are tallied
