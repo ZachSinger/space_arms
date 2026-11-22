@@ -374,10 +374,11 @@ export class CheckoutSystem {
     if (this.operatingRegister) return;
     if (!register) return;
     // Working the counter needs empty hands; crates would lock the player in place.
-    if (shop.crateSystem.getCarriedCrates().length > 0 || shop.cleaningSystem?.heldMop) {
+    if (shop.crateSystem.getCarriedCrates().length > 0) {
       shop.messages.show("Put down what you're carrying before working the register.");
       return;
     }
+    shop.cleaningSystem?.putAwayMop();
 
     shop.employees.forEach((employee) => employee.cancelRegisterJob(register));
     this.operatingRegister = true;

@@ -26,6 +26,8 @@ function harness() {
     },
     fixtures: { all: () => [], ofKind: () => [] },
     crateSystem: { getCarriedCrates: () => [] },
+    shiftClock: { started: false },
+    controlMode: { allows: () => true },
     fixtureSystem: { getNearbyTrashcan: () => null },
     checkoutSystem: { operatingRegister: false },
     player: {
@@ -39,9 +41,18 @@ function harness() {
     messages: { show: (text) => messages.push(text) },
   };
   const cleaning = new CleaningSystem(shop);
-  cleaning.heldMop = { id: "bucket" };
-  cleaning.mopAnimation = { press: (time) => presses.push(time) };
-  return { shop, cleaning, presses, messages };
+  const mops = [];
+  cleaning.createMopAnimation = () => {
+    const mop = {
+      motion: { active: false },
+      press(time) { presses.push(time); this.motion.active = true; },
+      update() {},
+      destroy() { this.destroyed = true; },
+    };
+    mops.push(mop);
+    return mop;
+  };
+  return { shop, cleaning, presses, messages, mops };
 }
 
 test("each dirt mark picks one of all three styles without changing saved styles", () => {
@@ -77,7 +88,41 @@ test("mopping reaches dirt in every facing, saves partial work, and restores two
   }
 });
 
-test("moving, empty hands, and out-of-reach dirt cannot advance cleaning", () => {
+test("no bucket needed: facing dirt offers mopping, and the first press brings out the mop", () => {
+  const { cleaning, mops } = harness();
+  const mark = cleaning.dirt.add("smudge", 160, 182);
+  const [action] = cleaning.getActions();
+  assert.equal(action.kind, "dirt");
+  assert.match(action.hint, /repeatedly to mop this dirt$/);
+  assert.equal(cleaning.heldMop, false);
+  action.perform();
+  assert.equal(cleaning.heldMop, true);
+  assert.equal(mops.length, 1);
+  action.perform();
+  assert.equal(mops.length, 1, "later presses keep the same mop");
+  assert.equal(mark.progress, 2 / CLEANING_TUNING.mopPressesPerSpot);
+});
+
+test("the mop goes away when the player walks off or the last sweep on a clean mark ends", () => {
+  const { shop, cleaning, mops } = harness();
+  const mark = cleaning.dirt.add("smudge", 160, 182);
+  cleaning.mopDirt(mark);
+  shop.player.sprite.body.velocity.x = 160;
+  cleaning.update(0, 16);
+  assert.equal(cleaning.heldMop, false);
+  assert.equal(mops[0].destroyed, true);
+  assert.equal(mark.progress, 1 / CLEANING_TUNING.mopPressesPerSpot, "progress stays on the mark");
+
+  shop.player.sprite.body.velocity.x = 0;
+  while (cleaning.dirt.count > 0) cleaning.mopDirt(mark);
+  cleaning.update(0, 16);
+  assert.equal(cleaning.heldMop, true, "the last sweep still plays");
+  mops[1].motion.active = false;
+  cleaning.update(0, 16);
+  assert.equal(cleaning.heldMop, false);
+});
+
+test("moving, full hands, and out-of-reach dirt cannot advance cleaning", () => {
   const { shop, cleaning, messages } = harness();
   const mark = cleaning.dirt.add("smudge", 160, 182);
   shop.player.sprite.body.velocity.x = 160;
@@ -85,12 +130,14 @@ test("moving, empty hands, and out-of-reach dirt cannot advance cleaning", () =>
   assert.equal(mark.progress, 0);
   assert.match(messages.at(-1), /Stand still/);
   shop.player.sprite.body.velocity.x = 0;
-  cleaning.heldMop = null;
+  shop.crateSystem.getCarriedCrates = () => [{ id: "crate" }];
   assert.equal(cleaning.mopDirt(mark), false);
-  cleaning.heldMop = { id: "bucket" };
+  assert.deepEqual(cleaning.getActions(), []);
+  shop.crateSystem.getCarriedCrates = () => [];
   shop.player.currentFacing = "up";
   assert.equal(cleaning.mopDirt(mark), false);
   assert.equal(mark.progress, 0);
+  assert.equal(cleaning.heldMop, false);
 });
 
 test("fast presses produce faster alternating sweeps, and motion settles when presses stop", () => {

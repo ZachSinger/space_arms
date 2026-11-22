@@ -3,7 +3,7 @@
 // ==========================================
 // Store cleanliness, trash, and dirt. The state slice saves their locations and mopping
 // progress; the fields draw and relocate them in the Phaser world.
-import { fixtureBounds, fixtureFootprint } from "../../logic/FixtureLayout.js";
+import { fixtureFootprint } from "../../logic/FixtureLayout.js";
 import { TILE_SIZE, EXPANSION_ORDER } from "../../logic/RoomLayout.js";
 import { AREA } from "../../world/Areas.js";
 import { controlLabel } from "../../input/InputDevice.js";
@@ -29,14 +29,16 @@ export class CleaningSystem {
     this.trash = new TrashField(shop, (x, y) => this.isOpenTrashSpot(x, y));
     this.dirt = new DirtField(shop, (x, y) => this.isOpenTrashSpot(x, y));
     this.heldTrash = null;
-    this.heldMop = null;
+    // True while the player has the mop out. It appears on the first press at a dirt mark and
+    // goes away when they walk off, turn away, or finish the mark.
+    this.heldMop = false;
     this.mopAnimation = null;
     this.mopBar = null;
     // Employee -> the piece of trash they're carrying to a trashcan.
     /** @type {Map<object, object>} */
     this.staffHeldTrash = new Map();
-    // Employee -> { bucket, animation, clockMs } for the mop they took.
-    /** @type {Map<object, { bucket: object, animation: MopAnimation, clockMs: number }>} */
+    // Employee -> { animation, clockMs } for the mop they have out while mopping a mark.
+    /** @type {Map<object, { animation: MopAnimation, clockMs: number }>} */
     this.staffMops = new Map();
     this.createMopAnimation = (actor) => new MopAnimation(shop, actor);
     if (shop.interactables) {
@@ -78,17 +80,6 @@ export class CleaningSystem {
     return true;
   }
 
-  getNearbyMopBucket() {
-    const shop = this.shop;
-    if (shop.areas.playerArea !== AREA.SHOP || shop.checkoutSystem.operatingRegister) return null;
-    return shop.fixtures.ofKind("mop").find((fixture) => {
-      if (!shop.interactionSystem.isPlayerFacingFixture(fixture)) return false;
-      const bounds = fixtureBounds(fixture);
-      const rect = Object.fromEntries(Object.entries(bounds).map(([key, value]) => [key, value * TILE_SIZE]));
-      return shop.interactionSystem.feetReachTo(shop.interactionSystem.getInteractionOrigin(), rect) <= 12;
-    }) ?? null;
-  }
-
   getActions() {
     const shop = this.shop;
     const carriedCrates = shop.crateSystem.getCarriedCrates();
@@ -108,24 +99,15 @@ export class CleaningSystem {
       }] : [];
     }
 
-    const bucket = this.getNearbyMopBucket();
-    if (this.heldMop) {
-      if (bucket === this.heldMop) return [{
-        action: "interact", kind: "mop-bucket", target: bucket, priority: 7, range: 0,
-        distanceFrom: () => 0,
-        hint: `${controlLabel("interact")}: Put the mop back in its bucket`,
-        perform: () => this.putAwayMop(),
-      }];
+    if (carriedCrates.length === 0) {
       const dirt = this.findDirtInFront();
-      return dirt ? [{
+      const mopAction = dirt && [{
         action: "interact", kind: "dirt", target: dirt, priority: 6, range: 0,
         distanceFrom: () => 0,
         hint: `Press ${controlLabel("interact")} repeatedly to mop this dirt`,
         perform: () => this.mopDirt(dirt),
-      }] : [];
-    }
-
-    if (carriedCrates.length === 0) {
+      }];
+      if (this.heldMop && mopAction) return mopAction;
       const piece = this.findTrashInFront();
       if (piece) {
         return [{
@@ -140,14 +122,7 @@ export class CleaningSystem {
           perform: () => this.pickUpTrash(piece),
         }];
       }
-      if (bucket) return [{
-        action: "interact", kind: "mop-bucket", target: bucket, priority: 5, range: 0,
-        distanceFrom: () => 0,
-        hint: this.isMopWithStaff(bucket)
-          ? "An employee is using this bucket's mop"
-          : `${controlLabel("interact")}: Take the mop from the bucket`,
-        perform: () => this.takeMop(bucket),
-      }];
+      if (mopAction) return mopAction;
     }
 
     return [];
@@ -173,44 +148,32 @@ export class CleaningSystem {
     }, CLEANING_TUNING.trashPickupReachPx);
   }
 
-  takeMop(bucket) {
-    if (this.heldMop || this.heldTrash || this.shop.crateSystem.getCarriedCrates().length > 0) {
-      this.shop.messages.show("Empty your hands before taking the mop.", "#f59e0b");
-      return false;
-    }
-    if (this.getNearbyMopBucket() !== bucket) {
-      this.shop.messages.show("Face the mop bucket and move closer to take its mop.", "#94a3b8");
-      return false;
-    }
-    if (this.isMopWithStaff(bucket)) {
-      this.shop.messages.show("An employee is using this bucket's mop. They put it back when they're done.", "#94a3b8");
-      return false;
-    }
-    // The player wins any race: an employee walking to this bucket picks another one.
-    bucket.mopClaimedBy = null;
-    this.mopAnimation = this.createMopAnimation(this.shop.player);
-    this.heldMop = bucket;
-    return true;
-  }
-
   putAwayMop() {
     if (!this.heldMop) return false;
     this.mopAnimation?.destroy();
     this.mopAnimation = null;
-    this.heldMop = null;
+    this.heldMop = false;
     this.mopBar?.setVisible(false);
     return true;
   }
 
   mopDirt(mark) {
     const shop = this.shop;
-    if (!this.heldMop || this.findDirtInFront() !== mark) {
-      shop.messages.show("Take the mop, then face the dirt and move closer.", "#94a3b8");
+    if (this.heldTrash || shop.crateSystem.getCarriedCrates().length > 0) {
+      shop.messages.show("Empty your hands before mopping.", "#f59e0b");
+      return false;
+    }
+    if (this.findDirtInFront() !== mark) {
+      shop.messages.show("Face the dirt and move closer to mop it.", "#94a3b8");
       return false;
     }
     if (shop.player.sprite.body.velocity.x || shop.player.sprite.body.velocity.y) {
       shop.messages.show("Stand still while mopping the dirt.", "#94a3b8");
       return false;
+    }
+    if (!this.heldMop) {
+      this.mopAnimation = this.createMopAnimation(shop.player);
+      this.heldMop = true;
     }
     this.mopAnimation.press(shop.worldElapsedMs);
     mark.progress = Math.min(1, mark.progress + 1 / CLEANING_TUNING.mopPressesPerSpot);
@@ -224,11 +187,8 @@ export class CleaningSystem {
   }
 
   pickUpTrash(piece) {
-    if (this.heldMop) {
-      this.shop.messages.show("Put the mop back before picking up trash.", "#f59e0b");
-      return false;
-    }
     if (!this.trash.take(piece)) return false;
+    this.putAwayMop();
     // The player wins any race: an employee walking to this piece gives up and picks another.
     piece.claimedBy = null;
     this.heldTrash = piece;
@@ -381,33 +341,17 @@ export class CleaningSystem {
     this.staffHeldTrash.clear();
   }
 
-  // ---- Employees who mop. Each bucket has one mop: the player, or one employee, uses it.
-
-  isMopWithStaff(bucket) {
-    return [...this.staffMops.values()].some((mop) => mop.bucket === bucket);
-  }
-
-  isMopFree(bucket, holder) {
-    if (this.heldMop === bucket) return false;
-    for (const [other, mop] of this.staffMops) if (other !== holder && mop.bucket === bucket) return false;
-    return !bucket.mopClaimedBy || bucket.mopClaimedBy === holder;
-  }
-
-  staffMopBuckets(holder) {
-    return this.shop.fixtures.ofKind("mop").filter((bucket) => this.isMopFree(bucket, holder));
-  }
+  // ---- Employees who mop. The mop appears in their hands while they mop a mark.
 
   staffDirtTargets(holder) {
     return this.dirt.pieces.filter((mark) => !mark.claimedBy || mark.claimedBy === holder);
   }
 
-  // Reserves a bucket's mop and a dirt mark (either may be null) for one employee.
-  claimMoppingForStaff(holder, { bucket = null, mark = null }) {
-    if (bucket && !this.isMopFree(bucket, holder)) return false;
-    if (mark && (!this.dirt.pieces.includes(mark) || (mark.claimedBy && mark.claimedBy !== holder))) return false;
+  // Reserves a dirt mark for one employee so nobody else heads for it. Drops any older claim.
+  claimDirtForStaff(holder, mark) {
+    if (!this.dirt.pieces.includes(mark) || (mark.claimedBy && mark.claimedBy !== holder)) return false;
     this.releaseStaffMoppingClaims(holder);
-    if (bucket) bucket.mopClaimedBy = holder;
-    if (mark) mark.claimedBy = holder;
+    mark.claimedBy = holder;
     return true;
   }
 
@@ -417,24 +361,15 @@ export class CleaningSystem {
 
   releaseStaffMoppingClaims(holder) {
     for (const mark of this.dirt.pieces) if (mark.claimedBy === holder) mark.claimedBy = null;
-    for (const bucket of this.shop.fixtures.ofKind("mop")) {
-      if (bucket.mopClaimedBy === holder) bucket.mopClaimedBy = null;
-    }
   }
 
   isStaffHoldingMop(holder) {
     return this.staffMops.has(holder);
   }
 
-  staffMopBucket(holder) {
-    return this.staffMops.get(holder)?.bucket ?? null;
-  }
-
-  takeMopForStaff(holder, bucket) {
-    if (this.staffMops.has(holder) || !this.shop.fixtures.ofKind("mop").includes(bucket) ||
-      !this.isMopFree(bucket, holder)) return false;
-    bucket.mopClaimedBy = null;
-    this.staffMops.set(holder, { bucket, animation: this.createMopAnimation(holder), clockMs: 0 });
+  takeMopForStaff(holder) {
+    if (this.staffMops.has(holder)) return true;
+    this.staffMops.set(holder, { animation: this.createMopAnimation(holder), clockMs: 0 });
     return true;
   }
 
@@ -461,9 +396,7 @@ export class CleaningSystem {
     mop.animation.update(delta, scrubbing);
   }
 
-  // The mop goes back in its bucket (wherever the employee is) and their claims are dropped.
-  returnStaffMop(holder) {
-    this.releaseStaffMoppingClaims(holder);
+  putAwayStaffMop(holder) {
     const mop = this.staffMops.get(holder);
     if (!mop) return false;
     this.staffMops.delete(holder);
@@ -472,7 +405,10 @@ export class CleaningSystem {
   }
 
   clearStaffMops() {
-    for (const holder of [...this.staffMops.keys()]) this.returnStaffMop(holder);
+    for (const holder of [...this.staffMops.keys()]) {
+      this.releaseStaffMoppingClaims(holder);
+      this.putAwayStaffMop(holder);
+    }
   }
 
   getCleanliness() {
@@ -565,14 +501,17 @@ export class CleaningSystem {
     this.syncStaffHeldTrash();
     if (!this.heldMop) return;
     const shop = this.shop;
+    if (shop.shiftClock.started && shop.shiftClock.isPaused) return;
     const moving = Boolean(shop.player.sprite.body.velocity.x || shop.player.sprite.body.velocity.y);
-    if (moving) {
-      this.mopAnimation.motion.active = false;
+    const mark = this.findDirtInFront();
+    // Walking off, turning away, or opening the tablet puts the mop away. After the last
+    // stroke on a mark, the sweep finishes before the mop goes.
+    if (moving || !shop.controlMode.allows("interact") || this.heldTrash ||
+      shop.crateSystem.getCarriedCrates().length > 0 || (!mark && !this.mopAnimation.motion.active)) {
+      this.putAwayMop();
+      return;
     }
-    const canScrub = shop.controlMode.allows("interact") && !moving &&
-      (!shop.shiftClock.started || !shop.shiftClock.isPaused);
-    this.mopAnimation.update(canScrub ? delta : 0, canScrub);
-    const mark = canScrub ? this.findDirtInFront() : null;
+    this.mopAnimation.update(delta, true);
     if (!mark) {
       this.mopBar?.setVisible(false);
       return;

@@ -117,7 +117,7 @@ export class HUDController {
         const pieces = trashCount === 1 ? '1 piece of trash' : `${trashCount} pieces of trash`;
         const dirt = dirtCount === 1 ? '1 dirt mark' : `${dirtCount} dirt marks`;
         this.cleanlinessEl.title = `Store cleanliness. ${pieces} and ${dirt} right now. ` +
-            'Pick up trash and put it in a trashcan. Take the mop from its bucket to clean dirt. ' +
+            'Pick up trash and put it in a trashcan. Face dirt and tap the use button to mop it. ' +
             'Customers who find the store too dirty cost you store reputation, and very dirty stores make them walk out.';
     }
 

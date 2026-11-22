@@ -4,47 +4,23 @@ import { startGame } from "./harness.mjs";
 const h = await startGame({ port: 5397 });
 try {
   await h.newGame();
-  const bucketId = await h.game((scene) => {
-    const system = scene.fixtureSystem;
-    if (!system.buy("mop_bucket")) throw new Error("Could not buy the mop bucket.");
-    const crate = scene.restockCrates.find((entry) => entry.typeId === "mop_bucket");
-    if (!crate) throw new Error("Mop bucket was not delivered.");
-    scene.restockCrates = scene.restockCrates.filter((entry) => entry !== crate);
-    scene.crateSystem.addCarriedCrate(crate);
-    const cell = system.findNearestCell("mop_bucket", { gx: 19, gy: 3 });
-    if (!cell) throw new Error("No space to place the mop bucket.");
-    if (!system.placeFromCrate(crate, cell.gx, cell.gy)) throw new Error("Bucket placement failed.");
-    return scene.fixtures.ofKind("mop")[0].id;
-  });
-
-  const faceBucket = () => h.game(async (scene) => {
-    const { fixtureBounds } = await import("/js/logic/FixtureLayout.js");
-    const bucket = scene.fixtures.ofKind("mop")[0];
-    scene.player.teleportTo(bucket.x, fixtureBounds(bucket).bottom * 64 + 6);
-    scene.player.forceFacing("up");
-  });
-  await faceBucket();
-  await h.page.keyboard.press("e");
-  assert.equal(await h.game((scene) => scene.cleaningSystem.heldMop?.id), bucketId);
-
-  const blocked = await h.game((scene) => {
+  const handsFull = await h.game((scene) => {
     const cleaning = scene.cleaningSystem;
-    const bucket = cleaning.heldMop;
-    const trash = cleaning.trash.add("can", 980, 280);
-    const pickedUp = cleaning.pickUpTrash(trash);
+    scene.player.teleportTo(980, 280);
+    scene.player.forceFacing("up");
+    const center = scene.player.sprite.body.center;
+    const mark = cleaning.dirt.add("smudge", center.x, center.y - 22);
+    const trash = cleaning.trash.add("can", 700, 280);
+    cleaning.pickUpTrash(trash);
+    const refused = cleaning.mopDirt(mark);
+    cleaning.dropHeldTrash();
     cleaning.trash.take(trash);
     trash.sprite.destroy();
-    const crateBlocked = scene.crateSystem.getActions().pickUp.blocked;
-    const move = scene.fixtureSystem.moveAreaBlockReason(bucket);
-    const crate = scene.fixtureSystem.crateBlockReason(bucket);
-    const sell = scene.fixtureSystem.saleBlockReason(bucket);
-    scene.checkoutSystem.beginRegisterSession(scene.fixtures.ofKind("register")[0]);
-    return { pickedUp, crateBlocked, move, crate, sell, register: scene.checkoutSystem.operatingRegister };
+    cleaning.dirt.take(mark);
+    mark.sprite.destroy();
+    return { refused, heldMop: cleaning.heldMop, progress: mark.progress };
   });
-  assert.equal(blocked.pickedUp, false);
-  assert.equal(blocked.crateBlocked, true);
-  assert.equal(blocked.register, false);
-  for (const reason of [blocked.move, blocked.crate, blocked.sell]) assert.match(reason, /Put the mop back/);
+  assert.deepEqual(handsFull, { refused: false, heldMop: false, progress: 0 });
 
   for (const [index, facing] of ["up", "down", "left", "right"].entries()) {
     const before = await h.game((scene, { facing, index }) => {
@@ -98,7 +74,7 @@ try {
       await h.page.keyboard.down("d");
       await h.wait(100);
       await h.page.keyboard.up("d");
-      assert.equal(await h.game((scene) => scene.cleaningSystem.mopAnimation.motion.active), false);
+      assert.equal(await h.game((scene) => scene.cleaningSystem.heldMop), false, "walking puts the mop away");
       await h.game((scene) => {
         scene.player.teleportTo(980, 280);
         scene.player.forceFacing("up");
@@ -111,16 +87,11 @@ try {
     assert.equal(await h.game((scene) => scene.cleaningSystem.dirt.count), 0);
     assert.equal(await h.game((scene) => scene.cleaningSystem.getCleanliness().score), before + 2);
     await h.wait(1000);
-    assert.equal(await h.game((scene) => scene.cleaningSystem.mopAnimation.motion.active), false);
+    assert.equal(await h.game((scene) => scene.cleaningSystem.heldMop), false, "the mop goes away once the dirt is clean");
+    assert.equal(await h.game((scene) => scene.player.sprite.texture.key), "player_mechanic");
     console.log(`Mopping ${facing}: held key ignored; ${Math.round(slow)}ms slow / ${Math.round(fast)}ms fast sweep.`);
   }
 
-  await faceBucket();
-  await h.page.keyboard.press("e");
-  assert.equal(await h.game((scene) => scene.cleaningSystem.heldMop), null);
-  assert.equal(await h.game((scene) => scene.player.sprite.texture.key), "player_mechanic");
-  await h.page.keyboard.press("e");
-  assert.equal(await h.game((scene) => scene.cleaningSystem.heldMop?.id), bucketId);
   const saved = await h.game((scene) => {
     for (const [index, kind] of ["smudge", "footprints", "scuff"].entries()) {
       scene.cleaningSystem.dirt.add(kind, 980 + index * 40, 280, index / 8);
@@ -132,11 +103,9 @@ try {
   const loaded = await h.game((scene) => ({
     dirt: scene.cleaningSystem.dirt.serialize(),
     heldMop: scene.cleaningSystem.heldMop,
-    buckets: scene.fixtures.ofKind("mop").length,
   }));
   assert.deepEqual(loaded.dirt, saved.dirt);
-  assert.equal(loaded.heldMop, null);
-  assert.equal(loaded.buckets, 1);
+  assert.equal(loaded.heldMop, false);
 
   const uniforms = await h.game(async (scene) => {
     const { MopAnimation } = await import("/js/modules/cleaning/MopAnimation.js");
@@ -184,7 +153,7 @@ try {
   assert.equal(dropped.again, dropped.after);
   assert.equal(dropped.timer, null);
   assert.deepEqual(h.errors(), []);
-  console.log(`Bucket purchase/placement, return, carry restrictions, dirt saves, and all ${uniforms} employee uniforms passed.`);
+  console.log(`No-bucket mopping, full-hands refusal, mop put away on walking and when clean, dirt saves, and all ${uniforms} employee uniforms passed.`);
 } finally {
   await h.close();
 }

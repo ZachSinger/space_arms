@@ -111,7 +111,7 @@ function storeTopic({ shopLevel, reputation }) {
         <strong>Layout</strong> tab. Each one needs a certain Store Level, costs money, and
         must be bought in order, between shifts.</p>`),
     section("Placing Fixtures", `
-      <p>Fixtures are your shelves, register, trashcan, and mop bucket.</p>
+      <p>Fixtures are your shelves, register, and trashcan.</p>
       ${list([
         "Buy one in the <strong>Fixtures</strong> tab. It arrives as a crate on the Loading Pad.",
         `Pick up the crate with ${key("crate")}, carry it to where you want it, and press ${key("interact")}.`,
@@ -137,16 +137,15 @@ function storeTopic({ shopLevel, reputation }) {
       <p>With empty hands, face trash and press ${key("interact")} to pick it up. Face a
         trashcan and press ${key("interact")} to throw it away. Hold ${key("highlightTrash")}
         to highlight trash and dirt, including marks hidden behind fixtures.</p>
-      <p>Buy a <strong>Mop Bucket</strong> in the Fixtures tab and place it on the sales
-        floor. With empty hands, face the front of the bucket and press ${key("interact")}
-        to take its mop. Stand still, face a dirt mark, and press ${key("interact")}
-        repeatedly until the small bar fills. Holding the button does not clean it.</p>
+      <p>To clean a dirt mark, stand still with empty hands, face the mark, and press
+        ${key("interact")} repeatedly. Your character pulls out a mop and scrubs, and a small
+        bar fills above them. The mark is gone when the bar is full. Holding the button
+        does not clean it.</p>
       <p>Faster presses make your character mop faster. Cleaning the mark restores its
-        2 cleanliness points. Face the same bucket and press ${key("interact")} to return
-        the mop. You cannot carry trash or crates, use shelves, or work the register while
-        holding it.</p>
-      <p>Dirt and unfinished mopping are saved and stay overnight. Loading a save returns
-        the mop to its bucket. Employees on the Clean the store job also mop dirt.</p>`),
+        2 cleanliness points. The mop goes away on its own when you walk off or the mark is
+        clean.</p>
+      <p>Dirt and unfinished mopping are saved and stay overnight. Employees on the Clean the
+        store job also mop dirt.</p>`),
     section("Starting a Shift", `
       ${list([
         "Press <strong>START SHIFT</strong> on the top bar. The game saves first.",
@@ -336,7 +335,7 @@ function employeesTopic() {
       ${list([
         "<strong>Stock shelves:</strong> a crate anywhere in the shop or backroom has items, and a matching shelf spot has room.",
         "<strong>Clean the store:</strong> trash comes first. If there is trash on the shop floor and a trashcan they can walk to, they pick up the nearest piece nobody else is going for, one at a time, and throw it in the nearest trashcan. If you pick up that piece first, they go for another one.",
-        "When there is no trash to pick up, they mop dirt marks. They need a Mop Bucket whose mop nobody is using. They take the mop, mop the nearest dirt mark until it's gone, move on to the next mark, and put the mop back in its bucket when no dirt is left. While an employee has a bucket's mop, you can't take it, move the bucket, or sell it. If you take that mop before they get to the bucket, they choose another job.",
+        "When there is no trash to pick up, they mop dirt marks. They walk to the nearest dirt mark nobody else is going for, pull out a mop, and scrub until it's gone, then move on to the next mark until no dirt is left.",
       ])}
       <p>They take a matching crate — from the Loading Pad, the backroom, or the shop floor,
         top of a stack first — straight to its shelf spot. They only

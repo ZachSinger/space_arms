@@ -1,5 +1,5 @@
-// Checks, in a real shift, that an employee on the cleaning job fetches the mop, mops dirt with
-// the sweeping animation in all four facing directions, and puts the mop back.
+// Checks, in a real shift, that an employee on the cleaning job walks to dirt, mops it with the
+// sweeping animation in all four facing directions (no bucket needed), and puts the mop away.
 // Optional: pass a file path to save a screenshot of the employee mopping.
 import assert from "node:assert/strict";
 import { startGame } from "./harness.mjs";
@@ -12,13 +12,6 @@ try {
     scene.gameState.reputation.shopLevel = 7;
     scene.gameState.economy.credits += 20000;
     scene.debugTools.quickstart({ shelfCount: 2, itemCount: 8 });
-    const system = scene.fixtureSystem;
-    if (!system.buy("mop_bucket")) throw new Error("Could not buy the mop bucket.");
-    const crate = scene.restockCrates.find((entry) => entry.typeId === "mop_bucket");
-    scene.restockCrates = scene.restockCrates.filter((entry) => entry !== crate);
-    scene.crateSystem.addCarriedCrate(crate);
-    const cell = system.findNearestCell("mop_bucket", { gx: 19, gy: 3 });
-    if (!cell || !system.placeFromCrate(crate, cell.gx, cell.gy)) throw new Error("Bucket placement failed.");
     if (!scene.gameState.hireEmployee("tavi_stock_clerk")) throw new Error("Could not hire.");
     scene.gameState.staff.jobPriorities.tavi_stock_clerk = ["clean", "register", "stock_shelves"];
     scene.gameState.staff.registerAssignments = {};
@@ -71,7 +64,7 @@ try {
   assert.equal(done.score.dirtCount, 0);
   assert.doesNotMatch(done.texture, /_mopping$/);
   assert.deepEqual(h.errors(), []);
-  console.log("Employee fetched the mop, mopped both marks in all four facings, and put it back.");
+  console.log("Employee walked to both marks, mopped them in all four facings without a bucket, and put the mop away.");
 } finally {
   await h.close();
 }

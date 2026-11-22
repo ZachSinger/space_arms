@@ -177,7 +177,6 @@ export class FixtureSystem {
     if (!fixture) {
       const trashcan = this.getNearbyTrashcan();
       if (trashcan && shop.interactionSystem.isPlayerFacingFixture(trashcan)) fixture = trashcan;
-      if (!fixture) fixture = shop.cleaningSystem?.getNearbyMopBucket() ?? null;
     }
     if (!fixture || !this.canRearrange()) return null;
     return this.moveAreaBlockReason(fixture) ? null : fixture;
@@ -287,13 +286,6 @@ export class FixtureSystem {
   // Fixtures can only be moved from the same room the player is standing in.
   moveAreaBlockReason(fixture) {
     if (!fixture) return null;
-    if (this.shop.cleaningSystem?.heldMop) {
-      return this.shop.cleaningSystem.heldMop === fixture
-        ? "Put the mop back before moving its bucket." : "Put the mop back before moving fixtures.";
-    }
-    if (this.shop.cleaningSystem?.isMopWithStaff?.(fixture)) {
-      return "An employee is using this bucket's mop. It can be moved once they put the mop back.";
-    }
     const area = areaAtRow(Math.floor(fixture.gy));
     if (area === this.shop.areas.playerArea) return null;
     const name = this.fixtures.displayName(fixture);
@@ -477,7 +469,7 @@ export class FixtureSystem {
   // Fixture shop rows, with every reason a purchase might be blocked.
   purchaseOptions() {
     const { catalog, economy } = this.shop.gameState;
-    return Object.values(FIXTURE_TYPES).filter((spec) => spec.kind !== "mop" || this.shop.cleaningSystem).map((spec) => ({
+    return Object.values(FIXTURE_TYPES).map((spec) => ({
       spec,
       license: database.getLicense(spec.licenseId),
       licensed: catalog.owns(spec.licenseId),
@@ -496,10 +488,6 @@ export class FixtureSystem {
     const { catalog, economy } = scene.gameState;
     const spec = getFixtureType(typeId);
     if (!spec) throw new Error(`Unknown fixture type: ${typeId}`);
-    if (spec.kind === "mop" && !scene.cleaningSystem) {
-      scene.messages.show("Mop buckets are unavailable while cleaning is disabled.", "#94a3b8");
-      return false;
-    }
     if (!catalog.owns(spec.licenseId)) return false;
     if (economy.credits < spec.price) return false;
     const spawn = scene.supply.takePadSpots(1)[0];
@@ -531,10 +519,6 @@ export class FixtureSystem {
   #removalBlockReason(fixture, action) {
     if (!fixture) return "Fixture not found.";
     if (!this.canRearrange()) return `Fixtures can only be ${action} while the store is closed.`;
-    if (this.shop.cleaningSystem?.heldMop === fixture) return `Put the mop back before its bucket is ${action}.`;
-    if (this.shop.cleaningSystem?.isMopWithStaff?.(fixture)) {
-      return `An employee is using this bucket's mop. It can be ${action} once they put the mop back.`;
-    }
     if (getFixtureType(fixture.type).kind === "register" &&
       this.fixtures.ofKind("register").length <= 1) return `The last register cannot be ${action}.`;
     if (fixture instanceof ShelfFixture && fixture.placements.some((stack) => stack.quantity > 0)) {
@@ -693,17 +677,7 @@ export class FixtureSystem {
   tryOpenFixtureWindow(fixture) {
     const shop = this.shop;
     if (!shop.controlMode.allows("interact")) return false;
-    if (fixture && getFixtureType(fixture.type).kind === "mop") {
-      const action = shop.interactables.findTarget("interact", shop.interactionSystem.getInteractionOrigin(),
-        fixture, shop.player, shop.input, "mop-bucket");
-      if (action) return action.perform();
-      shop.messages.show("Face the mop bucket with empty hands, or bring its mop back.", "#94a3b8");
-      return false;
-    }
-    if (shop.cleaningSystem?.heldMop) {
-      shop.messages.show("Put the mop back before using a shelf.", "#94a3b8");
-      return false;
-    }
+    shop.cleaningSystem?.putAwayMop();
     const target = shop.interactables.findTarget(
       "fixture",
       shop.interactionSystem.getInteractionOrigin(),

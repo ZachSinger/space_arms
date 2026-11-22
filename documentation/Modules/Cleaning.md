@@ -39,7 +39,8 @@ These answer the open questions in the design above.
 ### Build order
 1. **Slice 1 (built):** trash only. Customers drop trash, you pick it up and throw it in a
    trashcan, the store has a cleanliness level shown in the top bar, and customers judge it.
-2. **Slice 2 (built):** dirt marks, Mop Bucket, and player mopping.
+2. **Slice 2 (built):** dirt marks and player mopping. (A Mop Bucket fixture was built
+   first, then removed: you always have a mop, and old saves get the bucket's 40 back.)
 3. **Employees who clean (built):** see below.
 
 ### Employees who clean
@@ -49,22 +50,20 @@ These answer the open questions in the design above.
   **Move up / down**; highest priority is at the top. The saved order changes between shifts only.
 - An employee works down their job order and takes the first job that has work. Cleaning has
   work when there is floor trash nobody else is going for and a trashcan they can reach, or
-  a dirt mark nobody else is going for and a Mop Bucket whose mop is free. Trash comes first.
+  a dirt mark nobody else is going for. Trash comes first.
   Without the cleaning module, cleaning never has work.
 - They walk to the nearest piece, pick it up (one at a time, carried at their side), walk to
   the nearest trashcan, and throw it away. The cleanliness level goes back up exactly as when
   you do it. Then they pick their next job again.
 - Each employee reserves the piece they're walking to, so two employees never go for the same
   one. If you pick it up first, they give up on it and choose again.
-- Mopping: they reserve the nearest free bucket and the nearest dirt mark, take the mop,
-  and mop the mark with the same four-direction sweeping animation as the player. One sweep
-  equals one player press (8 per mark); a sweep takes 250 ms at Level 1, so a mark takes
-  about 2 seconds. The arms sweep faster as the skill goes up. After a mark, they move to the
-  next unreserved mark, and put the mop back in its bucket when none are left.
-- One mop per bucket: while an employee has it, the player can't take it and the bucket
-  can't be moved, crated, or sold. If the player takes the mop before the employee reaches
-  the bucket, the employee gives up and chooses again. The player and an employee can both
-  mop the same mark; whoever finishes it, the other moves on.
+- Mopping: they reserve the nearest dirt mark, walk beside it, pull out a mop, and mop
+  it with the same four-direction sweeping animation as the player. One sweep equals one
+  player press (8 per mark); a sweep takes 250 ms at Level 1, so a mark takes about
+  2 seconds. The arms sweep faster as the skill goes up. The mop goes away when they leave
+  the mark; they then walk to the next unreserved mark until none are left.
+- The player and an employee can both mop the same mark; whoever finishes it, the other
+  moves on.
 - Skill makes the whole trip faster: walking, picking up, throwing away, and mopping (+20%
   speed per level, the same as the other jobs).
 - At 20:00 they finish the cleaning task already underway, including picking up the claimed
@@ -72,9 +71,8 @@ These answer the open questions in the design above.
   customers already inside at the register before walking out through the public front
   door. The shift waits until they reach the exit. If they're removed from the
   store while carrying trash, it goes back on the floor; it's never lost or counted twice.
-  Someone mopping finishes their current mark, then returns the mop without starting another.
-  A mop held by an employee who is removed, or when a save is loaded, goes straight back
-  into its bucket; employee mops are not saved.
+  Someone mopping finishes their current mark without starting another. Employee mops are
+  not saved.
 - Saves from before this job (save format 11 and older) add the cleaning job to the end of each
   employee's job order, at Level 1.
 
@@ -114,37 +112,31 @@ for being bigger. Each customer rolls two numbers when they arrive:
 - If a fixture is placed on top of trash, the trash is pushed to the nearest open floor.
 
 ### Dirt and the mop
-- A cheap 1x1 **Mop Bucket** fixture, from the Basic Fixture Supply contract. You place it
-  like a trashcan.
-- Face it with empty hands and press E to take the mop. Press E at the bucket again to put
-  it back.
-- While holding the mop you can't carry crates or trash.
-- You also cannot use shelves or work the register while holding it.
-- No wheeling the bucket around: it would add walking without adding a real choice. Where you
-  place the bucket is the choice.
+- There is no mop to buy or fetch. Face a dirt mark with empty hands and press E: the mop
+  appears in your hands on the first press. It goes away on its own when you walk, turn
+  away, open the tablet, or finish the mark (after the last sweep plays out).
+- Picking up trash, opening a shelf, or starting the register also puts it away.
 - New dirt marks randomly choose one of the three approved appearances: dark smudges,
   footprints, or scuffs. Their appearance never changes when saving or loading.
-- The bucket and mop use the first mockup's yellow bucket and cotton mop; the progress
-  indicator uses its small horizontal blue bar.
+- The mop uses the first mockup's cotton mop; the progress indicator uses its small
+  horizontal blue bar.
 - Stand still, face the mark, and repeatedly press the current interaction button.
   Held keys and repeated keydown events do not count as new presses.
 - The character's arms and mop sweep back and forth in all four facing directions.
   Faster fresh presses shorten the sweep; the animation settles when pressing stops.
   Employees use the same renderer on their own uniforms (see Employees who clean).
 - Dirt costs 2 cleanliness points until the mark is fully cleaned. Partial progress,
-  position, and appearance persist overnight and through save/Continue. Loading returns
-  the held mop to its bucket. The additive dirt save field is optional for older saves.
+  position, and appearance persist overnight and through save/Continue. The additive dirt
+  save field is optional for older saves.
 - Holding H highlights dirt as well as trash. Placing fixtures over dirt moves it to the
   nearest open floor, preserving unfinished cleaning.
 - Starting values chosen during implementation, not balance targets: a 15% independent
   chance of one dirt mark per customer, 1–6 seconds into walking; 8 fresh presses per
-  mark; bucket price 40. Dirt chance and press count live in `data/tuning/cleaning.json`;
-  bucket price lives in `data/Fixtures.json`.
+  mark. Dirt chance and press count live in `data/tuning/cleaning.json`.
 
 ### Verification
-`node scripts/browser/mopping.mjs` checks buying and placing the bucket, real keyboard
-presses, all four directions, different pressing speeds, carry restrictions, save/Continue,
+`node scripts/browser/mopping.mjs` checks real keyboard presses, all four directions, different pressing speeds, carry restrictions, save/Continue,
 and the shared renderer with every employee uniform. `node scripts/browser/check-optional-cleaning.mjs`
-also checks preserved dirt and bucket behavior when the module is disabled.
-`node scripts/browser/employee-mopping.mjs` checks, in a real shift, that an employee fetches the
-mop, mops dirt in all four facing directions, and puts the mop back.
+also checks preserved dirt when the module is disabled.
+`node scripts/browser/employee-mopping.mjs` checks, in a real shift, that an employee walks to
+dirt and mops it in all four facing directions.

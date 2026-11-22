@@ -22,6 +22,7 @@ function harness({ carried = [], heldTrash = null, trashcan = null, area = AREA.
   };
   const cleaning = Object.assign(Object.create(CleaningSystem.prototype), { shop, heldTrash });
   cleaning.findTrashInFront = () => null;
+  cleaning.findDirtInFront = () => null;
   cleaning.pickUpTrash = (piece) => calls.push(piece);
   cleaning.throwAwayHeldTrash = () => calls.push("throw");
   return { cleaning, calls };

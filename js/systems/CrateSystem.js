@@ -158,11 +158,6 @@ export class CrateSystem {
         putDown: holding ? { tap: say("Leave the register to put down a crate") } : undefined,
       }, null, holding);
     }
-    if (shop.cleaningSystem?.heldMop) {
-      return this.addActionHints({
-        pickUp: { tap: say("Put the mop back before picking up crates.", "#f59e0b"), blocked: true },
-      }, null, holding);
-    }
     if (shop.heldTrash) {
       const reason = "You can't pick up crates while holding trash";
       return this.addActionHints({

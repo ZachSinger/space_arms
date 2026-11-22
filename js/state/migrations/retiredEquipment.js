@@ -13,6 +13,7 @@ const RETIRED_FIXTURE_PRICES = Object.freeze({
   locker_single: 180,
   locker_double: 1200,
   locker_secure: 2200,
+  mop_bucket: 40,
 });
 const RETIRED_LICENSE_PRICES = Object.freeze({
   lic_fixture_expanded: 750, lic_fixture_premium_shelf: 600,

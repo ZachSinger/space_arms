@@ -105,7 +105,7 @@ function bindCleaningSystem(scene) {
     getActions: () => [],
     findTrashInFront: () => null,
     findDirtInFront: () => null,
-    getNearbyMopBucket: () => null,
+    putAwayMop: () => false,
     isOpenTrashSpot: () => false,
     dropTrash: () => false,
     pickUpTrash: () => false,

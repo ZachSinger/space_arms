@@ -109,11 +109,6 @@ export class InteractionSystem {
         `or press ${controlLabel("putDown")} to drop it.`, "#94a3b8");
       return;
     }
-    if (shop.cleaningSystem?.heldMop) {
-      shop.messages.show(`Face dirt and press ${controlLabel("interact")} repeatedly to mop it, ` +
-        `or face its bucket and press ${controlLabel("interact")} to put the mop back.`, "#94a3b8");
-      return;
-    }
     if (shop.carriedCrate?.kind === "fixture") {
       throw new Error("A carried fixture crate has no placement action.");
     }
@@ -145,7 +140,7 @@ export class InteractionSystem {
       } else if (mode === CONTROL_MODES.WALKING && !shop.heldTrash && !shop.cleaningSystem?.heldMop &&
         !shop.cleaningSystem?.findTrashInFront()) {
         const interactable = shop.interactables.findTarget("interact", this.getInteractionOrigin());
-        if (interactable?.hint && interactable.kind !== "trash" && interactable.kind !== "trashcan") {
+        if (interactable?.hint && !["trash", "trashcan", "dirt"].includes(interactable.kind)) {
           lines.push(...interactable.hint.split("\n"));
         }
       }
@@ -158,7 +153,7 @@ export class InteractionSystem {
         this.getInteractionOrigin(),
       );
       const cleaningActions = availableActions.filter((action) =>
-        ["trash", "trashcan", "dirt", "mop-bucket"].includes(action.kind));
+        ["trash", "trashcan", "dirt"].includes(action.kind));
       const crateActions = availableActions.filter((action) => action.kind === "crate-control");
       for (const action of cleaningActions) lines.push(action.hint);
       for (const action of crateActions) {

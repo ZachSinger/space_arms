@@ -25,7 +25,7 @@ export const TRASH_HANDLING_MS = 600;
 export const MOP_STROKE_MS = 250;
 // Provisional Level 1 pause for each individual item placed on a shelf.
 export const STOCKING_MS_PER_ITEM = 1000;
-const CLEANING_WALK_STATES = Object.freeze(["TO_LITTER", "TO_LITTER_BIN", "TO_MOP_BUCKET", "TO_DIRT", "TO_RETURN_MOP"]);
+const CLEANING_WALK_STATES = Object.freeze(["TO_LITTER", "TO_LITTER_BIN", "TO_DIRT"]);
 const CLEANING_ACTION_STATES = Object.freeze(["PICKING_UP_LITTER", "BINNING_LITTER", "MOPPING"]);
 
 export class Employee {
@@ -107,9 +107,6 @@ export class Employee {
     } else if (CLEANING_ACTION_STATES.includes(this.state)) {
       this.updateCleaningAction(delta);
     } else if (this.state === "TO_LITTER" && !this.isStillAfterTrash()) {
-      this.sprite.body.setVelocity(0, 0);
-      this.finishTask();
-    } else if (this.state === "TO_MOP_BUCKET" && this.currentJob.bucket.mopClaimedBy !== this) {
       this.sprite.body.setVelocity(0, 0);
       this.finishTask();
     } else if (this.state === "TO_DIRT" && !this.isStillAfterDirt()) {
@@ -362,7 +359,7 @@ export class Employee {
   }
 
   // Cleaning: trash first (the nearest piece nobody else is after, then the nearest trashcan),
-  // then dirt (fetch a free mop, mop the nearest marks, put the mop back). No cleaning module,
+  // then dirt (walk to the nearest mark and mop it, then the next). No cleaning module,
   // no mess, or nowhere reachable to take it means there's no cleaning work.
   startCleaningJob() {
     const cleaning = this.store.cleaning;
@@ -394,17 +391,14 @@ export class Employee {
 
   startMoppingJob(cleaning) {
     const marks = cleaning.staffDirtTargets(this);
-    const buckets = cleaning.staffMopBuckets(this);
-    if (marks.length === 0 || buckets.length === 0) return false;
-    const toBucket = this.findClosestSpot(this.fixtureSpots(buckets));
+    if (marks.length === 0) return false;
     const toDirt = this.findClosestSpot(this.dirtSpots(marks));
-    if (!toBucket || !toDirt ||
-      !cleaning.claimMoppingForStaff(this, { bucket: toBucket.spot.fixture, mark: toDirt.spot.mark })) {
+    if (!toDirt || !cleaning.claimDirtForStaff(this, toDirt.spot.mark)) {
       this.cleaningCheckInMs = JOB_RETRY_MS;
       return false;
     }
-    this.currentJob = { jobId: "clean", bucket: toBucket.spot.fixture, dirt: toDirt.spot.mark };
-    if (this.startPath(toBucket.spot, toBucket.path, "TO_MOP_BUCKET")) return true;
+    this.currentJob = { jobId: "clean", dirt: toDirt.spot.mark };
+    if (this.startPath(toDirt.spot, toDirt.path, "TO_DIRT")) return true;
     cleaning.releaseStaffMoppingClaims(this);
     return false;
   }
@@ -414,37 +408,20 @@ export class Employee {
     return Boolean(dirt && this.store.cleaning?.isDirtClaimedBy(dirt, this));
   }
 
-  arriveAtMopBucket() {
-    if (!this.store.cleaning?.takeMopForStaff(this, this.currentJob.bucket)) {
-      this.finishTask();
-      return;
-    }
-    this.walkToNextDirt();
-  }
-
   // The claimed mark if it's still dirty, otherwise the nearest unclaimed one. At closing time
   // the claimed mark still gets finished, but no new one is started.
   walkToNextDirt() {
     const cleaning = this.store.cleaning;
     const job = this.currentJob;
+    cleaning.putAwayStaffMop(this);
     const marks = this.isStillAfterDirt() ? [job.dirt]
       : this.clockOutRequested ? [] : cleaning.staffDirtTargets(this);
     const nearest = marks.length > 0 ? this.findClosestSpot(this.dirtSpots(marks)) : null;
-    if (nearest && cleaning.claimMoppingForStaff(this, { mark: nearest.spot.mark })) {
+    if (nearest && cleaning.claimDirtForStaff(this, nearest.spot.mark)) {
       job.dirt = nearest.spot.mark;
       if (this.startPath(nearest.spot, nearest.path, "TO_DIRT")) return true;
       this.currentJob = job;
     }
-    job.dirt = null;
-    return this.walkToReturnMop();
-  }
-
-  walkToReturnMop() {
-    const cleaning = this.store.cleaning;
-    const bucket = cleaning.staffMopBucket(this);
-    const route = bucket && this.store.fixtures.ofKind("mop").includes(bucket)
-      ? this.findClosestSpot(this.fixtureSpots([bucket])) : null;
-    if (route && this.startPath(route.spot, route.path, "TO_RETURN_MOP")) return true;
     this.finishTask();
     return false;
   }
@@ -455,14 +432,10 @@ export class Employee {
       return;
     }
     this.faceToward(this.currentJob.dirt);
+    this.store.cleaning.takeMopForStaff(this);
     this.beginCleaningAction("MOPPING");
     // The first sweep starts right away.
     this.cleaningActionRemainingMs = 0;
-  }
-
-  arriveToReturnMop() {
-    this.store.cleaning?.returnStaffMop(this);
-    this.finishTask();
   }
 
   faceToward(point) {
@@ -694,12 +667,8 @@ export class Employee {
       this.arriveAtTrash();
     } else if (this.state === "TO_LITTER_BIN") {
       this.arriveAtTrashBin();
-    } else if (this.state === "TO_MOP_BUCKET") {
-      this.arriveAtMopBucket();
     } else if (this.state === "TO_DIRT") {
       this.arriveAtDirt();
-    } else if (this.state === "TO_RETURN_MOP") {
-      this.arriveToReturnMop();
     }
   }
 
@@ -921,7 +890,7 @@ export class Employee {
 
   finishTask() {
     // Trash still in hand goes back on the floor, so it's never lost or counted twice, and a
-    // mop still in hand goes back in its bucket.
+    // mop in hand is put away.
     if (this.currentJob?.jobId === "clean") this.dropCleaningThings();
     this.currentJob = null;
     this.registerServiceRemainingMs = 0;
@@ -935,7 +904,8 @@ export class Employee {
 
   dropCleaningThings() {
     this.store.cleaning?.dropStaffTrash(this);
-    this.store.cleaning?.returnStaffMop(this);
+    this.store.cleaning?.releaseStaffMoppingClaims(this);
+    this.store.cleaning?.putAwayStaffMop(this);
   }
 
   requestClockOut() {

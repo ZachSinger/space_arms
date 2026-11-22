@@ -488,7 +488,7 @@ After Phase 3, any finished phase is a safe place to pause and build features.
 
 | Feature | Can start after | Why |
 |---|---|---|
-| Cleaning slice 2 (dirt, mop bucket) | Phase 5 | Dirt marks and the mop bucket are interactables. "Press E to fill the gauge" is a hold action |
+| Cleaning slice 2 (dirt, mopping) | Phase 5 | Dirt marks are interactables; the mop appears when you tap E at dirt (no bucket). "Press E to fill the gauge" is a hold action |
 | Employees who clean | Phase 4 | A new job on the shared movement core |
 | Presentation | Phase 3 (checkout) + Phase 8 | Decorations are fixtures with a value. The "no gain if too low" rule is a reputation rule |
 | Drone Deliveries | Phase 6 | Locked mixed crates tied to an order ID; filling from nearby crates and shelves are actions |
