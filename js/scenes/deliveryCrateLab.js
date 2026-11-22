@@ -13,24 +13,22 @@ import { PEOPLE_DEPTH_BASE } from "../world/Depth.js";
 export const DRONE_TERMINAL_SPRITE = Object.freeze({
   key: "fixture_drone_terminal_sheet",
   path: "img/Generated/fixture_drone_terminal_sheet.png",
-  frameWidth: 80,
-  frameHeight: 54,
+  frameWidth: 120,
+  frameHeight: 81,
 });
 
 // Sheet frames: 0 closed, 1-4 doors opening, 5-7 platform rising.
+// pauseAfter: how long PLAY ALL holds before the next part. The platform starts rising as soon as the doors finish.
 const STAGES = Object.freeze([
-  { label: "DOORS OPEN", frames: [0, 1, 2, 3, 4] },
-  { label: "PLATFORM RISES", frames: [5, 6, 7] },
-  { label: "PLATFORM LOWERS", frames: [6, 5, 4] },
-  { label: "DOORS CLOSE", frames: [3, 2, 1, 0] },
+  { label: "DOORS OPEN", frames: [0, 1, 2, 3, 4], pauseAfter: 0 },
+  { label: "PLATFORM RISES", frames: [5, 6, 7], pauseAfter: 600 },
+  { label: "PLATFORM LOWERS", frames: [6, 5, 4], pauseAfter: 600 },
+  { label: "DOORS CLOSE", frames: [3, 2, 1, 0], pauseAfter: 600 },
 ]);
 const FRAME_MS = 120;
-const STAGE_PAUSE_MS = 600;
 const HEADER_HEIGHT = 100;
 const TEXT_STYLE = { fontFamily: "monospace", fontSize: "14px", color: "#e2e8f0" };
 const ROOM = Object.freeze({ columns: 8, rows: 5 });
-// Makes the terminal about as tall as the player.
-const TERMINAL_SCALE = 1.5;
 
 export class DeliveryCrateLabScene extends Phaser.Scene {
   constructor() {
@@ -65,7 +63,7 @@ export class DeliveryCrateLabScene extends Phaser.Scene {
     this.drawFloor();
 
     this.terminal = this.addWorld(this.add.sprite(this.roomWidth / 2, this.roomHeight / 2,
-      DRONE_TERMINAL_SPRITE.key, 0).setScale(TERMINAL_SCALE));
+      DRONE_TERMINAL_SPRITE.key, 0));
     this.terminal.setDepth(PEOPLE_DEPTH_BASE + this.terminal.getBounds().bottom);
 
     this.player = new Player(this, this.terminal.getBounds().left - TILE_SIZE, this.roomHeight / 2);
@@ -118,7 +116,8 @@ export class DeliveryCrateLabScene extends Phaser.Scene {
     do {
       for (let index = 0; index < STAGES.length; index += 1) {
         if (!await this.runStage(index, token)) return;
-        if (!await this.wait(STAGE_PAUSE_MS, token)) return;
+        const pause = STAGES[index].pauseAfter;
+        if (pause > 0 && !await this.wait(pause, token)) return;
       }
     } while (this.looping && token === this.playToken);
     this.finish(token);
