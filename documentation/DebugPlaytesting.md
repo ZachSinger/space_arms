@@ -60,7 +60,8 @@ and the floor doors closing. There is no extra pause between the floor doors ope
 the crate rising. Three pictures show the crate appearing before its platform becomes visible;
 lowering reverses the same pictures, so the platform disappears before the crate does.
 Each of the six stages has **SLOW**, **NORMAL**, and **FAST** buttons. Normal preserves the
-original 120 ms per picture; Slow uses 240 ms and Fast uses 60 ms. Changes affect that stage's
+original 120 ms per picture; Slow uses 240 ms and Fast uses 60 ms. All six default to Fast,
+the approved timing for the eventual in-game terminal animation. Changes affect that stage's
 next picture delay without restarting the animation or changing the other stages. The green
 button marks the selected speed. The existing holds between stages remain unchanged.
 Choices survive leaving and reopening the lab during the same game session; they do not affect saved games.
@@ -69,6 +70,10 @@ Use **MENU** or **Esc** to leave. The animation pictures are in
 All pictures share the same terminal and pad pixel for pixel. Only the moving doors, platform
 and crate change; the raised crate can overlap the back of the pad but is clipped behind its front rim.
 The original empty-platform sheet remains in `img/Generated/fixture_drone_terminal_sheet.png`.
+Both sheets use the same cleaned, dark outline without the original white-background halo.
+The terminal screen is a separate overlay in `img/Generated/fixture_drone_terminal_screen_sheet.png`
+(8 pictures, 16×15 each). It covers the screen at offset (10, 11) from the terminal picture's top-left
+and loops at 8 pictures per second, independently of the mechanical stages and their speed controls.
 
 ## Capturing a session
 

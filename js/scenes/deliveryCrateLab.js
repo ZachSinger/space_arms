@@ -17,6 +17,14 @@ export const DRONE_TERMINAL_SPRITE = Object.freeze({
   frameHeight: 81,
 });
 
+export const DRONE_TERMINAL_SCREEN_SPRITE = Object.freeze({
+  key: "fixture_drone_terminal_screen_sheet",
+  path: "img/Generated/fixture_drone_terminal_screen_sheet.png",
+  frameWidth: 16,
+  frameHeight: 15,
+});
+const SCREEN_ANIMATION_KEY = "drone-terminal-screen";
+
 // Frames 5-7 reveal only the crate; 8-12 reveal its platform. Frames 13-15 open the crate lid.
 // The platform starts rising as soon as the doors finish; other holds stay unchanged.
 const STAGES = Object.freeze([
@@ -39,21 +47,24 @@ const ROOM = Object.freeze({ columns: 8, rows: 5 });
 export class DeliveryCrateLabScene extends Phaser.Scene {
   constructor() {
     super("scene-delivery-crate-lab");
-    this.speedSettings = STAGES.map(() => 1);
+    this.speedSettings = STAGES.map(() => 2);
   }
 
   preload() {
-    if (!this.textures.exists(DRONE_TERMINAL_SPRITE.key)) {
-      this.load.spritesheet(DRONE_TERMINAL_SPRITE.key, DRONE_TERMINAL_SPRITE.path, {
-        frameWidth: DRONE_TERMINAL_SPRITE.frameWidth,
-        frameHeight: DRONE_TERMINAL_SPRITE.frameHeight,
-      });
+    for (const sprite of [DRONE_TERMINAL_SPRITE, DRONE_TERMINAL_SCREEN_SPRITE]) {
+      if (!this.textures.exists(sprite.key)) {
+        this.load.spritesheet(sprite.key, sprite.path, {
+          frameWidth: sprite.frameWidth,
+          frameHeight: sprite.frameHeight,
+        });
+      }
     }
   }
 
   create() {
     installSceneTextSize(this, Phaser);
     this.textures.get(DRONE_TERMINAL_SPRITE.key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.textures.get(DRONE_TERMINAL_SCREEN_SPRITE.key).setFilter(Phaser.Textures.FilterMode.NEAREST);
     this.carriedCrates = [];
     this.controlMode = { allows: () => true };
     this.playing = false;
@@ -71,6 +82,19 @@ export class DeliveryCrateLabScene extends Phaser.Scene {
     this.terminal = this.addWorld(this.add.sprite(this.roomWidth / 2, this.roomHeight / 2,
       DRONE_TERMINAL_SPRITE.key, 0));
     this.terminal.setDepth(PEOPLE_DEPTH_BASE + this.terminal.getBounds().bottom);
+    if (!this.anims.exists(SCREEN_ANIMATION_KEY)) {
+      this.anims.create({
+        key: SCREEN_ANIMATION_KEY,
+        frames: this.anims.generateFrameNumbers(DRONE_TERMINAL_SCREEN_SPRITE.key, { start: 0, end: 7 }),
+        frameRate: 8,
+        repeat: -1,
+      });
+    }
+    this.terminalScreen = this.addWorld(this.add.sprite(
+      this.terminal.x - DRONE_TERMINAL_SPRITE.frameWidth / 2 + 10,
+      this.terminal.y - DRONE_TERMINAL_SPRITE.frameHeight / 2 + 11,
+      DRONE_TERMINAL_SCREEN_SPRITE.key,
+    ).setOrigin(0).setDepth(this.terminal.depth + 0.01).play(SCREEN_ANIMATION_KEY));
 
     this.player = new Player(this, this.terminal.getBounds().left - TILE_SIZE, this.roomHeight / 2);
     this.player.sprite.body.setCollideWorldBounds(true);
@@ -81,7 +105,7 @@ export class DeliveryCrateLabScene extends Phaser.Scene {
       "DELIVERY CRATE LAB  Always looping. Click a speed to change that stage. Esc: menu.", TEXT_STYLE));
     this.status = this.addUi(this.add.text(16, 26, "", { ...TEXT_STYLE, color: "#facc15" }));
     this.addUi(this.add.text(16, 46,
-      "Slow: half speed. Normal: original speed. Fast: double speed. Green marks your choice.", TEXT_STYLE));
+      "Fast is the chosen game speed. Slow / Normal remain available for comparison. Green marks your choice.", TEXT_STYLE));
     this.speedButtons = STAGES.map((stage, stageIndex) => {
       const y = 72 + stageIndex * 24;
       this.addUi(this.add.text(16, y, `${stageIndex + 1}: ${stage.label}`, TEXT_STYLE));
@@ -153,7 +177,7 @@ export class DeliveryCrateLabScene extends Phaser.Scene {
 
   showStatus() {
     const stage = this.playing ? STAGES[this.stageIndex].label : "STARTING";
-    const speed = this.playing ? SPEEDS[this.speedSettings[this.stageIndex]].label : "NORMAL";
+    const speed = this.playing ? SPEEDS[this.speedSettings[this.stageIndex]].label : "FAST";
     this.status.setText(`Now: ${stage}   Speed: ${speed}   Picture ${this.terminal.frame.name + 1} of 16   Loop: ON`);
   }
 

@@ -40,6 +40,14 @@ The Drone Terminal lets you fill orders from remote customers from the start of 
   crate area. This keeps remote-order work off the sales floor while keeping the terminal and
   incoming stock nearby.
 
+## Approved terminal animation (delivery lab)
+
+Use the delivery lab's Fast timing, 60 ms per picture, for all six mechanical stages when
+integrating the approved terminal art into gameplay. The terminal screen is a separate
+continuously animated overlay; its animation must not follow the doors, platform or crate lid.
+The lab uses this timing by default. See [DebugPlaytesting.md](../DebugPlaytesting.md) for the
+sprite sheets and screen alignment.
+
 ## Implemented first-pass tuning (not confirmed by Zach)
 
 The following values are implementation picks to make the feature playable, not agreed design.
