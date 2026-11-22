@@ -20,17 +20,19 @@ import { controlLabel } from "../../input/InputDevice.js";
 import { describeOrderSources, findOrderItemSources } from "./OrderSources.js";
 import { OrderTracker } from "./OrderTracker.js";
 
+// The terminal art reaches 15px left, 103px right and 28px up from this point, so this
+// tucks it into the top-right corner of the starting backroom floor.
 const TERMINAL_POSITION = Object.freeze({
-  x: TILE_SIZE * 1.375,
-  y: TILE_SIZE * (BACKROOM_GRID_Y + 2.5),
+  x: TILE_SIZE * 5 - 103,
+  y: TILE_SIZE * (BACKROOM_GRID_Y + 1) + 28,
 });
 const DELIVERY_PAD_POSITION = Object.freeze({
   x: TERMINAL_POSITION.x + 72.5,
   y: TERMINAL_POSITION.y + 32.5,
 });
 const ORDER_CRATE_POSITION = Object.freeze({
-  x: TILE_SIZE * 1.375 + 74,
-  y: TILE_SIZE * (BACKROOM_GRID_Y + 2.5) + 19,
+  x: TERMINAL_POSITION.x + 74,
+  y: TERMINAL_POSITION.y + 19,
 });
 const TERMINAL_ART_CENTER = Object.freeze({
   x: TERMINAL_POSITION.x + 45,

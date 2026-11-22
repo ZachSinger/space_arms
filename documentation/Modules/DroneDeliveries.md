@@ -36,9 +36,9 @@ The Drone Terminal lets you fill orders from remote customers from the start of 
 - Orders come in by chance, much like how customers are generated, except factions don't matter.
   An order can arrive at any time.
 - Remote orders are generally larger than most customer orders.
-- The Drone Terminal and its pad are already placed in the starting backroom, next to the shipping
-  crate area. This keeps remote-order work off the sales floor while keeping the terminal and
-  incoming stock nearby.
+- The Drone Terminal and its pad are already placed in the top-right corner of the starting
+  backroom, against the back wall. This keeps remote-order work off the sales floor while keeping
+  the terminal and incoming stock nearby.
 
 ## Approved terminal art in gameplay
 

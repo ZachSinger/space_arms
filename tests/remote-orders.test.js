@@ -239,7 +239,7 @@ test("the drone pad refuses an overlapping crate and accepts a clear order crate
     fixture.crate.isCarried = false;
   };
   assert.equal(fixture.system.putOrderCrateOnPad(fixture.crate), true);
-  assert.deepEqual(fixture.crate.sprite, { x: 162, y: 6579 });
+  assert.deepEqual(fixture.crate.sprite, { x: 291, y: 6511 });
   assert.deepEqual(fixture.shop.crateSystem.restockCrates, [fixture.crate]);
 });
 
