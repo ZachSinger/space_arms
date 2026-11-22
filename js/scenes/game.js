@@ -16,6 +16,11 @@ import { ControlMode, CONTROL_MODES } from "../input/ControlMode.js";
 import { InteractableRegistry } from "../interaction/InteractableRegistry.js";
 import { InteractionSystem } from "../interaction/InteractionSystem.js";
 import { ModuleHost } from "../modules/GameModules.js";
+import {
+  DRONE_TERMINAL_PLATFORM_SPRITE,
+  DRONE_TERMINAL_SCREEN_SPRITE,
+  REMOTE_ORDER_CRATE_SPRITES,
+} from "../modules/droneDeliveries/DroneTerminalArt.js";
 /** @typedef {import("../logic/ShelfFixture.js").ShelfFixture} ShelfFixture */
 import { SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT } from "../logic/Customer.js";
 import { Player } from "../logic/Player.js";
@@ -75,7 +80,20 @@ export class GameScene extends Phaser.Scene {
     super("scene-game");
   }
 
-  preload() {}
+  preload() {
+    for (const sprite of [DRONE_TERMINAL_PLATFORM_SPRITE, DRONE_TERMINAL_SCREEN_SPRITE]) {
+      this.load.spritesheet(sprite.key, sprite.path, {
+        frameWidth: sprite.frameWidth,
+        frameHeight: sprite.frameHeight,
+      });
+    }
+    for (const sprite of Object.values(REMOTE_ORDER_CRATE_SPRITES)) {
+      this.load.spritesheet(sprite.key, sprite.path, {
+        frameWidth: sprite.frameWidth,
+        frameHeight: sprite.frameHeight,
+      });
+    }
+  }
 
   /**
    * @param {{ savedShopData?: object, sandbox?: boolean, lab?: "ui", real?: boolean, seed?: number }} data -

@@ -8,6 +8,7 @@ import { createServer } from "vite";
 import { createRemoteOrder } from "../js/logic/RemoteOrders.js";
 import { Crate } from "../js/logic/Crate.js";
 import { transferItems } from "../js/logic/InventoryTransfer.js";
+import { REMOTE_ORDER_CRATE_SPRITES } from "../js/modules/droneDeliveries/DroneTerminalArt.js";
 
 let server;
 let cacheDirectory;
@@ -32,6 +33,21 @@ after(async () => {
 });
 
 function createScene() {
+  const image = (x, y, textureKey) => ({
+    x, y, textureKey, scaleX: 1, scaleY: 1, displayHeight: 28,
+    setDisplaySize(width, height) {
+      this.width = width;
+      this.height = height;
+      this.displayHeight = height;
+      return this;
+    },
+    setTexture(key) { this.textureKey = key; return this; },
+    setFrame() { return this; },
+    setDepth() { return this; },
+    setOrigin() { return this; },
+    setTint() { return this; },
+    clearTint() { return this; },
+  });
   const scene = {
     crateBounds: { left: 0, top: 0, right: 500, bottom: 500 },
     crateGroup: {
@@ -50,21 +66,8 @@ function createScene() {
       },
     },
     add: {
-      image(x, y) {
-        return {
-          x, y, scaleX: 1, scaleY: 1, displayHeight: 28,
-          setDisplaySize(width, height) {
-            this.width = width;
-            this.height = height;
-            this.displayHeight = height;
-            return this;
-          },
-          setDepth() { return this; },
-          setOrigin() { return this; },
-          setTint() { return this; },
-          clearTint() { return this; },
-        };
-      },
+      image,
+      sprite: image,
     },
   };
   return scene;
@@ -236,8 +239,22 @@ test("the drone pad refuses an overlapping crate and accepts a clear order crate
     fixture.crate.isCarried = false;
   };
   assert.equal(fixture.system.putOrderCrateOnPad(fixture.crate), true);
-  assert.deepEqual(fixture.crate.sprite, { x: 160, y: 6560 });
+  assert.deepEqual(fixture.crate.sprite, { x: 162, y: 6579 });
   assert.deepEqual(fixture.shop.crateSystem.restockCrates, [fixture.crate]);
+});
+
+test("remote order crate switches from red to green and back when its contents reset", () => {
+  const crate = new Crate(createScene(), null, 0, 100, 100, {
+    kind: "remote-order",
+    orderId: "remote-order-1",
+    requiredItems: [{ itemId: "wpn_rif_01", quantity: 1 }],
+  });
+
+  assert.equal(crate.sprite.textureKey, REMOTE_ORDER_CRATE_SPRITES.incomplete.key);
+  assert.equal(crate.add("wpn_rif_01", 1), 1);
+  assert.equal(crate.sprite.textureKey, REMOTE_ORDER_CRATE_SPRITES.complete.key);
+  crate.resetRemoteOrderContents();
+  assert.equal(crate.sprite.textureKey, REMOTE_ORDER_CRATE_SPRITES.incomplete.key);
 });
 
 test("stock transfers into the order crate one item at a time and cannot be taken back out", () => {

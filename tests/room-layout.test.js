@@ -39,16 +39,16 @@ test("the starting sales floor has seven by three usable squares and both doors 
   assert.deepEqual(getBackroomDoorCell(), { gx: floor.gridX + 7, gy: floor.gridY + 1 });
 });
 
-test("the starting backroom is one floor square longer and the loading pad stays at the bottom", () => {
+test("the wider starting backroom leaves an aisle beside the unchanged loading pad", () => {
   const room = getBackroomBounds();
   const floor = getBackroomInteriorBounds();
   const pad = getLoadingPadBounds();
-  assert.equal(room.width, 256);
+  assert.equal(room.width, 384);
   assert.equal(room.height, 448);
-  assert.equal(floor.right - floor.left, 128);
+  assert.equal(floor.right - floor.left, 256);
   assert.equal(floor.bottom - floor.top, 320);
   assert.equal(pad.left, floor.left);
-  assert.equal(pad.right, floor.right);
+  assert.equal(floor.right - pad.right, 128);
   assert.equal(pad.top - floor.top, 192);
   assert.equal(pad.bottom, floor.bottom);
   const zones = ZONES.map((zone) => ({ ...zone }));

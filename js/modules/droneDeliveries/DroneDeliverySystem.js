@@ -9,6 +9,11 @@ import { createRemoteOrder, REMOTE_ORDER_TUNING } from "../../logic/RemoteOrders
 import { TILE_SIZE, BACKROOM_GRID_Y } from "../../logic/RoomLayout.js";
 import { playOrderAlert } from "../../logic/Sfx.js";
 import { UIWindow } from "../../logic/UIWindow.js";
+import {
+  DRONE_TERMINAL_FRAME_MS,
+  DRONE_TERMINAL_PLATFORM_SPRITE,
+  DRONE_TERMINAL_SCREEN_SPRITE,
+} from "./DroneTerminalArt.js";
 import { AREA } from "../../world/Areas.js";
 import { PEOPLE_DEPTH_BASE } from "../../world/Depth.js";
 import { controlLabel } from "../../input/InputDevice.js";
@@ -20,17 +25,28 @@ const TERMINAL_POSITION = Object.freeze({
   y: TILE_SIZE * (BACKROOM_GRID_Y + 2.5),
 });
 const DELIVERY_PAD_POSITION = Object.freeze({
-  x: TILE_SIZE * 2.5,
-  y: TILE_SIZE * (BACKROOM_GRID_Y + 2.5),
+  x: TERMINAL_POSITION.x + 72.5,
+  y: TERMINAL_POSITION.y + 32.5,
 });
 const ORDER_CRATE_POSITION = Object.freeze({
-  x: TILE_SIZE * 2,
-  y: TILE_SIZE * (BACKROOM_GRID_Y + 3.45),
+  x: TILE_SIZE * 1.375 + 74,
+  y: TILE_SIZE * (BACKROOM_GRID_Y + 2.5) + 19,
 });
-const TERMINAL_SIZE = Object.freeze({ width: 44, height: 28 });
-const DELIVERY_PAD_SIZE = Object.freeze({ width: 56, height: 48 });
+const TERMINAL_ART_CENTER = Object.freeze({
+  x: TERMINAL_POSITION.x + 45,
+  y: TERMINAL_POSITION.y + 12.5,
+});
+const TERMINAL_COLLISION_CENTER = Object.freeze({
+  x: TERMINAL_POSITION.x + 3,
+  y: TERMINAL_POSITION.y + 7.5,
+});
+const TERMINAL_SIZE = Object.freeze({ width: 36, height: 71 });
+const DELIVERY_PAD_SIZE = Object.freeze({ width: 61, height: 41 });
 const DELIVERY_REACH = TILE_SIZE / 2;
 const SHIP_DELAY_MS = 700;
+const TERMINAL_OPEN_FRAMES = Object.freeze([0, 1, 2, 3, 4, 5, 6, 7]);
+const TERMINAL_CLOSE_FRAMES = Object.freeze([6, 5, 4, 3, 2, 1, 0]);
+const TERMINAL_SCREEN_ANIMATION = "remote-order-terminal-screen";
 // How often the order card and the item markers re-check shelves and crates.
 const GUIDANCE_REFRESH_MS = 250;
 const SOURCE_MARKER_COLOR = "#2dd4bf";
@@ -61,6 +77,8 @@ export class DroneDeliverySystem {
     this.sourceMarkers = [];
     this.markerSpots = [];
     this.guidanceMs = 0;
+    this.terminalRaised = false;
+    this.terminalAnimation = null;
     this.drawTerminal();
     this.registerInteractions();
     this.buildWindow();
@@ -71,32 +89,43 @@ export class DroneDeliverySystem {
   }
 
   drawTerminal() {
-    const { x, y } = TERMINAL_POSITION;
-    const depth = PEOPLE_DEPTH_BASE + y + TERMINAL_SIZE.height / 2 - 0.75;
-    const art = this.shop.add.graphics().setDepth(depth);
-    art.fillStyle(0x111827).fillRoundedRect(x - 24, y - 18, 48, 34, 3);
-    art.lineStyle(2, 0x64748b).strokeRoundedRect(x - 24, y - 18, 48, 34, 3);
-    art.fillStyle(0x064e3b).fillRect(x - 16, y - 12, 32, 13);
-    art.lineStyle(1, 0x34d399).strokeRect(x - 16, y - 12, 32, 13);
-    art.fillStyle(0x94a3b8).fillRect(x - 8, y + 16, 16, 3);
-    art.fillStyle(0x475569).fillRect(x - 16, y + 19, 32, 4);
-    this.visuals.push(art);
-    this.visuals.push(this.shop.add.text(x, y - 5, "REMOTE", {
-      fontFamily: '"Courier New", monospace',
-      fontSize: "7px",
-      fontStyle: "bold",
-      color: "#6ee7b7",
-    }).setOrigin(0.5).setDepth(depth + 0.01));
-    this.visuals.push(this.shop.add.text(x, y + 34, "ORDERS", {
-      fontFamily: '"Courier New", monospace',
-      fontSize: "9px",
-      fontStyle: "bold",
-      color: "#e2e8f0",
-    }).setOrigin(0.5).setDepth(depth));
+    const depth = PEOPLE_DEPTH_BASE + TERMINAL_COLLISION_CENTER.y + TERMINAL_SIZE.height / 2;
+    this.shop.textures.get(DRONE_TERMINAL_PLATFORM_SPRITE.key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.shop.textures.get(DRONE_TERMINAL_SCREEN_SPRITE.key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.terminal = this.shop.add.sprite(
+      TERMINAL_ART_CENTER.x,
+      TERMINAL_ART_CENTER.y,
+      DRONE_TERMINAL_PLATFORM_SPRITE.key,
+      0,
+    ).setCrop(0, 0, 57, DRONE_TERMINAL_PLATFORM_SPRITE.frameHeight).setDepth(depth);
+    this.visuals.push(this.terminal);
+    this.terminalPad = this.shop.add.sprite(
+      TERMINAL_ART_CENTER.x,
+      TERMINAL_ART_CENTER.y,
+      DRONE_TERMINAL_PLATFORM_SPRITE.key,
+      0,
+    ).setCrop(57, 0, DRONE_TERMINAL_PLATFORM_SPRITE.frameWidth - 57,
+      DRONE_TERMINAL_PLATFORM_SPRITE.frameHeight).setDepth(0.6);
+    this.visuals.push(this.terminalPad);
+
+    if (!this.shop.anims.exists(TERMINAL_SCREEN_ANIMATION)) {
+      this.shop.anims.create({
+        key: TERMINAL_SCREEN_ANIMATION,
+        frames: this.shop.anims.generateFrameNumbers(DRONE_TERMINAL_SCREEN_SPRITE.key),
+        frameRate: 10,
+        repeat: -1,
+      });
+    }
+    this.terminalScreen = this.shop.add.sprite(
+      TERMINAL_ART_CENTER.x - DRONE_TERMINAL_PLATFORM_SPRITE.frameWidth / 2 + 10,
+      TERMINAL_ART_CENTER.y - DRONE_TERMINAL_PLATFORM_SPRITE.frameHeight / 2 + 11,
+      DRONE_TERMINAL_SCREEN_SPRITE.key,
+    ).setOrigin(0).setDepth(depth + 0.01).play(TERMINAL_SCREEN_ANIMATION);
+    this.visuals.push(this.terminalScreen);
 
     this.terminalBlocker = this.shop.add.rectangle(
-      x,
-      y,
+      TERMINAL_COLLISION_CENTER.x,
+      TERMINAL_COLLISION_CENTER.y,
       TERMINAL_SIZE.width,
       TERMINAL_SIZE.height,
       0x000000,
@@ -105,38 +134,16 @@ export class DroneDeliverySystem {
     this.shop.physics.add.existing(this.terminalBlocker, true);
     this.shop.obstacleGroup.add(this.terminalBlocker);
 
-    const pad = this.shop.add.graphics().setDepth(0.6);
-    pad.fillStyle(0x0f172a, 0.9).fillRoundedRect(
-      DELIVERY_PAD_POSITION.x - DELIVERY_PAD_SIZE.width / 2,
-      DELIVERY_PAD_POSITION.y - DELIVERY_PAD_SIZE.height / 2,
-      DELIVERY_PAD_SIZE.width,
-      DELIVERY_PAD_SIZE.height,
-      4,
-    );
-    pad.lineStyle(2, 0x14b8a6, 0.95).strokeRoundedRect(
-      DELIVERY_PAD_POSITION.x - DELIVERY_PAD_SIZE.width / 2,
-      DELIVERY_PAD_POSITION.y - DELIVERY_PAD_SIZE.height / 2,
-      DELIVERY_PAD_SIZE.width,
-      DELIVERY_PAD_SIZE.height,
-      4,
-    );
-    pad.lineStyle(1, 0x5eead4, 0.55).strokeCircle(
+    this.padBlocker = this.shop.add.rectangle(
       DELIVERY_PAD_POSITION.x,
       DELIVERY_PAD_POSITION.y,
-      12,
-    );
-    this.visuals.push(pad);
-    this.visuals.push(this.shop.add.text(
-      DELIVERY_PAD_POSITION.x,
-      DELIVERY_PAD_POSITION.y - DELIVERY_PAD_SIZE.height / 2 - 3,
-      "DRONE PAD",
-      {
-        fontFamily: '"Courier New", monospace',
-        fontSize: "9px",
-        fontStyle: "bold",
-        color: "#5eead4",
-      },
-    ).setOrigin(0.5, 1).setDepth(0.6));
+      DELIVERY_PAD_SIZE.width,
+      DELIVERY_PAD_SIZE.height,
+      0x000000,
+      0,
+    ).setVisible(false).setData("allowsCrates", true);
+    this.shop.physics.add.existing(this.padBlocker, true);
+    this.shop.obstacleGroup.add(this.padBlocker);
   }
 
   buildWindow() {
@@ -229,7 +236,7 @@ export class DroneDeliverySystem {
   }
 
   terminalBounds() {
-    const { x, y } = TERMINAL_POSITION;
+    const { x, y } = TERMINAL_COLLISION_CENTER;
     return {
       left: x - TERMINAL_SIZE.width / 2,
       right: x + TERMINAL_SIZE.width / 2,
@@ -437,8 +444,69 @@ export class DroneDeliverySystem {
 
   update(time, delta) {
     this.updateOrderArrivals();
+    this.syncTerminalState();
+    this.updateTerminalAnimation(delta);
     this.updateDeliveryPad(delta);
     this.updateGuidance(time, delta);
+  }
+
+  syncTerminalState() {
+    if (this.terminalAnimation) return;
+    const crate = this.findOrderCrate();
+    const onPad = crate && this.isCrateOnDeliveryPad(crate);
+    if (onPad && !this.terminalRaised) {
+      this.startTerminalAnimation(TERMINAL_OPEN_FRAMES, true, crate);
+    } else if (!onPad && this.terminalRaised) {
+      this.startTerminalAnimation(TERMINAL_CLOSE_FRAMES, false);
+    }
+  }
+
+  isCrateOnDeliveryPad(crate) {
+    if (crate.isCarried || !crate.isStationary()) return false;
+    const bounds = crate.getFloorBounds();
+    const pad = this.deliveryPadBounds();
+    return bounds.left >= pad.left && bounds.right <= pad.right &&
+      bounds.top >= pad.top && bounds.bottom <= pad.bottom;
+  }
+
+  startTerminalAnimation(frames, raised, crate = null) {
+    this.terminalAnimation = { frames, index: 0, elapsedMs: 0, raised, crate };
+    if (raised && crate) {
+      crate.sprite.setVisible(false).setPosition(ORDER_CRATE_POSITION.x, ORDER_CRATE_POSITION.y + 18);
+    }
+    this.setTerminalFrame(frames[0]);
+  }
+
+  setTerminalFrame(frame) {
+    this.terminal.setFrame(frame);
+    this.terminalPad.setFrame(frame);
+  }
+
+  updateTerminalAnimation(delta) {
+    const animation = this.terminalAnimation;
+    if (!animation) return;
+    animation.elapsedMs += delta;
+    while (animation.elapsedMs >= DRONE_TERMINAL_FRAME_MS) {
+      animation.elapsedMs -= DRONE_TERMINAL_FRAME_MS;
+      animation.index += 1;
+      if (animation.index >= animation.frames.length) {
+        this.terminalAnimation = null;
+        this.terminalRaised = animation.raised;
+        if (animation.crate?.sprite?.active) {
+          if (animation.raised) {
+            animation.crate.sprite.setPosition(ORDER_CRATE_POSITION.x, ORDER_CRATE_POSITION.y);
+          }
+          animation.crate.sprite.setVisible(true);
+          if (animation.raised) animation.crate.animateRemoteOrderLid();
+        }
+        return;
+      }
+      this.setTerminalFrame(animation.frames[animation.index]);
+      if (animation.raised && animation.crate?.sprite?.active && animation.index >= 5) {
+        animation.crate.sprite.setVisible(true);
+        animation.crate.sprite.y = ORDER_CRATE_POSITION.y + (7 - animation.index) * 9;
+      }
+    }
   }
 
   updateGuidance(time, delta) {
@@ -589,16 +657,16 @@ export class DroneDeliverySystem {
   putOrderCrateOnPad(crate) {
     if (!this.isCurrentOrderCrate(crate) || this.shop.carriedCrate !== crate) return false;
     if (!crate.isDropPositionClear(
-      DELIVERY_PAD_POSITION.x,
-      DELIVERY_PAD_POSITION.y,
+      ORDER_CRATE_POSITION.x,
+      ORDER_CRATE_POSITION.y,
       this.shop.player.sprite,
     )) {
       this.shop.messages.show("Make room on the drone pad before setting down the remote order crate.", "#f59e0b");
       return false;
     }
     crate.drop(
-      DELIVERY_PAD_POSITION.x,
-      DELIVERY_PAD_POSITION.y,
+      ORDER_CRATE_POSITION.x,
+      ORDER_CRATE_POSITION.y,
       0,
       0,
       this.shop.crateSystem.motionPaused,
@@ -697,6 +765,7 @@ export class DroneDeliverySystem {
     this.window?.element.remove();
     if (this.window) this.shop.windowManager.windows.delete(this.window.id);
     this.terminalBlocker?.destroy();
+    this.padBlocker?.destroy();
     for (const visual of this.visuals) visual.destroy();
     this.visuals = [];
     for (const marker of this.sourceMarkers ?? []) marker.destroy();

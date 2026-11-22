@@ -466,14 +466,14 @@ test("backroom walls leave extra space above the pad and upgrades keep the exit"
     assert.equal(wall.x - wall.width / 2, left);
     assert.equal(wall.width, TILE_SIZE);
   };
-  assertRightWall(3, 192);
-  for (const gx of [1, 2]) {
+  assertRightWall(5, 320);
+  for (const gx of [1, 2, 3, 4]) {
     assert.equal(room.isWalkable(gx, 105), true, `new floor at ${gx},105`);
     assert.equal(room.wallCells.has(`${gx},106`), true, `bottom wall at ${gx},106`);
   }
   const exit = "2,100";
   const pad = getLoadingPadBounds();
-  for (const [id, gx, left] of [["backroom_upgrade_a", 5, 320], ["backroom_upgrade_b", 7, 448], ["backroom_upgrade_c", 9, 576]]) {
+  for (const [id, gx, left] of [["backroom_upgrade_a", 7, 448], ["backroom_upgrade_b", 9, 576], ["backroom_upgrade_c", 11, 704]]) {
     room.unlockZone(id);
     assertRightWall(gx, left);
     assert.equal(room.wallCells.get(exit).door, true);

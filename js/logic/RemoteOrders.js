@@ -9,7 +9,6 @@ export const REMOTE_ORDER_TUNING = Object.freeze({
   payoutMarkup: 0.3,
   daysUntilExpiry: 1,
   reputationPerProductType: 1,
-  completeTint: 0x14b8a6,
 });
 
 function randomInt(random, min, max) {

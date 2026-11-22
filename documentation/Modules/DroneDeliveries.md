@@ -13,7 +13,7 @@ The Drone Terminal lets you fill orders from remote customers from the start of 
   - **From crates:** each press of E pulls one needed item from a nearby crate, if any.
   - **From shelves:** press E next to the shelf. Without opening the shelf screen, it pulls one
     of the needed items into the crate, if the shelf has any.
-- Once the crate has every item it needs, it turns a different color (one we haven't used yet).
+- Its light stays red while any items are missing and turns green when all items are packed.
 - Set the finished crate on the pad next to the Drone Terminal. It ships itself and you are
   paid immediately.
 
@@ -40,13 +40,16 @@ The Drone Terminal lets you fill orders from remote customers from the start of 
   crate area. This keeps remote-order work off the sales floor while keeping the terminal and
   incoming stock nearby.
 
-## Approved terminal animation (delivery lab)
+## Approved terminal art in gameplay
 
-Use the delivery lab's Fast timing, 60 ms per picture, for all six mechanical stages when
-integrating the approved terminal art into gameplay. The terminal screen is a separate
-continuously animated overlay; its animation must not follow the doors, platform or crate lid.
-The lab uses this timing by default. See [DebugPlaytesting.md](../DebugPlaytesting.md) for the
-sprite sheets and screen alignment.
+The gameplay terminal uses the approved door and platform animation at Fast speed, 60 ms per
+picture. The order crate uses its approved dark art and animates its lid as it arrives and when
+items are packed. The crate's separate red or green light shows whether the order is complete.
+The screen scrolls continuously on its own, independently of the doors, platform, and crate lid.
+See [DebugPlaytesting.md](../DebugPlaytesting.md) for the sprite sheets and screen alignment.
+
+The terminal post and pad both block people. The pad is drawn on the floor layer, so it never
+covers the player. Crates can occupy the pad's surface without colliding with its people blocker.
 
 The delivery crate's light is red while its order is missing any item and turns green once the
 crate holds every item the order needs (requested by Zach).
@@ -64,7 +67,9 @@ They should be reviewed against the game's balance before they are treated as fi
 - Shipping grants one store reputation per product type. Cancelling or expiring loses the same
   amount.
 - An order received on one day expires at the end of the following day.
-- A complete order crate turns teal.
+- The starting backroom has four usable floor columns rather than two, with its depth,
+  Loading Pad size, and door position unchanged. This is mockup A's first-pass width, not a
+  width selected by Zach; later backroom upgrades still add two columns each.
 - When an order arrives, a short bell chime plays, the bottom bar says where to find its item
   list and crate, and the order card glows for 6 seconds.
 - An order card sits in the top-left corner while an order is open. It shows the deadline,

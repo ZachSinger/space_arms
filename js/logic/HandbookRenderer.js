@@ -183,6 +183,7 @@ function orderingTopic() {
         "Remote orders can arrive during a shift. Only one can be open at a time. A chime plays when one arrives.",
         "While an order is open, its card in the top-left corner lists each item, how many are packed, and how many your shelves and crates hold in each room. Click the card's heading to shrink or expand it.",
         `Pick up the special order crate by the Drone Terminal in the backroom. Teal diamonds then mark the shelves and crates holding items the order still needs. Face one and press ${key("interact")} to add one item at a time.`,
+        "The order crate's light stays red while it is missing items and turns green when every item is packed.",
         "The order crate can only hold the products and amounts shown at the terminal. To take packed items back out, reset or cancel the order at the terminal; the items go into the Go-Backs bin.",
         "When every item is packed, set the order crate on the drone pad beside the terminal. It ships after a short wait, pays the amount shown, and adds store reputation.",
         "The terminal shows the shipping deadline and the reputation gained or lost. Cancelling an order or letting it expire loses that reputation.",

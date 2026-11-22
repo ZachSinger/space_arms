@@ -3,6 +3,7 @@ import {
 } from "../logic/CratePushing.js";
 import { separateOverlappingCrates } from "../logic/CrateSeparation.js";
 import { getAuthoredGridSize, TILE_SIZE, LOADING_PAD_WIDTH, LOADING_PAD_HEIGHT } from "../logic/RoomLayout.js";
+import { isCrateObstacle } from "../logic/Crate.js";
 
 export class CrateWorld {
   constructor(shop, {
@@ -23,7 +24,10 @@ export class CrateWorld {
         shop.restockCrates.find((crate) => crate.sprite === sprite)?.refreshDrag();
       }
     });
-    for (const collider of colliders) shop.physics.add.collider(shop.crateGroup, collider);
+    for (const collider of colliders) {
+      shop.physics.add.collider(shop.crateGroup, collider, null,
+        (first, second) => isCrateObstacle(first.body) && isCrateObstacle(second.body));
+    }
     if (padRect) {
       const padBarrier = shop.add.zone(
         padRect.centerX,
@@ -191,7 +195,7 @@ export class CrateWorld {
       return true;
     }
     return this.shop.physics.overlapRect(left, top, width, height, false, true).some((body) =>
-      body.enable && left < body.right && left + width > body.left &&
+      isCrateObstacle(body) && left < body.right && left + width > body.left &&
       top < body.bottom && top + height > body.top);
   }
 }

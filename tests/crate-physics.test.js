@@ -136,6 +136,22 @@ function createScene(obstacles = []) {
   return scene;
 }
 
+test("crates can rest on a delivery platform but ordinary solid fixtures still block them", () => {
+  const surface = {
+    enable: true, left: 180, right: 240, top: 180, bottom: 240,
+    gameObject: { getData: (key) => key === "allowsCrates" },
+  };
+  const scene = createScene([surface]);
+  const crate = new Crate(scene, "item", 1, 210, 210);
+  const rect = { left: 194, top: 206, width: 32, height: 18 };
+  assert.equal(crate.isDropPositionClear(210, 210), true);
+  assert.equal(CrateWorld.prototype.isCrateSpaceBlocked.call({ shop: scene }, rect), false);
+
+  surface.gameObject.getData = () => false;
+  assert.equal(crate.isDropPositionClear(210, 210), false);
+  assert.equal(CrateWorld.prototype.isCrateSpaceBlocked.call({ shop: scene }, rect), true);
+});
+
 test("pushing and dropping agree on exact bottom-wall contact for both crate kinds", () => {
   const wall = { enable: true, left: 0, right: 500, top: 400, bottom: 500 };
   const scene = createScene([wall]);

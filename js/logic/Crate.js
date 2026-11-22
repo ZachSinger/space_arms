@@ -7,7 +7,7 @@
 import items from "../../data/Items.json" with { type: "json" };
 import { getCrateItemLimit } from "./ShelfSlotStocking.js";
 import { getItemCrateTint } from "./CrateCategory.js";
-import { REMOTE_ORDER_TUNING } from "./RemoteOrders.js";
+import { REMOTE_ORDER_CRATE_SPRITES } from "../modules/droneDeliveries/DroneTerminalArt.js";
 
 const ITEMS_BY_ID = new Map(items.map((item) => [item.id, item]));
 
@@ -42,6 +42,11 @@ const FACING_DIRECTIONS = Object.freeze({
   up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
 });
 let nextStandaloneCrateId = 1;
+
+// Delivery platforms stop people, but support crates placed on their surface.
+export function isCrateObstacle(body) {
+  return Boolean(body.enable) && !body.gameObject?.getData?.("allowsCrates");
+}
 
 // The space a set-down crate must keep clear of: the carrier's feet (physics body) with a
 // small margin, so crates can be set down right beside him; art overlap is depth-sorted.
@@ -82,14 +87,27 @@ export class Crate {
     this.throwCarrier = null;
     this.hitCustomers = new Set();
 
-    const art = kind === "fixture" ? FIXTURE_CRATE_SPRITE : ITEM_CRATE_SPRITE;
-    this.sprite = scene.add
-      .image(x, y, art.key)
+    const art = kind === "fixture" ? FIXTURE_CRATE_SPRITE
+      : kind === "remote-order"
+        ? this.isRemoteOrderComplete() ? REMOTE_ORDER_CRATE_SPRITES.complete : REMOTE_ORDER_CRATE_SPRITES.incomplete
+        : ITEM_CRATE_SPRITE;
+    const sprite = kind === "remote-order"
+      ? scene.add.sprite(x, y, art.key, 0)
+      : scene.add.image(x, y, art.key);
+    this.sprite = sprite
       .setDisplaySize(art.width, art.height)
       .setDepth(2);
     if (tint !== null) this.sprite.setTint?.(tint);
-    else if (kind === "remote-order" && this.isRemoteOrderComplete()) {
-      this.sprite.setTint?.(REMOTE_ORDER_TUNING.completeTint);
+    if (kind === "remote-order" && scene.anims && !scene.anims.exists(art.animation)) {
+      for (const appearance of Object.values(REMOTE_ORDER_CRATE_SPRITES)) {
+        if (scene.anims.exists(appearance.animation)) continue;
+        scene.anims.create({
+          key: appearance.animation,
+          frames: [1, 2, 3, 2, 1, 0].map((frame) => ({ key: appearance.key, frame })),
+          frameRate: 1000 / 60,
+          repeat: 0,
+        });
+      }
     }
 
     scene.crateGroup.add(this.sprite);
@@ -177,7 +195,8 @@ export class Crate {
       if (accepted <= 0) return 0;
       this.contents.set(itemId, this.getAvailableUnitsFor(itemId) + accepted);
       this.quantity += accepted;
-      if (this.isRemoteOrderComplete()) this.sprite?.setTint?.(REMOTE_ORDER_TUNING.completeTint);
+      this.setRemoteOrderAppearance(this.isRemoteOrderComplete());
+      this.animateRemoteOrderLid();
       return accepted;
     }
     if (!this.canPut(itemId)) return 0;
@@ -214,11 +233,29 @@ export class Crate {
       this.requiredItems.every((entry) => this.getAvailableUnitsFor(entry.itemId) >= entry.quantity);
   }
 
+  setRemoteOrderAppearance(complete) {
+    if (this.kind !== "remote-order") return;
+    const appearance = complete
+      ? REMOTE_ORDER_CRATE_SPRITES.complete
+      : REMOTE_ORDER_CRATE_SPRITES.incomplete;
+    this.sprite?.anims?.stop?.();
+    this.sprite?.setTexture?.(appearance.key, 0);
+  }
+
+  animateRemoteOrderLid() {
+    if (this.kind !== "remote-order") return;
+    const appearance = this.isRemoteOrderComplete()
+      ? REMOTE_ORDER_CRATE_SPRITES.complete
+      : REMOTE_ORDER_CRATE_SPRITES.incomplete;
+    this.sprite?.anims?.play?.(appearance.animation, true);
+  }
+
   resetRemoteOrderContents() {
     if (this.kind !== "remote-order") throw new Error("Only a remote order crate can be reset.");
     this.contents.clear();
     this.quantity = 0;
-    this.sprite?.clearTint?.();
+    this.sprite?.anims?.stop?.();
+    this.setRemoteOrderAppearance(false);
   }
 
   /**
@@ -288,7 +325,7 @@ export class Crate {
         clearLeft, clearTop, clearRight - clearLeft, clearBottom - clearTop, false, true),
       ...(this.scene.restockCrates ?? []).filter((crate) => crate !== this).map((crate) => crate.sprite.body),
     ];
-    return !bodies.some((body) => body.enable &&
+    return !bodies.some((body) => isCrateObstacle(body) &&
       clearLeft < body.right && clearRight > body.left && clearTop < body.bottom && clearBottom > body.top);
   }
 
