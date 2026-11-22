@@ -8,8 +8,7 @@ Once unlocked, the Drone Terminal lets you fill orders from remote customers.
   order before it expires.
 
 ## Filling an order
-- Each order produces a special kind of crate. You can have multiple orders at once; each
-  order gets its own crate.
+- Each order produces a special kind of crate. With one drone, only one order is open at a time.
 - Carry the order crate and grab the required stock from shelves or from existing crates:
   - **From crates:** each press of E pulls one needed item from a nearby crate, if any.
   - **From shelves:** press E next to the shelf. Without opening the shelf screen, it pulls one
@@ -39,19 +38,11 @@ Once unlocked, the Drone Terminal lets you fill orders from remote customers.
 - Remote orders are generally larger than most customer orders.
 
 ## Proposed first version (not yet confirmed by Zach)
-These answers fill gaps the notes above leave open. They are first-pass picks to build and
-playtest, not agreed design; any of them can change.
+These fill gaps the notes above leave open. They are first-pass picks, not agreed design.
 
-- **Unlock:** Shop Level 10, alongside the third staff slot, when employees can start running
-  the floor. It becomes a Shop Level unlock with no contract to sign.
-- **Terminal and pad:** one fixture, the Drone Terminal with its pad attached, bought and placed
-  like a register. One per shop. Price: 3,000, about two shifts of profit at Level 10.
-- **How orders arrive:** a new order appears on the terminal at the start of each day, with up to
-  3 open at once. The player gets a message when one arrives.
-- **What's in an order:** 2 to 4 different products, 3 to 8 of each, chosen only from products
-  the player already has contracts for.
+- **What's in an order:** only products you already have contracts for, and more of them than a
+  typical customer buys (exact size to be tuned in playtests).
 - **Pay:** the market price of everything in the order plus 30%, paid when the crate ships.
-- **Reputation:** shipping adds reputation equal to the number of products in the order. Letting
-  an order expire or cancelling it costs the same amount.
-- **Deadline:** an order expires when the day after it arrived ends, as the notes say.
+- **Reputation:** shipping adds reputation; letting an order expire or cancelling it costs the
+  same amount.
 - **Finished crate color:** a teal not used by any other crate.

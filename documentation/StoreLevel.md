@@ -39,7 +39,7 @@ the RPG arrives with rockets at Level 38, and a separate Pre-War Ammunition cont
 heavy pistol and rifle ammunition alongside the first matching firearms at Level 41.
 
 Planned modules that will need an unlock level: Hovercart (its design says Level 7), Shooting
-Range, Drone Deliveries, and Presentation.
+Range and Presentation. Drone Deliveries are available from the start.
 
 | Level | Total store reputation | Unlock |
 | --- | --- | --- |
