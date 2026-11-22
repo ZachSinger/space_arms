@@ -53,12 +53,17 @@ behind it: you should stop only at its feet, and it should hide you when you're 
 ## Delivery Crate Lab
 
 On the title screen, choose **DEV**, then **DELIVERY CRATE LAB**. It shows the remote-order
-terminal beside the player. **PLAY ALL** shows the floor doors opening, the platform rising
-right after, the platform lowering, and the doors closing. The numbered buttons play one part at a time,
+terminal beside the player. **PLAY ALL** shows the floor doors opening, the dark delivery crate
+rising on its platform, the crate lid opening and closing, the loaded platform lowering,
+and the floor doors closing. There is no extra pause between the floor doors opening and
+the crate rising. Three pictures show the crate appearing before its platform becomes visible;
+lowering reverses the same pictures, so the platform disappears before the crate does.
+The numbered buttons (or keys **1–6**) play one part at a time,
 and **LOOP ON/OFF** repeats the whole animation. The animation pictures are in
-`img/Generated/fixture_drone_terminal_sheet.png` (8 pictures, 120×81 each, shown at full size).
-All 8 pictures share the same terminal and pad edge pixel for pixel; only the inside of the pad
-changes, so nothing outside the doors and platform should flicker between pictures.
+`img/Generated/fixture_drone_terminal_crate_sheet.png` (16 pictures, 120×81 each, shown at full size).
+All pictures share the same terminal and pad pixel for pixel. Only the moving doors, platform
+and crate change; the raised crate can overlap the back of the pad but is clipped behind its front rim.
+The original empty-platform sheet remains in `img/Generated/fixture_drone_terminal_sheet.png`.
 
 ## Capturing a session
 

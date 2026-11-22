@@ -1,9 +1,9 @@
 // ==========================================
 // FILE: deliveryCrateLab.js
 // ==========================================
-// Dev harness for the drone delivery terminal's floor pad: watch the doors open, the platform
-// rise and lower, and the doors close. Opened from the title screen's DEV option. Nothing here
-// touches the saved game.
+// Dev harness for the delivery terminal: watch the loaded platform rise, the crate lid open
+// and close, and everything lower again. Opened from the title screen's DEV option.
+// Nothing here touches the saved game.
 import Phaser from "phaser";
 import { installSceneTextSize } from "../logic/GameTextSize.js";
 import { TILE_SIZE } from "../logic/RoomLayout.js";
@@ -11,18 +11,20 @@ import { Player } from "../logic/Player.js";
 import { PEOPLE_DEPTH_BASE } from "../world/Depth.js";
 
 export const DRONE_TERMINAL_SPRITE = Object.freeze({
-  key: "fixture_drone_terminal_sheet",
-  path: "img/Generated/fixture_drone_terminal_sheet.png",
+  key: "fixture_drone_terminal_crate_sheet",
+  path: "img/Generated/fixture_drone_terminal_crate_sheet.png",
   frameWidth: 120,
   frameHeight: 81,
 });
 
-// Sheet frames: 0 closed, 1-4 doors opening, 5-7 platform rising.
+// Frames 5-7 reveal only the crate; 8-12 reveal its platform. Frames 13-15 open the crate lid.
 // pauseAfter: how long PLAY ALL holds before the next part. The platform starts rising as soon as the doors finish.
 const STAGES = Object.freeze([
   { label: "DOORS OPEN", frames: [0, 1, 2, 3, 4], pauseAfter: 0 },
-  { label: "PLATFORM RISES", frames: [5, 6, 7], pauseAfter: 600 },
-  { label: "PLATFORM LOWERS", frames: [6, 5, 4], pauseAfter: 600 },
+  { label: "CRATE RISES", frames: [5, 6, 7, 8, 9, 10, 11, 12], pauseAfter: 600 },
+  { label: "CRATE OPENS", frames: [13, 14, 15], pauseAfter: 600 },
+  { label: "CRATE CLOSES", frames: [14, 13, 12], pauseAfter: 600 },
+  { label: "CRATE LOWERS", frames: [11, 10, 9, 8, 7, 6, 5, 4], pauseAfter: 600 },
   { label: "DOORS CLOSE", frames: [3, 2, 1, 0], pauseAfter: 600 },
 ]);
 const FRAME_MS = 120;
@@ -72,7 +74,7 @@ export class DeliveryCrateLabScene extends Phaser.Scene {
 
     this.addUi(this.add.rectangle(0, 0, this.scale.width, HEADER_HEIGHT, 0x0f172a, 0.92).setOrigin(0));
     this.addUi(this.add.text(16, 6,
-      "DELIVERY CRATE LAB  Space: play all.  1-4: play one part.  L: loop.  Esc: menu.", TEXT_STYLE));
+      "DELIVERY CRATE LAB  Space: play all.  1-6: play one part.  L: loop.  Esc: menu.", TEXT_STYLE));
     this.status = this.addUi(this.add.text(16, 26, "", { ...TEXT_STYLE, color: "#facc15" }));
     let x = 16;
     for (const [label, onClick] of [
@@ -94,7 +96,7 @@ export class DeliveryCrateLabScene extends Phaser.Scene {
     this.input.keyboard.on("keydown-SPACE", () => this.playAll());
     this.input.keyboard.on("keydown-L", () => this.toggleLoop());
     STAGES.forEach((_stage, index) => {
-      this.input.keyboard.on(`keydown-${["ONE", "TWO", "THREE", "FOUR"][index]}`, () => this.playStage(index));
+      this.input.keyboard.on(`keydown-${["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX"][index]}`, () => this.playStage(index));
     });
     this.input.keyboard.on("keydown-ESC", () => this.scene.start("scene-title"));
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
@@ -161,7 +163,7 @@ export class DeliveryCrateLabScene extends Phaser.Scene {
 
   showStatus() {
     const stage = this.playing ? STAGES[this.stageIndex].label : "STOPPED";
-    this.status.setText(`Now: ${stage}   Picture ${this.terminal.frame.name + 1} of 8   Loop: ${this.looping ? "ON" : "OFF"}`);
+    this.status.setText(`Now: ${stage}   Picture ${this.terminal.frame.name + 1} of 16   Loop: ${this.looping ? "ON" : "OFF"}`);
   }
 
   // --- Room, cameras, and header ---
