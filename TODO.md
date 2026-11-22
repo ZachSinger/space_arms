@@ -5,6 +5,8 @@ completed or no longer relevant.
 
 ## Current shop
 
+- [ ] Balance the game's money: product prices, supplier costs, delivery fees, and employee
+      wages. None of it has been balanced yet.
 - [ ] Check shop-level progression and customer traffic as reputation and stock change
       across normal shifts; adjust level thresholds and customer counts if needed. The
       intended starting pace is one level per fully served, penalty-free shift for the
