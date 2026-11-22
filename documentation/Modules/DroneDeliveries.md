@@ -31,6 +31,13 @@ Once unlocked, the Drone Terminal lets you fill orders from remote customers.
 - The game ties each order's crate to its order with a unique ID, so it never treats that
   crate like a regular item crate and never confuses it with another order's crate.
 
+## Confirmed by Zach
+- Remote orders are available from the start of the game, not a later unlock.
+- The shop has one drone, so only one remote order can be open at a time.
+- Orders come in by chance, much like how customers are generated, except factions don't matter.
+  An order can arrive at any time.
+- Remote orders are generally larger than most customer orders.
+
 ## Proposed first version (not yet confirmed by Zach)
 These answers fill gaps the notes above leave open. They are first-pass picks to build and
 playtest, not agreed design; any of them can change.
