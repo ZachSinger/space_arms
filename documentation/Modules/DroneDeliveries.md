@@ -1,7 +1,7 @@
 # Drone Deliveries (module)
 
 ## Overview
-Once unlocked, the Drone Terminal lets you fill orders from remote customers.
+The Drone Terminal lets you fill orders from remote customers from the start of the game.
 - Drone Deliveries are generally larger orders and are very profitable.
 - They generally have a very high chance of positive reputation gain.
 - The only way to lose reputation on a drone delivery is to not deliver it, or to cancel the
@@ -36,6 +36,9 @@ Once unlocked, the Drone Terminal lets you fill orders from remote customers.
 - Orders come in by chance, much like how customers are generated, except factions don't matter.
   An order can arrive at any time.
 - Remote orders are generally larger than most customer orders.
+- The Drone Terminal and its pad are already placed in the starting backroom, next to the shipping
+  crate area. This keeps remote-order work off the sales floor while keeping the terminal and
+  incoming stock nearby.
 
 ## Proposed first version (not yet confirmed by Zach)
 These fill gaps the notes above leave open. They are first-pass picks, not agreed design.
