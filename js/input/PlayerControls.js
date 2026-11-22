@@ -44,7 +44,7 @@ export class PlayerControls {
 
     this.bindCrateKeys();
     this.highlightTrashKey = shop.cleaningSystem ? { get isDown() {
-      return shop.controls.isActionDown("highlightTrash");
+      return shop.controls.isActionDown("highlightTrash") || Boolean(shop.controls.padInput?.wantsTrashHighlight());
     } } : null;
 
     const handleTabletKey = (event) => {

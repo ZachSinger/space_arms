@@ -152,8 +152,13 @@ export class GamepadInput {
     return { ...this.leftStick };
   }
 
-  // Holding B (thumb stays on the face buttons), either trigger, or clicking the left stick.
+  // Holding B (thumb stays on the face buttons) or either trigger.
   wantsDash() {
-    return this.down.has(PAD.B) || this.down.has(PAD.RT) || this.down.has(PAD.LT) || this.down.has(PAD.L3);
+    return this.down.has(PAD.B) || this.down.has(PAD.RT) || this.down.has(PAD.LT);
+  }
+
+  // Holding the left stick in lights up all trash on the floor.
+  wantsTrashHighlight() {
+    return this.down.has(PAD.L3);
   }
 }

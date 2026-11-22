@@ -51,6 +51,15 @@ test("holding B dashes", () => {
   assert.equal(input.wantsDash(), true);
 });
 
+test("holding the left stick in shows trash instead of dashing", () => {
+  const { input, press } = fakePad();
+  input.poll(0);
+  press(PAD.L3);
+  input.poll(16);
+  assert.equal(input.wantsTrashHighlight(), true);
+  assert.equal(input.wantsDash(), false);
+});
+
 test("small stick drift is ignored and the rest rescales from zero", () => {
   assert.deepEqual(applyDeadzone(0.1, 0.1), { x: 0, y: 0 });
   const full = applyDeadzone(1, 0);

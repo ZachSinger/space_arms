@@ -245,8 +245,8 @@ notice something that needs doing but isn't being done right now.
       outrageous prices make customers leave. Price reactions appear in the Finances receipt.
       Inventory prices can be pinned to follow market changes; customers may pick up to two
       extra bargain items. Design and implementation are complete.
-- [ ] Highlight trash on a controller. Keyboard holds H; every controller button is already
-      used, so this needs a button chosen.
+- [x] Highlight trash on a controller: hold the left stick in (L3), like holding H on a
+      keyboard. The left stick no longer dashes.
 
 ## Saving
 - [x] HUD SAVE button: manually save while the store is closed, with explicit success

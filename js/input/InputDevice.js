@@ -38,19 +38,19 @@ const GAMEPAD_LAYOUTS = Object.freeze({
     bottom: "A", right: "B", left: "X", top: "Y",
     leftBumper: "LB", rightBumper: "RB", leftTrigger: "LT", rightTrigger: "RT",
     back: "View", start: "Start", rightStick: "Right stick click",
-    dash: "B or a trigger (LT or RT)", highlightTrash: "Not on controller yet",
+    dash: "B or a trigger (LT or RT)", highlightTrash: "Left stick click (hold)",
   }),
   playstation: Object.freeze({
     bottom: "✕", right: "○", left: "□", top: "△",
     leftBumper: "L1", rightBumper: "R1", leftTrigger: "L2", rightTrigger: "R2",
     back: "Share/Create", start: "Options", rightStick: "Right stick click",
-    dash: "○ or a trigger (L2 or R2)", highlightTrash: "Not on controller yet",
+    dash: "○ or a trigger (L2 or R2)", highlightTrash: "Left stick click (L3, hold)",
   }),
   nintendo: Object.freeze({
     bottom: "B", right: "A", left: "Y", top: "X",
     leftBumper: "L", rightBumper: "R", leftTrigger: "ZL", rightTrigger: "ZR",
     back: "Minus", start: "Plus", rightStick: "Right stick click",
-    dash: "A or a trigger (ZL or ZR)", highlightTrash: "Not on controller yet",
+    dash: "A or a trigger (ZL or ZR)", highlightTrash: "Left stick click (hold)",
   }),
 });
 
