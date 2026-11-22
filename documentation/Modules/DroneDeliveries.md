@@ -48,6 +48,9 @@ continuously animated overlay; its animation must not follow the doors, platform
 The lab uses this timing by default. See [DebugPlaytesting.md](../DebugPlaytesting.md) for the
 sprite sheets and screen alignment.
 
+The delivery crate's light is red while its order is missing any item and turns green once the
+crate holds every item the order needs (requested by Zach).
+
 ## Implemented first-pass tuning (not confirmed by Zach)
 
 The following values are implementation picks to make the feature playable, not agreed design.

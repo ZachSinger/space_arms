@@ -17,6 +17,13 @@ export const DRONE_TERMINAL_SPRITE = Object.freeze({
   frameHeight: 81,
 });
 
+// Same pictures, but the crate's light is red: the order crate is still missing items.
+export const DRONE_TERMINAL_RED_LIGHT_SPRITE = Object.freeze({
+  ...DRONE_TERMINAL_SPRITE,
+  key: "fixture_drone_terminal_crate_sheet_red",
+  path: "img/Generated/fixture_drone_terminal_crate_sheet_red.png",
+});
+
 export const DRONE_TERMINAL_SCREEN_SPRITE = Object.freeze({
   key: "fixture_drone_terminal_screen_sheet",
   path: "img/Generated/fixture_drone_terminal_screen_sheet.png",
@@ -48,10 +55,11 @@ export class DeliveryCrateLabScene extends Phaser.Scene {
   constructor() {
     super("scene-delivery-crate-lab");
     this.speedSettings = STAGES.map(() => 2);
+    this.orderComplete = false;
   }
 
   preload() {
-    for (const sprite of [DRONE_TERMINAL_SPRITE, DRONE_TERMINAL_SCREEN_SPRITE]) {
+    for (const sprite of [DRONE_TERMINAL_SPRITE, DRONE_TERMINAL_RED_LIGHT_SPRITE, DRONE_TERMINAL_SCREEN_SPRITE]) {
       if (!this.textures.exists(sprite.key)) {
         this.load.spritesheet(sprite.key, sprite.path, {
           frameWidth: sprite.frameWidth,
@@ -64,6 +72,7 @@ export class DeliveryCrateLabScene extends Phaser.Scene {
   create() {
     installSceneTextSize(this, Phaser);
     this.textures.get(DRONE_TERMINAL_SPRITE.key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.textures.get(DRONE_TERMINAL_RED_LIGHT_SPRITE.key).setFilter(Phaser.Textures.FilterMode.NEAREST);
     this.textures.get(DRONE_TERMINAL_SCREEN_SPRITE.key).setFilter(Phaser.Textures.FilterMode.NEAREST);
     this.carriedCrates = [];
     this.controlMode = { allows: () => true };
@@ -80,7 +89,7 @@ export class DeliveryCrateLabScene extends Phaser.Scene {
     this.drawFloor();
 
     this.terminal = this.addWorld(this.add.sprite(this.roomWidth / 2, this.roomHeight / 2,
-      DRONE_TERMINAL_SPRITE.key, 0));
+      this.terminalSheetKey(), 0));
     this.terminal.setDepth(PEOPLE_DEPTH_BASE + this.terminal.getBounds().bottom);
     if (!this.anims.exists(SCREEN_ANIMATION_KEY)) {
       this.anims.create({
@@ -119,6 +128,8 @@ export class DeliveryCrateLabScene extends Phaser.Scene {
       });
     });
     this.addButton(16, 220, "[ MENU ]", () => this.scene.start("scene-title"));
+    this.lightButton = this.addButton(120, 220, "", () => this.toggleOrderComplete());
+    this.showLightButton();
     this.showStatus();
 
     this.fitRoom();
@@ -173,6 +184,22 @@ export class DeliveryCrateLabScene extends Phaser.Scene {
       button.setColor(index === speedIndex ? "#86efac" : "#38bdf8");
     });
     this.showStatus();
+  }
+
+  terminalSheetKey() {
+    return this.orderComplete ? DRONE_TERMINAL_SPRITE.key : DRONE_TERMINAL_RED_LIGHT_SPRITE.key;
+  }
+
+  toggleOrderComplete() {
+    this.orderComplete = !this.orderComplete;
+    this.terminal.setTexture(this.terminalSheetKey(), this.terminal.frame.name);
+    this.showLightButton();
+  }
+
+  showLightButton() {
+    this.lightButton.setText(this.orderComplete
+      ? "[ CRATE LIGHT: GREEN, order has every item. Click for red ]"
+      : "[ CRATE LIGHT: RED, order is missing items. Click for green ]");
   }
 
   showStatus() {
