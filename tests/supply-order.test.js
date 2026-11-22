@@ -56,8 +56,8 @@ test("an ordered crate holds exactly one full Budget Shelf 2x2 space of its item
   }
 });
 
-test("Scrap-Iron Autopistol deliveries fill a shelf space with ten pistols", () => {
-  const pistol = items.find(({ id }) => id === "wpn_pis_02");
+test("Derringer deliveries fill a shelf space with ten pistols", () => {
+  const pistol = items.find(({ id }) => id === "wpn_pis_10");
   assert.equal(getCrateOrderQuantity(pistol), 10);
   assert.equal(getSlotItemLimit(pistol.boxSize), 10);
 });

@@ -677,6 +677,30 @@ test("only active throws can hit customers", () => {
   assert.equal(crate.tryHitCustomer(customer), false);
 });
 
+test("a thrown crate bounces off people instead of passing through, but not off its thrower", () => {
+  const crate = new Crate(createScene(), "item", 5, 100, 100);
+  crate.drop(100, 100, 160, 0, false);
+  const body = crate.sprite.body;
+  body.center = { x: (body.left + body.right) / 2, y: (body.top + body.bottom) / 2 };
+  const nudges = [];
+  crate.nudge = (dx, dy) => nudges.push([dx, dy]);
+  const person = {
+    left: body.right - 4, right: body.right + 20, top: body.top - 10, bottom: body.bottom + 10,
+    center: { x: body.right + 8, y: body.center.y },
+  };
+  const personSprite = { body: { enable: true } };
+  assert.equal(crate.canHitPerson(personSprite), true);
+  assert.equal(crate.bounceOffPerson(person), true);
+  assert.deepEqual(nudges, [[-4, 0]], "pushed back out of the person, who stays put");
+  assert.ok(body.velocity.x < 0, "bounces back the way it came");
+
+  crate.throwCarrier = personSprite;
+  assert.equal(crate.canHitPerson(personSprite), false);
+  crate.throwCarrier = null;
+  body.stop();
+  assert.equal(crate.canHitPerson(personSprite), false, "a resting crate is just an obstacle");
+});
+
 test("drop position avoids corners and world bounds, or reports no room", () => {
   const walls = [
     { enable: true, left: 0, right: 100, top: 0, bottom: 500 },

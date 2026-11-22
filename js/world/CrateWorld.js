@@ -12,8 +12,10 @@ export class CrateWorld {
     padRect = null,
     customerGroup = null,
     onCustomerHit = null,
+    people = [],
   } = {}) {
     this.shop = shop;
+    const peopleGroups = [customerGroup, ...people].filter(Boolean);
     shop.crateBounds = new Phaser.Geom.Rectangle(0, 0, width, height);
     shop.crateGroup = shop.physics.add.group();
     shop.physics.add.collider(shop.crateGroup, shop.crateGroup, (spriteA, spriteB) => {
@@ -33,13 +35,21 @@ export class CrateWorld {
       shop.physics.add.collider(shop.crateGroup, padBarrier, null, (crateSprite) =>
         !shop.restockCrates.find((crate) => crate.sprite === crateSprite)?.lockedToPad);
     }
-    if (customerGroup && onCustomerHit) {
-      shop.physics.add.overlap(shop.crateGroup, customerGroup, (crateSprite, customerSprite) => {
-        const crate = shop.restockCrates.find((candidate) => candidate.sprite === crateSprite);
-        const customer = shop.customers.find((candidate) => candidate.sprite === customerSprite);
-        if (crate && customer && crate.tryHitCustomer(customer)) {
-          onCustomerHit(customer, crate);
+    // Thrown crates bounce off people instead of passing through them; a customer hit still
+    // counts once per throw.
+    const crateOf = (sprite) => shop.restockCrates.find((crate) => crate.sprite === sprite);
+    for (const people of peopleGroups) {
+      shop.physics.add.overlap(shop.crateGroup, people, (first, second) => {
+        // Phaser swaps the pair when one side is a single sprite rather than a group.
+        let crate = crateOf(first);
+        const personSprite = crate ? second : first;
+        crate ??= crateOf(second);
+        if (!crate?.canHitPerson(personSprite)) return;
+        if (people === customerGroup && onCustomerHit) {
+          const customer = shop.customers.find((candidate) => candidate.sprite === personSprite);
+          if (customer && crate.tryHitCustomer(customer)) onCustomerHit(customer, crate);
         }
+        crate.bounceOffPerson(personSprite.body);
       });
     }
   }

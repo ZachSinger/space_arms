@@ -116,6 +116,7 @@ export class TitleScene extends Phaser.Scene {
       contentHTML: `
         <p>Pick a test area. Nothing you do in any of them is saved.</p>
         <button class="action-btn" data-dev-crate-lab>CRATE LAB</button>
+        <button class="action-btn" data-dev-shelf-collision-lab>SHELF COLLISION LAB</button>
         <button class="action-btn" data-dev-shelf-room>SHELF TEST ROOM</button>
         <button class="action-btn" data-dev-ui-lab>UI LAB</button>
         <button class="action-btn" data-dev-cancel>CANCEL</button>
@@ -126,6 +127,10 @@ export class TitleScene extends Phaser.Scene {
     devButton("[data-dev-crate-lab]", () => {
       this.devWindow.close();
       this.scene.start("scene-crate-lab");
+    });
+    devButton("[data-dev-shelf-collision-lab]", () => {
+      this.devWindow.close();
+      this.scene.start("scene-shelf-collision-lab");
     });
     devButton("[data-dev-shelf-room]", () => {
       this.devWindow.close();

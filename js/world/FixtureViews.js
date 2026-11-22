@@ -11,7 +11,7 @@ import { ShelfFacingLight } from "../logic/ShelfFacingLight.js";
 import { ShelfItemDisplay } from "../logic/ShelfItemDisplay.js";
 import { getFixtureTexture, hasFacingTextures } from "../logic/FixtureTexture.js";
 import {
-  fixtureArtInset, fixtureBounds, fixtureFootprint, fixtureRotation, getFixtureType,
+  fixtureArtInset, fixtureBounds, fixtureFootprint, fixtureRotation, fixtureSolidBounds, getFixtureType,
 } from "../logic/FixtureLayout.js";
 import { FIXTURE_LIGHT_DEPTH_OFFSET, FIXTURE_STOCK_DEPTH_OFFSET, fixtureDepth } from "./Depth.js";
 import { TILE_SIZE } from "../logic/RoomLayout.js";
@@ -78,10 +78,13 @@ export class FixtureViews {
     sprite.setPosition(x, y).setAngle(facingArt ? 0 : rotation * 90);
     const footprint = fixtureFootprint(fixture);
     const inset = fixtureArtInset(fixture);
+    // Upright shelves are solid only around their feet; see fixtureSolidBounds.
+    const local = { ...fixture, gx: 0, gy: 0 };
+    const clipTop = (fixtureSolidBounds(local).top - fixtureBounds(local).top) * TILE_SIZE;
     const width = (footprint.w - inset.left - inset.right) * TILE_SIZE;
-    const height = (footprint.h - inset.top - inset.bottom) * TILE_SIZE;
+    const height = (footprint.h - inset.top - inset.bottom) * TILE_SIZE - clipTop;
     const centerX = x + (inset.left - inset.right) * TILE_SIZE / 2;
-    const centerY = y + (inset.top - inset.bottom) * TILE_SIZE / 2;
+    const centerY = y + (inset.top - inset.bottom) * TILE_SIZE / 2 + clipTop / 2;
     const body = sprite.body;
     body.world.staticTree.remove(body);
     body.position.set(centerX - width / 2, centerY - height / 2);

@@ -22,6 +22,7 @@ import { GameScene } from "./game.js";
 import { BootScene } from "./boot.js";
 import { ShelfLabScene } from "./shelfLab.js";
 import { CrateLabScene } from "./crateLab.js";
+import { ShelfCollisionLabScene } from "./shelfCollisionLab.js";
 import { watchKeyboardAndMouse } from "../input/InputDevice.js";
 import { installGameCursor } from "../logic/GameCursor.js";
 import { ErrorReportPrompt } from "../debug/ErrorReportPrompt.js";
@@ -69,7 +70,7 @@ const config = {
       debug: false, // true only when tuning counter or wall hitboxes
     },
   },
-  scene: [BootScene, TitleScene, GameScene, ShelfLabScene, CrateLabScene],
+  scene: [BootScene, TitleScene, GameScene, ShelfLabScene, CrateLabScene, ShelfCollisionLabScene],
 };
 
 // Exposed for devtools/debugging convenience (e.g. `window.__game.scene.getScene(...)`).

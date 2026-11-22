@@ -411,7 +411,8 @@ export class CrateSystem {
     if (!body) return;
     const inFront = player.sprite.depth + 1 + MAX_CARRIED_CRATES;
     for (const crate of this.restockCrates ?? []) {
-      if (crate.launch || !crate.sprite.body) continue;
+      // A crate just leaving the thrower's hands stays drawn over him until it clears him.
+      if (crate.throwCarrier || !crate.sprite.body) continue;
       const bottom = crate.sprite.body.bottom;
       const byBase = PEOPLE_DEPTH_BASE + bottom - 0.5;
       crate.sprite.setDepth(body.bottom < bottom ? Math.max(byBase, inFront) : byBase);

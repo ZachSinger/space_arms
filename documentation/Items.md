@@ -28,8 +28,8 @@ onto several shelf spaces.
 
 No item property currently controls a hovercart.
 
-The Scrap-Iron Autopistol has base cost 8 and box size 2: 10 fit in **each shelf space**
-and 10 arrive in each crate. A shelf with several spaces can hold several groups of 10.
+The Scrap-Iron Autopistol has base cost 8 and box size 1: 20 fit in **each shelf space**
+and 20 arrive in each crate. A shelf with several spaces can hold several groups of 20.
 Older saves have its market price halved once when loaded; player-chosen selling prices
 are kept. This also prevents the old market price from exceeding the new valid price range.
 
@@ -115,7 +115,7 @@ product's new base cost divided by its old one.
 
 - _Flavor:_ A heavy, crude ballistic pistol manufactured from reclaimed ship plating. Cheap and prone to overheating.
 - _Tags:_ `['Firearm', 'Surplus', 'Old', 'Pistol']`
-- _Stats:_ Dim: 1x1 | Stack: 2 (legacy) | Base Cost: 8 | Box Size: 2 | Ammo: Pistol Light Caliber
+- _Stats:_ Dim: 1x1 | Stack: 2 (legacy) | Base Cost: 8 | Box Size: 1 | Ammo: Pistol Light Caliber
 
 **3. K-77 'Supernova' Hand Cannon**
 
@@ -163,7 +163,7 @@ product's new base cost divided by its old one.
 
 - _Flavor:_ A tiny, twin-barrel kinetic pistol that easily fits in an asteroid miner's boot.
 - _Tags:_ `['Firearm', 'Surplus', 'Old', 'Pistol']`
-- _Stats:_ Dim: 1x1 | Stack: 1 | Base Cost: 12 | Ammo: Pistol Light Caliber
+- _Stats:_ Dim: 1x1 | Stack: 1 | Base Cost: 12 | Box Size: 2 | Ammo: Pistol Light Caliber
 
 ## Category 3: [Firearm] + [Heavy]
 

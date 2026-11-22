@@ -122,7 +122,7 @@
   },
   {
     "id": "wpn_pis_02",
-    "boxSize": 2,
+    "boxSize": 1,
     "name": "Scrap-Iron Autopistol",
     "flavor": "A heavy, crude ballistic pistol manufactured from reclaimed ship plating. Cheap and prone to overheating.",
     "tags": ["Firearm", "Surplus", "Old", "Pistol"],
@@ -210,7 +210,7 @@
   },
   {
     "id": "wpn_pis_10",
-    "boxSize": 1,
+    "boxSize": 2,
     "name": "Frontier 'Stinger' Derringer",
     "flavor": "A tiny, twin-barrel kinetic pistol that easily fits in an asteroid miner's boot.",
     "tags": ["Firearm", "Surplus", "Old", "Pistol"],

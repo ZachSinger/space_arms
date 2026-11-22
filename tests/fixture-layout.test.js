@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { FIXTURE_TYPES, STARTING_FIXTURES, FIXTURE_POSITION_STEP, FIXTURE_SNAP_STEP, FIXTURE_FRONT_CLEARANCE, fixtureAccessCells, fixtureAtWorldPoint, fixtureBounds, fixtureCells, fixtureFacing, fixtureFacingStep, fixtureFootprint, fixtureFrontClearance, fixtureProjectionBoxes, fixturesOverlap, fixtureStandingSpot, cellKey, getFixtureType, isFixturePosition, migrateFixtureEntry, planRegisterQueue, snapFixturePosition, validateFixtureLayout, fixtureInteractionDistance } from "../js/logic/FixtureLayout.js";
+import { FIXTURE_TYPES, STARTING_FIXTURES, FIXTURE_POSITION_STEP, FIXTURE_SNAP_STEP, FIXTURE_FRONT_CLEARANCE, fixtureAccessCells, fixtureAtWorldPoint, fixtureBounds, fixtureCells, fixtureFacing, fixtureFacingStep, fixtureFootprint, fixtureFrontClearance, fixtureProjectionBoxes, fixtureSolidBounds, fixturesOverlap, fixtureStandingSpot, cellKey, getFixtureType, isFixturePosition, migrateFixtureEntry, planRegisterQueue, snapFixturePosition, validateFixtureLayout, fixtureInteractionDistance } from "../js/logic/FixtureLayout.js";
 import { FixturePlacement } from "../js/logic/FixturePlacement.js";
 import { PAD } from "../js/input/GamepadInput.js";
 import { controllerButtonFor } from "../js/input/ControllerBindings.js";
@@ -493,6 +493,10 @@ test("the starting layout has accessible fronts, a register back, and six queue 
     assert.equal(options.reservedCells.has(cellKey(cell)), false);
   }
   assert.equal(result.blockedCells.has("13,3"), true);
+  const register = STARTING_FIXTURES.find(({ type }) => type === "register_basic");
+  const exit = result.backAccess.get(register.id);
+  assert.ok(fixtureAccessCells(register, true).some((cell) => cellKey(cell) === cellKey(exit)),
+    "leaving the register always uses a reachable square behind it");
 });
 
 test("fractional fixture edges do not hide clear routes to register and shelf access", () => {
@@ -1202,4 +1206,15 @@ test("a fixture cannot block the standing space beside the backroom doorway", ()
   const result = validateFixtureLayout(layout, createRoom());
   assert.equal(result.valid, false);
   assert.match(result.reason, /stand at fixtures/);
+});
+
+test("upright shelves are solid only around their feet; side-facing shelves and registers stay fully solid", () => {
+  for (const rotation of [0, 2]) {
+    const shelf = { type: "shelf_budget_2x4", gx: 2, gy: 2, rotation };
+    const bounds = fixtureBounds(shelf);
+    assert.deepEqual(fixtureSolidBounds(shelf), { ...bounds, top: bounds.bottom - 24 / 64 });
+  }
+  for (const placement of [{ type: "shelf_budget_2x4", gx: 2, gy: 2, rotation: 1 }, { type: "register_basic", gx: 2, gy: 2 }]) {
+    assert.deepEqual(fixtureSolidBounds(placement), fixtureBounds(placement));
+  }
 });

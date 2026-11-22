@@ -8,21 +8,21 @@
 // the 9,000+ layer used for speech bubbles, prompts, and gauges.
 export const PEOPLE_DEPTH_BASE = 2000;
 
-// Fixtures sort among themselves by the bottom of their solid base, so a lower fixture (such
-// as a down-facing shelf backed against an up-facing one) covers the one behind it. They stay
-// above walls and the sliding door (1.5) and under thrown crates (2). A shelf's stock and
-// facing light sit just over their own shelf; bases snap 8 pixels apart, which leaves room.
-const FIXTURE_DEPTH_BASE = 1.6;
-const FIXTURE_DEPTH_PER_PIXEL = 1 / 20000;
+// Fixtures sort with people and floor crates by the bottom of their solid base: anyone whose
+// feet are behind a shelf's feet is drawn behind it, so walking past the top of an upright
+// shelf hides you behind it. A lower fixture (such as a down-facing shelf backed against an
+// up-facing one) covers the one behind it, and a floor crate level with a fixture's base draws
+// over it. A shelf's stock and facing light sit just over their own shelf.
+const FIXTURE_DEPTH_BELOW_FEET = 0.75;
 export const FIXTURE_STOCK_DEPTH_OFFSET = 0.0001;
 export const FIXTURE_LIGHT_DEPTH_OFFSET = 0.0002;
 
 export function fixtureDepth(baseBottomPx) {
-  return FIXTURE_DEPTH_BASE + baseBottomPx * FIXTURE_DEPTH_PER_PIXEL;
+  return PEOPLE_DEPTH_BASE + baseBottomPx - FIXTURE_DEPTH_BELOW_FEET;
 }
 
 // People (player, customers, staff) are drawn lower-on-screen in front: a customer walking
-// down past someone passes behind them. Everyone stays above shelves and floor crates.
+// down past someone passes behind them, and anyone behind a fixture's base is hidden by it.
 export function sortPeopleByFeet(shop) {
   const people = [
     shop.player?.sprite,

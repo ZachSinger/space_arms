@@ -406,7 +406,7 @@ export class CheckoutSystem {
     shop.crateSystem.syncFloorStacks();
   }
 
-  // Returns the player to where they stood before beginRegisterSession(). Only called when
+  // Steps the player out behind the counter. Only called when
   // the player leaves on purpose (E again), not when the checkout window closes because
   // the line ran out.
 
@@ -426,10 +426,15 @@ export class CheckoutSystem {
       register?.sprite?.setDepth(this.registerDepthBeforeTuck);
       this.registerDepthBeforeTuck = null;
     }
-    shop.player.teleportTo(
-      this.playerPositionBeforeRegister.x,
-      this.playerPositionBeforeRegister.y,
-    );
+    // Always step out through the back, on the validated floor behind the counter.
+    const exit = register?.backExitPoint;
+    const sprite = shop.player.sprite;
+    if (exit) {
+      const center = sprite.body.center;
+      shop.player.teleportTo(exit.x - (center.x - sprite.x), exit.y - (center.y - sprite.y));
+    } else {
+      shop.player.teleportTo(this.playerPositionBeforeRegister.x, this.playerPositionBeforeRegister.y);
+    }
     this.playerPositionBeforeRegister = null;
     shop.eventBus.emit(GAME_EVENTS.REGISTER_SESSION_ENDED, {
       registerId: register?.id ?? null,

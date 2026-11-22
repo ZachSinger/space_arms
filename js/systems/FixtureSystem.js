@@ -448,6 +448,8 @@ export class FixtureSystem {
     // Each register carries its own validated customer-line positions.
     for (const register of this.fixtures.registers()) {
       register.queuePoints = result.queuePointsById?.get(register.id) ?? result.queuePoints;
+      const backCell = result.backAccess?.get(register.id) ?? fixtureAccessCells(register, true)[0];
+      register.backExitPoint = fixtureStandingSpot(register, backCell);
     }
     scene.goBacksBadge?.refresh();
     scene.cleaningSystem?.moveOffBlockedSpots();

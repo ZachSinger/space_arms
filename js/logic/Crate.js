@@ -508,7 +508,36 @@ export class Crate {
       return false;
     }
     this.hitCustomers.add(customer);
-    this.hitCustomers.add(customer);
+    return true;
+  }
+
+  // A crate in flight that people stop rather than pass through: the player, staff, customers.
+  canHitPerson(personSprite) {
+    const body = this.sprite.body;
+    return this.isThrown && !this.isCarried && !this.isPushed && body.enable && body.moves &&
+      !this.isStationary() && this.throwCarrier !== personSprite && personSprite.body?.enable !== false;
+  }
+
+  /**
+   * Push the crate out of a person's feet box and bounce it back; the person isn't moved.
+   * @param {{ left: number, right: number, top: number, bottom: number, center: { x: number, y: number } }} person
+   */
+  bounceOffPerson(person) {
+    const body = this.sprite.body;
+    const overlapX = Math.min(body.right - person.left, person.right - body.left);
+    const overlapY = Math.min(body.bottom - person.top, person.bottom - body.top);
+    if (overlapX <= 0 || overlapY <= 0) return false;
+    const velocity = body.velocity;
+    if (overlapX < overlapY) {
+      const away = body.center.x >= person.center.x ? 1 : -1;
+      this.nudge(away * overlapX, 0);
+      if (velocity.x * away < 0) velocity.x = -velocity.x * CRATE_BOUNCE;
+    } else {
+      const away = body.center.y >= person.center.y ? 1 : -1;
+      this.nudge(0, away * overlapY);
+      if (velocity.y * away < 0) velocity.y = -velocity.y * CRATE_BOUNCE;
+    }
+    this.refreshDrag();
     return true;
   }
 

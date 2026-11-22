@@ -287,12 +287,17 @@ test("CrateWorld registers wall, pad, and customer physics", () => {
   assert.equal(padFilter(locked.sprite), false);
   assert.equal(padFilter(loose.sprite), true);
 
-  const customer = { sprite: {} };
-  const crate = { sprite: {}, itemId: "item", tryHitCustomer: () => true };
+  const customer = { sprite: { body: {} } };
+  let bounced;
+  const crate = {
+    sprite: {}, itemId: "item", tryHitCustomer: () => true,
+    canHitPerson: () => true, bounceOffPerson: (body) => { bounced = body; },
+  };
   scene.customers = [customer];
   scene.restockCrates = [crate];
   overlapCallback(crate.sprite, customer.sprite);
   assert.deepEqual(hit, { customer, crate });
+  assert.equal(bounced, customer.sprite.body);
 });
 
 // A 40px crate on the floor `distance` px to the right of the player's middle (in front of

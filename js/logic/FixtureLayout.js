@@ -8,7 +8,7 @@ import fixtureTypes from "../../data/Fixtures.json" with { type: "json" };
 import { roundMoney } from "./Money.js";
 import { getSlotItemLimit } from "./ShelfSlotStocking.js";
 import { createFloorReachability, FLOOR_NODE_STEP } from "../world/Navigation.js";
-import { PLAYER_BODY_HEIGHT, PLAYER_BODY_WIDTH } from "./Player.js";
+import { PLAYER_BODY_HEIGHT, PLAYER_BODY_WIDTH, PLAYER_CHARACTER_HEIGHT } from "./Player.js";
 import {
   CHARACTER_ART_HEIGHT, CHARACTER_ART_WIDTH, CHARACTER_FEET_DROP,
   CUSTOMER_COLLISION_HEIGHT, CUSTOMER_COLLISION_WIDTH,
@@ -36,6 +36,8 @@ export const SHELF_FEET_BELOW_WALL = 1 / 4;
 export const FIXTURE_FRONT_CLEARANCE = 1 / 2;
 // Upright shelf backs can share projected artwork, but their floor bases need this depth.
 const SHELF_BACK_TO_BACK_DEPTH = 1 / 4;
+// Tiles of an upright shelf's feet that people bump into: half the player character's height.
+export const SHELF_SOLID_HEIGHT = PLAYER_CHARACTER_HEIGHT / 2 / TILE_SIZE;
 // px, the feet box every walker (customers, staff, the player) must fit through.
 const WALKING_BODY_WIDTH = Math.max(PLAYER_BODY_WIDTH, CUSTOMER_COLLISION_WIDTH);
 const WALKING_BODY_HEIGHT = Math.max(PLAYER_BODY_HEIGHT, CUSTOMER_COLLISION_HEIGHT);
@@ -169,6 +171,18 @@ export function fixtureBounds(placement) {
     left: placement.gx + inset.left, top: placement.gy + inset.top,
     right: placement.gx + w - inset.right, bottom: placement.gy + h - inset.bottom,
   };
+}
+
+/**
+ * The part people actually bump into, in tiles. An upright shelf (facing up or down) is only
+ * solid around its feet, up to half a person's height; anyone further up walks behind its
+ * top. Placement and walking routes still use the full body box (fixtureBounds).
+ */
+export function fixtureSolidBounds(placement) {
+  const bounds = fixtureBounds(placement);
+  const facing = fixtureFacing(placement);
+  if (getFixtureType(placement.type).kind !== "shelf" || (facing !== "up" && facing !== "down")) return bounds;
+  return { ...bounds, top: Math.max(bounds.top, bounds.bottom - SHELF_SOLID_HEIGHT) };
 }
 
 export function fixtureAtWorldPoint(placement, worldX, worldY) {
@@ -509,6 +523,7 @@ export function validateFixtureLayout(placements, {
   }
   const access = new Map();
   const accessCells = new Map();
+  const backAccess = new Map();
   for (const { id, type, placement, isRegister, front, back } of requirements) {
     if ([...front, ...back].some((cell) => doorwayCells.has(cellKey(cell)))) {
       return invalid(`The ${isRegister ? "front and back" : "front"} of ${getFixtureType(type).name} can't face into a doorway.`);
@@ -524,6 +539,7 @@ export function validateFixtureLayout(placements, {
     }
     access.set(id, usableFront[Math.floor(usableFront.length / 2)]);
     accessCells.set(id, usableFront);
+    if (isRegister) backAccess.set(id, usableBack[Math.floor(usableBack.length / 2)]);
   }
   if (floor.hasCutOffFloor()) return invalid("This placement cuts off part of the shop.");
 
@@ -640,7 +656,7 @@ export function validateFixtureLayout(placements, {
   }
   return {
     valid: true, reason: "Click to place. Contents stay on the fixture.",
-    blockedCells, access, accessCells, queuePointsById,
+    blockedCells, access, accessCells, backAccess, queuePointsById,
     queueCells: firstQueue.queueCells, queuePoints: firstQueue.queuePoints,
   };
 }

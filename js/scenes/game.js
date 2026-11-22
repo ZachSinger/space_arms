@@ -265,6 +265,7 @@ export class GameScene extends Phaser.Scene {
       colliders: [this.room.wallGroup, this.obstacleGroup, this.registerGroup],
       padRect: this.supply.padRect,
       customerGroup: this.customerGroup,
+      people: [this.employeeGroup, this.player.sprite],
       onCustomerHit: (customer, crate) => this.eventBus.emit(GAME_EVENTS.CUSTOMER_HIT_BY_CRATE, {
         customer,
         itemId: crate.itemId,

@@ -12,7 +12,7 @@ import { GAME_EVENTS } from "../js/core/Events.js";
 import { SupplierLicense } from "../js/logic/Licenses.js";
 import { ContractRenderer } from "../js/logic/ContractRenderer.js";
 import { BACKROOM_UPGRADE_ORDER, EXPANSION_ORDER, ZONES } from "../js/logic/RoomLayout.js";
-import { FIXTURE_TYPES, fixtureBounds, fixtureFacingStep, fixtureFootprint, positionRegisterQueue } from "../js/logic/FixtureLayout.js";
+import { FIXTURE_TYPES, fixtureFacingStep, fixtureFootprint, fixtureSolidBounds, positionRegisterQueue } from "../js/logic/FixtureLayout.js";
 import { upgradeContractSplit } from "../js/state/migrations/contractSplit.js";
 
 let server;
@@ -1107,7 +1107,7 @@ test("HUD Save button is wired, reflects availability, and removes its handler o
   assert.equal(hudRoot.listeners.size, 0);
 });
 
-test("all placeable fixture physics bodies use the same art-trimmed bounds as placement", () => {
+test("all placeable fixture physics bodies match the solid part of their placement bounds", () => {
   const views = new FixtureViews(Object.create(GameScene.prototype));
   const tree = { remove() {}, insert() {} };
   const body = { world: { staticTree: tree }, position: { set(x, y) { this.x = x; this.y = y; } },
@@ -1122,7 +1122,7 @@ test("all placeable fixture physics bodies use the same art-trimmed bounds as pl
       const fixture = { type, x: 832, y: 192, rotation, sprite };
       views.orient(fixture);
       const footprint = fixtureFootprint(fixture);
-      const bounds = fixtureBounds({ ...fixture, gx: 832 / 64 - footprint.w / 2, gy: 192 / 64 - footprint.h / 2 });
+      const bounds = fixtureSolidBounds({ ...fixture, gx: 832 / 64 - footprint.w / 2, gy: 192 / 64 - footprint.h / 2 });
       assert.ok(Math.abs(body.width - (bounds.right - bounds.left) * 64) < 1e-9);
       assert.ok(Math.abs(body.height - (bounds.bottom - bounds.top) * 64) < 1e-9);
       assert.ok(Math.abs(body.position.x - bounds.left * 64) < 1e-9);
@@ -1178,7 +1178,7 @@ test("side-facing register queue and cashier align with the body box rather than
   });
 });
 
-test("the budget shelf art fills its footprint in every direction; only the visible shelf is solid", () => {
+test("the budget shelf art fills its footprint in every direction; only its feet or visible sides are solid", () => {
   const views = new FixtureViews(Object.create(GameScene.prototype));
   const tree = { remove() {}, insert() {} };
   const body = { world: { staticTree: tree }, position: { set() {} }, center: { set() {} } };
@@ -1201,8 +1201,9 @@ test("the budget shelf art fills its footprint in every direction; only the visi
     assert.equal(sprite.displayWidth, width);
     assert.equal(sprite.displayHeight, height);
     assert.equal(sprite.angle, 0);
-    // The 2x2 art leaves an empty band at its top (facing up/down) or sides (facing left/right).
-    const [solidWidth, solidHeight] = rotation % 2 === 0 ? [68, 48] : [44, 70];
+    // Facing up/down only the bottom 24px (half the player's height) is solid; facing
+    // left/right the art leaves empty bands at its sides.
+    const [solidWidth, solidHeight] = rotation % 2 === 0 ? [68, 24] : [44, 70];
     assert.equal(body.width, solidWidth);
     assert.equal(body.height, solidHeight);
   }
