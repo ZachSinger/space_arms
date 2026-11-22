@@ -65,3 +65,12 @@ They should be reviewed against the game's balance before they are treated as fi
   amount.
 - An order received on one day expires at the end of the following day.
 - A complete order crate turns teal.
+- When an order arrives, a short bell chime plays, the bottom bar says where to find its item
+  list and crate, and the order card glows for 6 seconds.
+- An order card sits in the top-left corner while an order is open. It shows the deadline,
+  payout, how many items are packed, and for each product: packed/needed, which rooms' shelves
+  and crates hold it and how many, and a warning when the shop has fewer than still needed.
+  Its last line says what to do next. Clicking its heading shrinks it to one line for the rest
+  of the session.
+- While the player carries the order crate, a bobbing teal diamond marks each shelf and crate
+  stack holding a product the order still needs.

@@ -3,13 +3,17 @@ import { gameRandom } from "../../core/Random.js";
 import { html, raw } from "../../core/html.js";
 import { INTERACT_RANGE } from "../../logic/Crate.js";
 import { transferItems } from "../../logic/InventoryTransfer.js";
-import { fixtureFacing, fixtureInteractionDistance } from "../../logic/FixtureLayout.js";
+import { fixtureBounds, fixtureFacing, fixtureInteractionDistance } from "../../logic/FixtureLayout.js";
 import { formatMoneyAmount } from "../../logic/Money.js";
 import { createRemoteOrder, REMOTE_ORDER_TUNING } from "../../logic/RemoteOrders.js";
 import { TILE_SIZE, BACKROOM_GRID_Y } from "../../logic/RoomLayout.js";
+import { playOrderAlert } from "../../logic/Sfx.js";
 import { UIWindow } from "../../logic/UIWindow.js";
+import { AREA } from "../../world/Areas.js";
 import { PEOPLE_DEPTH_BASE } from "../../world/Depth.js";
 import { controlLabel } from "../../input/InputDevice.js";
+import { describeOrderSources, findOrderItemSources } from "./OrderSources.js";
+import { OrderTracker } from "./OrderTracker.js";
 
 const TERMINAL_POSITION = Object.freeze({
   x: TILE_SIZE * 1.375,
@@ -27,6 +31,9 @@ const TERMINAL_SIZE = Object.freeze({ width: 44, height: 28 });
 const DELIVERY_PAD_SIZE = Object.freeze({ width: 56, height: 48 });
 const DELIVERY_REACH = TILE_SIZE / 2;
 const SHIP_DELAY_MS = 700;
+// How often the order card and the item markers re-check shelves and crates.
+const GUIDANCE_REFRESH_MS = 250;
+const SOURCE_MARKER_COLOR = "#2dd4bf";
 
 function facingDistance(fixture) {
   return ({ feet }) => {
@@ -51,9 +58,13 @@ export class DroneDeliverySystem {
     this.pendingShipId = null;
     this.pendingShipMs = 0;
     this.visuals = [];
+    this.sourceMarkers = [];
+    this.markerSpots = [];
+    this.guidanceMs = 0;
     this.drawTerminal();
     this.registerInteractions();
     this.buildWindow();
+    this.tracker = new OrderTracker();
     this.unsubscribeShiftStarted = shop.eventBus.on(GAME_EVENTS.SHIFT_STARTED, () => {
       this.arrivalCursor = 0;
     });
@@ -351,6 +362,7 @@ export class DroneDeliverySystem {
   }
 
   refreshWindow() {
+    this.guidanceMs = 0;
     if (!this.windowBody) return;
     const order = this.orderState.activeOrder;
     if (!order) {
@@ -403,7 +415,12 @@ export class DroneDeliverySystem {
       ...ORDER_CRATE_POSITION,
     });
     this.orderState.open({ id, ...details, crateId: crate.id });
-    this.shop.messages.show("Remote order received. Check the Drone Terminal in the backroom.", "#14b8a6");
+    playOrderAlert();
+    this.tracker?.announce();
+    this.shop.messages.show(
+      "New remote order! Its item list is in the top-left corner. Its crate is by the Drone Terminal in the backroom.",
+      "#14b8a6",
+    );
     this.refreshWindow();
     return true;
   }
@@ -418,9 +435,130 @@ export class DroneDeliverySystem {
     }
   }
 
-  update(_time, delta) {
+  update(time, delta) {
     this.updateOrderArrivals();
     this.updateDeliveryPad(delta);
+    this.updateGuidance(time, delta);
+  }
+
+  updateGuidance(time, delta) {
+    this.guidanceMs -= delta;
+    if (this.guidanceMs <= 0) {
+      this.guidanceMs = GUIDANCE_REFRESH_MS;
+      this.refreshGuidance();
+    }
+    this.positionSourceMarkers(time);
+  }
+
+  areaName(area) {
+    if (area === AREA.SHOP) return "Sales floor";
+    if (area === AREA.BACKROOM) return "Backroom";
+    const title = this.shop.areas.titleFor(area).toLowerCase();
+    return title.charAt(0).toUpperCase() + title.slice(1);
+  }
+
+  sourceContext(orderCrate) {
+    return {
+      shelves: this.shop.fixtures.shelves(),
+      floorCrates: this.shop.crateSystem.getFloorCrates(),
+      carriedCrates: this.shop.crateSystem.getCarriedCrates().filter((crate) => crate !== orderCrate),
+      shelfPoint: (shelf) => {
+        const bounds = fixtureBounds(shelf);
+        return { x: (bounds.left + bounds.right) / 2 * TILE_SIZE, y: bounds.top * TILE_SIZE };
+      },
+      areaAtPoint: (x, y) => this.shop.areas.areaAt(x, y),
+    };
+  }
+
+  // Where the order crate is, said the way the player would look for it.
+  describeOrderCrateSpot(crate, carrying) {
+    if (carrying) return "you're carrying it";
+    const pad = this.deliveryPadBounds();
+    const { x, y } = crate.sprite;
+    if (x >= pad.left && x <= pad.right && y >= pad.top && y <= pad.bottom) return "on the drone pad";
+    return this.shop.areas.areaAt(x, y) === AREA.SHOP ? "on the sales floor" : "in the backroom";
+  }
+
+  /** Builds the order card's contents and the list of shelves and crates to mark. */
+  refreshGuidance() {
+    const order = this.orderState.activeOrder;
+    const crate = order ? this.findOrderCrate(order) : null;
+    if (!order || !crate) {
+      this.markerSpots = [];
+      this.tracker?.render(null);
+      return;
+    }
+    const carrying = this.carriedOrderCrate() === crate;
+    const context = this.sourceContext(crate);
+    const markerSpots = [];
+    const lines = order.items.map((line) => {
+      const item = this.getItem(line.itemId);
+      const packed = crate.getAvailableUnitsFor(line.itemId);
+      const view = { name: item?.name ?? line.itemId, image: item?.image ?? null, packed, needed: line.quantity };
+      const remaining = line.quantity - packed;
+      if (remaining <= 0) return { ...view, where: "All packed", shortage: "" };
+      const sources = findOrderItemSources(line.itemId, context);
+      if (carrying) markerSpots.push(...sources.filter((source) => source.kind !== "carried"));
+      const available = sources.reduce((sum, source) => sum + source.quantity, 0);
+      const shortage = available === 0
+        ? "None in the shop. Buy more in the Supply tab."
+        : available < remaining ? `Only ${available} in the shop. Buy more in the Supply tab.` : "";
+      return { ...view, where: describeOrderSources(sources, (area) => this.areaName(area)), shortage };
+    });
+    this.markerSpots = markerSpots;
+
+    const total = order.items.reduce((sum, line) => sum + line.quantity, 0);
+    const packed = lines.reduce((sum, line) => sum + Math.min(line.packed, line.needed), 0);
+    const spot = this.describeOrderCrateSpot(crate, carrying);
+    const complete = crate.isRemoteOrderComplete();
+    let status;
+    if (complete && spot === "on the drone pad") status = "Everything is packed. The drone is picking it up.";
+    else if (complete) status = "Everything is packed. Set the order crate on the drone pad in the backroom.";
+    else if (carrying) {
+      status = `Face a shelf or crate with a teal diamond over it and press ${controlLabel("interact")} to pack one item.`;
+    } else status = `The order crate is ${spot}. Pick it up to start packing.`;
+    const today = this.shop.gameState.calendar.day;
+    this.tracker?.render({
+      dueText: order.expiresOnDay <= today ? "Ship by the end of today" : `Ship by the end of Day ${order.expiresOnDay}`,
+      dueSoon: order.expiresOnDay <= today,
+      payText: `Pays ${formatMoneyAmount(order.payout)}`,
+      packed,
+      total,
+      status,
+      complete,
+      lines,
+    });
+  }
+
+  // A teal diamond bobbing over each shelf and crate holding an item the carried order still needs.
+  positionSourceMarkers(time) {
+    const places = [];
+    for (const spot of this.markerSpots) {
+      const sprite = spot.kind === "crate" ? spot.target.sprite : null;
+      if (sprite && !sprite.active) continue;
+      const x = sprite ? sprite.x : spot.x;
+      const top = sprite ? sprite.y - sprite.displayHeight / 2 : spot.y;
+      // One diamond per crate stack and per shelf.
+      if (places.some((place) => Math.abs(place.x - x) < 6 && Math.abs(place.top - top) < 64)) continue;
+      places.push({ x, top });
+    }
+    while (this.sourceMarkers.length < places.length) {
+      this.sourceMarkers.push(this.shop.add.text(0, 0, "◆", {
+        fontFamily: "Arial, sans-serif",
+        fontSize: "28px",
+        color: SOURCE_MARKER_COLOR,
+        stroke: "#0f172a",
+        strokeThickness: 5,
+      }).setOrigin(0.5, 1).setDepth(9000));
+    }
+    const bob = Math.abs(Math.sin(time / 220)) * 5;
+    this.sourceMarkers.forEach((marker, index) => {
+      const place = places[index];
+      marker.setVisible(Boolean(place));
+      if (!place) return;
+      const scale = this.shop.cameraRig?.popupScale?.(place.x, place.top) ?? 1;
+      marker.setScale(scale).setPosition(place.x, place.top - 2 - bob * scale);
+    });
   }
 
   updateDeliveryPad(delta) {
@@ -561,5 +699,8 @@ export class DroneDeliverySystem {
     this.terminalBlocker?.destroy();
     for (const visual of this.visuals) visual.destroy();
     this.visuals = [];
+    for (const marker of this.sourceMarkers ?? []) marker.destroy();
+    this.sourceMarkers = [];
+    this.tracker?.destroy();
   }
 }

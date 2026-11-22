@@ -264,3 +264,31 @@ test("stock transfers into the order crate one item at a time and cannot be take
   assert.equal(transferItems(ammo, order, "amo_01", 1).moved, 1);
   assert.equal(order.isRemoteOrderComplete(), true);
 });
+
+test("order item sources group shelves and crates by area and skip other items", async () => {
+  const { describeOrderSources, findOrderItemSources } =
+    await server.ssrLoadModule("/js/modules/droneDeliveries/OrderSources.js");
+  const shelf = (y, placements) => ({ y, placements });
+  const crate = (itemId, quantity, y) => ({ kind: "item", itemId, quantity, sprite: { x: 10, y } });
+  const sources = findOrderItemSources("rifle", {
+    shelves: [
+      shelf(100, [{ itemId: "rifle", quantity: 4 }, { itemId: "rifle", quantity: 2 }]),
+      shelf(120, [{ itemId: "ammo", quantity: 9 }]),
+    ],
+    floorCrates: [crate("rifle", 12, 900), crate("rifle", 0, 900), crate("ammo", 5, 900),
+      { kind: "remote-order", itemId: null, quantity: 3, sprite: { x: 0, y: 900 } }],
+    carriedCrates: [crate("rifle", 3, 100)],
+    shelfPoint: (entry) => ({ x: 0, y: entry.y }),
+    areaAtPoint: (_x, y) => (y > 500 ? "backroom" : "shop"),
+  });
+
+  assert.deepEqual(sources.map(({ kind, area, quantity }) => [kind, area, quantity]), [
+    ["shelf", "shop", 6],
+    ["crate", "backroom", 12],
+    ["carried", "shop", 3],
+  ]);
+  assert.equal(
+    describeOrderSources(sources, (area) => (area === "shop" ? "Sales floor" : "Backroom")),
+    "Sales floor shelves: 6 · Backroom crates: 12 · Crates you're carrying: 3",
+  );
+});

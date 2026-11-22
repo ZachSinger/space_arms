@@ -25,6 +25,11 @@ const SOUNDS = {
   })),
   // Low buzz for a rejected (wrong-amount) payment attempt.
   error: [{ wave: "sawtooth", frequency: 160, start: 0, length: 0.22, curve: [[0, 0.12], [0.22, 0.001]] }],
+  // Two bright bell notes, then a repeat, for a new remote order arriving.
+  order: [1318.5, 1760, 1318.5, 1760].map((frequency, index) => ({
+    wave: "sine", frequency, start: index * 0.12 + (index >= 2 ? 0.18 : 0), length: 0.35,
+    curve: [[0, 0.0001], [0.01, 0.16], [0.34, 0.001]],
+  })),
 };
 
 function getContext() {
@@ -129,4 +134,8 @@ export function playSaleComplete() {
 
 export function playErrorBuzz() {
   play("error");
+}
+
+export function playOrderAlert() {
+  play("order");
 }
