@@ -19,9 +19,11 @@ The Drone Terminal lets you fill orders from remote customers from the start of 
 
 ## Deadlines
 - A new order arrives as an **offer** at the Drone Terminal. Accept it to get its crate, or
-  decline it. An offer only waits a limited number of days, then goes away on its own.
+  decline it. An offer only waits a limited number of shifts, then goes away on its own.
+- Each day has exactly one shift (End Day must be clicked before the next shift can start), so
+  "Day N" on the terminal is also the shift a deadline ends with.
 - Declining an offer, or letting it go away, never costs reputation.
-- Once accepted, an order must be shipped within a set number of days. Missing that deadline
+- Once accepted, an order must be shipped within a set number of shifts. Missing that deadline
   costs store reputation.
 - Orders can be filled any time, even after hours.
 
@@ -42,8 +44,8 @@ The Drone Terminal lets you fill orders from remote customers from the start of 
 - Each in-game hour of a shift is a 15% chance for a new order offer.
 - Orders use products from any supplier contract the store's level allows buying, whether or
   not the store owns that contract yet.
-- Offers only exist for a limited number of days, and accepted orders must be filled within a
-  limited number of days. Not accepting an offer never loses reputation; failing to fill an
+- Offers only exist for a limited number of shifts, and accepted orders must be filled within a
+  limited number of shifts. Not accepting an offer never loses reputation; failing to fill an
   accepted order in time loses store reputation.
 - Orders scale with store level: more orders, and more varied orders, at higher levels.
 - Remote orders are generally larger than most customer orders.
@@ -70,10 +72,10 @@ crate holds every item the order needs (requested by Zach).
 The following values are implementation picks to make the feature playable, not agreed design.
 They should be reviewed against the game's balance before they are treated as final:
 
-- An offer waits at the terminal for 2 days, counting the day it arrives (an offer that
-  arrives on Day 3 goes away at the end of Day 4).
-- An accepted order must ship within 3 days, counting the day it is accepted (accepted on
-  Day 4, due by the end of Day 6).
+- An offer waits at the terminal for 2 shifts, counting the shift it arrives in (an offer that
+  arrives during the Day 3 shift goes away when the Day 4 shift ends).
+- An accepted order must ship within 3 shifts, counting the shift it is accepted in (accepted
+  during the Day 4 shift, due by the end of the Day 6 shift).
 - With one drone, only one accepted order can be open at a time. Its Accept buttons are
   greyed out until it ships or is cancelled; offers can still arrive and wait meanwhile.
 - Up to 1 offer can wait at once for store levels 1–10, 2 for 11–20, 3 for 21–30, 4 for

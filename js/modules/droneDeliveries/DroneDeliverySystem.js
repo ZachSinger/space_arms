@@ -434,7 +434,7 @@ export class DroneDeliverySystem {
   renderOffers(orderOpen) {
     const { offers } = this.orderState;
     if (offers.length === 0) return "";
-    const fillDays = REMOTE_ORDER_TUNING.fillShifts;
+    const fillShifts = REMOTE_ORDER_TUNING.fillShifts;
     const cards = offers.map((offer) => {
       const rows = offer.items.map((line) => {
         const item = this.getItem(line.itemId);
@@ -449,7 +449,7 @@ export class DroneDeliverySystem {
         <div class="remote-order-offer">
           <div class="remote-order-lines">${raw(rows)}</div>
           <p>Pays <strong>${formatMoneyAmount(offer.payout)}</strong> and adds ${offer.reputation} store
-            reputation when shipped. This offer goes away after Day ${offer.offerEndsDay}.</p>
+            reputation when shipped. This offer goes away when the Day ${offer.offerEndsDay} shift ends.</p>
           <div class="remote-order-actions">
             <button type="button" class="action-btn" data-remote-order-accept="${offer.id}"
               ${orderOpen ? "disabled" : ""}>ACCEPT</button>
@@ -460,7 +460,7 @@ export class DroneDeliverySystem {
     }).join("");
     return String(html`
       <h3>ORDER OFFERS</h3>
-      <p>After you accept an order, you have ${fillDays} days to ship it, counting the day you accept.
+      <p>After you accept an order, you have ${fillShifts} shifts to ship it, counting the shift you accept it in.
         Declining an offer or letting it go away never costs store reputation.
         ${orderOpen ? "Ship or cancel the current order before accepting another." : ""}</p>
       ${raw(cards)}
