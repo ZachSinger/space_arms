@@ -17,6 +17,7 @@ import {
 import { AREA } from "../../world/Areas.js";
 import { PEOPLE_DEPTH_BASE } from "../../world/Depth.js";
 import { controlLabel } from "../../input/InputDevice.js";
+import { matchesBinding } from "../../input/KeyBindings.js";
 import { describeOrderSources, findOrderItemSources } from "./OrderSources.js";
 import { OrderTracker } from "./OrderTracker.js";
 
@@ -165,6 +166,23 @@ export class DroneDeliverySystem {
       if (event.target.closest("[data-remote-order-reset]")) this.resetOrder();
       else if (event.target.closest("[data-remote-order-cancel]")) this.cancelOrder();
     });
+    // The interact key that opened the terminal also closes it, like the shelf window.
+    this.onWindowKey = (event) => {
+      if (!this.window.isOpen || this.shop.gamePaused || event.repeat) return;
+      if (event.target?.matches?.("input, textarea") || !matchesBinding("interact", event)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.window.close();
+    };
+    this.onWindowMouse = (event) => {
+      if (!this.window.isOpen || this.shop.gamePaused || event.target !== this.shop.game.canvas) return;
+      if (!matchesBinding("interact", event)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.window.close();
+    };
+    window.addEventListener("keydown", this.onWindowKey, true);
+    window.addEventListener("mousedown", this.onWindowMouse);
     this.refreshWindow();
   }
 
@@ -763,6 +781,8 @@ export class DroneDeliverySystem {
   destroy() {
     this.unsubscribeShiftStarted?.();
     this.unregisterInteractions?.();
+    window.removeEventListener("keydown", this.onWindowKey, true);
+    window.removeEventListener("mousedown", this.onWindowMouse);
     this.window?.close();
     this.window?.element.remove();
     if (this.window) this.shop.windowManager.windows.delete(this.window.id);

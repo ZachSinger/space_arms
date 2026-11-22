@@ -790,7 +790,8 @@ test("mouse buttons assigned to game actions do not also open clicked fixtures",
   let opened = 0;
   const scene = {
     game: { canvas },
-    add: { image },
+    add: { image, zone: () => ({}) },
+    physics: { add: { existing() {} } },
     obstacleGroup: { add() {} },
     registerGroup: { add() {} },
     fixtureSystem: { tryOpenFixtureWindow() { opened += 1; } },

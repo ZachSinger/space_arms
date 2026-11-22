@@ -59,7 +59,7 @@ crate holds every item the order needs (requested by Zach).
 The following values are implementation picks to make the feature playable, not agreed design.
 They should be reviewed against the game's balance before they are treated as final:
 
-- Each scheduled customer arrival is a 1% chance for a remote order. Customer factions do not
+- Each scheduled customer arrival is a 6% chance for a remote order. Customer factions do not
   affect the order.
 - Orders contain 2–4 product types, with 3–8 of each. Products are limited to items covered by
   the shop's current supplier licenses.

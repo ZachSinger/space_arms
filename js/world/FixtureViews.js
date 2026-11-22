@@ -11,7 +11,8 @@ import { ShelfFacingLight } from "../logic/ShelfFacingLight.js";
 import { ShelfItemDisplay } from "../logic/ShelfItemDisplay.js";
 import { getFixtureTexture, hasFacingTextures } from "../logic/FixtureTexture.js";
 import {
-  fixtureArtInset, fixtureBounds, fixtureFootprint, fixtureRotation, fixtureSolidBounds, getFixtureType,
+  REGISTER_FRONT_OVERLAP, fixtureArtInset, fixtureBounds, fixtureFacingStep, fixtureFootprint, fixtureRotation,
+  fixtureSolidBounds, getFixtureType,
 } from "../logic/FixtureLayout.js";
 import { FIXTURE_LIGHT_DEPTH_OFFSET, FIXTURE_STOCK_DEPTH_OFFSET, fixtureDepth } from "./Depth.js";
 import { TILE_SIZE } from "../logic/RoomLayout.js";
@@ -52,6 +53,8 @@ export class FixtureViews {
     fixture.facingLight?.destroy();
     fixture.stockItemsDisplay?.destroy();
     fixture.sprite?.destroy();
+    fixture.registerSolid?.destroy();
+    fixture.registerSolid = null;
     this.shown.delete(fixture);
   }
 
@@ -85,15 +88,21 @@ export class FixtureViews {
     const height = (footprint.h - inset.top - inset.bottom) * TILE_SIZE - clipTop;
     const centerX = x + (inset.left - inset.right) * TILE_SIZE / 2;
     const centerY = y + (inset.top - inset.bottom) * TILE_SIZE / 2 + clipTop / 2;
-    const body = sprite.body;
-    body.world.staticTree.remove(body);
-    body.position.set(centerX - width / 2, centerY - height / 2);
-    body.width = width;
-    body.height = height;
-    body.halfWidth = width / 2;
-    body.halfHeight = height / 2;
-    body.center.set(centerX, centerY);
-    body.world.staticTree.insert(body);
+    const left = centerX - width / 2;
+    const top = centerY - height / 2;
+    placeStaticBody(sprite.body, left, top, width, height);
+    if (fixture.registerSolid) {
+      // The front strip customers queue on is open floor for everyone, as in route planning.
+      const { dx, dy } = fixtureFacingStep(fixture);
+      const trim = REGISTER_FRONT_OVERLAP;
+      placeStaticBody(
+        fixture.registerSolid.body,
+        dx < 0 ? left + trim : left,
+        dy < 0 ? top + trim : top,
+        dx ? width - trim : width,
+        dy ? height - trim : height,
+      );
+    }
     sprite.setDepth(fixtureDepth(fixtureBounds(fixture).bottom * TILE_SIZE));
     this.layerDisplays(fixture);
   }
@@ -139,7 +148,9 @@ export class FixtureViews {
   }
 
   /**
-   * The register uses the same art-sized body box as other fixtures.
+   * The register's own body is the same art-sized box as other fixtures; queue and cashier
+   * spots line up with it. What the player and crates bump into is a separate box without
+   * the front strip, so the player can walk anywhere customers can.
    * @param {object} fixture
    */
   drawRegister(fixture) {
@@ -153,8 +164,11 @@ export class FixtureViews {
         scene.checkoutSystem.openRegisterWindow();
       }
     });
-    scene.registerGroup.add(sprite); // see registerGroup in create()
+    scene.physics.add.existing(sprite, true);
+    const solid = scene.add.zone(fixture.x, fixture.y, 1, 1);
+    scene.registerGroup.add(solid); // see registerGroup in create()
     fixture.sprite = sprite;
+    fixture.registerSolid = solid;
   }
 
   refreshStockDisplay(shelf) {
@@ -165,4 +179,16 @@ export class FixtureViews {
   refreshStockDisplays() {
     for (const shelf of this.shop.fixtures.shelves()) this.refreshStockDisplay(shelf);
   }
+}
+
+// Phaser's own refit ignores rotation, so static body boxes are set by hand.
+function placeStaticBody(body, left, top, width, height) {
+  body.world.staticTree.remove(body);
+  body.position.set(left, top);
+  body.width = width;
+  body.height = height;
+  body.halfWidth = width / 2;
+  body.halfHeight = height / 2;
+  body.center.set(left + width / 2, top + height / 2);
+  body.world.staticTree.insert(body);
 }

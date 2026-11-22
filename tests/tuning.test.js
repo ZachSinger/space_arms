@@ -69,9 +69,9 @@ test("moved tuning numbers keep their old values", () => {
     scavengersWalkOutPercent: [10, 25],
     civilianUpsetPercent: [55, 75],
     civilianWalkOutPercent: [25, 40],
-    mercenariesUpsetPercent: [65, 85],
+    mercenariesUpsetPercent: [65, 80],
     mercenariesWalkOutPercent: [35, 50],
-    explorersUpsetPercent: [75, 95],
+    explorersUpsetPercent: [70, 80],
     explorersWalkOutPercent: [45, 60],
   });
   assert.deepEqual({ ...loadTuning("navigation", navigationTuning) }, {

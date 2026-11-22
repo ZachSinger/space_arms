@@ -90,9 +90,10 @@ for being bigger. Each customer rolls two numbers when they arrive:
 |---|---|---|
 | Scavenger | 40–60% | 10–25% |
 | Regular (no faction) | 55–75% | 25–40% |
-| Mercenary | 65–85% | 35–50% |
-| Explorer | 75–95% | 45–60% |
+| Mercenary | 65–80% | 35–50% |
+| Explorer | 70–80% | 45–60% |
 
+- No customer gets upset at 80% or cleaner, so one or two small messes in a new store never cost reputation.
 - Upset: they look disappointed and you lose 1 store reputation. They keep shopping.
 - Walks out: they look angry, you lose 2 store reputation, and they leave right away.
 - These are store reputation only; faction reputation isn't touched.

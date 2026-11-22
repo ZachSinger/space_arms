@@ -1,7 +1,7 @@
 import { roundMoney } from "./Money.js";
 
 export const REMOTE_ORDER_TUNING = Object.freeze({
-  chancePerCustomer: 0.01,
+  chancePerCustomer: 0.06,
   minProductTypes: 2,
   maxProductTypes: 4,
   minUnitsPerProduct: 3,

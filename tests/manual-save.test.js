@@ -1132,6 +1132,25 @@ test("all placeable fixture physics bodies match the solid part of their placeme
   }
 });
 
+test("the register's solid box leaves its front strip open, like customer routes", () => {
+  const views = new FixtureViews(Object.create(GameScene.prototype));
+  const makeBody = () => ({ world: { staticTree: { remove() {}, insert() {} } },
+    position: { set(x, y) { this.x = x; this.y = y; } }, center: { set() {} } });
+  const sprite = { body: makeBody(), setTexture() { return this; }, setDisplaySize() { return this; },
+    setPosition() { return this; }, setAngle() { return this; }, setDepth() { return this; } };
+  for (let rotation = 0; rotation < 4; rotation++) {
+    const registerSolid = { body: makeBody() };
+    views.orient({ type: "register_basic", x: 832, y: 192, rotation, sprite, registerSolid });
+    const full = sprite.body;
+    const solid = registerSolid.body;
+    const { dx, dy } = fixtureFacingStep({ type: "register_basic", rotation });
+    assert.equal(solid.width, full.width - (dx ? 10 : 0));
+    assert.equal(solid.height, full.height - (dy ? 10 : 0));
+    assert.equal(solid.position.x, full.position.x + (dx < 0 ? 10 : 0));
+    assert.equal(solid.position.y, full.position.y + (dy < 0 ? 10 : 0));
+  }
+});
+
 test("side-facing register queue and cashier align with the body box rather than transparent art", () => {
   const scene = Object.create(GameScene.prototype);
   const body = { width: 30, height: 68, center: { x: 100, y: 100 } };

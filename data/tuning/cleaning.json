@@ -160,7 +160,7 @@
     "description": "Cleanliness percentage range below which regular customers leave."
   },
   "mercenariesUpsetPercent": {
-    "value": [65, 85],
+    "value": [65, 80],
     "min": 0,
     "max": 100,
     "description": "Cleanliness percentage range below which mercenaries become upset."
@@ -172,7 +172,7 @@
     "description": "Cleanliness percentage range below which mercenaries leave."
   },
   "explorersUpsetPercent": {
-    "value": [75, 95],
+    "value": [70, 80],
     "min": 0,
     "max": 100,
     "description": "Cleanliness percentage range below which explorers become upset."
