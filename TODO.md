@@ -23,6 +23,8 @@ completed or no longer relevant.
       Adjust stick feel, dash timing, menu navigation, and button prompts as needed.
 - [ ] Check how movement, crate handling, the camera, and checkout feel during a
       10-minute game session.
+- [ ] Show an outline or highlight on an employee when a shelf hides most of them, so the
+      player can still see where their staff are.
 - [ ] Make the backroom worth using. Right now it's easier to leave crates all over the
       sales floor than to carry them to the backroom, so the backroom has no real purpose.
 - [ ] Add a first-shift tutorial for ordering products, collecting deliveries, stocking

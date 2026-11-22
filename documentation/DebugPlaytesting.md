@@ -38,6 +38,18 @@ The panel in the top-right corner opens the real Manager's Tablet straight to an
 tabs, so changes tried here are the same menus players see. **Send 1 customer** brings
 someone in, and you serve them at the register as usual.
 
+## Shelf Collision Lab
+
+On the title screen, choose **DEV**, then **SHELF COLLISION LAB**. It shows the short
+(two-row) and tall (three-row) shelves facing every direction, plus back-to-back pairs. Red
+marks the part of each shelf that people bump into; press **G** to hide or show it. Shelves
+facing up or down are solid only around their feet, so you, customers, and staff can walk
+behind their tops and be hidden by them. A pretend customer walks a loop behind the shelves.
+
+**Every new shelf must be checked here before it ships.** Add it to the lab's shelf list in
+`js/scenes/shelfCollisionLab.js` in all four facings, then walk into it from every side and
+behind it: you should stop only at its feet, and it should hide you when you're behind it.
+
 ## Capturing a session
 
 Click **Debug Info** in the top HUD, including before opening the store.
