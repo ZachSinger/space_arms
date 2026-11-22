@@ -18,23 +18,28 @@ export const DRONE_TERMINAL_SPRITE = Object.freeze({
 });
 
 // Frames 5-7 reveal only the crate; 8-12 reveal its platform. Frames 13-15 open the crate lid.
-// pauseAfter: how long PLAY ALL holds before the next part. The platform starts rising as soon as the doors finish.
+// The platform starts rising as soon as the doors finish; other holds stay unchanged.
 const STAGES = Object.freeze([
-  { label: "DOORS OPEN", frames: [0, 1, 2, 3, 4], pauseAfter: 0 },
-  { label: "CRATE RISES", frames: [5, 6, 7, 8, 9, 10, 11, 12], pauseAfter: 600 },
-  { label: "CRATE OPENS", frames: [13, 14, 15], pauseAfter: 600 },
-  { label: "CRATE CLOSES", frames: [14, 13, 12], pauseAfter: 600 },
-  { label: "CRATE LOWERS", frames: [11, 10, 9, 8, 7, 6, 5, 4], pauseAfter: 600 },
-  { label: "DOORS CLOSE", frames: [3, 2, 1, 0], pauseAfter: 600 },
+  { label: "FLOOR DOORS OPENING", frames: [0, 1, 2, 3, 4], pauseAfter: 0 },
+  { label: "PLATFORM RAISING", frames: [5, 6, 7, 8, 9, 10, 11, 12], pauseAfter: 600 },
+  { label: "CRATE LID OPENING", frames: [13, 14, 15], pauseAfter: 600 },
+  { label: "CRATE LID CLOSING", frames: [14, 13, 12], pauseAfter: 600 },
+  { label: "PLATFORM LOWERING", frames: [11, 10, 9, 8, 7, 6, 5, 4], pauseAfter: 600 },
+  { label: "FLOOR DOORS CLOSING", frames: [3, 2, 1, 0], pauseAfter: 600 },
 ]);
-const FRAME_MS = 120;
-const HEADER_HEIGHT = 100;
+const SPEEDS = Object.freeze([
+  { label: "SLOW", frameMs: 240 },
+  { label: "NORMAL", frameMs: 120 },
+  { label: "FAST", frameMs: 60 },
+]);
+const HEADER_HEIGHT = 244;
 const TEXT_STYLE = { fontFamily: "monospace", fontSize: "14px", color: "#e2e8f0" };
 const ROOM = Object.freeze({ columns: 8, rows: 5 });
 
 export class DeliveryCrateLabScene extends Phaser.Scene {
   constructor() {
     super("scene-delivery-crate-lab");
+    this.speedSettings = STAGES.map(() => 1);
   }
 
   preload() {
@@ -52,7 +57,6 @@ export class DeliveryCrateLabScene extends Phaser.Scene {
     this.carriedCrates = [];
     this.controlMode = { allows: () => true };
     this.playing = false;
-    this.looping = false;
     this.stageIndex = -1;
     this.playToken = 0;
 
@@ -74,36 +78,33 @@ export class DeliveryCrateLabScene extends Phaser.Scene {
 
     this.addUi(this.add.rectangle(0, 0, this.scale.width, HEADER_HEIGHT, 0x0f172a, 0.92).setOrigin(0));
     this.addUi(this.add.text(16, 6,
-      "DELIVERY CRATE LAB  Space: play all.  1-6: play one part.  L: loop.  Esc: menu.", TEXT_STYLE));
+      "DELIVERY CRATE LAB  Always looping. Click a speed to change that stage. Esc: menu.", TEXT_STYLE));
     this.status = this.addUi(this.add.text(16, 26, "", { ...TEXT_STYLE, color: "#facc15" }));
-    let x = 16;
-    for (const [label, onClick] of [
-      ["[ PLAY ALL ]", () => this.playAll()],
-      ...STAGES.map((stage, index) => [`[ ${index + 1}: ${stage.label} ]`, () => this.playStage(index)]),
-    ]) {
-      x += this.addButton(x, 50, label, onClick).width + 12;
-    }
-    x = 16;
-    for (const [label, onClick] of [
-      ["[ LOOP ON/OFF ]", () => this.toggleLoop()],
-      ["[ MENU ]", () => this.scene.start("scene-title")],
-    ]) {
-      x += this.addButton(x, 74, label, onClick).width + 12;
-    }
+    this.addUi(this.add.text(16, 46,
+      "Slow: half speed. Normal: original speed. Fast: double speed. Green marks your choice.", TEXT_STYLE));
+    this.speedButtons = STAGES.map((stage, stageIndex) => {
+      const y = 72 + stageIndex * 24;
+      this.addUi(this.add.text(16, y, `${stageIndex + 1}: ${stage.label}`, TEXT_STYLE));
+      let x = 260;
+      return SPEEDS.map((speed, speedIndex) => {
+        const button = this.addButton(x, y, `[ ${speed.label} ]`,
+          () => this.setStageSpeed(stageIndex, speedIndex));
+        button.setColor(speedIndex === this.speedSettings[stageIndex] ? "#86efac" : "#38bdf8");
+        x += button.width + 16;
+        return button;
+      });
+    });
+    this.addButton(16, 220, "[ MENU ]", () => this.scene.start("scene-title"));
     this.showStatus();
 
     this.fitRoom();
-    this.input.keyboard.on("keydown-SPACE", () => this.playAll());
-    this.input.keyboard.on("keydown-L", () => this.toggleLoop());
-    STAGES.forEach((_stage, index) => {
-      this.input.keyboard.on(`keydown-${["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX"][index]}`, () => this.playStage(index));
-    });
     this.input.keyboard.on("keydown-ESC", () => this.scene.start("scene-title"));
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.events.once("shutdown", () => {
       this.playToken += 1;
       this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     });
+    this.playAll();
   }
 
   update(_time, delta) {
@@ -115,21 +116,13 @@ export class DeliveryCrateLabScene extends Phaser.Scene {
 
   async playAll() {
     const token = ++this.playToken;
-    do {
+    while (token === this.playToken) {
       for (let index = 0; index < STAGES.length; index += 1) {
         if (!await this.runStage(index, token)) return;
         const pause = STAGES[index].pauseAfter;
         if (pause > 0 && !await this.wait(pause, token)) return;
       }
-    } while (this.looping && token === this.playToken);
-    this.finish(token);
-  }
-
-  async playStage(index) {
-    const token = ++this.playToken;
-    // Each part starts from where the previous part ends.
-    this.terminal.setFrame(index === 0 ? 0 : STAGES[index - 1].frames.at(-1));
-    if (await this.runStage(index, token)) this.finish(token);
+    }
   }
 
   async runStage(index, token) {
@@ -139,7 +132,7 @@ export class DeliveryCrateLabScene extends Phaser.Scene {
       if (token !== this.playToken) return false;
       this.terminal.setFrame(frame);
       this.showStatus();
-      if (!await this.wait(FRAME_MS, token)) return false;
+      if (!await this.wait(SPEEDS[this.speedSettings[index]].frameMs, token)) return false;
     }
     return true;
   }
@@ -150,20 +143,18 @@ export class DeliveryCrateLabScene extends Phaser.Scene {
     });
   }
 
-  finish(token) {
-    if (token !== this.playToken) return;
-    this.playing = false;
-    this.showStatus();
-  }
-
-  toggleLoop() {
-    this.looping = !this.looping;
+  setStageSpeed(stageIndex, speedIndex) {
+    this.speedSettings[stageIndex] = speedIndex;
+    this.speedButtons[stageIndex].forEach((button, index) => {
+      button.setColor(index === speedIndex ? "#86efac" : "#38bdf8");
+    });
     this.showStatus();
   }
 
   showStatus() {
-    const stage = this.playing ? STAGES[this.stageIndex].label : "STOPPED";
-    this.status.setText(`Now: ${stage}   Picture ${this.terminal.frame.name + 1} of 16   Loop: ${this.looping ? "ON" : "OFF"}`);
+    const stage = this.playing ? STAGES[this.stageIndex].label : "STARTING";
+    const speed = this.playing ? SPEEDS[this.speedSettings[this.stageIndex]].label : "NORMAL";
+    this.status.setText(`Now: ${stage}   Speed: ${speed}   Picture ${this.terminal.frame.name + 1} of 16   Loop: ON`);
   }
 
   // --- Room, cameras, and header ---

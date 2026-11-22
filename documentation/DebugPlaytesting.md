@@ -53,13 +53,18 @@ behind it: you should stop only at its feet, and it should hide you when you're 
 ## Delivery Crate Lab
 
 On the title screen, choose **DEV**, then **DELIVERY CRATE LAB**. It shows the remote-order
-terminal beside the player. **PLAY ALL** shows the floor doors opening, the dark delivery crate
+terminal beside the player. The animation starts automatically and continuously loops through
+the floor doors opening, the dark delivery crate
 rising on its platform, the crate lid opening and closing, the loaded platform lowering,
 and the floor doors closing. There is no extra pause between the floor doors opening and
 the crate rising. Three pictures show the crate appearing before its platform becomes visible;
 lowering reverses the same pictures, so the platform disappears before the crate does.
-The numbered buttons (or keys **1–6**) play one part at a time,
-and **LOOP ON/OFF** repeats the whole animation. The animation pictures are in
+Each of the six stages has **SLOW**, **NORMAL**, and **FAST** buttons. Normal preserves the
+original 120 ms per picture; Slow uses 240 ms and Fast uses 60 ms. Changes affect that stage's
+next picture delay without restarting the animation or changing the other stages. The green
+button marks the selected speed. The existing holds between stages remain unchanged.
+Choices survive leaving and reopening the lab during the same game session; they do not affect saved games.
+Use **MENU** or **Esc** to leave. The animation pictures are in
 `img/Generated/fixture_drone_terminal_crate_sheet.png` (16 pictures, 120×81 each, shown at full size).
 All pictures share the same terminal and pad pixel for pixel. Only the moving doors, platform
 and crate change; the raised crate can overlap the back of the pad but is clipped behind its front rim.
