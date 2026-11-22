@@ -10,6 +10,7 @@ Every rebuild step must keep these passing. See [RebuildPlan.md](./RebuildPlan.m
 | `npm test` | All unit tests, including the golden saves | Locally and on GitHub |
 | `npm run check` | Type check and lint | Locally and on GitHub |
 | `npm run check:game` | Plays the real game in a hidden Edge window (below) | Locally only |
+| `npm run check:crash` | Crashes and restarts the desktop game to check error reporting | Locally only |
 
 `npm run check:game` needs the game art in `img/`, which is kept out of git. Copy the `img/`
 folder from an existing working copy (or regenerate it with the scripts in `scripts/`) before
@@ -21,6 +22,10 @@ disabled and enabled, including the trashcan, customers, HUD, and saved trash.
 
 The production build optimizes item pictures while leaving the source art untouched. After
 building, `npm run check:build` checks the pictures and Phase 9's 15,000,000-byte size limit.
+
+The crash check builds the game and launches hidden Electron windows using a temporary profile.
+It checks the crash report after restarting, including deferring and submitting it, without
+touching the player's save or sending a report to Discord.
 
 ## Browser checks
 

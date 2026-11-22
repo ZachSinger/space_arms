@@ -11,12 +11,17 @@ The project owner has severe ADHD and difficulty holding context across long res
 - Mention build or tooling warnings only when they affect the game or require the owner's attention. If one must be mentioned, immediately explain what it means and whether the owner needs to act.
 - Never ask the owner to playtest or suggest that they playtest. Handle testing yourself.
 - Unless the user says otherwise, don't end at a dead end: continue unfinished requested work, or briefly suggest one concrete next step. If a decision is needed, ask one focused question instead.
+- When asked what to work on next, use the current project context and TODO to choose one concrete game-related task. Say what will change and why; don't make the owner ask again for a clear recommendation, and don't suggest committing or pushing as the next task.
 - The owner may only see the final completion summary, not the reply text before it. Put the whole answer in the final message the owner sees. Never finish with a summary like "explained above" or "waiting on the user".
 - Never refer back to earlier context ("your question", "as discussed", "point 4") without restating it in full. Assume the owner remembers nothing from earlier messages.
 - Use the owner's own words for things they described. Don't rename their ideas.
 - If a question form or tool says the owner is unavailable, don't believe it. Ask in plain text in the final message instead.
 - Never write to the owner in lists (no bullets, no numbered items, no tables). Write short plain paragraphs only.
 - Cover exactly one item per reply. When several things need the owner's input, keep the list yourself, bring up one at a time, and tell the owner plainly when the last one is done.
+
+## Git Workflow
+
+- After completing and verifying changes for a task, commit and push those changes automatically without waiting for the owner to ask. Don't include unrelated work; if committing or pushing fails, explain the blocker without discarding changes.
 
 ## Project Overview
 
