@@ -123,6 +123,7 @@ export class TitleScene extends Phaser.Scene {
         <button class="action-btn" data-dev-starting-template>STARTING TEMPLATE</button>
         <button class="action-btn" data-dev-decorator>DECORATOR MODE</button>
         <button class="action-btn" data-dev-tutorial>FIRST DAY TUTORIAL</button>
+        <button class="action-btn" data-dev-crate-test>CRATE TEST ROOM</button>
         <button class="action-btn" data-dev-cancel>CANCEL</button>
       `,
     }, this.windowManager);
@@ -159,6 +160,10 @@ export class TitleScene extends Phaser.Scene {
     devButton("[data-dev-tutorial]", () => {
       this.devWindow.close();
       this.scene.start("scene-game", { sandbox: true, lab: "tutorial" });
+    });
+    devButton("[data-dev-crate-test]", () => {
+      this.devWindow.close();
+      this.scene.start("scene-game", { sandbox: true, lab: "crates" });
     });
     devButton("[data-dev-cancel]", () => this.devWindow.close());
     this.padInput = new GamepadInput();

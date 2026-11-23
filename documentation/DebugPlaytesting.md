@@ -57,6 +57,13 @@ Choose **DEV**, then **FIRST DAY TUTORIAL** to try the first-day guidance in a f
 using the Starting Template. The guidance follows real actions through stocking, serving
 customers, and ending the day. This test area never saves and does not change the regular game.
 
+## Crate Test Room
+
+Choose **DEV**, then **CRATE TEST ROOM** to open the real shop with everything unlocked and the
+sales floor and backroom covered in full item crates, as single crates and stacks of two and three,
+with walking room between them. **Refill crates** puts a fresh set down and **Clear crates**
+empties the floor. This test area never saves.
+
 ## Decorator Mode
 
 On the title screen, choose **DEV**, then **DECORATOR MODE**. It's a top-level shop with every
