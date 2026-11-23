@@ -17,9 +17,12 @@
 - The purchase shows on the day's receipt as "Bought equipment: Hovercart".
 
 ## Saving
-- A save remembers that you own it and which crates are on it, not its battery or position.
-- Loading a save with crates on the cart puts it next to you, switched on with a full battery
-  and its crates still on it. Otherwise it loads docked on its charger with a full battery.
+- A save remembers that you own it, which crates are on it, how much charge its battery has,
+  and whether it was out or on its charger. It doesn't remember exactly where the cart was.
+- Loading a save keeps the battery charge, so reloading never refills it. A cart that was out,
+  or has crates on it, comes back next to you. It's switched on with its crates, or dead if its
+  battery was empty, so you still carry it back. Otherwise it loads on its charger and keeps
+  charging from where it was.
 
 The DEV Crate Test Room gives you the cart for free, with a battery that never runs out and
 endless stamina, for testing. Nothing there is saved.

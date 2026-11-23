@@ -966,13 +966,21 @@ export class Hovercart {
     this.reset();
   }
 
-  // A loaded save puts the cart's crates back on it, switched on next to the player.
-  restoreCrates(crates) {
-    if (!crates.length) return;
+  // A loaded save keeps the cart's charge. A cart that was out (or has crates) comes back next
+  // to the player, switched on, or dead if its battery was empty; otherwise it's on its charger.
+  restoreSaved(crates, battery, out) {
+    this.battery = battery;
+    if (!crates.length && !out) {
+      this.renderBattery();
+      return;
+    }
     const player = this.scene.player.sprite;
-    this.active = true;
-    this.cart.setTexture(HOVERCART_TEXTURES.active);
+    const dead = battery <= 0;
+    this.active = !dead;
+    this.dead = dead;
+    this.cart.setTexture(dead ? HOVERCART_TEXTURES.docked : HOVERCART_TEXTURES.active);
     this.placeCartClearOfPlayer(player.x + 40, player.y);
+    if (dead) this.cart.body.stop();
     for (const crate of crates) {
       crate.setCarriedBy("hovercart");
       crate.sprite.body.stop();

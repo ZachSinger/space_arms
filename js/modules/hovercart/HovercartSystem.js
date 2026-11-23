@@ -4,6 +4,7 @@ import { Hovercart } from "./Hovercart.js";
 import { formatMoneyAmount } from "../../logic/Money.js";
 import { validateFixtureLayout } from "../../logic/FixtureLayout.js";
 import {
+  HOVERCART_BATTERY,
   HOVERCART_LEVEL,
   HOVERCART_NAME,
   HOVERCART_PRICE,
@@ -103,10 +104,15 @@ export class HovercartSystem {
       if (!crate.id) crate.id = this.scene.crateSystem.createId();
       return crate.serializePayload();
     });
-    return { hovercart: { owned: true, crates } };
+    // Whole numbers keep the save from changing with every tiny bit of charge.
+    const battery = Math.max(0, Math.min(HOVERCART_BATTERY.capacity, Math.floor(this.cart.battery)));
+    return { hovercart: { owned: true, crates, battery, out: this.cart.isOut() } };
   }
 
-  /** @param {{ hovercart?: { owned: true, crates: object[] } }} data - a checked save */
+  /**
+   * @param {{ hovercart?: { owned: true, crates: object[], battery?: number, out?: boolean } }} data
+   *   - a checked save
+   */
   load(data) {
     this.uninstall();
     if (!data.hovercart?.owned) return;
@@ -114,7 +120,7 @@ export class HovercartSystem {
     const { player } = this.scene;
     const crates = data.hovercart.crates.map((entry) => this.scene.crateSystem.createItemCrate(
       entry.itemId, entry.quantity, player.sprite.x, player.sprite.y, { id: entry.id }));
-    cart.restoreCrates(crates);
+    cart.restoreSaved(crates, data.hovercart.battery ?? HOVERCART_BATTERY.capacity, data.hovercart.out ?? false);
   }
 
   uninstall() {

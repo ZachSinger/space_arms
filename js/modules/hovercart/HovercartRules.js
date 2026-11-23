@@ -35,7 +35,12 @@ export function getHovercartReservedRectangle() {
  */
 export function isValidHovercartSave(value) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
-  const { owned, crates } = /** @type {{ owned?: unknown, crates?: unknown }} */ (value);
-  return owned === true && Array.isArray(crates) && crates.length <= HOVERCART_CAPACITY &&
+  const { owned, crates, battery, out } =
+    /** @type {{ owned?: unknown, crates?: unknown, battery?: unknown, out?: unknown }} */ (value);
+  // Battery and out were added after the first hovercart saves, so they're optional.
+  const batteryOk = battery === undefined ||
+    (typeof battery === "number" && Number.isFinite(battery) && battery >= 0 && battery <= HOVERCART_BATTERY.capacity);
+  return owned === true && batteryOk && (out === undefined || typeof out === "boolean") &&
+    Array.isArray(crates) && crates.length <= HOVERCART_CAPACITY &&
     crates.every((crate) => crate !== null && typeof crate === "object" && (crate.kind ?? "item") === "item");
 }

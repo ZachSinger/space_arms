@@ -208,6 +208,15 @@ test("a bought hovercart saves up to three item crates and they count toward cra
   const fixtureCrate = structuredClone(data);
   fixtureCrate.hovercart.crates[0] = { id: "crate-3", kind: "fixture", typeId: "shelf_budget_2x2" };
   assert.throws(() => validateShopSave(fixtureCrate, database), /invalid hovercart/);
+
+  const charged = structuredClone(data);
+  charged.hovercart.battery = 0;
+  charged.hovercart.out = true;
+  assert.deepEqual(validateShopSave(structuredClone(charged), database).hovercart, charged.hovercart);
+  for (const battery of [-1, 301, Number.NaN, "full"]) {
+    assert.throws(() => validateShopSave({ ...charged, hovercart: { ...charged.hovercart, battery } }, database),
+      /invalid hovercart/);
+  }
 });
 
 test("saved receipts must belong to the saved day", () => {
