@@ -542,7 +542,7 @@ export class CrateSystem {
     }
     const stocking = shop.shelfStockingWindow?.getStockingCrate();
     const cart = shop.hovercartLab;
-    const cartInReach = cart?.isInReach() ?? false;
+    const cartInReach = cart?.isCloseEnough() ?? false;
     this.crateFooter.render({
       marked: stack ? this.describeCrateForFooter(stack.marked) : this.describeHoveredShelfForFooter(),
       carried: [...this.getCarriedCrates()].reverse().map((crate) => crate === stocking

@@ -220,7 +220,12 @@ export class HovercartLab {
   }
 
   isInReach() {
-    return this.active && !this.moving &&
+    return this.active && !this.moving && this.isCloseEnough();
+  }
+
+  // Close enough to the player for its crates to count as at hand in the crate cards.
+  isCloseEnough() {
+    return this.active &&
       Phaser.Math.Distance.Between(
         this.scene.player.sprite.x, this.scene.player.sprite.y,
         this.cart.x, this.cart.y,
@@ -234,7 +239,7 @@ export class HovercartLab {
   getCrateActions() {
     const scene = this.scene;
     if (this.active && this.modifierDown() && !this.isReadyForCrateAction()) {
-      const reason = this.moving
+      const reason = this.isCloseEnough()
         ? "Wait for the hovercart to stop next to you."
         : "Stand next to the hovercart to load or unload it.";
       const blocked = { tap: () => scene.messages.show(reason, "#f59e0b"), hintOverride: reason, blocked: true };

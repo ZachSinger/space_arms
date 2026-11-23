@@ -19,8 +19,9 @@ unlock, purchase, battery duration, and upgrades are not part of this prototype.
 - In a shelf screen, its crates count as if you were holding them, so you can stock from up to
   8 crates at once.
 - The crate cards in the bottom right list the hovercart's crates under an "ON HOVERCART"
-  heading, below the crates in your hands. While the cart is moving or too far away to use,
-  those cards are greyed out and the heading says so; crates in your hands are never greyed out.
+  heading, below the crates in your hands. While the cart is too far away, those cards are greyed
+  out and the heading says so; once it is close enough they look normal again. Crates in your
+  hands are never greyed out.
 
 ## Following behavior
 - It only moves after you've gotten a few steps away. It must always get close enough to be
