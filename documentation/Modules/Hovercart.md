@@ -4,7 +4,7 @@
 > earlier. This is a new design and does not bring that one back.
 
 ## Overview
-- Unlocks at Store Level 7. Bought once, for 1,500, in the Equipment section of the Manager's
+- Unlocks at Store Level 7. Bought once, for 2,200, in the Equipment section of the Manager's
   Tablet Layout tab, while the store is closed. The price is a starting guess.
 - A floating platform about as wide as a crate that holds a stack of up to 3 crates at first.
 - It follows the player. Each crate on it slows it down, but it does its best to keep up.

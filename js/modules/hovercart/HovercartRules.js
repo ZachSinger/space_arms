@@ -3,7 +3,7 @@ import { getBackroomInteriorBounds } from "../../logic/RoomLayout.js";
 
 export const HOVERCART_NAME = "Hovercart";
 export const HOVERCART_LEVEL = 7;
-export const HOVERCART_PRICE = 1500;
+export const HOVERCART_PRICE = 2200;
 export const HOVERCART_CAPACITY = 3;
 // Energy per second: sitting still is 1 plus 1 per crate, moving is 4 plus 2 per crate.
 // A full battery lasts 30 seconds moving with 3 crates.
