@@ -1,5 +1,6 @@
 import { CRATE_STACK_SPACING, INTERACT_RANGE } from "../logic/Crate.js";
 import { MAX_CARRIED_CRATES } from "../logic/CrateStack.js";
+import { CRATE_TUNING, solveCratePush } from "../logic/CratePushing.js";
 import { getBackroomInteriorBounds } from "../logic/RoomLayout.js";
 import { controlLabel } from "../input/InputDevice.js";
 import { PAD } from "../input/GamepadInput.js";
@@ -185,7 +186,10 @@ export class HovercartLab {
       id: "hovercart-lab-station",
       kind: "hovercart-station",
       range: 24,
-      distanceFrom: (origin) => scene.interactionSystem.feetReachTo(origin, this.stationBounds),
+      // A docked cart is solid, so facing it counts as facing its charger.
+      distanceFrom: (origin) => scene.interactionSystem.feetReachTo(origin, this.isOut()
+        ? this.stationBounds
+        : { ...this.stationBounds, left: this.dock.x - 16, right: this.dock.x + 16, bottom: this.dock.y + 8 }),
       getActions: () => this.getStationActions(),
     }]);
     // A dead cart can't follow; the player carries it back to the charger once it's empty.
@@ -262,10 +266,20 @@ export class HovercartLab {
     this.cart.body.enable = true;
     this.cart.body.reset(this.dock.x, this.dock.y);
     this.cart.setTexture(HOVERCART_TEXTURES.docked);
+    this.stepPlayerOffDock();
     this.scene.messages.show("Hovercart docked.", "#10b981");
     this.syncCartCrates();
     this.renderBattery();
     return true;
+  }
+
+  // The docked cart is solid, so a player standing on its spot steps just below it.
+  stepPlayerOffDock() {
+    const player = this.scene.player;
+    const feet = player?.sprite?.body;
+    const cart = this.cart.body;
+    if (!feet || feet.right <= cart.x || feet.x >= cart.right || feet.bottom <= cart.y || feet.y >= cart.bottom) return;
+    player.teleportTo(player.sprite.x, player.sprite.y + cart.bottom - feet.y + 1);
   }
 
   runOutOfBattery() {
@@ -510,7 +524,7 @@ export class HovercartLab {
       : null);
   }
 
-  update(time) {
+  update(time, delta) {
     const seconds = this.lastTime === null ? 0 : Math.min(time - this.lastTime, 100) / 1000;
     this.lastTime = time;
     const scene = this.scene;
@@ -518,7 +532,80 @@ export class HovercartLab {
       scene.controlMode?.getMode() === CONTROL_MODES.LOADING;
     if (!frozen && this.cart?.body) this.updateBattery(seconds);
     this.updateMovement(time, frozen);
+    if (!frozen) this.updatePlayerPush(delta);
     this.renderBattery();
+  }
+
+  // Whether the cart's body would hit a wall, fixture, register, or floor crate at rect.
+  isCartSpaceBlocked(rect) {
+    const scene = this.scene;
+    const touches = (b) => rect.left < b.x + b.width && rect.left + rect.width > b.x &&
+      rect.top < b.y + b.height && rect.top + rect.height > b.y;
+    if (!Phaser.Geom.Rectangle.ContainsRect(scene.crateBounds,
+      new Phaser.Geom.Rectangle(rect.left, rect.top, rect.width, rect.height))) return true;
+    const solidGroups = [scene.room.wallGroup, scene.obstacleGroup, scene.registerGroup];
+    return scene.physics.overlapRect(rect.left, rect.top, rect.width, rect.height, false, true)
+      .some((solid) => solid.enable && solidGroups.some((group) => group?.contains(solid.gameObject)) && touches(solid)) ||
+      scene.restockCrates.some((crate) => crate.sprite.body?.enable && touches(crate.sprite.body));
+  }
+
+  // Moves the cart to (x, y), or the nearest free spot around it that isn't where the player stands.
+  placeCartClearOfPlayer(x, y) {
+    const body = this.cart.body;
+    const feet = this.scene.player.sprite.body;
+    const { width, height } = body;
+    const offsets = [[0, 0], [0, 28], [40, 0], [-40, 0], [0, -28], [40, 28], [-40, 28], [0, 52], [40, -28], [-40, -28]];
+    for (const [dx, dy] of offsets) {
+      const rect = { left: x + dx - width / 2, top: y + dy - height / 2, width, height };
+      const onPlayer = rect.left < feet.right && rect.left + width > feet.x &&
+        rect.top < feet.bottom && rect.top + height > feet.y;
+      if (!onPlayer && !this.isCartSpaceBlocked(rect)) {
+        body.reset(x + dx, y + dy);
+        return;
+      }
+    }
+    body.reset(x, y);
+  }
+
+  // The cart is solid like a floor crate. Walking into it pushes it at the one-crate push
+  // speed, whatever the player carries; docked, it holds still and blocks.
+  updatePlayerPush(delta) {
+    const scene = this.scene;
+    const body = this.cart?.body;
+    const playerBody = scene.player?.sprite?.body;
+    if (!body?.enable || this.carried || !playerBody || !scene.crateBounds) return;
+    const rectOf = (b) => ({ left: b.x, top: b.y, width: b.width, height: b.height });
+    const touches = (a, b) => a.left < b.x + b.width && a.left + a.width > b.x &&
+      a.top < b.y + b.height && a.top + a.height > b.y;
+    const cartRect = rectOf(body);
+    const { playerVelocity, crateVelocities } = solveCratePush({
+      player: rectOf(playerBody),
+      velocity: playerBody.velocity,
+      dt: Math.min(delta ?? 16, CRATE_TUNING.physicsFrameDeltaCapMs) / 1000,
+      crates: [{ key: this, rect: cartRect, weight: 1, locked: !this.isOut() }],
+      isBlocked: (rect) => this.isCartSpaceBlocked(rect),
+      maxMoved: 1,
+    });
+    playerBody.setVelocity(playerVelocity.x, playerVelocity.y);
+    const pushed = crateVelocities.get(this);
+    if (pushed && (pushed.x || pushed.y)) {
+      body.setVelocity(pushed.x, pushed.y);
+      this.path = null;
+      return;
+    }
+    // A following cart stops short instead of driving into the player.
+    const seconds = Math.min(delta ?? 16, CRATE_TUNING.physicsFrameDeltaCapMs) / 1000;
+    const playerNext = rectOf(playerBody);
+    playerNext.left += playerVelocity.x * seconds;
+    playerNext.top += playerVelocity.y * seconds;
+    for (const axis of ["x", "y"]) {
+      if (!body.velocity[axis]) continue;
+      const next = { ...cartRect };
+      if (axis === "x") next.left += body.velocity.x * seconds;
+      else next.top += body.velocity.y * seconds;
+      const asBody = { x: playerNext.left, y: playerNext.top, width: playerNext.width, height: playerNext.height };
+      if (touches(next, asBody)) body.velocity[axis] = 0;
+    }
   }
 
   updateMovement(time, frozen) {
@@ -550,7 +637,7 @@ export class HovercartLab {
       this.pathAt = time;
       // No route (e.g. boxed in): catch up by hopping next to the player.
       if (!this.path && !sameArea) {
-        this.cart.body.reset(player.x, player.y + CART_FOLLOW_STOP);
+        this.placeCartClearOfPlayer(player.x, player.y + CART_FOLLOW_STOP);
         this.path = null;
         this.syncCartCrates();
         return;
@@ -561,7 +648,7 @@ export class HovercartLab {
       if (Phaser.Math.Distance.Between(this.cart.x, this.cart.y, next.x, next.y) > 6) break;
       this.path.shift();
       if (next.teleportTo) {
-        this.cart.body.reset(next.teleportTo.x, next.teleportTo.y);
+        this.placeCartClearOfPlayer(next.teleportTo.x, next.teleportTo.y);
         this.pathAt = -Infinity;
       }
     }

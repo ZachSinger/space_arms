@@ -26,6 +26,16 @@ design. The level unlock, purchase, and upgrades are not part of this prototype.
 ## Following behavior
 - It only moves after you've gotten a few steps away. It must always get close enough to be
   used, but it shouldn't fidget every time you move at all.
+- When it follows you through a door and you're still standing just inside, it stops beside
+  you rather than on top of you.
+
+## Bumping into it
+- It's solid: you can never walk over it, whether it's on, out of battery, or docked.
+- Walking into it pushes it like a single floor crate, always at the one-crate push speed
+  (60% of walking), no matter how many crates are on it or in your hands.
+- Docked on its charger it doesn't move. Facing the docked cart counts as facing the
+  charger, so you can still turn it on.
+- While you carry it over your head it doesn't bump into anything.
 
 ## Gear Modifier button
 - Shift on keyboard (L1 or equivalent on a controller).
