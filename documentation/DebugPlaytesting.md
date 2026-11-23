@@ -67,8 +67,10 @@ the first follows you and the others follow the cart ahead of them, including th
 The shelf maze on the lower sales floor is available to test the chain.
 
 Stand beside a cart, hold **Shift** (or **L1** on a controller), and press **Q** to put a crate
-on it or **Space** to take one off; keep holding Q or Space to move all of them. The closest
-cart is selected. Each cart holds six crates; your hands hold three. **Refill crates** puts a
+on it or **Space** to take one off; keep holding Q or Space to move all of them. Standing
+beside any stopped cart reaches every stopped cart in the same room: crates you put on fill
+the front cart first, then the ones behind it, and crates you take come off the last loaded
+cart first. Each cart holds six crates; your hands hold three. **Refill crates** puts a
 fresh set down and **Clear crates** empties the floor and carts. Battery and stamina are
 unlimited in this room. This linked-cart prototype is only in the test room; the main game
 still has one cart.

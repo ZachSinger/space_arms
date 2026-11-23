@@ -97,6 +97,49 @@ test("stocking beside a linked cart includes distant stopped carts, but not unav
   assert.deepEqual(carts[0].getStockableCrates(), carts[0].cartCrates, "normal single-cart stocking");
 });
 
+test("loading fills linked carts front to back and unloading empties them back to front", () => {
+  const held = [];
+  const scene = {
+    areas: { playerArea: "shop", areaAt: () => "shop" },
+    player: { sprite: {} },
+    messages: { show() {} },
+    gameState: { crates: { changed() {} } },
+    crateSystem: {
+      getCarriedCrates: () => held,
+      addCarriedCrate: (crate) => held.push(crate),
+      removeCarriedCrate: (crate) => held.splice(held.indexOf(crate), 1),
+      emitCratePickedUp() {},
+      emitCrateDropped() {},
+    },
+  };
+  const carts = [0, 1, 2].map((i) => Object.assign(Object.create(Hovercart.prototype), {
+    scene,
+    cart: { x: i * 40, y: 20 },
+    cartCrates: [],
+    upgrades: { length: 0 },
+    moving: false,
+    carried: false,
+    crossing: null,
+    dead: false,
+    isOut: () => true,
+    isInReach() { return i === 0; },
+    syncCartCrates() {},
+  }));
+  for (const cart of carts) cart.linkedCarts = carts;
+  const capacity = carts[0].capacity;
+  const crate = (id) => ({
+    id, kind: "item", sprite: { body: { stop() {}, enable: true, moves: true } },
+    setCarriedBy() {}, pickUp() {},
+  });
+  for (let i = 0; i < capacity + 2; i += 1) held.push(crate(i));
+  assert.ok(carts[2].putOnCart(held.length));
+  assert.deepEqual(carts.map((cart) => cart.cartCrates.length), [capacity, 2, 0]);
+  assert.equal(held.length, 0);
+  assert.ok(carts[0].takeFromCart(3));
+  assert.deepEqual(carts.map((cart) => cart.cartCrates.length), [capacity - 1, 0, 0]);
+  assert.equal(held.length, 3);
+});
+
 test("a player pushes all touching linked carts at one-crate speed and cannot push them through a wall", () => {
   const body = (x, y, width, height) => ({
     x, y, width, height, enable: true, velocity: { x: 0, y: 0 },

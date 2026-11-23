@@ -270,7 +270,7 @@ export class Hovercart {
   }
 
   isReadyForCrateAction() {
-    return this.modifierDown() && this.isInReach();
+    return this.modifierDown() && this.getReachableCarts().length > 0;
   }
 
   isInReach() {
@@ -294,12 +294,16 @@ export class Hovercart {
     return this.getLinkedCarts().flatMap((cart) => cart.cartCrates);
   }
 
-  getStockableCrates() {
+  // Linked carts work as one: standing by any stopped one reaches every stopped one in the room.
+  getReachableCarts() {
     const carts = this.getLinkedCarts();
     if (!carts.some((cart) => cart.isInReach())) return [];
     return carts.filter((cart) => cart.isOut() && !cart.moving && !cart.carried && !cart.crossing &&
-      this.scene.areas.areaAt(cart.cart.x, cart.cart.y) === this.scene.areas.playerArea)
-      .flatMap((cart) => cart.cartCrates);
+      this.scene.areas.areaAt(cart.cart.x, cart.cart.y) === this.scene.areas.playerArea);
+  }
+
+  getStockableCrates() {
+    return this.getReachableCarts().flatMap((cart) => cart.cartCrates);
   }
 
   getCrateActions() {
@@ -318,14 +322,13 @@ export class Hovercart {
     }
     if (!this.isReadyForCrateAction()) return null;
     const carried = scene.crateSystem.getCarriedCrates();
-    const capacity = getHovercartTransferCount(
-      carried.length,
-      this.capacity - this.cartCrates.length,
-    );
-    const takeCount = getHovercartTransferCount(
-      this.cartCrates.length,
-      MAX_CARRIED_CRATES - carried.length,
-    );
+    const reachable = this.getReachableCarts();
+    const loaded = reachable.reduce((sum, cart) => sum + cart.cartCrates.length, 0);
+    const room = reachable.filter((cart) => !cart.dead)
+      .reduce((sum, cart) => sum + cart.capacity - cart.cartCrates.length, 0);
+    const allDead = reachable.every((cart) => cart.dead);
+    const capacity = getHovercartTransferCount(carried.length, room);
+    const takeCount = getHovercartTransferCount(loaded, MAX_CARRIED_CRATES - carried.length);
     const modifier = "Shift / L1";
     const actions = {};
 
@@ -336,16 +339,14 @@ export class Hovercart {
         hintOverride: `Hold ${modifier} + ${controlLabel("crate")}: Take crates from the hovercart`,
       };
     } else {
+      const reason = loaded ? "Your hands are full." : "The hovercart is empty.";
       actions.pickUp = {
-        tap: () => scene.messages.show(
-          this.cartCrates.length ? "Your hands are full." : "The hovercart is empty.",
-          "#94a3b8",
-        ),
-        hintOverride: this.cartCrates.length ? "Your hands are full." : "The hovercart is empty.",
+        tap: () => scene.messages.show(reason, "#94a3b8"),
+        hintOverride: reason,
       };
     }
 
-    if (carried.length && this.dead) {
+    if (carried.length && allDead) {
       const reason = "The hovercart's battery is empty. You can only take crates off it.";
       actions.putDown = {
         tap: () => scene.messages.show(reason, "#f59e0b"),
@@ -371,11 +372,14 @@ export class Hovercart {
     return actions;
   }
 
+  // Takes from the top of the last loaded cart first, so linked carts empty back to front.
   takeFromCart(count) {
     const scene = this.scene;
     const carried = scene.crateSystem.getCarriedCrates();
-    const take = getHovercartTransferCount(
-      Math.min(count, this.cartCrates.length),
+    const reachable = this.getReachableCarts();
+    const loaded = reachable.reduce((sum, cart) => sum + cart.cartCrates.length, 0);
+    let take = getHovercartTransferCount(
+      Math.min(count, loaded),
       MAX_CARRIED_CRATES - carried.length,
     );
     if (!take) {
@@ -384,30 +388,35 @@ export class Hovercart {
         : "The hovercart is empty.", "#94a3b8");
       return false;
     }
-    const crates = this.cartCrates.splice(-take);
-    for (const crate of crates) {
-      crate.pickUp(scene.player.sprite, { holderId: "player" });
-      scene.crateSystem.addCarriedCrate(crate);
-      scene.crateSystem.emitCratePickedUp(crate);
+    for (const cart of [...reachable].reverse()) {
+      const crates = cart.cartCrates.splice(-Math.min(take, cart.cartCrates.length));
+      take -= crates.length;
+      for (const crate of crates) {
+        crate.pickUp(scene.player.sprite, { holderId: "player" });
+        scene.crateSystem.addCarriedCrate(crate);
+        scene.crateSystem.emitCratePickedUp(crate);
+      }
+      cart.syncCartCrates();
+      if (!take) break;
     }
     scene.gameState.crates.changed();
-    this.syncCartCrates();
     return true;
   }
 
+  // Fills the front cart first, then each linked cart behind it.
   putOnCart(count) {
     const scene = this.scene;
-    if (this.dead) {
+    const reachable = this.getReachableCarts();
+    const open = reachable.filter((cart) => !cart.dead);
+    if (!open.length) {
       scene.messages.show("The hovercart's battery is empty. You can only take crates off it.", "#f59e0b");
       return false;
     }
     const carried = scene.crateSystem.getCarriedCrates();
-    const take = getHovercartTransferCount(
-      Math.min(count, carried.length),
-      this.capacity - this.cartCrates.length,
-    );
+    const room = open.reduce((sum, cart) => sum + cart.capacity - cart.cartCrates.length, 0);
+    let take = getHovercartTransferCount(Math.min(count, carried.length), room);
     if (!take) {
-      scene.messages.show(this.cartCrates.length >= this.capacity
+      scene.messages.show(room <= 0
         ? "The hovercart is full."
         : "There are no crates to put on the hovercart.", "#94a3b8");
       return false;
@@ -417,17 +426,22 @@ export class Hovercart {
       scene.messages.show("Only item crates can go on the hovercart.", "#f59e0b");
       return false;
     }
-    for (const crate of crates) {
-      scene.crateSystem.removeCarriedCrate(crate);
-      crate.setCarriedBy("hovercart");
-      crate.sprite.body.stop();
-      crate.sprite.body.enable = false;
-      crate.sprite.body.moves = false;
-      this.cartCrates.push(crate);
-      scene.crateSystem.emitCrateDropped(crate, { x: this.cart.x, y: this.cart.y }, false);
+    for (const cart of open) {
+      while (take && cart.cartCrates.length < cart.capacity) {
+        const crate = crates.shift();
+        take -= 1;
+        scene.crateSystem.removeCarriedCrate(crate);
+        crate.setCarriedBy("hovercart");
+        crate.sprite.body.stop();
+        crate.sprite.body.enable = false;
+        crate.sprite.body.moves = false;
+        cart.cartCrates.push(crate);
+        scene.crateSystem.emitCrateDropped(crate, { x: cart.cart.x, y: cart.cart.y }, false);
+      }
+      cart.syncCartCrates();
+      if (!take) break;
     }
     scene.gameState.crates.changed();
-    this.syncCartCrates();
     return true;
   }
 
