@@ -73,6 +73,12 @@ fresh set down and **Clear crates** empties the floor and carts. Battery and sta
 unlimited in this room. This linked-cart prototype is only in the test room; the main game
 still has one cart.
 
+For shelf stocking, stand beside any stopped cart: all stopped carts in the same room supply
+their crates, including the ones farther down the chain. **Q** cycles through their crates.
+The crate cards show the entire chain and scroll to keep the selected stocking crate visible.
+Pushing the carts together has the resistance of one empty floor crate, even with all
+eighteen crates loaded. The carts remain solid and cannot be pushed through walls or fixtures.
+
 ## Decorator Mode
 
 On the title screen, choose **DEV**, then **DECORATOR MODE**. It's a top-level shop with every

@@ -58,6 +58,77 @@ test("hovercart battery drain matches the agreed table", () => {
   assert.equal(HOVERCART_BATTERY.capacity / getHovercartDrainPerSecond(3, true), 30);
 });
 
+test("stocking beside a linked cart includes distant stopped carts, but not unavailable ones", () => {
+  const scene = { areas: { playerArea: "shop", areaAt: (_x, y) => y < 100 ? "shop" : "backroom" } };
+  const carts = [20, 70, 120].map((x) => Object.assign(Object.create(Hovercart.prototype), {
+    scene,
+    cart: { x, y: 20 },
+    cartCrates: [{ id: `cargo-${x}` }],
+    moving: false,
+    carried: false,
+    crossing: null,
+    active: true,
+    isInReach() { return this.active && !this.moving && this.cart.x < 56; },
+  }));
+  for (const cart of carts) cart.linkedCarts = carts;
+  const cargo = carts.flatMap((cart) => cart.cartCrates);
+  for (const cart of carts) assert.deepEqual(cart.getStockableCrates(), cargo);
+  assert.deepEqual(carts[1].getCargoCrates(), cargo);
+
+  const tail = carts[2];
+  for (const [property, value] of [["moving", true], ["active", false], ["carried", true],
+    ["crossing", { phase: "out" }]]) {
+    const previous = tail[property];
+    tail[property] = value;
+    assert.deepEqual(carts[0].getStockableCrates(), cargo.slice(0, 2), property);
+    tail[property] = previous;
+  }
+  tail.cart.y = 200;
+  assert.deepEqual(carts[0].getStockableCrates(), cargo.slice(0, 2), "other room");
+  tail.cart.y = 20;
+  scene.areas.playerArea = "backroom";
+  assert.deepEqual(carts[0].getStockableCrates(), [], "player in another room");
+  scene.areas.playerArea = "shop";
+  carts[0].cart.x = 200;
+  assert.deepEqual(carts[1].getStockableCrates(), [], "no linked cart in reach");
+  assert.deepEqual(carts[1].getCargoCrates(), cargo, "inventory still counts unavailable cargo");
+  carts[0].linkedCarts = null;
+  carts[0].cart.x = 20;
+  assert.deepEqual(carts[0].getStockableCrates(), carts[0].cartCrates, "normal single-cart stocking");
+});
+
+test("a player pushes all touching linked carts at one-crate speed and cannot push them through a wall", () => {
+  const body = (x, y, width, height) => ({
+    x, y, width, height, enable: true, velocity: { x: 0, y: 0 },
+    setVelocity(x, y) { this.velocity = { x, y }; },
+  });
+  const playerBody = body(100, 100, 22, 20);
+  const scene = { player: { sprite: { body: playerBody } }, crateBounds: {} };
+  let blocked = false;
+  const carts = Array.from({ length: 3 }, (_, i) => Object.assign(Object.create(Hovercart.prototype), {
+    scene,
+    cart: { body: body(122 + i * 32, 102, 32, 16) },
+    cartCrates: Array(6).fill({}),
+    active: true,
+    carried: false,
+    path: ["old path"],
+    isCartSpaceBlocked(rect) { return blocked && rect.left + rect.width > 218; },
+  }));
+  for (const cart of carts) cart.linkedCarts = carts;
+  playerBody.setVelocity(160, 0);
+  carts[0].updatePlayerPush(1000 / 60);
+  assert.deepEqual(playerBody.velocity, { x: 96, y: 0 });
+  for (const cart of carts) {
+    assert.deepEqual(cart.cart.body.velocity, playerBody.velocity);
+    assert.equal(cart.path, null);
+  }
+  blocked = true;
+  playerBody.setVelocity(160, 0);
+  carts[0].updatePlayerPush(1000 / 60);
+  assert.deepEqual(playerBody.velocity, { x: 0, y: 0 });
+  for (const cart of carts) assert.deepEqual(cart.cart.body.velocity, { x: 0, y: 0 });
+});
+
 test("linked carts track their leader's position and room, even while it crosses a door", () => {
   const player = { x: 10, y: 10, body: { enable: true, center: { x: 10, y: 12 } } };
   const leader = { x: 20, y: 200, body: { enable: false, center: { x: 20, y: 15 } } };

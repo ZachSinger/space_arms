@@ -96,6 +96,9 @@
   position: absolute;
   right: 0;
   bottom: 96px;
+  max-height: calc(100% - 180px);
+  overflow-y: auto;
+  pointer-events: auto;
   display: flex;
   flex-direction: column;
   font-family: "Courier New", monospace;
@@ -106,6 +109,7 @@
 
 .holding-card {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   width: 320px;
   height: 56px;

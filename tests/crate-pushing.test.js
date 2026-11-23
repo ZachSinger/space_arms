@@ -154,6 +154,27 @@ test("customers shove any number of crates out of their way", () => {
   assert.ok(crateVelocities.get("b").y < 0);
 });
 
+test("linked-cart resistance stays at one crate for any number pushed, without bypassing walls", () => {
+  for (const count of [1, 3, 8]) {
+    const crates = Array.from({ length: count }, (_, i) => crateAt(`c${i}`, 100, 179 - i * 40));
+    const options = {
+      player: PLAYER, velocity: UP, dt: 1 / 60, crates,
+      maxMoved: Infinity, maxSlowdownWeight: 1,
+    };
+    const result = solveCratePush({ ...options, isBlocked: () => false });
+    const expected = { x: 0, y: UP.y * PUSH_SPEED_BY_CRATE_COUNT[1] };
+    assert.deepEqual(result.playerVelocity, expected);
+    assert.equal(result.crateVelocities.size, count);
+    for (const velocity of result.crateVelocities.values()) assert.deepEqual(velocity, expected);
+
+    const blocked = solveCratePush({
+      ...options, isBlocked: ({ top }) => top < crates.at(-1).rect.top,
+    });
+    assert.deepEqual(blocked.playerVelocity, { x: 0, y: 0 });
+    for (const velocity of blocked.crateVelocities.values()) assert.equal(Math.hypot(velocity.x, velocity.y), 0);
+  }
+});
+
 test("when customers push the same crates, the one further from their destination wins", () => {
   const near = { name: "near" };
   const far = { name: "far" };

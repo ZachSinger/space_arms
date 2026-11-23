@@ -14,6 +14,7 @@ import { getCrateOrderQuantity } from "../logic/SupplyOrder.js";
 import { sourceItems } from "../logic/InventoryTransfer.js";
 import { unlockEverything } from "./SandboxRoom.js";
 import { controlLabel } from "../input/InputDevice.js";
+import { CONTROL_MODES } from "../input/ControlMode.js";
 import { HOVERCART_CHARGER_TYPE, getLegacyChargerSpot } from "../modules/hovercart/HovercartRules.js";
 import { Hovercart } from "../modules/hovercart/Hovercart.js";
 
@@ -94,7 +95,8 @@ function keepClearSpots(scene, carts) {
 
 /**
  * @param {Phaser.Scene} scene - the game scene, started with { sandbox: true, lab: "crates" }
- * @returns {{ noteGaveUp: () => void, destroy: () => void }}
+ * @returns {{ carts: Hovercart[], update: (time: number, delta: number) => void,
+ *   noteGaveUp: () => void, destroy: () => void }}
  */
 export function setupCrateTestLab(scene) {
   const { gameState, crateSystem } = scene;
@@ -121,6 +123,7 @@ export function setupCrateTestLab(scene) {
   }
   hovercartSystem.upgrades = { speed: 3, length: 3, battery: 6 };
   for (const cart of carts) {
+    cart.linkedCarts = carts;
     cart.setUpgrades(hovercartSystem.upgrades);
     cart.battery = cart.batteryCapacity;
     cart.infiniteBattery = true;
@@ -147,6 +150,9 @@ export function setupCrateTestLab(scene) {
       }
       if (cart.secondary) cart.update(time, delta);
     }
+    const frozen = (scene.shiftClock?.isPaused && scene.shiftClock.started) ||
+      scene.controlMode.getMode() === CONTROL_MODES.LOADING;
+    if (!frozen) hovercart.updatePlayerPush(delta);
     const player = scene.player.sprite;
     const available = carts.filter((cart) => cart.isOut());
     scene.hovercart = available.sort((a, b) =>
@@ -161,7 +167,6 @@ export function setupCrateTestLab(scene) {
     }
     links.setDepth(active.length ? Math.min(...active.map((cart) => cart.cart.depth)) - 0.02 : 0);
   };
-  scene.events.on("update", updateCarts);
   // Temporary while testing the cart in the maze.
   scene.player.infiniteStamina = true;
   const items = labItems();
@@ -280,11 +285,11 @@ export function setupCrateTestLab(scene) {
   fill();
   return {
     carts,
+    update: updateCarts,
     noteGaveUp() {},
     destroy() {
       panel.removeEventListener("click", onClick);
       panel.remove();
-      scene.events.off("update", updateCarts);
       links.destroy();
       for (const collider of cartColliders) collider.destroy();
       for (const cart of carts.slice(1)) cart.destroy();

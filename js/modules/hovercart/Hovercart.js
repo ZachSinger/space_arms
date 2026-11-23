@@ -64,6 +64,7 @@ export class Hovercart {
     this.scene = scene;
     this.secondary = secondary;
     this.followTarget = null;
+    this.linkedCarts = null;
     this.cartCrates = [];
     this.upgrades = { ...HOVERCART_DEFAULT_UPGRADES };
     this.active = false;
@@ -285,8 +286,20 @@ export class Hovercart {
       ) <= CART_READY_RANGE;
   }
 
+  getLinkedCarts() {
+    return this.linkedCarts ?? [this];
+  }
+
+  getCargoCrates() {
+    return this.getLinkedCarts().flatMap((cart) => cart.cartCrates);
+  }
+
   getStockableCrates() {
-    return this.isInReach() ? this.cartCrates : [];
+    const carts = this.getLinkedCarts();
+    if (!carts.some((cart) => cart.isInReach())) return [];
+    return carts.filter((cart) => cart.isOut() && !cart.moving && !cart.carried && !cart.crossing &&
+      this.scene.areas.areaAt(cart.cart.x, cart.cart.y) === this.scene.areas.playerArea)
+      .flatMap((cart) => cart.cartCrates);
   }
 
   getCrateActions() {
@@ -501,7 +514,7 @@ export class Hovercart {
       scene.controlMode?.getMode() === CONTROL_MODES.LOADING;
     if (!frozen && this.cart?.body) this.updateBattery(seconds);
     this.updateMovement(time, frozen, seconds);
-    if (!frozen) this.updatePlayerPush(delta);
+    if (!frozen && !this.linkedCarts) this.updatePlayerPush(delta);
     this.renderBattery();
   }
 
@@ -536,44 +549,47 @@ export class Hovercart {
     body.reset(x, y);
   }
 
-  // The cart is solid like a floor crate. Walking into it pushes it at the one-crate push
-  // speed, whatever the player carries; docked, it holds still and blocks.
+  // Resolve the whole chain together so carts can push each other without stacking slowdowns.
   updatePlayerPush(delta) {
     const scene = this.scene;
-    const body = this.cart?.body;
     const playerBody = scene.player?.sprite?.body;
-    if (!body?.enable || this.carried || !playerBody || !scene.crateBounds) return;
+    if (!playerBody || !scene.crateBounds) return;
+    const carts = this.getLinkedCarts().filter((cart) => cart.cart?.body?.enable && !cart.carried);
+    if (!carts.length) return;
     const rectOf = (b) => ({ left: b.x, top: b.y, width: b.width, height: b.height });
     const touches = (a, b) => a.left < b.x + b.width && a.left + a.width > b.x &&
       a.top < b.y + b.height && a.top + a.height > b.y;
-    const cartRect = rectOf(body);
+    const seconds = Math.min(delta ?? 16, CRATE_TUNING.physicsFrameDeltaCapMs) / 1000;
     const { playerVelocity, crateVelocities } = solveCratePush({
       player: rectOf(playerBody),
       velocity: playerBody.velocity,
-      dt: Math.min(delta ?? 16, CRATE_TUNING.physicsFrameDeltaCapMs) / 1000,
-      crates: [{ key: this, rect: cartRect, weight: 1, locked: !this.isOut() }],
+      dt: seconds,
+      crates: carts.map((cart) => ({ key: cart, rect: rectOf(cart.cart.body), weight: 1, locked: !cart.isOut() })),
       isBlocked: (rect) => this.isCartSpaceBlocked(rect),
-      maxMoved: 1,
+      maxMoved: Infinity,
+      maxSlowdownWeight: 1,
     });
     playerBody.setVelocity(playerVelocity.x, playerVelocity.y);
-    const pushed = crateVelocities.get(this);
-    if (pushed && (pushed.x || pushed.y)) {
-      body.setVelocity(pushed.x, pushed.y);
-      this.path = null;
-      return;
-    }
-    // A following cart stops short instead of driving into the player.
-    const seconds = Math.min(delta ?? 16, CRATE_TUNING.physicsFrameDeltaCapMs) / 1000;
     const playerNext = rectOf(playerBody);
     playerNext.left += playerVelocity.x * seconds;
     playerNext.top += playerVelocity.y * seconds;
-    for (const axis of ["x", "y"]) {
-      if (!body.velocity[axis]) continue;
-      const next = { ...cartRect };
-      if (axis === "x") next.left += body.velocity.x * seconds;
-      else next.top += body.velocity.y * seconds;
-      const asBody = { x: playerNext.left, y: playerNext.top, width: playerNext.width, height: playerNext.height };
-      if (touches(next, asBody)) body.velocity[axis] = 0;
+    for (const cart of carts) {
+      const body = cart.cart.body;
+      const pushed = crateVelocities.get(cart);
+      if (pushed) {
+        body.setVelocity(pushed.x, pushed.y);
+        cart.path = null;
+        continue;
+      }
+      // Following carts stop short instead of driving into the player.
+      for (const axis of ["x", "y"]) {
+        if (!body.velocity[axis]) continue;
+        const next = rectOf(body);
+        if (axis === "x") next.left += body.velocity.x * seconds;
+        else next.top += body.velocity.y * seconds;
+        const asBody = { x: playerNext.left, y: playerNext.top, width: playerNext.width, height: playerNext.height };
+        if (touches(next, asBody)) body.velocity[axis] = 0;
+      }
     }
   }
 

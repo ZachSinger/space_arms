@@ -73,10 +73,13 @@ function pushDirection(from, to, direction) {
  *   weight whenever anything is pushed
  * @param {number} [options.maxMoved] - most crates moved at once, carried ones included;
  *   customers pass Infinity since they shove anything in their way
+ * @param {number} [options.maxSlowdownWeight] - caps only the slowdown, not the number
+ *   moved; linked hovercarts together have the resistance of one crate
  * @returns {{playerVelocity:{x:number,y:number}, crateVelocities: Map<any,{x:number,y:number}>}}
  */
 export function solveCratePush({
   player, velocity, dt, crates, isBlocked, carriedWeight = 0, maxMoved = MAX_MOVED_CRATES,
+  maxSlowdownWeight = Infinity,
 }) {
   const run = (intended) => {
     const crateVelocities = new Map();
@@ -181,7 +184,7 @@ export function solveCratePush({
     .filter(([, v]) => Math.hypot(v.x, v.y) > EPSILON);
   const weight = moving.reduce((sum, [crate]) => sum + (crate.weight ?? 1), 0) +
     (moving.length ? carriedWeight : 0);
-  const factor = PUSH_SPEED_BY_CRATE_COUNT[Math.min(weight, PUSH_SPEED_BY_CRATE_COUNT.length - 1)];
+  const factor = PUSH_SPEED_BY_CRATE_COUNT[Math.min(weight, maxSlowdownWeight, PUSH_SPEED_BY_CRATE_COUNT.length - 1)];
   const result = run({ x: velocity.x * factor, y: velocity.y * factor });
   const crateVelocities = new Map();
   for (const [crate, v] of result.crateVelocities) crateVelocities.set(crate.key, v);

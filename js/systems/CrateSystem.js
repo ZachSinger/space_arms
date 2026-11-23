@@ -542,17 +542,18 @@ export class CrateSystem {
     }
     const stocking = shop.shelfStockingWindow?.getStockingCrate();
     const cart = shop.hovercart;
-    const cartInReach = cart?.isCloseEnough() ?? false;
+    const stockable = new Set(cart?.getStockableCrates() ?? []);
     this.crateFooter.render({
       marked: stack ? this.describeCrateForFooter(stack.marked) : this.describeHoveredShelfForFooter(),
       carried: [...this.getCarriedCrates()].reverse().map((crate) => crate === stocking
         ? { ...this.describeCrateForFooter(crate), stockingNext: true }
         : this.describeCrateForFooter(crate)),
       ...(cart ? {
-        cart: [...cart.cartCrates].reverse().map((crate) => ({
+        linked: Boolean(cart.linkedCarts),
+        cart: [...cart.getCargoCrates()].reverse().map((crate) => ({
           ...this.describeCrateForFooter(crate),
           ...(crate === stocking ? { stockingNext: true } : {}),
-          outOfReach: !cartInReach,
+          outOfReach: !stockable.has(crate),
         })),
       } : {}),
     });
