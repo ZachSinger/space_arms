@@ -328,7 +328,7 @@ test("the drone pad refuses an overlapping crate and accepts a clear order crate
     fixture.crate.isCarried = false;
   };
   assert.equal(fixture.system.putOrderCrateOnPad(fixture.crate), true);
-  assert.deepEqual(fixture.crate.sprite, { x: 291, y: 6511 });
+  assert.deepEqual(fixture.crate.sprite, { x: 291, y: 6471 });
   assert.deepEqual(fixture.shop.crateSystem.restockCrates, [fixture.crate]);
 });
 
@@ -420,7 +420,7 @@ test("pickup leaves the pad raised, and accepting another order swaps crates wit
 test("shipping closes only the returned crate and keeps the hatch open until the last accepted order ships", () => {
   const fixture = createDeliveryFixture();
   const { system, state, crate } = fixture;
-  crate.sprite.setPosition(291, 6511);
+  crate.sprite.setPosition(291, 6471);
   crate.animateRemoteOrderLid();
   state.addOffer({ ...fixture.order, id: "remote-order-2", offerEndsDay: 2 });
   system.acceptOffer("remote-order-2");

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
+import { useFixedStart } from "./support/fixed-start.js";
 import { startingMoney } from "../js/logic/StartingTemplate.js";
 
 let server;
@@ -33,6 +34,7 @@ before(async () => {
       },
     }],
   });
+  await useFixedStart(server);
   ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));
   ({ validateShopSave } = await server.ssrLoadModule("/js/logic/ShopSave.js"));
   const { DatabaseManager } = await server.ssrLoadModule("/js/logic/DatabaseManager.js");

@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Events, GAME_EVENTS } from "../js/core/Events.js";
 import { createServer } from "vite";
+import { useFixedStart } from "./support/fixed-start.js";
 
 let server;
 let cacheDirectory;
@@ -61,6 +62,7 @@ before(async () => {
     await server.ssrLoadModule("/js/logic/Customer.js"));
   ({ Navigation } = await server.ssrLoadModule("/js/world/Navigation.js"));
   ({ gameRandom } = await server.ssrLoadModule("/js/core/Random.js"));
+  await useFixedStart(server);
   ({ GameScene } = await server.ssrLoadModule("/js/scenes/game.js"));
   ({ CustomerFlow } = await server.ssrLoadModule("/js/systems/CustomerFlow.js"));
   ({ CheckoutSystem } = await server.ssrLoadModule("/js/systems/CheckoutSystem.js"));

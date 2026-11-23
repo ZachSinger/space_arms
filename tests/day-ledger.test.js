@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
+import { useFixedStart } from "./support/fixed-start.js";
 import { startingMoney } from "../js/logic/StartingTemplate.js";
 import { Events, GAME_EVENTS } from "../js/core/Events.js";
 import { DayLedger, isValidLedgerData, summarizeReceipt } from "../js/logic/DayLedger.js";
@@ -40,6 +41,7 @@ before(async () => {
       },
     }],
   });
+  await useFixedStart(server);
   ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));
   ({ HUDController } = await server.ssrLoadModule("/js/logic/HUDController.js"));
   ({ ShiftSystem } = await server.ssrLoadModule("/js/systems/ShiftSystem.js"));

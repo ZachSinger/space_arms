@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
+import { useFixedStart } from "./support/fixed-start.js";
 import { GAME_EVENTS } from "../js/core/Events.js";
 
 let server;
@@ -42,6 +43,7 @@ before(async () => {
   });
   ({ Customer, PATIENCE_MS, getPatienceLevel } = await server.ssrLoadModule("/js/logic/Customer.js"));
   ({ CheckoutSystem } = await server.ssrLoadModule("/js/systems/CheckoutSystem.js"));
+  await useFixedStart(server);
   ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));
 });
 

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
+import { useFixedStart } from "./support/fixed-start.js";
 import { ControlMode } from "../js/input/ControlMode.js";
 import { PlayerControls } from "../js/input/PlayerControls.js";
 import { defaultBindings, setBindings } from "../js/input/KeyBindings.js";
@@ -65,6 +66,7 @@ before(async () => {
       },
     }],
   });
+  await useFixedStart(server);
   ({ GameScene } = await server.ssrLoadModule("/js/scenes/game.js"));
   ({ ShelfFixture } = await server.ssrLoadModule("/js/logic/ShelfFixture.js"));
   ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));

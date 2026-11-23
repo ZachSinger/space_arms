@@ -39,6 +39,17 @@ export function startingTemplateProblem(data) {
 }
 
 /**
+ * Uses this starting template for every new game from now on, without saving it to disk.
+ * @param {{ money: number, fixtures: object[] }} data
+ */
+export function useStartingTemplate(data) {
+  const problem = startingTemplateProblem(data);
+  if (problem) throw new Error(problem);
+  current.money = data.money;
+  current.fixtures = structuredClone(data.fixtures);
+}
+
+/**
  * Saves a new starting template to data/StartingTemplate.json (dev server only) and uses it
  * for every new game from now on.
  * @param {{ money: number, fixtures: object[] }} data
@@ -54,5 +65,5 @@ export async function saveStartingTemplate(data, fetcher = fetch) {
   });
   if (response.status === 404) throw new Error("Snapshot only works while the game runs from the dev server.");
   if (!response.ok) throw new Error((await response.text()) || `The dev server said ${response.status}.`);
-  Object.assign(current, structuredClone(data));
+  useStartingTemplate(data);
 }

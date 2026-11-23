@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { createServer } from "vite";
+import { useFixedStart } from "./support/fixed-start.js";
 import { summarizeSupplyOrder, DELIVERY_FEE } from "../js/logic/SupplyOrder.js";
 import { GAME_EVENTS } from "../js/core/Events.js";
 import { isMoney } from "../js/logic/Money.js";
@@ -66,6 +67,7 @@ before(async () => {
   ({ EmployeeTab } = await server.ssrLoadModule("/js/logic/EmployeeTab.js"));
   ({ FixturesTab } = await server.ssrLoadModule("/js/logic/FixturesTab.js"));
   ({ LayoutTab } = await server.ssrLoadModule("/js/logic/LayoutTab.js"));
+  await useFixedStart(server);
   ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));
 });
 

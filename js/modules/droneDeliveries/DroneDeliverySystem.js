@@ -22,11 +22,12 @@ import { matchesBinding } from "../../input/KeyBindings.js";
 import { describeOrderSources, findOrderItemSources } from "./OrderSources.js";
 import { OrderTracker } from "./OrderTracker.js";
 
-// The terminal art reaches 15px left, 103px right and 28px up from this point, so this
-// tucks it into the top-right corner of the starting backroom floor.
+// The terminal art reaches 15px left, 103px right and 28px up from this point, and the pad's
+// top edge is 12px below it. This puts the pad's top edge on the base of the backroom's top
+// wall (the terminal stands in front of the wall) in the right corner of the starting floor.
 const TERMINAL_POSITION = Object.freeze({
   x: TILE_SIZE * 5 - 103,
-  y: TILE_SIZE * (BACKROOM_GRID_Y + 1) + 28,
+  y: TILE_SIZE * (BACKROOM_GRID_Y + 1) - 12,
 });
 const DELIVERY_PAD_POSITION = Object.freeze({
   x: TERMINAL_POSITION.x + 72.5,

@@ -60,7 +60,7 @@ export function snapFixturePosition(value) {
 export const FIXTURE_TYPES = fixtureTypes;
 
 // The bare shop: one trash can and one register. New games start from the Starting Template
-// (data/StartingTemplate.json) instead; tests use this fixed layout so editing that can't break them.
+// (data/StartingTemplate.json) instead; tests start from this layout (tests/support/fixed-start.js).
 export const BASIC_FIXTURES = [
   { id: "trash_can_01", type: "trash_can", gx: 18, gy: 2 },
   { id: "register", type: "register_basic", gx: 13, gy: 3 },
