@@ -5,9 +5,6 @@ completed or no longer relevant.
 
 ## Current shop
 
-- [ ] Build [Drone Deliveries](documentation/Modules/DroneDeliveries.md) next: remote orders packed
-      into special mixed-item crates and shipped from a terminal pad. Zach is answering the open
-      questions in documentation/Modules/RemoteOrderQuestions.md first.
 - [ ] Check the first-pass money balance during real shifts: whether each contract and expansion
       takes a sensible amount of saving, and whether fixtures, wages, and delivery fees still matter
       later on. Run `node scripts/balance-audit.mjs` for the modeled numbers.
@@ -25,8 +22,6 @@ completed or no longer relevant.
       10-minute game session.
 - [x] Let the player assign employees to hovercarts, and make employees use a hovercart
       when it helps (for example, moving several crates between the backroom and shelves).
-- [ ] Make the backroom worth using: crates left on the sales floor lower presentation,
-      giving players a reason to keep spare stock in the backroom.
 - [ ] Add a first-shift tutorial for ordering products, collecting deliveries, stocking
       shelves, and setting prices. Wait until the map and core loop are close to final.
 
