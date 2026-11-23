@@ -89,6 +89,13 @@ trying out how the store looks. Expansions, shelves and stock can be bought from
 as usual (expansions still go in order), or fixtures and shelf stock can be put down for free
 with the same panel and **Fill with** picker as Starting Template. Nothing in it is saved.
 
+## Decoration Gallery
+
+On the title screen, choose **DEV**, then **DECORATION GALLERY**. The sales floor is cleared
+down to the register and every decoration from the tablet stands in one block, each with its
+number and name underneath and its animation playing, so they can be compared side by side.
+New decorations show up here on their own. Nothing in it is saved.
+
 ## Shelf Collision Lab
 
 On the title screen, choose **DEV**, then **SHELF COLLISION LAB**. It shows the short

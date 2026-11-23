@@ -125,6 +125,7 @@ export class TitleScene extends Phaser.Scene {
         <button class="action-btn" data-dev-ui-lab>UI LAB</button>
         <button class="action-btn" data-dev-starting-template>STARTING TEMPLATE</button>
         <button class="action-btn" data-dev-decorator>DECORATOR MODE</button>
+        <button class="action-btn" data-dev-decoration-gallery>DECORATION GALLERY</button>
         <button class="action-btn" data-dev-tutorial>FIRST DAY TUTORIAL</button>
         <button class="action-btn" data-dev-crate-test>CRATE TEST ROOM</button>
         <button class="action-btn" data-dev-cancel>CANCEL</button>
@@ -159,6 +160,10 @@ export class TitleScene extends Phaser.Scene {
     devButton("[data-dev-decorator]", () => {
       this.devWindow.close();
       this.startGameScene({ sandbox: true, lab: "decorator" });
+    });
+    devButton("[data-dev-decoration-gallery]", () => {
+      this.devWindow.close();
+      this.startGameScene({ sandbox: true, lab: "decorations" });
     });
     devButton("[data-dev-tutorial]", () => {
       this.devWindow.close();

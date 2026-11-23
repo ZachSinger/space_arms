@@ -42,6 +42,7 @@ import { setupSandboxRoom } from "../debug/SandboxRoom.js";
 import { setupUiLab } from "../debug/UiLab.js";
 import { setupStartingTemplateLab } from "../debug/StartingTemplateLab.js";
 import { setupDecoratorMode } from "../debug/DecoratorMode.js";
+import { setupDecorationGallery } from "../debug/DecorationGalleryLab.js";
 import { setupTutorialLab } from "../debug/TutorialLab.js";
 import { setupCrateTestLab } from "../debug/CrateTestLab.js";
 import { ShelfStockingWindow } from "../logic/ShelfStockingWindow.js";
@@ -112,7 +113,7 @@ export class GameScene extends Phaser.Scene {
   init(data = {}) {
     this.savedShopData = data.savedShopData ?? null;
     this.sandbox = data.sandbox === true;
-    this.lab = this.sandbox && ["ui", "template", "decorator", "tutorial", "crates"].includes(data.lab) ? data.lab : null;
+    this.lab = this.sandbox && ["ui", "template", "decorator", "decorations", "tutorial", "crates"].includes(data.lab) ? data.lab : null;
     this.realMode = data.real === true;
     this.seed = Number.isInteger(data.seed) ? data.seed : randomSeed();
   }
@@ -433,6 +434,7 @@ export class GameScene extends Phaser.Scene {
       : this.lab === "ui" ? setupUiLab(this)
         : this.lab === "template" ? setupStartingTemplateLab(this)
           : this.lab === "decorator" ? setupDecoratorMode(this)
+            : this.lab === "decorations" ? setupDecorationGallery(this)
             : this.lab === "tutorial" ? setupTutorialLab(this)
               : this.lab === "crates" ? setupCrateTestLab(this) : setupSandboxRoom(this);
     this.events.once("shutdown", () => {
