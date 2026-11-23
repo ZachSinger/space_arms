@@ -14,8 +14,8 @@ completed or no longer relevant.
       first four shifts, then slower progression. See [StoreLevel.md](documentation/StoreLevel.md).
 - [ ] Check employee shelf-stocking times at each training level during normal shifts,
       including their trips between crates and shelves, and adjust speeds if needed.
-- [ ] Make customers' lists of products they came to buy grow with reputation. Decide
-      when they grow after measuring reputation gains and losses over multiple shifts.
+- [ ] Check customer shopping-list growth during normal shifts and adjust its first-pass
+      reputation milestones after measuring reputation gains and losses over multiple shifts.
 - [ ] Test controls with physical Xbox and PlayStation controllers and on Steam Deck.
       Adjust stick feel, dash timing, menu navigation, and button prompts as needed.
 - [ ] Check how movement, crate handling, the camera, and checkout feel during a

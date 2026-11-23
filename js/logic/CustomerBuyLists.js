@@ -5,10 +5,10 @@ import { gameRandom } from "../core/Random.js";
 // Builds each customer's shopping list from what's on the shelves: primary items matching
 // their faction, plus faction-flavored bonus (impulse) items.
 
-// Reputation thresholds are intentionally empty until the pace and value of reputation
-// changes have been established through playtesting. Counts are items; bonusCount is [min, max].
+// The first five shop levels keep shopping lists small; these later milestones are first-pass
+// values to review after playtesting. Counts are items; bonusCount is [min, max].
 export const CUSTOMER_BUY_LIST_TUNING = Object.freeze({
-  reputationPrimaryThresholds: [],
+  reputationPrimaryThresholds: [138, 1128, 2343],
   primaryCount: {
     default: 1,
     mercenaries: 2,
@@ -85,13 +85,19 @@ function takeRandomItems(candidates, count, random, { uniqueWeaponTypes = false 
  * @param {string[]} shelfItemIds
  * @param {(id: string) => object | undefined} getItem
  * @param {() => number} [random]
+ * @param {number} [storeReputation]
  * @returns {{ primaryItemIds: string[], bonusItemIds: string[], matchingAmmoIdsByFirearm: Object<string, string[]> }}
  */
-export function createCustomerBuyList(factionId, shelfItemIds, getItem, random = gameRandom) {
+export function createCustomerBuyList(
+  factionId, shelfItemIds, getItem, random = gameRandom, storeReputation = 0,
+) {
   const shelfItems = [...new Set(shelfItemIds)].map(getItem).filter(Boolean);
   const factionItems = shelfItems.filter((item) => factionMatches(item, factionId));
-  const primaryCount = CUSTOMER_BUY_LIST_TUNING.primaryCount[factionId] ??
+  const startingPrimaryCount = CUSTOMER_BUY_LIST_TUNING.primaryCount[factionId] ??
     CUSTOMER_BUY_LIST_TUNING.primaryCount.default;
+  const reputationBonus = CUSTOMER_BUY_LIST_TUNING.reputationPrimaryThresholds
+    .filter((threshold) => storeReputation >= threshold).length;
+  const primaryCount = startingPrimaryCount + reputationBonus;
 
   const primary = takeRandomItems(factionItems, primaryCount, random, {
     uniqueWeaponTypes: factionId === "mercenaries",

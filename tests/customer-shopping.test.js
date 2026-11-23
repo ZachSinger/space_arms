@@ -548,7 +548,10 @@ function makeShelfScene(shelves) {
   scene.fixtures = { shelves: () => shelves };
   scene.getStorePrice = () => 10;
   scene.catalogSystem = { getStorePrice: () => 10 };
-  scene.gameState = { market: { getPrice: () => 10 } };
+  scene.gameState = {
+    market: { getPrice: () => 10 },
+    reputation: { global: 0 },
+  };
   scene.customerFlow = new CustomerFlow(scene);
   return scene;
 }
@@ -704,6 +707,20 @@ test("wanderer routes include stocked shelves while keeping sold-out wants for r
   assert.deepEqual(plan.primaryItemIds, ["missing"]);
   assert.deepEqual(plan.shelfStops.map((stop) => stop.fixture), [soldOut]);
   assert.deepEqual(plan.allShelfStops.map((stop) => stop.fixture), [stocked]);
+});
+
+test("shopping plans use current store reputation to grow primary lists", () => {
+  const shelf = fixture({ x: 100, y: 100 }, [
+    { itemId: "first", quantity: 1 },
+    { itemId: "second", quantity: 1 },
+    { itemId: "third", quantity: 1 },
+  ]);
+  const scene = makeShelfScene([shelf]);
+  scene.gameState.reputation.global = 138;
+
+  const plan = scene.customerFlow.shoppingPlan(null);
+
+  assert.equal(plan.primaryItemIds.length, 2);
 });
 
 test("customer emoticons appear only for a new event and fade while following the customer", () => {

@@ -194,7 +194,13 @@ export class CustomerFlow {
     const shop = this.shop;
     const shelves = shop.fixtures.shelves();
     const shelfItemIds = shelves.flatMap((shelf) => shelf.placements.map((placement) => placement.itemId));
-    const buyList = createCustomerBuyList(factionId, shelfItemIds, (itemId) => database.getItem(itemId));
+    const buyList = createCustomerBuyList(
+      factionId,
+      shelfItemIds,
+      (itemId) => database.getItem(itemId),
+      undefined,
+      shop.gameState.reputation.global,
+    );
     buyList.bonusItemIds = addDiscountBonusItem(
       buyList,
       shelfItemIds,

@@ -32,8 +32,29 @@ test("customers can want one, two, or three of each item without rerolling dupli
   }
 });
 
-test("reputation thresholds stay unset and neutral customers want a shelf-assigned item", () => {
-  assert.deepEqual(CUSTOMER_BUY_LIST_TUNING.reputationPrimaryThresholds, []);
+test("primary shopping lists grow at reputation milestones", () => {
+  const extraItems = Array.from({ length: 6 }, (_, index) => ({
+    id: `extra_${index}`,
+    name: `Extra ${index}`,
+    tags: [],
+  }));
+  const items = [...catalog, ...extraItems];
+  const getAnyItem = (itemId) => items.find((item) => item.id === itemId);
+  const shelfItemIds = items.map((item) => item.id);
+  const countAt = (reputation) => createCustomerBuyList(
+    null, shelfItemIds, getAnyItem, () => 0, reputation,
+  ).primaryItemIds.length;
+  const [first, second, third] = CUSTOMER_BUY_LIST_TUNING.reputationPrimaryThresholds;
+
+  assert.equal(countAt(-1), 1);
+  assert.equal(countAt(first - 1), 1);
+  assert.equal(countAt(first), 2);
+  assert.equal(countAt(second - 1), 2);
+  assert.equal(countAt(second), 3);
+  assert.equal(countAt(third), 4);
+});
+
+test("neutral customers without reputation still want a shelf-assigned item", () => {
   const list = createCustomerBuyList(null, ["tool", "survival"], getItem, () => 0);
   assert.deepEqual(list.primaryItemIds, ["tool"]);
   assert.deepEqual(list.bonusItemIds, []);
