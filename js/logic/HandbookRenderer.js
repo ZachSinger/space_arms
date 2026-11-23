@@ -131,6 +131,20 @@ function storeTopic({ shopLevel, reputation }) {
         <strong>MOVE</strong> in the Fixtures tab. Its contents move with it.</p>
       <p>An empty fixture can be packed back into a crate, or sold for half of what it cost.
         Your shop always keeps at least one register.</p>`),
+    section("Presentation", `
+      <p>Your shop starts with 20 presentation points. Its maximum starts at 20 and rises by
+        20 per sales-floor expansion and 2 per Shop Level above 5; the starting points do not rise.</p>
+      <p>Buy holograms, freestanding hanging banners, and lights in the Fixtures tab through
+        Basic Fixture Supply. Place, move, crate, and sell them like other fixtures. Each
+        placed sales-floor decoration adds its listed points, plus 1 point once per distinct
+        design. Duplicate copies add their normal points but no extra variety bonus.
+        Backroom decorations give no points. Prices and points are development defaults.
+        Decoration points are capped at the maximum before subtracting floor-crate penalties,
+        so spare decorations cannot hide clutter.</p>
+      <p>Each crate resting on the sales-floor ground lowers presentation by 1 point. Crates in
+        the backroom, being carried, or loaded in a hovercart do not count. Customers whose
+        presentation expectation is higher than your presentation percentage cannot give reputation, but they
+        keep shopping and do not cause an extra reputation loss.</p>`),
     section("Cleaning", `
       <p>Customers sometimes leave trash and dirt on the sales floor. Each piece of trash
         costs 1 cleanliness point; each dirt mark costs 2. Customers who find the store too
@@ -346,11 +360,11 @@ function employeesTopic() {
         "<strong>Clean the store:</strong> trash comes first. If there is trash on the shop floor and a trashcan they can walk to, they pick up the nearest piece nobody else is going for, one at a time, and throw it in the nearest trashcan. If you pick up that piece first, they go for another one.",
         "When there is no trash to pick up, they mop dirt marks. They walk to the nearest dirt mark nobody else is going for, pull out a mop, and scrub until it's gone, then move on to the next mark until no dirt is left.",
       ])}
-      <p>They take a matching crate — from the Loading Pad, the backroom, or the shop floor,
+      <p>When stocking by hand, they take a matching crate — from the Loading Pad, the backroom, or the shop floor,
         top of a stack first — straight to its shelf spot. They only
         stock items that already have a spot on a shelf. With nothing to do, they take a break in the backroom and
         check again soon.</p>
-      <p>After stocking, they carry leftover stock to an existing crate stack with room
+      <p>After stocking by hand, they carry leftover stock to an existing crate stack with room
         before taking more floor space. Deliveries are put away in the backroom when it has room,
         leaving the Loading Pad free. If no stack has room, loose crates from elsewhere
         go back to their original spot when it is still clear.
@@ -363,6 +377,28 @@ function employeesTopic() {
         remaining register work is finished, they walk out the front door. Someone on
         the way to a piece of trash leaves it where it is; someone already carrying trash
         throws it away first.</p>`),
+    section("Employee Hovercarts", `
+      <p>Buy a hovercart in <strong>Layout</strong> and place its charger. Between shifts,
+        choose its numbered <strong>HOVERCART</strong> button under an employee in the
+        <strong>Employee</strong> tab. Each employee can have one cart, and each cart has one
+        employee. Choosing a cart already assigned to someone else transfers it to this employee.
+        <strong>NONE</strong> makes that employee stock by hand and leaves their cart available to you.</p>
+      <p>Assigned carts do not follow you, and you cannot load, unload, or stock from them.
+        The employee uses the cart for cross-room stocking or batches of useful crates,
+        taking stacked crates from the top and filling the cart up to its capacity.
+        They wait for it to arrive before loading or stocking.
+        Their register assignment and job order still apply; one same-room crate can be carried by hand.</p>
+      <p>They place one item on the shelf at a time at their normal trained stocking pace.
+        Empty crates go to a reachable trashcan. Leftover stock stays on the cart when they dock it,
+        so it can be used again when its shelf needs more. Cargo on employee carts still counts
+        in your Inventory, but not as sales-floor crate clutter.</p>
+      <p>They return the cart when its battery is low and let it recharge before its next trip.
+        While it charges, they can stock floor crates by hand or do their other jobs.
+        If it runs out on a trip, they tow it back slowly, keeping all its crates.
+        At closing they return their cart before leaving.</p>
+      <p>Dock the cart before changing its assignment. Leftover crates stay with it.
+        To handle those crates yourself, choose <strong>NONE</strong> for its employee,
+        then turn on the cart at its charger.</p>`),
     section("How to Set Priorities", `
       <p>Open the <strong>Employee</strong> tab and find the employee under <strong>YOUR STAFF</strong>.
         Drag the jobs under <strong>Other jobs</strong> to arrange them from highest priority

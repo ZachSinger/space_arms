@@ -67,6 +67,10 @@ export class Employee {
   update(delta = 0) {
     if (this.isDestroyed) return;
     this.cleaningCheckInMs -= delta;
+    if (this.store.hovercarts?.updateEmployee(this, delta)) {
+      this.updateFacing();
+      return;
+    }
     if (this.state === "WAITING_EXIT") {
       this.retryInMs -= delta;
       if (this.retryInMs <= 0) this.walkOut();
@@ -149,6 +153,7 @@ export class Employee {
       if (jobId === "register") {
         continue;
       } else if (jobId === "stock_shelves") {
+        if (this.store.hovercarts?.startStocking(this)) return;
         const job = this.findStockingJob();
         if (job) {
           this.currentJob = { ...job, jobId };
@@ -204,7 +209,7 @@ export class Employee {
     return this.walkTo(this.store.getBehindRegisterPoint(register), "TO_REGISTER");
   }
 
-  findStockingJob() {
+  findStockingJob(candidates = this.store.restockCrates) {
     const reserved = this.getReservedShelfPlacements();
     const reservedCrates = new Set(this.store.employees
       .filter((employee) => employee !== this)
@@ -216,14 +221,15 @@ export class Employee {
       .flatMap((shelf) => shelf.placements)
       .reduce((sum, entry) => sum + (entry.itemId === itemId ? entry.quantity : 0), 0);
     let best = null;
-    for (const base of this.store.restockCrates) {
+    const cartCargo = this.store.hovercarts?.cartFor(this)?.cartCrates ?? [];
+    for (const base of candidates) {
       // Stacked crates are taken from the top; a lone crate is its own top. Any resting
       // crate anywhere in the shop or backroom is fair game. A stack's top crate rides the
       // one below it (flagged as carried), which doesn't make it someone's load.
       const top = this.store.floorStacks?.get(base)?.at(-1);
       const crate = top ?? base;
       const fromPad = Boolean(base.lockedToPad);
-      if (crate.kind !== "item" || crate.quantity <= 0 || (!top && crate.isCarried) ||
+      if (crate.kind !== "item" || crate.quantity <= 0 || (!top && crate.isCarried && !cartCargo.includes(crate)) ||
         reservedCrates.has(crate)) continue;
       const soldOut = onShelves(crate.itemId) === 0;
       for (const shelf of this.store.fixtures.shelves()) {
@@ -596,7 +602,9 @@ export class Employee {
       onReroute() {},
       onRerouteUnavailable: (previousPath) => {
         this.path = previousPath;
-        if (["TO_TRASHCAN", "TO_RETURN_CRATE"].includes(this.state)) this.returnCrate();
+        if (this.currentJob?.hovercart) {
+          this.store.hovercarts.returnToCharger(this);
+        } else if (["TO_TRASHCAN", "TO_RETURN_CRATE"].includes(this.state)) this.returnCrate();
         else if (CLEANING_WALK_STATES.includes(this.state)) {
           this.sprite.body.setVelocity(0, 0);
           this.finishTask();
@@ -617,7 +625,9 @@ export class Employee {
   }
 
   getWalkSpeed() {
-    const jobId = ["TO_SHELF", "TO_CRATE", "TO_RETURN_CRATE", "TO_TRASHCAN"].includes(this.state)
+    if (this.currentJob?.hovercart?.towedByStaff) return 60;
+    const jobId = this.state.startsWith("HOVERCART_") ||
+      ["TO_SHELF", "TO_CRATE", "TO_RETURN_CRATE", "TO_TRASHCAN"].includes(this.state)
       ? "stock_shelves"
       : CLEANING_WALK_STATES.includes(this.state) ? "clean" : null;
     return WALK_SPEED * (jobId ? getEmployeeJobSpeed(this.data.skillLevels, jobId) : 1);
@@ -631,6 +641,7 @@ export class Employee {
   }
 
   arriveAtDestination() {
+    if (this.store.hovercarts?.arrive(this)) return;
     if (this.state === "TO_EXIT") {
       this.destroy();
     } else if (this.state === "TO_CLOSING_REGISTER") {
@@ -699,7 +710,7 @@ export class Employee {
       const { moved } = transferItems(crate, shelf, itemId, 1, {
         destinationEntry: placement,
         eventBus: this.store.eventBus,
-        sourceName: "loading-pad",
+        sourceName: this.currentJob.hovercart ? "hovercart" : "loading-pad",
         destinationName: "shelf",
       });
       if (moved === 0) break;
@@ -710,6 +721,10 @@ export class Employee {
         getEmployeeJobSpeed(this.data.skillLevels, "stock_shelves");
     }
     if (this.stockingUnitsRemaining > 0 && this.stockingRemainingMs > 0) return;
+    if (this.currentJob.hovercart) {
+      this.store.hovercarts.finishStocking(this);
+      return;
+    }
     if (crate.quantity <= 0) {
       if (!this.walkToTrashcan()) this.returnCrate();
       return;
@@ -719,6 +734,10 @@ export class Employee {
 
   // Fill an existing stack before taking floor space. Deliveries leave the Loading Pad free.
   returnCrate() {
+    if (this.currentJob.hovercart) {
+      this.store.hovercarts.finishStocking(this);
+      return;
+    }
     const { crate, base: originalBase, fromPad, cratePosition } = this.currentJob;
     const store = this.store;
     const others = store.employees.filter((employee) => employee !== this);
@@ -920,6 +939,7 @@ export class Employee {
     // is working it); everyone else goes home.
     const assigned = this.assignedRegister();
     if (!assigned || !this.assignedRegisterStillNeeded(assigned)) {
+      if (this.store.hovercarts?.returnBeforeClockOut(this)) return;
       this.walkOut();
       return;
     }
@@ -966,7 +986,8 @@ export class Employee {
   }
 
   isCarryingCrate() {
-    return ["TO_SHELF", "STOCKING_SHELF", "TO_RETURN_CRATE", "TO_TRASHCAN", "WAITING_CRATE_RETURN"].includes(this.state) &&
+    return !this.currentJob?.hovercart &&
+      ["TO_SHELF", "STOCKING_SHELF", "TO_RETURN_CRATE", "TO_TRASHCAN", "WAITING_CRATE_RETURN"].includes(this.state) &&
       Boolean(this.currentJob?.crate.isCarried);
   }
 
@@ -981,6 +1002,7 @@ export class Employee {
   destroy() {
     if (this.isDestroyed) return;
     if (this.currentJob?.jobId === "clean") this.dropCleaningThings();
+    this.store.hovercarts?.releaseEmployee(this);
     this.isDestroyed = true;
     this.sprite.body.setVelocity(0, 0);
     this.store.removeEmployeeSprite(this.sprite);

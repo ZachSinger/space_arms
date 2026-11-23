@@ -149,6 +149,9 @@ export class GameState {
     const placedRegisters = new Set(this.shop.fixtures.registers().map(({ id }) => id));
     staff.registerAssignments = Object.fromEntries(Object.entries(staff.registerAssignments)
       .filter(([registerId]) => placedRegisters.has(registerId)));
+    const placedChargers = new Set(this.shop.fixtures.ofKind("charger").map(({ id }) => id));
+    staff.hovercartAssignments = Object.fromEntries(Object.entries(staff.hovercartAssignments)
+      .filter(([chargerId]) => placedChargers.has(chargerId)));
     const catalog = this.catalog.toSave();
     return {
       playerState: {

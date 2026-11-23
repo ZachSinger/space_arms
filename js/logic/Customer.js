@@ -180,6 +180,10 @@ export class Customer {
     this.trashDropAtWalkMs = cleaningProfile?.trashDropAtWalkMs ?? null;
     this.dirtDropAtWalkMs = cleaningProfile?.dirtDropAtWalkMs ?? null;
     this.trashWalkMs = 0;
+    this.presentationExpectation = store.presentation?.createCustomerExpectation(this.factionId) ?? null;
+    if (store.presentation && !Number.isFinite(this.presentationExpectation)) {
+      throw new Error("Presentation must provide a numeric customer expectation.");
+    }
     this.shoppingPlan = getShoppingPlan
       ? getShoppingPlan(this.factionId, this.traits, this.bargainTolerance)
       : createCustomerBuyList(this.factionId, [], () => null);

@@ -13,6 +13,7 @@ export function createCustomerStore(scene) {
     noteCustomerGaveUp: (...args) => scene.customerFlow?.noteGaveUp(...args),
     createCustomerSprite: (...args) => addCharacterSprite(scene, ...args),
     get cleaning() { return scene.cleaningSystem; },
+    get presentation() { return scene.presentationSystem; },
     get scale() { return scene.scale; },
     get gameState() { return scene.gameState; },
     get eventBus() { return scene.eventBus; },
@@ -51,6 +52,7 @@ export function createEmployeeStore(scene) {
     get player() { return scene.player; },
     // Optional cleaning module (null when disabled): the "clean" job then has no work.
     get cleaning() { return scene.cleaningSystem ?? null; },
+    get hovercarts() { return scene.gameModules?.get("hovercart")?.staff ?? null; },
     get crateMotionPaused() { return scene.crateSystem.motionPaused; },
   };
 }

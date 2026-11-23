@@ -39,6 +39,10 @@ export class EmployeeTab {
         id: register.id, name: this.scene.fixtures.displayName(register),
       })),
       registerAssignments: this.gameState.staff.registerAssignments,
+      hovercarts: this.scene.gameModules?.get("hovercart")?.chargers().map((charger, index) => ({
+        id: charger.id, name: `HOVERCART ${index + 1}`,
+      })) ?? [],
+      hovercartAssignments: this.gameState.staff.hovercartAssignments,
     });
   }
 
@@ -138,6 +142,17 @@ export class EmployeeTab {
       this.scene.staffSystem.assignRegister(
         registerButton.dataset.employeeRegisterId,
         registerButton.dataset.employeeRegister || null,
+      );
+      this.redraw();
+      return;
+    }
+
+    const hovercartButton = event.target.closest("button[data-employee-hovercart-id]");
+    if (hovercartButton) {
+      if (hovercartButton.disabled) return;
+      this.scene.staffSystem.assignHovercart(
+        hovercartButton.dataset.employeeHovercartId,
+        hovercartButton.dataset.employeeHovercart || null,
       );
       this.redraw();
       return;

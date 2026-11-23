@@ -4,6 +4,7 @@ import { TILE_SIZE, getBackroomInteriorBounds } from "../../logic/RoomLayout.js"
 export const HOVERCART_NAME = "Hovercart";
 export const HOVERCART_LEVEL = 7;
 export const HOVERCART_PRICE = 2200;
+export const MAX_LINKED_HOVERCARTS = 3;
 export const HOVERCART_CAPACITY = 3;
 // Energy per second: sitting still is 1 plus 1 per crate, moving is 4 plus 2 per crate.
 // A full battery lasts 30 seconds moving with 3 crates.
@@ -87,16 +88,28 @@ export function getLegacyChargerSpot() {
  */
 export function isValidHovercartSave(value) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
-  const { owned, crates, battery, out, charger, upgrades } =
-    /** @type {{ owned?: unknown, crates?: unknown, battery?: unknown, out?: unknown, charger?: unknown, upgrades?: unknown }} */ (value);
+  const { owned, crates, battery, out, charger, upgrades, carts, chargerId } =
+    /** @type {{ owned?: unknown, crates?: unknown, battery?: unknown, out?: unknown, charger?: unknown, upgrades?: unknown, carts?: unknown, chargerId?: unknown }} */ (value);
   const upgradesOk = upgrades === undefined || isValidHovercartUpgrades(upgrades);
   const currentUpgrades = upgradesOk && upgrades !== undefined ? upgrades : HOVERCART_DEFAULT_UPGRADES;
   const batteryCapacity = getHovercartBatteryCapacity(currentUpgrades);
   // Battery, out, and upgrades were added after the first hovercart saves, so they're optional.
   const batteryOk = battery === undefined ||
     (typeof battery === "number" && Number.isFinite(battery) && battery >= 0 && battery <= batteryCapacity);
+  const linkedCartsOk = carts === undefined || (Array.isArray(carts) &&
+    carts.length < MAX_LINKED_HOVERCARTS && carts.every((cart) => {
+      if (cart === null || typeof cart !== "object" || Array.isArray(cart)) return false;
+      return (cart.chargerId === undefined || typeof cart.chargerId === "string") &&
+        Array.isArray(cart.crates) && cart.crates.length <= getHovercartCapacity(currentUpgrades) &&
+        cart.crates.every((crate) => crate !== null && typeof crate === "object" && (crate.kind ?? "item") === "item") &&
+        typeof cart.battery === "number" && Number.isFinite(cart.battery) &&
+        cart.battery >= 0 && cart.battery <= batteryCapacity &&
+        typeof cart.out === "boolean";
+    }));
   // Saves from before the charger was a placeable fixture have no charger flag.
-  return owned === true && upgradesOk && batteryOk && (out === undefined || typeof out === "boolean") &&
+  return owned === true && upgradesOk && batteryOk && linkedCartsOk &&
+    (chargerId === undefined || typeof chargerId === "string") &&
+    (out === undefined || typeof out === "boolean") &&
     (charger === undefined || charger === true) &&
     Array.isArray(crates) && crates.length <= getHovercartCapacity(currentUpgrades) &&
     crates.every((crate) => crate !== null && typeof crate === "object" && (crate.kind ?? "item") === "item");

@@ -29,6 +29,7 @@ const ZONE_KINDS = Object.freeze({
 
 const SHELF_INTERACT_RANGE = 12;
 const CHARGER_REACH = 24;
+const DECORATION_REACH = 24;
 const TRASHCAN_REACH = loadTuning("crates", crateTuning).trashcanReachPx;
 const PLAYER_FACING_STEPS = Object.freeze({
   up: { x: 0, y: -1 }, down: { x: 0, y: 1 },
@@ -183,6 +184,7 @@ export class FixtureSystem {
       if (trashcan && shop.interactionSystem.isPlayerFacingFixture(trashcan)) fixture = trashcan;
     }
     fixture ??= this.chargerInReach(origin);
+    fixture ??= this.decorationInReach(origin);
     if (!fixture || !this.canRearrange()) return null;
     return this.moveAreaBlockReason(fixture) ? null : fixture;
   }
@@ -198,6 +200,19 @@ export class FixtureSystem {
       };
       return interactionSystem.isPlayerFacingFixture(charger) &&
         interactionSystem.feetReachTo(origin, rect) <= CHARGER_REACH;
+    }) ?? null;
+  }
+
+  decorationInReach(origin) {
+    const { interactionSystem } = this.shop;
+    return this.fixtures.ofKind("decoration").find((decoration) => {
+      const bounds = fixtureBounds(decoration);
+      const rect = {
+        left: bounds.left * TILE_SIZE, right: bounds.right * TILE_SIZE,
+        top: bounds.top * TILE_SIZE, bottom: bounds.bottom * TILE_SIZE,
+      };
+      return interactionSystem.isPlayerFacingFixture(decoration) &&
+        interactionSystem.feetReachTo(origin, rect) <= DECORATION_REACH;
     }) ?? null;
   }
 
@@ -553,8 +568,17 @@ export class FixtureSystem {
     if (fixture instanceof ShelfFixture && fixture.placements.some((stack) => stack.quantity > 0)) {
       return `Only empty fixtures can be ${action}.`;
     }
-    if (getFixtureType(fixture.type).kind === "charger" && this.shop.hovercart?.isOut()) {
-      return `Dock the hovercart on its charger first. Then the charger can be ${action}.`;
+    if (getFixtureType(fixture.type).kind === "charger") {
+      const system = this.shop.gameModules?.get("hovercart");
+      const cart = system
+        ? system.carts.find((candidate) => candidate.charger.id === fixture.id)
+        : this.shop.hovercart;
+      if (cart?.isOut()) {
+        return `Dock the hovercart on its charger first. Then the charger can be ${action}.`;
+      }
+      if (cart?.cartCrates.length) {
+        return "Unload this hovercart's crates first. If it's assigned to an employee, release that assignment to handle the crates yourself.";
+      }
     }
     return null;
   }
@@ -573,6 +597,9 @@ export class FixtureSystem {
     const staff = scene.gameState.staff;
     if (staff.registerAssignments[fixture.id]) {
       staff.assignRegister(staff.registerAssignments[fixture.id], null);
+    }
+    if (staff.hovercartAssignments?.[fixture.id]) {
+      staff.assignHovercart(staff.hovercartAssignments[fixture.id], null);
     }
     this.applyLayout(layout, result);
     return true;

@@ -107,6 +107,16 @@ export function checkShopSave(data, database) {
       new Set(assigned).size === assigned.length,
     "invalid register assignments.");
   }
+  if (player.hovercartAssignments !== undefined) {
+    const chargerIds = data.fixtures
+      .filter((fixture) => getFixtureType(fixture.type)?.kind === "charger").map(({ id }) => id);
+    const assigned = Object.values(isRecord(player.hovercartAssignments) ? player.hovercartAssignments : {});
+    requireSave(isRecord(player.hovercartAssignments) &&
+      Object.keys(player.hovercartAssignments).every((id) => chargerIds.includes(id)) &&
+      assigned.every((id) => (player.hiredEmployees ?? []).includes(id)) &&
+      new Set(assigned).size === assigned.length,
+    "invalid hovercart assignments.");
+  }
   requireSave(isRecord(player.factionReputation) &&
     CUSTOMER_FACTION_IDS.every((id) => integer(player.factionReputation[id])),
   "invalid faction reputation.");
@@ -384,10 +394,11 @@ export function checkShopSave(data, database) {
       "carried crate stack does not match its top crate.");
     }
   }
-  // Optional: only saves with a bought hovercart have one, with up to 3 item crates on it.
+  // Optional: linked cart cargo shares crate IDs with the rest of the saved inventory.
   if (data.hovercart !== undefined) {
     requireSave(isValidHovercartSave(data.hovercart), "invalid hovercart.");
     data.hovercart.crates.forEach(validateCrateContents);
+    for (const cart of data.hovercart.carts ?? []) cart.crates.forEach(validateCrateContents);
   }
   requireSave(Number.isSafeInteger(data.nextCrateId) && data.nextCrateId > maximumCrateId,
     "invalid next crate id.");

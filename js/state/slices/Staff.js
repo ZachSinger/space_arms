@@ -31,6 +31,22 @@ export class Staff extends Slice {
     // Register fixture id -> the one employee assigned to work it all shift.
     /** @type {Record<string, string>} */
     this.registerAssignments = {};
+    /** @type {Record<string, string>} charger fixture id -> employee id */
+    this.hovercartAssignments = {};
+  }
+
+  hovercartFor(employeeId) {
+    return Object.keys(this.hovercartAssignments)
+      .find((id) => this.hovercartAssignments[id] === employeeId) ?? null;
+  }
+
+  assignHovercart(employeeId, chargerId) {
+    if (!this.hired.includes(employeeId) || this.hovercartFor(employeeId) === chargerId) return false;
+    const current = this.hovercartFor(employeeId);
+    if (current) delete this.hovercartAssignments[current];
+    if (chargerId) this.hovercartAssignments[chargerId] = employeeId;
+    this.changed();
+    return true;
   }
 
   /** @param {string} employeeId @returns {string | null} register fixture id */
@@ -150,6 +166,7 @@ export class Staff extends Slice {
       employeeSkills: Object.fromEntries(Object.entries(this.skills).map(([id, levels]) => [id, { ...levels }])),
       employeeTraining: { ...this.training },
       registerAssignments: { ...this.registerAssignments },
+      hovercartAssignments: { ...this.hovercartAssignments },
     };
   }
 
@@ -164,6 +181,7 @@ export class Staff extends Slice {
     staff.skills = Object.fromEntries(Object.entries(data.employeeSkills ?? {}).map(([id, levels]) => [id, { ...levels }]));
     staff.training = { ...(data.employeeTraining ?? {}) };
     staff.registerAssignments = { ...(data.registerAssignments ?? {}) };
+    staff.hovercartAssignments = { ...(data.hovercartAssignments ?? {}) };
     return staff;
   }
 }

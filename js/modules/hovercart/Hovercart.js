@@ -63,6 +63,7 @@ export class Hovercart {
     this.id = secondary ? `hovercartCart:${charger.id}` : "hovercartCart";
     this.scene = scene;
     this.secondary = secondary;
+    this.showBatteryHud = !secondary;
     this.followTarget = null;
     this.linkedCarts = null;
     this.cartCrates = [];
@@ -84,6 +85,8 @@ export class Hovercart {
     this.routeUntil = -Infinity;
     this.closing = null;
     this.destroyed = false;
+    this.assignedEmployeeId = null;
+    this.towedByStaff = null;
 
     // The charger itself is a fixture (HOVERCART CHARGER), drawn and made solid by FixtureViews.
     createHovercartTextures(scene);
@@ -113,7 +116,7 @@ export class Hovercart {
     }]);
     // A dead cart can't follow; the player carries it back to the charger once it's empty.
     this.unregisterCart = scene.interactables.registerProvider(cartId, () =>
-      this.dead && !this.carried ? [{
+      this.dead && !this.carried && !this.assignedEmployeeId ? [{
         id: cartId,
         kind: "hovercart",
         range: 24,
@@ -185,6 +188,11 @@ export class Hovercart {
   getStationActions() {
     const scene = this.scene;
     if (areaAtRow(Math.floor(this.charger.gy)) !== scene.areas.playerArea) return [];
+    if (this.assignedEmployeeId) {
+      const name = scene.gameState.staff.profile(this.assignedEmployeeId).name;
+      const hint = `Assigned to ${name}. Change hovercart assignments in Employees between shifts.`;
+      return [{ action: "interact", hint, perform: () => scene.messages.show(hint) }];
+    }
     let hint = `${controlLabel("interact")}: Turn on the hovercart`;
     if (this.dead) hint = `${controlLabel("interact")}: Dock the hovercart to charge it`;
     else if (this.active) hint = `${controlLabel("interact")}: Dock and turn off the hovercart`;
@@ -196,6 +204,10 @@ export class Hovercart {
   }
 
   toggleAtStation() {
+    if (this.assignedEmployeeId) {
+      this.scene.messages.show("This hovercart is assigned to an employee. Change its assignment in Employees between shifts.");
+      return false;
+    }
     if (!this.isOut()) {
       if (this.battery <= 0) {
         this.scene.messages.show("The hovercart's battery is empty. Let it charge first.", "#f59e0b");
@@ -242,12 +254,15 @@ export class Hovercart {
     this.path = null;
     this.cart.body.stop();
     this.cart.setTexture(HOVERCART_TEXTURES.docked);
-    this.scene.messages.show("The hovercart's battery ran out. Take its crates off and carry it back to its charger.", "#ef4444");
+    this.scene.messages.show(this.assignedEmployeeId
+      ? "An employee's hovercart ran out of battery. They'll tow it back to its charger."
+      : "The hovercart's battery ran out. Take its crates off and carry it back to its charger.", "#ef4444");
     this.syncCartCrates();
   }
 
   pickUpCart() {
     const scene = this.scene;
+    if (this.assignedEmployeeId) return false;
     if (!this.dead || this.carried) return false;
     if (this.cartCrates.length) {
       scene.messages.show("Take the crates off the hovercart before you can carry it.", "#f59e0b");
@@ -296,7 +311,7 @@ export class Hovercart {
 
   // Linked carts work as one: standing by any stopped one reaches every stopped one in the room.
   getReachableCarts() {
-    const carts = this.getLinkedCarts();
+    const carts = this.getLinkedCarts().filter((cart) => !cart.assignedEmployeeId);
     if (!carts.some((cart) => cart.isInReach())) return [];
     return carts.filter((cart) => cart.isOut() && !cart.moving && !cart.carried && !cart.crossing &&
       this.scene.areas.areaAt(cart.cart.x, cart.cart.y) === this.scene.areas.playerArea);
@@ -308,6 +323,7 @@ export class Hovercart {
 
   getCrateActions() {
     const scene = this.scene;
+    if (this.assignedEmployeeId) return null;
     if (this.carried) {
       const reason = "You're carrying the hovercart. Take it to its charger first.";
       const blocked = { tap: () => scene.messages.show(reason, "#f59e0b"), hintOverride: reason, blocked: true };
@@ -512,7 +528,7 @@ export class Hovercart {
         .fillStyle(METER_COLORS.back, 1).fillRect(-12, -1, 24, 3)
         .fillStyle(color, 1).fillRect(-12, -1, cartFill, 3);
     }
-    if (!this.secondary) {
+    if (this.showBatteryHud) {
       this.scene.hud?.renderHovercartBattery?.(this.isOut()
         ? { percent: Math.ceil(fraction * 100), level, dead: this.dead }
         : null);
@@ -564,11 +580,11 @@ export class Hovercart {
   }
 
   // Resolve the whole chain together so carts can push each other without stacking slowdowns.
-  updatePlayerPush(delta) {
+  updatePlayerPush(delta, linkedCarts = this.getLinkedCarts()) {
     const scene = this.scene;
     const playerBody = scene.player?.sprite?.body;
     if (!playerBody || !scene.crateBounds) return;
-    const carts = this.getLinkedCarts().filter((cart) => cart.cart?.body?.enable && !cart.carried);
+    const carts = linkedCarts.filter((cart) => cart.cart?.body?.enable && !cart.carried);
     if (!carts.length) return;
     const rectOf = (b) => ({ left: b.x, top: b.y, width: b.width, height: b.height });
     const touches = (a, b) => a.left < b.x + b.width && a.left + a.width > b.x &&
@@ -671,7 +687,7 @@ export class Hovercart {
   // is standing just outside it.
   updateCrossing(seconds) {
     const crossing = this.crossing;
-    const speed = getHovercartMoveSpeed(this.cartCrates.length, this.upgrades.speed);
+    const speed = this.getMoveSpeed();
     const goal = crossing.phase === "in" ? crossing.from.door : crossing.to.front;
     const distance = Phaser.Math.Distance.Between(this.cart.x, this.cart.y, goal.x, goal.y);
     const step = Math.min(distance, speed * seconds);
@@ -746,7 +762,7 @@ export class Hovercart {
       if (!frozen) this.updateCrossing(seconds);
       return;
     }
-    if (!this.cart?.body || !this.active || frozen) {
+    if (!this.cart?.body || (!this.active && !this.towedByStaff) || frozen) {
       this.moving = false;
       this.path = null;
       this.cart?.body?.stop();
@@ -818,7 +834,7 @@ export class Hovercart {
       }
     }
     const target = this.path?.[0] ?? player;
-    const speed = getHovercartMoveSpeed(this.cartCrates.length, this.upgrades.speed);
+    const speed = this.getMoveSpeed();
     const angle = Phaser.Math.Angle.Between(this.cart.x, this.cart.y, target.x, target.y);
     this.cart.body.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
     this.syncCartCrates();
@@ -928,7 +944,7 @@ export class Hovercart {
         return;
       }
     }
-    const speed = getHovercartMoveSpeed(this.cartCrates.length, this.upgrades.speed);
+    const speed = this.getMoveSpeed();
     const angle = Phaser.Math.Angle.Between(this.cart.x, this.cart.y, target.x, target.y);
     this.cart.body.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
   }
@@ -985,11 +1001,27 @@ export class Hovercart {
     this.dead = false;
     this.carried = false;
     this.moving = false;
+    this.towedByStaff = null;
     if (!this.cart?.body) return;
     this.cart.setTexture(HOVERCART_TEXTURES.docked);
     this.parkOnCharger();
     this.syncCartCrates();
     this.renderBattery();
+  }
+
+  getMoveSpeed() {
+    return this.towedByStaff ? 60 : getHovercartMoveSpeed(this.cartCrates.length, this.upgrades.speed);
+  }
+
+  activateForStaff() {
+    if (this.isOut() || this.battery <= 0) return false;
+    this.active = true;
+    this.cart.body.enable = true;
+    this.placeCartClearOfPlayer(this.launch.x, this.launch.y);
+    this.cart.setTexture(HOVERCART_TEXTURES.active);
+    this.syncCartCrates();
+    this.renderBattery();
+    return true;
   }
 
   destroy() {

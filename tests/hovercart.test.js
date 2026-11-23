@@ -50,12 +50,41 @@ test("hovercart saves validate upgrade dependencies and upgraded cargo and batte
     battery: 1600,
   }), true);
   assert.equal(isValidHovercartSave({ owned: true, crates: [], battery: HOVERCART_BATTERY.capacity }), true);
+  assert.equal(isValidHovercartSave({
+    ...saved,
+    carts: [{ chargerId: "charger-2", crates: [], battery: 450, out: true }],
+  }), true);
+  assert.equal(isValidHovercartSave({
+    ...saved,
+    carts: [
+      { chargerId: "charger-2", crates: [], battery: 450, out: false },
+      { chargerId: "charger-3", crates: [], battery: 450, out: false },
+      { chargerId: "charger-4", crates: [], battery: 450, out: false },
+    ],
+  }), false);
+  assert.equal(isValidHovercartSave({
+    ...saved,
+    carts: [{ chargerId: "charger-2", crates: [], battery: 451, out: false }],
+  }), false);
 });
 
 test("hovercart battery drain matches the agreed table", () => {
   assert.deepEqual([0, 1, 2, 3].map((n) => getHovercartDrainPerSecond(n, false)), [1, 2, 3, 4]);
   assert.deepEqual([0, 1, 2, 3].map((n) => getHovercartDrainPerSecond(n, true)), [4, 6, 8, 10]);
   assert.equal(HOVERCART_BATTERY.capacity / getHovercartDrainPerSecond(3, true), 30);
+});
+
+test("employee cargo is never reachable through player-linked cart interactions", () => {
+  const scene = { areas: { playerArea: "shop", areaAt: () => "shop" } };
+  const carts = [null, "tavi_stock_clerk"].map((assignedEmployeeId) =>
+    Object.assign(Object.create(Hovercart.prototype), {
+      scene, assignedEmployeeId, cart: { x: 20, y: 20 }, cartCrates: [{ assignedEmployeeId }],
+      active: true, moving: false, isInReach: () => true,
+    }));
+  for (const cart of carts) cart.linkedCarts = carts;
+  assert.deepEqual(carts[0].getStockableCrates(), carts[0].cartCrates);
+  assert.equal(carts[1].getCrateActions(), null);
+  assert.equal(carts[1].pickUpCart(), false);
 });
 
 test("stocking beside a linked cart includes distant stopped carts, but not unavailable ones", () => {

@@ -67,10 +67,12 @@ export class CatalogSystem {
     for (const crate of shop.crateSystem.getCarriedCrates()) {
       if (crate.kind === "item") add(crate, "offShelves");
     }
-    for (const crate of shop.hovercart?.getCargoCrates() ?? []) add(crate, "offShelves");
+    const cartCargo = shop.gameModules?.get("hovercart")?.getCargoCrates() ??
+      shop.hovercart?.getCargoCrates() ?? [];
+    for (const crate of cartCargo) add(crate, "offShelves");
     for (const employee of shop.employees ?? []) {
       const crate = employee.currentJob?.crate;
-      if (crate?.isCarried && !floorCrates.includes(crate)) add(crate, "offShelves");
+      if (crate?.isCarried && !floorCrates.includes(crate) && !cartCargo.includes(crate)) add(crate, "offShelves");
     }
     for (const customer of shop.customers) {
       if (customer.state === "LEAVING") continue;

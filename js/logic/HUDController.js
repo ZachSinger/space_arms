@@ -20,6 +20,7 @@ export class HUDController {
         this.repEl = document.getElementById('hud-rep');
         this.shopLevelEl = document.getElementById('hud-shop-level');
         this.cleanlinessEl = document.getElementById('hud-cleanliness');
+        this.presentationEl = document.getElementById('hud-presentation');
         this.staminaEl = document.getElementById('hud-stamina');
         this.staminaFillEl = document.getElementById('hud-stamina-fill');
         this.staminaValueEl = document.getElementById('hud-stamina-value');
@@ -131,6 +132,10 @@ export class HUDController {
         this.cleanlinessEl.parentElement.style.display = enabled ? '' : 'none';
     }
 
+    setPresentationEnabled(enabled) {
+        this.presentationEl.parentElement.style.display = enabled ? '' : 'none';
+    }
+
     renderCleanliness({ score, max, trashCount, dirtCount = 0 }) {
         const key = `${score}/${max}/${trashCount}/${dirtCount}`;
         if (!this.cleanlinessEl || key === this.cleanlinessKey) return;
@@ -144,6 +149,20 @@ export class HUDController {
         this.cleanlinessEl.title = `Store cleanliness. ${pieces} and ${dirt} right now. ` +
             'Pick up trash and put it in a trashcan. Face dirt and tap the use button to mop it. ' +
             'Customers who find the store too dirty cost you store reputation, and very dirty stores make them walk out.';
+    }
+
+    renderPresentation({ score, max, floorCrateCount }) {
+        const key = `${score}/${max}/${floorCrateCount}`;
+        if (!this.presentationEl || key === this.presentationKey) return;
+        this.presentationKey = key;
+        this.presentationEl.textContent = `${score}/${max}`;
+        const ratio = score / max;
+        this.presentationEl.classList.toggle('clean-warn', ratio < 0.75 && ratio >= 0.5);
+        this.presentationEl.classList.toggle('clean-bad', ratio < 0.5);
+        const crates = floorCrateCount === 1 ? '1 crate' : `${floorCrateCount} crates`;
+        this.presentationEl.title = `Store presentation. ${crates} on the sales floor right now. ` +
+            'Each crate on the floor lowers presentation by 1 point. Customers whose presentation ' +
+            'expectation is higher than this will not give reputation, but they will keep shopping.';
     }
 
     render() {

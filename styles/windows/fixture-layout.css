@@ -66,6 +66,14 @@
   gap: 3px;
 }
 
+.fixture-art-preview {
+  flex: 0 0 auto;
+  object-fit: contain;
+  image-rendering: pixelated;
+  max-width: 48px;
+  max-height: 80px;
+}
+
 .fixture-sale-action {
   flex: 0 0 calc(132px * var(--text-scale));
   min-width: 0;

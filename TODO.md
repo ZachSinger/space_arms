@@ -23,10 +23,10 @@ completed or no longer relevant.
       Adjust stick feel, dash timing, menu navigation, and button prompts as needed.
 - [ ] Check how movement, crate handling, the camera, and checkout feel during a
       10-minute game session.
-- [ ] Show an outline or highlight on an employee when a shelf hides most of them, so the
-      player can still see where their staff are.
-- [ ] Make the backroom worth using. Right now it's easier to leave crates all over the
-      sales floor than to carry them to the backroom, so the backroom has no real purpose.
+- [x] Let the player assign employees to hovercarts, and make employees use a hovercart
+      when it helps (for example, moving several crates between the backroom and shelves).
+- [ ] Make the backroom worth using: crates left on the sales floor lower presentation,
+      giving players a reason to keep spare stock in the backroom.
 - [ ] Add a first-shift tutorial for ordering products, collecting deliveries, stocking
       shelves, and setting prices. Wait until the map and core loop are close to final.
 
@@ -55,8 +55,9 @@ completed or no longer relevant.
       lanes, firearm tuning, and stairs down to the range.
 - [ ] Add the new [Hovercart](documentation/modules/Hovercart.md) at Shop Level 7: a
       chargeable cart that follows the player and carries stacks of crates.
-- [ ] Add [Presentation Level](documentation/modules/Presentation.md): customers expect
-      decorations, and low presentation blocks reputation gains. The design is unfinished.
+- [x] Finish [Presentation Level](documentation/modules/Presentation.md): 20 purchasable
+      decorations raise presentation, with distinct-design variety and floor-crate penalties.
+      Decoration prices and points remain provisional development defaults.
 
 ## Other ideas
 

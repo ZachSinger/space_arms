@@ -17,6 +17,7 @@ import { InteractableRegistry } from "../interaction/InteractableRegistry.js";
 import { InteractionSystem } from "../interaction/InteractionSystem.js";
 import { ModuleHost } from "../modules/GameModules.js";
 import { createHovercartTextures } from "../modules/hovercart/HovercartArt.js";
+import { createDecorationTextures } from "../world/DecorationArt.js";
 import {
   DRONE_TERMINAL_PLATFORM_SPRITE,
   DRONE_TERMINAL_SCREEN_SPRITE,
@@ -225,6 +226,7 @@ export class GameScene extends Phaser.Scene {
     });
     // The hovercart charger is a fixture, so its art must exist before any fixture is drawn.
     createHovercartTextures(this);
+    createDecorationTextures(this);
     for (const fixture of this.fixtures.all()) this.fixtureViews.show(fixture);
 
     // Customers spawn just inside the front door. The small jitter box keeps several quick
@@ -360,7 +362,9 @@ export class GameScene extends Phaser.Scene {
     this.database = database;
     this.gameModules = new ModuleHost(this);
     this.cleaningSystem = this.gameModules.get("cleaning");
+    this.presentationSystem = this.gameModules.get("presentation");
     this.hud.setCleanlinessEnabled(Boolean(this.cleaningSystem));
+    this.hud.setPresentationEnabled(Boolean(this.presentationSystem));
     this.events.once("shutdown", () => this.gameModules.destroy());
     this.customerStore = createCustomerStore(this);
     this.employeeStore = createEmployeeStore(this);

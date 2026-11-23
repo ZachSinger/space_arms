@@ -176,13 +176,18 @@ export function fixtureBounds(placement) {
 
 /**
  * The part people actually bump into, in tiles. An upright shelf (facing up or down) is only
- * solid around its feet, up to half a person's height; anyone further up walks behind its
- * top. Placement and walking routes still use the full body box (fixtureBounds).
+ * solid around its feet, up to half a person's height. Decorations use their catalog's
+ * solid foot height. Anyone further up walks behind the art; placement and walking routes
+ * still use the full body box (fixtureBounds).
  */
 export function fixtureSolidBounds(placement) {
   const bounds = fixtureBounds(placement);
+  const spec = getFixtureType(placement.type);
+  if (spec.kind === "decoration") {
+    return { ...bounds, top: Math.max(bounds.top, bounds.bottom - spec.solidHeight) };
+  }
   const facing = fixtureFacing(placement);
-  if (getFixtureType(placement.type).kind !== "shelf" || (facing !== "up" && facing !== "down")) return bounds;
+  if (spec.kind !== "shelf" || (facing !== "up" && facing !== "down")) return bounds;
   return { ...bounds, top: Math.max(bounds.top, bounds.bottom - SHELF_SOLID_HEIGHT) };
 }
 

@@ -218,10 +218,48 @@ test("a bought hovercart saves up to three item crates and they count toward cra
       /invalid hovercart/);
   }
 
+  const linked = structuredClone(data);
+  linked.hovercart.carts = [{
+    chargerId: "hovercart_charger_2",
+    crates: [{ id: "crate-5", kind: "item", itemId: "srv_01", quantity: 1 }],
+    battery: 300,
+    out: true,
+  }];
+  linked.nextCrateId = 6;
+  assert.deepEqual(validateShopSave(structuredClone(linked), database).hovercart.carts, linked.hovercart.carts);
+  const invalidLinkedCrate = structuredClone(linked);
+  invalidLinkedCrate.hovercart.carts[0].crates[0].itemId = "not-a-game-item";
+  assert.throws(() => validateShopSave(invalidLinkedCrate, database), /invalid crate contents/);
+  const duplicateLinkedCrate = structuredClone(linked);
+  duplicateLinkedCrate.hovercart.carts[0].crates[0].id = "crate-3";
+  assert.throws(() => validateShopSave(duplicateLinkedCrate, database), /duplicate crate id/);
+
   const placed = { ...charged, hovercart: { ...charged.hovercart, charger: true } };
   assert.equal(validateShopSave(structuredClone(placed), database).hovercart.charger, true);
   assert.throws(() => validateShopSave({ ...charged, hovercart: { ...charged.hovercart, charger: "yes" } }, database),
     /invalid hovercart/);
+});
+
+test("hovercart assignments require placed chargers and unique hired employees", () => {
+  const data = snapshot();
+  data.fixtures.push(
+    { id: "charger-1", type: "hovercart_charger", gx: 8, gy: 103, rotation: 0 },
+    { id: "charger-2", type: "hovercart_charger", gx: 10, gy: 103, rotation: 0 },
+  );
+  data.playerState.hiredEmployees = ["tavi_stock_clerk"];
+  data.playerState.hovercartAssignments = { "charger-1": "tavi_stock_clerk" };
+  const checked = validateShopSave(structuredClone(data), database);
+  assert.deepEqual(checked.playerState.hovercartAssignments, data.playerState.hovercartAssignments);
+  for (const assignments of [
+    { "missing-charger": "tavi_stock_clerk" },
+    { "charger-1": "not-hired" },
+    { "charger-1": "tavi_stock_clerk", "charger-2": "tavi_stock_clerk" },
+    [],
+  ]) {
+    const invalid = structuredClone(data);
+    invalid.playerState.hovercartAssignments = assignments;
+    assert.throws(() => validateShopSave(invalid, database), /invalid hovercart assignments/);
+  }
 });
 
 test("saved receipts must belong to the saved day", () => {

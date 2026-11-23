@@ -1132,6 +1132,7 @@ test("all placeable fixture physics bodies match the solid part of their placeme
     setDepth(depth) { this.depth = depth; return this; } };
   for (const type of Object.keys(FIXTURE_TYPES)) {
     for (let rotation = 0; rotation < 4; rotation++) {
+      if (FIXTURE_TYPES[type].fixedFacing && rotation !== 0) continue;
       const fixture = { type, x: 832, y: 192, rotation, sprite };
       views.orient(fixture);
       const footprint = fixtureFootprint(fixture);

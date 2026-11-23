@@ -7,6 +7,8 @@ import { Events, GAME_EVENTS } from "../js/core/Events.js";
 import { createServer } from "vite";
 import { PLAYER_BODY_HEIGHT, PLAYER_BODY_WIDTH } from "../js/logic/Player.js";
 import { CleaningSystem } from "../js/modules/cleaning/CleaningSystem.js";
+import { Staff } from "../js/state/slices/Staff.js";
+import { StaffHovercarts } from "../js/modules/hovercart/StaffHovercarts.js";
 
 let server;
 let cacheDirectory;
@@ -21,6 +23,7 @@ let STOCKING_MS_PER_ITEM;
 let EmployeeRenderer;
 let EmployeeTraining;
 let StaffSystem;
+let FixtureSystem;
 let ShiftSystem;
 
 before(async () => {
@@ -68,6 +71,7 @@ before(async () => {
   EmployeeTraining = await server.ssrLoadModule("/js/logic/EmployeeTraining.js");
   ({ REGISTER_SERVICE_MS_PER_CUSTOMER, REGISTER_SERVICE_MS_PER_ITEM } = EmployeeTraining);
   ({ StaffSystem } = await server.ssrLoadModule("/js/systems/StaffSystem.js"));
+  ({ FixtureSystem } = await server.ssrLoadModule("/js/systems/FixtureSystem.js"));
   ({ ShiftSystem } = await server.ssrLoadModule("/js/systems/ShiftSystem.js"));
 });
 
@@ -303,6 +307,204 @@ function finishStocking(employee) {
   employee.stockCrateOnShelf();
   employee.updateStocking(employee.stockingUnitsRemaining * STOCKING_MS_PER_ITEM);
 }
+
+function assignTestCart(employee) {
+  const scene = employee.store;
+  scene.areas.areaAt = (_x, y) => y < 80 ? "backroom" : "shop";
+  scene.gameState.staff.hovercartFor = () => "charger-1";
+  employee.sprite.body.stop = () => employee.sprite.body.setVelocity(0, 0);
+  for (const crate of scene.restockCrates) crate.canPickUp = () => true;
+  for (const shelf of scene.fixtures.shelves()) Object.assign(shelf, { x: 100, y: 100 });
+  const cart = {
+    charger: { id: "charger-1" },
+    assignedEmployeeId: employee.data.id,
+    cart: { x: 20, y: 20 },
+    cartCrates: [],
+    dock: { x: 20, y: 20 },
+    launch: { x: 20, y: 45 },
+    capacity: 3, batteryCapacity: 300, battery: 300,
+    moving: false, active: false, dead: false,
+    isOut() { return this.active || this.dead; },
+    activateForStaff() { this.active = true; return true; },
+    hasClearLine: () => true,
+    targetFeet: (sprite) => sprite,
+    syncCartCrates() {},
+    reset() { this.active = false; this.dead = false; this.towedByStaff = null; },
+  };
+  scene.hovercarts = new StaffHovercarts({ scene, carts: [cart] });
+  return cart;
+}
+
+test("employee hovercart assignments are one-to-one, replace owners, and persist", () => {
+  const staff = new Staff();
+  staff.add("tavi_stock_clerk");
+  staff.add("sera_floor_assistant");
+  assert.equal(staff.assignHovercart("not-hired", "charger-1"), false);
+  staff.assignHovercart("tavi_stock_clerk", "charger-1");
+  staff.assignHovercart("sera_floor_assistant", "charger-1");
+  assert.equal(staff.hovercartFor("tavi_stock_clerk"), null);
+  staff.assignHovercart("sera_floor_assistant", "charger-2");
+  assert.deepEqual(staff.hovercartAssignments, { "charger-2": "sera_floor_assistant" });
+  const restored = Staff.fromSave(staff.toSave());
+  assert.equal(restored.hovercartFor("sera_floor_assistant"), "charger-2");
+  restored.assignHovercart("sera_floor_assistant", null);
+  assert.deepEqual(restored.hovercartAssignments, {});
+});
+
+test("assigned employees batch crates, wait for their cart, stock at the normal pace, and dock leftovers before leaving", () => {
+  const { employee, shelf, crate } = makeEmployee({ crateQuantity: 2, shelfCapacity: 3 });
+  const second = makeDeliveryCrate(2);
+  second.canPickUp = () => true;
+  employee.store.restockCrates.push(second);
+  const cart = assignTestCart(employee);
+  employee.startNextTask();
+  assert.equal(employee.state, "HOVERCART_TO_SOURCE");
+  employee.arriveAtDestination();
+  employee.update(16);
+  employee.arriveAtDestination();
+  employee.update(16);
+  assert.deepEqual(cart.cartCrates, [crate, second]);
+  assert.equal(employee.store.restockCrates.length, 0);
+  assert.equal(employee.state, "HOVERCART_TO_SHELF");
+  employee.sprite.body.reset(100, 100);
+  employee.arriveAtDestination();
+  employee.update(1000);
+  assert.equal(shelf.placements[0].quantity, 0, "a distant cart cannot supply stock");
+  Object.assign(cart.cart, { x: 80, y: 100 });
+  employee.update(16);
+  assert.equal(employee.state, "STOCKING_SHELF");
+  assert.equal(employee.isCarryingCrate(), false, "cargo stays on the cart");
+  employee.update(999);
+  assert.equal(shelf.placements[0].quantity, 0);
+  employee.update(1);
+  assert.equal(shelf.placements[0].quantity, 1);
+  employee.update(1000);
+  assert.equal(employee.state, "HOVERCART_TO_SHELF", "the next cargo crate uses the remaining space");
+  employee.arriveAtDestination();
+  employee.update(16);
+  employee.clockOutRequested = true;
+  employee.update(1000);
+  assert.equal(shelf.placements[0].quantity, 3);
+  assert.equal(employee.state, "HOVERCART_TO_BIN");
+  employee.arriveAtDestination();
+  employee.update(16);
+  assert.equal(crate.destroyed, true);
+  assert.deepEqual(cart.cartCrates, [second]);
+  assert.equal(second.quantity, 1);
+  assert.equal(employee.state, "HOVERCART_TO_CHARGER");
+  employee.arriveAtDestination();
+  employee.update(16);
+  assert.equal(employee.state, "HOVERCART_WAIT_CHARGER", "no long-distance docking");
+  Object.assign(cart.cart, { x: 30, y: 20 });
+  employee.update(16);
+  assert.equal(cart.isOut(), false);
+  assert.equal(employee.state, "TO_EXIT");
+  assert.equal(second.quantity, 1, "leftover stock is never discarded or put on the sales floor");
+});
+
+test("a dead employee cart is towed at walking speed without spending battery or losing loaded stock", () => {
+  const { employee, crate } = makeEmployee();
+  const cart = assignTestCart(employee);
+  cart.cartCrates = [crate];
+  employee.store.restockCrates = [];
+  Object.assign(cart, { battery: 0, dead: true });
+  employee.startNextTask();
+  assert.equal(employee.state, "HOVERCART_TO_RECOVERY");
+  employee.arriveAtDestination();
+  assert.equal(cart.towedByStaff, employee);
+  assert.equal(employee.getWalkSpeed(), 60);
+  employee.arriveAtDestination();
+  employee.update(16);
+  assert.equal(cart.isOut(), false);
+  assert.equal(cart.battery, 0, "docking does not magically refill the battery");
+  assert.deepEqual(cart.cartCrates, [crate]);
+});
+
+test("register service still outranks cart stocking, and a charging cart falls back to hand stocking", () => {
+  const { employee } = makeEmployee({ hasRegister: true });
+  const cart = assignTestCart(employee);
+  employee.startNextTask();
+  assert.equal(employee.state, "TO_REGISTER");
+  assert.equal(cart.active, false);
+  employee.store.checkoutSystem.operatingRegister = true;
+  cart.battery = 20;
+  employee.startNextTask();
+  assert.equal(employee.state, "TO_CRATE");
+  assert.equal(cart.active, false);
+});
+
+test("a cart with empty crates and no reachable trashcan stays docked rather than repeating failed trips", () => {
+  const { employee } = makeEmployee({ trashcans: [] });
+  const cart = assignTestCart(employee);
+  cart.cartCrates = [makeDeliveryCrate(0)];
+  const messages = [];
+  employee.store.showShopMessage = (message) => messages.push(message);
+  employee.startNextTask();
+  assert.equal(employee.state, "TO_CRATE", "useful floor stock is carried by hand");
+  employee.startNextTask();
+  assert.equal(cart.active, false);
+  assert.equal(cart.cartCrates.length, 1);
+  assert.equal(messages.length, 1);
+  assert.match(messages[0], /reachable trashcan/);
+});
+
+test("hovercart assignment changes require docked carts, but docked leftover cargo can change hands", () => {
+  const { employee } = makeEmployee();
+  const scene = employee.store;
+  const cart = assignTestCart(employee);
+  const staff = new Staff();
+  staff.add(employee.data.id);
+  scene.gameState.staff = staff;
+  const system = { carts: [cart], chargers: () => [cart.charger], sync() {} };
+  scene.gameModules = { get: () => system };
+  scene.shift = { starting: false };
+  let autosaves = 0;
+  scene.saves = { canSaveOffShift: () => true, requestAutosave: () => { autosaves += 1; } };
+  const messages = [];
+  scene.messages = { show: (message) => messages.push(message) };
+  const staffSystem = new StaffSystem(scene);
+  cart.active = true;
+  assert.equal(staffSystem.assignHovercart(employee.data.id, cart.charger.id), false);
+  assert.match(messages.at(-1), /Dock these hovercarts/);
+  cart.active = false;
+  cart.cartCrates.push(makeDeliveryCrate(1));
+  assert.equal(staffSystem.assignHovercart(employee.data.id, cart.charger.id), true);
+  assert.equal(staffSystem.assignHovercart(employee.data.id, null), true);
+  assert.equal(autosaves, 2);
+  assert.equal(cart.cartCrates.length, 1);
+});
+
+test("employee controls show cart ownership and disable changes during a shift", () => {
+  const options = {
+    hiredEmployeeIds: ["tavi_stock_clerk", "sera_floor_assistant"], activeEmployeeIds: [],
+    employeeJobPriorities: {}, credits: 10000, canHire: true, shopLevel: 7,
+    hovercarts: [{ id: "charger-1", name: "HOVERCART 1" }],
+    hovercartAssignments: { "charger-1": "tavi_stock_clerk" },
+  };
+  const ready = EmployeeRenderer.generateHTML(options);
+  assert.match(ready, /data-employee-hovercart-id="tavi_stock_clerk"[\s\S]*?data-employee-hovercart="charger-1" aria-pressed="true"/);
+  assert.match(ready, /data-employee-hovercart-id="sera_floor_assistant"[\s\S]*?replacing Tavi/);
+  const duringShift = EmployeeRenderer.generateHTML({ ...options, canHire: false });
+  assert.match(duringShift, /data-employee-hovercart="charger-1" aria-pressed="true"[\s\S]*?disabled/);
+});
+
+test("an employee charger's own cart blocks removal while out or loaded, independently of player carts", () => {
+  const charger = { id: "charger-1", type: "hovercart_charger" };
+  const otherCharger = { id: "charger-2", type: "hovercart_charger" };
+  const employeeCart = { charger, cartCrates: [], isOut: () => true };
+  const playerCart = { charger: otherCharger, cartCrates: [], isOut: () => false };
+  const fixtures = new FixtureSystem({
+    hovercart: playerCart, gameModules: { get: () => ({ carts: [employeeCart, playerCart] }) },
+  });
+  fixtures.canRearrange = () => true;
+  assert.match(fixtures.crateBlockReason(charger), /Dock the hovercart/);
+  assert.equal(fixtures.crateBlockReason(otherCharger), null);
+  employeeCart.isOut = () => false;
+  employeeCart.cartCrates.push({ quantity: 1 });
+  assert.match(fixtures.saleBlockReason(charger), /Unload this hovercart/);
+  employeeCart.cartCrates = [];
+  assert.equal(fixtures.crateBlockReason(charger), null);
+});
 
 test("15 shelf items require 15 full intervals, even when clockout is requested mid-stock", () => {
   const { employee, shelf, crate, transfers } = makeEmployee({ shelfCapacity: 15, crateQuantity: 15 });

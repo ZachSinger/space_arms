@@ -89,6 +89,8 @@ export class EmployeeRenderer {
     shopLevel,
     registers = [],
     registerAssignments = {},
+    hovercarts = [],
+    hovercartAssignments = {},
   }) {
     const hired = new Set(hiredEmployeeIds);
     const offShift = new Set(offShiftEmployeeIds);
@@ -164,6 +166,18 @@ export class EmployeeRenderer {
             </button>`;
         });
         const trainingJobId = employeeTraining[employee.id];
+        const ownCartId = hovercarts.find(({ id }) => hovercartAssignments[id] === employee.id)?.id ?? "";
+        const cartOptions = [{ id: "", name: "NONE" }, ...hovercarts].map(({ id, name }) => {
+          const holder = id ? hovercartAssignments[id] : null;
+          const takenBy = holder && holder !== employee.id ? nameOf(holder) : null;
+          return html`
+            <button type="button" class="action-btn" data-employee-hovercart-id="${employee.id}"
+              data-employee-hovercart="${id}" aria-pressed="${String(id === ownCartId)}"
+              ${canHire ? "" : "disabled"}
+              aria-label="${id ? `Assign ${name} to ${employee.name}` : `${employee.name} stocks by hand`}${takenBy ? `, replacing ${takenBy}` : ""}">
+              ${name}${takenBy ? ` (${takenBy})` : ""}
+            </button>`;
+        });
         const selectedTrainingJobId = employeeTrainingSelection[employee.id] ?? trainingJobId ?? "register";
         const isOnShift = !offShift.has(employee.id);
         const shiftTitle = canHire ? "" : "Change On Shift or Off Shift between shifts.";
@@ -200,6 +214,12 @@ export class EmployeeRenderer {
             <p class="employee-training-hint">They stay at this register all shift. When you step onto it, they do their other jobs until you leave.</p>
             <div class="employee-register-options" role="group" aria-label="Register for ${employee.name}">
               ${registerOptions}
+            </div>
+            <h4 class="employee-section-title">Hovercart</h4>
+            <p class="employee-training-hint">Assigned carts carry stocking crates for this employee, not you. They return to charge, keeping leftover stock on the cart. NONE leaves carts available to you. Dock the cart before changing its assignment; leftover crates stay with it.</p>
+            ${hovercarts.length ? null : html`<p class="type-description">Buy a hovercart in Layout and place its charger to assign it here.</p>`}
+            <div class="employee-register-options" role="group" aria-label="Hovercart for ${employee.name}">
+              ${cartOptions}
             </div>
             <h4 class="employee-section-title">Other jobs</h4>
             <p class="employee-training-hint">Off the register, they do these in order. Drag to reorder.</p>

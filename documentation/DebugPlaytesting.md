@@ -72,8 +72,8 @@ beside any stopped cart reaches every stopped cart in the same room: crates you 
 the front cart first, then the ones behind it, and crates you take come off the last loaded
 cart first. Each cart holds six crates; your hands hold three. **Refill crates** puts a
 fresh set down and **Clear crates** empties the floor and carts. Battery and stamina are
-unlimited in this room. This linked-cart prototype is only in the test room; the main game
-still has one cart.
+unlimited in this room. In the main game, buy up to three carts for 2,200 each; their upgrades
+apply to all linked carts.
 
 For shelf stocking, stand beside any stopped cart: all stopped carts in the same room supply
 their crates, including the ones farther down the chain. **Q** cycles through their crates.

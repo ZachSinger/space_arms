@@ -151,6 +151,43 @@ export class StaffSystem {
     return true;
   }
 
+  assignHovercart(employeeId, chargerId) {
+    const { shop, staff } = this;
+    if (!this.canManage()) {
+      shop.messages.show("Hovercart assignments can only be changed between shifts.");
+      return false;
+    }
+    if (!staff.isHired(employeeId)) {
+      shop.messages.show("Hire this employee before assigning a hovercart.");
+      return false;
+    }
+    const system = shop.gameModules.get("hovercart");
+    const charger = chargerId ? system?.chargers().find(({ id }) => id === chargerId) : null;
+    if (chargerId && !charger) {
+      shop.messages.show("Place this hovercart's charger before assigning it.");
+      return false;
+    }
+    const currentId = staff.hovercartFor(employeeId);
+    const affected = system?.carts.filter((cart) =>
+      cart.charger.id === currentId || cart.charger.id === chargerId) ?? [];
+    if (affected.some((cart) => cart.isOut())) {
+      shop.messages.show("Dock these hovercarts before changing who uses them. Leftover crates stay on the cart.");
+      return false;
+    }
+    const previous = chargerId ? staff.hovercartAssignments[chargerId] : null;
+    if (!staff.assignHovercart(employeeId, chargerId)) return false;
+    system?.sync();
+    const employee = staff.profile(employeeId);
+    const bumped = previous && previous !== employeeId ? staff.profile(previous) : null;
+    shop.messages.show(charger
+      ? `${employee.name} will use this hovercart for stocking. It won't follow you.` +
+        (bumped ? ` ${bumped.name} no longer has a hovercart.` : "")
+      : `${employee.name} will stock by hand. Their hovercart is available to you.`,
+    STAFF_MESSAGE_COLOR);
+    shop.saves.requestAutosave();
+    return true;
+  }
+
   // Wages are paid up front, even into the red (bible Step 32), one receipt line each.
   payWages() {
     let total = 0;

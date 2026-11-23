@@ -14,9 +14,7 @@ import { getCrateOrderQuantity } from "../logic/SupplyOrder.js";
 import { sourceItems } from "../logic/InventoryTransfer.js";
 import { unlockEverything } from "./SandboxRoom.js";
 import { controlLabel } from "../input/InputDevice.js";
-import { CONTROL_MODES } from "../input/ControlMode.js";
 import { HOVERCART_CHARGER_TYPE, getLegacyChargerSpot } from "../modules/hovercart/HovercartRules.js";
-import { Hovercart } from "../modules/hovercart/Hovercart.js";
 
 const STEP_X = 56;
 const STEP_Y = 52;
@@ -95,7 +93,7 @@ function keepClearSpots(scene, carts) {
 
 /**
  * @param {Phaser.Scene} scene - the game scene, started with { sandbox: true, lab: "crates" }
- * @returns {{ carts: Hovercart[], update: (time: number, delta: number) => void,
+ * @returns {{ carts: import("../modules/hovercart/Hovercart.js").Hovercart[],
  *   noteGaveUp: () => void, destroy: () => void }}
  */
 export function setupCrateTestLab(scene) {
@@ -108,65 +106,22 @@ export function setupCrateTestLab(scene) {
     scene.fixtureSystem.checkPlacement(HOVERCART_CHARGER_TYPE, charger.gx, charger.gy).valid) {
     scene.fixtureSystem.placeFree(HOVERCART_CHARGER_TYPE, charger.gx, charger.gy);
   }
-  const hovercart = hovercartSystem.sync();
-  if (!hovercart) throw new Error("Crate lab: no room for the hovercart charger.");
-  const carts = [hovercart];
+  if (!hovercartSystem.sync()) throw new Error("Crate lab: no room for the hovercart charger.");
   for (const offsetY of [0, 2]) {
     const gx = charger.gx + 2;
     const gy = charger.gy + offsetY;
     if (!scene.fixtureSystem.placeFree(HOVERCART_CHARGER_TYPE, gx, gy)) {
       throw new Error("Crate lab: no room for all three hovercart chargers.");
     }
-    const fixture = hovercartSystem.chargers().find((entry) => entry.gx === gx && entry.gy === gy);
-    if (!fixture) throw new Error("Crate lab: missing hovercart charger.");
-    carts.push(new Hovercart(scene, fixture, { secondary: true }));
   }
+  hovercartSystem.sync();
+  const carts = hovercartSystem.carts;
   hovercartSystem.upgrades = { speed: 3, length: 3, battery: 6 };
   for (const cart of carts) {
-    cart.linkedCarts = carts;
     cart.setUpgrades(hovercartSystem.upgrades);
     cart.battery = cart.batteryCapacity;
     cart.infiniteBattery = true;
   }
-  const cartColliders = [];
-  for (let i = 0; i < carts.length; i += 1) {
-    for (let j = i + 1; j < carts.length; j += 1) {
-      cartColliders.push(scene.physics.add.collider(carts[i].cart, carts[j].cart));
-    }
-  }
-  const links = scene.add.graphics();
-  const updateCarts = (time, delta) => {
-    const active = carts.filter((cart) => cart.active);
-    for (let index = 0; index < carts.length; index += 1) {
-      const cart = carts[index];
-      const position = active.indexOf(cart);
-      const target = position > 0 ? active[position - 1].cart : null;
-      if (cart.followTarget !== target) {
-        cart.followTarget = target;
-        cart.trail = [];
-        cart.trailArea = null;
-        cart.trailTarget = null;
-        cart.path = null;
-      }
-      if (cart.secondary) cart.update(time, delta);
-    }
-    const frozen = (scene.shiftClock?.isPaused && scene.shiftClock.started) ||
-      scene.controlMode.getMode() === CONTROL_MODES.LOADING;
-    if (!frozen) hovercart.updatePlayerPush(delta);
-    const player = scene.player.sprite;
-    const available = carts.filter((cart) => cart.isOut());
-    scene.hovercart = available.sort((a, b) =>
-      Phaser.Math.Distance.Between(player.x, player.y, a.cart.x, a.cart.y) -
-      Phaser.Math.Distance.Between(player.x, player.y, b.cart.x, b.cart.y))[0] ?? hovercart;
-    links.clear().lineStyle(2, 0x7dd3fc, 0.8);
-    for (let index = 1; index < active.length; index += 1) {
-      const first = active[index - 1].cart;
-      const second = active[index].cart;
-      if (scene.areas.areaAt(first.x, first.y) !== scene.areas.areaAt(second.x, second.y)) continue;
-      links.lineBetween(first.x, first.y, second.x, second.y);
-    }
-    links.setDepth(active.length ? Math.min(...active.map((cart) => cart.cart.depth)) - 0.02 : 0);
-  };
   // Temporary while testing the cart in the maze.
   scene.player.infiniteStamina = true;
   const items = labItems();
@@ -285,16 +240,11 @@ export function setupCrateTestLab(scene) {
   fill();
   return {
     carts,
-    update: updateCarts,
     noteGaveUp() {},
     destroy() {
       panel.removeEventListener("click", onClick);
       panel.remove();
-      links.destroy();
-      for (const collider of cartColliders) collider.destroy();
-      for (const cart of carts.slice(1)) cart.destroy();
       hovercartSystem.uninstall();
-      if (carts.includes(scene.hovercart)) scene.hovercart = null;
       scene.player.infiniteStamina = false;
     },
   };

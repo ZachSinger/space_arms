@@ -5,6 +5,8 @@
 // (optionally) the fixture purchase list.
 import { html } from "../core/html.js";
 import { getFixtureResaleValue, getFixtureType } from "./FixtureLayout.js";
+import { PRESENTATION_TUNING } from "../modules/presentation/PresentationRules.js";
+import { TILE_SIZE } from "./RoomLayout.js";
 
 export class LayoutRenderer {
   /**
@@ -71,14 +73,16 @@ export class LayoutRenderer {
     `);
   }
 
-  // Equipment bought once, with upgrade steps shown after purchase.
+  // Equipment purchases and upgrade steps.
   static equipmentHTML(scene, enabled) {
     const hovercart = scene.gameModules?.get("hovercart");
     if (!hovercart) return "";
-    const { name, price, capacity, requiredShopLevel, isPurchased, levelMet, canAfford, hasDeliverySpace } = hovercart.purchaseOption();
-    const canBuy = enabled && !isPurchased && levelMet && canAfford && hasDeliverySpace;
-    const status = isPurchased
-      ? "OWNED"
+    const {
+      name, price, capacity, cartCount, maxCarts, requiredShopLevel, isPurchased, levelMet, canAfford, hasDeliverySpace,
+    } = hovercart.purchaseOption();
+    const canBuy = enabled && cartCount < maxCarts && levelMet && canAfford && hasDeliverySpace;
+    const status = cartCount >= maxCarts
+      ? "MAXIMUM OWNED"
       : !levelMet
         ? "LOCKED"
         : !canAfford
@@ -87,7 +91,7 @@ export class LayoutRenderer {
             ? "AVAILABLE WHILE STORE IS CLOSED"
             : !hasDeliverySpace
               ? "LOADING PAD FULL"
-              : "BUY";
+              : cartCount ? "BUY ANOTHER" : "BUY";
     const upgradeCards = isPurchased ? hovercart.upgradeOptions().map((option) => {
       const label = option.path === "speed" ? "Speed" : option.path === "length" ? "Length" : "Battery";
       const description = option.maxed
@@ -129,19 +133,21 @@ export class LayoutRenderer {
       <h3 class="type-h3 layout-zone-heading">Equipment</h3>
       <div class="item-card fixture-sale-card">
         <div class="fixture-sale-info">
-          <h3 class="type-h3">${name}</h3>
+          <h3 class="type-h3">${cartCount ? "Linked Hovercart" : name}</h3>
           <p class="type-description">Shop Level ${requiredShopLevel}</p>
-          <p class="type-description">Follows you around the store carrying up to ${capacity} crates. It arrives in a crate on the Loading Pad with its charger, which you can place anywhere in the store.</p>
+          <p class="type-description">${cartCount
+            ? `You own ${cartCount} of ${maxCarts} linked carts. Each arrives with a charger in a crate on the Loading Pad.`
+            : `Follows you around the store carrying up to ${capacity} crates. It arrives in a crate on the Loading Pad with its charger, which you can place anywhere in the store.`}</p>
         </div>
         <div class="fixture-sale-action">
           <p class="type-description fixture-sale-price">${price.toLocaleString()}</p>
-          <button type="button" class="${!isPurchased && !levelMet ? "retro-tab-btn" : "action-btn"}" data-buy-hovercart
+          <button type="button" class="${cartCount < maxCarts && !levelMet ? "retro-tab-btn" : "action-btn"}" data-buy-hovercart
             ${canBuy ? "" : "disabled"}>${status}</button>
         </div>
       </div>
       ${isPurchased ? html`
         <h3 class="type-h3 layout-zone-heading">Hovercart Upgrades</h3>
-        <p class="type-description">Upgrades apply to this hovercart only. Buy each Speed upgrade before its matching extra crate space.</p>
+        <p class="type-description">Upgrades apply to all linked carts. Buy each Speed upgrade before its matching extra crate space.</p>
         ${upgradeCards}
       ` : null}
     `;
@@ -167,6 +173,9 @@ export class LayoutRenderer {
 
     const saleCards = scene.fixtureSystem.purchaseOptions()
       .map(({ spec, license, licensed, canAfford, hasDeliverySpace }) => {
+        const isDecoration = spec.kind === "decoration";
+        const preview = isDecoration && scene.textures?.exists(spec.texture)
+          ? scene.textures.getBase64(spec.texture) : null;
         const disabled = !licensed || !canAfford || !hasDeliverySpace;
         const label = !licensed
           ? "LOCKED"
@@ -177,8 +186,16 @@ export class LayoutRenderer {
               : "BUY";
         return html`
           <div class="item-card fixture-sale-card">
+            ${preview ? html`<img class="fixture-art-preview" src="${preview}" alt="${spec.name} preview"
+              width="${spec.w * TILE_SIZE}" height="${spec.h * TILE_SIZE}">` : null}
             <div class="fixture-sale-info">
               <h3 class="type-h3">${spec.name}</h3>
+              ${isDecoration ? html`
+                <p class="type-description">${spec.description}</p>
+                <p class="type-description">Adds ${spec.presentationPoints} to PRESENTATION when placed on the sales floor,
+                  plus ${PRESENTATION_TUNING.decorationVarietyBonus} more the first time this design is out there.
+                  Adds nothing in the backroom or once PRESENTATION is at its maximum.</p>
+              ` : null}
               ${licensed ? null : html`<p class="type-description fixture-locked-note">Needs contract: ${license.name} (Contracts tab)</p>`}
             </div>
             <div class="fixture-sale-action">

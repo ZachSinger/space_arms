@@ -4,10 +4,11 @@
 > earlier. This is a new design and does not bring that one back.
 
 ## Overview
-- Unlocks at Store Level 7. Bought once, for 2,200, in the Equipment section of the Manager's
+- Unlocks at Store Level 7. Up to three can be bought, for 2,200 each, in the Equipment section of the Manager's
   Tablet Layout tab, while the store is closed. The price is a starting guess.
 - A floating platform about as wide as a crate that holds a stack of up to 3 crates at first.
-- It follows the player. Each crate on it slows it down, but it does its best to keep up.
+- Unassigned carts follow the player as a linked chain. Assigned carts follow their employee
+  during stocking instead. Each crate slows its cart down, but it does its best to keep up.
 - You can still hold three crates yourself while using it.
 
 ## Buying it
@@ -120,6 +121,26 @@ endless stamina, for testing. Nothing there is saved.
   30,000, 60,000, and 100,000. They raise battery capacity to 450, 600, 800, 1,000, 1,300, and
   1,600. Buying a battery upgrade keeps the same percentage of charge. An empty battery still
   takes 60 seconds to fill.
-- The game currently supports one purchased hovercart. Linking multiple carts is a separate
-  future feature; each cart will need its own upgrade levels.
+- Upgrades are shared by all three carts, including employee carts.
 - The full numbers and design notes are in [HovercartUpgrades.md](./HovercartUpgrades.md).
+
+## Employee use
+- Between shifts, the Employee tab assigns a placed charger's cart to one hired employee.
+  An employee has at most one cart; assigning an already-owned cart replaces its employee.
+  NONE releases the cart for the player. Both affected carts must be docked to change assignments.
+  Docked leftover cargo stays with the cart and can be handled by the player after releasing it.
+- The assigned register still outranks stocking. Within their normal job priorities, staff use
+  carts for cross-room stock or batches of useful floor crates. Single same-room crates and work
+  while the cart charges use the existing hand-carry workflow.
+- They load useful crates from the source room, top of each stack first, respecting reservations
+  by other employees and the purchased capacity. Only the assigned employee accesses its cargo.
+  Player carts link only to other player carts; the Inventory totals include everyone's cargo once.
+- Staff wait for the stopped cart to catch up before each load or shelf transfer. Individual
+  stocking intervals and training still apply. Empty crates are taken to a reachable trashcan;
+  remaining stock stays on the cart at its charger, not on the sales floor.
+- Provisional development rules: return at 20% battery, depart once charged to at least 80%.
+  Charge and drain use the existing battery simulation. Running flat triggers physical towing
+  at 60 px/s along the normal room/door routes, preserving cargo without refilling the battery.
+  Blocked return routes are retried with a shop notification, never silently discarded.
+- Staff dock before clocking out. Off-shift/training staff do not borrow player carts.
+  A docked staff cart with cargo restores docked; its charge, cargo and charger assignment persist.

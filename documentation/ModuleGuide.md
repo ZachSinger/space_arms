@@ -31,7 +31,7 @@ format, so disabling the feature does not discard existing save data.
 |---|---|---|
 | Shooting Range | Own lanes, programs, range visitors, payment, and the 1800 entry cutoff. | Register the lower floor and stairs through `Areas`; shared movement routes through portal pairs, and the framed camera shows the current room. |
 | Drone Deliveries | Own orders, terminal/pad actions, order expiration, and each order's locked mixed crate. | Use container transfer rules for stock movement and a `GameState` slice for saved orders. |
-| Presentation | Track decoration value and register the reputation-gain rule. | Sale gains include the customer in the rule context, so each customer's expectation can veto a gain before tallying. `reputation.lose` is a separate path and remains available. |
+| Presentation | Track presentation, count sales-floor crates, and register the reputation-gain rule. | Sale gains include the customer in the rule context, so each customer's expectation can veto a gain before tallying. `reputation.lose` is a separate path and remains available. |
 
 Before implementing a module, confirm its needs fit these shared services. If it would require
 editing unrelated systems at many call sites, add a focused registration hook to the shared
