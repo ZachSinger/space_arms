@@ -128,7 +128,16 @@
           Promise.resolve().then(() => window.desktopApi.recordRuntimeError(record))
             .catch((saveError) => console.error("Could not save startup error:", saveError));
         };
-        const handleError = (event) => save("renderer-error", event);
+        // A file that fails to load (script, image, stylesheet) sends a plain event with no message.
+        const handleError = (event) => {
+          const target = event.target;
+          if (target && target !== window && !(event instanceof ErrorEvent)) {
+            const file = target.src || target.href || target.currentSrc || "unknown file";
+            save("renderer-error", { message: `Could not load ${String(target.tagName).toLowerCase()} ${file}` });
+            return;
+          }
+          save("renderer-error", event);
+        };
         const handleRejection = (event) => save("unhandled-rejection", event);
         window.addEventListener("error", handleError, true);
         window.addEventListener("unhandledrejection", handleRejection);

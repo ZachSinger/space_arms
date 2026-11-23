@@ -11,7 +11,9 @@ import { fileURLToPath } from "node:url";
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
 export async function startGame({ port = 5391, headless = true, vitePlugins = [] } = {}) {
-  const server = await createServer({ root: ROOT, logLevel: "error", plugins: vitePlugins, server: {
+  // Its own cache, so re-bundling here can't break a dev server the desktop app is using.
+  const server = await createServer({ root: ROOT, logLevel: "error", plugins: vitePlugins,
+    cacheDir: "node_modules/.vite-harness", server: {
     port,
     strictPort: true,
     // Builds and packaging write here; watching them can crash the server mid-check.
