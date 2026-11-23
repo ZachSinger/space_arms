@@ -23,6 +23,10 @@ export class HUDController {
         this.staminaEl = document.getElementById('hud-stamina');
         this.staminaFillEl = document.getElementById('hud-stamina-fill');
         this.staminaValueEl = document.getElementById('hud-stamina-value');
+        this.hovercartEl = document.getElementById('hud-hovercart');
+        this.hovercartFillEl = document.getElementById('hud-hovercart-fill');
+        this.hovercartValueEl = document.getElementById('hud-hovercart-value');
+        this.hovercartKey = null;
         this.shiftTimeEl = document.getElementById('hud-shift-time');
         this.pauseBtn = document.getElementById('hud-pause-btn');
         this.storeToggleBtn = document.getElementById('hud-store-toggle-btn');
@@ -100,6 +104,27 @@ export class HUDController {
             ? `${percent}% stamina. Recovering before you can dash again.`
             : `${percent}% stamina`);
         this.staminaEl.classList.toggle('exhausted', exhausted);
+    }
+
+    /**
+     * Hovercart battery gauge, shown only while the hovercart is off its charger.
+     * @param {{ percent: number, level: 'high' | 'mid' | 'low', dead: boolean } | null} battery
+     */
+    renderHovercartBattery(battery) {
+        if (!this.hovercartEl) return;
+        const key = JSON.stringify(battery);
+        if (key === this.hovercartKey) return;
+        this.hovercartKey = key;
+        this.hovercartEl.classList.toggle('hidden', !battery);
+        if (!battery) return;
+        const { percent, level, dead } = battery;
+        this.hovercartFillEl.style.width = `${percent}%`;
+        this.hovercartValueEl.textContent = dead ? 'EMPTY' : `${percent}%`;
+        this.hovercartEl.setAttribute('aria-valuenow', String(percent));
+        this.hovercartEl.setAttribute('aria-valuetext', dead
+            ? 'Hovercart battery empty. Drag it back to its charger.'
+            : `${percent}% hovercart battery`);
+        for (const name of ['high', 'mid', 'low']) this.hovercartEl.classList.toggle(`battery-${name}`, level === name);
     }
 
     setCleanlinessEnabled(enabled) {

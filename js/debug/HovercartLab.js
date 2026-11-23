@@ -3,10 +3,16 @@ import { MAX_CARRIED_CRATES } from "../logic/CrateStack.js";
 import { getBackroomInteriorBounds } from "../logic/RoomLayout.js";
 import { controlLabel } from "../input/InputDevice.js";
 import { PAD } from "../input/GamepadInput.js";
+import { CONTROL_MODES } from "../input/ControlMode.js";
 import { AREA } from "../world/Areas.js";
 import { PEOPLE_DEPTH_BASE } from "../world/Depth.js";
 
-const CART_CAPACITY = 5;
+const CART_CAPACITY = 3;
+// Energy per second: sitting still is 1 plus 1 per crate, moving is 4 plus 2 per crate.
+// A full battery lasts 30 seconds moving with 3 crates.
+export const HOVERCART_BATTERY = Object.freeze({ capacity: 300, chargeSeconds: 60 });
+const CART_TOW_SPEED = 60;
+const METER_COLORS = Object.freeze({ high: 0x4ade80, mid: 0xfbbf24, low: 0xef4444, back: 0x0b1220 });
 const CART_MOVE_SPEED = Object.freeze({ empty: 150, perCrate: 18, minimum: 60 });
 const CART_FOLLOW_START = 84;
 const CART_FOLLOW_STOP = 44;
@@ -25,6 +31,17 @@ export function getHovercartTransferCount(available, capacity) {
 
 export function getHovercartMoveSpeed(crateCount) {
   return Math.max(CART_MOVE_SPEED.minimum, CART_MOVE_SPEED.empty - CART_MOVE_SPEED.perCrate * crateCount);
+}
+
+export function getHovercartDrainPerSecond(crateCount, moving) {
+  return moving ? 4 + 2 * crateCount : 1 + crateCount;
+}
+
+/** @param {number} fraction battery left, 0 to 1 */
+export function getHovercartBatteryLevel(fraction) {
+  if (fraction > 0.5) return "high";
+  if (fraction > 0.2) return "mid";
+  return "low";
 }
 
 function drawTexture(scene, key, width, height, draw) {
@@ -115,6 +132,10 @@ export class HovercartLab {
     this.scene = scene;
     this.cartCrates = [];
     this.active = false;
+    this.dead = false;
+    this.towed = false;
+    this.battery = HOVERCART_BATTERY.capacity;
+    this.lastTime = null;
     this.moving = false;
     this.path = null;
     this.pathAt = -Infinity;
@@ -157,6 +178,10 @@ export class HovercartLab {
     scene.physics.add.existing(this.postBlocker, true);
     scene.obstacleGroup.add(this.postBlocker);
 
+    this.chargerTop = { x: this.dock.x - 32, y: bounds.top - 8 - 44 };
+    this.stationMeter = scene.add.graphics().setDepth(PEOPLE_DEPTH_BASE + bounds.top + 2);
+    this.cartMeter = scene.add.graphics();
+
     this.unregisterStation = scene.interactables.registerProvider("hovercart-lab-station", () => [{
       id: "hovercart-lab-station",
       kind: "hovercart-station",
@@ -164,16 +189,35 @@ export class HovercartLab {
       distanceFrom: (origin) => scene.interactionSystem.feetReachTo(origin, this.stationBounds),
       getActions: () => this.getStationActions(),
     }]);
+    // A dead cart can't follow; the player drags it back to the charger by hand.
+    this.unregisterCart = scene.interactables.registerProvider("hovercart-lab-cart", () =>
+      this.dead && !this.towed ? [{
+        id: "hovercart-lab-cart",
+        kind: "hovercart",
+        range: 24,
+        distanceFrom: (origin) => scene.interactionSystem.feetReachTo(origin, this.cart.getBounds()),
+        getActions: () => [{
+          action: "interact",
+          hint: `${controlLabel("interact")}: Drag the hovercart behind you`,
+          perform: () => this.startTowing(),
+        }],
+      }] : []);
     scene.hovercartLab = this;
     this.syncCartCrates();
+    this.renderBattery();
+  }
+
+  // Off its charger, whether switched on or dead.
+  isOut() {
+    return this.active || this.dead;
   }
 
   getStationActions() {
     const scene = this.scene;
     if (scene.areas.playerArea !== AREA.BACKROOM) return [];
-    const hint = this.active
-      ? `${controlLabel("interact")}: Dock and turn off the hovercart`
-      : `${controlLabel("interact")}: Turn on the hovercart`;
+    let hint = `${controlLabel("interact")}: Turn on the hovercart`;
+    if (this.dead) hint = `${controlLabel("interact")}: Dock the hovercart to charge it`;
+    else if (this.active) hint = `${controlLabel("interact")}: Dock and turn off the hovercart`;
     return [{
       action: "interact",
       hint,
@@ -182,7 +226,11 @@ export class HovercartLab {
   }
 
   toggleAtStation() {
-    if (!this.active) {
+    if (!this.isOut()) {
+      if (this.battery <= 0) {
+        this.scene.messages.show("The hovercart's battery is empty. Let it charge first.", "#f59e0b");
+        return false;
+      }
       this.active = true;
       this.cart.setPosition(this.dock.x, this.dock.y);
       this.cart.body.stop();
@@ -190,6 +238,7 @@ export class HovercartLab {
       this.cart.setTexture(HOVERCART_TEXTURES.active);
       this.scene.messages.show("Hovercart on.", "#10b981");
       this.syncCartCrates();
+      this.renderBattery();
       return true;
     }
 
@@ -203,11 +252,35 @@ export class HovercartLab {
     }
 
     this.active = false;
+    this.dead = false;
+    this.towed = false;
     this.moving = false;
     this.cart.body.stop();
     this.cart.setPosition(this.dock.x, this.dock.y);
     this.cart.setTexture(HOVERCART_TEXTURES.docked);
     this.scene.messages.show("Hovercart docked.", "#10b981");
+    this.syncCartCrates();
+    this.renderBattery();
+    return true;
+  }
+
+  runOutOfBattery() {
+    this.battery = 0;
+    this.active = false;
+    this.dead = true;
+    this.towed = false;
+    this.moving = false;
+    this.path = null;
+    this.cart.body.stop();
+    this.cart.setTexture(HOVERCART_TEXTURES.docked);
+    this.scene.messages.show("The hovercart's battery ran out. Drag it back to its charger.", "#ef4444");
+    this.syncCartCrates();
+  }
+
+  startTowing() {
+    if (!this.dead) return false;
+    this.towed = true;
+    this.scene.messages.show("Dragging the hovercart. Take it to its charger.", "#94a3b8");
     return true;
   }
 
@@ -220,12 +293,12 @@ export class HovercartLab {
   }
 
   isInReach() {
-    return this.active && !this.moving && this.isCloseEnough();
+    return this.isOut() && !this.moving && this.isCloseEnough();
   }
 
   // Close enough to the player for its crates to count as at hand in the crate cards.
   isCloseEnough() {
-    return this.active &&
+    return this.isOut() &&
       Phaser.Math.Distance.Between(
         this.scene.player.sprite.x, this.scene.player.sprite.y,
         this.cart.x, this.cart.y,
@@ -238,7 +311,7 @@ export class HovercartLab {
 
   getCrateActions() {
     const scene = this.scene;
-    if (this.active && this.modifierDown() && !this.isReadyForCrateAction()) {
+    if (this.isOut() && this.modifierDown() && !this.isReadyForCrateAction()) {
       const reason = this.isCloseEnough()
         ? "Wait for the hovercart to stop next to you."
         : "Stand next to the hovercart to load or unload it.";
@@ -274,7 +347,14 @@ export class HovercartLab {
       };
     }
 
-    if (carried.length && carried.every((crate) => crate.kind === "item") && capacity > 0) {
+    if (carried.length && this.dead) {
+      const reason = "The hovercart's battery is empty. You can only take crates off it.";
+      actions.putDown = {
+        tap: () => scene.messages.show(reason, "#f59e0b"),
+        hintOverride: reason,
+        blocked: true,
+      };
+    } else if (carried.length && carried.every((crate) => crate.kind === "item") && capacity > 0) {
       actions.putDown = {
         tap: () => this.putOnCart(1),
         hold: () => this.putOnCart(capacity),
@@ -319,6 +399,10 @@ export class HovercartLab {
 
   putOnCart(count) {
     const scene = this.scene;
+    if (this.dead) {
+      scene.messages.show("The hovercart's battery is empty. You can only take crates off it.", "#f59e0b");
+      return false;
+    }
     const carried = scene.crateSystem.getCarriedCrates();
     const take = getHovercartTransferCount(
       Math.min(count, carried.length),
@@ -352,12 +436,66 @@ export class HovercartLab {
   syncCartCrates() {
     if (!this.cart || this.destroyed) return;
     this.cart.setDepth(PEOPLE_DEPTH_BASE + this.cart.y);
+    this.cartMeter?.setPosition(this.cart.x, this.cart.y + 15).setDepth(this.cart.depth + 0.5);
     this.cartCrates.forEach((crate, index) =>
       crate.followCarrier(this.cart, index, 21, CRATE_STACK_SPACING));
   }
 
+  updateBattery(seconds) {
+    const { capacity, chargeSeconds } = HOVERCART_BATTERY;
+    if (!this.isOut()) {
+      this.battery = Math.min(capacity, this.battery + capacity / chargeSeconds * seconds);
+      return;
+    }
+    if (!this.active) return;
+    this.battery -= getHovercartDrainPerSecond(this.cartCrates.length, this.moving) * seconds;
+    if (this.battery <= 0) this.runOutOfBattery();
+  }
+
+  // Shows the charge on the cart, on the charger's screen, and in the top bar while it's out.
+  renderBattery() {
+    if (this.destroyed) return;
+    const fraction = Math.max(0, Math.min(1, this.battery / HOVERCART_BATTERY.capacity));
+    const level = getHovercartBatteryLevel(fraction);
+    const color = METER_COLORS[level];
+    const charging = !this.isOut() && fraction < 1;
+    const blinkOff = charging && Math.floor(this.scene.time.now / 500) % 2 === 1;
+    const screenFill = Math.round(13 * fraction);
+    const cartFill = Math.round(24 * fraction);
+    const key = `${this.isOut()}/${level}/${screenFill}/${cartFill}/${blinkOff}`;
+    if (key !== this.meterKey) {
+      this.meterKey = key;
+      const { x, y } = this.chargerTop;
+      this.stationMeter.clear()
+        .fillStyle(METER_COLORS.back, 1).fillRect(x + 27, y + 9, 10, 13)
+        .fillStyle(color, 1).fillRect(x + 27, y + 22 - screenFill, 10, screenFill);
+      // While charging, the top of the bar blinks.
+      if (blinkOff && screenFill > 0) {
+        this.stationMeter.fillStyle(METER_COLORS.back, 1).fillRect(x + 27, y + 22 - screenFill, 10, 1);
+      }
+      this.cartMeter.clear().setVisible(this.isOut())
+        .fillStyle(0x0d1018, 1).fillRect(-13, -2, 26, 5)
+        .fillStyle(METER_COLORS.back, 1).fillRect(-12, -1, 24, 3)
+        .fillStyle(color, 1).fillRect(-12, -1, cartFill, 3);
+    }
+    this.scene.hud?.renderHovercartBattery?.(this.isOut()
+      ? { percent: Math.ceil(fraction * 100), level, dead: this.dead }
+      : null);
+  }
+
   update(time) {
-    if (!this.cart?.body || !this.active) {
+    const seconds = this.lastTime === null ? 0 : Math.min(time - this.lastTime, 100) / 1000;
+    this.lastTime = time;
+    const scene = this.scene;
+    const frozen = (scene.shiftClock?.isPaused && scene.shiftClock.started) ||
+      scene.controlMode?.getMode() === CONTROL_MODES.LOADING;
+    if (!frozen && this.cart?.body) this.updateBattery(seconds);
+    this.updateMovement(time, frozen);
+    this.renderBattery();
+  }
+
+  updateMovement(time, frozen) {
+    if (!this.cart?.body || !(this.active || this.towed) || frozen) {
       this.moving = false;
       this.path = null;
       this.cart?.body?.stop();
@@ -401,7 +539,7 @@ export class HovercartLab {
       }
     }
     const target = this.path?.[0] ?? player;
-    const speed = getHovercartMoveSpeed(this.cartCrates.length);
+    const speed = this.towed ? CART_TOW_SPEED : getHovercartMoveSpeed(this.cartCrates.length);
     const angle = Phaser.Math.Angle.Between(this.cart.x, this.cart.y, target.x, target.y);
     this.cart.body.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
     this.syncCartCrates();
@@ -410,27 +548,35 @@ export class HovercartLab {
   clearCrates() {
     for (const crate of this.cartCrates) crate.destroy();
     this.cartCrates = [];
+    this.battery = HOVERCART_BATTERY.capacity;
     this.reset();
   }
 
   reset() {
     this.active = false;
+    this.dead = false;
+    this.towed = false;
     this.moving = false;
     this.cart?.body?.stop();
     this.cart?.setTexture(HOVERCART_TEXTURES.docked);
     this.cart?.setPosition(this.dock.x, this.dock.y);
     this.syncCartCrates();
+    this.renderBattery();
   }
 
   destroy() {
     if (this.destroyed) return;
+    this.scene.hud?.renderHovercartBattery?.(null);
     this.destroyed = true;
     this.unregisterStation?.();
+    this.unregisterCart?.();
     for (const collider of this.colliders) collider.destroy();
     this.scene.obstacleGroup.remove(this.postBlocker, true, true);
     for (const crate of this.cartCrates) crate.destroy();
     this.cartCrates = [];
     this.charger.destroy();
+    this.stationMeter.destroy();
+    this.cartMeter.destroy();
     this.cart.destroy();
     for (const key of Object.values(HOVERCART_TEXTURES)) {
       if (this.scene.textures.exists(key)) this.scene.textures.remove(key);

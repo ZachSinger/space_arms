@@ -5,13 +5,13 @@
 
 ## Overview
 - Purchasable at Store Level 7.
-- A floating platform about as wide as a crate that holds a stack of up to 5 crates.
+- A floating platform about as wide as a crate that holds a stack of up to 3 crates at first.
 - It follows the player. Each crate on it slows it down, but it does its best to keep up.
 - You can still hold three crates yourself while using it.
 
 The DEV Crate Test Room has a non-saving prototype of the cart and its charger for testing crate
-transfers and stacking. It uses the selected wall-post and floor-dock charger design. The level
-unlock, purchase, battery duration, and upgrades are not part of this prototype.
+transfers, stacking, and the battery. It uses the selected wall-post and floor-dock charger
+design. The level unlock, purchase, and upgrades are not part of this prototype.
 
 ## Counting as held crates
 - When it's not moving (it has finished approaching you), its crates count as a stack you're
@@ -38,8 +38,24 @@ unlock, purchase, battery duration, and upgrades are not part of this prototype.
 - The station is where you turn the hovercart on and off. Face it and press E (same rules as a
   door: you must actually face it, not be far off-center) to activate the hovercart so it
   follows you.
+- A full battery holds 300 energy. While the cart is on, it uses energy every second:
+
+  | Crates on cart | Sitting still | Moving |
+  |---|---|---|
+  | 0 | 1 | 4 |
+  | 1 | 2 | 6 |
+  | 2 | 3 | 8 |
+  | 3 | 4 | 10 |
+
+  So moving with 3 crates empties a full battery in 30 seconds.
+- It charges only while docked at its station: empty to full in 60 seconds (a starting guess).
+- The charge shows in three places: a bar under the cart, the charger's screen, and a
+  HOVERCART gauge in the top bar while the cart is off its charger.
+- When the battery runs out, the cart drops to the floor where it is and stops following.
+  You can still take crates off it but not put any on. Face it and press E to drag it behind
+  you at walking pace, then dock it at its station (with no crates on it) to charge.
 
 ## Upgrades
-- **Length:** each upgrade adds another 5-crate stack, up to 4 stacks (20 crates).
+- **Length:** each upgrade adds more crate space (amounts not decided yet; it starts at 3).
 - **Speed:** can be upgraded until it follows at full running speed (the speed you'd have
   holding no crates).
