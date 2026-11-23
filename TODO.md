@@ -50,8 +50,8 @@ completed or no longer relevant.
       lanes, firearm tuning, and stairs down to the range.
 - [ ] Add the new [Hovercart](documentation/modules/Hovercart.md) at Shop Level 7: a
       chargeable cart that follows the player and carries stacks of crates.
-- [x] Finish [Presentation Level](documentation/modules/Presentation.md): 20 purchasable
-      decorations raise presentation, with distinct-design variety and floor-crate penalties.
+- [x] Finish [Presentation Level](documentation/modules/Presentation.md): 8 purchasable
+      hologram decorations raise presentation, with distinct-design variety and floor-crate penalties.
       Decoration prices and points remain provisional development defaults.
 
 ## Other ideas
