@@ -11,6 +11,8 @@ const CART_MOVE_SPEED = Object.freeze({ empty: 150, perCrate: 18, minimum: 60 })
 const CART_FOLLOW_START = 84;
 const CART_FOLLOW_STOP = 44;
 const CART_READY_RANGE = INTERACT_RANGE;
+const CART_REPATH_MS = 300;
+const CART_BODY = Object.freeze({ width: 32, height: 16, avoidStoreDoor: true });
 const HOVERCART_TEXTURES = Object.freeze({
   charger: "hovercart-lab-charger",
   docked: "hovercart-lab-cart-docked",
@@ -114,6 +116,8 @@ export class HovercartLab {
     this.cartCrates = [];
     this.active = false;
     this.moving = false;
+    this.path = null;
+    this.pathAt = -Infinity;
     this.destroyed = false;
     const bounds = getBackroomInteriorBounds();
     this.dock = { x: bounds.left + 40, y: bounds.top + 22 };
@@ -134,13 +138,7 @@ export class HovercartLab {
     scene.physics.add.existing(this.cart);
     this.cart.body.setSize(32, 16)
       .setAllowGravity(false)
-      .setImmovable(false)
-      .setBoundsRectangle(new Phaser.Geom.Rectangle(
-        bounds.left + 20,
-        bounds.top + 20,
-        bounds.right - bounds.left - 40,
-        bounds.bottom - bounds.top - 40,
-      ));
+      .setImmovable(false);
     this.colliders = [
       scene.physics.add.collider(this.cart, scene.room.wallGroup),
       scene.physics.add.collider(this.cart, scene.obstacleGroup),
@@ -237,8 +235,7 @@ export class HovercartLab {
 
   getCrateActions() {
     const scene = this.scene;
-    if (this.active && this.modifierDown() && !this.isReadyForCrateAction() &&
-      scene.areas.playerArea === AREA.BACKROOM) {
+    if (this.active && this.modifierDown() && !this.isReadyForCrateAction()) {
       const reason = this.moving
         ? "Wait for the hovercart to stop next to you."
         : "Stand next to the hovercart to load or unload it.";
@@ -356,29 +353,54 @@ export class HovercartLab {
       crate.followCarrier(this.cart, index, 21, CRATE_STACK_SPACING));
   }
 
-  update() {
-    if (!this.cart?.body || !this.active || this.scene.areas.playerArea !== AREA.BACKROOM) {
+  update(time) {
+    if (!this.cart?.body || !this.active) {
       this.moving = false;
+      this.path = null;
       this.cart?.body?.stop();
       return;
     }
 
-    // Heads straight for the player and parks within reach, whichever way he faces.
-    const { x: targetX, y: targetY } = this.scene.player.sprite;
-    const distance = Phaser.Math.Distance.Between(this.cart.x, this.cart.y, targetX, targetY);
-    const shouldMove = this.moving ? distance > CART_FOLLOW_STOP : distance > CART_FOLLOW_START;
+    // Parks within reach of the player, whichever way he faces, and follows him through doors.
+    const areas = this.scene.areas;
+    const player = this.scene.player.sprite;
+    const sameArea = areas.areaAt(this.cart.x, this.cart.y) === areas.playerArea;
+    const distance = Phaser.Math.Distance.Between(this.cart.x, this.cart.y, player.x, player.y);
+    const shouldMove = !sameArea ||
+      (this.moving ? distance > CART_FOLLOW_STOP : distance > CART_FOLLOW_START);
     if (!shouldMove) {
       this.moving = false;
+      this.path = null;
       this.cart.body.stop();
-    } else {
-      this.moving = true;
-      const speed = getHovercartMoveSpeed(this.cartCrates.length);
-      const angle = Phaser.Math.Angle.Between(this.cart.x, this.cart.y, targetX, targetY);
-      this.cart.body.setVelocity(
-        Math.cos(angle) * speed,
-        Math.sin(angle) * speed,
-      );
+      this.syncCartCrates();
+      return;
     }
+
+    this.moving = true;
+    if (!this.path || time - this.pathAt > CART_REPATH_MS) {
+      this.path = this.scene.navigation.store.findPath(this.cart.x, this.cart.y, player.x, player.y, CART_BODY);
+      this.pathAt = time;
+      // No route (e.g. boxed in): catch up by hopping next to the player.
+      if (!this.path && !sameArea) {
+        this.cart.body.reset(player.x, player.y + CART_FOLLOW_STOP);
+        this.path = null;
+        this.syncCartCrates();
+        return;
+      }
+    }
+    while (this.path?.length) {
+      const next = this.path[0];
+      if (Phaser.Math.Distance.Between(this.cart.x, this.cart.y, next.x, next.y) > 6) break;
+      this.path.shift();
+      if (next.teleportTo) {
+        this.cart.body.reset(next.teleportTo.x, next.teleportTo.y);
+        this.pathAt = -Infinity;
+      }
+    }
+    const target = this.path?.[0] ?? player;
+    const speed = getHovercartMoveSpeed(this.cartCrates.length);
+    const angle = Phaser.Math.Angle.Between(this.cart.x, this.cart.y, target.x, target.y);
+    this.cart.body.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
     this.syncCartCrates();
   }
 
