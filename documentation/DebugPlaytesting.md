@@ -51,6 +51,12 @@ empty it.
 new game, by rewriting `data/StartingTemplate.json`. It only works while the game runs from the
 dev server (`npm start` or `npm run dev`). Nothing else in this area is saved.
 
+## First Day Tutorial
+
+Choose **DEV**, then **FIRST DAY TUTORIAL** to try the first-day guidance in a fresh shop
+using the Starting Template. The guidance follows real actions through stocking, serving
+customers, and ending the day. This test area never saves and does not change the regular game.
+
 ## Decorator Mode
 
 On the title screen, choose **DEV**, then **DECORATOR MODE**. It's a top-level shop with every

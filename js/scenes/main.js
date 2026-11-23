@@ -7,6 +7,7 @@ import "../../styles/windows/shelf-stocking.css";
 import "../../styles/space_dealer_window.css";
 import "../../styles/windows/hud.css";
 import "../../styles/windows/remote-orders.css";
+import "../../styles/windows/tutorial.css";
 import "../../styles/windows/settings.css";
 import "../../styles/windows/pause.css";
 import "../../styles/windows/checkout.css";

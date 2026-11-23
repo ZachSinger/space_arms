@@ -40,6 +40,7 @@ import { setupSandboxRoom } from "../debug/SandboxRoom.js";
 import { setupUiLab } from "../debug/UiLab.js";
 import { setupStartingTemplateLab } from "../debug/StartingTemplateLab.js";
 import { setupDecoratorMode } from "../debug/DecoratorMode.js";
+import { setupTutorialLab } from "../debug/TutorialLab.js";
 import { ShelfStockingWindow } from "../logic/ShelfStockingWindow.js";
 import { REGISTER_FRONT_OVERLAP, fixtureFacing } from "../logic/FixtureLayout.js";
 import { Messages } from "../world/Messages.js";
@@ -100,15 +101,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * @param {{ savedShopData?: object, sandbox?: boolean, lab?: "ui", real?: boolean, seed?: number }} data -
-   *   save to load, or none for a new shop; sandbox starts a DEV test area, which never saves:
-   *   the Shelf Test Room, or the UI Lab when lab is "ui"; real starts a fresh game with every
-   *   debug tool removed; seed fixes every gameplay dice roll so a session can be replayed
+   * @param {{ savedShopData?: object, sandbox?: boolean, lab?: "ui" | "template" | "decorator" | "tutorial", real?: boolean, seed?: number }} data -
+   *   save to load, or none for a new shop; sandbox starts a DEV test area that never saves;
+   *   real starts a fresh game with every debug tool removed; seed fixes gameplay dice rolls
    */
   init(data = {}) {
     this.savedShopData = data.savedShopData ?? null;
     this.sandbox = data.sandbox === true;
-    this.lab = this.sandbox && ["ui", "template", "decorator"].includes(data.lab) ? data.lab : null;
+    this.lab = this.sandbox && ["ui", "template", "decorator", "tutorial"].includes(data.lab) ? data.lab : null;
     this.realMode = data.real === true;
     this.seed = Number.isInteger(data.seed) ? data.seed : randomSeed();
   }
@@ -420,7 +420,8 @@ export class GameScene extends Phaser.Scene {
     this.sandboxRoom = !this.sandbox ? null
       : this.lab === "ui" ? setupUiLab(this)
         : this.lab === "template" ? setupStartingTemplateLab(this)
-          : this.lab === "decorator" ? setupDecoratorMode(this) : setupSandboxRoom(this);
+          : this.lab === "decorator" ? setupDecoratorMode(this)
+            : this.lab === "tutorial" ? setupTutorialLab(this) : setupSandboxRoom(this);
     this.events.once("shutdown", () => {
       this.sandboxRoom?.destroy();
       this.sandboxRoom = null;
