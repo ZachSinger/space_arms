@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+
+const STARTING_MONEY = JSON.parse(readFileSync(new URL("../../data/StartingTemplate.json", import.meta.url), "utf8")).money;
+
 async function clickTitleCommand(page, label) {
   const position = await page.evaluate((target) => {
     const title = window.__game.scene.getScene("scene-title");
@@ -28,7 +32,7 @@ async function startRealGame(h) {
     credits: scene.gameState.economy.credits,
   }));
   if (!ready.realMode || ready.debugTools) throw new Error("REAL did not start a debug-free game");
-  if (ready.day !== 1 || ready.credits !== 1500) {
+  if (ready.day !== 1 || ready.credits !== STARTING_MONEY) {
     throw new Error(`REAL did not start a fresh game: day ${ready.day}, money ${ready.credits}`);
   }
 }

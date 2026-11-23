@@ -12,6 +12,7 @@ import { migratePreWarAmmoContract } from "../../js/state/migrations/preWarAmmoC
 import { repriceScrapAutopistol } from "../../js/state/migrations/scrapAutopistolPrice.js";
 import { SHOP_LAYOUT_VERSION } from "../../js/state/migrations/index.js";
 import { addRegisterAssignments } from "../../js/state/migrations/registerAssignments.js";
+import { rebalanceItemPrices } from "../../js/state/migrations/moneyRebalance.js";
 
 const GOLDEN = new URL("../../tests/golden-saves/", import.meta.url);
 
@@ -145,8 +146,11 @@ export const scenarios = {
         depth: register.sprite.depth, playerDepth: scene.player.sprite.depth };
       const depthBefore = scene.checkoutSystem.registerDepthBeforeTuck;
       scene.checkoutSystem.endRegisterSession();
+      const center = scene.player.sprite.body.center;
+      const exit = register.backExitPoint ?? start;
+      const exitTarget = register.backExitPoint ? center : scene.player.sprite;
       return { id: register.id, inside, depthBefore, restoredDepth: register.sprite.depth,
-        back: Math.hypot(scene.player.sprite.x - start.x, scene.player.sprite.y - start.y) < 2,
+        back: Math.hypot(exitTarget.x - exit.x, exitTarget.y - exit.y) < 2,
         off: !scene.checkoutSystem.operatingRegister && scene.player.inputEnabled };
     }));
     const failures = [];
@@ -154,7 +158,7 @@ export const scenarios = {
     for (const result of results) {
       if (!result.inside.on || result.inside.input) failures.push(`${result.id}: didn't lock the player behind the counter`);
       if (!result.inside.nearX || !result.inside.nearY) failures.push(`${result.id}: player not at the counter`);
-      if (!result.back || !result.off) failures.push(`${result.id}: player not returned and freed afterwards`);
+      if (!result.back || !result.off) failures.push(`${result.id}: player not let out the back and freed afterwards`);
       if (result.depthBefore != null && result.restoredDepth !== result.depthBefore) {
         failures.push(`${result.id}: counter drawing order not restored`);
       }
@@ -386,8 +390,8 @@ async function upgradeResaved(saved) {
     database.loadItemsJSON(await data("Items.json"));
     database.loadLicensesJSON(await data("Licenses.json"));
   }
-  const save = addRegisterAssignments(repriceScrapAutopistol(
-    migratePreWarAmmoContract(upgradeContractSplit(saved)), database));
+  const save = rebalanceItemPrices(addRegisterAssignments(repriceScrapAutopistol(
+    migratePreWarAmmoContract(upgradeContractSplit(saved)), database)), database);
   return { ...save, layoutVersion: SHOP_LAYOUT_VERSION };
 }
 
