@@ -1,3 +1,5 @@
+import { syncPeopleVisibilityOutlines } from "./PeopleVisibility.js";
+
 // =============================================================================
 // FILE: Depth.js
 // =============================================================================
@@ -32,6 +34,10 @@ export function sortPeopleByFeet(shop) {
   for (const sprite of people) {
     if (sprite?.active) sprite.setDepth(PEOPLE_DEPTH_BASE + (sprite.body?.bottom ?? sprite.y));
   }
+  syncPeopleVisibilityOutlines(shop, [
+    shop.player?.sprite,
+    ...shop.employees.map((employee) => employee.isDestroyed ? null : employee.sprite),
+  ]);
   // Tucked behind the counter, the register draws just over him and hides his legs.
   if (shop.checkoutSystem.registerDepthBeforeTuck != null && shop.player?.sprite) {
     shop.checkoutSystem.operatingRegisterFixture?.sprite?.setDepth(shop.player.sprite.depth + 0.5);
