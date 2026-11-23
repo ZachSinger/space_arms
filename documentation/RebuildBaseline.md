@@ -21,7 +21,8 @@ Run `node scripts/browser/check-optional-cleaning.mjs` to check the real game wi
 disabled and enabled, including the trashcan, customers, HUD, and saved trash.
 
 The production build optimizes item pictures while leaving the source art untouched. After
-building, `npm run check:build` checks the pictures and Phase 9's 15,000,000-byte size limit.
+building, `npm run check:build` checks the optimized item pictures and reports the build size. The
+earlier 15,000,000-byte limit was dropped because the Steam release doesn't need it.
 
 The crash check builds the game and launches hidden Electron windows using a temporary profile.
 It checks the crash report after restarting, including deferring and submitting it, without

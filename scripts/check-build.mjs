@@ -2,8 +2,6 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import sharp from "sharp";
 
-const limit = 15_000_000;
-
 async function sizeOf(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
   const sizes = await Promise.all(entries.map(async (entry) => {
@@ -16,7 +14,6 @@ async function sizeOf(directory) {
 }
 
 const size = await sizeOf("dist");
-if (size >= limit) throw new Error(`Built game is ${size} bytes; it must be under ${limit}.`);
 const items = JSON.parse(await readFile(join("dist", "data", "Items.json"), "utf8"));
 const images = new Set(items.map((item) => item.image).filter(Boolean));
 for (const image of images) {
