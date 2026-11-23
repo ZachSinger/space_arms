@@ -92,6 +92,8 @@ export class Player {
     this.stamina = MAX_STAMINA;
     this.exhausted = false;
     this.staminaRecoveryDelay = 0;
+    // Dev rooms only: dashing never drains stamina.
+    this.infiniteStamina = false;
 
     // False while an interaction owns positioning (e.g. operating the register). Velocity
     // is zeroed instead of disabling the body, so collisions still work.
@@ -138,7 +140,9 @@ export class Player {
     const wantsDash = (vx !== 0 || vy !== 0) && ((mapped ? mapped("dash") : this.dashKey.isDown) || Boolean(pad?.dash));
     if (wantsDash && !this.exhausted && this.stamina > 0) {
       const dashSeconds = Math.min(delta / 1000, this.stamina / STAMINA_DRAIN_PER_SECOND);
-      this.stamina = Math.max(0, this.stamina - dashSeconds * STAMINA_DRAIN_PER_SECOND);
+      if (!this.infiniteStamina) {
+        this.stamina = Math.max(0, this.stamina - dashSeconds * STAMINA_DRAIN_PER_SECOND);
+      }
       if (delta > 0) speed += (DASH_SPEED - MOVE_SPEED) * dashSeconds / (delta / 1000);
       this.staminaRecoveryDelay = STAMINA_RECOVERY_DELAY_MS;
       this.exhausted = this.stamina === 0;

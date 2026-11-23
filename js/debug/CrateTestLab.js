@@ -100,6 +100,9 @@ export function setupCrateTestLab(scene) {
   unlockEverything(scene);
   buildShelfMaze(scene);
   const hovercart = new HovercartLab(scene);
+  // Temporary while testing the cart in the maze.
+  hovercart.infiniteBattery = true;
+  scene.player.infiniteStamina = true;
   const items = labItems();
   for (const item of items) gameState.catalog.priceIfUnset(item.id, gameState.market.getPrice(item.id));
 
@@ -218,6 +221,7 @@ export function setupCrateTestLab(scene) {
       panel.removeEventListener("click", onClick);
       panel.remove();
       hovercart.destroy();
+      scene.player.infiniteStamina = false;
     },
   };
 }

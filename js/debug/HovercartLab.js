@@ -144,6 +144,7 @@ export class HovercartLab {
     this.dead = false;
     this.carried = false;
     this.battery = HOVERCART_BATTERY.capacity;
+    this.infiniteBattery = false;
     this.lastTime = null;
     this.moving = false;
     this.path = null;
@@ -509,7 +510,7 @@ export class HovercartLab {
       this.battery = Math.min(capacity, this.battery + capacity / chargeSeconds * seconds);
       return;
     }
-    if (!this.active) return;
+    if (!this.active || this.infiniteBattery) return;
     this.battery -= getHovercartDrainPerSecond(this.cartCrates.length, this.moving) * seconds;
     if (this.battery <= 0) this.runOutOfBattery();
   }
