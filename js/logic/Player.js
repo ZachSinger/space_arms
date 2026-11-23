@@ -184,7 +184,8 @@ export class Player {
   }
 
   updateCarryPose() {
-    const carrying = Boolean(this.scene.carriedCrates?.length || this.scene.carriedCrate);
+    const carrying = Boolean(this.scene.carriedCrates?.length || this.scene.carriedCrate ||
+      this.scene.hovercartLab?.carried);
     if (carrying === this.carryingPose) return;
     this.carryingPose = carrying;
     this.sprite.anims.stop();
