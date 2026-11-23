@@ -478,12 +478,16 @@ export class HovercartLab {
       const player = this.scene.player.sprite;
       this.cart.setPosition(player.x, player.y - 22).setDepth(player.depth + 1);
     } else {
-      this.cart.setDepth(PEOPLE_DEPTH_BASE + this.cart.y);
+      // Sorts by its bottom edge like people, so it's in front of a fixture exactly when it looks it.
+      this.cart.setDepth(PEOPLE_DEPTH_BASE + this.cart.y + CART_BODY.height / 2);
     }
-    this.cartMeter?.setPosition(this.cart.x, this.cart.y + 15).setDepth(this.cart.depth + 0.5)
+    this.cartMeter?.setPosition(this.cart.x, this.cart.y + 15).setDepth(this.cart.depth + 0.005)
       .setVisible(this.isOut() && !this.carried);
-    this.cartCrates.forEach((crate, index) =>
-      crate.followCarrier(this.cart, index, 21, CRATE_STACK_SPACING));
+    // Its crates stay just over the cart, never far enough up to jump past a fixture.
+    this.cartCrates.forEach((crate, index) => {
+      crate.followCarrier(this.cart, index, 21, CRATE_STACK_SPACING);
+      crate.sprite.setDepth(this.cart.depth + 0.01 * (index + 1));
+    });
   }
 
   updateBattery(seconds) {
