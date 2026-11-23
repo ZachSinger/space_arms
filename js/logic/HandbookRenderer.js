@@ -93,7 +93,6 @@ function storeTopic({ shopLevel, reputation }) {
         "<strong>+1</strong> for every customer who pays at the register.",
         "<strong>-1</strong> when a customer gets tired of waiting in line and leaves.",
         "<strong>-1</strong> when a customer can't find anything they came for, because it's out of stock everywhere in the shop.",
-        "<strong>-1</strong> when a thrown crate hits a customer.",
         "<strong>-1</strong> for handing a customer the wrong change. The first wrong try with each customer is only a warning. The third wrong try loses the sale, but costs no more reputation.",
       ])}
       <p>Changes are added up during the shift and only count when the shift ends. The
@@ -210,8 +209,6 @@ function stockingTopic() {
         `If you're holding a crate and the arrow points at a crate of the same item, ${key("crate")} moves as many of its items as fit into your crate instead of picking it up. Anything that doesn't fit stays in the crate on the floor; if everything fits, that crate is left empty on the floor.`,
         `Tap ${key("putDown")} to put your top crate down in front of you. Hold ${key("putDown")} to set everything you're carrying down as one stack.`,
         `When the arrow points at a crate on the floor, ${key("putDown")} puts your crates on top of it instead: tap for one, hold for as many as fit. Stacks on the floor can be up to three crates high. Nothing can be stacked on a fixture crate or on the Loading Pad, and fixture crates are never stacked.`,
-        `While walking with no arrow showing, press ${key("crate")} to throw your crate the way you're walking. You can only throw when you're carrying just one crate. Thrown crates that hit a customer cost reputation.`,
-        "Thrown crates fall from your hands to the floor. A sideways throw lands level with where your feet were when you threw it. Walls block the crate's floor position, not its raised artwork. A thrown crate bounces off anyone it hits (you, employees, or customers) instead of passing through them; it doesn't push them.",
         "Only the lower part of a crate blocks movement, so its top can overlap a wall above it while its base stays on the floor.",
         "Carrying two crates slows you down; a third slows you down further. Empty crates slow you less than filled crates. Your character faces the direction you move, and the crates stay straight.",
         `Press ${key("interact")} at a shelf to stock it by hand.`,

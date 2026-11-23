@@ -89,7 +89,7 @@ export const scenarios = {
           scene.player.teleportTo(x, y);
           scene.player.forceFacing(facing);
           scene.player.sprite.body.setVelocity(step[facing][0] * 220, step[facing][1] * 220);
-          if (scene.crateSystem.throwTopCrate()) return true;
+          if (scene.crateSystem.dropTopCrate(true)) return true;
         }
         return false;
       });

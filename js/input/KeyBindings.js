@@ -9,7 +9,7 @@ export const BINDING_GROUPS = Object.freeze([
   ] },
   { title: "Shop", actions: [
     { id: "interact", label: "Use or open", defaults: ["KeyE", null] },
-    { id: "crate", label: "Pick up / throw crate; hand over change", defaults: ["Space", null] },
+    { id: "crate", label: "Pick up crate; hand over change", defaults: ["Space", null] },
     { id: "putDown", label: "Put down crate; choose stocking crate", defaults: ["KeyQ", null] },
     { id: "nextCrate", label: "Move crate arrow / move fixture", defaults: ["Control", null] },
     { id: "highlightTrash", label: "Show trash", defaults: ["KeyH", null] },

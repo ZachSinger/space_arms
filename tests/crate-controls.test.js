@@ -1023,38 +1023,20 @@ test("nothing stacks on a fixture crate or a Loading Pad crate, and a fixture cr
   assert.ok(fixture.dropped);
 });
 
-test("Space throws your only crate while walking with no arrow showing, and explains when standing still", () => {
+test("Space never throws or drops a carried crate when no arrow is showing", () => {
   const h = createHarness();
   const [lower, upper] = [crate(), crate()];
-  carry(h.scene, [lower, upper]);
-  h.scene.player.sprite.body.velocity = { x: 160, y: 0 };
-  tap(h);
-  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [lower, upper], "two crates can't be thrown");
-  assert.equal(h.messages.at(-1), "You can only throw a crate when you're holding just one.");
-  carry(h.scene, [upper]);
-  const velocity = { x: 160 / Math.sqrt(2), y: -160 / Math.sqrt(2) };
-  h.scene.player.sprite.body.velocity = velocity;
-  upper.drop = () => { throw new Error("Throws must not teleport to the clearance position"); };
-
-  pressKey(h, "keydown", "SPACE");
-  assert.deepEqual(upper.thrownWith, [h.scene.player.sprite, velocity.x, velocity.y], "throws on the press itself");
-  assert.equal(h.scene.player.sprite.body.velocity, velocity);
-  upper.isStationary = () => false; // still flying, so the arrow can't mark it
-  pressKey(h, "keyup", "SPACE");
-  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), []);
-  h.scene.restockCrates = h.scene.restockCrates.filter((c) => c !== upper);
-  carry(h.scene, [lower]);
-
-  h.scene.player.sprite.body.velocity = { x: 0, y: 0 };
-  tap(h);
-  assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), [lower]);
-  assert.equal(h.messages.at(-1), "To throw a crate, walk and press Space.");
-
-  h.scene.player.sprite.body.velocity = { x: 160, y: 0 };
-  lower.findThrowPosition = () => null;
-  tap(h);
-  assert.equal(h.scene.carriedCrate, lower);
-  assert.equal(h.messages.at(-1), "No room to throw crate");
+  for (const held of [[lower, upper], [upper]]) {
+    carry(h.scene, held);
+    for (const velocity of [{ x: 160, y: 0 }, { x: 0, y: 0 }]) {
+      h.scene.player.sprite.body.velocity = velocity;
+      const messageCount = h.messages.length;
+      tap(h);
+      assert.deepEqual(h.scene.crateSystem.getCarriedCrates(), held);
+      assert.equal(h.messages.length, messageCount, "no throw message or prompt appears");
+    }
+  }
+  assert.equal(upper.thrownWith, undefined);
 });
 
 test("the arrow only marks crates in front of the player", () => {
@@ -1416,23 +1398,22 @@ test("the context lines say what each crate button does right now", () => {
   assert.equal(element.textContent, [
     "Tap Q: Put your top crate down",
     "Hold Q: Set all 3 crates down as a stack",
-  ].join("\n"), "walking with more than one crate never offers a throw");
+  ].join("\n"), "walking with crates and no arrow offers nothing for Space");
 
   h.scene.player.sprite.body.velocity = { x: 0, y: 0 };
   h.scene.interactionSystem.updateHint();
   assert.equal(element.textContent, [
     "Tap Q: Put your top crate down",
     "Hold Q: Set all 3 crates down as a stack",
-  ].join("\n"), "standing still never promises a throw, which needs the player mid-stride");
+  ].join("\n"));
   h.scene.player.sprite.body.velocity = { x: 160, y: 0 };
 
   carry(h.scene, [crate({ kind: "fixture" })]);
   h.scene.interactionSystem.updateHint();
   assert.equal(element.textContent, [
-    "Space: Throw your crate",
     "Tap Q: Put your top crate down",
     "E: Place the fixture",
-  ].join("\n"));
+  ].join("\n"), "carrying a crate with no arrow never offers a throw");
 });
 
 test("the registered crate action is both advertised in the hint and performed by the button", () => {

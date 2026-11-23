@@ -7,12 +7,13 @@ import { fixtureBounds, fixtureFacing, fixtureInteractionDistance } from "../../
 import { formatMoneyAmount } from "../../logic/Money.js";
 import { acceptRemoteOffer, createRemoteOrder, REMOTE_ORDER_TUNING, remoteOrderScaling } from "../../logic/RemoteOrders.js";
 import { TILE_SIZE, BACKROOM_GRID_Y } from "../../logic/RoomLayout.js";
-import { playOrderAlert } from "../../logic/Sfx.js";
+import { playOrderAlert, playOrderShipped } from "../../logic/Sfx.js";
 import { UIWindow } from "../../logic/UIWindow.js";
 import {
   DRONE_TERMINAL_FRAME_MS,
   DRONE_TERMINAL_PLATFORM_SPRITE,
   DRONE_TERMINAL_SCREEN_SPRITE,
+  DRONE_TERMINAL_SENT_SCREEN_SPRITE,
 } from "./DroneTerminalArt.js";
 import { AREA } from "../../world/Areas.js";
 import { PEOPLE_DEPTH_BASE } from "../../world/Depth.js";
@@ -54,6 +55,10 @@ const TERMINAL_RAISE_OPEN_FRAMES = Object.freeze([4, 5, 6, 7]);
 const TERMINAL_CLOSE_HATCH_FRAMES = Object.freeze([3, 2, 1, 0]);
 const TERMINAL_SWAP_PAUSE_MS = 180;
 const TERMINAL_SCREEN_ANIMATION = "remote-order-terminal-screen";
+// After a shipment the screen shows dots filling in, then a blinking thumbs up with a jingle.
+const SHIP_FEEDBACK_DOTS_MS = 1000;
+const SHIP_FEEDBACK_THUMBS_MS = 1600;
+const SHIP_FEEDBACK_SPARKLE_MS = 200;
 // How often the order card and the item markers re-check shelves and crates.
 const GUIDANCE_REFRESH_MS = 250;
 const SOURCE_MARKER_COLOR = "#2dd4bf";
@@ -638,6 +643,7 @@ export class DroneDeliverySystem {
     this.updateOrderArrivals();
     this.syncTerminalState();
     this.updateTerminalAnimation(delta);
+    this.updateShipFeedback(delta);
     this.updateDeliveryPad(delta);
     this.updateGuidance(time, delta);
   }
@@ -731,6 +737,35 @@ export class DroneDeliverySystem {
       }
       this.showTerminalAnimationFrame();
     }
+  }
+
+  startShipFeedback() {
+    if (!this.terminalScreen) return;
+    this.shipFeedback = { elapsedMs: 0, cheered: false };
+    this.terminalScreen.stop();
+    this.terminalScreen.setTexture(DRONE_TERMINAL_SENT_SCREEN_SPRITE.key, 0);
+  }
+
+  updateShipFeedback(delta) {
+    const feedback = this.shipFeedback;
+    if (!feedback) return;
+    feedback.elapsedMs += delta;
+    const elapsed = feedback.elapsedMs;
+    let frame;
+    if (elapsed < SHIP_FEEDBACK_DOTS_MS) {
+      frame = Math.min(2, Math.floor(elapsed / (SHIP_FEEDBACK_DOTS_MS / 3)));
+    } else if (elapsed < SHIP_FEEDBACK_DOTS_MS + SHIP_FEEDBACK_THUMBS_MS) {
+      if (!feedback.cheered) {
+        feedback.cheered = true;
+        playOrderShipped();
+      }
+      frame = 3 + Math.floor((elapsed - SHIP_FEEDBACK_DOTS_MS) / SHIP_FEEDBACK_SPARKLE_MS) % 2;
+    } else {
+      this.shipFeedback = null;
+      this.terminalScreen.setTexture(DRONE_TERMINAL_SCREEN_SPRITE.key).play(TERMINAL_SCREEN_ANIMATION);
+      return;
+    }
+    if (this.terminalScreen.frame.name !== frame) this.terminalScreen.setFrame(frame);
   }
 
   updateGuidance(time, delta) {
@@ -946,6 +981,7 @@ export class DroneDeliverySystem {
     this.cancelConfirmation = false;
     this.activeTab = this.orderState.activeOrder ? "order" : this.orderState.offers.length ? "offers" : "order";
     this.pendingShipId = null;
+    this.startShipFeedback();
     this.shop.messages.show(
       `Remote order shipped for ${formatMoneyAmount(order.payout)}. Store reputation +${order.reputation}.`,
       "#10b981",

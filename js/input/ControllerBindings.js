@@ -2,7 +2,7 @@
 // and the D-pad keep their existing movement, dash, and navigation behavior.
 export const CONTROLLER_ACTIONS = Object.freeze([
   { id: "interact", label: "Use, open, or place a fixture", defaultButton: 0 },
-  { id: "crate", label: "Pick up or throw a crate; cancel fixture placement", defaultButton: 2 },
+  { id: "crate", label: "Pick up a crate; cancel fixture placement", defaultButton: 2 },
   { id: "putDown", label: "Put down a crate; turn a fixture", defaultButton: 3 },
   { id: "nextCrate", label: "Move the crate arrow", defaultButton: 11 },
   { id: "highlightTrash", label: "Show trash (hold)", defaultButton: 10 },

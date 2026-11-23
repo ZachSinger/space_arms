@@ -62,7 +62,6 @@ export function getControlHelp() { return [
   controlHelp("Dash (uses stamina)", `Hold ${controlLabel("dash", "keyboard")}`, `Hold ${controlLabel("dash", "gamepad")}`),
   controlHelp("Use or open", controlLabel("interact", "keyboard"), controlLabel("interact", "gamepad")),
   controlHelp("Pick up a crate (hold: the whole stack from the arrow up)", controlLabel("crate", "keyboard"), controlLabel("crate", "gamepad")),
-  controlHelp("Throw your crate (carrying just one, while walking, no arrow)", controlLabel("crate", "keyboard"), controlLabel("crate", "gamepad")),
   controlHelp("Light up all trash and dirt on the floor (hold)", controlLabel("highlightTrash", "keyboard"), controlLabel("highlightTrash", "gamepad")),
   controlHelp("Put a crate down (hold: your whole stack)", controlLabel("putDown", "keyboard"), controlLabel("putDown", "gamepad")),
   controlHelp("Move the green arrow one crate down", controlLabel("nextCrate", "keyboard"), controlLabel("nextCrate", "gamepad")),

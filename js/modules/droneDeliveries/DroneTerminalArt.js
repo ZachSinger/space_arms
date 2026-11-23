@@ -12,6 +12,15 @@ export const DRONE_TERMINAL_SCREEN_SPRITE = Object.freeze({
   frameHeight: 15,
 });
 
+// Shown on the terminal screen after an order ships: frames 0-2 are one, two, and three
+// dots; frames 3-4 are a thumbs up without and with sparkles.
+export const DRONE_TERMINAL_SENT_SCREEN_SPRITE = Object.freeze({
+  key: "fixture_drone_terminal_screen_sent_sheet",
+  path: "img/Generated/fixture_drone_terminal_screen_sent_sheet.png",
+  frameWidth: 16,
+  frameHeight: 15,
+});
+
 export const REMOTE_ORDER_CRATE_SPRITES = Object.freeze({
   incomplete: Object.freeze({
     key: "remote-order-crate-red",

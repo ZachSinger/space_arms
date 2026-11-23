@@ -209,11 +209,7 @@ export class CrateSystem {
           lifted,
         };
       }
-    } else if (holding === 1) {
-      actions.pickUp = { tap: () => this.throwTopCrate(), throws: true };
-    } else if (holding > 1) {
-      actions.pickUp = { tap: say("You can only throw a crate when you're holding just one.", "#94a3b8") };
-    } else {
+    } else if (holding === 0) {
       actions.pickUp = {
         tap: this.findCrateInFront({ moving: true })
           ? say("Wait for crate to stop", "#f59e0b")
@@ -252,7 +248,6 @@ export class CrateSystem {
   }
 
   addActionHints(actions, stack, holding) {
-    const shop = this.shop;
     const pickKey = controlLabel("crate");
     const putKey = controlLabel("putDown");
     const handsFull = `Your hands are full (${MAX_CARRIED_CRATES} crates max)`;
@@ -261,10 +256,7 @@ export class CrateSystem {
     const pickUpHints = [];
     const putDownHints = [];
 
-    if (pickUp?.throws) {
-      const { x, y } = shop.player.sprite.body.velocity;
-      if (x !== 0 || y !== 0) pickUpHints.push(`${pickKey}: Throw your crate`);
-    } else if (stack && pickUp?.combines) {
+    if (stack && pickUp?.combines) {
       const name = database.getItem(stack.marked.itemId)?.name ?? "items";
       pickUpHints.push(pickUp.combines === stack.marked.quantity
         ? `${pickKey}: Move all ${pickUp.combines} ${name} from this crate into yours`
@@ -297,7 +289,7 @@ export class CrateSystem {
       pickUp.id = "crate-control:pickUp";
       pickUp.action = "pickUp";
       pickUp.kind = "crate-control";
-      pickUp.target = stack?.marked ?? (pickUp.throws ? this.carriedCrate : null);
+      pickUp.target = stack?.marked ?? null;
       pickUp.perform = pickUp.tap;
       pickUp.hint = pickUpHints.join("\n");
     }
@@ -555,16 +547,6 @@ export class CrateSystem {
     const item = database.getItem(shelf.itemId);
     return { label: "SHELF", name: item?.name ?? "Unknown item",
       count: shelf.quantity > 0 ? `x${shelf.quantity}` : "SOLD OUT", image: item?.image ?? null };
-  }
-
-  // The pick-up button with no green arrow: throws your top crate the way you're walking.
-  throwTopCrate() {
-    const { x, y } = this.shop.player.sprite.body.velocity;
-    if (this.motionPaused || (x === 0 && y === 0)) {
-      this.shop.messages.show(`To throw a crate, walk and press ${controlLabel("crate")}.`, "#94a3b8");
-      return false;
-    }
-    return this.dropTopCrate(true);
   }
 
   heldEmptyCrates() {

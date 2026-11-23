@@ -156,7 +156,7 @@ export class PlayerControls {
   /**
    * One frame of controller input. A screen on top gets it through the menu cursor;
    * otherwise each button runs the same action as its keyboard key:
-   *   Default buttons: A = interact   X = pick up / throw   Y = put down
+   *   Default buttons: A = interact   X = pick up   Y = put down
    *   R3 = move the green arrow down   Back = tablet   LB/RB = zoom
    *   Start = top bar   B = leave the register / dash   triggers = dash
    *   Button actions can be remapped in Settings; the left stick and D-pad walk.

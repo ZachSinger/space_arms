@@ -19,6 +19,7 @@ import { ModuleHost } from "../modules/GameModules.js";
 import {
   DRONE_TERMINAL_PLATFORM_SPRITE,
   DRONE_TERMINAL_SCREEN_SPRITE,
+  DRONE_TERMINAL_SENT_SCREEN_SPRITE,
   REMOTE_ORDER_CRATE_SPRITES,
 } from "../modules/droneDeliveries/DroneTerminalArt.js";
 /** @typedef {import("../logic/ShelfFixture.js").ShelfFixture} ShelfFixture */
@@ -81,7 +82,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload() {
-    for (const sprite of [DRONE_TERMINAL_PLATFORM_SPRITE, DRONE_TERMINAL_SCREEN_SPRITE]) {
+    for (const sprite of [DRONE_TERMINAL_PLATFORM_SPRITE, DRONE_TERMINAL_SCREEN_SPRITE, DRONE_TERMINAL_SENT_SCREEN_SPRITE]) {
       this.load.spritesheet(sprite.key, sprite.path, {
         frameWidth: sprite.frameWidth,
         frameHeight: sprite.frameHeight,

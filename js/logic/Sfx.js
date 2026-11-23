@@ -30,6 +30,13 @@ const SOUNDS = {
     wave: "sine", frequency, start: index * 0.12 + (index >= 2 ? 0.18 : 0), length: 0.35,
     curve: [[0, 0.0001], [0.01, 0.16], [0.34, 0.001]],
   })),
+  // Rising four-note fanfare (C, E, G, high C held) for a remote order that shipped.
+  shipped: [523.25, 659.25, 783.99, 1046.5].map((frequency, index) => ({
+    wave: "square", frequency, start: index * 0.11, length: index === 3 ? 0.6 : 0.12,
+    curve: index === 3
+      ? [[0, 0.0001], [0.01, 0.07], [0.25, 0.05], [0.6, 0.001]]
+      : [[0, 0.0001], [0.01, 0.07], [0.12, 0.01]],
+  })),
 };
 
 function getContext() {
@@ -138,4 +145,8 @@ export function playErrorBuzz() {
 
 export function playOrderAlert() {
   play("order");
+}
+
+export function playOrderShipped() {
+  play("shipped");
 }

@@ -3,7 +3,7 @@
 // ==========================================
 // Dev harness for working on crates: an empty room with a few full and empty crates and a
 // couple of pillars to push against. Crates use the shop's controls (pick up, stack, drop,
-// throw, push). Opened from the title screen's DEV option. Nothing here touches the saved game.
+// push). Opened from the title screen's DEV option. Nothing here touches the saved game.
 import Phaser from "phaser";
 import { installSceneTextSize } from "../logic/GameTextSize.js";
 import { TILE_SIZE } from "../logic/RoomLayout.js";
@@ -23,7 +23,7 @@ const HOLDING_CARD = Object.freeze({ width: 320, height: 56, nameWrap: 200 });
 const TEXT_STYLE = { fontFamily: "monospace", fontSize: "14px", color: "#e2e8f0" };
 const ROOM = Object.freeze({ columns: 14, rows: 10 });
 const PLAYER_START = Object.freeze({ x: 7 * TILE_SIZE, y: 5.5 * TILE_SIZE });
-// Floor squares for pillars, so pushing and throwing have something to hit.
+// Floor squares for pillars, so pushing has something to hit.
 const PILLARS = Object.freeze([{ gx: 3, gy: 7 }, { gx: 10, gy: 2 }]);
 const FULL_CRATE_COUNT = 5;
 const EMPTY_CRATE_COUNT = 3;
@@ -104,7 +104,7 @@ export class CrateLabScene extends Phaser.Scene {
         event.preventDefault();
         if (event.repeat || this.keyPress) return;
         const action = this.crateActions()[which];
-        // Actions with no hold (like throwing) happen right away.
+        // Actions with no hold happen right away.
         if (action && !action.hold) action.tap();
         else if (action) this.keyPress = { which, startedAt: this.time.now, fired: false };
       });
@@ -223,8 +223,6 @@ export class CrateLabScene extends Phaser.Scene {
           : { tap: full, hold: full, full: true };
       } else {
         actions.putDown = { tap: () => this.dropTopCrate(), hold: () => this.dropWholeStack() };
-        // With no green arrow, Space throws your top crate while you're walking.
-        actions.pickUp = { tap: () => this.throwTopCrate(), throws: true };
       }
     }
     return actions;
@@ -236,9 +234,7 @@ export class CrateLabScene extends Phaser.Scene {
     const { pickUp, putDown } = this.crateActions();
     const holding = this.carriedCrates.length;
     const parts = [];
-    if (pickUp?.throws) {
-      parts.push(`${key} while walking: Throw your top crate`);
-    } else if (pickUp) {
+    if (pickUp) {
       const room = MAX_CARRIED_CRATES - holding;
       if (room === 0) parts.push(`Your hands are full (${MAX_CARRIED_CRATES} crates max)`);
       else parts.push(`Tap ${key}: Pick up ${this.describeCrate(this.markedFloorStack().marked)}`);
@@ -532,35 +528,20 @@ export class CrateLabScene extends Phaser.Scene {
       crate.followCarrier(this.player.sprite, index, PLAYER_CRATE_HOLD_OFFSET, FLOOR_STACK_SPACING));
   }
 
-  // Tap Q: your top crate goes on the floor in front of you. Space uses throwing to throw it
-  // the way you're walking instead.
-  dropTopCrate(throwing = false) {
+  // Tap Q: your top crate goes on the floor in front of you.
+  dropTopCrate() {
     const crate = this.carriedCrates[this.carriedCrates.length - 1];
-    const { x: velocityX, y: velocityY } = this.player.sprite.body.velocity;
-    const position = throwing
-      ? crate.findThrowPosition(this.player.sprite, velocityX, velocityY)
-      : crate.findDropPosition(this.player.sprite.x, this.player.sprite.y, this.player.sprite,
-        [], undefined, this.player.currentFacing);
+    const position = crate.findDropPosition(this.player.sprite.x, this.player.sprite.y, this.player.sprite,
+      [], undefined, this.player.currentFacing);
     if (!position) {
-      this.say(throwing ? "There's no room to throw the crate." : "There's no room to put the crate down.");
+      this.say("There's no room to put the crate down.");
       return;
     }
-    if (throwing) crate.startThrow(this.player.sprite, velocityX, velocityY);
-    else crate.drop(position.x, position.y, 0, 0, false);
+    crate.drop(position.x, position.y, 0, 0, false);
     this.carriedCrates.pop();
     this.restockCrates.push(crate);
     this.syncCarriedCrates();
-    this.say(`${throwing ? "Threw" : "Put down"} ${this.describeCrate(crate)}.`);
-  }
-
-  // Space with no green arrow: throws your top crate the way you're walking.
-  throwTopCrate() {
-    const { x: velocityX, y: velocityY } = this.player.sprite.body.velocity;
-    if (velocityX === 0 && velocityY === 0) {
-      this.say(`To throw a crate, walk and press ${controlLabel("crate", "keyboard")}.`);
-      return;
-    }
-    this.dropTopCrate(true);
+    this.say(`Put down ${this.describeCrate(crate)}.`);
   }
 
   // Hold: everything you're carrying goes on the floor in front of you as one stack.

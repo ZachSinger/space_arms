@@ -68,6 +68,8 @@ The gameplay terminal uses the approved door and platform animation at Fast spee
 picture. The order crate uses its approved dark art, opens its lid as it arrives, and closes
 it when accepted for shipping. The crate's separate red or green light shows whether the order is complete.
 The screen scrolls continuously on its own, independently of the doors, platform, and crate lid.
+When an order ships, the screen shows three dots filling in for about a second, then a blinking
+green thumbs up with a short four-note jingle, then goes back to scrolling.
 See [DebugPlaytesting.md](../DebugPlaytesting.md) for the sprite sheets and screen alignment.
 
 Picking up a delivery crate leaves the platform raised and the hatch open. Accepting or
