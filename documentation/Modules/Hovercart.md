@@ -35,6 +35,9 @@ design. The level unlock, purchase, and upgrades are not part of this prototype.
   ends up on top of you or past you.
 - It steers around floor crates instead of shoving them. If a crate sits right in front of the
   door, it pulls up beside the crate and slips through the door anyway.
+- It plans its route with a little room to spare around fixtures like the register and racks,
+  so it rounds their corners instead of catching on them. It only cuts it close in gaps too
+  narrow to pass otherwise.
 
 ## Bumping into it
 - It's solid: you can never walk over it, whether it's on, out of battery, or docked.

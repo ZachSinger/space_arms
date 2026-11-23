@@ -20,6 +20,7 @@ const CART_DOOR_OPEN_REACH = 72;
 const CART_STUCK_MS = 500;
 const CART_READY_RANGE = INTERACT_RANGE;
 const CART_REPATH_MS = 300;
+const CART_CLEARANCE = 4;
 const CART_BODY = Object.freeze({ width: 32, height: 16, avoidStoreDoor: true });
 const HOVERCART_TEXTURES = Object.freeze({
   charger: "hovercart-lab-charger",
@@ -718,21 +719,30 @@ export class HovercartLab {
   // In the player's room it heads for the player. Anywhere else it only heads for the door
   // leading toward him, and goes straight at it if no clear route is found.
   findFollowPath(player, sameArea) {
-    const store = this.scene.navigation.store;
-    const body = {
-      ...CART_BODY,
-      extraSolids: this.scene.restockCrates
-        .filter((crate) => crate.sprite.body?.enable)
-        .map(({ sprite: { body: b } }) => ({ x: b.x, y: b.y, width: b.width, height: b.height })),
+    const navStore = this.scene.navigation.store;
+    const extraSolids = this.scene.restockCrates
+      .filter((crate) => crate.sprite.body?.enable)
+      .map(({ sprite: { body: b } }) => ({ x: b.x, y: b.y, width: b.width, height: b.height }));
+    const tight = { ...CART_BODY, extraSolids };
+    // Routes keep a little room off fixture corners so the cart can't snag on them; the
+    // tight fit is only used for gaps too narrow otherwise.
+    const roomy = {
+      width: CART_BODY.width + CART_CLEARANCE * 2,
+      height: CART_BODY.height + CART_CLEARANCE * 2,
+      extraSolids,
     };
-    if (sameArea) return store.findPath(this.cart.x, this.cart.y, player.x, player.y, body);
+    const store = {
+      findPath: (fromX, fromY, toX, toY) =>
+        navStore.findPath(fromX, fromY, toX, toY, roomy) ?? navStore.findPath(fromX, fromY, toX, toY, tight),
+    };
+    if (sameArea) return store.findPath(this.cart.x, this.cart.y, player.x, player.y);
     const legs = this.scene.areas.crossings(this.cart.x, this.cart.y, player.x, player.y);
     if (!legs?.length) return null;
     const { near, far } = legs[0];
     const door = { x: near.x, y: near.y, teleportTo: { x: far.x, y: far.y } };
     let route = null;
     for (const [dx, dy] of [[0, 0], [0, 16], [-24, 8], [24, 8], [0, 32], [-32, 24], [32, 24], [0, 48]]) {
-      const path = store.findPath(this.cart.x, this.cart.y, near.x + dx, near.y + dy, body);
+      const path = store.findPath(this.cart.x, this.cart.y, near.x + dx, near.y + dy);
       if (!path) continue;
       route = dx || dy ? [...path, { x: near.x + dx, y: near.y + dy }] : path;
       break;
