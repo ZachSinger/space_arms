@@ -4,7 +4,7 @@ const MAX_REPORT_ERRORS = 20;
 
 function safeText(value, maxLength) {
   return String(value ?? "")
-    .replace(/(?:[A-Za-z]:[\\/]|file:\/\/\/)[^\s)]+/g, (filePath) =>
+    .replace(/(?:(?<![A-Za-z])[A-Za-z]:[\\/]|file:\/\/\/)[^\s)]+/g, (filePath) =>
       filePath.split(/[\\/]/).pop() || "<local file>")
     .slice(0, maxLength);
 }
@@ -17,6 +17,12 @@ function errorText(error) {
 
 function safeStack(stack) {
   return safeText(stack, 10000);
+}
+
+// Files reloaded live while code is being edited carry "?t=<timestamp>". Errors from those
+// half-saved files aren't game bugs, so they're never kept or shown.
+export function isLiveReloadError(error) {
+  return /[?&]t=\d{10,}/.test(`${error?.message ?? ""} ${error?.filename ?? ""} ${error?.stack ?? ""}`);
 }
 
 export function createErrorReportPrefill(errors) {
@@ -92,7 +98,10 @@ export class ErrorReportPrompt {
   async loadPending() {
     if (!this.environment.desktopApi?.getPendingRuntimeErrors) return;
     try {
-      this.mergeErrors(await this.environment.desktopApi.getPendingRuntimeErrors());
+      const pending = await this.environment.desktopApi.getPendingRuntimeErrors();
+      const stale = pending.filter(isLiveReloadError).map((error) => error.id).filter(Boolean);
+      if (stale.length) await this.environment.desktopApi.clearPendingRuntimeErrors?.(stale);
+      this.mergeErrors(pending.filter((error) => !isLiveReloadError(error)));
       if (this.errors.length) this.open();
     } catch (error) {
       console.error("Could not load saved game errors:", error);
@@ -101,6 +110,7 @@ export class ErrorReportPrompt {
   }
 
   capture(error) {
+    if (isLiveReloadError(error)) return;
     const localId = `local-${Date.now()}-${this.localErrorNumber++}`;
     const record = {
       ...error,

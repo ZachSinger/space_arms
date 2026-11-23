@@ -121,6 +121,8 @@
       window.__earlyErrorCapture = (() => {
         const save = (type, error) => {
           if (!window.desktopApi?.recordRuntimeError) return;
+          // Live-reloaded files ("?t=<timestamp>") mid-edit aren't game bugs; see ErrorReportPrompt.js.
+          if (/[?&]t=\d{10,}/.test(`${error?.message ?? ""} ${error?.filename ?? ""}`)) return;
           const record = {
             type,
             message: error?.message ?? String(error ?? "Unknown error"),

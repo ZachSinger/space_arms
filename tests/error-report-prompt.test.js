@@ -115,6 +115,31 @@ test("a current runtime error opens a consent-based prompt and remains pending w
   prompt.destroy();
 });
 
+test("errors from files reloaded mid-edit are dropped, not shown on every launch", async () => {
+  const stale = { id: "stale-1", type: "renderer-error",
+    message: "Could not load script http://localhost:5173/js/scenes/main.js?t=1795453593828" };
+  let cleared;
+  let recorded = 0;
+  const env = environment({
+    getPendingRuntimeErrors: async () => [stale],
+    clearPendingRuntimeErrors: async (ids) => { cleared = ids; },
+    recordRuntimeError: async (error) => { recorded += 1; return error; },
+  });
+  const prompt = new ErrorReportPrompt(env);
+  for (let i = 0; i < 4; i += 1) await Promise.resolve();
+  env.listeners.get("error")({ message: "Uncaught SyntaxError", filename: "http://localhost:5173/js/a.js?t=1795453524852" });
+
+  assert.deepEqual(cleared, ["stale-1"]);
+  assert.equal(recorded, 0);
+  assert.equal(env.dialog.open, false);
+  prompt.destroy();
+});
+
+test("web addresses in errors keep their file name instead of being cut to 'htt'", () => {
+  const prefill = createErrorReportPrefill([{ message: "Could not load script http://localhost:5173/js/scenes/main.js" }]);
+  assert.match(prefill.title, /http:\/\/localhost:5173\/js\/scenes\/main\.js/);
+});
+
 test("prefilled reports stay within the report form limits", () => {
   const prefill = createErrorReportPrefill(Array.from({ length: 30 }, (_, index) => ({
     type: "renderer-error",
