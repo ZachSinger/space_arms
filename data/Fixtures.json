@@ -269,24 +269,6 @@
     "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
     "price": 350, "presentationPoints": 3, "licenseId": "lic_fixture_basics"
   },
-  "decor_holo_robot": {
-    "id": "decor_holo_robot", "name": "FRIENDLY BOT HOLOGRAM", "kind": "decoration",
-    "artFamily": "hologram", "motif": "robot", "accent": "#8cd6ab",
-    "description": "A smiling robot head with an aerial and square eyes.",
-    "w": 0.75, "h": 1, "fixedFacing": true, "anyRoom": true,
-    "texture": "decor_holo_robot", "solidHeight": 0.25,
-    "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
-    "price": 280, "presentationPoints": 3, "licenseId": "lic_fixture_basics"
-  },
-  "decor_holo_wave": {
-    "id": "decor_holo_wave", "name": "SIGNAL HOLOGRAM", "kind": "decoration",
-    "artFamily": "hologram", "motif": "waveform", "accent": "#ff8cb8",
-    "description": "A stepped signal waveform on an oscilloscope grid.",
-    "w": 0.75, "h": 1, "fixedFacing": true, "anyRoom": true,
-    "texture": "decor_holo_wave", "solidHeight": 0.25,
-    "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
-    "price": 260, "presentationPoints": 3, "licenseId": "lic_fixture_basics"
-  },
   "decor_holo_gate": {
     "id": "decor_holo_gate", "name": "JUMPGATE HOLOGRAM", "kind": "decoration",
     "artFamily": "hologram", "motif": "jumpgate", "accent": "#8cf1ed",
@@ -304,96 +286,6 @@
     "texture": "decor_holo_system", "solidHeight": 0.25,
     "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
     "price": 400, "presentationPoints": 3, "licenseId": "lic_fixture_basics"
-  },
-  "decor_banner_salvage": {
-    "id": "decor_banner_salvage", "name": "SALVAGE GUILD BANNER", "kind": "decoration",
-    "artFamily": "banner", "motif": "salvageGear", "accent": "#e5ac59",
-    "description": "A toothed salvage gear on a freestanding hanging banner.",
-    "w": 0.75, "h": 1.25, "fixedFacing": true, "anyRoom": true,
-    "texture": "decor_banner_salvage", "solidHeight": 0.25,
-    "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
-    "price": 180, "presentationPoints": 2, "licenseId": "lic_fixture_basics"
-  },
-  "decor_banner_blades": {
-    "id": "decor_banner_blades", "name": "MERCENARY BANNER", "kind": "decoration",
-    "artFamily": "banner", "motif": "crossedBlades", "accent": "#ef7e78",
-    "description": "Crossed blades hang from a portable mercenary standard.",
-    "w": 0.75, "h": 1.25, "fixedFacing": true, "anyRoom": true,
-    "texture": "decor_banner_blades", "solidHeight": 0.25,
-    "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
-    "price": 220, "presentationPoints": 2, "licenseId": "lic_fixture_basics"
-  },
-  "decor_banner_compass": {
-    "id": "decor_banner_compass", "name": "EXPLORER BANNER", "kind": "decoration",
-    "artFamily": "banner", "motif": "compass", "accent": "#80c5ee",
-    "description": "A compass rose marks a freestanding explorer standard.",
-    "w": 0.75, "h": 1.25, "fixedFacing": true, "anyRoom": true,
-    "texture": "decor_banner_compass", "solidHeight": 0.25,
-    "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
-    "price": 240, "presentationPoints": 2, "licenseId": "lic_fixture_basics"
-  },
-  "decor_banner_routes": {
-    "id": "decor_banner_routes", "name": "TRADE ROUTES BANNER", "kind": "decoration",
-    "artFamily": "banner", "motif": "tradeRoutes", "accent": "#91ddac",
-    "description": "Linked port markers and chevrons chart a trade route.",
-    "w": 0.75, "h": 1.25, "fixedFacing": true, "anyRoom": true,
-    "texture": "decor_banner_routes", "solidHeight": 0.25,
-    "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
-    "price": 200, "presentationPoints": 2, "licenseId": "lic_fixture_basics"
-  },
-  "decor_banner_star": {
-    "id": "decor_banner_star", "name": "FRONTIER STAR BANNER", "kind": "decoration",
-    "artFamily": "banner", "motif": "frontierStar", "accent": "#e6d487",
-    "description": "A five-point frontier star above three service stripes.",
-    "w": 0.75, "h": 1.25, "fixedFacing": true, "anyRoom": true,
-    "texture": "decor_banner_star", "solidHeight": 0.25,
-    "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
-    "price": 210, "presentationPoints": 2, "licenseId": "lic_fixture_basics"
-  },
-  "decor_banner_circuit": {
-    "id": "decor_banner_circuit", "name": "CIRCUIT BANNER", "kind": "decoration",
-    "artFamily": "banner", "motif": "circuit", "accent": "#b3a1ef",
-    "description": "Branching circuit traces surround a central processor.",
-    "w": 0.75, "h": 1.25, "fixedFacing": true, "anyRoom": true,
-    "texture": "decor_banner_circuit", "solidHeight": 0.25,
-    "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
-    "price": 230, "presentationPoints": 2, "licenseId": "lic_fixture_basics"
-  },
-  "decor_light_tube": {
-    "id": "decor_light_tube", "name": "ION TUBE LAMP", "kind": "decoration",
-    "artFamily": "light", "motif": "ionTube", "accent": "#86e7ff",
-    "description": "A tall ion tube held inside a protective metal frame.",
-    "w": 0.5, "h": 1, "fixedFacing": true, "anyRoom": true,
-    "texture": "decor_light_tube", "solidHeight": 0.25,
-    "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
-    "price": 160, "presentationPoints": 2, "licenseId": "lic_fixture_basics"
-  },
-  "decor_light_lantern": {
-    "id": "decor_light_lantern", "name": "HEX LANTERN", "kind": "decoration",
-    "artFamily": "light", "motif": "hexLantern", "accent": "#ffd789",
-    "description": "A caged hexagonal lantern on a short pedestal.",
-    "w": 0.5, "h": 1, "fixedFacing": true, "anyRoom": true,
-    "texture": "decor_light_lantern", "solidHeight": 0.25,
-    "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
-    "price": 190, "presentationPoints": 2, "licenseId": "lic_fixture_basics"
-  },
-  "decor_light_beacon": {
-    "id": "decor_light_beacon", "name": "SURVEY BEACON", "kind": "decoration",
-    "artFamily": "light", "motif": "surveyBeacon", "accent": "#ff9e88",
-    "description": "A luminous survey beacon supported by three splayed legs.",
-    "w": 0.5, "h": 1, "fixedFacing": true, "anyRoom": true,
-    "texture": "decor_light_beacon", "solidHeight": 0.25,
-    "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
-    "price": 210, "presentationPoints": 2, "licenseId": "lic_fixture_basics"
-  },
-  "decor_light_arc": {
-    "id": "decor_light_arc", "name": "ARC FLOOR LAMP", "kind": "decoration",
-    "artFamily": "light", "motif": "arcLamp", "accent": "#d6b5ff",
-    "description": "A bent floor-lamp arm suspends a glowing downward shade.",
-    "w": 0.5, "h": 1, "fixedFacing": true, "anyRoom": true,
-    "texture": "decor_light_arc", "solidHeight": 0.25,
-    "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
-    "price": 180, "presentationPoints": 2, "licenseId": "lic_fixture_basics"
   },
   "hovercart_charger": {
     "id": "hovercart_charger",

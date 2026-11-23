@@ -34,7 +34,7 @@ test("only placed sales-floor decorations contribute; moving, crating, and selli
   const first = fixtures.add({ id: "a", type: "decor_holo_planet", gx: 1, gy: 1 });
   fixtures.add({ id: "b", type: "decor_holo_planet", gx: 2, gy: 1 });
   fixtures.add({ id: "backroom", type: "decor_holo_rocket", gx: 7, gy: 1 });
-  fixtures.add({ id: "locked", type: "decor_banner_star", gx: 5, gy: 1 });
+  fixtures.add({ id: "locked", type: "decor_holo_gate", gx: 5, gy: 1 });
   fixtures.add({ id: "shelf", type: "shelf_budget_2x2", gx: 0, gy: 2 });
   const shop = {
     fixtures,

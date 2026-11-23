@@ -8,30 +8,28 @@ import { FIXTURE_TYPES } from "../logic/FixtureLayout.js";
 import { BACKROOM_GRID_Y, TILE_SIZE } from "../logic/RoomLayout.js";
 import { unlockEverything } from "./SandboxRoom.js";
 
-const PER_ROW = 7;
+const PER_ROW = 4;
 const STEP_X = 2.5;
 // First row sits below the register and front door; the gap fits the labels.
 const FIRST_ROW_Y = 4.5;
 const STEP_Y = 2.5;
 const CAMERA_ZOOM = 1.25;
 const NUDGES = [0, 0.125, -0.125, 0.25, -0.25, 0.5, -0.5];
-const GROUPS = ["decor_holo_", "decor_banner_", "decor_light_"];
 const PANEL_STYLE = [
   "position:fixed", "right:12px", "top:84px", "z-index:50", "width:260px", "padding:10px",
   "background:rgba(15,23,42,0.92)", "border:1px solid #38bdf8", "color:#e2e8f0", "font:13px monospace",
   "display:flex", "flex-direction:column", "gap:4px", "pointer-events:auto",
 ].join(";");
 
-/** Every decoration type in shop order: holograms, then banners, then lights. */
+/** Every decoration type, in shop order. */
 export function galleryDecorations() {
-  const decorations = Object.entries(FIXTURE_TYPES).filter(([, type]) => type.kind === "decoration");
-  return GROUPS.flatMap((prefix) => decorations.filter(([id]) => id.startsWith(prefix)))
+  return Object.entries(FIXTURE_TYPES).filter(([, type]) => type.kind === "decoration")
     .map(([id, type]) => ({ id, name: type.name ?? id }));
 }
 
-/** The label's second line: the shop name without the trailing "HOLOGRAM"/"BANNER". */
+/** The label's second line: the shop name without the trailing "HOLOGRAM". */
 function shortName(name) {
-  return name.replace(/\s+(HOLOGRAM|BANNER)$/u, "");
+  return name.replace(/\s+HOLOGRAM$/u, "");
 }
 
 function salesFloorBounds(scene) {

@@ -2,7 +2,7 @@
   {
     "id": "lic_fixture_basics",
     "name": "Basic Fixture Supply",
-    "description": "A starter contract for Budget Shelves, checkout registers, trashcans, and 20 holograms, freestanding banners, and lights.",
+    "description": "A starter contract for Budget Shelves, checkout registers, trashcans, and 8 holograms.",
     "tier": 1,
     "baseCost": 0,
     "reqReputation": 0,
@@ -21,20 +21,8 @@
       "decor_holo_crystal",
       "decor_holo_atom",
       "decor_holo_shield",
-      "decor_holo_robot",
-      "decor_holo_wave",
       "decor_holo_gate",
-      "decor_holo_system",
-      "decor_banner_salvage",
-      "decor_banner_blades",
-      "decor_banner_compass",
-      "decor_banner_routes",
-      "decor_banner_star",
-      "decor_banner_circuit",
-      "decor_light_tube",
-      "decor_light_lantern",
-      "decor_light_beacon",
-      "decor_light_arc"
+      "decor_holo_system"
     ]
   },
   {

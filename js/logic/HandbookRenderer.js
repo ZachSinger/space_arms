@@ -134,7 +134,7 @@ function storeTopic({ shopLevel, reputation }) {
     section("Presentation", `
       <p>Your shop starts with 20 presentation points. Its maximum starts at 20 and rises by
         20 per sales-floor expansion and 2 per Shop Level above 5; the starting points do not rise.</p>
-      <p>Buy holograms, freestanding hanging banners, and lights in the Fixtures tab through
+      <p>Buy holograms in the Fixtures tab through
         Basic Fixture Supply. Place, move, crate, and sell them like other fixtures. Each
         placed sales-floor decoration adds its listed points, plus 1 point once per distinct
         design. Duplicate copies add their normal points but no extra variety bonus.

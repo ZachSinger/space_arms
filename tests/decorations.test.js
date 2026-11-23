@@ -60,17 +60,16 @@ function textureScene() {
   };
 }
 
-test("the catalog exposes 20 distinct motifs and pixel designs through Basic Fixture Supply", () => {
-  assert.equal(decorations.length, 20);
-  assert.deepEqual(["hologram", "banner", "light"].map((family) =>
-    decorations.filter((spec) => spec.artFamily === family).length), [10, 6, 4]);
-  assert.equal(new Set(decorations.map((spec) => spec.motif)).size, 20);
+test("the catalog exposes 8 distinct hologram designs through Basic Fixture Supply", () => {
+  assert.equal(decorations.length, 8);
+  assert.ok(decorations.every((spec) => spec.artFamily === "hologram"));
+  assert.equal(new Set(decorations.map((spec) => spec.motif)).size, 8);
   const contract = licenses.find((license) => license.id === "lic_fixture_basics");
   const scene = textureScene();
   createDecorationTextures(scene);
   createDecorationTextures(scene);
-  assert.equal(scene.made.size, 20 * DECORATION_FRAMES);
-  assert.equal(scene.destroyed, 20 * DECORATION_FRAMES, "art is initialized once, not regenerated for previews");
+  assert.equal(scene.made.size, 8 * DECORATION_FRAMES);
+  assert.equal(scene.destroyed, 8 * DECORATION_FRAMES, "art is initialized once, not regenerated for previews");
   const signatures = new Set();
   for (const spec of decorations) {
     assert.ok(contract.unlocksFixtures.includes(spec.id));
@@ -93,7 +92,7 @@ test("the catalog exposes 20 distinct motifs and pixel designs through Basic Fix
     // Ignore all colors: recolors produce the same geometry and cannot pass this check.
     signatures.add(JSON.stringify([...art.pixels].sort(([a], [b]) => a.localeCompare(b))));
   }
-  assert.equal(signatures.size, 20, "each design must change the drawing, not only its color");
+  assert.equal(signatures.size, 8, "each design must change the drawing, not only its color");
 });
 
 test("every decoration fits ordinary layout validation, creates a plain model, and round-trips through shop saves", () => {
@@ -178,7 +177,7 @@ function fixtureScene() {
   return { scene, system, delivered };
 }
 
-test("all 20 designs can be bought, delivered, started from a crate in the backroom, and placed as normal fixtures", () => {
+test("every design can be bought, delivered, started from a crate in the backroom, and placed as a normal fixture", () => {
   for (const spec of decorations) {
     const { scene, system, delivered } = fixtureScene();
     assert.ok(system.purchaseOptions().some((option) => option.spec.id === spec.id && option.licensed));
@@ -205,7 +204,7 @@ test("all 20 designs can be bought, delivered, started from a crate in the backr
 
 test("decorations support empty-hand hold-to-move, crating, and half-price resale through the shared fixture system", () => {
   const { scene, system, delivered } = fixtureScene();
-  const type = "decor_banner_compass";
+  const type = "decor_holo_gate";
   assert.equal(system.buy(type), true);
   scene.carriedCrate = delivered[0];
   assert.equal(system.placeFromCrate(scene.carriedCrate, 5, 5), true);
@@ -242,7 +241,7 @@ test("decoration purchase cards show generated texture previews and explain poin
   const { scene, system } = fixtureScene();
   scene.textures = textures.textures;
   const markup = LayoutRenderer.generateHTML(scene, true);
-  assert.equal([...markup.matchAll(/class="fixture-art-preview"/g)].length, 20);
+  assert.equal([...markup.matchAll(/class="fixture-art-preview"/g)].length, 8);
   assert.match(markup, /src="data:image\/png;base64,decor_holo_planet"/);
   assert.match(markup, /Adds 3 to PRESENTATION when placed on the sales floor/);
   assert.match(markup, /plus 1 more the first time this design is out there/);
