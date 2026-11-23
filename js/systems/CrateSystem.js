@@ -87,7 +87,7 @@ export class CrateSystem {
   }
 
   getStockableCrates() {
-    return this.getCarriedCrates();
+    return [...this.getCarriedCrates(), ...(this.shop.hovercartLab?.getStockableCrates() ?? [])];
   }
 
   addCarriedCrate(crate) {
@@ -177,6 +177,16 @@ export class CrateSystem {
         pickUp: { tap: say(reason, "#f59e0b"), blocked: true },
         putDown: { tap: () => shop.cleaningSystem?.dropHeldTrash() ?? false, trash: true },
       }, null, holding);
+    }
+
+    const hovercartActions = shop.hovercartLab?.getCrateActions();
+    if (hovercartActions) {
+      const actions = this.addActionHints(hovercartActions, null, holding);
+      for (const action of Object.values(actions)) {
+        if (action?.hintOverride) action.hint = action.hintOverride;
+        if (action) action.target = shop.hovercartLab.cart;
+      }
+      return actions;
     }
 
     const actions = {};

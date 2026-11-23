@@ -11,6 +11,7 @@ import { TILE_SIZE } from "../logic/RoomLayout.js";
 import { getCrateOrderQuantity } from "../logic/SupplyOrder.js";
 import { sourceItems } from "../logic/InventoryTransfer.js";
 import { unlockEverything } from "./SandboxRoom.js";
+import { HovercartLab } from "./HovercartLab.js";
 
 const STEP_X = 56;
 const STEP_Y = 52;
@@ -41,6 +42,7 @@ function keepClearSpots(scene) {
   return [
     scene.storeDoor,
     scene.player.sprite,
+    scene.hovercartLab?.dock,
     ...scene.areas.portals.map((portal) => portal.front),
   ].filter(Boolean).map(({ x, y }) => ({ x, y }));
 }
@@ -52,6 +54,7 @@ function keepClearSpots(scene) {
 export function setupCrateTestLab(scene) {
   const { gameState, crateSystem } = scene;
   unlockEverything(scene);
+  const hovercart = new HovercartLab(scene);
   const items = labItems();
   for (const item of items) gameState.catalog.priceIfUnset(item.id, gameState.market.getPrice(item.id));
 
@@ -69,6 +72,7 @@ export function setupCrateTestLab(scene) {
   };
 
   const clear = () => {
+    hovercart.clearCrates();
     for (const crate of crateSystem.getFloorCrates()) crate.destroy();
     crateSystem.restockCrates.length = 0;
     crateSystem.floorStacks.clear();
@@ -129,6 +133,8 @@ export function setupCrateTestLab(scene) {
   panel.innerHTML = `
     <strong style="color:#38bdf8">CRATE TEST LAB</strong>
     <span>Nothing here is saved.</span>
+    <span>Face the charger to start or dock the hovercart.</span>
+    <span>Hold Shift / L1 with crate controls to move crates to or from the cart.</span>
     <span data-count role="status" aria-live="polite"></span>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
       <button type="button" class="hud-pause-btn" data-refill>Refill crates</button>
@@ -155,9 +161,13 @@ export function setupCrateTestLab(scene) {
   fill();
   return {
     noteGaveUp() {},
+    update(time, delta) {
+      hovercart.update(time, delta);
+    },
     destroy() {
       panel.removeEventListener("click", onClick);
       panel.remove();
+      hovercart.destroy();
     },
   };
 }

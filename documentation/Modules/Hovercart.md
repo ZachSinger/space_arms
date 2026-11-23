@@ -9,6 +9,10 @@
 - It follows the player. Each crate on it slows it down, but it does its best to keep up.
 - You can still hold three crates yourself while using it.
 
+The DEV Crate Test Room has a non-saving prototype of the cart and its charger for testing crate
+transfers and stacking. It uses the selected wall-post and floor-dock charger design. The level
+unlock, purchase, battery duration, and upgrades are not part of this prototype.
+
 ## Counting as held crates
 - When it's not moving (it has finished approaching you), its crates count as a stack you're
   holding.

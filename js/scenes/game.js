@@ -488,6 +488,7 @@ export class GameScene extends Phaser.Scene {
     this.hud.renderStamina(this.player);
     if (this.cleaningSystem) this.hud.renderCleanliness(this.cleaningSystem.getCleanliness());
     this.gameModules.update(time, delta);
+    this.sandboxRoom?.update?.(time, delta);
 
     this.shiftClock.update(delta);
     this.goBacksBadge.position();
