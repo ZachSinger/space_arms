@@ -241,7 +241,8 @@ test("starter contracts and existing faction reputation requirements remain avai
 });
 
 test("each fixture type is unlocked by its configured license", () => {
-  for (const spec of Object.values(FIXTURE_TYPES)) {
+  // Equipment, like the hovercart charger, is bought by Shop Level instead.
+  for (const spec of Object.values(FIXTURE_TYPES).filter((type) => !type.equipment)) {
     assert.ok(licenseById.get(spec.licenseId)?.unlocksFixtures.includes(spec.id));
   }
 });

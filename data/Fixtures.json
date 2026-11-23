@@ -214,5 +214,35 @@
     },
     "price": 40,
     "licenseId": "lic_fixture_basics"
+  },
+  "hovercart_charger": {
+    "id": "hovercart_charger",
+    "name": "HOVERCART CHARGER",
+    "kind": "charger",
+    "equipment": true,
+    "fixedFacing": true,
+    "anyRoom": true,
+    "w": 1,
+    "h": 1.375,
+    "texture": "hovercart-charger",
+    "facingTextures": {
+      "down": "hovercart-charger",
+      "left": "hovercart-charger",
+      "up": "hovercart-charger",
+      "right": "hovercart-charger"
+    },
+    "facingFootprints": {
+      "down": { "w": 1, "h": 1.375 },
+      "left": { "w": 1, "h": 1.375 },
+      "up": { "w": 1, "h": 1.375 },
+      "right": { "w": 1, "h": 1.375 }
+    },
+    "artInsets": {
+      "down": { "left": 0.078125, "top": 0, "right": 0.078125, "bottom": 0.09375 },
+      "left": { "left": 0.078125, "top": 0, "right": 0.078125, "bottom": 0.09375 },
+      "up": { "left": 0.078125, "top": 0, "right": 0.078125, "bottom": 0.09375 },
+      "right": { "left": 0.078125, "top": 0, "right": 0.078125, "bottom": 0.09375 }
+    },
+    "price": 2200
   }
 }

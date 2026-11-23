@@ -8,7 +8,7 @@ import { database } from "../scenes/boot.js";
 import { GAME_EVENTS } from "../core/Events.js";
 import { Crate } from "../logic/Crate.js";
 import { ShelfFixture } from "../logic/ShelfFixture.js";
-import { FIXTURE_TYPES, fixtureAccessCells, fixtureFacing, fixtureFootprint, fixtureInteractionDistance,
+import { FIXTURE_TYPES, fixtureAccessCells, fixtureBounds, fixtureFacing, fixtureFootprint, fixtureInteractionDistance,
   fixtureStandingSpot, getFixtureResaleValue, getFixtureType, validateFixtureLayout } from "../logic/FixtureLayout.js";
 import { BACKROOM_UPGRADE_ORDER, EXPANSION_ORDER, TILE_SIZE, getAuthoredGridSize, getBackroomDoorCell,
   getBackroomExitCell, getBackroomInteriorBounds, getBackroomLink, getDoorwayClearanceBounds, getLoadingPadBounds,
@@ -28,6 +28,7 @@ const ZONE_KINDS = Object.freeze({
 });
 
 const SHELF_INTERACT_RANGE = 12;
+const CHARGER_REACH = 24;
 const TRASHCAN_REACH = loadTuning("crates", crateTuning).trashcanReachPx;
 const PLAYER_FACING_STEPS = Object.freeze({
   up: { x: 0, y: -1 }, down: { x: 0, y: 1 },
@@ -181,8 +182,23 @@ export class FixtureSystem {
       const trashcan = this.getNearbyTrashcan();
       if (trashcan && shop.interactionSystem.isPlayerFacingFixture(trashcan)) fixture = trashcan;
     }
+    fixture ??= this.chargerInReach(origin);
     if (!fixture || !this.canRearrange()) return null;
     return this.moveAreaBlockReason(fixture) ? null : fixture;
+  }
+
+  // A hovercart charger the player faces from right in front of it.
+  chargerInReach(origin) {
+    const { interactionSystem } = this.shop;
+    return this.fixtures.ofKind("charger").find((charger) => {
+      const bounds = fixtureBounds(charger);
+      const rect = {
+        left: bounds.left * TILE_SIZE, right: bounds.right * TILE_SIZE,
+        top: bounds.top * TILE_SIZE, bottom: bounds.bottom * TILE_SIZE,
+      };
+      return interactionSystem.isPlayerFacingFixture(charger) &&
+        interactionSystem.feetReachTo(origin, rect) <= CHARGER_REACH;
+    }) ?? null;
   }
 
   getMoveAction() {
@@ -258,7 +274,7 @@ export class FixtureSystem {
       entrance, reservedCells, doorwayCells, fixtureReservedCells: doorwayCells, occupiedRectangles,
       links: [[link.shop, link.backroom]],
       backroomBounds: getBackroomInteriorBounds(room.zones),
-      reservedRectangles: [getLoadingPadBounds(), ...(this.shop.gameModules?.get("hovercart")?.reservedRectangles() ?? [])],
+      reservedRectangles: [getLoadingPadBounds()],
       doorwayClearanceRectangles: getDoorwayClearanceBounds(),
     };
   }
@@ -478,10 +494,11 @@ export class FixtureSystem {
 
   // --- Buying, crating, selling, and placing ---
 
-  // Fixture shop rows, with every reason a purchase might be blocked.
+  // Fixture shop rows, with every reason a purchase might be blocked. Equipment, like the
+  // hovercart's charger, is bought in the Layout tab instead.
   purchaseOptions() {
     const { catalog, economy } = this.shop.gameState;
-    return Object.values(FIXTURE_TYPES).map((spec) => ({
+    return Object.values(FIXTURE_TYPES).filter((spec) => !spec.equipment).map((spec) => ({
       spec,
       license: database.getLicense(spec.licenseId),
       licensed: catalog.owns(spec.licenseId),
@@ -535,6 +552,9 @@ export class FixtureSystem {
       this.fixtures.ofKind("register").length <= 1) return `The last register cannot be ${action}.`;
     if (fixture instanceof ShelfFixture && fixture.placements.some((stack) => stack.quantity > 0)) {
       return `Only empty fixtures can be ${action}.`;
+    }
+    if (getFixtureType(fixture.type).kind === "charger" && this.shop.hovercart?.isOut()) {
+      return `Dock the hovercart on its charger first. Then the charger can be ${action}.`;
     }
     return null;
   }

@@ -14,6 +14,7 @@ import { getCrateOrderQuantity } from "../logic/SupplyOrder.js";
 import { sourceItems } from "../logic/InventoryTransfer.js";
 import { unlockEverything } from "./SandboxRoom.js";
 import { controlLabel } from "../input/InputDevice.js";
+import { HOVERCART_CHARGER_TYPE, getLegacyChargerSpot } from "../modules/hovercart/HovercartRules.js";
 
 const STEP_X = 56;
 const STEP_Y = 52;
@@ -99,7 +100,13 @@ export function setupCrateTestLab(scene) {
   unlockEverything(scene);
   buildShelfMaze(scene);
   const hovercartSystem = scene.gameModules.get("hovercart");
-  const hovercart = hovercartSystem.install();
+  const charger = getLegacyChargerSpot();
+  if (!hovercartSystem.chargers().length &&
+    scene.fixtureSystem.checkPlacement(HOVERCART_CHARGER_TYPE, charger.gx, charger.gy).valid) {
+    scene.fixtureSystem.placeFree(HOVERCART_CHARGER_TYPE, charger.gx, charger.gy);
+  }
+  const hovercart = hovercartSystem.sync();
+  if (!hovercart) throw new Error("Crate lab: no room for the hovercart charger.");
   // Temporary while testing the cart in the maze.
   hovercart.infiniteBattery = true;
   scene.player.infiniteStamina = true;

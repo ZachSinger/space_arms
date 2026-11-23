@@ -1,13 +1,13 @@
 import { CRATE_STACK_SPACING, INTERACT_RANGE } from "../../logic/Crate.js";
 import { MAX_CARRIED_CRATES } from "../../logic/CrateStack.js";
 import { CRATE_TUNING, solveCratePush } from "../../logic/CratePushing.js";
-import { getBackroomInteriorBounds } from "../../logic/RoomLayout.js";
 import { controlLabel } from "../../input/InputDevice.js";
 import { PAD } from "../../input/GamepadInput.js";
 import { CONTROL_MODES } from "../../input/ControlMode.js";
-import { AREA } from "../../world/Areas.js";
+import { areaAtRow } from "../../world/Areas.js";
 import { PEOPLE_DEPTH_BASE } from "../../world/Depth.js";
-import { HOVERCART_BATTERY, HOVERCART_CAPACITY, getHovercartDock } from "./HovercartRules.js";
+import { HOVERCART_BATTERY, HOVERCART_CAPACITY, getHovercartChargerSpots } from "./HovercartRules.js";
+import { HOVERCART_TEXTURES, createHovercartTextures } from "./HovercartArt.js";
 
 export { HOVERCART_BATTERY };
 
@@ -29,11 +29,6 @@ const CART_CLOSING_MS = 600;
 const CART_CLOSING_GAIN = 6;
 const CART_ROUTE_MS = 1500;
 const CART_BODY = Object.freeze({ width: 32, height: 16, avoidStoreDoor: true });
-const HOVERCART_TEXTURES = Object.freeze({
-  charger: "hovercart-charger",
-  docked: "hovercart-cart-docked",
-  active: "hovercart-cart-active",
-});
 
 export function getHovercartTransferCount(available, capacity) {
   return Math.max(0, Math.min(available, capacity));
@@ -54,90 +49,8 @@ export function getHovercartBatteryLevel(fraction) {
   return "low";
 }
 
-function drawTexture(scene, key, width, height, draw) {
-  if (scene.textures.exists(key)) return;
-  const graphics = scene.make.graphics({ x: 0, y: 0, add: false });
-  draw(graphics);
-  graphics.generateTexture(key, width, height);
-  graphics.destroy();
-}
-
-function pixel(g, x, y, width, height, color) {
-  g.fillStyle(color, 1).fillRect(x, y, width, height);
-}
-
-function createCartTextures(scene) {
-  const colors = {
-    outline: 0x0d1018,
-    steel: 0x616a7c,
-    light: 0x9aa7bb,
-    dark: 0x3f485b,
-    deep: 0x252c3b,
-    green: 0x5ae678,
-    cyan: 0x50c9e8,
-  };
-  drawTexture(scene, HOVERCART_TEXTURES.charger, 64, 88, (g) => {
-    const c = colors;
-    pixel(g, 20, 0, 24, 48, c.outline);
-    pixel(g, 22, 2, 20, 44, c.steel);
-    pixel(g, 23, 3, 3, 41, c.light);
-    pixel(g, 41, 3, 1, 41, c.dark);
-    pixel(g, 25, 7, 14, 17, c.deep);
-    pixel(g, 27, 9, 10, 13, 0x10231a);
-    pixel(g, 29, 11, 6, 2, c.green);
-    pixel(g, 29, 15, 2, 2, c.green);
-    pixel(g, 33, 15, 2, 2, c.green);
-    pixel(g, 25, 28, 14, 5, c.dark);
-    pixel(g, 27, 35, 10, 9, c.outline);
-    pixel(g, 29, 36, 6, 6, c.deep);
-    pixel(g, 31, 44, 2, 13, c.outline);
-    pixel(g, 32, 45, 1, 11, c.steel);
-    pixel(g, 5, 54, 54, 28, c.outline);
-    pixel(g, 7, 56, 50, 24, c.steel);
-    pixel(g, 9, 58, 46, 18, c.dark);
-    pixel(g, 11, 60, 42, 14, c.deep);
-    pixel(g, 17, 61, 30, 2, c.steel);
-    pixel(g, 19, 62, 26, 3, c.dark);
-    pixel(g, 28, 64, 8, 2, c.cyan);
-  });
-  drawTexture(scene, HOVERCART_TEXTURES.docked, 40, 24, (g) => {
-    const c = colors;
-    pixel(g, 3, 5, 34, 15, c.outline);
-    pixel(g, 5, 6, 30, 12, c.steel);
-    pixel(g, 6, 7, 27, 2, c.light);
-    pixel(g, 6, 10, 28, 1, c.dark);
-    pixel(g, 7, 12, 26, 4, c.deep);
-    pixel(g, 11, 17, 18, 2, c.dark);
-    pixel(g, 8, 19, 5, 3, c.outline);
-    pixel(g, 27, 19, 5, 3, c.outline);
-    pixel(g, 9, 20, 3, 1, c.dark);
-    pixel(g, 28, 20, 3, 1, c.dark);
-    pixel(g, 15, 9, 10, 2, c.outline);
-    pixel(g, 16, 10, 2, 1, c.green);
-    pixel(g, 19, 10, 2, 1, c.green);
-    pixel(g, 22, 10, 2, 1, c.green);
-  });
-  drawTexture(scene, HOVERCART_TEXTURES.active, 40, 24, (g) => {
-    const c = colors;
-    pixel(g, 3, 4, 34, 15, c.outline);
-    pixel(g, 5, 5, 30, 12, c.steel);
-    pixel(g, 6, 6, 27, 2, c.light);
-    pixel(g, 6, 9, 28, 1, c.dark);
-    pixel(g, 7, 11, 26, 4, c.deep);
-    pixel(g, 11, 16, 18, 2, c.dark);
-    pixel(g, 8, 19, 5, 2, c.outline);
-    pixel(g, 27, 19, 5, 2, c.outline);
-    pixel(g, 9, 20, 3, 1, c.cyan);
-    pixel(g, 28, 20, 3, 1, c.cyan);
-    pixel(g, 15, 8, 10, 2, c.outline);
-    pixel(g, 16, 9, 2, 1, c.green);
-    pixel(g, 19, 9, 2, 1, c.green);
-    pixel(g, 22, 9, 2, 1, c.green);
-  });
-}
-
 export class Hovercart {
-  constructor(scene) {
+  constructor(scene, charger) {
     this.id = "hovercartCart";
     this.scene = scene;
     this.cartCrates = [];
@@ -158,22 +71,10 @@ export class Hovercart {
     this.routeUntil = -Infinity;
     this.closing = null;
     this.destroyed = false;
-    const bounds = getBackroomInteriorBounds();
-    this.dock = getHovercartDock();
-    this.stationBounds = {
-      left: this.dock.x - 12,
-      right: this.dock.x + 12,
-      top: bounds.top - 20,
-      bottom: bounds.top + 2,
-    };
 
-    createCartTextures(scene);
-    this.charger = scene.add.image(this.dock.x, bounds.top - 8, HOVERCART_TEXTURES.charger)
-      .setOrigin(0.5, 0.5)
-      .setDepth(PEOPLE_DEPTH_BASE + bounds.top + 1);
-    this.cart = scene.add.image(this.dock.x, this.dock.y, HOVERCART_TEXTURES.docked)
-      .setOrigin(0.5, 0.5)
-      .setDepth(PEOPLE_DEPTH_BASE + this.dock.y);
+    // The charger itself is a fixture (HOVERCART CHARGER), drawn and made solid by FixtureViews.
+    createHovercartTextures(scene);
+    this.cart = scene.add.image(0, 0, HOVERCART_TEXTURES.docked).setOrigin(0.5, 0.5);
     scene.physics.add.existing(this.cart);
     this.cart.body.setSize(32, 16)
       .setAllowGravity(false)
@@ -184,30 +85,15 @@ export class Hovercart {
       scene.physics.add.collider(this.cart, scene.registerGroup),
       scene.physics.add.collider(this.cart, scene.crateGroup, null, (_cart, crate) => this.slideOffCrate(crate)),
     ];
-
-    this.postBlocker = scene.add.rectangle(
-      this.dock.x,
-      bounds.top - 3,
-      24,
-      26,
-      0x000000,
-      0,
-    ).setVisible(false);
-    scene.physics.add.existing(this.postBlocker, true);
-    scene.obstacleGroup.add(this.postBlocker);
-
-    this.chargerTop = { x: this.dock.x - 32, y: bounds.top - 8 - 44 };
-    this.stationMeter = scene.add.graphics().setDepth(PEOPLE_DEPTH_BASE + bounds.top + 2);
+    this.stationMeter = scene.add.graphics();
     this.cartMeter = scene.add.graphics();
+    this.setCharger(charger);
 
     this.unregisterStation = scene.interactables.registerProvider("hovercart-station", () => [{
       id: "hovercart-station",
       kind: "hovercart-station",
       range: 24,
-      // A docked cart is solid, so facing it counts as facing its charger.
-      distanceFrom: (origin) => scene.interactionSystem.feetReachTo(origin, this.isOut()
-        ? this.stationBounds
-        : { ...this.stationBounds, left: this.dock.x - 16, right: this.dock.x + 16, bottom: this.dock.y + 8 }),
+      distanceFrom: (origin) => scene.interactionSystem.feetReachTo(origin, this.stationBounds),
       getActions: () => this.getStationActions(),
     }]);
     // A dead cart can't follow; the player carries it back to the charger once it's empty.
@@ -239,9 +125,36 @@ export class Hovercart {
     return this.active || this.dead;
   }
 
+  /**
+   * Takes its home spots from the charger fixture, wherever it was placed. A docked cart moves
+   * with its charger.
+   * @param {{ gx: number, gy: number, sprite?: object }} charger - the HOVERCART CHARGER fixture
+   */
+  setCharger(charger) {
+    this.charger = charger;
+    const spots = getHovercartChargerSpots(charger);
+    this.dock = spots.dock;
+    this.launch = spots.launch;
+    this.stationBounds = spots.bounds;
+    this.chargerTop = spots.artTop;
+    this.chargerKey = `${charger.gx},${charger.gy}`;
+    this.meterKey = null;
+    if (!this.isOut()) this.parkOnCharger();
+    this.syncCartCrates();
+    this.renderBattery();
+  }
+
+  // A docked cart sits inside its charger's solid box, so it has no body of its own.
+  parkOnCharger() {
+    this.cart.body.enable = true;
+    this.cart.body.reset(this.dock.x, this.dock.y);
+    this.cart.body.stop();
+    this.cart.body.enable = false;
+  }
+
   getStationActions() {
     const scene = this.scene;
-    if (scene.areas.playerArea !== AREA.BACKROOM) return [];
+    if (areaAtRow(Math.floor(this.charger.gy)) !== scene.areas.playerArea) return [];
     let hint = `${controlLabel("interact")}: Turn on the hovercart`;
     if (this.dead) hint = `${controlLabel("interact")}: Dock the hovercart to charge it`;
     else if (this.active) hint = `${controlLabel("interact")}: Dock and turn off the hovercart`;
@@ -259,9 +172,9 @@ export class Hovercart {
         return false;
       }
       this.active = true;
-      this.cart.setPosition(this.dock.x, this.dock.y);
-      this.cart.body.stop();
       this.cart.body.enable = true;
+      this.placeCartClearOfPlayer(this.launch.x, this.launch.y);
+      this.cart.body.stop();
       this.cart.setTexture(HOVERCART_TEXTURES.active);
       this.scene.messages.show("Hovercart on.", "#10b981");
       this.syncCartCrates();
@@ -282,23 +195,12 @@ export class Hovercart {
     this.dead = false;
     this.carried = false;
     this.moving = false;
-    this.cart.body.enable = true;
-    this.cart.body.reset(this.dock.x, this.dock.y);
+    this.parkOnCharger();
     this.cart.setTexture(HOVERCART_TEXTURES.docked);
-    this.stepPlayerOffDock();
     this.scene.messages.show("Hovercart docked.", "#10b981");
     this.syncCartCrates();
     this.renderBattery();
     return true;
-  }
-
-  // The docked cart is solid, so a player standing on its spot steps just below it.
-  stepPlayerOffDock() {
-    const player = this.scene.player;
-    const feet = player?.sprite?.body;
-    const cart = this.cart.body;
-    if (!feet || feet.right <= cart.x || feet.x >= cart.right || feet.bottom <= cart.y || feet.y >= cart.bottom) return;
-    player.teleportTo(player.sprite.x, player.sprite.y + cart.bottom - feet.y + 1);
   }
 
   runOutOfBattery() {
@@ -492,7 +394,12 @@ export class Hovercart {
     if (this.carried) {
       const player = this.scene.player.sprite;
       this.cart.setPosition(player.x, player.y - 22).setDepth(player.depth + 1);
+    } else if (!this.isOut()) {
+      // Fades with its charger while the charger is being moved.
+      this.cart.setPosition(this.dock.x, this.dock.y).setAlpha(this.charger?.sprite?.alpha ?? 1);
+      this.cart.setDepth(this.chargerDepth() + 0.002);
     } else {
+      this.cart.setAlpha(1);
       // Sorts by its bottom edge like people, so it's in front of a fixture exactly when it looks it.
       this.cart.setDepth(PEOPLE_DEPTH_BASE + this.cart.y + CART_BODY.height / 2);
     }
@@ -503,6 +410,11 @@ export class Hovercart {
       crate.followCarrier(this.cart, index, 21, CRATE_STACK_SPACING);
       crate.sprite.setDepth(this.cart.depth + 0.01 * (index + 1));
     });
+  }
+
+  // The charger fixture's own layer; its screen and a docked cart draw just over it.
+  chargerDepth() {
+    return this.charger?.sprite?.depth ?? PEOPLE_DEPTH_BASE + this.stationBounds.bottom;
   }
 
   updateBattery(seconds) {
@@ -527,6 +439,7 @@ export class Hovercart {
     const screenFill = Math.round(13 * fraction);
     const cartFill = Math.round(24 * fraction);
     const key = `${this.isOut()}/${level}/${screenFill}/${cartFill}/${blinkOff}`;
+    this.stationMeter.setDepth(this.chargerDepth() + 0.001).setAlpha(this.charger?.sprite?.alpha ?? 1);
     if (key !== this.meterKey) {
       this.meterKey = key;
       const { x, y } = this.chargerTop;
@@ -548,9 +461,10 @@ export class Hovercart {
   }
 
   update(time, delta) {
-    const seconds = this.lastTime === null ? 0 : Math.min(time - this.lastTime, 100) / 1000;
+    const seconds = this.lastTime === null ? 0 : Math.max(0, Math.min(time - this.lastTime, 100)) / 1000;
     this.lastTime = time;
     const scene = this.scene;
+    if (`${this.charger.gx},${this.charger.gy}` !== this.chargerKey) this.setCharger(this.charger);
     const frozen = (scene.shiftClock?.isPaused && scene.shiftClock.started) ||
       scene.controlMode?.getMode() === CONTROL_MODES.LOADING;
     if (!frozen && this.cart?.body) this.updateBattery(seconds);
@@ -979,6 +893,7 @@ export class Hovercart {
     this.active = !dead;
     this.dead = dead;
     this.cart.setTexture(dead ? HOVERCART_TEXTURES.docked : HOVERCART_TEXTURES.active);
+    this.cart.body.enable = true;
     this.placeCartClearOfPlayer(player.x + 40, player.y);
     if (dead) this.cart.body.stop();
     for (const crate of crates) {
@@ -1001,10 +916,9 @@ export class Hovercart {
     this.dead = false;
     this.carried = false;
     this.moving = false;
-    if (this.cart?.body) this.cart.body.enable = true;
-    this.cart?.body?.stop();
-    this.cart?.setTexture(HOVERCART_TEXTURES.docked);
-    this.cart?.body?.reset(this.dock.x, this.dock.y);
+    if (!this.cart?.body) return;
+    this.cart.setTexture(HOVERCART_TEXTURES.docked);
+    this.parkOnCharger();
     this.syncCartCrates();
     this.renderBattery();
   }
@@ -1018,17 +932,11 @@ export class Hovercart {
     this.unregisterCart?.();
     this.releaseDoors?.();
     for (const collider of this.colliders) collider.destroy();
-    // Destroying it also takes it out of obstacleGroup, which may already be gone at shutdown.
-    this.postBlocker.destroy();
     for (const crate of this.cartCrates) crate.destroy();
     this.cartCrates = [];
-    this.charger.destroy();
     this.stationMeter.destroy();
     this.cartMeter.destroy();
     this.cart.destroy();
-    for (const key of Object.values(HOVERCART_TEXTURES)) {
-      if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
-    }
     if (this.scene.hovercart === this) this.scene.hovercart = null;
   }
 }

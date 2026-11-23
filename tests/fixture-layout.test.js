@@ -1186,6 +1186,15 @@ test("all fixture types stay on the sales floor", () => {
   assert.equal(validateFixtureLayout(trashCanInBackroom, createRoom()).valid, false);
 });
 
+test("the hovercart charger can stand in the backroom but cannot be turned", () => {
+  const options = createRoom();
+  const at = (rotation) => validateFixtureLayout(
+    [...BASIC_FIXTURES, { id: "charger", type: "hovercart_charger", gx: 1, gy: 101.5, rotation }], options);
+  const placed = at(0);
+  assert.equal(placed.valid, true, placed.reason);
+  for (const rotation of [1, 2, 3]) assert.equal(at(rotation).valid, false, `rotation ${rotation}`);
+});
+
 test("the backroom only connects to the shop through its door pair", () => {
   const options = createRoom();
   const link = getBackroomLink();

@@ -16,6 +16,7 @@ import { ControlMode, CONTROL_MODES } from "../input/ControlMode.js";
 import { InteractableRegistry } from "../interaction/InteractableRegistry.js";
 import { InteractionSystem } from "../interaction/InteractionSystem.js";
 import { ModuleHost } from "../modules/GameModules.js";
+import { createHovercartTextures } from "../modules/hovercart/HovercartArt.js";
 import {
   DRONE_TERMINAL_PLATFORM_SPRITE,
   DRONE_TERMINAL_SCREEN_SPRITE,
@@ -222,6 +223,8 @@ export class GameScene extends Phaser.Scene {
       registerFrontOverlap: REGISTER_FRONT_OVERLAP,
       defaultBodySize: { width: SPRITE_DISPLAY_WIDTH, height: SPRITE_DISPLAY_HEIGHT },
     });
+    // The hovercart charger is a fixture, so its art must exist before any fixture is drawn.
+    createHovercartTextures(this);
     for (const fixture of this.fixtures.all()) this.fixtureViews.show(fixture);
 
     // Customers spawn just inside the front door. The small jitter box keeps several quick

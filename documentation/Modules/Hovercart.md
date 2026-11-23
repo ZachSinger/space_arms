@@ -11,18 +11,27 @@
 - You can still hold three crates yourself while using it.
 
 ## Buying it
-- Its charger goes in the top-left corner of the backroom. That corner must be clear of
-  fixtures, floor crates, and the player to buy it, and fixtures can't be placed there after.
+- It arrives packed with its charger in one crate on the Loading Pad, like a bought fixture, so
+  the Loading Pad needs a free spot. Pick the crate up and place the HOVERCART CHARGER anywhere
+  in the store, sales floor or backroom. The charger can't be turned; the cart always pulls out
+  in front of it.
+- The charger is a fixture: hold to move it, or crate it, like any other fixture.
+  The cart must be docked on it first. Crating the charger packs the cart away with it (its
+  charge is kept), and the cart comes back docked when the charger is placed again. Selling the
+  charger sells the hovercart.
 - The Level 7 news at the end of a shift mentions it, and the Handbook's Level Rewards list it.
 - The purchase shows on the day's receipt as "Bought equipment: Hovercart".
 
 ## Saving
 - A save remembers that you own it, which crates are on it, how much charge its battery has,
   and whether it was out or on its charger. It doesn't remember exactly where the cart was.
+  The charger is saved like any fixture or fixture crate.
 - Loading a save keeps the battery charge, so reloading never refills it. A cart that was out,
   or has crates on it, comes back next to you. It's switched on with its crates, or dead if its
   battery was empty, so you still carry it back. Otherwise it loads on its charger and keeps
   charging from where it was.
+- Saves from before the charger could be placed get a charger in the backroom's top-left
+  corner, or the nearest free spot, or a charger crate on the Loading Pad if there's no room.
 
 The DEV Crate Test Room gives you the cart for free, with a battery that never runs out and
 endless stamina, for testing. Nothing there is saved.
@@ -66,8 +75,8 @@ endless stamina, for testing. Nothing there is saved.
 - It's solid: you can never walk over it, whether it's on, out of battery, or docked.
 - Walking into it pushes it like a single floor crate, always at the one-crate push speed
   (60% of walking), no matter how many crates are on it or in your hands.
-- Docked on its charger it doesn't move. Facing the docked cart counts as facing the
-  charger, so you can still turn it on.
+- Docked on its charger it doesn't move; it's part of the charger, so the charger is what
+  you bump into and face to turn it on.
 - While you carry it over your head it doesn't bump into anything.
 
 ## Gear Modifier button

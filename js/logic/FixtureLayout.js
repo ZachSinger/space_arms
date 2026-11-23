@@ -414,6 +414,8 @@ export function validateFixtureLayout(placements, {
       !isValidFixtureRotation(placement.rotation)) {
       return invalid("The fixture layout is invalid.");
     }
+    // Art drawn for one facing only (the hovercart charger) can't be turned.
+    if (spec.fixedFacing && fixtureRotation(placement) !== 0) return invalid("The fixture layout is invalid.");
     ids.add(placement.id);
     const bounds = fixtureBounds(placement);
     const projections = fixtureProjectionBoxes(placement);
@@ -464,7 +466,7 @@ export function validateFixtureLayout(placements, {
           ? "Too far into the wall. Move it down a little."
           : "Place fixtures on unlocked floor, away from walls.");
       }
-      if (!tucked && requireSalesFloor && !zoneAt(cell.gx, cell.gy)?.salesFloor) {
+      if (!tucked && requireSalesFloor && !spec.anyRoom && !zoneAt(cell.gx, cell.gy)?.salesFloor) {
         return invalid(`The ${spec.name} must go on the sales floor.`);
       }
       if (fixtureReservedCells.has(key)) return invalid("Keep entrances and the loading area clear.");

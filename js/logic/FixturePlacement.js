@@ -99,6 +99,10 @@ export class FixturePlacement {
   }
 
   rotate() {
+    if (this.spec.fixedFacing) {
+      this.scene.messages.show(`The ${this.spec.name} can't be turned.`);
+      return;
+    }
     this.rotation = (this.rotation + 1) % 4;
     this.refreshPreview();
   }
@@ -176,7 +180,7 @@ export class FixturePlacement {
     }
     if (crate !== this.scene.carriedCrate || crate?.kind !== "fixture") return false;
     const spec = getFixtureType(crate.typeId);
-    if (this.scene.areas.playerArea === AREA.BACKROOM && spec) {
+    if (this.scene.areas.playerArea === AREA.BACKROOM && spec && !spec.anyRoom) {
       this.scene.messages.show("Fixtures can only be placed on the sales floor.");
       return false;
     }

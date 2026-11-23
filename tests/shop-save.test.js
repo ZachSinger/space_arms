@@ -217,6 +217,11 @@ test("a bought hovercart saves up to three item crates and they count toward cra
     assert.throws(() => validateShopSave({ ...charged, hovercart: { ...charged.hovercart, battery } }, database),
       /invalid hovercart/);
   }
+
+  const placed = { ...charged, hovercart: { ...charged.hovercart, charger: true } };
+  assert.equal(validateShopSave(structuredClone(placed), database).hovercart.charger, true);
+  assert.throws(() => validateShopSave({ ...charged, hovercart: { ...charged.hovercart, charger: "yes" } }, database),
+    /invalid hovercart/);
 });
 
 test("saved receipts must belong to the saved day", () => {

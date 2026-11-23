@@ -75,8 +75,8 @@ export class LayoutRenderer {
   static equipmentHTML(scene, enabled) {
     const hovercart = scene.gameModules?.get("hovercart");
     if (!hovercart) return "";
-    const { name, price, requiredShopLevel, isPurchased, levelMet, canAfford } = hovercart.purchaseOption();
-    const canBuy = enabled && !isPurchased && levelMet && canAfford;
+    const { name, price, requiredShopLevel, isPurchased, levelMet, canAfford, hasDeliverySpace } = hovercart.purchaseOption();
+    const canBuy = enabled && !isPurchased && levelMet && canAfford && hasDeliverySpace;
     const status = isPurchased
       ? "OWNED"
       : !levelMet
@@ -85,14 +85,16 @@ export class LayoutRenderer {
           ? "INSUFFICIENT FUNDS"
           : !enabled
             ? "AVAILABLE WHILE STORE IS CLOSED"
-            : "BUY";
+            : !hasDeliverySpace
+              ? "LOADING PAD FULL"
+              : "BUY";
     return html`
       <h3 class="type-h3 layout-zone-heading">Equipment</h3>
       <div class="item-card fixture-sale-card">
         <div class="fixture-sale-info">
           <h3 class="type-h3">${name}</h3>
           <p class="type-description">Shop Level ${requiredShopLevel}</p>
-          <p class="type-description">Follows you around the store carrying up to 3 crates. Its charger goes in the top-left corner of the backroom.</p>
+          <p class="type-description">Follows you around the store carrying up to 3 crates. It arrives in a crate on the Loading Pad with its charger, which you can place anywhere in the store.</p>
         </div>
         <div class="fixture-sale-action">
           <p class="type-description fixture-sale-price">${price.toLocaleString()}</p>
