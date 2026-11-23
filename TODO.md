@@ -33,9 +33,6 @@ completed or no longer relevant.
       sweep should be hand-drawn frames in each character's sprite sheet. Right now the game draws the mop and arms
       over the character with code while it runs. This applies to the player and every
       employee, in all four directions.
-- [ ] Add a sound effect when a thrown box hits a customer.
-- [ ] Replace the placeholder icon for the Blackwood Ordnance Counter-Weight Stock
-      (`att_stk_08`) with artwork made for that item.
 
 ## Planned modules after the base shop
 

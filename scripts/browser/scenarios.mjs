@@ -69,6 +69,13 @@ export const scenarios = {
       let hits = 0;
       scene.eventBus.on("customer-hit-by-crate", () => { hits += 1; });
       window.__hits = () => hits;
+      // Records the length of every sound started, to confirm the box-hit thud plays.
+      window.__soundsPlayed = [];
+      const start = AudioBufferSourceNode.prototype.start;
+      AudioBufferSourceNode.prototype.start = function (...args) {
+        window.__soundsPlayed.push(this.buffer?.duration ?? 0);
+        return start.apply(this, args);
+      };
       scene.customerFlow.spawn();
       // Reputation changes wait in a pending tally until End Day.
       return scene.gameState.reputation.pending.global;
@@ -98,10 +105,12 @@ export const scenarios = {
       await h.wait(1200);
       if (await h.page.evaluate(() => window.__hits())) break;
     }
-    const after = await h.game((scene) => ({ hits: window.__hits(), reputation: scene.gameState.reputation.pending.global }));
+    const after = await h.game((scene) => ({ hits: window.__hits(), reputation: scene.gameState.reputation.pending.global,
+      thuds: window.__soundsPlayed.filter((seconds) => Math.abs(seconds - 0.18) < 0.005).length }));
     const failures = [];
     if (after.hits < 1) failures.push("no customer was hit by a thrown crate");
     else if (!(after.reputation < before)) failures.push(`hit didn't cost reputation (${before} -> ${after.reputation})`);
+    if (after.hits >= 1 && after.thuds < 1) failures.push("no hit sound played");
     return failures;
   },
 

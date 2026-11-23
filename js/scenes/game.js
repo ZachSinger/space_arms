@@ -71,7 +71,7 @@ import { hideLoadingScreen } from "./loadingScreen.js";
 import { installSceneTextSize } from "../logic/GameTextSize.js";
 import { gameRandom, randomSeed } from "../core/Random.js";
 import { PauseMenu } from "../logic/PauseMenu.js";
-import { setSfxPaused } from "../logic/Sfx.js";
+import { playCrateHit, setSfxPaused } from "../logic/Sfx.js";
 
 // How far below the doorway cell's center a customer's feet must be for their head to stay
 // under the top of the door opening (opening top is 24px above center, heads ~42px tall,
@@ -299,10 +299,10 @@ export class GameScene extends Phaser.Scene {
       padRect: this.supply.padRect,
       customerGroup: this.customerGroup,
       people: [this.employeeGroup, this.player.sprite],
-      onCustomerHit: (customer, crate) => this.eventBus.emit(GAME_EVENTS.CUSTOMER_HIT_BY_CRATE, {
-        customer,
-        itemId: crate.itemId,
-      }),
+      onCustomerHit: (customer, crate) => {
+        playCrateHit();
+        this.eventBus.emit(GAME_EVENTS.CUSTOMER_HIT_BY_CRATE, { customer, itemId: crate.itemId });
+      },
     });
     this.carriedCrate = null; // the uppermost carried crate, used for the next action
     this.carriedCrates = [];

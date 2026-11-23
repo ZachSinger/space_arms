@@ -37,6 +37,11 @@ const SOUNDS = {
       ? [[0, 0.0001], [0.01, 0.07], [0.25, 0.05], [0.6, 0.001]]
       : [[0, 0.0001], [0.01, 0.07], [0.12, 0.01]],
   })),
+  // Cardboard thud for a thrown box hitting a customer: a low drop in pitch under a short slap.
+  crateHit: [
+    { wave: "sine", frequency: 130, sweepTo: 55, start: 0, length: 0.18, curve: [[0, 0.45], [0.18, 0.001]] },
+    { wave: "noise", start: 0, length: 0.07, curve: [[0, 0.22], [0.07, 0.001]] },
+  ],
 };
 
 function getContext() {
@@ -57,8 +62,13 @@ export function setSfxPaused(value) {
 }
 
 // Band-limited like the Web Audio oscillators, so the beeps sound the same as before.
-function waveSample(wave, frequency, seconds, nyquist) {
-  const phase = 2 * Math.PI * frequency * seconds;
+// A note with `sweepTo` slides its pitch evenly from `frequency` to `sweepTo` over its length.
+function waveSample(note, seconds, nyquist) {
+  const { wave, frequency, sweepTo, length } = note;
+  if (wave === "noise") return Math.random() * 2 - 1;
+  const phase = sweepTo === undefined
+    ? 2 * Math.PI * frequency * seconds
+    : 2 * Math.PI * (frequency * seconds + (sweepTo - frequency) * seconds * seconds / (2 * length));
   if (wave === "sine") return Math.sin(phase);
   let sum = 0;
   for (let harmonic = 1; harmonic * frequency < nyquist; harmonic += 1) {
@@ -95,7 +105,7 @@ function getBuffer(ctx, name) {
     const count = Math.round(note.length * rate);
     for (let index = 0; index < count && first + index < length; index += 1) {
       const seconds = index / rate;
-      samples[first + index] += waveSample(note.wave, note.frequency, seconds, rate / 2) *
+      samples[first + index] += waveSample(note, seconds, rate / 2) *
         volumeAt(note.curve, seconds);
     }
   }
@@ -149,4 +159,8 @@ export function playOrderAlert() {
 
 export function playOrderShipped() {
   play("shipped");
+}
+
+export function playCrateHit() {
+  play("crateHit");
 }
