@@ -397,6 +397,15 @@ export class Navigation {
       }
       obstacles.push(bounds);
     }
+    // Things only this mover avoids, such as floor crates for the hovercart.
+    for (const solid of bodySize.extraSolids ?? []) {
+      obstacles.push({
+        left: solid.x - halfW,
+        right: solid.x + solid.width + halfW,
+        top: solid.y - halfH,
+        bottom: solid.y + solid.height + halfH,
+      });
+    }
     return obstacles;
   }
 

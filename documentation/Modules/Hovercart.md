@@ -26,10 +26,15 @@ design. The level unlock, purchase, and upgrades are not part of this prototype.
 ## Following behavior
 - It only moves after you've gotten a few steps away. It must always get close enough to be
   used, but it shouldn't fidget every time you move at all.
+- It only follows you directly while it's in the same room as you. Once you leave the room,
+  it stops chasing you and heads for the door you left through, then follows you on the other
+  side. It never jumps across the map to catch up.
 - It goes through doors the way you do: the door slides open as it comes near, it glides into
   the doorway, comes out of the matching door on the other side, and floats out after you. If
   you're still standing just inside, it waits in the doorway until you step clear, so it never
   ends up on top of you or past you.
+- It steers around floor crates instead of shoving them. If a crate sits right in front of the
+  door, it pulls up beside the crate and slips through the door anyway.
 
 ## Bumping into it
 - It's solid: you can never walk over it, whether it's on, out of battery, or docked.

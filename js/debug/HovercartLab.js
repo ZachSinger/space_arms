@@ -17,6 +17,7 @@ const CART_MOVE_SPEED = Object.freeze({ empty: 150, perCrate: 18, minimum: 60 })
 const CART_FOLLOW_START = 84;
 const CART_FOLLOW_STOP = 44;
 const CART_DOOR_OPEN_REACH = 72;
+const CART_STUCK_MS = 500;
 const CART_READY_RANGE = INTERACT_RANGE;
 const CART_REPATH_MS = 300;
 const CART_BODY = Object.freeze({ width: 32, height: 16, avoidStoreDoor: true });
@@ -166,7 +167,7 @@ export class HovercartLab {
       scene.physics.add.collider(this.cart, scene.room.wallGroup),
       scene.physics.add.collider(this.cart, scene.obstacleGroup),
       scene.physics.add.collider(this.cart, scene.registerGroup),
-      scene.physics.add.collider(this.cart, scene.crateGroup),
+      scene.physics.add.collider(this.cart, scene.crateGroup, null, (_cart, crate) => this.slideOffCrate(crate)),
     ];
 
     this.postBlocker = scene.add.rectangle(
@@ -611,6 +612,30 @@ export class HovercartLab {
     }
   }
 
+  // Floor crates stop the cart without being shoved by it; the cart backs out the short way.
+  slideOffCrate(crateSprite) {
+    const cart = this.cart.body;
+    const crate = crateSprite.body;
+    if (!cart.enable || !crate?.enable) return false;
+    const pushLeft = cart.right - crate.x;
+    const pushRight = crate.right - cart.x;
+    const pushUp = cart.bottom - crate.y;
+    const pushDown = crate.bottom - cart.y;
+    const smallest = Math.min(pushLeft, pushRight, pushUp, pushDown);
+    if (smallest <= 0) return false;
+    let { x, y } = cart.center;
+    if (smallest === pushLeft) x -= pushLeft;
+    else if (smallest === pushRight) x += pushRight;
+    else if (smallest === pushUp) y -= pushUp;
+    else y += pushDown;
+    const velocity = { x: cart.velocity.x, y: cart.velocity.y };
+    if (smallest === pushLeft || smallest === pushRight) velocity.x = 0;
+    else velocity.y = 0;
+    cart.reset(x, y);
+    cart.setVelocity(velocity.x, velocity.y);
+    return false;
+  }
+
   // The portal whose front is the path's next stop, while the cart is heading for a door.
   approachingPortal() {
     const next = this.path?.[0];
@@ -627,7 +652,18 @@ export class HovercartLab {
       Phaser.Math.Distance.Between(this.cart.x, this.cart.y, portal.front.x, portal.front.y) < CART_DOOR_OPEN_REACH;
   }
 
+  // True once a moving cart has gone nowhere for a moment.
+  isStuck(time) {
+    const last = this.progress;
+    if (!last || Phaser.Math.Distance.Between(this.cart.x, this.cart.y, last.x, last.y) > 4) {
+      this.progress = { x: this.cart.x, y: this.cart.y, time };
+      return false;
+    }
+    return time - last.time > CART_STUCK_MS;
+  }
+
   startCrossing(portal) {
+    this.progress = null;
     const to = portal.partner ?? this.scene.areas.portalBetween(portal.to, portal.area);
     if (!to) return false;
     this.crossing = { from: portal, to, phase: "in" };
@@ -675,6 +711,31 @@ export class HovercartLab {
       y - height / 2 < feet.bottom && y + height / 2 > feet.y;
   }
 
+  // In the player's room it heads for the player. Anywhere else it only heads for the door
+  // leading toward him, and goes straight at it if no clear route is found.
+  findFollowPath(player, sameArea) {
+    const store = this.scene.navigation.store;
+    const body = {
+      ...CART_BODY,
+      extraSolids: this.scene.restockCrates
+        .filter((crate) => crate.sprite.body?.enable)
+        .map(({ sprite: { body: b } }) => ({ x: b.x, y: b.y, width: b.width, height: b.height })),
+    };
+    if (sameArea) return store.findPath(this.cart.x, this.cart.y, player.x, player.y, body);
+    const legs = this.scene.areas.crossings(this.cart.x, this.cart.y, player.x, player.y);
+    if (!legs?.length) return null;
+    const { near, far } = legs[0];
+    const door = { x: near.x, y: near.y, teleportTo: { x: far.x, y: far.y } };
+    let route = null;
+    for (const [dx, dy] of [[0, 0], [0, 16], [-24, 8], [24, 8], [0, 32], [-32, 24], [32, 24], [0, 48]]) {
+      const path = store.findPath(this.cart.x, this.cart.y, near.x + dx, near.y + dy, body);
+      if (!path) continue;
+      route = dx || dy ? [...path, { x: near.x + dx, y: near.y + dy }] : path;
+      break;
+    }
+    return [...(route ?? []).filter((point) => point.x !== near.x || point.y !== near.y), door];
+  }
+
   updateMovement(time, frozen, seconds = 0) {
     if (this.crossing && this.cart?.body) {
       if (!frozen) this.updateCrossing(seconds);
@@ -694,6 +755,7 @@ export class HovercartLab {
     const distance = Phaser.Math.Distance.Between(this.cart.x, this.cart.y, player.x, player.y);
     const shouldMove = !sameArea ||
       (this.moving ? distance > CART_FOLLOW_STOP : distance > CART_FOLLOW_START);
+    if (!this.moving) this.progress = null;
     if (!shouldMove) {
       this.moving = false;
       this.path = null;
@@ -704,15 +766,14 @@ export class HovercartLab {
 
     this.moving = true;
     if (!this.path || time - this.pathAt > CART_REPATH_MS) {
-      this.path = this.scene.navigation.store.findPath(this.cart.x, this.cart.y, player.x, player.y, CART_BODY);
+      this.path = this.findFollowPath(player, sameArea);
       this.pathAt = time;
-      // No route (e.g. boxed in): catch up by hopping next to the player.
-      if (!this.path && !sameArea) {
-        this.placeCartClearOfPlayer(player.x, player.y + CART_FOLLOW_STOP);
-        this.path = null;
-        this.syncCartCrates();
-        return;
-      }
+    }
+    if (!sameArea && !this.path?.length) {
+      this.moving = false;
+      this.cart.body.stop();
+      this.syncCartCrates();
+      return;
     }
     while (this.path?.length) {
       const next = this.path[0];
@@ -726,6 +787,16 @@ export class HovercartLab {
       if (next.teleportTo) {
         this.placeCartClearOfPlayer(next.teleportTo.x, next.teleportTo.y);
         this.pathAt = -Infinity;
+      }
+    }
+    const doorAhead = !sameArea ? this.approachingPortal() : null;
+    if (doorAhead && this.isStuck(time) && Phaser.Math.Distance.Between(
+      this.cart.x, this.cart.y, doorAhead.front.x, doorAhead.front.y) < CART_DOOR_OPEN_REACH) {
+      // Something's in front of the door; it squeezes past rather than waiting forever.
+      this.path.shift();
+      if (this.startCrossing(doorAhead)) {
+        this.updateCrossing(seconds);
+        return;
       }
     }
     const target = this.path?.[0] ?? player;
