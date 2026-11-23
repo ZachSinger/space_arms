@@ -19,8 +19,9 @@ full charge lasts 30 seconds of moving. Moving empty uses 4 per second, so a ful
 
 Upgrades are bought in the same Equipment section of the Manager's Tablet Layout tab where you
 buy the hovercart, while the store is closed. They take effect right away. There are three
-separate upgrade paths, Length, Speed, and Battery, and each one has 3 steps. Each step unlocks
-at a Store Level and must be bought in order.
+separate upgrade paths: Length and Speed have 3 steps each, and Battery has 6. Each step unlocks
+at a Store Level and must be bought in order. Upgrades belong to one hovercart; if you own more
+than one, each cart is upgraded separately.
 
 ## Length (how many crates it holds)
 
@@ -56,11 +57,20 @@ step, so a bigger battery never means a longer wait at the charger.
 Step 1 unlocks at Level 13, costs 3,000, and gives 450 energy. That's 45 seconds of moving with
 3 crates.
 
-Step 2 unlocks at Level 32, costs 15,000, and gives 600 energy. That's 60 seconds of moving with
+Step 2 unlocks at Level 22, costs 8,000, and gives 600 energy. That's 60 seconds of moving with
 3 crates.
 
-Step 3 unlocks at Level 42, costs 60,000, and gives 900 energy. That's 90 seconds of moving with
-3 crates, or about 56 seconds with 6 crates.
+Step 3 unlocks at Level 32, costs 15,000, and gives 800 energy. That's 50 seconds of moving with
+6 crates.
+
+Step 4 unlocks at Level 37, costs 30,000, and gives 1,000 energy. That's about 62 seconds of
+moving with 6 crates.
+
+Step 5 unlocks at Level 42, costs 60,000, and gives 1,300 energy. That's about 81 seconds of
+moving with 6 crates.
+
+Step 6 unlocks at Level 49, costs 100,000, and gives 1,600 energy. That's 100 seconds of moving
+with 6 crates, more than three times the starting cart with 3 crates.
 
 ## Why these levels and prices
 
@@ -77,3 +87,8 @@ Should a second hovercart (with its own charger) be buyable later, and at what l
 If you own more than one hovercart, should upgrades apply to all of them or be bought per cart?
 
 Should a Speed upgrade be needed before a Length upgrade, so a long cart is never painfully slow?
+
+Answer: I really want you to be able to link hovercarts together, so that in theory you could eventually be moving three fully upgraded hovercarts yourself. This adds diversity to gameplay because it empowers the player to lean into solo or multiplayer rather than leaning on employees, if that's something they want to do.
+
+Upgrades should only apply to single hovercarts. 
+As for order of upgrades, Speed should come first, followed by Length, and then Battery. This ensures that a long cart is never painfully slow and that players can make meaningful improvements to their hovercarts in a logical progression. Let's also add three more upgrades for batteries. You can discuss with me if you want, but yeah I think there needs to be more battery potentially, to scale to how many times you can upgrade the store space, I mean the hovercart could eventually become a pain depending on your build. I don't want people to be punished for their builds if they go a little crazy to have fun
