@@ -3,7 +3,7 @@
 // ==========================================
 // DEV "Crate Test Lab": the real shop with a few dozen item crates, single and stacked, on the sales
 // floor and in the backroom, for trying out picking up, carrying, stacking, and stocking, plus a
-// shelf maze for testing how the hovercart follows the player around fixtures.
+// shelf maze for testing how three linked hovercarts follow the player around fixtures.
 // Nothing is saved. The panel can refill the floor or clear it.
 import { database } from "../scenes/boot.js";
 import { AREA } from "../world/Areas.js";
@@ -15,6 +15,7 @@ import { sourceItems } from "../logic/InventoryTransfer.js";
 import { unlockEverything } from "./SandboxRoom.js";
 import { controlLabel } from "../input/InputDevice.js";
 import { HOVERCART_CHARGER_TYPE, getLegacyChargerSpot } from "../modules/hovercart/HovercartRules.js";
+import { Hovercart } from "../modules/hovercart/Hovercart.js";
 
 const STEP_X = 56;
 const STEP_Y = 52;
@@ -24,8 +25,8 @@ const CLEARANCE = 10;
 const KEEP_CLEAR = TILE_SIZE * 1.5;
 // Stack heights cycle through this pattern so every height from 1 to the max shows up.
 const HEIGHTS = [1, 3, 2, 3, 1, 2];
-// Enough stacks per room to try every height a couple of times (about 24 crates in all).
-const STACKS_PER_AREA = 6;
+// Enough crates to fill all three carts, even when chargers limit backroom space.
+const STACKS_PER_AREA = 10;
 
 // Shelf maze on the lower sales floor for testing how the hovercart gets around fixtures.
 // A long shelf wall closes off the top. Below it, walls of sideways shelves (solid almost
@@ -82,11 +83,11 @@ function labItems() {
   return mixed.slice(0, 24);
 }
 
-function keepClearSpots(scene) {
+function keepClearSpots(scene, carts) {
   return [
     scene.storeDoor,
     scene.player.sprite,
-    scene.hovercart?.dock,
+    ...carts.map((cart) => cart.dock),
     ...scene.areas.portals.map((portal) => portal.front),
   ].filter(Boolean).map(({ x, y }) => ({ x, y }));
 }
@@ -107,8 +108,61 @@ export function setupCrateTestLab(scene) {
   }
   const hovercart = hovercartSystem.sync();
   if (!hovercart) throw new Error("Crate lab: no room for the hovercart charger.");
+  const carts = [hovercart];
+  for (const offsetY of [0, 2]) {
+    const gx = charger.gx + 2;
+    const gy = charger.gy + offsetY;
+    if (!scene.fixtureSystem.placeFree(HOVERCART_CHARGER_TYPE, gx, gy)) {
+      throw new Error("Crate lab: no room for all three hovercart chargers.");
+    }
+    const fixture = hovercartSystem.chargers().find((entry) => entry.gx === gx && entry.gy === gy);
+    if (!fixture) throw new Error("Crate lab: missing hovercart charger.");
+    carts.push(new Hovercart(scene, fixture, { secondary: true }));
+  }
+  hovercartSystem.upgrades = { speed: 3, length: 3, battery: 6 };
+  for (const cart of carts) {
+    cart.setUpgrades(hovercartSystem.upgrades);
+    cart.battery = cart.batteryCapacity;
+    cart.infiniteBattery = true;
+  }
+  const cartColliders = [];
+  for (let i = 0; i < carts.length; i += 1) {
+    for (let j = i + 1; j < carts.length; j += 1) {
+      cartColliders.push(scene.physics.add.collider(carts[i].cart, carts[j].cart));
+    }
+  }
+  const links = scene.add.graphics();
+  const updateCarts = (time, delta) => {
+    const active = carts.filter((cart) => cart.active);
+    for (let index = 0; index < carts.length; index += 1) {
+      const cart = carts[index];
+      const position = active.indexOf(cart);
+      const target = position > 0 ? active[position - 1].cart : null;
+      if (cart.followTarget !== target) {
+        cart.followTarget = target;
+        cart.trail = [];
+        cart.trailArea = null;
+        cart.trailTarget = null;
+        cart.path = null;
+      }
+      if (cart.secondary) cart.update(time, delta);
+    }
+    const player = scene.player.sprite;
+    const available = carts.filter((cart) => cart.isOut());
+    scene.hovercart = available.sort((a, b) =>
+      Phaser.Math.Distance.Between(player.x, player.y, a.cart.x, a.cart.y) -
+      Phaser.Math.Distance.Between(player.x, player.y, b.cart.x, b.cart.y))[0] ?? hovercart;
+    links.clear().lineStyle(2, 0x7dd3fc, 0.8);
+    for (let index = 1; index < active.length; index += 1) {
+      const first = active[index - 1].cart;
+      const second = active[index].cart;
+      if (scene.areas.areaAt(first.x, first.y) !== scene.areas.areaAt(second.x, second.y)) continue;
+      links.lineBetween(first.x, first.y, second.x, second.y);
+    }
+    links.setDepth(active.length ? Math.min(...active.map((cart) => cart.cart.depth)) - 0.02 : 0);
+  };
+  scene.events.on("update", updateCarts);
   // Temporary while testing the cart in the maze.
-  hovercart.infiniteBattery = true;
   scene.player.infiniteStamina = true;
   const items = labItems();
   for (const item of items) gameState.catalog.priceIfUnset(item.id, gameState.market.getPrice(item.id));
@@ -127,7 +181,7 @@ export function setupCrateTestLab(scene) {
   };
 
   const clear = () => {
-    hovercart.clearCrates();
+    for (const cart of carts) cart.clearCrates();
     for (const crate of crateSystem.getFloorCrates()) crate.destroy();
     crateSystem.restockCrates.length = 0;
     crateSystem.floorStacks.clear();
@@ -138,7 +192,7 @@ export function setupCrateTestLab(scene) {
   const fill = () => gameState.batch(fillNow);
   const fillNow = () => {
     clear();
-    const avoid = keepClearSpots(scene);
+    const avoid = keepClearSpots(scene, carts);
     let placed = 0;
     let stacks = 0;
     for (const areaId of [AREA.SHOP, AREA.BACKROOM]) {
@@ -191,14 +245,15 @@ export function setupCrateTestLab(scene) {
   panel.innerHTML = `
     <strong style="color:#38bdf8">CRATE TEST LAB</strong>
     <span>Nothing here is saved.</span>
-    <span>Backroom hovercart: face its charger and press E to turn it on. It follows you anywhere in the shop.</span>
-    <span>The rows of shelves on the lower sales floor are a maze for testing how the hovercart gets around shelves.</span>
-    <span>Stand next to it, then hold ${controlLabel("dash", "keyboard")} (L1 on a controller) and press ${controlLabel("putDown", "keyboard")} to put a crate on it, or ${controlLabel("crate", "keyboard")} to take one off. Keep holding ${controlLabel("putDown", "keyboard")} or ${controlLabel("crate", "keyboard")} to move all of them. It holds 3 crates.</span>
-    <span>Its battery drains while it's on, and faster while it moves and for every crate on it. If it runs out, take its crates off, face it and press ${controlLabel("interact", "keyboard")} to pick it up, then carry it to its charger and press ${controlLabel("interact", "keyboard")} there to dock it.</span>
+    <span>Three fully upgraded hovercarts start in the backroom. Turn them on at their chargers or use Launch carts below. They link together and follow you.</span>
+    <span>The shelves on the lower sales floor form a maze for testing the linked carts.</span>
+    <span>Stand next to a cart, hold ${controlLabel("dash", "keyboard")} (L1 on a controller), and press ${controlLabel("putDown", "keyboard")} to put a crate on it or ${controlLabel("crate", "keyboard")} to take one off. Each holds 6 crates. You use the nearest cart.</span>
+    <span>Battery and stamina are unlimited here.</span>
     <span data-count role="status" aria-live="polite"></span>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
       <button type="button" class="hud-pause-btn" data-refill>Refill crates</button>
       <button type="button" class="hud-pause-btn" data-clear>Clear crates</button>
+      <button type="button" class="hud-pause-btn" data-launch>Launch carts</button>
     </div>
   `;
   document.getElementById("ui-layer").appendChild(panel);
@@ -211,20 +266,30 @@ export function setupCrateTestLab(scene) {
     const button = event.target.closest("button");
     if (!button) return;
     if (button.hasAttribute("data-refill")) fill();
+    else if (button.hasAttribute("data-launch")) {
+      for (const cart of carts) if (!cart.isOut()) cart.toggleAtStation();
+    }
     else if (button.hasAttribute("data-clear")) {
       clear();
       render(0);
     }
+    if (event.detail > 0) button.blur();
   };
   panel.addEventListener("click", onClick);
 
   fill();
   return {
+    carts,
     noteGaveUp() {},
     destroy() {
       panel.removeEventListener("click", onClick);
       panel.remove();
+      scene.events.off("update", updateCarts);
+      links.destroy();
+      for (const collider of cartColliders) collider.destroy();
+      for (const cart of carts.slice(1)) cart.destroy();
       hovercartSystem.uninstall();
+      if (carts.includes(scene.hovercart)) scene.hovercart = null;
       scene.player.infiniteStamina = false;
     },
   };

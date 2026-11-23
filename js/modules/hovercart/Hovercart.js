@@ -59,9 +59,11 @@ export function getHovercartBatteryLevel(fraction) {
 }
 
 export class Hovercart {
-  constructor(scene, charger) {
-    this.id = "hovercartCart";
+  constructor(scene, charger, { secondary = false } = {}) {
+    this.id = secondary ? `hovercartCart:${charger.id}` : "hovercartCart";
     this.scene = scene;
+    this.secondary = secondary;
+    this.followTarget = null;
     this.cartCrates = [];
     this.upgrades = { ...HOVERCART_DEFAULT_UPGRADES };
     this.active = false;
@@ -99,17 +101,19 @@ export class Hovercart {
     this.cartMeter = scene.add.graphics();
     this.setCharger(charger);
 
-    this.unregisterStation = scene.interactables.registerProvider("hovercart-station", () => [{
-      id: "hovercart-station",
+    const stationId = secondary ? `hovercart-station:${charger.id}` : "hovercart-station";
+    const cartId = secondary ? `hovercart-cart:${charger.id}` : "hovercart-cart";
+    this.unregisterStation = scene.interactables.registerProvider(stationId, () => [{
+      id: stationId,
       kind: "hovercart-station",
       range: 24,
       distanceFrom: (origin) => scene.interactionSystem.feetReachTo(origin, this.stationBounds),
       getActions: () => this.getStationActions(),
     }]);
     // A dead cart can't follow; the player carries it back to the charger once it's empty.
-    this.unregisterCart = scene.interactables.registerProvider("hovercart-cart", () =>
+    this.unregisterCart = scene.interactables.registerProvider(cartId, () =>
       this.dead && !this.carried ? [{
-        id: "hovercart-cart",
+        id: cartId,
         kind: "hovercart",
         range: 24,
         distanceFrom: (origin) => scene.interactionSystem.feetReachTo(origin, this.cart.getBounds()),
@@ -125,7 +129,7 @@ export class Hovercart {
     this.releaseDoors = scene.areas?.addDoorUser?.((portal) => this.isUsingDoor(portal));
     this.onPostUpdate = () => this.syncCartCrates();
     scene.events.on("postupdate", this.onPostUpdate);
-    scene.hovercart = this;
+    if (!secondary) scene.hovercart = this;
     this.syncCartCrates();
     this.renderBattery();
   }
@@ -481,9 +485,11 @@ export class Hovercart {
         .fillStyle(METER_COLORS.back, 1).fillRect(-12, -1, 24, 3)
         .fillStyle(color, 1).fillRect(-12, -1, cartFill, 3);
     }
-    this.scene.hud?.renderHovercartBattery?.(this.isOut()
-      ? { percent: Math.ceil(fraction * 100), level, dead: this.dead }
-      : null);
+    if (!this.secondary) {
+      this.scene.hud?.renderHovercartBattery?.(this.isOut()
+        ? { percent: Math.ceil(fraction * 100), level, dead: this.dead }
+        : null);
+    }
   }
 
   update(time, delta) {
@@ -719,14 +725,15 @@ export class Hovercart {
 
     // Parks within reach of the player, whichever way he faces, and follows him through doors.
     const areas = this.scene.areas;
-    const player = this.scene.player.sprite;
-    const sameArea = areas.areaAt(this.cart.x, this.cart.y) === areas.playerArea;
+    const player = this.followTarget ?? this.scene.player.sprite;
+    const targetArea = this.followTarget ? areas.areaAt(player.x, player.y) : areas.playerArea;
+    const sameArea = areas.areaAt(this.cart.x, this.cart.y) === targetArea;
     const distance = Phaser.Math.Distance.Between(this.cart.x, this.cart.y, player.x, player.y);
     // Close only counts if nothing like the register stands between them.
     const nearby = sameArea && distance <= CART_FOLLOW_START;
     const shouldMove = !sameArea ||
       (this.moving ? distance > CART_FOLLOW_STOP : distance > CART_FOLLOW_START) ||
-      (nearby && !this.hasClearLine(this.cart, player.body.center, CART_BODY.width / 2, -2));
+      (nearby && !this.hasClearLine(this.cart, this.targetFeet(player), CART_BODY.width / 2, -2));
     if (!this.moving) {
       this.progress = null;
       this.closing = null;
@@ -787,14 +794,20 @@ export class Hovercart {
     this.syncCartCrates();
   }
 
+  targetFeet(target) {
+    return target.body?.enable ? target.body.center : { x: target.x, y: target.y };
+  }
+
   // Remembers where the player has walked in his current room, to follow in his footsteps.
   recordTrail() {
     const areas = this.scene.areas;
-    const feet = this.scene.player?.sprite?.body?.center;
+    const target = this.followTarget ?? this.scene.player?.sprite;
+    const feet = target ? this.targetFeet(target) : null;
     if (!feet || !areas) return;
-    if (this.trailArea !== areas.playerArea) {
+    const targetArea = this.followTarget ? areas.areaAt(target.x, target.y) : areas.playerArea;
+    if (this.trailArea !== targetArea) {
       this.trail = [];
-      this.trailArea = areas.playerArea;
+      this.trailArea = targetArea;
       this.trailTarget = null;
     }
     const last = this.trail[this.trail.length - 1];
@@ -828,7 +841,7 @@ export class Hovercart {
     }
     if (this.trailTarget && time - this.trailAt < CART_TRAIL_RECHECK_MS) return this.trailTarget;
     this.trailAt = time;
-    const feet = this.scene.player.sprite.body.center;
+    const feet = this.targetFeet(this.followTarget ?? this.scene.player.sprite);
     if (this.hasClearLine(cart, feet, CART_BODY.width / 2)) {
       this.trailTarget = { x: feet.x, y: feet.y };
       return this.trailTarget;
@@ -851,7 +864,7 @@ export class Hovercart {
   // (stuck on something, or not closing in on the player, whether he's standing or
   // walking), it plans its own route for a moment instead.
   steerInRoom(time, player) {
-    const feet = player.body.center;
+    const feet = this.targetFeet(player);
     // Progress is judged against where the player is now, so his own walking neither
     // hides a stuck cart nor counts against one that's keeping up.
     const closing = this.closing;
@@ -951,7 +964,7 @@ export class Hovercart {
 
   destroy() {
     if (this.destroyed) return;
-    this.scene.hud?.renderHovercartBattery?.(null);
+    if (!this.secondary) this.scene.hud?.renderHovercartBattery?.(null);
     this.destroyed = true;
     this.scene.events.off("postupdate", this.onPostUpdate);
     this.unregisterStation?.();

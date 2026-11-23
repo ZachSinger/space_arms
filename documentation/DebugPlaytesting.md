@@ -60,13 +60,18 @@ customers, and ending the day. This test area never saves and does not change th
 ## Crate Test Room
 
 Choose **DEV**, then **CRATE TEST ROOM** to open the real shop with everything unlocked and the
-sales floor and backroom each holding six stacks of full item crates (singles and stacks of two and
-three, about 24 crates in all), with walking room between them. In the backroom, face the hovercart charger and press **E** to
-turn the cart on. It follows you anywhere in the shop, through the backroom door too, and stops next to you. Stand beside it, hold **Shift** (or **L1**
-on a controller), and press **Q** to put a crate on it or **Space** to take one off; keep holding
-Q or Space to move all of them. The cart holds five crates; your hands
-hold three. **Refill crates** puts a fresh set down and **Clear crates** empties the floor and cart.
-This test area never saves.
+sales floor and backroom holding stacks of full item crates, with walking room between them.
+Three fully upgraded hovercarts wait at their chargers in the backroom. Turn each on at its
+charger with **E**, or use **Launch carts** in the test panel. Active carts link in a line:
+the first follows you and the others follow the cart ahead of them, including through doors.
+The shelf maze on the lower sales floor is available to test the chain.
+
+Stand beside a cart, hold **Shift** (or **L1** on a controller), and press **Q** to put a crate
+on it or **Space** to take one off; keep holding Q or Space to move all of them. The closest
+cart is selected. Each cart holds six crates; your hands hold three. **Refill crates** puts a
+fresh set down and **Clear crates** empties the floor and carts. Battery and stamina are
+unlimited in this room. This linked-cart prototype is only in the test room; the main game
+still has one cart.
 
 ## Decorator Mode
 

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   HOVERCART_BATTERY,
+  Hovercart,
   getHovercartDrainPerSecond,
   getHovercartMoveSpeed,
   getHovercartTransferCount,
@@ -55,4 +56,58 @@ test("hovercart battery drain matches the agreed table", () => {
   assert.deepEqual([0, 1, 2, 3].map((n) => getHovercartDrainPerSecond(n, false)), [1, 2, 3, 4]);
   assert.deepEqual([0, 1, 2, 3].map((n) => getHovercartDrainPerSecond(n, true)), [4, 6, 8, 10]);
   assert.equal(HOVERCART_BATTERY.capacity / getHovercartDrainPerSecond(3, true), 30);
+});
+
+test("linked carts track their leader's position and room, even while it crosses a door", () => {
+  const player = { x: 10, y: 10, body: { enable: true, center: { x: 10, y: 12 } } };
+  const leader = { x: 20, y: 200, body: { enable: false, center: { x: 20, y: 15 } } };
+  const follower = {
+    scene: { player: { sprite: player }, areas: {
+      playerArea: "shop",
+      areaAt: (_x, y) => y > 100 ? "backroom" : "shop",
+    } },
+    followTarget: leader,
+    trailArea: "shop",
+    trail: [{ x: 10, y: 12 }],
+    trailTarget: { x: 10, y: 12 },
+    targetFeet: Hovercart.prototype.targetFeet,
+  };
+  Hovercart.prototype.recordTrail.call(follower);
+  assert.equal(follower.trailArea, "backroom");
+  assert.deepEqual(follower.trail, [{ x: 20, y: 200 }]);
+  assert.equal(follower.trailTarget, null);
+});
+
+test("a linked cart follows its leader, including when the leader changes rooms", () => {
+  const previousPhaser = globalThis.Phaser;
+  globalThis.Phaser = { Math: { Distance: { Between: (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1) } } };
+  try {
+    const leader = { x: 100, y: 200, body: { enable: true, center: { x: 100, y: 200 } } };
+    const player = { x: 10, y: 10, body: { center: { x: 10, y: 10 } } };
+    let steeredTo = null;
+    let doorTarget = null;
+    const follower = {
+      scene: { player: { sprite: player }, areas: {
+        playerArea: "shop",
+        areaAt: (_x, y) => y > 100 ? "backroom" : "shop",
+      } },
+      cart: { x: 0, y: 200, body: { stop() {} } },
+      active: true,
+      moving: false,
+      followTarget: leader,
+      recordTrail() {},
+      syncCartCrates() {},
+      steerInRoom(_time, target) { steeredTo = target; },
+      findFollowPath(target, sameArea) { doorTarget = { target, sameArea }; return []; },
+      targetFeet: Hovercart.prototype.targetFeet,
+    };
+    Hovercart.prototype.updateMovement.call(follower, 0, false);
+    assert.equal(steeredTo, leader);
+    leader.y = 10;
+    Hovercart.prototype.updateMovement.call(follower, 500, false);
+    assert.deepEqual(doorTarget, { target: leader, sameArea: false });
+  } finally {
+    if (previousPhaser === undefined) delete globalThis.Phaser;
+    else globalThis.Phaser = previousPhaser;
+  }
 });
