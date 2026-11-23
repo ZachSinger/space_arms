@@ -35,6 +35,11 @@ design. The level unlock, purchase, and upgrades are not part of this prototype.
   ends up on top of you or past you.
 - It steers around floor crates instead of shoving them. If a crate sits right in front of the
   door, it pulls up beside the crate and slips through the door anyway.
+- In your room it retraces your footsteps, cutting straight to the furthest spot along them it
+  can reach without bumping anything. If it gets stuck, or stops getting closer while you stand
+  still, it plans its own way around for a moment and then goes back to your footsteps.
+- Being close only counts if nothing stands between you. A cart right behind the register from
+  you still comes around to your side.
 - It plans its route with a little room to spare around fixtures like the register and racks,
   so it rounds their corners instead of catching on them. It only cuts it close in gaps too
   narrow to pass otherwise.

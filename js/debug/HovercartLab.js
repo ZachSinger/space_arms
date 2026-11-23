@@ -21,6 +21,12 @@ const CART_STUCK_MS = 500;
 const CART_READY_RANGE = INTERACT_RANGE;
 const CART_REPATH_MS = 300;
 const CART_CLEARANCE = 4;
+const CART_TRAIL_STEP = 8;
+const CART_TRAIL_MAX = 80;
+const CART_TRAIL_RECHECK_MS = 120;
+const CART_CLOSING_MS = 600;
+const CART_CLOSING_GAIN = 6;
+const CART_ROUTE_MS = 1500;
 const CART_BODY = Object.freeze({ width: 32, height: 16, avoidStoreDoor: true });
 const HOVERCART_TEXTURES = Object.freeze({
   charger: "hovercart-lab-charger",
@@ -143,6 +149,12 @@ export class HovercartLab {
     this.path = null;
     this.pathAt = -Infinity;
     this.crossing = null;
+    this.trail = [];
+    this.trailArea = null;
+    this.trailTarget = null;
+    this.trailAt = -Infinity;
+    this.routeUntil = -Infinity;
+    this.closing = null;
     this.destroyed = false;
     const bounds = getBackroomInteriorBounds();
     this.dock = { x: bounds.left + 40, y: bounds.top + 22 };
@@ -751,6 +763,7 @@ export class HovercartLab {
   }
 
   updateMovement(time, frozen, seconds = 0) {
+    this.recordTrail();
     if (this.crossing && this.cart?.body) {
       if (!frozen) this.updateCrossing(seconds);
       return;
@@ -767,18 +780,30 @@ export class HovercartLab {
     const player = this.scene.player.sprite;
     const sameArea = areas.areaAt(this.cart.x, this.cart.y) === areas.playerArea;
     const distance = Phaser.Math.Distance.Between(this.cart.x, this.cart.y, player.x, player.y);
+    // Close only counts if nothing like the register stands between them.
+    const nearby = sameArea && distance <= CART_FOLLOW_START;
     const shouldMove = !sameArea ||
-      (this.moving ? distance > CART_FOLLOW_STOP : distance > CART_FOLLOW_START);
-    if (!this.moving) this.progress = null;
+      (this.moving ? distance > CART_FOLLOW_STOP : distance > CART_FOLLOW_START) ||
+      (nearby && !this.hasClearLine(this.cart, player.body.center, CART_BODY.width / 2));
+    if (!this.moving) {
+      this.progress = null;
+      this.closing = null;
+    }
     if (!shouldMove) {
       this.moving = false;
       this.path = null;
+      this.trailTarget = null;
       this.cart.body.stop();
       this.syncCartCrates();
       return;
     }
 
     this.moving = true;
+    if (sameArea) {
+      this.steerInRoom(time, player, distance);
+      this.syncCartCrates();
+      return;
+    }
     if (!this.path || time - this.pathAt > CART_REPATH_MS) {
       this.path = this.findFollowPath(player, sameArea);
       this.pathAt = time;
@@ -820,6 +845,110 @@ export class HovercartLab {
     this.syncCartCrates();
   }
 
+  // Remembers where the player has walked in his current room, to follow in his footsteps.
+  recordTrail() {
+    const areas = this.scene.areas;
+    const feet = this.scene.player?.sprite?.body?.center;
+    if (!feet || !areas) return;
+    if (this.trailArea !== areas.playerArea) {
+      this.trail = [];
+      this.trailArea = areas.playerArea;
+      this.trailTarget = null;
+    }
+    const last = this.trail[this.trail.length - 1];
+    if (last && Phaser.Math.Distance.Between(last.x, last.y, feet.x, feet.y) < CART_TRAIL_STEP) return;
+    this.trail.push({ x: feet.x, y: feet.y });
+    if (this.trail.length > CART_TRAIL_MAX) this.trail.shift();
+  }
+
+  // Whether the cart could glide straight from `from` to `to` without touching anything,
+  // stopping `short` pixels before `to`.
+  hasClearLine(from, to, short = 0) {
+    const length = Phaser.Math.Distance.Between(from.x, from.y, to.x, to.y);
+    const end = Math.max(0, length - short);
+    const width = CART_BODY.width - 2;
+    const height = CART_BODY.height - 2;
+    for (let along = 0; ; along = Math.min(end, along + 6)) {
+      const x = length ? from.x + (to.x - from.x) / length * along : from.x;
+      const y = length ? from.y + (to.y - from.y) / length * along : from.y;
+      if (this.isCartSpaceBlocked({ left: x - width / 2, top: y - height / 2, width, height })) return false;
+      if (along >= end) return true;
+    }
+  }
+
+  // The furthest point along the player's footsteps the cart can reach in a straight line,
+  // or the player himself if nothing is in the way.
+  nextTrailPoint(time) {
+    const cart = this.cart;
+    if (this.trailTarget &&
+      Phaser.Math.Distance.Between(cart.x, cart.y, this.trailTarget.x, this.trailTarget.y) <= 6) {
+      this.trailTarget = null;
+    }
+    if (this.trailTarget && time - this.trailAt < CART_TRAIL_RECHECK_MS) return this.trailTarget;
+    this.trailAt = time;
+    const feet = this.scene.player.sprite.body.center;
+    if (this.hasClearLine(cart, feet, CART_BODY.width / 2)) {
+      this.trailTarget = { x: feet.x, y: feet.y };
+      return this.trailTarget;
+    }
+    for (let i = this.trail.length - 1; i >= 0; i--) {
+      if (!this.hasClearLine(cart, this.trail[i])) continue;
+      this.trail.splice(0, i);
+      this.trailTarget = this.trail[0];
+      return this.trailTarget;
+    }
+    this.trailTarget = null;
+    return null;
+  }
+
+  // In the player's room the cart retraces his footsteps. If it stops getting anywhere
+  // (stuck on something, or not closing in on a player who's standing still), it plans
+  // its own route for a moment instead.
+  steerInRoom(time, player, distance) {
+    const feet = player.body.center;
+    const closing = this.closing;
+    const playerMoved = closing &&
+      Phaser.Math.Distance.Between(feet.x, feet.y, closing.x, closing.y) > CART_TRAIL_STEP;
+    if (!closing || playerMoved || distance < closing.best - CART_CLOSING_GAIN) {
+      this.closing = { best: distance, x: feet.x, y: feet.y, time };
+    }
+    const stuck = this.isStuck(time);
+    const notClosing = time - this.closing.time > CART_CLOSING_MS;
+    if (time >= this.routeUntil && (stuck || notClosing)) this.startRouting(time);
+
+    let target;
+    if (time < this.routeUntil) {
+      if (!this.path || time - this.pathAt > CART_REPATH_MS) {
+        this.path = this.findFollowPath(player, true);
+        this.pathAt = time;
+      }
+      while (this.path?.length &&
+        Phaser.Math.Distance.Between(this.cart.x, this.cart.y, this.path[0].x, this.path[0].y) <= 6) {
+        this.path.shift();
+      }
+      target = this.path?.[0] ?? player;
+    } else {
+      target = this.nextTrailPoint(time);
+      if (!target) {
+        this.startRouting(time);
+        this.steerInRoom(time, player, distance);
+        return;
+      }
+    }
+    const speed = getHovercartMoveSpeed(this.cartCrates.length);
+    const angle = Phaser.Math.Angle.Between(this.cart.x, this.cart.y, target.x, target.y);
+    this.cart.body.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+  }
+
+  startRouting(time) {
+    this.routeUntil = time + CART_ROUTE_MS;
+    this.path = null;
+    this.pathAt = -Infinity;
+    this.trailTarget = null;
+    this.closing = null;
+    this.progress = null;
+  }
+
   clearCrates() {
     for (const crate of this.cartCrates) crate.destroy();
     this.cartCrates = [];
@@ -829,6 +958,9 @@ export class HovercartLab {
 
   reset() {
     this.crossing = null;
+    this.trailTarget = null;
+    this.routeUntil = -Infinity;
+    this.closing = null;
     this.active = false;
     this.dead = false;
     this.carried = false;
