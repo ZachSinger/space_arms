@@ -161,6 +161,7 @@ export class ManagerTablet {
         buyExpansion: (expansionId) => this.scene.fixtureSystem.buyExpansion(expansionId),
         buyBackroomUpgrade: (upgradeId) => this.scene.fixtureSystem.buyBackroomUpgrade(upgradeId),
         buyHovercart: () => this.scene.gameModules.get("hovercart")?.buy(),
+        buyHovercartUpgrade: (path) => this.scene.gameModules.get("hovercart")?.purchaseUpgrade(path),
       },
     );
     this.financesTab.bind(

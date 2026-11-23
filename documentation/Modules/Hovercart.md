@@ -109,8 +109,17 @@ endless stamina, for testing. Nothing there is saved.
   handle crates while carrying it. Take it to its station and press E to dock it and charge.
 
 ## Upgrades
-- **Length:** each upgrade adds more crate space (amounts not decided yet; it starts at 3).
-- **Speed:** can be upgraded until it follows at full running speed (the speed you'd have
-  holding no crates).
-- A proposed set of upgrades, with levels and prices, is in
-  [HovercartUpgrades.md](./HovercartUpgrades.md). Nothing there is decided yet.
+- Buy them in Layout > Equipment while the store is closed. Each upgrade belongs to the
+  hovercart you own and is saved with it.
+- **Speed:** three steps at Levels 10, 20, and 32, costing 3,000, 12,000, and 45,000. Each step
+  makes the cart faster and lets it carry more crates without becoming painfully slow. The last
+  step matches your running speed, even when full.
+- **Length:** three steps at Levels 13, 22, and 32, costing 4,000, 14,000, and 40,000. They raise
+  capacity from 3 to 4, 5, and 6 crates. Each Length step requires the matching Speed step first.
+- **Battery:** six steps at Levels 13, 22, 32, 37, 42, and 49, costing 3,000, 8,000, 15,000,
+  30,000, 60,000, and 100,000. They raise battery capacity to 450, 600, 800, 1,000, 1,300, and
+  1,600. Buying a battery upgrade keeps the same percentage of charge. An empty battery still
+  takes 60 seconds to fill.
+- The game currently supports one purchased hovercart. Linking multiple carts is a separate
+  future feature; each cart will need its own upgrade levels.
+- The full numbers and design notes are in [HovercartUpgrades.md](./HovercartUpgrades.md).

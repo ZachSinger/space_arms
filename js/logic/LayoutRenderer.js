@@ -71,11 +71,11 @@ export class LayoutRenderer {
     `);
   }
 
-  // Equipment bought once, like the hovercart.
+  // Equipment bought once, with upgrade steps shown after purchase.
   static equipmentHTML(scene, enabled) {
     const hovercart = scene.gameModules?.get("hovercart");
     if (!hovercart) return "";
-    const { name, price, requiredShopLevel, isPurchased, levelMet, canAfford, hasDeliverySpace } = hovercart.purchaseOption();
+    const { name, price, capacity, requiredShopLevel, isPurchased, levelMet, canAfford, hasDeliverySpace } = hovercart.purchaseOption();
     const canBuy = enabled && !isPurchased && levelMet && canAfford && hasDeliverySpace;
     const status = isPurchased
       ? "OWNED"
@@ -88,13 +88,50 @@ export class LayoutRenderer {
             : !hasDeliverySpace
               ? "LOADING PAD FULL"
               : "BUY";
+    const upgradeCards = isPurchased ? hovercart.upgradeOptions().map((option) => {
+      const label = option.path === "speed" ? "Speed" : option.path === "length" ? "Length" : "Battery";
+      const description = option.maxed
+        ? "All steps bought."
+        : option.path === "speed"
+          ? option.perCrate === 0
+            ? "Moves at your running speed, even when full."
+                : "Moves faster, and each crate slows it down less."
+          : option.path === "length"
+            ? `Carries up to ${option.capacity} crates.`
+            : `${Math.floor(option.capacity / 10)} seconds with 3 crates; takes 60 seconds to recharge.`;
+      const status = option.maxed
+        ? "MAXED"
+        : !option.levelMet
+          ? "LOCKED"
+          : option.requiresSpeed
+            ? `NEEDS SPEED UPGRADE ${option.speedRequired}`
+            : !option.canAfford
+              ? "INSUFFICIENT FUNDS"
+              : !enabled
+                ? "AVAILABLE WHILE STORE IS CLOSED"
+                : "BUY";
+      return html`
+        <div class="item-card fixture-sale-card">
+          <div class="fixture-sale-info">
+            <h3 class="type-h3">${label} Upgrade ${option.step}</h3>
+            ${option.maxed ? null : html`<p class="type-description">Shop Level ${option.level}</p>`}
+            <p class="type-description">${description}</p>
+          </div>
+          <div class="fixture-sale-action">
+            ${option.maxed ? null : html`<p class="type-description fixture-sale-price">${option.cost.toLocaleString()}</p>`}
+            <button type="button" class="action-btn" data-buy-hovercart-upgrade="${option.path}"
+              ${option.available ? "" : "disabled"}>${status}</button>
+          </div>
+        </div>
+      `;
+    }) : null;
     return html`
       <h3 class="type-h3 layout-zone-heading">Equipment</h3>
       <div class="item-card fixture-sale-card">
         <div class="fixture-sale-info">
           <h3 class="type-h3">${name}</h3>
           <p class="type-description">Shop Level ${requiredShopLevel}</p>
-          <p class="type-description">Follows you around the store carrying up to 3 crates. It arrives in a crate on the Loading Pad with its charger, which you can place anywhere in the store.</p>
+          <p class="type-description">Follows you around the store carrying up to ${capacity} crates. It arrives in a crate on the Loading Pad with its charger, which you can place anywhere in the store.</p>
         </div>
         <div class="fixture-sale-action">
           <p class="type-description fixture-sale-price">${price.toLocaleString()}</p>
@@ -102,6 +139,11 @@ export class LayoutRenderer {
             ${canBuy ? "" : "disabled"}>${status}</button>
         </div>
       </div>
+      ${isPurchased ? html`
+        <h3 class="type-h3 layout-zone-heading">Hovercart Upgrades</h3>
+        <p class="type-description">Upgrades apply to this hovercart only. Buy each Speed upgrade before its matching extra crate space.</p>
+        ${upgradeCards}
+      ` : null}
     `;
   }
 

@@ -6,12 +6,17 @@ import { PAD } from "../../input/GamepadInput.js";
 import { CONTROL_MODES } from "../../input/ControlMode.js";
 import { areaAtRow } from "../../world/Areas.js";
 import { PEOPLE_DEPTH_BASE } from "../../world/Depth.js";
-import { HOVERCART_BATTERY, HOVERCART_CAPACITY, getHovercartChargerSpots } from "./HovercartRules.js";
+import {
+  HOVERCART_BATTERY,
+  HOVERCART_DEFAULT_UPGRADES,
+  HOVERCART_UPGRADES,
+  getHovercartBatteryCapacity,
+  getHovercartCapacity,
+  getHovercartChargerSpots,
+} from "./HovercartRules.js";
 import { HOVERCART_TEXTURES, createHovercartTextures } from "./HovercartArt.js";
 
 export { HOVERCART_BATTERY };
-
-const CART_CAPACITY = HOVERCART_CAPACITY;
 
 const METER_COLORS = Object.freeze({ high: 0x4ade80, mid: 0xfbbf24, low: 0xef4444, back: 0x0b1220 });
 const CART_MOVE_SPEED = Object.freeze({ empty: 150, perCrate: 18, minimum: 60 });
@@ -34,8 +39,12 @@ export function getHovercartTransferCount(available, capacity) {
   return Math.max(0, Math.min(available, capacity));
 }
 
-export function getHovercartMoveSpeed(crateCount) {
-  return Math.max(CART_MOVE_SPEED.minimum, CART_MOVE_SPEED.empty - CART_MOVE_SPEED.perCrate * crateCount);
+export function getHovercartMoveSpeed(crateCount, upgradeLevel = 0) {
+  const upgrade = HOVERCART_UPGRADES.speed[upgradeLevel - 1];
+  if (upgradeLevel === HOVERCART_UPGRADES.speed.length) return upgrade.speed;
+  const empty = upgrade?.speed ?? CART_MOVE_SPEED.empty;
+  const perCrate = upgrade?.perCrate ?? CART_MOVE_SPEED.perCrate;
+  return Math.max(CART_MOVE_SPEED.minimum, empty - perCrate * crateCount);
 }
 
 export function getHovercartDrainPerSecond(crateCount, moving) {
@@ -54,10 +63,11 @@ export class Hovercart {
     this.id = "hovercartCart";
     this.scene = scene;
     this.cartCrates = [];
+    this.upgrades = { ...HOVERCART_DEFAULT_UPGRADES };
     this.active = false;
     this.dead = false;
     this.carried = false;
-    this.battery = HOVERCART_BATTERY.capacity;
+    this.battery = this.batteryCapacity;
     this.infiniteBattery = false;
     this.lastTime = null;
     this.moving = false;
@@ -118,6 +128,21 @@ export class Hovercart {
     scene.hovercart = this;
     this.syncCartCrates();
     this.renderBattery();
+  }
+
+  get capacity() {
+    return getHovercartCapacity(this.upgrades);
+  }
+
+  get batteryCapacity() {
+    return getHovercartBatteryCapacity(this.upgrades);
+  }
+
+  setUpgrades(upgrades) {
+    this.upgrades = { ...upgrades };
+    this.battery = Math.min(this.battery, this.batteryCapacity);
+    this.renderBattery();
+    this.syncCartCrates();
   }
 
   // Off its charger, whether switched on or dead.
@@ -278,7 +303,7 @@ export class Hovercart {
     const carried = scene.crateSystem.getCarriedCrates();
     const capacity = getHovercartTransferCount(
       carried.length,
-      CART_CAPACITY - this.cartCrates.length,
+      this.capacity - this.cartCrates.length,
     );
     const takeCount = getHovercartTransferCount(
       this.cartCrates.length,
@@ -362,10 +387,10 @@ export class Hovercart {
     const carried = scene.crateSystem.getCarriedCrates();
     const take = getHovercartTransferCount(
       Math.min(count, carried.length),
-      CART_CAPACITY - this.cartCrates.length,
+      this.capacity - this.cartCrates.length,
     );
     if (!take) {
-      scene.messages.show(this.cartCrates.length >= CART_CAPACITY
+      scene.messages.show(this.cartCrates.length >= this.capacity
         ? "The hovercart is full."
         : "There are no crates to put on the hovercart.", "#94a3b8");
       return false;
@@ -418,7 +443,8 @@ export class Hovercart {
   }
 
   updateBattery(seconds) {
-    const { capacity, chargeSeconds } = HOVERCART_BATTERY;
+    const capacity = this.batteryCapacity;
+    const { chargeSeconds } = HOVERCART_BATTERY;
     if (!this.isOut()) {
       this.battery = Math.min(capacity, this.battery + capacity / chargeSeconds * seconds);
       return;
@@ -431,7 +457,7 @@ export class Hovercart {
   // Shows the charge on the cart, on the charger's screen, and in the top bar while it's out.
   renderBattery() {
     if (this.destroyed) return;
-    const fraction = Math.max(0, Math.min(1, this.battery / HOVERCART_BATTERY.capacity));
+    const fraction = Math.max(0, Math.min(1, this.battery / this.batteryCapacity));
     const level = getHovercartBatteryLevel(fraction);
     const color = METER_COLORS[level];
     const charging = !this.isOut() && fraction < 1;
@@ -609,7 +635,7 @@ export class Hovercart {
   // is standing just outside it.
   updateCrossing(seconds) {
     const crossing = this.crossing;
-    const speed = getHovercartMoveSpeed(this.cartCrates.length);
+    const speed = getHovercartMoveSpeed(this.cartCrates.length, this.upgrades.speed);
     const goal = crossing.phase === "in" ? crossing.from.door : crossing.to.front;
     const distance = Phaser.Math.Distance.Between(this.cart.x, this.cart.y, goal.x, goal.y);
     const step = Math.min(distance, speed * seconds);
@@ -755,7 +781,7 @@ export class Hovercart {
       }
     }
     const target = this.path?.[0] ?? player;
-    const speed = getHovercartMoveSpeed(this.cartCrates.length);
+    const speed = getHovercartMoveSpeed(this.cartCrates.length, this.upgrades.speed);
     const angle = Phaser.Math.Angle.Between(this.cart.x, this.cart.y, target.x, target.y);
     this.cart.body.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
     this.syncCartCrates();
@@ -859,7 +885,7 @@ export class Hovercart {
         return;
       }
     }
-    const speed = getHovercartMoveSpeed(this.cartCrates.length);
+    const speed = getHovercartMoveSpeed(this.cartCrates.length, this.upgrades.speed);
     const angle = Phaser.Math.Angle.Between(this.cart.x, this.cart.y, target.x, target.y);
     this.cart.body.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
   }
@@ -876,7 +902,7 @@ export class Hovercart {
   clearCrates() {
     for (const crate of this.cartCrates) crate.destroy();
     this.cartCrates = [];
-    this.battery = HOVERCART_BATTERY.capacity;
+    this.battery = this.batteryCapacity;
     this.reset();
   }
 

@@ -1,8 +1,8 @@
-# Hovercart Upgrades (proposal)
+# Hovercart Upgrades
 
-Everything in this document is a suggestion from the AI assistant, not a decision. Edit
-anything you like, and delete the notes you don't need. Once you're happy with it, the game
-gets built to match.
+The upgrades and prices below are now implemented in the game. The game currently supports one
+purchased hovercart. Upgrade levels are saved with it; if linked carts are added later, each
+cart will need its own upgrade levels.
 
 ## How the hovercart works today
 
@@ -84,13 +84,7 @@ around the same level, so upgrades feel worth saving for without competing with 
 store. Speed comes first, at Level 10, because a slow cart is the first thing you'll notice.
 Length and Battery arrive with the bigger store at Level 13, when trips get longer.
 
-## Open questions for you
-
-Should a second hovercart (with its own charger) be buyable later, and at what level?
-
-If you own more than one hovercart, should upgrades apply to all of them or be bought per cart?
-
-Should a Speed upgrade be needed before a Length upgrade, so a long cart is never painfully slow?
+## Future: linked hovercarts
 
 Answer: I really want you to be able to link hovercarts together, so that in theory you could eventually be moving three fully upgraded hovercarts yourself. This adds diversity to gameplay because it empowers the player to lean into solo or multiplayer rather than leaning on employees, if that's something they want to do.
 

@@ -8,9 +8,13 @@ import { formatMoneyAmount } from "../../logic/Money.js";
 import {
   HOVERCART_BATTERY,
   HOVERCART_CHARGER_TYPE,
+  HOVERCART_DEFAULT_UPGRADES,
   HOVERCART_LEVEL,
   HOVERCART_NAME,
   HOVERCART_PRICE,
+  HOVERCART_UPGRADES,
+  getHovercartBatteryCapacity,
+  getHovercartCapacity,
   getLegacyChargerSpot,
 } from "./HovercartRules.js";
 
@@ -21,6 +25,7 @@ export class HovercartSystem {
     this.cart = null;
     // The charge of a cart packed away in its charger's crate.
     this.storedBattery = HOVERCART_BATTERY.capacity;
+    this.upgrades = { ...HOVERCART_DEFAULT_UPGRADES };
   }
 
   /** Its charger is placed, or waiting in a crate. */
@@ -42,12 +47,35 @@ export class HovercartSystem {
     return {
       name: HOVERCART_NAME,
       price: HOVERCART_PRICE,
+      capacity: this.cart?.capacity ?? getHovercartCapacity(this.upgrades),
       requiredShopLevel: HOVERCART_LEVEL,
       isPurchased: this.owned,
       levelMet: reputation.shopLevel >= HOVERCART_LEVEL,
       canAfford: economy.credits >= HOVERCART_PRICE,
       hasDeliverySpace: !!this.scene.supply.firstFreePadSpot(),
     };
+  }
+
+  upgradeOptions() {
+    const shopLevel = this.scene.gameState.reputation.shopLevel;
+    const credits = this.scene.gameState.economy.credits;
+    return Object.entries(HOVERCART_UPGRADES).map(([path, steps]) => {
+      const stepIndex = this.upgrades[path];
+      const step = steps[stepIndex] ?? null;
+      const requiresSpeed = path === "length" && stepIndex + 1 > this.upgrades.speed;
+      return {
+        path,
+        step: Math.min(stepIndex + 1, steps.length),
+        ...step,
+        maxed: !step,
+        requiresSpeed,
+        speedRequired: stepIndex + 1,
+        levelMet: !!step && shopLevel >= step.level,
+        canAfford: !!step && credits >= step.cost,
+        available: !!step && shopLevel >= step.level && credits >= step.cost &&
+          !requiresSpeed && this.scene.fixtureSystem.canExpand(),
+      };
+    });
   }
 
   buy() {
@@ -76,11 +104,68 @@ export class HovercartSystem {
     }
     scene.gameState.economy.spend(HOVERCART_PRICE, { category: "equipment", label: HOVERCART_NAME });
     this.storedBattery = HOVERCART_BATTERY.capacity;
+    this.upgrades = { ...HOVERCART_DEFAULT_UPGRADES };
     scene.supply.deliver(new Crate(scene, null, 1, spot.x, spot.y, { kind: "fixture", typeId: HOVERCART_CHARGER_TYPE }));
     scene.supply.freePlayerFromPad();
     scene.gameState.shop.changed();
     scene.saves.requestAutosave();
     scene.messages.show("Hovercart bought. It's packed with its charger in a crate on the Loading Pad. Pick the crate up and place the charger anywhere in the store.", "#10b981");
+    return true;
+  }
+
+  purchaseUpgrade(path) {
+    const scene = this.scene;
+    if (!Object.hasOwn(HOVERCART_UPGRADES, path)) throw new Error(`Unknown hovercart upgrade: ${path}`);
+    const option = this.upgradeOptions().find((entry) => entry.path === path);
+    if (!this.owned) {
+      scene.messages.show("Buy the hovercart before upgrading it.");
+      return false;
+    }
+    if (!scene.fixtureSystem.canExpand()) {
+      scene.messages.show("Hovercart upgrades can only be bought while the store is closed.");
+      return false;
+    }
+    if (option.maxed) {
+      scene.messages.show(`The hovercart's ${path} upgrades are maxed out.`);
+      return false;
+    }
+    if (!option.levelMet) {
+      scene.messages.show(`Reach Shop Level ${option.level} to buy this hovercart upgrade.`);
+      return false;
+    }
+    if (option.requiresSpeed) {
+      scene.messages.show(`Buy Speed Upgrade ${option.speedRequired} before adding another crate space.`);
+      return false;
+    }
+    if (!option.canAfford) {
+      scene.messages.show(`This hovercart upgrade costs ${formatMoneyAmount(option.cost)}.`);
+      return false;
+    }
+
+    const previousBatteryCapacity = getHovercartBatteryCapacity(this.upgrades);
+    const batteryFraction = this.cart
+      ? this.cart.battery / previousBatteryCapacity
+      : this.storedBattery / previousBatteryCapacity;
+    this.upgrades = { ...this.upgrades, [path]: this.upgrades[path] + 1 };
+    if (this.cart) {
+      this.cart.setUpgrades(this.upgrades);
+      if (path === "battery") {
+        this.cart.battery = Math.min(this.cart.batteryCapacity, batteryFraction * this.cart.batteryCapacity);
+        this.cart.renderBattery();
+      }
+    } else if (path === "battery") {
+      this.storedBattery = Math.min(
+        getHovercartBatteryCapacity(this.upgrades),
+        batteryFraction * getHovercartBatteryCapacity(this.upgrades),
+      );
+    }
+    scene.gameState.economy.spend(option.cost, {
+      category: "equipment",
+      label: `${HOVERCART_NAME} ${path} upgrade ${option.step}`,
+    });
+    scene.gameState.shop.changed();
+    scene.saves.requestAutosave();
+    scene.messages.show(`${HOVERCART_NAME} ${path} upgrade ${option.step} installed.`, "#10b981");
     return true;
   }
 
@@ -97,6 +182,7 @@ export class HovercartSystem {
     }
     if (!this.cart) {
       this.cart = new Hovercart(this.scene, charger);
+      this.cart.setUpgrades(this.upgrades);
       this.cart.battery = this.storedBattery;
       this.cart.renderBattery();
     } else if (this.cart.charger !== charger) {
@@ -108,15 +194,22 @@ export class HovercartSystem {
   serialize() {
     if (!this.owned) return {};
     // Whole numbers keep the save from changing with every tiny bit of charge.
-    const wholeCharge = (value) => Math.max(0, Math.min(HOVERCART_BATTERY.capacity, Math.floor(value)));
+    const capacity = getHovercartBatteryCapacity(this.upgrades);
+    const wholeCharge = (value) => Math.max(0, Math.min(capacity, Math.floor(value)));
     if (!this.cart) {
-      return { hovercart: { owned: true, charger: true, crates: [], battery: wholeCharge(this.storedBattery), out: false } };
+      return { hovercart: {
+        owned: true, charger: true, crates: [], battery: wholeCharge(this.storedBattery),
+        out: false, upgrades: { ...this.upgrades },
+      } };
     }
     const crates = this.cart.cartCrates.map((crate) => {
       if (!crate.id) crate.id = this.scene.crateSystem.createId();
       return crate.serializePayload();
     });
-    return { hovercart: { owned: true, charger: true, crates, battery: wholeCharge(this.cart.battery), out: this.cart.isOut() } };
+    return { hovercart: {
+      owned: true, charger: true, crates, battery: wholeCharge(this.cart.battery),
+      out: this.cart.isOut(), upgrades: { ...this.upgrades },
+    } };
   }
 
   /**
@@ -127,6 +220,7 @@ export class HovercartSystem {
   load(data) {
     this.uninstall();
     this.storedBattery = data.hovercart?.battery ?? HOVERCART_BATTERY.capacity;
+    this.upgrades = { ...HOVERCART_DEFAULT_UPGRADES, ...(data.hovercart?.upgrades ?? {}) };
     if (!data.hovercart?.owned) return;
     if (!data.hovercart.charger) this.placeLegacyCharger();
     const cart = this.sync();
