@@ -64,6 +64,7 @@ import { Navigation } from "../world/Navigation.js";
 import { CheckoutWindow } from "../logic/CheckoutWindow.js";
 import { PlayerControls } from "../input/PlayerControls.js";
 import { database } from "./boot.js"; // the exported DatabaseManager singleton
+import { hideLoadingScreen } from "./loadingScreen.js";
 import { installSceneTextSize } from "../logic/GameTextSize.js";
 import { gameRandom, randomSeed } from "../core/Random.js";
 import { PauseMenu } from "../logic/PauseMenu.js";
@@ -130,7 +131,10 @@ export class GameScene extends Phaser.Scene {
     this.events.once("shutdown", () => {
       this.messages.destroy();
       this.shift?.destroy();
+      hideLoadingScreen();
     });
+    // The title screen put up the loading cover; lift it once the shop has been drawn.
+    this.game.events.once(Phaser.Core.Events.POST_RENDER, hideLoadingScreen);
     // Sync after Arcade Physics finalizes the player's and crates' positions for this frame.
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, () => this.crateSystem.syncCarriedCrate());
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, () => this.crateSystem.syncFloorStacks());

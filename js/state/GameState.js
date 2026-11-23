@@ -195,10 +195,24 @@ export class GameState {
       else Object.assign(this[name], next[name]);
     }
     // Each slice tells its own subscribers; whole-game subscribers hear about it once.
-    this.#holding = true;
-    try {
+    this.batch(() => {
       rebuildWorld();
       for (const name of SLICE_NAMES) this[name].changed();
+    });
+  }
+
+  /**
+   * Runs `fn`, telling whole-game subscribers once at the end instead of after every change.
+   * @param {() => void} fn
+   */
+  batch(fn) {
+    if (this.#holding) {
+      fn();
+      return;
+    }
+    this.#holding = true;
+    try {
+      fn();
     } finally {
       this.#holding = false;
     }

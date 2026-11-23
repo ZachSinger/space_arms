@@ -83,7 +83,8 @@ export function setupCrateTestLab(scene) {
     gameState.crates.changed();
   };
 
-  const fill = () => {
+  const fill = () => gameState.batch(fillNow);
+  const fillNow = () => {
     clear();
     const avoid = keepClearSpots(scene);
     let placed = 0;

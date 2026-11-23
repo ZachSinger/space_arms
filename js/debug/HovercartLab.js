@@ -216,7 +216,11 @@ export class HovercartLab {
   }
 
   isReadyForCrateAction() {
-    return this.active && !this.moving && this.modifierDown() &&
+    return this.modifierDown() && this.isInReach();
+  }
+
+  isInReach() {
+    return this.active && !this.moving &&
       Phaser.Math.Distance.Between(
         this.scene.player.sprite.x, this.scene.player.sprite.y,
         this.cart.x, this.cart.y,
@@ -224,13 +228,7 @@ export class HovercartLab {
   }
 
   getStockableCrates() {
-    return this.active && !this.moving &&
-      Phaser.Math.Distance.Between(
-        this.scene.player.sprite.x, this.scene.player.sprite.y,
-        this.cart.x, this.cart.y,
-      ) <= CART_READY_RANGE
-      ? this.cartCrates
-      : [];
+    return this.isInReach() ? this.cartCrates : [];
   }
 
   getCrateActions() {

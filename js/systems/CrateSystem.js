@@ -541,11 +541,20 @@ export class CrateSystem {
       else this.pickupMarker.setAngle(-90).setPosition(bounds.left - 7, bounds.centerY);
     }
     const stocking = shop.shelfStockingWindow?.getStockingCrate();
+    const cart = shop.hovercartLab;
+    const cartInReach = cart?.isInReach() ?? false;
     this.crateFooter.render({
       marked: stack ? this.describeCrateForFooter(stack.marked) : this.describeHoveredShelfForFooter(),
       carried: [...this.getCarriedCrates()].reverse().map((crate) => crate === stocking
         ? { ...this.describeCrateForFooter(crate), stockingNext: true }
         : this.describeCrateForFooter(crate)),
+      ...(cart ? {
+        cart: [...cart.cartCrates].reverse().map((crate) => ({
+          ...this.describeCrateForFooter(crate),
+          ...(crate === stocking ? { stockingNext: true } : {}),
+          outOfReach: !cartInReach,
+        })),
+      } : {}),
     });
   }
 

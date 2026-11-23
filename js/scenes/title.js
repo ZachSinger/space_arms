@@ -14,6 +14,7 @@ import { database } from "./boot.js";
 import { GamepadInput } from "../input/GamepadInput.js";
 import { UINavigator } from "../logic/UINavigator.js";
 import { setInputDevice } from "../input/InputDevice.js";
+import { showLoadingThen, hideLoadingScreen } from "./loadingScreen.js";
 
 export class TitleScene extends Phaser.Scene {
   constructor() {
@@ -21,6 +22,8 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create() {
+    this.startingGame = false;
+    hideLoadingScreen();
     installSceneTextSize(this, Phaser);
     const { width, height } = this.scale;
 
@@ -107,7 +110,7 @@ export class TitleScene extends Phaser.Scene {
     }, this.windowManager);
     this.newGameWindow.element.querySelector("[data-confirm-new-game]").addEventListener("click", () => {
       this.newGameWindow.close();
-      this.scene.start("scene-game");
+      this.startGameScene();
     });
     this.newGameWindow.element.querySelector("[data-cancel-new-game]").addEventListener("click", () => this.newGameWindow.close());
     this.devWindow = new UIWindow({
@@ -143,27 +146,27 @@ export class TitleScene extends Phaser.Scene {
     });
     devButton("[data-dev-shelf-room]", () => {
       this.devWindow.close();
-      this.scene.start("scene-game", { sandbox: true });
+      this.startGameScene({ sandbox: true });
     });
     devButton("[data-dev-ui-lab]", () => {
       this.devWindow.close();
-      this.scene.start("scene-game", { sandbox: true, lab: "ui" });
+      this.startGameScene({ sandbox: true, lab: "ui" });
     });
     devButton("[data-dev-starting-template]", () => {
       this.devWindow.close();
-      this.scene.start("scene-game", { sandbox: true, lab: "template" });
+      this.startGameScene({ sandbox: true, lab: "template" });
     });
     devButton("[data-dev-decorator]", () => {
       this.devWindow.close();
-      this.scene.start("scene-game", { sandbox: true, lab: "decorator" });
+      this.startGameScene({ sandbox: true, lab: "decorator" });
     });
     devButton("[data-dev-tutorial]", () => {
       this.devWindow.close();
-      this.scene.start("scene-game", { sandbox: true, lab: "tutorial" });
+      this.startGameScene({ sandbox: true, lab: "tutorial" });
     });
     devButton("[data-dev-crate-test]", () => {
       this.devWindow.close();
-      this.scene.start("scene-game", { sandbox: true, lab: "crates" });
+      this.startGameScene({ sandbox: true, lab: "crates" });
     });
     devButton("[data-dev-cancel]", () => this.devWindow.close());
     this.padInput = new GamepadInput();
@@ -214,7 +217,15 @@ export class TitleScene extends Phaser.Scene {
   // REAL skips the save-overwrite question and starts a debug-free fresh game.
   startRealGame() {
     if (this.loadingSave) return;
-    this.scene.start("scene-game", { real: true });
+    this.startGameScene({ real: true });
+  }
+
+  /** @param {object} [data] - passed to the game scene's init */
+  startGameScene(data) {
+    if (this.startingGame) return;
+    this.startingGame = true;
+    this.setMenuActive(false);
+    showLoadingThen(() => this.scene.start("scene-game", data));
   }
 
   openDevChooser() {
@@ -236,7 +247,7 @@ export class TitleScene extends Phaser.Scene {
         return;
       }
       const savedShopData = validateShopSave(payload.data.shop, database);
-      this.scene.start("scene-game", { savedShopData });
+      this.startGameScene({ savedShopData });
     } catch (error) {
       console.error("Could not load saved game", error);
       this.showStatus(`LOAD FAILED: ${error.message}`);
