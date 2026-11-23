@@ -49,7 +49,7 @@ are available from the start. The Hovercart unlocks at Level 7.
 | 4 | 90 | Staff limit: up to 1 employee hired at once |
 | 5 | 138 | Contract: Scrap-Yard Melee |
 | 6 | 318 | Contract: Lyra Casual Wear; Sales Floor Expansion West (buy for 2,700) |
-| 7 | 507 | Staff limit: up to 2 employees hired at once; Hovercart (1,500) |
+| 7 | 507 | Staff limit: up to 2 employees hired at once; Hovercart (2,200) |
 | 8 | 705 | Contract: Scrap-Yard Long Guns; Contract: Standard Rifle Ammo |
 | 9 | 912 | Contract: Nautilus Hand Tools; Contract: Lyra Footwear |
 | 10 | 1128 | Staff limit: up to 3 employees hired at once |

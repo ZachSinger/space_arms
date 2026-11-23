@@ -112,3 +112,5 @@ endless stamina, for testing. Nothing there is saved.
 - **Length:** each upgrade adds more crate space (amounts not decided yet; it starts at 3).
 - **Speed:** can be upgraded until it follows at full running speed (the speed you'd have
   holding no crates).
+- A proposed set of upgrades, with levels and prices, is in
+  [HovercartUpgrades.md](./HovercartUpgrades.md). Nothing there is decided yet.
