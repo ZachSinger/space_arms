@@ -52,8 +52,9 @@ design. The level unlock, purchase, and upgrades are not part of this prototype.
 - The charge shows in three places: a bar under the cart, the charger's screen, and a
   HOVERCART gauge in the top bar while the cart is off its charger.
 - When the battery runs out, the cart drops to the floor where it is and stops following.
-  You can still take crates off it but not put any on. Face it and press E to drag it behind
-  you at walking pace, then dock it at its station (with no crates on it) to charge.
+  You can still take crates off it but not put any on. Once it has no crates on it and your
+  hands are empty, face it and press E to pick it up and carry it over your head. You can't
+  handle crates while carrying it. Take it to its station and press E to dock it and charge.
 
 ## Upgrades
 - **Length:** each upgrade adds more crate space (amounts not decided yet; it starts at 3).

@@ -141,7 +141,7 @@ export function setupCrateTestLab(scene) {
     <span>Nothing here is saved.</span>
     <span>Backroom hovercart: face its charger and press E to turn it on. It follows you anywhere in the shop.</span>
     <span>Stand next to it, then hold ${controlLabel("dash", "keyboard")} (L1 on a controller) and press ${controlLabel("putDown", "keyboard")} to put a crate on it, or ${controlLabel("crate", "keyboard")} to take one off. Keep holding ${controlLabel("putDown", "keyboard")} or ${controlLabel("crate", "keyboard")} to move all of them. It holds 3 crates.</span>
-    <span>Its battery drains while it's on, and faster while it moves and for every crate on it. If it runs out, face it and press ${controlLabel("interact", "keyboard")} to drag it back to its charger, then dock it there to charge.</span>
+    <span>Its battery drains while it's on, and faster while it moves and for every crate on it. If it runs out, take its crates off, face it and press ${controlLabel("interact", "keyboard")} to pick it up, then carry it to its charger and press ${controlLabel("interact", "keyboard")} there to dock it.</span>
     <span data-count role="status" aria-live="polite"></span>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
       <button type="button" class="hud-pause-btn" data-refill>Refill crates</button>
