@@ -236,8 +236,16 @@ export class HovercartLab {
   }
 
   getCrateActions() {
-    if (!this.isReadyForCrateAction()) return null;
     const scene = this.scene;
+    if (this.active && this.modifierDown() && !this.isReadyForCrateAction() &&
+      scene.areas.playerArea === AREA.BACKROOM) {
+      const reason = this.moving
+        ? "Wait for the hovercart to stop next to you."
+        : "Stand next to the hovercart to load or unload it.";
+      const blocked = { tap: () => scene.messages.show(reason, "#f59e0b"), hintOverride: reason, blocked: true };
+      return { pickUp: blocked, putDown: { ...blocked } };
+    }
+    if (!this.isReadyForCrateAction()) return null;
     const carried = scene.crateSystem.getCarriedCrates();
     const capacity = getHovercartTransferCount(
       carried.length,
@@ -355,13 +363,8 @@ export class HovercartLab {
       return;
     }
 
-    const player = this.scene.player;
-    const direction = {
-      up: { x: 0, y: -1 }, down: { x: 0, y: 1 },
-      left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
-    }[player.currentFacing];
-    const targetX = player.sprite.x - direction.x * 42;
-    const targetY = player.sprite.y - direction.y * 42;
+    // Heads straight for the player and parks within reach, whichever way he faces.
+    const { x: targetX, y: targetY } = this.scene.player.sprite;
     const distance = Phaser.Math.Distance.Between(this.cart.x, this.cart.y, targetX, targetY);
     const shouldMove = this.moving ? distance > CART_FOLLOW_STOP : distance > CART_FOLLOW_START;
     if (!shouldMove) {

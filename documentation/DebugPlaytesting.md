@@ -62,8 +62,9 @@ customers, and ending the day. This test area never saves and does not change th
 Choose **DEV**, then **CRATE TEST ROOM** to open the real shop with everything unlocked and the
 sales floor and backroom covered in full item crates, as single crates and stacks of two and three,
 with walking room between them. In the backroom, face the hovercart charger and press **E** to
-turn the cart on. Once it follows you, hold **Shift** (or **L1** on a controller) with the crate
-controls to move crates between your hands and the cart. The cart holds five crates; your hands
+turn the cart on. It follows you and stops next to you. Stand beside it, hold **Shift** (or **L1**
+on a controller), and press **Q** to put a crate on it or **Space** to take one off; keep holding
+Q or Space to move all of them. The cart holds five crates; your hands
 hold three. **Refill crates** puts a fresh set down and **Clear crates** empties the floor and cart.
 This test area never saves.
 

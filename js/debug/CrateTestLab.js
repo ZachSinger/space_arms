@@ -12,6 +12,7 @@ import { getCrateOrderQuantity } from "../logic/SupplyOrder.js";
 import { sourceItems } from "../logic/InventoryTransfer.js";
 import { unlockEverything } from "./SandboxRoom.js";
 import { HovercartLab } from "./HovercartLab.js";
+import { controlLabel } from "../input/InputDevice.js";
 
 const STEP_X = 56;
 const STEP_Y = 52;
@@ -133,8 +134,8 @@ export function setupCrateTestLab(scene) {
   panel.innerHTML = `
     <strong style="color:#38bdf8">CRATE TEST LAB</strong>
     <span>Nothing here is saved.</span>
-    <span>Face the charger to start or dock the hovercart.</span>
-    <span>Hold Shift / L1 with crate controls to move crates to or from the cart.</span>
+    <span>Backroom hovercart: face its charger and press E to turn it on.</span>
+    <span>Stand next to it, then hold ${controlLabel("dash", "keyboard")} (L1 on a controller) and press ${controlLabel("putDown", "keyboard")} to put a crate on it, or ${controlLabel("crate", "keyboard")} to take one off. Keep holding ${controlLabel("putDown", "keyboard")} or ${controlLabel("crate", "keyboard")} to move all of them.</span>
     <span data-count role="status" aria-live="polite"></span>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
       <button type="button" class="hud-pause-btn" data-refill>Refill crates</button>
