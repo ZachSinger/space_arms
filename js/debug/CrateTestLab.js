@@ -2,12 +2,14 @@
 // FILE: CrateTestLab.js
 // ==========================================
 // DEV "Crate Test Lab": the real shop with a few dozen item crates, single and stacked, on the sales
-// floor and in the backroom, for trying out picking up, carrying, stacking, and stocking.
+// floor and in the backroom, for trying out picking up, carrying, stacking, and stocking, plus a
+// shelf maze for testing how the hovercart follows the player around fixtures.
 // Nothing is saved. The panel can refill the floor or clear it.
 import { database } from "../scenes/boot.js";
 import { AREA } from "../world/Areas.js";
 import { FLOOR_STACK_MAX } from "../logic/CrateStack.js";
 import { TILE_SIZE } from "../logic/RoomLayout.js";
+import { validateFixtureLayout } from "../logic/FixtureLayout.js";
 import { getCrateOrderQuantity } from "../logic/SupplyOrder.js";
 import { sourceItems } from "../logic/InventoryTransfer.js";
 import { unlockEverything } from "./SandboxRoom.js";
@@ -24,6 +26,45 @@ const KEEP_CLEAR = TILE_SIZE * 1.5;
 const HEIGHTS = [1, 3, 2, 3, 1, 2];
 // Enough stacks per room to try every height a couple of times (about 24 crates in all).
 const STACKS_PER_AREA = 6;
+
+// Shelf maze on the lower sales floor for testing how the hovercart gets around fixtures.
+// A long shelf wall closes off the top. Below it, walls of sideways shelves (solid almost
+// top to bottom, unlike upright shelves people walk behind) alternately hang from that wall
+// and stand on the room's bottom wall, so walkers have to weave up and down between them.
+// [type, tile x, tile y, rotations to try].
+const MAZE_LONG = "shelf_budget_3x4";
+const MAZE_MID = "shelf_budget_3x3";
+const MAZE_TOP_ROW_Y = 6;
+const MAZE_BOTTOM_Y = 12;
+const MAZE_PLAN = [
+  ...Array.from({ length: 15 }, (_, i) => [MAZE_LONG, 1 + i * 2, MAZE_TOP_ROW_Y, [2]]),
+  ...[5, 11, 17, 23].flatMap((gx) => [
+    [MAZE_LONG, gx, MAZE_TOP_ROW_Y + 1, [1, 3]],
+    [MAZE_MID, gx, MAZE_TOP_ROW_Y + 3, [1, 3]],
+  ]),
+  ...[8, 14, 20, 26].flatMap((gx) => [
+    [MAZE_LONG, gx, MAZE_BOTTOM_Y - 2, [1, 3]],
+    [MAZE_MID, gx, MAZE_BOTTOM_Y - 3.625, [1, 3]],
+  ]),
+];
+// Small nudges tried when a planned spot breaks a placement rule.
+const MAZE_NUDGES = [[0, 0], [0, 0.125], [0, -0.125], [0.125, 0], [-0.125, 0], [0, 0.25], [0, -0.25]];
+
+/** Places the shelf maze, skipping any shelf the shop's placement rules won't allow. */
+function buildShelfMaze(scene) {
+  const { fixtureSystem, fixtures } = scene;
+  for (const [type, gx, gy, rotations] of MAZE_PLAN) {
+    const spot = rotations
+      .flatMap((rotation) => MAZE_NUDGES.map(([dx, dy]) => [gx + dx, gy + dy, rotation]))
+      .find(([x, y, rotation]) => fixtureSystem.checkPlacement(type, x, y, rotation).valid);
+    if (!spot) continue;
+    const [x, y, rotation] = spot;
+    fixtureSystem.spawn({ id: fixtures.nextId(type), type, gx: x, gy: y, rotation });
+    const layout = fixtures.layout();
+    fixtureSystem.applyLayout(layout, validateFixtureLayout(layout, fixtureSystem.layoutOptions()));
+  }
+  scene.gameState.shop.changed();
+}
 
 /** Items with art, spread across categories so crates come in every tint. */
 function labItems() {
@@ -57,6 +98,7 @@ function keepClearSpots(scene) {
 export function setupCrateTestLab(scene) {
   const { gameState, crateSystem } = scene;
   unlockEverything(scene);
+  buildShelfMaze(scene);
   const hovercart = new HovercartLab(scene);
   const items = labItems();
   for (const item of items) gameState.catalog.priceIfUnset(item.id, gameState.market.getPrice(item.id));
@@ -140,6 +182,7 @@ export function setupCrateTestLab(scene) {
     <strong style="color:#38bdf8">CRATE TEST LAB</strong>
     <span>Nothing here is saved.</span>
     <span>Backroom hovercart: face its charger and press E to turn it on. It follows you anywhere in the shop.</span>
+    <span>The rows of shelves on the lower sales floor are a maze for testing how the hovercart gets around shelves.</span>
     <span>Stand next to it, then hold ${controlLabel("dash", "keyboard")} (L1 on a controller) and press ${controlLabel("putDown", "keyboard")} to put a crate on it, or ${controlLabel("crate", "keyboard")} to take one off. Keep holding ${controlLabel("putDown", "keyboard")} or ${controlLabel("crate", "keyboard")} to move all of them. It holds 3 crates.</span>
     <span>Its battery drains while it's on, and faster while it moves and for every crate on it. If it runs out, take its crates off, face it and press ${controlLabel("interact", "keyboard")} to pick it up, then carry it to its charger and press ${controlLabel("interact", "keyboard")} there to dock it.</span>
     <span data-count role="status" aria-live="polite"></span>

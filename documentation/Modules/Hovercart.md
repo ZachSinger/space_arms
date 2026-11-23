@@ -38,7 +38,10 @@ design. The level unlock, purchase, and upgrades are not part of this prototype.
 - In your room it retraces your footsteps, cutting straight to the furthest spot along them it
   can reach without bumping anything. If it gets stuck, or stops getting closer to where you are
   right now (whether you're standing still or walking), it plans its own way around for a moment
-  and then goes back to your footsteps.
+  and then goes back to your footsteps. Where you squeezed past a corner too tight for the cart
+  (like the end of a shelf), it plans its own way around instead of trying to follow you there.
+- The DEV Crate Test Room has a maze of sideways shelves on the lower sales floor, entered at the
+  far right end, for testing how the cart gets around shelves.
 - Being close only counts if nothing stands between you. A cart right behind the register from
   you still comes around to your side.
 - It plans its route with a little room to spare around fixtures like the register and racks,

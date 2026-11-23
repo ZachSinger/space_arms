@@ -784,7 +784,7 @@ export class HovercartLab {
     const nearby = sameArea && distance <= CART_FOLLOW_START;
     const shouldMove = !sameArea ||
       (this.moving ? distance > CART_FOLLOW_STOP : distance > CART_FOLLOW_START) ||
-      (nearby && !this.hasClearLine(this.cart, player.body.center, CART_BODY.width / 2));
+      (nearby && !this.hasClearLine(this.cart, player.body.center, CART_BODY.width / 2, -2));
     if (!this.moving) {
       this.progress = null;
       this.closing = null;
@@ -861,13 +861,13 @@ export class HovercartLab {
     if (this.trail.length > CART_TRAIL_MAX) this.trail.shift();
   }
 
-  // Whether the cart could glide straight from `from` to `to` without touching anything,
-  // stopping `short` pixels before `to`.
-  hasClearLine(from, to, short = 0) {
+  // Whether the cart, grown by `margin` pixels, could glide straight from `from` to `to`
+  // without touching anything, stopping `short` pixels before `to`.
+  hasClearLine(from, to, short = 0, margin = CART_CLEARANCE) {
     const length = Phaser.Math.Distance.Between(from.x, from.y, to.x, to.y);
     const end = Math.max(0, length - short);
-    const width = CART_BODY.width - 2;
-    const height = CART_BODY.height - 2;
+    const width = CART_BODY.width + margin;
+    const height = CART_BODY.height + margin;
     for (let along = 0; ; along = Math.min(end, along + 6)) {
       const x = length ? from.x + (to.x - from.x) / length * along : from.x;
       const y = length ? from.y + (to.y - from.y) / length * along : from.y;
@@ -892,7 +892,11 @@ export class HovercartLab {
       return this.trailTarget;
     }
     for (let i = this.trail.length - 1; i >= 0; i--) {
-      if (!this.hasClearLine(cart, this.trail[i])) continue;
+      const point = this.trail[i];
+      // The trail point it's already on doesn't count: there the player squeezed somewhere
+      // the wider cart can't, so it plans its own way around right away.
+      if (Phaser.Math.Distance.Between(cart.x, cart.y, point.x, point.y) <= 6) break;
+      if (!this.hasClearLine(cart, point)) continue;
       this.trail.splice(0, i);
       this.trailTarget = this.trail[0];
       return this.trailTarget;
