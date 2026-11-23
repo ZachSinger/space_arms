@@ -800,7 +800,7 @@ export class HovercartLab {
 
     this.moving = true;
     if (sameArea) {
-      this.steerInRoom(time, player, distance);
+      this.steerInRoom(time, player);
       this.syncCartCrates();
       return;
     }
@@ -902,15 +902,19 @@ export class HovercartLab {
   }
 
   // In the player's room the cart retraces his footsteps. If it stops getting anywhere
-  // (stuck on something, or not closing in on a player who's standing still), it plans
-  // its own route for a moment instead.
-  steerInRoom(time, player, distance) {
+  // (stuck on something, or not closing in on the player, whether he's standing or
+  // walking), it plans its own route for a moment instead.
+  steerInRoom(time, player) {
     const feet = player.body.center;
+    // Progress is judged against where the player is now, so his own walking neither
+    // hides a stuck cart nor counts against one that's keeping up.
     const closing = this.closing;
-    const playerMoved = closing &&
-      Phaser.Math.Distance.Between(feet.x, feet.y, closing.x, closing.y) > CART_TRAIL_STEP;
-    if (!closing || playerMoved || distance < closing.best - CART_CLOSING_GAIN) {
-      this.closing = { best: distance, x: feet.x, y: feet.y, time };
+    const gained = closing
+      ? Phaser.Math.Distance.Between(closing.x, closing.y, feet.x, feet.y) -
+        Phaser.Math.Distance.Between(this.cart.x, this.cart.y, feet.x, feet.y)
+      : 0;
+    if (!closing || gained >= CART_CLOSING_GAIN) {
+      this.closing = { x: this.cart.x, y: this.cart.y, time };
     }
     const stuck = this.isStuck(time);
     const notClosing = time - this.closing.time > CART_CLOSING_MS;
@@ -931,7 +935,7 @@ export class HovercartLab {
       target = this.nextTrailPoint(time);
       if (!target) {
         this.startRouting(time);
-        this.steerInRoom(time, player, distance);
+        this.steerInRoom(time, player);
         return;
       }
     }
