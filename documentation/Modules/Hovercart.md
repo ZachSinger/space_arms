@@ -26,8 +26,10 @@ design. The level unlock, purchase, and upgrades are not part of this prototype.
 ## Following behavior
 - It only moves after you've gotten a few steps away. It must always get close enough to be
   used, but it shouldn't fidget every time you move at all.
-- When it follows you through a door and you're still standing just inside, it stops beside
-  you rather than on top of you.
+- It goes through doors the way you do: the door slides open as it comes near, it glides into
+  the doorway, comes out of the matching door on the other side, and floats out after you. If
+  you're still standing just inside, it waits in the doorway until you step clear, so it never
+  ends up on top of you or past you.
 
 ## Bumping into it
 - It's solid: you can never walk over it, whether it's on, out of battery, or docked.

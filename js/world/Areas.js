@@ -303,10 +303,24 @@ export class Areas {
       portal.area === AREA.BACKROOM ? "left-backroom" : "changed-area", { from: portal.area, to: portal.to });
   }
 
-  // Each door opens while the player stands in front of it.
+  /**
+   * Opens doors for something other than the player while `isUsing(portal)` is true.
+   * @param {(portal: Portal) => boolean} isUsing
+   * @returns {() => void} stops holding doors
+   */
+  addDoorUser(isUsing) {
+    this.doorUsers ??= new Set();
+    this.doorUsers.add(isUsing);
+    return () => this.doorUsers?.delete(isUsing);
+  }
+
+  // Each door opens while the player stands in front of it, or something else goes through it.
   update(delta) {
     const near = this.nearbyPortal();
-    for (const portal of this.portals) portal.animation?.update(delta, portal === near);
+    for (const portal of this.portals) {
+      const inUse = portal === near || [...(this.doorUsers ?? [])].some((isUsing) => isUsing(portal));
+      portal.animation?.update(delta, inUse);
+    }
   }
 
   destroy() {

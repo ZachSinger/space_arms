@@ -16,6 +16,7 @@ const METER_COLORS = Object.freeze({ high: 0x4ade80, mid: 0xfbbf24, low: 0xef444
 const CART_MOVE_SPEED = Object.freeze({ empty: 150, perCrate: 18, minimum: 60 });
 const CART_FOLLOW_START = 84;
 const CART_FOLLOW_STOP = 44;
+const CART_DOOR_OPEN_REACH = 72;
 const CART_READY_RANGE = INTERACT_RANGE;
 const CART_REPATH_MS = 300;
 const CART_BODY = Object.freeze({ width: 32, height: 16, avoidStoreDoor: true });
@@ -139,6 +140,7 @@ export class HovercartLab {
     this.moving = false;
     this.path = null;
     this.pathAt = -Infinity;
+    this.crossing = null;
     this.destroyed = false;
     const bounds = getBackroomInteriorBounds();
     this.dock = { x: bounds.left + 40, y: bounds.top + 22 };
@@ -208,6 +210,7 @@ export class HovercartLab {
         }],
       }] : []);
     // Crates and the carried cart are placed after physics moves things, so they don't trail a frame behind.
+    this.releaseDoors = scene.areas?.addDoorUser?.((portal) => this.isUsingDoor(portal));
     this.onPostUpdate = () => this.syncCartCrates();
     scene.events.on("postupdate", this.onPostUpdate);
     scene.hovercartLab = this;
@@ -531,7 +534,7 @@ export class HovercartLab {
     const frozen = (scene.shiftClock?.isPaused && scene.shiftClock.started) ||
       scene.controlMode?.getMode() === CONTROL_MODES.LOADING;
     if (!frozen && this.cart?.body) this.updateBattery(seconds);
-    this.updateMovement(time, frozen);
+    this.updateMovement(time, frozen, seconds);
     if (!frozen) this.updatePlayerPush(delta);
     this.renderBattery();
   }
@@ -608,7 +611,75 @@ export class HovercartLab {
     }
   }
 
-  updateMovement(time, frozen) {
+  // The portal whose front is the path's next stop, while the cart is heading for a door.
+  approachingPortal() {
+    const next = this.path?.[0];
+    if (!next?.teleportTo || !this.moving) return null;
+    return this.scene.areas.portals.find((portal) =>
+      Math.abs(portal.front.x - next.x) < 1 && Math.abs(portal.front.y - next.y) < 1) ?? null;
+  }
+
+  // Doors open as the cart nears them and stay open while it passes through.
+  isUsingDoor(portal) {
+    if (this.crossing) return portal === this.crossing.from || portal === this.crossing.to;
+    const approaching = this.approachingPortal();
+    return portal === approaching &&
+      Phaser.Math.Distance.Between(this.cart.x, this.cart.y, portal.front.x, portal.front.y) < CART_DOOR_OPEN_REACH;
+  }
+
+  startCrossing(portal) {
+    const to = portal.partner ?? this.scene.areas.portalBetween(portal.to, portal.area);
+    if (!to) return false;
+    this.crossing = { from: portal, to, phase: "in" };
+    this.cart.body.stop();
+    this.cart.body.enable = false;
+    return true;
+  }
+
+  // Glides into the doorway, comes out of the other door, and waits there if the player
+  // is standing just outside it.
+  updateCrossing(seconds) {
+    const crossing = this.crossing;
+    const speed = getHovercartMoveSpeed(this.cartCrates.length);
+    const goal = crossing.phase === "in" ? crossing.from.door : crossing.to.front;
+    const distance = Phaser.Math.Distance.Between(this.cart.x, this.cart.y, goal.x, goal.y);
+    const step = Math.min(distance, speed * seconds);
+    const x = distance ? this.cart.x + (goal.x - this.cart.x) / distance * step : goal.x;
+    const y = distance ? this.cart.y + (goal.y - this.cart.y) / distance * step : goal.y;
+    if (crossing.phase === "out" && this.overlapsPlayerAt(x, y)) {
+      this.moving = false;
+      this.syncCartCrates();
+      return;
+    }
+    this.moving = true;
+    this.cart.setPosition(x, y);
+    if (step >= distance) {
+      if (crossing.phase === "in") {
+        crossing.phase = "out";
+        this.cart.setPosition(crossing.to.door.x, crossing.to.door.y);
+      } else {
+        this.crossing = null;
+        this.cart.body.enable = true;
+        this.cart.body.reset(goal.x, goal.y);
+        this.path = null;
+        this.pathAt = -Infinity;
+      }
+    }
+    this.syncCartCrates();
+  }
+
+  overlapsPlayerAt(x, y) {
+    const feet = this.scene.player.sprite.body;
+    const { width, height } = CART_BODY;
+    return x - width / 2 < feet.right && x + width / 2 > feet.x &&
+      y - height / 2 < feet.bottom && y + height / 2 > feet.y;
+  }
+
+  updateMovement(time, frozen, seconds = 0) {
+    if (this.crossing && this.cart?.body) {
+      if (!frozen) this.updateCrossing(seconds);
+      return;
+    }
     if (!this.cart?.body || !this.active || frozen) {
       this.moving = false;
       this.path = null;
@@ -646,7 +717,12 @@ export class HovercartLab {
     while (this.path?.length) {
       const next = this.path[0];
       if (Phaser.Math.Distance.Between(this.cart.x, this.cart.y, next.x, next.y) > 6) break;
+      const portal = next.teleportTo ? this.approachingPortal() : null;
       this.path.shift();
+      if (portal && this.startCrossing(portal)) {
+        this.updateCrossing(seconds);
+        return;
+      }
       if (next.teleportTo) {
         this.placeCartClearOfPlayer(next.teleportTo.x, next.teleportTo.y);
         this.pathAt = -Infinity;
@@ -667,6 +743,7 @@ export class HovercartLab {
   }
 
   reset() {
+    this.crossing = null;
     this.active = false;
     this.dead = false;
     this.carried = false;
@@ -686,6 +763,7 @@ export class HovercartLab {
     this.scene.events.off("postupdate", this.onPostUpdate);
     this.unregisterStation?.();
     this.unregisterCart?.();
+    this.releaseDoors?.();
     for (const collider of this.colliders) collider.destroy();
     this.scene.obstacleGroup.remove(this.postBlocker, true, true);
     for (const crate of this.cartCrates) crate.destroy();
