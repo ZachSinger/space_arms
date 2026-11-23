@@ -1,7 +1,7 @@
 // ==========================================
 // FILE: CrateTestLab.js
 // ==========================================
-// DEV "Crate Test Lab": the real shop covered in item crates, single and stacked, on the sales
+// DEV "Crate Test Lab": the real shop with a few dozen item crates, single and stacked, on the sales
 // floor and in the backroom, for trying out picking up, carrying, stacking, and stocking.
 // Nothing is saved. The panel can refill the floor or clear it.
 import { database } from "../scenes/boot.js";
@@ -22,6 +22,8 @@ const CLEARANCE = 10;
 const KEEP_CLEAR = TILE_SIZE * 1.5;
 // Stack heights cycle through this pattern so every height from 1 to the max shows up.
 const HEIGHTS = [1, 3, 2, 3, 1, 2];
+// Enough stacks per room to try every height a couple of times (about 24 crates in all).
+const STACKS_PER_AREA = 6;
 
 /** Items with art, spread across categories so crates come in every tint. */
 function labItems() {
@@ -88,8 +90,10 @@ export function setupCrateTestLab(scene) {
     let stacks = 0;
     for (const areaId of [AREA.SHOP, AREA.BACKROOM]) {
       const bounds = scene.areas.boundsFor(areaId);
+      const areaStart = stacks;
       for (let y = bounds.y + STEP_Y; y < bounds.y + bounds.height - STEP_Y / 2; y += STEP_Y) {
         for (let x = bounds.x + STEP_X / 2; x < bounds.x + bounds.width - STEP_X / 2; x += STEP_X) {
+          if (stacks - areaStart >= STACKS_PER_AREA) break;
           if (avoid.some((spot) => Math.hypot(spot.x - x, spot.y - y) < KEEP_CLEAR)) continue;
           const item = items[(placed + stacks) % items.length];
           const base = makeCrate(item, x, y);
