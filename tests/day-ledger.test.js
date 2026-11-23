@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
+import { startingMoney } from "../js/logic/StartingTemplate.js";
 import { Events, GAME_EVENTS } from "../js/core/Events.js";
 import { DayLedger, isValidLedgerData, summarizeReceipt } from "../js/logic/DayLedger.js";
 import { FinancesRenderer } from "../js/logic/FinancesRenderer.js";
@@ -71,7 +72,7 @@ test("new shops start at zero reputation and cannot hire anyone at Shop Level 1"
   assert.equal(state.reputation.global, 0);
   assert.equal(state.reputation.shopLevel, 1);
   assert.equal(state.hireEmployee("tavi_stock_clerk"), false);
-  assert.equal(state.economy.credits, 1500);
+  assert.equal(state.economy.credits, startingMoney());
   assert.deepEqual(state.staff.hired, []);
 });
 

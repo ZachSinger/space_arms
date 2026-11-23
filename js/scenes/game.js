@@ -38,6 +38,8 @@ import { ShiftClock } from "../logic/ShiftClock.js";
 import { FixturePlacement } from "../logic/FixturePlacement.js";
 import { setupSandboxRoom } from "../debug/SandboxRoom.js";
 import { setupUiLab } from "../debug/UiLab.js";
+import { setupStartingTemplateLab } from "../debug/StartingTemplateLab.js";
+import { setupDecoratorMode } from "../debug/DecoratorMode.js";
 import { ShelfStockingWindow } from "../logic/ShelfStockingWindow.js";
 import { REGISTER_FRONT_OVERLAP, fixtureFacing } from "../logic/FixtureLayout.js";
 import { Messages } from "../world/Messages.js";
@@ -48,7 +50,7 @@ import { Areas } from "../world/Areas.js";
 import { CameraRig } from "../world/CameraRig.js";
 import { FixtureViews } from "../world/FixtureViews.js";
 import { FixtureSystem } from "../systems/FixtureSystem.js";
-import { SupplySystem } from "../systems/SupplySystem.js";
+import { LOADING_PAD_ART, SupplySystem } from "../systems/SupplySystem.js";
 import { CustomerFlow } from "../systems/CustomerFlow.js";
 import { createCustomerStore, createEmployeeStore } from "../systems/CharacterStore.js";
 import { CheckoutSystem } from "../systems/CheckoutSystem.js";
@@ -88,6 +90,7 @@ export class GameScene extends Phaser.Scene {
         frameHeight: sprite.frameHeight,
       });
     }
+    this.load.image(LOADING_PAD_ART.key, LOADING_PAD_ART.path);
     for (const sprite of Object.values(REMOTE_ORDER_CRATE_SPRITES)) {
       this.load.spritesheet(sprite.key, sprite.path, {
         frameWidth: sprite.frameWidth,
@@ -105,7 +108,7 @@ export class GameScene extends Phaser.Scene {
   init(data = {}) {
     this.savedShopData = data.savedShopData ?? null;
     this.sandbox = data.sandbox === true;
-    this.lab = this.sandbox && data.lab === "ui" ? "ui" : null;
+    this.lab = this.sandbox && ["ui", "template", "decorator"].includes(data.lab) ? data.lab : null;
     this.realMode = data.real === true;
     this.seed = Number.isInteger(data.seed) ? data.seed : randomSeed();
   }
@@ -415,7 +418,9 @@ export class GameScene extends Phaser.Scene {
   startSession() {
     if (this.savedShopData) this.saves.loadAtStart(this.savedShopData);
     this.sandboxRoom = !this.sandbox ? null
-      : this.lab === "ui" ? setupUiLab(this) : setupSandboxRoom(this);
+      : this.lab === "ui" ? setupUiLab(this)
+        : this.lab === "template" ? setupStartingTemplateLab(this)
+          : this.lab === "decorator" ? setupDecoratorMode(this) : setupSandboxRoom(this);
     this.events.once("shutdown", () => {
       this.sandboxRoom?.destroy();
       this.sandboxRoom = null;

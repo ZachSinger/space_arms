@@ -59,8 +59,9 @@ export function snapFixturePosition(value) {
 // Placed fixtures are instances ({ id, type, gx, gy }) owned by FixtureRegistry.
 export const FIXTURE_TYPES = fixtureTypes;
 
-// A new game's layout: no shelves, so the player buys their first one from the Fixtures tab.
-export const STARTING_FIXTURES = [
+// The bare shop: one trash can and one register. New games start from the Starting Template
+// (data/StartingTemplate.json) instead; tests use this fixed layout so editing that can't break them.
+export const BASIC_FIXTURES = [
   { id: "trash_can_01", type: "trash_can", gx: 18, gy: 2 },
   { id: "register", type: "register_basic", gx: 13, gy: 3 },
 ];

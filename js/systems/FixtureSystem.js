@@ -15,6 +15,7 @@ import { BACKROOM_UPGRADE_ORDER, EXPANSION_ORDER, TILE_SIZE, getAuthoredGridSize
   getStoreDoorCell, getStoreDoorCells } from "../logic/RoomLayout.js";
 import { formatMoneyAmount } from "../logic/Money.js";
 import { createFixtureModel } from "../state/slices/Shop.js";
+import { sinkItems } from "../logic/InventoryTransfer.js";
 import { AREA, areaAtRow } from "../world/Areas.js";
 import { controlLabel } from "../input/InputDevice.js";
 import crateTuning from "../../data/tuning/crates.json" with { type: "json" };
@@ -611,6 +612,57 @@ export class FixtureSystem {
     else scene.restockCrates = scene.restockCrates.filter((candidate) => candidate !== crate);
     crate.destroy();
     scene.gameState.economy.add(value, { category: "fixture_sales", label: spec.name });
+    return true;
+  }
+
+  /**
+   * DEV areas: adds a new fixture straight to the floor, with no crate and no cost.
+   * @param {string} typeId
+   * @param {number} gx
+   * @param {number} gy
+   * @param {number} [rotation] - quarter turns clockwise
+   * @returns {boolean} whether it was placed
+   */
+  placeFree(typeId, gx, gy, rotation = 0) {
+    const scene = this.shop;
+    const result = this.checkPlacement(typeId, gx, gy, rotation);
+    if (!result.valid) {
+      scene.messages.show(result.reason);
+      return false;
+    }
+    this.spawn({ id: this.fixtures.nextId(typeId), type: typeId, gx, gy, rotation });
+    this.applyLayout(this.fixtures.layout(), result);
+    scene.gameState.shop.changed();
+    return true;
+  }
+
+  /**
+   * DEV areas: takes a fixture off the floor for good, throwing away anything on it.
+   * @param {string} id
+   * @returns {boolean} whether it was removed
+   */
+  removeFree(id) {
+    const scene = this.shop;
+    const fixture = this.fixtures.get(id);
+    if (!fixture) throw new Error(`Unknown fixture: ${id}`);
+    if (getFixtureType(fixture.type).kind === "register" && this.fixtures.ofKind("register").length <= 1) {
+      scene.messages.show("The last register cannot be removed.");
+      return false;
+    }
+    const placements = fixture instanceof ShelfFixture ? [...fixture.placements] : [];
+    if (!this.#removePlaced(fixture)) return false;
+    for (const placement of placements) {
+      if (placement.quantity <= 0) continue;
+      sinkItems(fixture, placement.itemId, placement.quantity, {
+        sinkId: `dev-remove-${placement.id}`,
+        sinkLocation: { kind: "dev-remove", slotId: placement.id },
+        sourceEntry: placement,
+        eventBus: scene.eventBus,
+        sourceName: "shelf",
+        sinkName: "dev area",
+      });
+    }
+    scene.gameState.shop.changed();
     return true;
   }
 

@@ -38,6 +38,27 @@ The panel in the top-right corner opens the real Manager's Tablet straight to an
 tabs, so changes tried here are the same menus players see. **Send 1 customer** brings
 someone in, and you serve them at the register as usual.
 
+## Starting Template
+
+On the title screen, choose **DEV**, then **STARTING TEMPLATE**. It's the shop exactly as a
+new game starts it. Use the panel to set the starting money, add any fixture for free (click
+the floor to put it down, R turns it), and move or remove what's already there; the last
+register can't be removed. To stock a shelf, walk up to it and open it, choose an item in
+**Fill with** at the top, and click a space to fill it to the top. Right-click a space to
+empty it.
+
+**Snapshot** saves the current layout, shelf stock and starting money as the start of every
+new game, by rewriting `data/StartingTemplate.json`. It only works while the game runs from the
+dev server (`npm start` or `npm run dev`). Nothing else in this area is saved.
+
+## Decorator Mode
+
+On the title screen, choose **DEV**, then **DECORATOR MODE**. It's a top-level shop with every
+license signed and money that tops itself back up to a million after every purchase, for
+trying out how the store looks. Expansions, shelves and stock can be bought from the tablet
+as usual (expansions still go in order), or fixtures and shelf stock can be put down for free
+with the same panel and **Fill with** picker as Starting Template. Nothing in it is saved.
+
 ## Shelf Collision Lab
 
 On the title screen, choose **DEV**, then **SHELF COLLISION LAB**. It shows the short

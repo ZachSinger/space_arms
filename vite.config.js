@@ -1,10 +1,11 @@
 // ==========================================
 // FILE: vite.config.js
 // ==========================================
-// Production build settings. Phaser, data JSON, and DOM <img> tags load images and data by
-// plain path, which Vite can't see, so the build copies them into dist/ itself.
+// Build settings, plus the dev server's Starting Template snapshot endpoint. Phaser, data JSON,
+// and DOM <img> tags load images and data by plain path, which Vite can't see, so the build
+// copies them into dist/ itself.
 // See also: package.json "build" (electron-builder packaging of dist/).
-import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { defineConfig } from "vite";
 import sharp from "sharp";
@@ -62,6 +63,46 @@ function copyRuntimeAssets() {
   };
 }
 
+// DEV "Starting Template" snapshot: writes data/StartingTemplate.json. The page that sent it
+// already uses the new template, so the file is left out of the watcher (no forced reload)
+// and only dropped from Vite's cache for the next page load.
+function startingTemplateEndpoint() {
+  return {
+    name: "starting-template-endpoint",
+    apply: "serve",
+    config: () => ({ server: { watch: { ignored: ["**/data/StartingTemplate.json"] } } }),
+    configureServer(server) {
+      const file = resolve(server.config.root, "data", "StartingTemplate.json");
+      server.middlewares.use("/__dev/starting-template", (request, response) => {
+        if (request.method !== "POST") {
+          response.statusCode = 405;
+          response.end("Only POST is allowed.");
+          return;
+        }
+        let body = "";
+        request.on("data", (chunk) => { body += chunk; });
+        request.on("end", () => {
+          try {
+            const data = JSON.parse(body);
+            if (!Number.isFinite(data?.money) || !Array.isArray(data?.fixtures)) {
+              throw new Error("A template needs starting money and a fixture list.");
+            }
+            writeFileSync(file, `${JSON.stringify({ money: data.money, fixtures: data.fixtures }, null, 2)}\n`);
+            for (const module of server.moduleGraph.getModulesByFile(file) ?? []) {
+              server.moduleGraph.invalidateModule(module);
+            }
+            response.statusCode = 204;
+            response.end();
+          } catch (error) {
+            response.statusCode = 400;
+            response.end(error.message);
+          }
+        });
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [copyRuntimeAssets()],
+  plugins: [copyRuntimeAssets(), startingTemplateEndpoint()],
 });

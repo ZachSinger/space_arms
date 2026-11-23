@@ -114,12 +114,14 @@ export class TitleScene extends Phaser.Scene {
       id: "dev-area-chooser", title: "DEV", width: "380px", height: "auto",
       x: 80, y: 120, onClose: () => this.setMenuActive(true),
       contentHTML: `
-        <p>Pick a test area. Nothing you do in any of them is saved.</p>
+        <p>Pick a test area. Nothing you do in any of them is saved, except the Snapshot button in Starting Template.</p>
         <button class="action-btn" data-dev-crate-lab>CRATE LAB</button>
         <button class="action-btn" data-dev-delivery-crate-lab>DELIVERY CRATE LAB</button>
         <button class="action-btn" data-dev-shelf-collision-lab>SHELF COLLISION LAB</button>
         <button class="action-btn" data-dev-shelf-room>SHELF TEST ROOM</button>
         <button class="action-btn" data-dev-ui-lab>UI LAB</button>
+        <button class="action-btn" data-dev-starting-template>STARTING TEMPLATE</button>
+        <button class="action-btn" data-dev-decorator>DECORATOR MODE</button>
         <button class="action-btn" data-dev-cancel>CANCEL</button>
       `,
     }, this.windowManager);
@@ -144,6 +146,14 @@ export class TitleScene extends Phaser.Scene {
     devButton("[data-dev-ui-lab]", () => {
       this.devWindow.close();
       this.scene.start("scene-game", { sandbox: true, lab: "ui" });
+    });
+    devButton("[data-dev-starting-template]", () => {
+      this.devWindow.close();
+      this.scene.start("scene-game", { sandbox: true, lab: "template" });
+    });
+    devButton("[data-dev-decorator]", () => {
+      this.devWindow.close();
+      this.scene.start("scene-game", { sandbox: true, lab: "decorator" });
     });
     devButton("[data-dev-cancel]", () => this.devWindow.close());
     this.padInput = new GamepadInput();

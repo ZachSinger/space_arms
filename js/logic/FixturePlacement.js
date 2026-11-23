@@ -91,9 +91,10 @@ export class FixturePlacement {
   // Place the fixture at the current preview; leaves placement mode if it fit.
   confirm() {
     const { id, gx, gy, rotation } = this.placement;
-    const placed = this.original
-      ? this.scene.fixtureSystem.move(id, gx, gy, rotation)
-      : this.scene.fixtureSystem.placeFromCrate(this.fixtureCrate, gx, gy, rotation);
+    let placed;
+    if (this.original) placed = this.scene.fixtureSystem.move(id, gx, gy, rotation);
+    else if (this.fixtureCrate) placed = this.scene.fixtureSystem.placeFromCrate(this.fixtureCrate, gx, gy, rotation);
+    else placed = this.scene.fixtureSystem.placeFree(this.spec.id, gx, gy, rotation);
     if (placed) this.cancel();
   }
 
@@ -183,10 +184,19 @@ export class FixturePlacement {
   }
 
   /**
+   * DEV areas: start placing a brand-new fixture of this type, with no crate and no cost.
+   * @param {string} typeId
+   */
+  beginFree(typeId) {
+    if (!getFixtureType(typeId)) throw new Error(`Unknown fixture type: ${typeId}`);
+    return this.start(typeId, null, null);
+  }
+
+  /**
    * Enter placement mode and show the ghost while the player continues moving normally.
    * @param {string} typeId
-   * @param {object|null} original - fixture being moved, or null when placing from a crate
-   * @param {Crate|null} fixtureCrate
+   * @param {object|null} original - fixture being moved, or null when placing a new one
+   * @param {Crate|null} fixtureCrate - the crate it comes from, or null for a DEV free placement
    */
   start(typeId, original, fixtureCrate) {
     this.cancel();
@@ -199,9 +209,9 @@ export class FixturePlacement {
     this.rotation = original?.rotation ?? 0;
     this.active = true;
     if (this.original) this.original.sprite.setAlpha(0.35);
-    else this.fixtureCrate.sprite.setVisible(false);
-    const x = original?.x ?? fixtureCrate.sprite.x;
-    const y = original?.y ?? fixtureCrate.sprite.y;
+    else this.fixtureCrate?.sprite.setVisible(false);
+    const from = original ?? fixtureCrate?.sprite ?? this.scene.player.sprite;
+    const { x, y } = from;
     this.ghost = this.scene.add.image(x, y, getFixtureTexture(this.spec))
       .setDisplaySize(this.spec.w * TILE_SIZE, this.spec.h * TILE_SIZE)
       .setAlpha(0.5).setDepth(9996);

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { FIXTURE_TYPES, STARTING_FIXTURES, FIXTURE_POSITION_STEP, FIXTURE_SNAP_STEP, FIXTURE_FRONT_CLEARANCE, fixtureAccessCells, fixtureAtWorldPoint, fixtureBounds, fixtureCells, fixtureFacing, fixtureFacingStep, fixtureFootprint, fixtureFrontClearance, fixtureProjectionBoxes, fixtureSolidBounds, fixturesOverlap, fixtureStandingSpot, cellKey, getFixtureType, isFixturePosition, migrateFixtureEntry, planRegisterQueue, snapFixturePosition, validateFixtureLayout, fixtureInteractionDistance } from "../js/logic/FixtureLayout.js";
+import { FIXTURE_TYPES, BASIC_FIXTURES, FIXTURE_POSITION_STEP, FIXTURE_SNAP_STEP, FIXTURE_FRONT_CLEARANCE, fixtureAccessCells, fixtureAtWorldPoint, fixtureBounds, fixtureCells, fixtureFacing, fixtureFacingStep, fixtureFootprint, fixtureFrontClearance, fixtureProjectionBoxes, fixtureSolidBounds, fixturesOverlap, fixtureStandingSpot, cellKey, getFixtureType, isFixturePosition, migrateFixtureEntry, planRegisterQueue, snapFixturePosition, validateFixtureLayout, fixtureInteractionDistance } from "../js/logic/FixtureLayout.js";
 import { FixturePlacement } from "../js/logic/FixturePlacement.js";
+import { startingFixtures } from "../js/logic/StartingTemplate.js";
 import { PAD } from "../js/input/GamepadInput.js";
 import { controllerButtonFor } from "../js/input/ControllerBindings.js";
 import { getInputDevice, setInputDevice } from "../js/input/InputDevice.js";
@@ -302,7 +303,7 @@ function createRoom({ expanded = false } = {}) {
 // New games start with no shelves, so most layout tests add one clear of the front door.
 // They leave out the starting trashcan so shelves can be tried anywhere on the floor.
 const TEST_SHELF = { id: "fixture_demo_01", type: "shelf_budget_2x4", gx: 16, gy: 3 };
-const initialLayout = () => [TEST_SHELF, ...STARTING_FIXTURES.filter((entry) => entry.type !== "trash_can")]
+const initialLayout = () => [TEST_SHELF, ...BASIC_FIXTURES.filter((entry) => entry.type !== "trash_can")]
   .map((entry) => ({ ...entry }));
 
 const moved = (id, gx, gy) => initialLayout().map((entry) => entry.id === id ? { ...entry, gx, gy } : entry);
@@ -375,11 +376,10 @@ test("controller walking and dashing leave the fixture cursor free for the right
   assert.equal(cancelled, 1);
 });
 
-test("a new game starts with a trashcan and register but no shelves", () => {
-  assert.equal(STARTING_FIXTURES.some((entry) => getFixtureType(entry.type).kind === "shelf"), false);
-  assert.equal(STARTING_FIXTURES.filter((entry) => getFixtureType(entry.type).kind === "trash").length, 1);
-  assert.equal(STARTING_FIXTURES.filter((entry) => getFixtureType(entry.type).kind === "register").length, 1);
-  const result = validateFixtureLayout(STARTING_FIXTURES, createRoom());
+test("the Starting Template is a walkable layout with a register", () => {
+  const fixtures = startingFixtures();
+  assert.ok(fixtures.some((entry) => getFixtureType(entry.type).kind === "register"));
+  const result = validateFixtureLayout(fixtures, createRoom());
   assert.equal(result.valid, true, result.reason);
 });
 
@@ -483,7 +483,7 @@ test("backroom walls leave extra space above the pad and upgrades keep the exit"
 
 test("the starting layout has accessible fronts, a register back, and six queue positions", () => {
   const options = createRoom();
-  const result = validateFixtureLayout([TEST_SHELF, ...STARTING_FIXTURES], options);
+  const result = validateFixtureLayout([TEST_SHELF, ...BASIC_FIXTURES], options);
   assert.equal(result.valid, true, result.reason);
   assert.equal(result.access.size, 3, "the register, the shelf, and the trashcan");
   assert.equal(result.queueCells.length, 6);
@@ -493,7 +493,7 @@ test("the starting layout has accessible fronts, a register back, and six queue 
     assert.equal(options.reservedCells.has(cellKey(cell)), false);
   }
   assert.equal(result.blockedCells.has("13,3"), true);
-  const register = STARTING_FIXTURES.find(({ type }) => type === "register_basic");
+  const register = BASIC_FIXTURES.find(({ type }) => type === "register_basic");
   const exit = result.backAccess.get(register.id);
   assert.ok(fixtureAccessCells(register, true).some((cell) => cellKey(cell) === cellKey(exit)),
     "leaving the register always uses a reachable square behind it");
@@ -501,7 +501,7 @@ test("the starting layout has accessible fronts, a register back, and six queue 
 
 test("fractional fixture edges do not hide clear routes to register and shelf access", () => {
   const options = createRoom({ expanded: true });
-  const register = STARTING_FIXTURES.at(-1);
+  const register = BASIC_FIXTURES.at(-1);
   assert.deepEqual(fixtureStandingSpot(register, fixtureAccessCells(register, true)[0]),
     { x: 13.5 * TILE_SIZE, y: 2.75 * TILE_SIZE + 10 });
   const registerGap = [
@@ -562,7 +562,7 @@ test("a boxed-in line still bends around obstacles one step at a time", () => {
 
 // Shelves wall off the register's right side, so customers have to go around the bottom
 // of the shop to reach it.
-const gauntletLayout = () => [...STARTING_FIXTURES.map((entry) => ({ ...entry })),
+const gauntletLayout = () => [...BASIC_FIXTURES.map((entry) => ({ ...entry })),
   { id: "gauntlet_top_left", type: "shelf_budget_2x2", gx: 14, gy: 3, rotation: 3 },
   { id: "gauntlet_left", type: "shelf_budget_2x4", gx: 14, gy: 4.125, rotation: 3 },
   { id: "gauntlet_right", type: "shelf_budget_2x4", gx: 17, gy: 4.125, rotation: 1 },
@@ -651,7 +651,7 @@ test("a shelf can sit beside a doorway approach while leaving a walkable passage
     gy: 1.25,
     rotation: 0,
   };
-  const register = STARTING_FIXTURES.find((entry) => getFixtureType(entry.type).kind === "register");
+  const register = BASIC_FIXTURES.find((entry) => getFixtureType(entry.type).kind === "register");
   const result = validateFixtureLayout([register, upperShelf, backroomShelf], options);
   assert.equal(result.valid, true, result.reason);
 });
@@ -666,7 +666,7 @@ test("a sideways shelf cannot cover part of the public doorway even if someone f
     gy: door.gy + 1,
     rotation: 3,
   };
-  const register = STARTING_FIXTURES.find((entry) => getFixtureType(entry.type).kind === "register");
+  const register = BASIC_FIXTURES.find((entry) => getFixtureType(entry.type).kind === "register");
   for (const offset of [0.375, 0.5, 0.75]) {
     const result = validateFixtureLayout([register, { ...shelf, gx: door.gx + offset }], options);
     assert.equal(result.valid, false, `offset ${offset}`);
@@ -684,7 +684,7 @@ test("transparent margins on larger sideways shelves do not block a player or cr
       top: 5 * TILE_SIZE + 16,
       bottom: 5 * TILE_SIZE + 32,
     }];
-    const register = STARTING_FIXTURES.find((entry) => getFixtureType(entry.type).kind === "register");
+    const register = BASIC_FIXTURES.find((entry) => getFixtureType(entry.type).kind === "register");
     const result = validateFixtureLayout([register, shelf], options);
     assert.equal(result.valid, true, `${type}: ${result.reason}`);
     options.occupiedRectangles[0].right += 8;
@@ -698,7 +698,7 @@ test("a walkable projection can share the floor in front of a doorway", () => {
   const options = createRoom({ expanded: true });
   const { shop } = getBackroomLink();
   const shelf = { id: "doorway-shelf", type: "shelf_budget_2x2", gx: shop.gx + 0.125, gy: shop.gy + 0.75, rotation: 2 };
-  const register = STARTING_FIXTURES.find((entry) => getFixtureType(entry.type).kind === "register");
+  const register = BASIC_FIXTURES.find((entry) => getFixtureType(entry.type).kind === "register");
   const result = validateFixtureLayout([register, shelf], options);
   assert.equal(result.valid, true, result.reason);
   assert.ok(result.accessCells.get(shelf.id).length > 0);
@@ -708,7 +708,7 @@ test("a walkable projection can share the floor in front of a doorway", () => {
 
 test("the register can be placed beside the entrance when only its projection shares the approach", () => {
   const options = createRoom();
-  const trash = { ...STARTING_FIXTURES.find((entry) => entry.type === "trash_can"), gx: 17, gy: 1.5 };
+  const trash = { ...BASIC_FIXTURES.find((entry) => entry.type === "trash_can"), gx: 17, gy: 1.5 };
   const register = { id: "register", type: "register_basic", gx: 16.625, gy: 3.125, rotation: 0 };
   const door = getDoorwayClearanceBounds()[0];
   const rear = fixtureFrontClearance(register, true);
@@ -741,7 +741,7 @@ test("a fixture's projection still cannot cover the loading pad", () => {
 
 test("a register facing the back wall can still have a reachable single-file line beside it", () => {
   const options = createRoom();
-  const trash = { ...STARTING_FIXTURES.find((entry) => entry.type === "trash_can"), gx: 17, gy: 1.5 };
+  const trash = { ...BASIC_FIXTURES.find((entry) => entry.type === "trash_can"), gx: 17, gy: 1.5 };
   const register = { id: "register", type: "register_basic", gx: 13, gy: 3.125, rotation: 2 };
   const result = validateFixtureLayout([trash, register], options);
   assert.equal(result.valid, true, result.reason);
@@ -757,7 +757,7 @@ test("a register facing the back wall can still have a reachable single-file lin
 
 test("a register between floor squares near the bottom wall still gets a full line on the open floor", () => {
   const options = createRoom();
-  const trash = { ...STARTING_FIXTURES.find((entry) => entry.type === "trash_can") };
+  const trash = { ...BASIC_FIXTURES.find((entry) => entry.type === "trash_can") };
   for (const [gx, gy] of [[16.75, 3.625], [13.125, 3.375], [15.25, 3.5]]) {
     const register = { id: "register", type: "register_basic", gx, gy, rotation: 0 };
     const result = validateFixtureLayout([trash, register], options);
@@ -774,7 +774,7 @@ test("a register between floor squares near the bottom wall still gets a full li
 
 test("the register can use reachable standing space within a partially occupied floor square", () => {
   const options = createRoom();
-  const trash = { ...STARTING_FIXTURES.find((entry) => entry.type === "trash_can"), gx: 17, gy: 1.5 };
+  const trash = { ...BASIC_FIXTURES.find((entry) => entry.type === "trash_can"), gx: 17, gy: 1.5 };
   for (const [gx, gy, rotation] of [[13, 3.5, 0], [14.25, 2, 1], [13, 2.625, 2], [16.5, 3.5, 3]]) {
     const register = { id: "register", type: "register_basic", gx, gy, rotation };
     const result = validateFixtureLayout([trash, register], options);
@@ -813,7 +813,7 @@ test("the register can use reachable standing space within a partially occupied 
 
 test("the checkout line can choose another turn when the first one leads to a dead end", () => {
   const options = createRoom();
-  const trash = { ...STARTING_FIXTURES.find((entry) => entry.type === "trash_can"), gx: 17, gy: 1.5 };
+  const trash = { ...BASIC_FIXTURES.find((entry) => entry.type === "trash_can"), gx: 17, gy: 1.5 };
   const register = { id: "register", type: "register_basic", gx: 14.875, gy: 2.5, rotation: 1 };
   const result = validateFixtureLayout([trash, register], options);
   assert.equal(result.valid, true, result.reason);
@@ -831,7 +831,7 @@ test("a checkout line cannot fill its spots from disconnected branches", () => {
 
 test("a tightly turning checkout line keeps customers apart", () => {
   const options = createRoom();
-  const trash = { ...STARTING_FIXTURES.find((entry) => entry.type === "trash_can"), gx: 17, gy: 1.5 };
+  const trash = { ...BASIC_FIXTURES.find((entry) => entry.type === "trash_can"), gx: 17, gy: 1.5 };
   const register = { id: "register", type: "register_basic", gx: 14, gy: 3.5, rotation: 2 };
   const result = validateFixtureLayout([trash, register], options);
   assert.equal(result.valid, true, result.reason);
@@ -1030,7 +1030,7 @@ test("turned shelves can line the bottom and side walls", () => {
 
 test("a turned register needs both its new front and back clear, and its line forms in front", () => {
   // Facing left: customers line up to its left; the cashier stands on its right.
-  const layout = (gx) => STARTING_FIXTURES.map((entry) => entry.id === "register"
+  const layout = (gx) => BASIC_FIXTURES.map((entry) => entry.id === "register"
     ? { ...entry, gx, gy: 3.875, rotation: 1 } : entry);
   const result = validateFixtureLayout(layout(18), createRoom());
   assert.equal(result.valid, true, result.reason);
@@ -1109,7 +1109,7 @@ test("all current shelves permit touching backs without allowing blocked fronts"
   }
   const upper = { id: "upper", type: "shelf_budget_2x2", gx: 17, gy: 4.25, rotation: 2 };
   const lower = { id: "lower", type: upper.type, gx: 17, gy: 5, rotation: 0 };
-  const result = validateFixtureLayout([upper, lower, ...STARTING_FIXTURES.filter((f) => f.type === "register_basic")],
+  const result = validateFixtureLayout([upper, lower, ...BASIC_FIXTURES.filter((f) => f.type === "register_basic")],
     createRoom({ expanded: true }));
   assert.equal(result.valid, true, result.reason);
   assert.ok(result.accessCells.get("upper").length && result.accessCells.get("lower").length);
@@ -1118,7 +1118,7 @@ test("all current shelves permit touching backs without allowing blocked fronts"
 test("pictured back-to-back shelves may overlap upright artwork at quarter-tile foot separation", () => {
   const types = Object.values(FIXTURE_TYPES).filter((spec) => spec.kind === "shelf").map((spec) => spec.id);
   const options = createRoom({ expanded: true });
-  const register = STARTING_FIXTURES.find((f) => f.type === "register_basic");
+  const register = BASIC_FIXTURES.find((f) => f.type === "register_basic");
   for (const upperType of types) {
     for (const lowerType of types) {
       const upper = { id: "upper", type: upperType, gx: 17, gy: 4.25, rotation: 2 };
@@ -1177,8 +1177,8 @@ test("all fixture types stay on the sales floor", () => {
     assert.match(result.reason, /sales floor/);
   }
   const trashCanInBackroom = [
-    { ...STARTING_FIXTURES.find((entry) => entry.type === "trash_can"), gx: 1, gy: 101.03125 },
-    ...STARTING_FIXTURES.filter((entry) => entry.type !== "trash_can"),
+    { ...BASIC_FIXTURES.find((entry) => entry.type === "trash_can"), gx: 1, gy: 101.03125 },
+    ...BASIC_FIXTURES.filter((entry) => entry.type !== "trash_can"),
   ];
   assert.equal(validateFixtureLayout(trashCanInBackroom, createRoom()).valid, false);
 });
@@ -1200,7 +1200,7 @@ test("a fixture cannot block the standing space beside the backroom doorway", ()
   // The starting trashcan sits beside the doorway; a shelf just below it leaves a gap too
   // narrow for anyone's feet.
   const layout = [
-    ...STARTING_FIXTURES.map((entry) => ({ ...entry })),
+    ...BASIC_FIXTURES.map((entry) => ({ ...entry })),
     { id: "fixture_demo_01", type: "shelf_budget_2x3", gx: shop.gx - 0.625, gy: shop.gy + 0.75 },
   ];
   const result = validateFixtureLayout(layout, createRoom());

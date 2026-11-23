@@ -13,6 +13,9 @@ import {
   getBackroomBounds, getBackroomInteriorBounds, LOADING_PAD_HEIGHT, LOADING_PAD_WIDTH,
 } from "../logic/RoomLayout.js";
 
+// Bays in the art are centered on the crate spots below.
+export const LOADING_PAD_ART = Object.freeze({ key: "loading_pad", path: "img/Generated/loading_pad.png" });
+
 // Loading Pad: a 3x3 grid of crate spots, each fitting one 32px crate (all px).
 const LOADING_PAD_SPOT_SIZE = 32;
 const LOADING_PAD_SPOT_SPACING = 40;
@@ -60,32 +63,11 @@ export class SupplySystem {
     return this.freePadSpots()[0] ?? null;
   }
 
-  // Painted floor marking: a plate with one outlined square per crate spot.
+  // A steel floor plate with a hazard-striped rim and one sunken bay per crate spot.
   drawPad() {
     const { x, y } = this.padCenter;
-    const pad = this.shop.add.graphics().setDepth(0.5);
-    pad.fillStyle(0x0f172a, 0.55);
-    pad.fillRect(x - LOADING_PAD_WIDTH / 2, y - LOADING_PAD_HEIGHT / 2, LOADING_PAD_WIDTH, LOADING_PAD_HEIGHT);
-    pad.lineStyle(2, 0xfacc15, 0.9);
-    pad.strokeRect(x - LOADING_PAD_WIDTH / 2, y - LOADING_PAD_HEIGHT / 2, LOADING_PAD_WIDTH, LOADING_PAD_HEIGHT);
-    pad.lineStyle(1, 0xfacc15, 0.35);
-    for (const spot of this.padSpots()) {
-      pad.strokeRect(
-        spot.x - LOADING_PAD_SPOT_SIZE / 2,
-        spot.y - LOADING_PAD_SPOT_SIZE / 2,
-        LOADING_PAD_SPOT_SIZE,
-        LOADING_PAD_SPOT_SIZE,
-      );
-    }
-    this.shop.add
-      .text(x, y - LOADING_PAD_HEIGHT / 2 - 4, "LOADING PAD", {
-        fontFamily: "monospace",
-        fontSize: "14px",
-        fontStyle: "bold",
-        color: "#facc15",
-      })
-      .setOrigin(0.5, 1)
-      .setAlpha(0.85)
+    this.shop.add.image(x, y, LOADING_PAD_ART.key)
+      .setDisplaySize(LOADING_PAD_WIDTH, LOADING_PAD_HEIGHT)
       .setDepth(0.5);
   }
 

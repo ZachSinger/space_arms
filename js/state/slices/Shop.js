@@ -7,7 +7,8 @@
 import { Slice } from "../Slice.js";
 import { FixtureRegistry } from "../../logic/FixtureRegistry.js";
 import { ShelfFixture } from "../../logic/ShelfFixture.js";
-import { STARTING_FIXTURES, fixtureFootprint, fixtureRotation, getFixtureType, getShelfDisplayGrid } from "../../logic/FixtureLayout.js";
+import { fixtureFootprint, fixtureRotation, getFixtureType, getShelfDisplayGrid } from "../../logic/FixtureLayout.js";
+import { startingFixtures } from "../../logic/StartingTemplate.js";
 import { TILE_SIZE, ZONES } from "../../logic/RoomLayout.js";
 import { SHOP_LAYOUT_VERSION } from "../migrations/index.js";
 
@@ -48,10 +49,10 @@ export class Shop extends Slice {
     this.unlockedZones = new Set(ZONES.filter((zone) => !zone.locked).map((zone) => zone.id));
   }
 
-  /** A new game's shop: the starting zones and the starting fixtures. */
+  /** A new game's shop: the starting zones and the Starting Template's fixtures and stock. */
   static newGame() {
     const shop = new Shop();
-    for (const entry of STARTING_FIXTURES) shop.fixtures.add(createFixtureModel(entry));
+    for (const entry of startingFixtures()) shop.fixtures.add(createFixtureModel(entry));
     return shop;
   }
 

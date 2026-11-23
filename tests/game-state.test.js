@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
+import { startingMoney } from "../js/logic/StartingTemplate.js";
 
 let server;
 let cacheDirectory;
@@ -144,5 +145,5 @@ test("a screen watching one part of the state stops hearing about it once it uns
   state.economy.add(5, { category: "sales", label: "Ration" });
   unsubscribe();
   state.economy.add(5, { category: "sales", label: "Ration" });
-  assert.deepEqual(shown, [1500, 1505]);
+  assert.deepEqual(shown, [startingMoney(), startingMoney() + 5]);
 });

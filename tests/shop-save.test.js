@@ -3,7 +3,7 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { SaveManager, createSaveStorage, SAVE_STORAGE_KEY } from "../SaveManager.js";
 import { DatabaseManager } from "../js/logic/DatabaseManager.js";
-import { STARTING_FIXTURES, getFixtureType } from "../js/logic/FixtureLayout.js";
+import { BASIC_FIXTURES, getFixtureType } from "../js/logic/FixtureLayout.js";
 import { Market } from "../js/logic/Market.js";
 import { SHOP_LAYOUT_VERSION, validateShopSave } from "../js/logic/ShopSave.js";
 
@@ -36,7 +36,7 @@ function snapshot() {
     market: { day: 1, ...new Market(database.getAllItems(), () => 0.5).serialize() },
     fixtures: [
       { id: "fixture_demo_01", type: "shelf_budget_2x2", gx: 16, gy: 3 },
-      ...STARTING_FIXTURES,
+      ...BASIC_FIXTURES,
     ].map(({ id, type, gx, gy }) => ({
       id, type, gx, gy,
       ...(getFixtureType(type).kind === "shelf" ? { stockingVersion: 1, placements: [{

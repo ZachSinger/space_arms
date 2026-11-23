@@ -1,0 +1,7 @@
+{
+  "money": 1500,
+  "fixtures": [
+    { "id": "trash_can_01", "type": "trash_can", "gx": 18, "gy": 2, "rotation": 0 },
+    { "id": "register", "type": "register_basic", "gx": 13, "gy": 3, "rotation": 0 }
+  ]
+}

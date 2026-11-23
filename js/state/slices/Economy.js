@@ -6,8 +6,7 @@ import { Slice } from "../Slice.js";
 import { DayLedger } from "../../logic/DayLedger.js";
 import { isMoney, sumMoney } from "../../logic/Money.js";
 import { getDailyLoanRepayment } from "../../logic/EmergencyLoan.js";
-
-export const STARTING_MONEY = 1500;
+import { startingMoney } from "../../logic/StartingTemplate.js";
 
 function copyReceipt(receipt) {
   return {
@@ -23,7 +22,7 @@ function copyReceipt(receipt) {
 export class Economy extends Slice {
   constructor() {
     super();
-    this.credits = STARTING_MONEY;
+    this.credits = startingMoney();
     // Every amount earned or spent today is itemized here for the End Day receipt.
     this.dayLedger = new DayLedger({ day: 1, openingCredits: this.credits, openingReputation: 0 });
     // Every finished day's closed receipt, oldest first, for the Finances tab history.

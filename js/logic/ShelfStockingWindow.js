@@ -98,6 +98,12 @@ export class ShelfStockingWindow {
       event.preventDefault();
       this.stopHolding();
       this.selected = Number(cell.dataset.shelfCell);
+      if (this.scene.shelfBrush) {
+        this.notice = this.scene.shelfBrush.paint(this.fixture, this.selected % this.art.columns.length,
+          Math.floor(this.selected / this.art.columns.length), event.button === 2);
+        this.refresh();
+        return;
+      }
       // Only a fresh right-click clears, so holding it to take the last item can't also clear.
       if (event.button === 2 && this.clearIfSoldOut(this.selected)) return;
       this.holding = { index: this.selected, pull: event.button === 2 };
@@ -184,6 +190,7 @@ export class ShelfStockingWindow {
     this.body.innerHTML = html`
       <p class="type-description shelf-stocking-status" role="status"></p>
       <div class="shelf-stocking-stage"></div>`;
+    if (this.scene.shelfBrush) this.body.prepend(this.scene.shelfBrush.picker);
     this.status = this.body.querySelector(".shelf-stocking-status");
     this.stage = this.body.querySelector(".shelf-stocking-stage");
     // Crop the empty strip above the shelf picture so the window hugs the art.
