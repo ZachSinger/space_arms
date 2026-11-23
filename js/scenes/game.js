@@ -17,7 +17,7 @@ import { InteractableRegistry } from "../interaction/InteractableRegistry.js";
 import { InteractionSystem } from "../interaction/InteractionSystem.js";
 import { ModuleHost } from "../modules/GameModules.js";
 import { createHovercartTextures } from "../modules/hovercart/HovercartArt.js";
-import { createDecorationTextures } from "../world/DecorationArt.js";
+import { animateDecorations, createDecorationTextures } from "../world/DecorationArt.js";
 import {
   DRONE_TERMINAL_PLATFORM_SPRITE,
   DRONE_TERMINAL_SCREEN_SPRITE,
@@ -477,6 +477,7 @@ export class GameScene extends Phaser.Scene {
     const movementFrozen = (this.shiftClock.isPaused && this.shiftClock.started) ||
       mode === CONTROL_MODES.LOADING;
     sortPeopleByFeet(this);
+    animateDecorations(this, this.worldElapsedMs);
 
     if (movementFrozen) {
       // Skipping customer update() also freezes their state-machine timers, not just movement.

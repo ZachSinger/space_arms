@@ -10,7 +10,9 @@ import { FixtureRegistry } from "../js/logic/FixtureRegistry.js";
 import { FixturePlacement } from "../js/logic/FixturePlacement.js";
 import { LayoutRenderer } from "../js/logic/LayoutRenderer.js";
 import { TILE_SIZE } from "../js/logic/RoomLayout.js";
-import { createDecorationTextures } from "../js/world/DecorationArt.js";
+import {
+  DECORATION_FRAMES, createDecorationTextures, decorationFrameKey,
+} from "../js/world/DecorationArt.js";
 
 // Replace only the browser scene's database; no browser, server, or renderer is started.
 const bootURL = new URL("../js/scenes/boot.js", import.meta.url).href;
@@ -67,20 +69,27 @@ test("the catalog exposes 20 distinct motifs and pixel designs through Basic Fix
   const scene = textureScene();
   createDecorationTextures(scene);
   createDecorationTextures(scene);
-  assert.equal(scene.made.size, 20);
-  assert.equal(scene.destroyed, 20, "art is initialized once, not regenerated for previews");
+  assert.equal(scene.made.size, 20 * DECORATION_FRAMES);
+  assert.equal(scene.destroyed, 20 * DECORATION_FRAMES, "art is initialized once, not regenerated for previews");
   const signatures = new Set();
   for (const spec of decorations) {
     assert.ok(contract.unlocksFixtures.includes(spec.id));
     const art = scene.made.get(spec.texture);
     const inset = fixtureArtInset({ type: spec.id });
-    assert.deepEqual([art.w, art.h], [spec.w * TILE_SIZE, spec.h * TILE_SIZE]);
-    for (const coordinate of art.pixels.keys()) {
-      const [x, y] = coordinate.split(",").map(Number);
-      assert.ok(x >= inset.left * TILE_SIZE && x < art.w - inset.right * TILE_SIZE &&
-        y >= inset.top * TILE_SIZE && y < art.h - inset.bottom * TILE_SIZE,
-      `${spec.id} artwork fits its declared margins at ${coordinate}`);
+    const frames = new Set();
+    for (let frame = 0; frame < DECORATION_FRAMES; frame++) {
+      const key = decorationFrameKey(spec, frame);
+      const image = scene.made.get(key);
+      assert.deepEqual([image.w, image.h], [spec.w * TILE_SIZE, spec.h * TILE_SIZE]);
+      for (const coordinate of image.pixels.keys()) {
+        const [x, y] = coordinate.split(",").map(Number);
+        assert.ok(x >= inset.left * TILE_SIZE && x < image.w - inset.right * TILE_SIZE &&
+          y >= inset.top * TILE_SIZE && y < image.h - inset.bottom * TILE_SIZE,
+        `${key} artwork fits its declared margins at ${coordinate}`);
+      }
+      frames.add(JSON.stringify([...image.pixels].sort(([a], [b]) => a.localeCompare(b))));
     }
+    assert.equal(frames.size, DECORATION_FRAMES, `${spec.id} animates through distinct frames`);
     // Ignore all colors: recolors produce the same geometry and cannot pass this check.
     signatures.add(JSON.stringify([...art.pixels].sort(([a], [b]) => a.localeCompare(b))));
   }
