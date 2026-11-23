@@ -38,8 +38,8 @@ Ammo and firearms now unlock together: the scatter-rifle arrives with scatter sh
 the RPG arrives with rockets at Level 38, and a separate Pre-War Ammunition contract unlocks
 heavy pistol and rifle ammunition alongside the first matching firearms at Level 41.
 
-Planned modules that will need an unlock level: Hovercart (its design says Level 7), Shooting
-Range and Presentation. Drone Deliveries are available from the start.
+Planned modules that will need an unlock level: Shooting Range and Presentation. Drone Deliveries
+are available from the start. The Hovercart unlocks at Level 7.
 
 | Level | Total store reputation | Unlock |
 | --- | --- | --- |
@@ -49,7 +49,7 @@ Range and Presentation. Drone Deliveries are available from the start.
 | 4 | 90 | Staff limit: up to 1 employee hired at once |
 | 5 | 138 | Contract: Scrap-Yard Melee |
 | 6 | 318 | Contract: Lyra Casual Wear; Sales Floor Expansion West (buy for 2,700) |
-| 7 | 507 | Staff limit: up to 2 employees hired at once |
+| 7 | 507 | Staff limit: up to 2 employees hired at once; Hovercart (1,500) |
 | 8 | 705 | Contract: Scrap-Yard Long Guns; Contract: Standard Rifle Ammo |
 | 9 | 912 | Contract: Nautilus Hand Tools; Contract: Lyra Footwear |
 | 10 | 1128 | Staff limit: up to 3 employees hired at once |

@@ -20,6 +20,7 @@ import {
   REGISTER_SERVICE_MS_PER_CUSTOMER, REGISTER_SERVICE_MS_PER_ITEM,
 } from "./EmployeeTraining.js";
 import { html, raw } from "../core/html.js";
+import { HOVERCART_CAPACITY, HOVERCART_LEVEL, HOVERCART_PRICE } from "../modules/hovercart/HovercartRules.js";
 
 export const HANDBOOK_TOPICS = Object.freeze([
   { id: "store", label: "Running the Store" },
@@ -70,6 +71,7 @@ export function getLevelRewards(licenses) {
     if (!zone.requiredShopLevel) continue;
     add(zone.requiredShopLevel, `${zone.name} (${formatMoneyAmount(zone.cost)})`);
   }
+  add(HOVERCART_LEVEL, `Hovercart, which follows you carrying up to ${HOVERCART_CAPACITY} crates (${formatMoneyAmount(HOVERCART_PRICE)})`);
   return rewards;
 }
 

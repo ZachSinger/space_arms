@@ -185,6 +185,31 @@ test("shop saves preserve three carried crates in order and reject stacks over t
   assert.throws(() => validateShopSave(data, database), /invalid carried crate stack/);
 });
 
+test("a bought hovercart saves up to three item crates and they count toward crate ids", () => {
+  const data = snapshot();
+  data.hovercart = { owned: true, crates: [
+    { id: "crate-3", kind: "item", itemId: "wpn_rif_01", quantity: 4 },
+    { id: "crate-4", kind: "item", itemId: "srv_01", quantity: 1 },
+  ] };
+  data.nextCrateId = 5;
+  assert.deepEqual(validateShopSave(structuredClone(data), database).hovercart, data.hovercart);
+
+  assert.throws(() => validateShopSave({ ...data, nextCrateId: 4 }, database), /invalid next crate id/);
+  const duplicate = structuredClone(data);
+  duplicate.hovercart.crates[1].id = "crate-1";
+  assert.throws(() => validateShopSave(duplicate, database), /duplicate crate id/);
+  const tooMany = structuredClone(data);
+  tooMany.hovercart.crates.push(
+    { id: "crate-5", kind: "item", itemId: "srv_01", quantity: 1 },
+    { id: "crate-6", kind: "item", itemId: "srv_01", quantity: 1 },
+  );
+  tooMany.nextCrateId = 7;
+  assert.throws(() => validateShopSave(tooMany, database), /invalid hovercart/);
+  const fixtureCrate = structuredClone(data);
+  fixtureCrate.hovercart.crates[0] = { id: "crate-3", kind: "fixture", typeId: "shelf_budget_2x2" };
+  assert.throws(() => validateShopSave(fixtureCrate, database), /invalid hovercart/);
+});
+
 test("saved receipts must belong to the saved day", () => {
   const data = snapshot();
   const day = data.market.day;

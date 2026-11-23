@@ -7,6 +7,7 @@ import { getSavedCursorMode } from "./GameCursor.js";
 import { getBindings } from "../input/KeyBindings.js";
 import { getControllerLabelStyle, getInputDevice, getResolvedControllerLabelStyle } from "../input/InputDevice.js";
 import { database } from "../scenes/boot.js";
+import { showLoadingThen } from "../scenes/loadingScreen.js";
 
 export class PauseMenu {
   constructor(shop) {
@@ -192,7 +193,7 @@ export class PauseMenu {
         const payload = await this.shop.saves.manager.read();
         if (!payload) throw new Error("No saved game was found.");
         const savedShopData = validateShopSave(payload.data.shop, database);
-        this.shop.scene.restart({ savedShopData, real: this.shop.realMode });
+        showLoadingThen(() => this.shop.scene.restart({ savedShopData, real: this.shop.realMode }));
       });
     } else if (action === "menu") {
       this.confirm("Exit to the main menu? Unsaved progress will be lost.", () => window.location.reload());

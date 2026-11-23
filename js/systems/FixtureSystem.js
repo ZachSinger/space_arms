@@ -258,7 +258,7 @@ export class FixtureSystem {
       entrance, reservedCells, doorwayCells, fixtureReservedCells: doorwayCells, occupiedRectangles,
       links: [[link.shop, link.backroom]],
       backroomBounds: getBackroomInteriorBounds(room.zones),
-      reservedRectangles: [getLoadingPadBounds()],
+      reservedRectangles: [getLoadingPadBounds(), ...(this.shop.gameModules?.get("hovercart")?.reservedRectangles() ?? [])],
       doorwayClearanceRectangles: getDoorwayClearanceBounds(),
     };
   }

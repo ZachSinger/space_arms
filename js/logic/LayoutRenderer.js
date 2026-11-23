@@ -64,10 +64,43 @@ export class LayoutRenderer {
             ${expansionCards(scene.fixtureSystem.expansionOptions(), false)}
             <h3 class="type-h3 layout-zone-heading">Backroom</h3>
             ${expansionCards(scene.fixtureSystem.backroomOptions(), true)}
+            ${LayoutRenderer.equipmentHTML(scene, enabled)}
           </div>
         </section>
       </div>
     `);
+  }
+
+  // Equipment bought once, like the hovercart.
+  static equipmentHTML(scene, enabled) {
+    const hovercart = scene.gameModules?.get("hovercart");
+    if (!hovercart) return "";
+    const { name, price, requiredShopLevel, isPurchased, levelMet, canAfford } = hovercart.purchaseOption();
+    const canBuy = enabled && !isPurchased && levelMet && canAfford;
+    const status = isPurchased
+      ? "OWNED"
+      : !levelMet
+        ? "LOCKED"
+        : !canAfford
+          ? "INSUFFICIENT FUNDS"
+          : !enabled
+            ? "AVAILABLE WHILE STORE IS CLOSED"
+            : "BUY";
+    return html`
+      <h3 class="type-h3 layout-zone-heading">Equipment</h3>
+      <div class="item-card fixture-sale-card">
+        <div class="fixture-sale-info">
+          <h3 class="type-h3">${name}</h3>
+          <p class="type-description">Shop Level ${requiredShopLevel}</p>
+          <p class="type-description">Follows you around the store carrying up to 3 crates. Its charger goes in the top-left corner of the backroom.</p>
+        </div>
+        <div class="fixture-sale-action">
+          <p class="type-description fixture-sale-price">${price.toLocaleString()}</p>
+          <button type="button" class="${!isPurchased && !levelMet ? "retro-tab-btn" : "action-btn"}" data-buy-hovercart
+            ${canBuy ? "" : "disabled"}>${status}</button>
+        </div>
+      </div>
+    `;
   }
 
   /**

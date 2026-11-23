@@ -15,6 +15,7 @@ import { isKnownShopLevel } from "../logic/ShopProgression.js";
 import { CUSTOMER_FACTION_IDS } from "../logic/CustomerBuyLists.js";
 import { isValidTrashList } from "../modules/cleaning/Litter.js";
 import { DIRT_KINDS } from "../modules/cleaning/CleaningArt.js";
+import { isValidHovercartSave } from "../modules/hovercart/HovercartRules.js";
 import { integer, isRecord, requireSave } from "./saveHelpers.js";
 import { SHOP_LAYOUT_VERSION } from "./migrations/index.js";
 
@@ -382,6 +383,11 @@ export function checkShopSave(data, database) {
         JSON.stringify(top.contents ?? []) === JSON.stringify(single.contents ?? []),
       "carried crate stack does not match its top crate.");
     }
+  }
+  // Optional: only saves with a bought hovercart have one, with up to 3 item crates on it.
+  if (data.hovercart !== undefined) {
+    requireSave(isValidHovercartSave(data.hovercart), "invalid hovercart.");
+    data.hovercart.crates.forEach(validateCrateContents);
   }
   requireSave(Number.isSafeInteger(data.nextCrateId) && data.nextCrateId > maximumCrateId,
     "invalid next crate id.");

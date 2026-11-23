@@ -737,6 +737,9 @@ test("a fixture's projection still cannot cover the loading pad", () => {
   const result = validateFixtureLayout([register], options);
   assert.equal(result.valid, false);
   assert.match(result.reason, /loading area/);
+
+  options.reservedRectangles[0].reason = "Keep the space in front of the hovercart charger clear.";
+  assert.match(validateFixtureLayout([register], options).reason, /hovercart charger/);
 });
 
 test("a register facing the back wall can still have a reachable single-file line beside it", () => {

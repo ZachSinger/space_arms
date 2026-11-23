@@ -5,7 +5,7 @@ import {
   getHovercartDrainPerSecond,
   getHovercartMoveSpeed,
   getHovercartTransferCount,
-} from "../js/debug/HovercartLab.js";
+} from "../js/modules/hovercart/Hovercart.js";
 
 test("hovercart transfers never exceed available crates or free space", () => {
   assert.equal(getHovercartTransferCount(4, 3), 3);

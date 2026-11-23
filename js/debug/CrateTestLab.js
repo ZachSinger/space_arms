@@ -13,7 +13,6 @@ import { validateFixtureLayout } from "../logic/FixtureLayout.js";
 import { getCrateOrderQuantity } from "../logic/SupplyOrder.js";
 import { sourceItems } from "../logic/InventoryTransfer.js";
 import { unlockEverything } from "./SandboxRoom.js";
-import { HovercartLab } from "./HovercartLab.js";
 import { controlLabel } from "../input/InputDevice.js";
 
 const STEP_X = 56;
@@ -86,7 +85,7 @@ function keepClearSpots(scene) {
   return [
     scene.storeDoor,
     scene.player.sprite,
-    scene.hovercartLab?.dock,
+    scene.hovercart?.dock,
     ...scene.areas.portals.map((portal) => portal.front),
   ].filter(Boolean).map(({ x, y }) => ({ x, y }));
 }
@@ -99,7 +98,8 @@ export function setupCrateTestLab(scene) {
   const { gameState, crateSystem } = scene;
   unlockEverything(scene);
   buildShelfMaze(scene);
-  const hovercart = new HovercartLab(scene);
+  const hovercartSystem = scene.gameModules.get("hovercart");
+  const hovercart = hovercartSystem.install();
   // Temporary while testing the cart in the maze.
   hovercart.infiniteBattery = true;
   scene.player.infiniteStamina = true;
@@ -214,13 +214,10 @@ export function setupCrateTestLab(scene) {
   fill();
   return {
     noteGaveUp() {},
-    update(time, delta) {
-      hovercart.update(time, delta);
-    },
     destroy() {
       panel.removeEventListener("click", onClick);
       panel.remove();
-      hovercart.destroy();
+      hovercartSystem.uninstall();
       scene.player.infiniteStamina = false;
     },
   };

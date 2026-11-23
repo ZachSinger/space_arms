@@ -4,14 +4,25 @@
 > earlier. This is a new design and does not bring that one back.
 
 ## Overview
-- Purchasable at Store Level 7.
+- Unlocks at Store Level 7. Bought once, for 1,500, in the Equipment section of the Manager's
+  Tablet Layout tab, while the store is closed. The price is a starting guess.
 - A floating platform about as wide as a crate that holds a stack of up to 3 crates at first.
 - It follows the player. Each crate on it slows it down, but it does its best to keep up.
 - You can still hold three crates yourself while using it.
 
-The DEV Crate Test Room has a non-saving prototype of the cart and its charger for testing crate
-transfers, stacking, and the battery. It uses the selected wall-post and floor-dock charger
-design. The level unlock, purchase, and upgrades are not part of this prototype.
+## Buying it
+- Its charger goes in the top-left corner of the backroom. That corner must be clear of
+  fixtures, floor crates, and the player to buy it, and fixtures can't be placed there after.
+- The Level 7 news at the end of a shift mentions it, and the Handbook's Level Rewards list it.
+- The purchase shows on the day's receipt as "Bought equipment: Hovercart".
+
+## Saving
+- A save remembers that you own it and which crates are on it, not its battery or position.
+- Loading a save with crates on the cart puts it next to you, switched on with a full battery
+  and its crates still on it. Otherwise it loads docked on its charger with a full battery.
+
+The DEV Crate Test Room gives you the cart for free, with a battery that never runs out and
+endless stamina, for testing. Nothing there is saved.
 
 ## Counting as held crates
 - When it's not moving (it has finished approaching you), its crates count as a stack you're

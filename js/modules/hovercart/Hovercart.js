@@ -1,17 +1,18 @@
-import { CRATE_STACK_SPACING, INTERACT_RANGE } from "../logic/Crate.js";
-import { MAX_CARRIED_CRATES } from "../logic/CrateStack.js";
-import { CRATE_TUNING, solveCratePush } from "../logic/CratePushing.js";
-import { getBackroomInteriorBounds } from "../logic/RoomLayout.js";
-import { controlLabel } from "../input/InputDevice.js";
-import { PAD } from "../input/GamepadInput.js";
-import { CONTROL_MODES } from "../input/ControlMode.js";
-import { AREA } from "../world/Areas.js";
-import { PEOPLE_DEPTH_BASE } from "../world/Depth.js";
+import { CRATE_STACK_SPACING, INTERACT_RANGE } from "../../logic/Crate.js";
+import { MAX_CARRIED_CRATES } from "../../logic/CrateStack.js";
+import { CRATE_TUNING, solveCratePush } from "../../logic/CratePushing.js";
+import { getBackroomInteriorBounds } from "../../logic/RoomLayout.js";
+import { controlLabel } from "../../input/InputDevice.js";
+import { PAD } from "../../input/GamepadInput.js";
+import { CONTROL_MODES } from "../../input/ControlMode.js";
+import { AREA } from "../../world/Areas.js";
+import { PEOPLE_DEPTH_BASE } from "../../world/Depth.js";
+import { HOVERCART_BATTERY, HOVERCART_CAPACITY, getHovercartDock } from "./HovercartRules.js";
 
-const CART_CAPACITY = 3;
-// Energy per second: sitting still is 1 plus 1 per crate, moving is 4 plus 2 per crate.
-// A full battery lasts 30 seconds moving with 3 crates.
-export const HOVERCART_BATTERY = Object.freeze({ capacity: 300, chargeSeconds: 60 });
+export { HOVERCART_BATTERY };
+
+const CART_CAPACITY = HOVERCART_CAPACITY;
+
 const METER_COLORS = Object.freeze({ high: 0x4ade80, mid: 0xfbbf24, low: 0xef4444, back: 0x0b1220 });
 const CART_MOVE_SPEED = Object.freeze({ empty: 150, perCrate: 18, minimum: 60 });
 const CART_FOLLOW_START = 84;
@@ -29,9 +30,9 @@ const CART_CLOSING_GAIN = 6;
 const CART_ROUTE_MS = 1500;
 const CART_BODY = Object.freeze({ width: 32, height: 16, avoidStoreDoor: true });
 const HOVERCART_TEXTURES = Object.freeze({
-  charger: "hovercart-lab-charger",
-  docked: "hovercart-lab-cart-docked",
-  active: "hovercart-lab-cart-active",
+  charger: "hovercart-charger",
+  docked: "hovercart-cart-docked",
+  active: "hovercart-cart-active",
 });
 
 export function getHovercartTransferCount(available, capacity) {
@@ -135,9 +136,9 @@ function createCartTextures(scene) {
   });
 }
 
-export class HovercartLab {
+export class Hovercart {
   constructor(scene) {
-    this.id = "hovercartLab";
+    this.id = "hovercartCart";
     this.scene = scene;
     this.cartCrates = [];
     this.active = false;
@@ -158,7 +159,7 @@ export class HovercartLab {
     this.closing = null;
     this.destroyed = false;
     const bounds = getBackroomInteriorBounds();
-    this.dock = { x: bounds.left + 40, y: bounds.top + 22 };
+    this.dock = getHovercartDock();
     this.stationBounds = {
       left: this.dock.x - 12,
       right: this.dock.x + 12,
@@ -199,8 +200,8 @@ export class HovercartLab {
     this.stationMeter = scene.add.graphics().setDepth(PEOPLE_DEPTH_BASE + bounds.top + 2);
     this.cartMeter = scene.add.graphics();
 
-    this.unregisterStation = scene.interactables.registerProvider("hovercart-lab-station", () => [{
-      id: "hovercart-lab-station",
+    this.unregisterStation = scene.interactables.registerProvider("hovercart-station", () => [{
+      id: "hovercart-station",
       kind: "hovercart-station",
       range: 24,
       // A docked cart is solid, so facing it counts as facing its charger.
@@ -210,9 +211,9 @@ export class HovercartLab {
       getActions: () => this.getStationActions(),
     }]);
     // A dead cart can't follow; the player carries it back to the charger once it's empty.
-    this.unregisterCart = scene.interactables.registerProvider("hovercart-lab-cart", () =>
+    this.unregisterCart = scene.interactables.registerProvider("hovercart-cart", () =>
       this.dead && !this.carried ? [{
-        id: "hovercart-lab-cart",
+        id: "hovercart-cart",
         kind: "hovercart",
         range: 24,
         distanceFrom: (origin) => scene.interactionSystem.feetReachTo(origin, this.cart.getBounds()),
@@ -228,7 +229,7 @@ export class HovercartLab {
     this.releaseDoors = scene.areas?.addDoorUser?.((portal) => this.isUsingDoor(portal));
     this.onPostUpdate = () => this.syncCartCrates();
     scene.events.on("postupdate", this.onPostUpdate);
-    scene.hovercartLab = this;
+    scene.hovercart = this;
     this.syncCartCrates();
     this.renderBattery();
   }
@@ -965,6 +966,24 @@ export class HovercartLab {
     this.reset();
   }
 
+  // A loaded save puts the cart's crates back on it, switched on next to the player.
+  restoreCrates(crates) {
+    if (!crates.length) return;
+    const player = this.scene.player.sprite;
+    this.active = true;
+    this.cart.setTexture(HOVERCART_TEXTURES.active);
+    this.placeCartClearOfPlayer(player.x + 40, player.y);
+    for (const crate of crates) {
+      crate.setCarriedBy("hovercart");
+      crate.sprite.body.stop();
+      crate.sprite.body.enable = false;
+      crate.sprite.body.moves = false;
+      this.cartCrates.push(crate);
+    }
+    this.syncCartCrates();
+    this.renderBattery();
+  }
+
   reset() {
     this.crossing = null;
     this.trailTarget = null;
@@ -991,7 +1010,8 @@ export class HovercartLab {
     this.unregisterCart?.();
     this.releaseDoors?.();
     for (const collider of this.colliders) collider.destroy();
-    this.scene.obstacleGroup.remove(this.postBlocker, true, true);
+    // Destroying it also takes it out of obstacleGroup, which may already be gone at shutdown.
+    this.postBlocker.destroy();
     for (const crate of this.cartCrates) crate.destroy();
     this.cartCrates = [];
     this.charger.destroy();
@@ -1001,6 +1021,6 @@ export class HovercartLab {
     for (const key of Object.values(HOVERCART_TEXTURES)) {
       if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
     }
-    if (this.scene.hovercartLab === this) this.scene.hovercartLab = null;
+    if (this.scene.hovercart === this) this.scene.hovercart = null;
   }
 }

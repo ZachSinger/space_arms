@@ -434,8 +434,10 @@ export function validateFixtureLayout(placements, {
       left: rect.left * TILE_SIZE, right: rect.right * TILE_SIZE,
       top: rect.top * TILE_SIZE, bottom: rect.bottom * TILE_SIZE,
     }));
-    if (pixelRectangles.some((rect) => reservedRectangles.some((reserved) => rectanglesOverlap(rect, reserved))) ||
-      doorwayClearanceRectangles.some((door) => rectanglesOverlap(pixelRectangles[0], door))) {
+    const hitReserved = reservedRectangles.find((reserved) =>
+      pixelRectangles.some((rect) => rectanglesOverlap(rect, reserved)));
+    if (hitReserved?.reason) return invalid(hitReserved.reason);
+    if (hitReserved || doorwayClearanceRectangles.some((door) => rectanglesOverlap(pixelRectangles[0], door))) {
       return invalid("Keep entrances and the loading area clear.");
     }
     for (const [index, projection] of projections.entries()) {

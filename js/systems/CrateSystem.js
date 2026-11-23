@@ -87,7 +87,7 @@ export class CrateSystem {
   }
 
   getStockableCrates() {
-    return [...this.getCarriedCrates(), ...(this.shop.hovercartLab?.getStockableCrates() ?? [])];
+    return [...this.getCarriedCrates(), ...(this.shop.hovercart?.getStockableCrates() ?? [])];
   }
 
   addCarriedCrate(crate) {
@@ -179,12 +179,12 @@ export class CrateSystem {
       }, null, holding);
     }
 
-    const hovercartActions = shop.hovercartLab?.getCrateActions();
+    const hovercartActions = shop.hovercart?.getCrateActions();
     if (hovercartActions) {
       const actions = this.addActionHints(hovercartActions, null, holding);
       for (const action of Object.values(actions)) {
         if (action?.hintOverride) action.hint = action.hintOverride;
-        if (action) action.target = shop.hovercartLab.cart;
+        if (action) action.target = shop.hovercart.cart;
       }
       return actions;
     }
@@ -541,7 +541,7 @@ export class CrateSystem {
       else this.pickupMarker.setAngle(-90).setPosition(bounds.left - 7, bounds.centerY);
     }
     const stocking = shop.shelfStockingWindow?.getStockingCrate();
-    const cart = shop.hovercartLab;
+    const cart = shop.hovercart;
     const cartInReach = cart?.isCloseEnough() ?? false;
     this.crateFooter.render({
       marked: stack ? this.describeCrateForFooter(stack.marked) : this.describeHoveredShelfForFooter(),

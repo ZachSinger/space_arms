@@ -67,6 +67,7 @@ export class CatalogSystem {
     for (const crate of shop.crateSystem.getCarriedCrates()) {
       if (crate.kind === "item") add(crate, "offShelves");
     }
+    for (const crate of shop.hovercart?.cartCrates ?? []) add(crate, "offShelves");
     for (const employee of shop.employees ?? []) {
       const crate = employee.currentJob?.crate;
       if (crate?.isCarried && !floorCrates.includes(crate)) add(crate, "offShelves");

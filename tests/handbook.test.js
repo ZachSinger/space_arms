@@ -57,7 +57,8 @@ test("level rewards come from the game's own unlock data", () => {
   assert.ok(rewards.get(23).includes("Staff limit: up to 6 employees hired at once"));
   assert.ok(rewards.get(6).some((text) => text.includes("Sales Floor Expansion West")));
   assert.ok(rewards.get(22).some((text) => text.includes("Backroom Upgrade A")));
-  assert.ok(![...rewards.values()].flat().some((text) => /hovercart|spaces/i.test(text)));
+  assert.ok(rewards.get(7).some((text) => text.startsWith("Hovercart")));
+  assert.ok(![...rewards.values()].flat().some((text) => /spaces/i.test(text)));
 });
 
 test("every level after the first unlocks one or two things", () => {

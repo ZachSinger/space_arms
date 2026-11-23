@@ -12,6 +12,7 @@ import { DELIVERY_FEE } from "../logic/SupplyOrder.js";
 import { summarizeReceipt } from "../logic/DayLedger.js";
 import { formatMoneyAmount, sumMoney } from "../logic/Money.js";
 import { sinkItems } from "../logic/InventoryTransfer.js";
+import { HOVERCART_LEVEL } from "../modules/hovercart/HovercartRules.js";
 
 const PRICE_REACTION_TYPES = Object.freeze(["bargain", "skipped", "disgusted"]);
 
@@ -182,6 +183,9 @@ export class ShiftSystem {
     }
     if (newBackroomExpansions.length) {
       message += ` Backroom expansion${newBackroomExpansions.length > 1 ? "s" : ""} available to buy in the Layout tab.`;
+    }
+    if (reachedNow(HOVERCART_LEVEL) && !this.shop.gameModules?.get("hovercart")?.owned) {
+      message += " The hovercart is available to buy in the Layout tab.";
     }
     if (hasUnimplementedShopRewardBetween(previousLevel, level)) {
       message += " Some later level rewards are not in the game yet.";

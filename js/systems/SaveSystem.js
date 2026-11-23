@@ -50,6 +50,7 @@ export class SaveSystem {
       ...shop.crateSystem.serialize(),
       // Trash in hand is saved as lying on the floor where he stands (or by the backroom door).
       ...(shop.cleaningSystem ? { trash: shop.cleaningSystem.serializeTrash() } : {}),
+      ...(shop.gameModules?.get("hovercart")?.serialize() ?? {}),
     }, database);
   }
 
@@ -102,6 +103,7 @@ export class SaveSystem {
     shop.cameraRig.refresh();
     shop.controls.cratePress = null;
     shop.crateSystem.load(data);
+    shop.gameModules?.get("hovercart")?.load(data);
     shop.gameModules?.get("droneDeliveries")?.restoreTerminal();
     shop.cleaningSystem?.load(data.trash ?? [], data.dirt ?? []);
     this.moveShelfOverflowToGoBacks();
