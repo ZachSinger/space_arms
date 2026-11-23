@@ -319,6 +319,17 @@ test("store expansions require their level, credits, and previous purchases", ()
   assert.match(wrongOrder.messages[0], /in order/);
 });
 
+test("Decorator Mode can buy a later store expansion, opening the earlier ones with it", () => {
+  const harness = createExpansionHarness({ shopLevel: 50, credits: 100000 });
+  const { scene } = harness;
+  scene.fixtureSystem.anyZoneOrder = true;
+  assert.equal(scene.fixtureSystem.expansionOptions()[1].isNext, true);
+  assert.equal(scene.fixtureSystem.buyExpansion("expansion_a"), true);
+  assert.equal(scene.room.zones.find((zone) => zone.id === "expansion_west").locked, false);
+  assert.equal(scene.room.zones.find((zone) => zone.id === "expansion_a").locked, false);
+  assert.equal(scene.gameState.economy.credits, 100000 - 2700 - 6400);
+});
+
 test("buying the first store expansion deducts credits and records a receipt line", () => {
   const harness = createExpansionHarness({ shopLevel: 6, credits: 2700 });
   const { scene } = harness;

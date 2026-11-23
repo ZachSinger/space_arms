@@ -38,6 +38,8 @@ export class FixtureSystem {
   /** @param {object} shop - the game scene, with its room, fixture views, and game state made */
   constructor(shop) {
     this.shop = shop;
+    // DEV Decorator Mode: any locked expansion can be bought, opening the ones before it too.
+    this.anyZoneOrder = false;
     if (shop.interactables) this.registerInteractions();
   }
 
@@ -310,7 +312,7 @@ export class FixtureSystem {
       return {
         zone,
         isPurchased: !zone.locked,
-        isNext: id === nextId,
+        isNext: id === nextId || (this.anyZoneOrder && zone.locked),
         levelMet: reputation.shopLevel >= zone.requiredShopLevel,
         canAfford: economy.credits >= zone.cost,
       };
@@ -338,22 +340,29 @@ export class FixtureSystem {
       scene.messages.show(`${zone.name} is already open.`);
       return false;
     }
-    if (zoneId !== order.find((id) => this.#zone(id)?.locked)) {
+    if (zoneId !== order.find((id) => this.#zone(id)?.locked) && !this.anyZoneOrder) {
       scene.messages.show(`Buy ${inOrder} in order.`);
       return false;
     }
+    // Earlier locked zones open too, so the new room always connects to the shop.
+    const opening = order.slice(0, order.indexOf(zoneId) + 1).map((id) => this.#zone(id))
+      .filter((candidate) => candidate?.locked);
+    const cost = opening.reduce((sum, candidate) => sum + candidate.cost, 0);
     const { reputation, economy } = scene.gameState;
-    if (reputation.shopLevel < zone.requiredShopLevel) {
-      scene.messages.show(`Reach Shop Level ${zone.requiredShopLevel} to buy ${zone.name}.`);
+    const levelNeeded = Math.max(...opening.map((candidate) => candidate.requiredShopLevel));
+    if (reputation.shopLevel < levelNeeded) {
+      scene.messages.show(`Reach Shop Level ${levelNeeded} to buy ${zone.name}.`);
       return false;
     }
-    if (economy.credits < zone.cost) {
-      scene.messages.show(`${zone.name} costs ${formatMoneyAmount(zone.cost)}.`);
+    if (economy.credits < cost) {
+      scene.messages.show(`${zone.name} costs ${formatMoneyAmount(cost)}.`);
       return false;
     }
 
-    economy.spend(zone.cost, { category: "expansions", label: zone.name });
-    this.openZone(zoneId);
+    for (const candidate of opening) {
+      economy.spend(candidate.cost, { category: "expansions", label: candidate.name });
+      this.openZone(candidate.id);
+    }
     scene.saves.requestAutosave();
     scene.messages.show(`${zone.name} is open.`);
     return true;
