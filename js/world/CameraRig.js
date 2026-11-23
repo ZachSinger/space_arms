@@ -32,8 +32,13 @@ export class CameraRig {
     this.viewHeight = null;
     this.backroomCamera = null;
     this.backroomFrame = null;
+    this.following = false;
     shop.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
-    shop.events.once("shutdown", () => shop.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this));
+    shop.events.on("postupdate", this.followPlayer, this);
+    shop.events.once("shutdown", () => {
+      shop.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
+      shop.events.off("postupdate", this.followPlayer, this);
+    });
     this.refresh();
   }
 
@@ -141,14 +146,35 @@ export class CameraRig {
     );
 
     // Inside another room the shop view holds still where the player left it.
-    if (scene.player?.sprite && scene.areas.playerArea === AREA.SHOP) {
-      camera.startFollow(scene.player.sprite, true);
-    } else if (scene.player?.sprite) {
-      camera.stopFollow();
-    } else {
-      camera.centerOn(shop.x + shop.width / 2, shop.y + shop.height / 2);
-    }
+    this.following = Boolean(scene.player?.sprite && scene.areas.playerArea === AREA.SHOP);
+    if (this.following) this.followPlayer();
+    else if (!scene.player?.sprite) camera.centerOn(shop.x + shop.width / 2, shop.y + shop.height / 2);
     this.refreshBackroomWindow();
+  }
+
+  // Centers on the player after movement each frame. The scroll snaps to whole screen
+  // pixels (not whole map pixels): at an uneven zoom, map-pixel steps made the floor and
+  // fixtures stutter in uneven jumps while walking.
+  followPlayer() {
+    if (!this.following) return;
+    const camera = this.shop.cameras.main;
+    const sprite = this.shop.player?.sprite;
+    if (!sprite) return;
+    const zoom = camera.zoom;
+    const bounds = camera.getBounds();
+    const visibleW = camera.width / zoom;
+    const visibleH = camera.height / zoom;
+    const snap = (target, min, max) => {
+      if (max <= min) return min;
+      const clamped = Phaser.Math.Clamp(target, min, max);
+      return Phaser.Math.Clamp(Math.round(clamped * zoom) / zoom, Math.ceil(min * zoom) / zoom, Math.floor(max * zoom) / zoom);
+    };
+    // Phaser's scroll is offset from the visible top-left by half the zoomed-away margin.
+    const offsetX = (camera.width - visibleW) / 2;
+    const offsetY = (camera.height - visibleH) / 2;
+    const left = snap(sprite.x - visibleW / 2, bounds.x, bounds.x + bounds.width - visibleW);
+    const top = snap(sprite.y - visibleH / 2, bounds.y, bounds.y + bounds.height - visibleH);
+    camera.setScroll(left - offsetX, top - offsetY);
   }
 
   // --- Backroom window ---
