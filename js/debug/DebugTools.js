@@ -119,12 +119,14 @@ export class DebugTools {
   quickstart({ shelfCount = 1, itemCount = 4 } = {}) {
     const { scene } = this;
     const { gameState } = scene;
-    if (scene.fixtures.shelves().length > 0) {
-      scene.messages.show("Quickstart only works before you place a shelf.");
+    if (scene.fixtures.shelves().some((shelf) => shelf.placements.length > 0)) {
+      scene.messages.show("Quickstart only works before any shelf has items on it.");
       return false;
     }
     const shelfType = "shelf_budget_2x2";
     const shelfSpec = getFixtureType(shelfType);
+    // Empty starter shelves are stocked first; new shelves are bought only for the rest.
+    const shelves = scene.fixtures.shelves().filter((shelf) => shelf.type === shelfType).slice(0, shelfCount);
     const items = database.getAllItems()
       .filter((item) => {
         const license = database.getLicense(item.license);
@@ -135,7 +137,7 @@ export class DebugTools {
       .slice(0, Math.min(itemCount, shelfCount * 4));
 
     const door = getStoreDoorCell();
-    if (!scene.fixtureSystem.findNearestCell(shelfType, door)) {
+    if (shelves.length < shelfCount && !scene.fixtureSystem.findNearestCell(shelfType, door)) {
       scene.messages.show("Quickstart couldn't find room for the shelf.");
       return false;
     }
@@ -148,8 +150,7 @@ export class DebugTools {
     }
     scene.catalogSystem.recalculateActiveFactions();
 
-    const shelves = [];
-    for (let count = 0; count < shelfCount; count += 1) {
+    for (let count = shelves.length; count < shelfCount; count += 1) {
       const shelfCell = scene.fixtureSystem.findNearestCell(shelfType, door);
       if (!shelfCell) break;
       gameState.economy.spend(shelfSpec.price, { category: "fixtures", label: shelfSpec.name });
