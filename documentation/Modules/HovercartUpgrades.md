@@ -23,6 +23,10 @@ separate upgrade paths: Length and Speed have 3 steps each, and Battery has 6. E
 at a Store Level and must be bought in order. Upgrades belong to one hovercart; if you own more
 than one, each cart is upgraded separately.
 
+Each Length step needs the matching Speed step first: Length step 1 needs Speed step 1, and so
+on. That way a cart can never hold more crates than its speed can handle. Battery steps need no
+other upgrade.
+
 ## Length (how many crates it holds)
 
 Each step adds room for one more crate on the cart's stack.
@@ -46,7 +50,7 @@ Step 1 unlocks at Level 10 and costs 3,000. Empty, it moves at 190. Each crate s
 
 Step 2 unlocks at Level 20 and costs 12,000. Empty, it moves at 235. Each crate slows it by 6.
 
-Step 3 unlocks at Level 37 and costs 45,000. It moves at 280, your running speed, with any
+Step 3 unlocks at Level 32 and costs 45,000. It moves at 280, your running speed, with any
 number of crates.
 
 ## Battery (how long it runs)
