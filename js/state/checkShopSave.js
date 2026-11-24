@@ -227,6 +227,21 @@ export function checkShopSave(data, database) {
     "invalid remote order offer.");
     remoteOrderIds.add(offer.id);
   }
+  // Optional: saves from before reviews existed have none.
+  if (player.customerReviews !== undefined) {
+    const { nextReviewId, reviews } = player.customerReviews ?? {};
+    requireSave(isRecord(player.customerReviews) && integer(nextReviewId, 1) && Array.isArray(reviews) &&
+      reviews.every((review, index) => isRecord(review) &&
+        integer(review.id, 1) && review.id < nextReviewId &&
+        (index === 0 || review.id > reviews[index - 1].id) &&
+        integer(review.day, 1) && review.day <= data.market?.day &&
+        (index === 0 || review.day >= reviews[index - 1].day) &&
+        integer(review.stars, 1) && review.stars <= 5 &&
+        (review.factionId === null || CUSTOMER_FACTION_IDS.includes(review.factionId)) &&
+        typeof review.username === "string" && review.username.length > 0 && review.username.length <= 60 &&
+        typeof review.text === "string" && review.text.length > 0 && review.text.length <= 1000),
+    "invalid customer reviews.");
+  }
 
   const fixtureIds = new Set();
   const placementIds = new Set();

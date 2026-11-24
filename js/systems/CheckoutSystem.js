@@ -614,7 +614,10 @@ export class CheckoutSystem {
       currency: customer.checkoutPayment.type === "m-scrips" ? "m-scrips" : "credits",
       paymentType: customer.checkoutPayment.type,
       chitCode: customer.checkoutPayment.code,
-      onWrongChange: () => shop.gameState.reputation.lose(1),
+      onWrongChange: () => {
+        customer.checkoutMistakes = (customer.checkoutMistakes ?? 0) + 1;
+        shop.gameState.reputation.lose(1);
+      },
       onCashAttempt: (attempt) => shop.debugInfo?.record("cash-handover", {
         customerId: shop.debugInfo.identifyCustomer(customer), ...attempt,
       }),

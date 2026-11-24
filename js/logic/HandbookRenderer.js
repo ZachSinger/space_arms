@@ -21,6 +21,7 @@ import {
 } from "./EmployeeTraining.js";
 import { html, raw } from "../core/html.js";
 import { HOVERCART_CAPACITY, HOVERCART_LEVEL, HOVERCART_PRICE } from "../modules/hovercart/HovercartRules.js";
+import { EXPERIENCE_TUNING, REVIEW_APP_NAME } from "../modules/customerExperience/ExperienceRules.js";
 
 export const HANDBOOK_TOPICS = Object.freeze([
   { id: "store", label: "Running the Store" },
@@ -281,6 +282,15 @@ function customersTopic() {
         `To step away, press ${key("interact")} again<span class="pad-only"> or ${controlLabel("cancel", "gamepad")}</span>. The sale waits for you exactly as you left it.`,
       ])}
       <p>Staff can also run the register. See <strong>Employees</strong>.</p>`),
+    section("Reviews", `
+      ${list([
+        `After you finish your ${EXPERIENCE_TUNING.unlockAfterShift === 2 ? "second" : `${EXPERIENCE_TUNING.unlockAfterShift}th`} shift, some customers start reviewing your store on ${REVIEW_APP_NAME}, the app customers use to rate shops. About 1 in every ${Math.round(1 / EXPERIENCE_TUNING.reviewChance)} customers writes one as they leave.`,
+        "Each review gives your store 1 to 5 stars. Read them all in the <strong>Reviews</strong> tab, where you can show only one star rating or one day at a time.",
+        `Your ${REVIEW_APP_NAME} rating is the average of your ${EXPERIENCE_TUNING.ratingWindow} most recent reviews, so older reviews stop counting.`,
+        "Reviews don't change your money or your reputation. They tell you what customers liked and what bothered them.",
+        "Customers notice: how long they waited in line, whether the items they wanted were on the shelves, your prices, how clean and good-looking the store is, getting hit by a crate, getting stuck, and mistakes with their change.",
+        "Scavengers care most about prices. Mercenaries hate waiting and finding items out of stock. Explorers care most about how the store looks. Other customers care most about cleanliness, safety, and correct change.",
+      ])}`),
   ].join("");
 }
 

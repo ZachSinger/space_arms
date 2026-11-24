@@ -17,6 +17,7 @@ import { Shop } from "./slices/Shop.js";
 import { Crates } from "./slices/Crates.js";
 import { Trash } from "./slices/Trash.js";
 import { DroneDeliveries } from "./slices/DroneDeliveries.js";
+import { CustomerReviews } from "./slices/CustomerReviews.js";
 import { Market } from "../logic/Market.js";
 import { getStaffLimit } from "../logic/ShopProgression.js";
 import { gameRandom } from "../core/Random.js";
@@ -24,7 +25,7 @@ import { DecisionRules } from "./DecisionRules.js";
 
 const SLICE_NAMES = Object.freeze([
   "economy", "reputation", "catalog", "staff", "calendar", "market", "goBacks", "shop", "crates", "trash",
-  "droneDeliveries",
+  "droneDeliveries", "customerReviews",
 ]);
 
 export class GameState {
@@ -54,6 +55,7 @@ export class GameState {
     this.crates = saved ? Crates.fromSave(saved) : new Crates();
     this.trash = saved ? Trash.fromSave(saved) : new Trash();
     this.droneDeliveries = saved ? DroneDeliveries.fromSave(player) : new DroneDeliveries();
+    this.customerReviews = saved ? CustomerReviews.fromSave(player) : new CustomerReviews();
     this.listeners = new Set();
     for (const name of SLICE_NAMES) this[name].attach(() => this.#notify());
   }
@@ -169,6 +171,7 @@ export class GameState {
         awaitingEndDay: this.calendar.awaitingEndDay,
         emergencyLoan: economy.emergencyLoan,
         ...this.droneDeliveries.toSave(),
+        ...this.customerReviews.toSave(),
       },
       market: { day: this.calendar.day, ...this.market.serialize() },
       ...this.shop.toSave(),

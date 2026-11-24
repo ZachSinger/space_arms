@@ -139,6 +139,11 @@ export class Customer {
     this.queueTarget = null; // set by the scene once this customer has a spot in line
     this.queuePosition = null;
     this.patienceRemainingMs = null; // only ticks once queued
+    this.queueWaitMs = 0; // total time spent in line, for the customer's review
+    this.firstQueuePosition = null;
+    this.gaveUpInLine = false;
+    this.gotStuck = false;
+    this.checkoutMistakes = 0;
     this.patienceBubble = null;
     this.patienceLevel = -1;
     this.reactionBubble = null;
@@ -176,6 +181,7 @@ export class Customer {
     this.cleanlinessTolerance = cleaningProfile?.tolerance ?? null;
     this.cleanlinessJudgeMs = cleaningProfile?.judgeAfterMs ?? null;
     this.cleanlinessJudged = false;
+    this.cleanlinessVerdict = null;
     this.cleanlinessTimerMs = 0;
     this.trashDropAtWalkMs = cleaningProfile?.trashDropAtWalkMs ?? null;
     this.dirtDropAtWalkMs = cleaningProfile?.dirtDropAtWalkMs ?? null;
@@ -238,6 +244,7 @@ export class Customer {
         this.seekingTimer += delta;
         if (this.madeWalkingProgress(delta)) this.seekingTimer = 0;
         if (this.seekingTimer > SEEKING_TIMEOUT_MS || this.walkingMs > MAX_WALK_MS) {
+          this.gotStuck = true;
           this.store.debugInfo?.recordCustomer("customer-seeking-timeout", this);
           this.store.noteCustomerGaveUp?.(this, this.walkingMs > MAX_WALK_MS
             ? "walked a full minute without arriving" : "stood stuck for 15 seconds");
@@ -666,6 +673,7 @@ export class Customer {
   setQueuePosition(position) {
     const previousPosition = this.queuePosition;
     if (previousPosition == null) {
+      this.firstQueuePosition ??= position;
       this.patienceRemainingMs = (this.maxPatienceMs ?? PATIENCE_MS) +
         position * QUEUE_JOIN_POSITION_BONUS_MS;
     } else if (position === 0 && previousPosition !== 0) {
@@ -682,10 +690,12 @@ export class Customer {
    */
   updatePatience(delta) {
     if (this.patienceRemainingMs == null) return;
+    if (!this.store.customerFlow.temporarilyClosed) this.queueWaitMs = (this.queueWaitMs ?? 0) + delta;
     if (this.queuePosition !== 0 && !this.store.customerFlow.temporarilyClosed) {
       this.patienceRemainingMs = Math.max(0, this.patienceRemainingMs - delta);
     }
     if (this.queuePosition !== 0 && this.patienceRemainingMs <= 0) {
+      this.gaveUpInLine = true;
       this.leaveAngry();
       return;
     }
@@ -802,6 +812,7 @@ export class Customer {
     this.cleanlinessJudged = true;
     const percent = this.cleaning.getCleanlinessPercent();
     const verdict = this.cleaning.judgeCustomerCleanliness(percent, this.cleanlinessTolerance);
+    this.cleanlinessVerdict = verdict;
     if (verdict === "fine") return verdict;
     this.showReaction("cleanliness", verdict === "walk-out" ? "angry" : "disappointed");
     this.cleaning.reportCleanlinessVerdict(this, verdict);
@@ -893,6 +904,7 @@ export class Customer {
   }
 
   handlePathUnavailable() {
+    this.gotStuck = true;
     this.store.debugInfo?.recordCustomer("customer-path-unavailable", this);
     this.store.noteCustomerGaveUp?.(this, "found no way through");
     const onPathUnavailable = this.onPathUnavailable;

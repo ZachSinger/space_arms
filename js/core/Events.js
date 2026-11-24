@@ -18,6 +18,7 @@
  * @property {{ customer: object, itemIds: string[], itemNames: string[] }} "customer-missing-primary"
  * @property {{ customer: object, reaction: "bargain" | "skipped" | "disgusted" }} "customer-price-reaction"
  * @property {{ customer: object, total: number }} "customer-sale-completed"
+ * @property {{ customer: object }} "customer-exited"
  * @property {{ kind: string, itemId: string | null, typeId: string | null, quantity: number }} "crate-picked-up"
  * @property {{ kind: string, itemId: string | null, typeId: string | null, quantity: number, thrown: boolean, x: number, y: number }} "crate-dropped"
  * @property {{ fixtureId: string, type: string }} "fixture-opened"
@@ -34,6 +35,7 @@ export const GAME_EVENTS = Object.freeze({
   CUSTOMER_MISSING_PRIMARY: "customer-missing-primary",
   CUSTOMER_PRICE_REACTION: "customer-price-reaction",
   CUSTOMER_SALE_COMPLETED: "customer-sale-completed",
+  CUSTOMER_EXITED: "customer-exited",
   CRATE_PICKED_UP: "crate-picked-up",
   CRATE_DROPPED: "crate-dropped",
   FIXTURE_OPENED: "fixture-opened",

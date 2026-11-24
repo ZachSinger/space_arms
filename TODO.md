@@ -46,6 +46,12 @@ completed or no longer relevant.
 - [x] Finish [Presentation Level](documentation/modules/Presentation.md): 8 purchasable
       hologram decorations raise presentation, with distinct-design variety and floor-crate penalties.
       Decoration prices and points remain provisional development defaults.
+- [x] Add [Customer Experience](documentation/modules/CustomerExperience.md): customers
+      quietly rate visits, some leave funny reviews, and the Manager's Tablet shows the store's
+      rating and every review. Unlocks after the second shift.
+- [ ] Add Delivery Drones: little bots that put accepted remote orders together from stock
+      in the shop and ship them, plus a Deliveries tab on the Manager's Tablet. Open questions
+      are in [DeliveryDroneQuestions](documentation/modules/DeliveryDroneQuestions.md).
 
 ## Other ideas
 

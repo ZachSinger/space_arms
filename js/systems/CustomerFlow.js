@@ -146,6 +146,7 @@ export class CustomerFlow {
       onComplete: (completedCustomer) => {
         shop.debugInfo?.recordCustomer("customer-exited", completedCustomer);
         shop.customers = shop.customers.filter((candidate) => candidate !== completedCustomer);
+        shop.eventBus.emit(GAME_EVENTS.CUSTOMER_EXITED, { customer: completedCustomer });
       },
     });
     shop.customerGroup.add(customer.sprite);

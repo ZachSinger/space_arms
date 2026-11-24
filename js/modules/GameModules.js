@@ -1,10 +1,12 @@
 import { CleaningSystem } from "./cleaning/CleaningSystem.js";
+import { CustomerExperienceSystem } from "./customerExperience/CustomerExperienceSystem.js";
 import { DroneDeliverySystem } from "./droneDeliveries/DroneDeliverySystem.js";
 import { HovercartSystem } from "./hovercart/HovercartSystem.js";
 import { PresentationSystem } from "./presentation/PresentationSystem.js";
 
 const MODULE_FACTORIES = Object.freeze({
   cleaning: (scene) => new CleaningSystem(scene),
+  customerExperience: (scene) => new CustomerExperienceSystem(scene),
   droneDeliveries: (scene) => new DroneDeliverySystem(scene),
   hovercart: (scene) => new HovercartSystem(scene),
   presentation: (scene) => new PresentationSystem(scene),
@@ -12,7 +14,7 @@ const MODULE_FACTORIES = Object.freeze({
 
 // Remove a module ID here to disable it for the whole game.
 export const ENABLED_GAME_MODULES = Object.freeze([
-  "cleaning", "droneDeliveries", "hovercart", "presentation",
+  "cleaning", "customerExperience", "droneDeliveries", "hovercart", "presentation",
 ]);
 
 export class ModuleHost {

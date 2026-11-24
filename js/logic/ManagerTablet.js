@@ -13,6 +13,7 @@ import { FixturesTab } from "./FixturesTab.js";
 import { LayoutTab } from "./LayoutTab.js";
 import { FinancesTab } from "./FinancesTab.js";
 import { HandbookTab } from "./HandbookTab.js";
+import { ReviewsTab } from "./ReviewsTab.js";
 import { FixtureHighlight } from "./FixtureHighlight.js";
 import { GAME_EVENTS } from "../core/Events.js";
 import { getFixtureResaleValue, getFixtureType } from "./FixtureLayout.js";
@@ -27,15 +28,20 @@ export const TAB_DEFS = [
   { id: "fixtures", label: "Fixtures" },
   { id: "layout", label: "Layout" },
   { id: "finances", label: "Finances" },
+  { id: "reviews", label: "Reviews" },
   { id: "handbook", label: "Handbook" },
 ];
 
 // Extra tabs that only appear in the DEV UI Lab.
 export const UI_LAB_TAB_DEFS = [{ id: "textStyles", label: "Text Styles" }];
 
+// Tabs that belong to an optional game module, hidden when that module is turned off.
+const MODULE_TABS = Object.freeze({ reviews: "customerExperience" });
+
 /** @param {Phaser.Scene} scene @returns {{id: string, label: string}[]} */
 export function getTabDefs(scene) {
-  return scene?.lab === "ui" ? [...TAB_DEFS, ...UI_LAB_TAB_DEFS] : TAB_DEFS;
+  const tabs = TAB_DEFS.filter(({ id }) => !MODULE_TABS[id] || scene?.gameModules?.get?.(MODULE_TABS[id]));
+  return scene?.lab === "ui" ? [...tabs, ...UI_LAB_TAB_DEFS] : tabs;
 }
 
 function renderTextStylesPage() {
@@ -78,6 +84,7 @@ export class ManagerTablet {
     this.layoutTab = new LayoutTab(scene);
     this.financesTab = new FinancesTab(scene);
     this.handbookTab = new HandbookTab(gameState, () => database.getAllLicenses());
+    this.reviewsTab = new ReviewsTab(gameState);
 
     const tabDefs = getTabDefs(scene);
     const tabBarHTML = tabDefs.map(
@@ -186,6 +193,8 @@ export class ManagerTablet {
       this.bodyElement,
       () => this.renderPanelContent("handbook"),
     );
+    const reviewsPanel = this.bodyElement.querySelector('[data-tab-panel="reviews"]');
+    if (reviewsPanel) this.reviewsTab.bind(reviewsPanel, this.bodyElement, () => this.renderPanelContent("reviews"));
     this.fixtureHighlight = new FixtureHighlight(scene, this.uiWindow);
     this.uiWindow.onClose = () => {
       this.fixturesTab.purchaseNotice = "";
@@ -223,6 +232,8 @@ export class ManagerTablet {
       this.refreshSupplyPanel();
       this.refreshLayoutPanels();
       this.refreshFinancesPanel();
+      // The review list can be long, so it only redraws while it's on screen.
+      if (this.reviewsTab.panel && !this.reviewsTab.panel.classList.contains("hidden")) this.reviewsTab.redraw();
     });
     this.scene.eventBus.on(GAME_EVENTS.INVENTORY_TRANSFERRED, ({ destination }) => {
       if (destination === "customer-cart") this.inventoryTab.redraw();
@@ -256,6 +267,7 @@ export class ManagerTablet {
     if (tabId === "layout") return this.layoutTab.draw();
     if (tabId === "finances") return this.financesTab.draw();
     if (tabId === "handbook") return this.handbookTab.draw();
+    if (tabId === "reviews") return this.reviewsTab.draw();
     if (tabId === "textStyles") return renderTextStylesPage();
     throw new Error(`Unknown tablet tab: ${tabId}`);
   }
@@ -272,6 +284,7 @@ export class ManagerTablet {
     if (tabId === "layout" || tabId === "fixtures") this.refreshLayoutPanels();
     if (tabId === "finances") this.refreshFinancesPanel();
     if (tabId === "handbook") this.refreshHandbookPanel();
+    if (tabId === "reviews") this.reviewsTab.redraw();
     this.bodyElement.querySelectorAll(".tablet-tab-btn").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.tab === tabId);
     });

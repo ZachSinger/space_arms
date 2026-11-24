@@ -51,6 +51,25 @@ function snapshot() {
   };
 }
 
+test("customer reviews survive saves; malformed reviews are rejected", () => {
+  const saved = snapshot();
+  saved.market.day = 4;
+  const review = { id: 1, day: 3, stars: 4, factionId: "explorers", username: "NebulaNomad", text: "Nice." };
+  saved.playerState.customerReviews = { nextReviewId: 3, reviews: [review, { ...review, id: 2, factionId: null }] };
+  assert.deepEqual(validateShopSave(saved, database), saved);
+  for (const invalid of [
+    { stars: 0 }, { stars: 6 }, { stars: 2.5 }, { day: 5 }, { id: 3 }, { factionId: "pirates" },
+    { username: "" }, { text: "" }, { text: "x".repeat(1001) },
+  ]) {
+    const broken = structuredClone(saved);
+    Object.assign(broken.playerState.customerReviews.reviews[1], invalid);
+    assert.throws(() => validateShopSave(broken, database), /invalid customer reviews/, JSON.stringify(invalid));
+  }
+  const outOfOrder = structuredClone(saved);
+  outOfOrder.playerState.customerReviews.reviews[1].day = 2;
+  assert.throws(() => validateShopSave(outOfOrder, database), /invalid customer reviews/);
+});
+
 test("dirt styles and partial mopping survive saves; malformed dirt is rejected", () => {
   const saved = snapshot();
   saved.dirt = [
