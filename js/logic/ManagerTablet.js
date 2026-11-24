@@ -14,7 +14,6 @@ import { LayoutTab } from "./LayoutTab.js";
 import { FinancesTab } from "./FinancesTab.js";
 import { HandbookTab } from "./HandbookTab.js";
 import { ReviewsTab } from "./ReviewsTab.js";
-import { DeliveriesTab } from "./DeliveriesTab.js";
 import { FixtureHighlight } from "./FixtureHighlight.js";
 import { GAME_EVENTS } from "../core/Events.js";
 import { getFixtureResaleValue, getFixtureType } from "./FixtureLayout.js";
@@ -29,7 +28,6 @@ export const TAB_DEFS = [
   { id: "fixtures", label: "Fixtures" },
   { id: "layout", label: "Layout" },
   { id: "finances", label: "Finances" },
-  { id: "deliveries", label: "Deliveries" },
   { id: "reviews", label: "Reviews" },
   { id: "handbook", label: "Handbook" },
 ];
@@ -38,7 +36,7 @@ export const TAB_DEFS = [
 export const UI_LAB_TAB_DEFS = [{ id: "textStyles", label: "Text Styles" }];
 
 // Tabs that belong to an optional game module, hidden when that module is turned off.
-const MODULE_TABS = Object.freeze({ deliveries: "droneDeliveries", reviews: "customerExperience" });
+const MODULE_TABS = Object.freeze({ reviews: "customerExperience" });
 
 /** @param {Phaser.Scene} scene @returns {{id: string, label: string}[]} */
 export function getTabDefs(scene) {
@@ -87,7 +85,6 @@ export class ManagerTablet {
     this.financesTab = new FinancesTab(scene);
     this.handbookTab = new HandbookTab(gameState, () => database.getAllLicenses());
     this.reviewsTab = new ReviewsTab(gameState);
-    this.deliveriesTab = new DeliveriesTab(scene);
 
     const tabDefs = getTabDefs(scene);
     const tabBarHTML = tabDefs.map(
@@ -172,7 +169,6 @@ export class ManagerTablet {
         buyBackroomUpgrade: (upgradeId) => this.scene.fixtureSystem.buyBackroomUpgrade(upgradeId),
         buyHovercart: () => this.scene.gameModules.get("hovercart")?.buy(),
         buyHovercartUpgrade: (path) => this.scene.gameModules.get("hovercart")?.purchaseUpgrade(path),
-        buyDeliveryDrones: () => this.scene.gameModules.get("droneDeliveries")?.drones.buy(),
       },
     );
     this.financesTab.bind(
@@ -199,11 +195,6 @@ export class ManagerTablet {
     );
     const reviewsPanel = this.bodyElement.querySelector('[data-tab-panel="reviews"]');
     if (reviewsPanel) this.reviewsTab.bind(reviewsPanel, this.bodyElement, () => this.renderPanelContent("reviews"));
-    const deliveriesPanel = this.bodyElement.querySelector('[data-tab-panel="deliveries"]');
-    if (deliveriesPanel) {
-      this.deliveriesTab.bind(deliveriesPanel, this.bodyElement, () => this.renderPanelContent("deliveries"));
-    }
-    this.refreshDeliveriesTabButton();
     this.fixtureHighlight = new FixtureHighlight(scene, this.uiWindow);
     this.uiWindow.onClose = () => {
       this.fixturesTab.purchaseNotice = "";
@@ -243,8 +234,6 @@ export class ManagerTablet {
       this.refreshFinancesPanel();
       // The review list can be long, so it only redraws while it's on screen.
       if (this.reviewsTab.panel && !this.reviewsTab.panel.classList.contains("hidden")) this.reviewsTab.redraw();
-      this.refreshDeliveriesTabButton();
-      if (this.deliveriesTab.visible) this.deliveriesTab.redraw();
     });
     this.scene.eventBus.on(GAME_EVENTS.INVENTORY_TRANSFERRED, ({ destination }) => {
       if (destination === "customer-cart") this.inventoryTab.redraw();
@@ -279,7 +268,6 @@ export class ManagerTablet {
     if (tabId === "finances") return this.financesTab.draw();
     if (tabId === "handbook") return this.handbookTab.draw();
     if (tabId === "reviews") return this.reviewsTab.draw();
-    if (tabId === "deliveries") return this.deliveriesTab.draw();
     if (tabId === "textStyles") return renderTextStylesPage();
     throw new Error(`Unknown tablet tab: ${tabId}`);
   }
@@ -297,10 +285,6 @@ export class ManagerTablet {
     if (tabId === "finances") this.refreshFinancesPanel();
     if (tabId === "handbook") this.refreshHandbookPanel();
     if (tabId === "reviews") this.reviewsTab.redraw();
-    if (tabId === "deliveries") {
-      this.deliveriesTab.confirmCancelId = null;
-      this.deliveriesTab.redraw();
-    }
     this.bodyElement.querySelectorAll(".tablet-tab-btn").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.tab === tabId);
     });
@@ -314,15 +298,6 @@ export class ManagerTablet {
     this.openWindow();
     this.switchTab("inventory");
     this.inventoryTab.focusItem(itemId);
-  }
-
-  // The Deliveries tab is the drones' app, so it only shows once they're bought.
-  refreshDeliveriesTabButton() {
-    const button = this.bodyElement.querySelector('.tablet-tab-btn[data-tab="deliveries"]');
-    if (!button) return;
-    const owned = this.gameState.droneDeliveries.dronesOwned === true;
-    button.style.display = owned ? "" : "none";
-    if (!owned && button.classList.contains("active")) this.switchTab("inventory");
   }
 
   refreshContractsPanel() {
@@ -437,7 +412,6 @@ export class ManagerTablet {
     this.refreshSupplyPanel(); // loading pad spots free up without any game state change
     this.refreshLayoutPanels();
     this.refreshFinancesPanel();
-    if (this.deliveriesTab.visible) this.deliveriesTab.redraw();
     this.uiWindow.openWindow();
     this.scene.checkoutWindow.suspend();
   }

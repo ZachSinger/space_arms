@@ -5,26 +5,20 @@
 // buttons that open expansions for free, run Quickstart, skip shifts, or prepare employee testing.
 // REAL games never create this.
 import { database } from "../scenes/boot.js";
-import { getStoreDoorCell, EXPANSION_ORDER, BACKROOM_UPGRADE_ORDER, TILE_SIZE, BACKROOM_GRID_Y } from "../logic/RoomLayout.js";
+import { getStoreDoorCell, EXPANSION_ORDER, BACKROOM_UPGRADE_ORDER } from "../logic/RoomLayout.js";
 import { getFixtureType, validateFixtureLayout } from "../logic/FixtureLayout.js";
 import { DELIVERY_FEE, MAX_CRATES_PER_ORDER, getCrateOrderQuantity } from "../logic/SupplyOrder.js";
 import { sinkItems, sourceItems } from "../logic/InventoryTransfer.js";
 import { rollCustomerTraits } from "../logic/CustomerTraits.js";
 import { gameRandom } from "../core/Random.js";
-import { DELIVERY_DRONES } from "../modules/droneDeliveries/DeliveryDrones.js";
 
 const DEBUG_BUTTON_IDS = ["hud-debug-info-btn", "hud-debug-shop-upgrade-btn",
   "hud-debug-backroom-upgrade-btn", "hud-debug-quickstart-btn", "hud-debug-skip-shifts-btn",
-  "hud-debug-employee-testing-btn", "hud-debug-drone-testing-btn"];
+  "hud-debug-employee-testing-btn"];
 const SHELF_TYPES = ["shelf_budget_2x2", "shelf_budget_2x3", "shelf_budget_2x4",
   "shelf_budget_3x2", "shelf_budget_3x3", "shelf_budget_3x4"];
 const EMPLOYEE_TEST_LEVEL = 5;
 const DEBUG_EMPLOYEE_FUNDS_LABEL = "Employee testing";
-// Just below and right of the Drone Terminal's pad, on the backroom floor.
-const DRONE_TEST_CRATE_START = Object.freeze({
-  x: TILE_SIZE * 5 + 40,
-  y: TILE_SIZE * (BACKROOM_GRID_Y + 2.5),
-});
 
 export class DebugTools {
   // REAL games hide every debug HUD button; dev builds show them.
@@ -49,7 +43,6 @@ export class DebugTools {
       ["hud-debug-quickstart-btn", () => this.quickstart({ shelfCount: 2, itemCount: 6 })],
       ["hud-debug-skip-shifts-btn", () => this.skipShifts(4)],
       ["hud-debug-employee-testing-btn", () => this.prepareEmployeeTesting()],
-      ["hud-debug-drone-testing-btn", () => this.prepareDroneTesting()],
     ].map(([id, handler]) => ({ element: document.getElementById(id), handler }))
       .filter(({ element }) => element);
     for (const { element, handler } of this.buttons) element.addEventListener("click", handler);
@@ -99,51 +92,6 @@ export class DebugTools {
     scene.messages.show(
       `Employee Test: played ${played} shift${played === 1 ? "" : "s"}. Shop Level ${gameState.reputation.shopLevel}, ` +
       `money ${Math.round(gameState.economy.credits)}, shelves stocked. You can hire your first employee.`,
-      "#10b981",
-    );
-    return true;
-  }
-
-  // Drone Test button: skips to what the Delivery Drone Delivery Drones need. Raises the shop
-  // to their level, tops money up to their price plus a little, sends one remote order offer,
-  // and sets crates holding exactly that order's items on the backroom floor by the terminal.
-  prepareDroneTesting() {
-    const { scene } = this;
-    const { gameState } = scene;
-    const system = scene.gameModules?.get("droneDeliveries");
-    if (!system) {
-      scene.messages.show("Drone Test needs the remote orders module.");
-      return false;
-    }
-    gameState.reputation.setShopLevel(Math.max(gameState.reputation.shopLevel, DELIVERY_DRONES.requiredShopLevel));
-    const fundsNeeded = Math.max(0, DELIVERY_DRONES.price + 1000 - gameState.economy.credits);
-    if (fundsNeeded > 0) gameState.economy.add(fundsNeeded, { category: "debug", label: "Drone testing" });
-    system.receiveOrder();
-    const offer = gameState.droneDeliveries.offers.at(-1);
-    if (!offer) {
-      scene.messages.show("Drone Test couldn't create a remote order offer.");
-      return false;
-    }
-    const { crateSystem } = scene;
-    for (const [index, line] of offer.items.entries()) {
-      const crate = crateSystem.createItemCrate(line.itemId, line.quantity,
-        DRONE_TEST_CRATE_START.x, DRONE_TEST_CRATE_START.y, { id: crateSystem.createId() });
-      const spot = crate.findDropPosition(DRONE_TEST_CRATE_START.x + 70 * index, DRONE_TEST_CRATE_START.y,
-        scene.player.sprite);
-      if (!spot) {
-        crate.destroy?.();
-        scene.messages.show("Drone Test ran out of backroom floor space for crates.");
-        break;
-      }
-      crate.drop(spot.x, spot.y, 0, 0, crateSystem.motionPaused);
-      crateSystem.restockCrates.push(crate);
-    }
-    crateSystem.syncFloorStacks();
-    gameState.crates.changed();
-    gameState.shop.changed();
-    scene.messages.show(
-      "Drone Test: Shop Level 10, an order offer is waiting, and its items are in crates in the backroom. " +
-      "Buy the drones in the Manager's Tablet Layout tab, then accept the order in the Deliveries tab.",
       "#10b981",
     );
     return true;

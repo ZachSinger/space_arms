@@ -51,8 +51,9 @@ completed or no longer relevant.
 - [x] Add [Customer Experience](documentation/modules/CustomerExperience.md): customers
       quietly rate visits, some leave funny reviews, and the Manager's Tablet shows the store's
       rating and every review. Unlocks after the second shift.
-- [ ] Add Delivery Drones: little bots that put accepted remote orders together from stock
-      in the shop and ship them, plus a Deliveries tab on the Manager's Tablet. Open questions
+- [ ] Finish Delivery Drones: little bots that put accepted remote orders together from stock
+      in the shop and ship them, plus a Deliveries tab on the Manager's Tablet. The bots need
+      more work, including their appearance and how they move and handle items. Open questions
       are in [DeliveryDroneQuestions](documentation/modules/DeliveryDroneQuestions.md).
 
 ## Other ideas

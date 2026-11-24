@@ -16,13 +16,6 @@ export class DroneDeliveries extends Slice {
     this.otherOrders = [];
     // Order offers waiting at the terminal to be accepted or declined.
     this.offers = [];
-    // Bought once in the Layout tab; they pack and ship accepted orders on their own.
-    this.dronesOwned = false;
-  }
-
-  buyDrones() {
-    this.dronesOwned = true;
-    this.changed();
   }
 
   allocateOrderId() {
@@ -65,11 +58,9 @@ export class DroneDeliveries extends Slice {
     this.changed();
   }
 
-  updateOrder(id, updates) {
-    if (this.activeOrder?.id === id) this.activeOrder = { ...this.activeOrder, ...updates };
-    else if (this.otherOrders.some((order) => order.id === id)) {
-      this.otherOrders = this.otherOrders.map((order) => (order.id === id ? { ...order, ...updates } : order));
-    } else throw new Error(`Remote order ${id} is not open.`);
+  updateActiveOrder(updates) {
+    if (!this.activeOrder) throw new Error("There is no remote order to update.");
+    this.activeOrder = { ...this.activeOrder, ...updates };
     this.changed();
   }
 
@@ -88,7 +79,6 @@ export class DroneDeliveries extends Slice {
     this.activeOrder = copyOrder(next.activeOrder);
     this.otherOrders = next.otherOrders.map(copyOrder);
     this.offers = next.offers.map(copyOrder);
-    this.dronesOwned = next.dronesOwned;
   }
 
   toSave() {
@@ -98,7 +88,6 @@ export class DroneDeliveries extends Slice {
         activeOrder: copyOrder(this.activeOrder),
         otherOrders: this.otherOrders.map(copyOrder),
         offers: this.offers.map(copyOrder),
-        dronesOwned: this.dronesOwned,
       },
     };
   }
@@ -110,7 +99,6 @@ export class DroneDeliveries extends Slice {
       state.activeOrder = copyOrder(data.droneDeliveries.activeOrder);
       state.otherOrders = (data.droneDeliveries.otherOrders ?? []).map(copyOrder);
       state.offers = (data.droneDeliveries.offers ?? []).map(copyOrder);
-      state.dronesOwned = data.droneDeliveries.dronesOwned === true;
     }
     return state;
   }

@@ -119,24 +119,3 @@ They should be reviewed against the game's balance before they are treated as fi
   of the session.
 - While the player carries the order crate, a bobbing teal diamond marks each shelf and crate
   stack holding a product the order still needs.
-
-## Delivery Drone Delivery Drones (picks by Copilot, not confirmed by Zach)
-
-Zach asked for little bots that pack accepted remote orders and ship them, plus an app that
-adds a Deliveries tab to the Manager's Tablet. The questions in DeliveryDroneQuestions.md were
-not answered, so every value below is an implementation pick:
-
-- Sold once in the Layout tab under Equipment for 5,000, from Shop Level 10. Nothing is placed
-  in the store, and they can be bought at any time.
-- They pack one item every 1.5 seconds into the oldest accepted order, and only start an order
-  once the store holds every item it still needs.
-- They take stock from crates before shelves, and backroom stock before sales floor stock.
-  They never take from a carried crate or from crates still locked on the Loading Pad, and the
-  order card says to move those crates into the store.
-- They only pack order crates that are inside the Drone Terminal or on its drone pad, and ship
-  a finished crate straight from the terminal.
-- They work at any time, including after hours. They have no sprites; progress shows on the
-  order card and in the Deliveries tab.
-- The Deliveries tab appears only after buying the drones. It lists accepted orders with their
-  packing progress and drone status, lets the player reset or cancel any of them, and shows
-  offers to accept or decline.

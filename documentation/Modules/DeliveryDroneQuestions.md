@@ -1,12 +1,12 @@
-﻿# Delivery Drone questions
+# Delivery Drone questions
 
 The idea so far: little bots that, while you have an accepted remote order and the items for it
 are somewhere in your shop, put the order together on their own and ship it. They come with an
 app that adds a Deliveries tab to the Manager's Tablet, so you can handle remote orders from
 the tablet instead of walking to the Drone Terminal.
 
-These went unanswered, so the first version uses picks listed under "Delivery Drone Delivery
-Drones" in DroneDeliveries.md. Answer any of them to change those picks.
+Write your answer under each question. Skip any you want me to decide, and I'll say what I
+picked.
 
 ## The name
 
