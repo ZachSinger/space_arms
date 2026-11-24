@@ -31,6 +31,9 @@ completed or no longer relevant.
       showing only the walls, floors, and doors, so changes to them are easy to see.
 - [ ] When a crate ships out, add a short delay and a small window with an animation of the
       crate flying through space away from the space station.
+- [ ] Redo the end of day. Right now it has no real effect, feels pointless, and interrupts play.
+- [ ] Make each day 5 minutes long again.
+- [ ] Fix how wide shelves look when they are turned sideways.
 - [ ] When the player orders crates, add a wait and a delivery the player can see, instead of
       the crates just appearing.
 - [ ] Show a small visual cue every time the player makes money, such as a little popup

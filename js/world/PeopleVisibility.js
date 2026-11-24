@@ -1,8 +1,17 @@
 const PEOPLE_VISIBILITY_DEPTH = 8998;
 
+// A person's picture frame is mostly empty space; use their feet for width so standing beside
+// a shelf doesn't count as being behind it.
+function personBounds(sprite) {
+  const frame = sprite.getBounds();
+  const body = sprite.body;
+  if (!Number.isFinite(body?.left) || !Number.isFinite(body?.right)) return frame;
+  return { left: body.left, right: body.right, top: frame.top, bottom: body.bottom ?? frame.bottom };
+}
+
 export function isOccludedByShelf(sprite, shelves) {
   if (!sprite?.active || !sprite.getBounds) return false;
-  const person = sprite.getBounds();
+  const person = personBounds(sprite);
   return shelves.some((shelf) => {
     const image = shelf?.sprite;
     if (!image?.active || image.depth <= sprite.depth || !image.getBounds) return false;

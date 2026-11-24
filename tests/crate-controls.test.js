@@ -14,7 +14,7 @@ import { InteractableRegistry } from "../js/interaction/InteractableRegistry.js"
 import { InteractionSystem } from "../js/interaction/InteractionSystem.js";
 import { Crate, CRATE_STACK_SPACING, INTERACT_RANGE } from "../js/logic/Crate.js";
 import { HOLD_KEY_MS, MAX_CARRIED_CRATES, isSquarelyInFront } from "../js/logic/CrateStack.js";
-import { fixtureBounds, getFixtureType } from "../js/logic/FixtureLayout.js";
+import { fixtureBounds, getFixtureResaleValue, getFixtureType } from "../js/logic/FixtureLayout.js";
 import { FixtureRegistry } from "../js/logic/FixtureRegistry.js";
 import { PAD } from "../js/input/GamepadInput.js";
 import {
@@ -2193,7 +2193,7 @@ test("selling an empty placed fixture pays half, updates walkable space, and pre
   assert.equal(scene.blockedCells.has("1,1"), false);
   assert.equal(scene.blockedCells.has("1,2"), false);
   assert.equal(scene.fixtures.get("register"), register);
-  assert.deepEqual(payments, [{ amount: 75, category: "fixture_sales", label: "BUDGET SHELF 2x2" }]);
+  assert.deepEqual(payments, [{ amount: getFixtureResaleValue("shelf_budget_2x2"), category: "fixture_sales", label: "BUDGET SHELF 2x2" }]);
   assert.equal(scene.fixtureSystem.sell("shelf"), false);
   assert.equal(payments.length, 1);
 });
@@ -2290,8 +2290,8 @@ test("fixture crates can be sold on the loading pad or while carried, only once 
   assert.equal(scene.carriedCrate, null);
   assert.equal(carried.destroyed, true);
   assert.deepEqual(paid, [
-    { amount: 150, category: "fixture_sales", label: "BUDGET SHELF 2x4" },
-    { amount: 75, category: "fixture_sales", label: "BUDGET SHELF 2x2" },
+    { amount: getFixtureResaleValue("shelf_budget_2x4"), category: "fixture_sales", label: "BUDGET SHELF 2x4" },
+    { amount: getFixtureResaleValue("shelf_budget_2x2"), category: "fixture_sales", label: "BUDGET SHELF 2x2" },
   ]);
 });
 

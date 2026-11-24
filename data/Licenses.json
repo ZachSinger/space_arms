@@ -30,7 +30,7 @@
     "name": "Basic Rations",
     "description": "Cheap nutrient paste, ration blocks, and survival bars. Every traveler needs to eat.",
     "tier": 1,
-    "baseCost": 125,
+    "baseCost": 50,
     "requiredShopLevel": 1,
     "reqReputation": 0
   },
@@ -39,7 +39,7 @@
     "name": "Frontier Survival Kit",
     "description": "Water straws, fire starters, and thermal blankets for anyone heading somewhere rough.",
     "tier": 1,
-    "baseCost": 200,
+    "baseCost": 100,
     "requiredShopLevel": 2,
     "reqReputation": null,
     "splitFrom": "lic_start_rations"

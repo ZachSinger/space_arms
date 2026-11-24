@@ -10,6 +10,7 @@ import { GAME_EVENTS } from "../js/core/Events.js";
 import { isMoney } from "../js/logic/Money.js";
 import { InventoryRenderer } from "../js/logic/InventoryRenderer.js";
 import { SupplierLicense } from "../js/logic/Licenses.js";
+import { getFixtureResaleValue } from "../js/logic/FixtureLayout.js";
 
 let server;
 let ManagerTablet;
@@ -1014,10 +1015,10 @@ test("fixture sale confirmations identify the chosen fixture or crate", () => {
   tablet.refreshLayoutPanels = () => {};
   tablet.prepareFixtureSale("placed", shelf);
   assert.equal(tablet.fixturesTab.saleConfirmation.name, "BUDGET SHELF 2x4");
-  assert.equal(tablet.fixturesTab.saleConfirmation.value, 150);
+  assert.equal(tablet.fixturesTab.saleConfirmation.value, getFixtureResaleValue("shelf_budget_2x4"));
   tablet.prepareFixtureSale("crate", crate);
   assert.equal(tablet.fixturesTab.saleConfirmation.name, "BUDGET SHELF 2x4 crate");
-  assert.equal(tablet.fixturesTab.saleConfirmation.value, 150);
+  assert.equal(tablet.fixturesTab.saleConfirmation.value, getFixtureResaleValue("shelf_budget_2x4"));
 });
 
 test("a removed fixture cannot be sold through an old confirmation", () => {
