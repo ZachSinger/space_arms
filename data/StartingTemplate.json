@@ -1,0 +1,29 @@
+{
+  "money": 1000,
+  "fixtures": [
+    {
+      "id": "trash_can_01",
+      "type": "trash_can",
+      "gx": 17,
+      "gy": 1.5,
+      "rotation": 0
+    },
+    {
+      "id": "register",
+      "type": "register_basic",
+      "gx": 13,
+      "gy": 3,
+      "rotation": 0
+    },
+    {
+      "id": "shelf_budget_2x2_1",
+      "type": "shelf_budget_2x2",
+      "gx": 14.875,
+      "gy": 1.25,
+      "rotation": 0,
+      "placements": [],
+      "nextPlacementId": 1,
+      "stockingVersion": 1
+    }
+  ]
+}

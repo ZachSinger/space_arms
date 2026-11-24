@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DebugInfo, createDebugSnapshot } from "../js/logic/DebugInfo.js";
+import { DebugInfo, createDebugSnapshot } from "../js/debug/DebugInfo.js";
 
 function fixtureScene() {
   const fixture = {
@@ -21,6 +21,7 @@ function fixtureScene() {
     patienceRemainingMs: 30000,
   };
   return {
+    shift: { ended: false, starting: false, customersServed: 2, creditsAtStart: 1500, reputationAtStart: 5 },
     shiftClock: {
       getElapsedMs: () => 4000, getFormattedTime: () => "08:04",
       started: true, isPaused: false, softClosed: false,
@@ -28,17 +29,21 @@ function fixtureScene() {
     game: { canvas: { width: 1280, height: 720 }, loop: { actualFps: 60 } },
     cameras: { main: { scrollX: 0, scrollY: 0, zoom: 1, width: 1280, height: 720 } },
     player: { sprite: { x: 40, y: 50 }, inputEnabled: true },
-    playerState: {
-      serialize: () => ({ globalReputation: 5, goBacks: [] }),
-      activeFactions: new Set(["mercenaries"]),
+    gameState: {
+      toSave: () => ({ playerState: { globalReputation: 5, goBacks: [] } }),
+      catalog: { activeFactions: new Set(["mercenaries"]) },
+      calendar: { day: 1 },
+      market: { serialize: () => ({ prices: { ammo: 5 } }) },
     },
-    market: { day: 1, serialize: () => ({ day: 1, prices: { ammo: 5 } }) },
-    customerPool: { totalCustomers: 4, stockScaler: 0.5 },
-    customerArrivalSchedule: [{ atMs: 2000, factionId: "mercenaries" }, { atMs: 8000, factionId: null }],
-    nextScheduledArrival: 1,
+    customerFlow: {
+      pool: { totalCustomers: 4, stockScaler: 0.5 },
+      schedule: [{ atMs: 2000, factionId: "mercenaries" }, { atMs: 8000, factionId: null }],
+      nextArrival: 1,
+    },
     customers: [customer],
-    registerLines: new Map([["register", [customer]]]),
-    lineFor: (register) => register.id === "register" ? [customer] : [],
+    checkoutSystem: {
+      lineFor: (register) => register.id === "register" ? [customer] : [],
+    },
     fixtures: { all: () => [fixture], registers: () => [{ id: "register" }] },
     restockCrates: [{ serialize: () => ({ itemId: "ammo", quantity: 5, velocityX: NaN }) }],
     carriedCrate: null,
@@ -47,7 +52,7 @@ function fixtureScene() {
     shelfStockingWindow: { fixture, uiWindow: { isOpen: true } },
     fixturePlacement: { active: false },
     checkoutWindow: { mode: "checkout", total: 5, uiWindow: { element: { querySelectorAll: () => [] } } },
-    saveStatus: "Saved", loadFailed: false,
+    saves: { status: "Saved", loadFailed: false, autosaveBlocked: false, inProgress: null },
   };
 }
 
@@ -79,6 +84,21 @@ function environment(api) {
 
 test("debug snapshots detach raw runtime state without save validation or Phaser cycles", () => {
   const scene = fixtureScene();
+  scene.employees = [{
+    data: { id: "staff-1", name: "Rin", skillLevels: { register: 2 }, wagePerShift: 30 },
+    state: "SERVING_REGISTER",
+    sprite: { x: 60, y: 70 },
+    destination: { x: 80, y: 90 },
+    path: [{ x: 61, y: 70 }],
+    jobPriorities: ["register", "stock_shelves"],
+    currentJob: { jobId: "register", register: { id: "register-1" }, customer: scene.customers[0] },
+    registerServiceRemainingMs: 1200,
+    stockingRemainingMs: 0,
+    stockingUnitsRemaining: 0,
+    cleaningActionRemainingMs: 0,
+    clockOutRequested: false,
+    isDestroyed: false,
+  }];
   const snapshot = createDebugSnapshot(scene, () => 7, [], environment());
   assert.equal(snapshot.formatVersion, 1);
   assert.deepEqual(snapshot.player.activeFactions, ["mercenaries"]);
@@ -89,6 +109,8 @@ test("debug snapshots detach raw runtime state without save validation or Phaser
   assert.equal(snapshot.fixtures[0].placements[0].quantity, -1);
   assert.equal(snapshot.crates[0].velocityX, "NaN");
   assert.equal(snapshot.ui.fixtureId, "shelf_1");
+  assert.equal(snapshot.employees[0].currentJob.registerId, "register-1");
+  assert.equal(snapshot.employees[0].currentJob.customerId, 7);
   assert.equal(Object.hasOwn(snapshot.ui, "pendingShelfPlacement"), false);
   scene.shelfStockingWindow.uiWindow.isOpen = false;
   assert.equal(createDebugSnapshot(scene, () => 7, [], environment()).ui.fixtureId, null);
@@ -98,6 +120,24 @@ test("debug snapshots detach raw runtime state without save validation or Phaser
   assert.equal(snapshot.fixtures[0].placements[0].quantity, -1);
   assert.equal(snapshot.customers[0].cart[0].price, 5);
   assert.equal(scene.shiftClock.isPaused, false);
+});
+
+test("debug snapshots include report-only diagnostics without mutating game state", () => {
+  const scene = fixtureScene();
+  const snapshot = createDebugSnapshot(scene, () => 7, [], environment(), {
+    recentErrors: [{ type: "runtime-error", message: "Broken" }],
+    recentInputs: [{ device: "keyboard", code: "KeyW" }],
+    settings: { textSize: "larger" },
+    controllers: [{ id: "Test controller" }],
+    display: { displayMode: "windowed" },
+    saveFile: { version: 1 },
+  });
+  assert.deepEqual(snapshot.diagnostics.recentErrors, [{ type: "runtime-error", message: "Broken" }]);
+  assert.deepEqual(snapshot.diagnostics.recentInputs, [{ device: "keyboard", code: "KeyW" }]);
+  assert.deepEqual(snapshot.diagnostics.settings, { textSize: "larger" });
+  assert.deepEqual(snapshot.diagnostics.controllers, [{ id: "Test controller" }]);
+  assert.deepEqual(snapshot.diagnostics.display, { displayMode: "windowed" });
+  assert.deepEqual(snapshot.diagnostics.saveFile, { version: 1 });
 });
 
 test("one click captures once, retains customer IDs, opens the folder, and cleans up listeners", async () => {

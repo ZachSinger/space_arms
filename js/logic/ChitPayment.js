@@ -1,4 +1,5 @@
 import { isMoney } from "./Money.js";
+import { gameRandom } from "../core/Random.js";
 
 export const CHIT_DIRECTION_DIGITS = Object.freeze({
   up: 1,
@@ -7,7 +8,7 @@ export const CHIT_DIRECTION_DIGITS = Object.freeze({
   right: 4,
 });
 
-export function generateChitCode(random = Math.random) {
+export function generateChitCode(random = gameRandom) {
   const length = 2 + Math.floor(random() * 4);
   return Array.from({ length }, () => String(1 + Math.floor(random() * 4))).join("");
 }

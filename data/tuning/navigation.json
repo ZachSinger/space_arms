@@ -1,0 +1,37 @@
+{
+  "walkStepPx": {
+    "value": 8,
+    "min": 4,
+    "max": 16,
+    "integer": true,
+    "description": "Distance between points checked while planning a walking route."
+  },
+  "connectorRadiusCells": {
+    "value": 16,
+    "min": 0,
+    "max": 32,
+    "integer": true,
+    "description": "How far route planning searches for a walkable grid point near each endpoint."
+  },
+  "maxPathNodes": {
+    "value": 50000,
+    "min": 1000,
+    "max": 100000,
+    "integer": true,
+    "description": "Maximum grid points explored for one detailed walking route."
+  },
+  "maxReachableGridCells": {
+    "value": 4000,
+    "min": 100,
+    "max": 10000,
+    "integer": true,
+    "description": "Safety limit for collecting connected walkable grid cells."
+  },
+  "maxGridPathSteps": {
+    "value": 4000,
+    "min": 100,
+    "max": 10000,
+    "integer": true,
+    "description": "Maximum cells explored for one floor-layout grid path."
+  }
+}

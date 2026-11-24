@@ -3,14 +3,17 @@
 // ==========================================
 // Placement mode for moving an existing fixture or unpacking a fixture crate: a ghost
 // follows the cursor on the 8-pixel grid, with valid/invalid and standing-space outlines.
-// Left-click or A commits; right-click, Esc, or X cancels. Only while the store is closed.
+// Left-click or the mapped use button commits; right-click, Esc, or the crate button cancels.
+// Only while the store is closed.
 import { TILE_SIZE } from "./RoomLayout.js";
+import { AREA } from "../world/Areas.js";
 import {
   getFixtureType, fixtureAtWorldPoint, fixtureBounds, fixtureFootprint, fixtureProjectionBoxes,
 } from "./FixtureLayout.js";
 import { getFixtureTexture, hasFacingTextures } from "./FixtureTexture.js";
-import { PAD } from "./GamepadInput.js";
-import { getInputDevice } from "./InputDevice.js";
+import { getInputDevice } from "../input/InputDevice.js";
+import { fixturePlacementContext } from "./FixturePlacementContext.js";
+import { matchesBinding } from "../input/KeyBindings.js";
 
 const PAD_CURSOR_SPEED = 240;
 const VALID_COLOR = 0x10b981;
@@ -52,28 +55,31 @@ export class FixturePlacement {
       // Ignore clicks that land on DOM windows over the canvas.
       if (!this.active || !scene.controlMode.allows("rotateFixture") ||
         pointer.event?.target !== scene.game.canvas) return;
-      if (pointer.rightButtonDown()) {
+      if (matchesBinding("cancel", pointer.event)) {
         this.cancel();
         return;
       }
-      if (!pointer.leftButtonDown()) return;
+      if (matchesBinding("rotate", pointer.event)) {
+        this.rotate();
+        return;
+      }
+      if (!matchesBinding("place", pointer.event)) return;
       this.padPoint = null;
       this.updatePreview(pointer);
       this.confirm();
     };
     scene.input.on("pointerdown", this.handlePointerDown);
-    this.handleRotateKey = () => {
+    this.handlePlacementKey = (event) => {
       if (!this.active || !scene.controlMode.allows("rotateFixture")) return;
-      this.rotate();
-    };
-    scene.input.keyboard.on("keydown-R", this.handleRotateKey);
-    // Marked consumed so the Esc that cancels placement doesn't also pause the shift.
-    this.handleEscape = (event) => {
-      if (!this.active || event.key !== "Escape" || event.repeat) return;
+      if (event.repeat || event.target?.closest?.("#ui-layer")) return;
+      if (matchesBinding("rotate", event)) this.rotate();
+      else if (matchesBinding("place", event)) this.confirm();
+      else if (matchesBinding("cancel", event)) this.cancel();
+      else return;
+      event.preventDefault();
       scene.windowManager.consumedEvents.add(event);
-      this.cancel();
     };
-    document.addEventListener("keydown", this.handleEscape);
+    document.addEventListener("keydown", this.handlePlacementKey);
     this.handleDocumentMouseMove = (event) => {
       if (!this.active) return;
       // Real mouse movement takes over from the controller.
@@ -85,13 +91,18 @@ export class FixturePlacement {
   // Place the fixture at the current preview; leaves placement mode if it fit.
   confirm() {
     const { id, gx, gy, rotation } = this.placement;
-    const placed = this.original
-      ? this.scene.moveFixture(id, gx, gy, rotation)
-      : this.scene.placeFixtureFromCrate(this.fixtureCrate, gx, gy, rotation);
+    let placed;
+    if (this.original) placed = this.scene.fixtureSystem.move(id, gx, gy, rotation);
+    else if (this.fixtureCrate) placed = this.scene.fixtureSystem.placeFromCrate(this.fixtureCrate, gx, gy, rotation);
+    else placed = this.scene.fixtureSystem.placeFree(this.spec.id, gx, gy, rotation);
     if (placed) this.cancel();
   }
 
   rotate() {
+    if (this.spec.fixedFacing) {
+      this.scene.messages.show(`The ${this.spec.name} can't be turned.`);
+      return;
+    }
     this.rotation = (this.rotation + 1) % 4;
     this.refreshPreview();
   }
@@ -104,7 +115,7 @@ export class FixturePlacement {
   handlePad(pad, delta) {
     if (!this.active) return;
     if (getInputDevice() === "gamepad" || pad.rightStick.x || pad.rightStick.y ||
-      pad.justPressed(PAD.A) || pad.justPressed(PAD.Y)) this.usePadPoint();
+      pad.justPressedAction("interact") || pad.justPressedAction("putDown")) this.usePadPoint();
     if (pad.rightStick.x || pad.rightStick.y) {
       const camera = this.getPlacementCamera();
       const distance = PAD_CURSOR_SPEED * Math.min(delta, 50) / 1000;
@@ -112,13 +123,13 @@ export class FixturePlacement {
       this.padPoint.y = Math.max(camera.y, Math.min(camera.y + camera.height - 1, this.padPoint.y + pad.rightStick.y * distance));
       this.refreshPreview();
     }
-    if (pad.justPressed(PAD.Y)) this.rotate();
-    if (pad.justPressed(PAD.A)) this.confirm();
-    else if (pad.justPressed(PAD.X)) this.cancel();
+    if (pad.justPressedAction("putDown")) this.rotate();
+    if (pad.justPressedAction("interact")) this.confirm();
+    else if (pad.justPressedAction("crate")) this.cancel();
   }
 
   getPlacementCamera() {
-    return this.scene.playerInBackroom ? this.scene.backroomCamera : this.scene.cameras.main;
+    return this.scene.cameraRig.cameraFor(this.scene.areas.playerArea);
   }
 
   setPadPoint(worldX, worldY) {
@@ -143,15 +154,15 @@ export class FixturePlacement {
    * @returns {boolean} false if the store is open
    */
   begin(id) {
-    if (!this.scene.canRearrangeFixtures()) {
-      this.scene.showShopMessage("Fixtures can only move while the store is closed.");
+    if (!this.scene.fixtureSystem.canRearrange()) {
+      this.scene.messages.show("Fixtures can only move while the store is closed.");
       return false;
     }
     const original = this.scene.fixtures.get(id);
     if (!original) throw new Error(`Unknown fixture: ${id}`);
-    const areaBlock = this.scene.getFixtureMoveAreaBlockReason(original);
+    const areaBlock = this.scene.fixtureSystem.moveAreaBlockReason(original);
     if (areaBlock) {
-      this.scene.showShopMessage(areaBlock);
+      this.scene.messages.show(areaBlock);
       return false;
     }
     return this.start(original.type, original, null);
@@ -163,28 +174,37 @@ export class FixturePlacement {
    * @returns {boolean} false if the store is open or the crate isn't a carried fixture crate
    */
   beginFromCrate(crate) {
-    if (!this.scene.canRearrangeFixtures()) {
-      this.scene.showShopMessage("Fixtures can only be placed while the store is closed.");
+    if (!this.scene.fixtureSystem.canRearrange()) {
+      this.scene.messages.show("Fixtures can only be placed while the store is closed.");
       return false;
     }
     if (crate !== this.scene.carriedCrate || crate?.kind !== "fixture") return false;
     const spec = getFixtureType(crate.typeId);
-    if (this.scene.playerInBackroom && spec) {
-      this.scene.showShopMessage("Fixtures can only be placed on the sales floor.");
+    if (this.scene.areas.playerArea === AREA.BACKROOM && spec && !spec.anyRoom) {
+      this.scene.messages.show("Fixtures can only be placed on the sales floor.");
       return false;
     }
     return this.start(crate.typeId, null, crate);
   }
 
   /**
+   * DEV areas: start placing a brand-new fixture of this type, with no crate and no cost.
+   * @param {string} typeId
+   */
+  beginFree(typeId) {
+    if (!getFixtureType(typeId)) throw new Error(`Unknown fixture type: ${typeId}`);
+    return this.start(typeId, null, null);
+  }
+
+  /**
    * Enter placement mode and show the ghost while the player continues moving normally.
    * @param {string} typeId
-   * @param {object|null} original - fixture being moved, or null when placing from a crate
-   * @param {Crate|null} fixtureCrate
+   * @param {object|null} original - fixture being moved, or null when placing a new one
+   * @param {Crate|null} fixtureCrate - the crate it comes from, or null for a DEV free placement
    */
   start(typeId, original, fixtureCrate) {
     this.cancel();
-    this.scene.endRegisterSession();
+    this.scene.checkoutSystem.endRegisterSession();
     // Placement uses the whole screen: close the tablet or anything else on top.
     this.scene.windowManager.closeAllExcept();
     this.original = original;
@@ -193,9 +213,9 @@ export class FixturePlacement {
     this.rotation = original?.rotation ?? 0;
     this.active = true;
     if (this.original) this.original.sprite.setAlpha(0.35);
-    else this.fixtureCrate.sprite.setVisible(false);
-    const x = original?.x ?? fixtureCrate.sprite.x;
-    const y = original?.y ?? fixtureCrate.sprite.y;
+    else this.fixtureCrate?.sprite.setVisible(false);
+    const from = original ?? fixtureCrate?.sprite ?? this.scene.player.sprite;
+    const { x, y } = from;
     this.ghost = this.scene.add.image(x, y, getFixtureTexture(this.spec))
       .setDisplaySize(this.spec.w * TILE_SIZE, this.spec.h * TILE_SIZE)
       .setAlpha(0.5).setDepth(9996);
@@ -232,7 +252,7 @@ export class FixturePlacement {
    * @param {Phaser.Input.Pointer} pointer
    */
   updatePreview(pointer) {
-    const world = this.scene.screenToWorld?.(pointer.x, pointer.y) ?? this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const world = this.scene.cameraRig?.screenToWorld(pointer.x, pointer.y) ?? this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
     this.updatePreviewAt(world.x, world.y);
   }
 
@@ -248,9 +268,13 @@ export class FixturePlacement {
       rotation: this.rotation,
     }, worldX, worldY);
     const { id, gx, gy, rotation } = this.placement;
+    const previewKey = JSON.stringify([
+      this.spec.id, id, gx, gy, rotation, fixturePlacementContext(this.scene),
+    ]);
+    if (previewKey === this.previewKey) return;
     const result = this.original
-      ? this.scene.checkFixtureMove(id, gx, gy, rotation)
-      : this.scene.checkFixturePlacement(this.spec.id, gx, gy, rotation);
+      ? this.scene.fixtureSystem.checkMove(id, gx, gy, rotation)
+      : this.scene.fixtureSystem.checkPlacement(this.spec.id, gx, gy, rotation);
     const x = gx * TILE_SIZE;
     const y = gy * TILE_SIZE;
     drawFixtureOutline(this.graphics.clear(), this.placement, result.valid ? VALID_COLOR : INVALID_COLOR, 1);
@@ -258,10 +282,11 @@ export class FixturePlacement {
     if (hasFacingTextures(this.spec)) {
       // Upright art for the chosen facing, at the same size as the placed fixture.
       this.ghost.setTexture(getFixtureTexture(this.spec, rotation)).setAngle(0);
-      this.scene.sizeFacingArt(this.ghost, this.spec, rotation);
+      this.scene.fixtureViews.sizeFacingArt(this.ghost, this.spec, rotation);
     } else {
       this.ghost.setAngle(rotation * 90);
     }
+    this.previewKey = previewKey;
   }
 
   /**
@@ -283,6 +308,7 @@ export class FixturePlacement {
     this.placedGraphics.clear().setVisible(false);
     this.original = null;
     this.fixtureCrate = null;
+    this.previewKey = null;
   }
 
   cancel() {
@@ -292,8 +318,7 @@ export class FixturePlacement {
   destroy() {
     this.finish();
     this.scene.input.off("pointerdown", this.handlePointerDown);
-    this.scene.input.keyboard.off("keydown-R", this.handleRotateKey);
-    document.removeEventListener("keydown", this.handleEscape);
+    document.removeEventListener("keydown", this.handlePlacementKey);
     document.removeEventListener("mousemove", this.handleDocumentMouseMove, true);
     this.graphics.destroy();
     this.placedGraphics.destroy();

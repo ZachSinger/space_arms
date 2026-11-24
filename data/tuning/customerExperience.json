@@ -1,0 +1,22 @@
+{
+  "unlockAfterShift": { "value": 2, "min": 0, "max": 50, "integer": true,
+    "description": "Customers start leaving reviews once this many shifts are finished." },
+  "reviewChance": { "value": 0.125, "min": 0, "max": 1,
+    "description": "Chance that a customer who leaves the shop writes a review (0.125 is about 1 in 8)." },
+  "ratingWindow": { "value": 20, "min": 1, "max": 500, "integer": true,
+    "description": "The store's rating is the average of this many most recent reviews." },
+  "maxSavedReviews": { "value": 300, "min": 20, "max": 5000, "integer": true,
+    "description": "Oldest reviews are dropped past this many so saves stay small." },
+  "longWaitFraction": { "value": 0.6, "min": 0, "max": 5,
+    "description": "Waiting in line longer than this share of the customer's patience counts as a long wait." },
+  "someWaitFraction": { "value": 0.3, "min": 0, "max": 5,
+    "description": "Waiting in line longer than this share of the customer's patience counts as a noticeable wait." },
+  "fastCheckoutFraction": { "value": 0.1, "min": 0, "max": 5,
+    "description": "Paying after waiting less than this share of the customer's patience counts as a fast checkout." },
+  "crowdedLinePosition": { "value": 3, "min": 1, "max": 20, "integer": true,
+    "description": "Joining the line with at least this many people ahead counts as a crowded shop." },
+  "huntingShelfCount": { "value": 5, "min": 2, "max": 50, "integer": true,
+    "description": "Needing this many different shelves for one shopping list counts as items being hard to find." },
+  "gorgeousMargin": { "value": 20, "min": 0, "max": 100,
+    "description": "Presentation this many points above what the customer expected counts as a beautiful shop." }
+}

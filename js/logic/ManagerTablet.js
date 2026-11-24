@@ -1,22 +1,21 @@
 // ==========================================
 // FILE: ManagerTablet.js
 // ==========================================
-// The Manager's Tablet window (bible Part 8): tab chrome plus the Contracts, Supply,
-// Fixtures/Layout, and price-editing interactions. Each tab's HTML comes from its renderer.
+// The Manager's Tablet window (bible Part 8): tab chrome and shared routing for tablet actions.
 
 import { UIWindow } from "./UIWindow.js";
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from "./GameViewport.js";
-import { InventoryRenderer } from "./InventoryRenderer.js";
-import { ContractRenderer } from "./ContractRenderer.js";
-import { SupplyRenderer } from "./SupplyRenderer.js";
-import { LayoutRenderer } from "./LayoutRenderer.js";
-import { EmployeeRenderer } from "./EmployeeRenderer.js";
-import { FinancesRenderer } from "./FinancesRenderer.js";
-import { HandbookRenderer } from "./HandbookRenderer.js";
+import { InventoryTab, INVENTORY_PRICE_CONTROL_SELECTOR } from "./InventoryTab.js";
+import { EmployeeTab, EMPLOYEE_PRIORITY_SELECTOR, EMPLOYEE_TRAINING_SELECTOR } from "./EmployeeTab.js";
+import { ContractsTab } from "./ContractsTab.js";
+import { SupplyTab } from "./SupplyTab.js";
+import { FixturesTab } from "./FixturesTab.js";
+import { LayoutTab } from "./LayoutTab.js";
+import { FinancesTab } from "./FinancesTab.js";
+import { HandbookTab } from "./HandbookTab.js";
+import { ReviewsTab } from "./ReviewsTab.js";
 import { FixtureHighlight } from "./FixtureHighlight.js";
-import { playErrorBuzz } from "./Sfx.js";
-import { GAME_EVENTS } from "./EventBus.js";
-import { adjustStorePrice } from "./Money.js";
+import { GAME_EVENTS } from "../core/Events.js";
 import { getFixtureResaleValue, getFixtureType } from "./FixtureLayout.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
@@ -29,15 +28,20 @@ export const TAB_DEFS = [
   { id: "fixtures", label: "Fixtures" },
   { id: "layout", label: "Layout" },
   { id: "finances", label: "Finances" },
+  { id: "reviews", label: "Reviews" },
   { id: "handbook", label: "Handbook" },
 ];
 
 // Extra tabs that only appear in the DEV UI Lab.
 export const UI_LAB_TAB_DEFS = [{ id: "textStyles", label: "Text Styles" }];
 
+// Tabs that belong to an optional game module, hidden when that module is turned off.
+const MODULE_TABS = Object.freeze({ reviews: "customerExperience" });
+
 /** @param {Phaser.Scene} scene @returns {{id: string, label: string}[]} */
 export function getTabDefs(scene) {
-  return scene?.lab === "ui" ? [...TAB_DEFS, ...UI_LAB_TAB_DEFS] : TAB_DEFS;
+  const tabs = TAB_DEFS.filter(({ id }) => !MODULE_TABS[id] || scene?.gameModules?.get?.(MODULE_TABS[id]));
+  return scene?.lab === "ui" ? [...tabs, ...UI_LAB_TAB_DEFS] : tabs;
 }
 
 function renderTextStylesPage() {
@@ -58,25 +62,29 @@ function renderTextStylesPage() {
   `;
 }
 
-const PRICE_INPUT_SELECTOR = "input[data-price-item-id]";
-const PRICE_BUTTON_SELECTOR = "button[data-price-action]";
-const PRICE_CONTROL_SELECTOR = `${PRICE_INPUT_SELECTOR}, ${PRICE_BUTTON_SELECTOR}`;
-const EMPLOYEE_PRIORITY_SELECTOR = "button[data-employee-priority-id]";
-const TABLET_KEYBOARD_CONTROL_SELECTOR = `${PRICE_CONTROL_SELECTOR}, ${EMPLOYEE_PRIORITY_SELECTOR}`;
+const TABLET_KEYBOARD_CONTROL_SELECTOR =
+  `${INVENTORY_PRICE_CONTROL_SELECTOR}, ${EMPLOYEE_PRIORITY_SELECTOR}, ${EMPLOYEE_TRAINING_SELECTOR}`;
 
 /**
- * The single Tablet window; owns tab switching, the supply order being built, and
- * live re-rendering of panels whenever playerState changes.
+ * The single Tablet window; owns tab switching and refreshes panels when game state changes.
  */
 export class ManagerTablet {
-  constructor(windowManager, playerState, scene) {
-    this.playerState = playerState;
-    this.scene = scene; // needed by the Supply tab to read/order fixture stock
-    this.supplyOrder = new Map(); // item id -> crates in the order being built
-    this.fixturePurchaseNotice = "";
-    this.fixtureSaleConfirmation = null;
-    this.handbookTopic = "store";
-    this.financesDay = null; // a finished day being reviewed, or null for today
+  constructor(windowManager, gameState, scene) {
+    this.gameState = gameState;
+    this.scene = scene;
+    this.inventoryTab = new InventoryTab(scene);
+    this.employeeTab = new EmployeeTab(scene, gameState);
+    this.contractsTab = new ContractsTab(
+      gameState,
+      () => database.getAllLicenses(),
+      (licenseId) => this.handleSignContract(licenseId),
+    );
+    this.supplyTab = new SupplyTab(scene);
+    this.fixturesTab = new FixturesTab(scene);
+    this.layoutTab = new LayoutTab(scene);
+    this.financesTab = new FinancesTab(scene);
+    this.handbookTab = new HandbookTab(gameState, () => database.getAllLicenses());
+    this.reviewsTab = new ReviewsTab(gameState);
 
     const tabDefs = getTabDefs(scene);
     const tabBarHTML = tabDefs.map(
@@ -109,183 +117,129 @@ export class ManagerTablet {
     );
 
     this.bodyElement = this.uiWindow.element.querySelector(".retro-window-body");
+    this.inventoryTab.bind(
+      this.bodyElement.querySelector('[data-tab-panel="inventory"]'),
+      this.uiWindow.element,
+      this.bodyElement,
+      () => this.renderPanelContent("inventory"),
+    );
+    this.employeeTab.bind(
+      this.bodyElement.querySelector('[data-tab-panel="employee"]'),
+      this.bodyElement,
+      () => this.renderPanelContent("employee"),
+    );
+    this.contractsTab.bind(
+      this.bodyElement.querySelector('[data-tab-panel="contracts"]'),
+      this.bodyElement,
+      () => this.renderPanelContent("contracts"),
+    );
+    this.supplyTab.bind(
+      this.bodyElement.querySelector('[data-tab-panel="supply"]'),
+      () => this.renderPanelContent("supply"),
+    );
+    this.fixturesTab.bind(
+      this.bodyElement.querySelector('[data-tab-panel="fixtures"]'),
+      this.bodyElement,
+      () => this.renderPanelContent("fixtures"),
+      {
+        buyFixture: (typeId) => this.handleFixturePurchase(typeId),
+        moveFixture: (fixtureId) => this.scene.fixturePlacement.begin(fixtureId),
+        crateFixture: (fixtureId) => this.scene.fixtureSystem.crate(fixtureId),
+        sellFixture: (fixtureId) =>
+          this.prepareFixtureSale("placed", this.scene.fixtures.get(fixtureId)),
+        sellFixtureCrate: (key) => {
+          const crate = key === "carried"
+            ? this.scene.carriedCrate
+            : this.scene.restockCrates[Number(key)];
+          this.prepareFixtureSale("crate", crate);
+        },
+        confirmSale: () => this.confirmFixtureSale(),
+        cancelSale: () => {
+          this.fixturesTab.saleConfirmation = null;
+          this.refreshLayoutPanels();
+        },
+      },
+    );
+    this.layoutTab.bind(
+      this.bodyElement.querySelector('[data-tab-panel="layout"]'),
+      this.bodyElement,
+      () => this.renderPanelContent("layout"),
+      {
+        buyExpansion: (expansionId) => this.scene.fixtureSystem.buyExpansion(expansionId),
+        buyBackroomUpgrade: (upgradeId) => this.scene.fixtureSystem.buyBackroomUpgrade(upgradeId),
+        buyHovercart: () => this.scene.gameModules.get("hovercart")?.buy(),
+        buyHovercartUpgrade: (path) => this.scene.gameModules.get("hovercart")?.purchaseUpgrade(path),
+      },
+    );
+    this.financesTab.bind(
+      this.bodyElement.querySelector('[data-tab-panel="finances"]'),
+      this.bodyElement,
+      () => this.renderPanelContent("finances"),
+      {
+        selectDay: (value) => {
+          this.financesTab.selectedDay = value === "today" ? null : Number(value);
+          this.financesTab.redraw();
+        },
+        endDay: () => {
+          if (this.scene.shift.endDay()) this.uiWindow.close();
+        },
+        startShift: () => this.scene.shift.start(),
+        takeLoan: () => this.scene.shift.takeLoan(),
+        payOffLoan: () => this.scene.shift.payOffLoan(),
+      },
+    );
+    this.handbookTab.bind(
+      this.bodyElement.querySelector('[data-tab-panel="handbook"]'),
+      this.bodyElement,
+      () => this.renderPanelContent("handbook"),
+    );
+    const reviewsPanel = this.bodyElement.querySelector('[data-tab-panel="reviews"]');
+    if (reviewsPanel) this.reviewsTab.bind(reviewsPanel, this.bodyElement, () => this.renderPanelContent("reviews"));
     this.fixtureHighlight = new FixtureHighlight(scene, this.uiWindow);
     this.uiWindow.onClose = () => {
-      this.fixturePurchaseNotice = "";
-      this.fixtureSaleConfirmation = null;
+      this.fixturesTab.purchaseNotice = "";
+      this.fixturesTab.saleConfirmation = null;
       this.fixtureHighlight.reset();
-      this.scene.resumeRegisterCheckout();
+      this.scene.checkoutSystem.resumeRegisterCheckout();
     };
-    this.disableInventoryNavigation = InventoryRenderer.enableListNavigation(
-      this.uiWindow.element,
-    );
-
     this.bodyElement.querySelector(".tablet-tab-bar").addEventListener("click", (event) => {
       const button = event.target.closest("[data-tab]");
       if (button) this.switchTab(button.dataset.tab);
     });
 
-    // Delegated, since panel innerHTML is fully replaced on every playerState change.
-    this.bodyElement.addEventListener("click", (event) => {
-      const handbookTopicButton = event.target.closest("[data-handbook-topic]");
-      if (handbookTopicButton) {
-        this.handbookTopic = handbookTopicButton.dataset.handbookTopic;
-        this.refreshHandbookPanel();
-      }
-
-      const signButton = event.target.closest("[data-license-id]");
-      if (signButton) this.handleSignContract(signButton.dataset.licenseId);
-
-      const hireEmployeeButton = event.target.closest("[data-hire-employee-id]");
-      if (hireEmployeeButton) {
-        this.scene.hireEmployee(hireEmployeeButton.dataset.hireEmployeeId);
-      }
-
-      const shiftButton = event.target.closest("[data-employee-shift-id]");
-      if (shiftButton) {
-        this.scene.setEmployeeOnShift(
-          shiftButton.dataset.employeeShiftId, shiftButton.dataset.employeeShiftOn === "true",
-        );
-        this.refreshEmployeePanel();
-      }
-
-      if (event.target.closest("[data-end-day]") && this.scene.endDay()) this.uiWindow.close();
-      if (event.target.closest("[data-finances-start-shift]")) this.scene.startNextShift();
-      if (event.target.closest("[data-take-emergency-loan]")) this.scene.takeEmergencyLoan();
-      if (event.target.closest("[data-pay-off-emergency-loan]")) this.scene.payOffEmergencyLoan();
-
-      const financesDayButton = event.target.closest("[data-finances-day]");
-      if (financesDayButton) {
-        const value = financesDayButton.dataset.financesDay;
-        this.financesDay = value === "today" ? null : Number(value);
-        this.refreshFinancesPanel();
-      }
-
-      const priorityButton = event.target.closest("[data-employee-priority-id]");
-      if (priorityButton && priorityButton.getAttribute("aria-pressed") !== "true") {
-        const changed = this.scene.moveEmployeeJobPriority(
-          priorityButton.dataset.employeePriorityId,
-          priorityButton.dataset.employeePriorityJob,
-          -1,
-        );
-        if (!changed) this.refreshEmployeePanel();
-      }
-
-      const addCrateButton = event.target.closest("[data-supply-add]");
-      if (addCrateButton) this.changeSupplyOrder(addCrateButton.dataset.supplyAdd, 1);
-      const removeCrateButton = event.target.closest("[data-supply-remove]");
-      if (removeCrateButton) this.changeSupplyOrder(removeCrateButton.dataset.supplyRemove, -1);
-      if (event.target.closest("[data-supply-clear]")) {
-        this.supplyOrder.clear();
-        this.refreshSupplyPanel();
-      }
-      if (event.target.closest("[data-supply-place]")) this.handlePlaceSupplyOrder();
-
-      const moveButton = event.target.closest("[data-move-fixture-id]");
-      if (moveButton) this.scene.fixturePlacement.begin(moveButton.dataset.moveFixtureId);
-
-      const buyFixtureButton = event.target.closest("[data-buy-fixture-id]");
-      if (buyFixtureButton) {
-        const typeId = buyFixtureButton.dataset.buyFixtureId;
-        const name = getFixtureType(typeId)?.name ?? "Fixture";
-        // Set before buying: the purchase re-renders this tab through the state listener.
-        this.fixturePurchaseNotice = `Bought ${name}. Its crate is waiting on the Loading Pad.`;
-        if (!this.scene.buyFixture(typeId)) {
-          this.fixturePurchaseNotice = "";
-          this.scene.showShopMessage("Fixture purchase is unavailable. Check its license, cost, and requirements.");
-        }
-      }
-
-      const buyExpansionButton = event.target.closest("[data-buy-expansion-id]");
-      if (buyExpansionButton) this.scene.buyExpansion(buyExpansionButton.dataset.buyExpansionId);
-
-      const buyBackroomButton = event.target.closest("[data-buy-backroom-id]");
-      if (buyBackroomButton) this.scene.buyBackroomUpgrade(buyBackroomButton.dataset.buyBackroomId);
-
-      const crateFixtureButton = event.target.closest("[data-crate-fixture-id]");
-      if (crateFixtureButton) this.scene.crateFixture(crateFixtureButton.dataset.crateFixtureId);
-
-      const sellFixtureButton = event.target.closest("[data-sell-fixture-id]");
-      if (sellFixtureButton) {
-        this.prepareFixtureSale("placed", this.scene.fixtures.get(sellFixtureButton.dataset.sellFixtureId));
-      }
-
-      const sellCrateButton = event.target.closest("[data-sell-fixture-crate]");
-      if (sellCrateButton) {
-        const key = sellCrateButton.dataset.sellFixtureCrate;
-        const crate = key === "carried" ? this.scene.carriedCrate : this.scene.restockCrates[Number(key)];
-        this.prepareFixtureSale("crate", crate);
-      }
-      if (event.target.closest("[data-confirm-fixture-sale]")) this.confirmFixtureSale();
-      if (event.target.closest("[data-cancel-fixture-sale]")) {
-        this.fixtureSaleConfirmation = null;
-        this.refreshLayoutPanels();
-      }
-
-      const priceButton = event.target.closest(PRICE_BUTTON_SELECTOR);
-      if (priceButton) {
-        this.handlePriceAdjustment(
-          priceButton.dataset.priceItemId,
-          priceButton.dataset.priceAction,
-        );
-      }
-    });
-
-    this.bodyElement.addEventListener("change", (event) => {
-      const input = event.target.closest(PRICE_INPUT_SELECTOR);
-      if (!input) return;
-      const itemId = input.dataset.priceItemId;
-      if (!this.scene.setStorePrice(itemId, Number(input.value))) {
-        input.value = this.scene.getStorePrice(itemId);
-      } else {
-        const entry = this.scene.getInventoryItems().find(({ item }) => item.id === itemId);
-        const profit = input.closest(".inventory-item-card")?.querySelector("[data-inventory-profit]");
-        if (entry && profit) {
-          profit.outerHTML = InventoryRenderer.generateProfitHTML(entry.storePrice, entry.unitCost);
-        }
-      }
-    });
-    this.bodyElement.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && event.target.matches(PRICE_INPUT_SELECTOR)) event.target.blur();
-    });
     // Focused controls must not also drive the player or fire game hotkeys.
     const keyboard = this.scene.input.keyboard;
     this.bodyElement.addEventListener("focusin", (event) => {
       if (!event.target.matches(TABLET_KEYBOARD_CONTROL_SELECTOR)) return;
-      if (event.target.matches(PRICE_INPUT_SELECTOR)) this.editingPrice = true;
       keyboard.enabled = false;
       keyboard.disableGlobalCapture();
       keyboard.resetKeys();
     });
     this.bodyElement.addEventListener("focusout", (event) => {
       if (!event.target.matches(TABLET_KEYBOARD_CONTROL_SELECTOR)) return;
-      if (event.target.matches(PRICE_INPUT_SELECTOR)) this.editingPrice = false;
       if (!event.relatedTarget?.matches?.(TABLET_KEYBOARD_CONTROL_SELECTOR)) {
         keyboard.enabled = true;
         keyboard.enableGlobalCapture();
-      }
-      // Keep the button in place until its click if focus moved there from an edited input.
-      if (this.inventoryRefreshPending && event.target.matches(PRICE_CONTROL_SELECTOR) &&
-        !event.relatedTarget?.matches?.(PRICE_BUTTON_SELECTOR)) {
-        setTimeout(() => this.refreshInventoryPanel());
       }
     });
 
     // License availability, supply affordability, shelf counts, and inventory totals all
     // change elsewhere (sales, deliveries, reputation), so re-render on every state change.
-    this.playerState.subscribe(() => {
-      this.refreshInventoryPanel();
-      this.refreshEmployeePanel();
-      this.refreshContractsPanel();
+    this.gameState.subscribe(() => {
+      this.inventoryTab.redraw();
+      this.employeeTab.redraw();
+      this.contractsTab.redraw();
       this.refreshSupplyPanel();
       this.refreshLayoutPanels();
       this.refreshFinancesPanel();
+      // The review list can be long, so it only redraws while it's on screen.
+      if (this.reviewsTab.panel && !this.reviewsTab.panel.classList.contains("hidden")) this.reviewsTab.redraw();
     });
     this.scene.eventBus.on(GAME_EVENTS.INVENTORY_TRANSFERRED, ({ destination }) => {
-      if (destination === "customer-cart") this.refreshInventoryPanel();
+      if (destination === "customer-cart") this.inventoryTab.redraw();
     });
     this.scene.eventBus.on(GAME_EVENTS.CUSTOMER_SALE_COMPLETED, () => {
-      this.refreshInventoryPanel();
+      this.inventoryTab.redraw();
     });
   }
 
@@ -305,41 +259,15 @@ export class ManagerTablet {
    * @returns {string} panel body HTML
    */
   renderPanelBody(tabId) {
-    if (tabId === "inventory") return InventoryRenderer.generateHTML(this.scene.getInventoryItems());
-    if (tabId === "employee") {
-      return EmployeeRenderer.generateHTML({
-        hiredEmployeeIds: this.playerState.hiredEmployees,
-        offShiftEmployeeIds: this.playerState.offShiftEmployees,
-        activeEmployeeIds: this.scene.employees.map((employee) => employee.data.id),
-        employeeJobPriorities: this.playerState.employeeJobPriorities,
-        credits: this.playerState.credits,
-        canHire: this.scene.canHireEmployees(),
-        employeeSkills: this.playerState.employeeSkills,
-        employeeTraining: this.playerState.employeeTraining,
-        shopLevel: this.playerState.shopLevel,
-      });
-    }
-    if (tabId === "contracts") {
-      return ContractRenderer.generateHTML(database.getAllLicenses(), this.playerState);
-    }
-    if (tabId === "supply") return SupplyRenderer.generateHTML(this.scene, this.supplyOrder);
-    if (tabId === "fixtures") {
-      return LayoutRenderer.generateHTML(
-        this.scene, true, this.fixturePurchaseNotice, this.fixtureSaleConfirmation,
-      );
-    }
-    if (tabId === "layout") return LayoutRenderer.generateHTML(this.scene);
-    if (tabId === "finances") {
-      return FinancesRenderer.generateHTML(this.scene.getFinancesView(), this.financesDay);
-    }
-    if (tabId === "handbook") {
-      return HandbookRenderer.generateHTML({
-        topic: this.handbookTopic,
-        shopLevel: this.playerState.shopLevel,
-        reputation: this.playerState.globalReputation,
-        licenses: database.getAllLicenses(),
-      });
-    }
+    if (tabId === "inventory") return this.inventoryTab.draw();
+    if (tabId === "employee") return this.employeeTab.draw();
+    if (tabId === "contracts") return this.contractsTab.draw();
+    if (tabId === "supply") return this.supplyTab.draw();
+    if (tabId === "fixtures") return this.fixturesTab.draw();
+    if (tabId === "layout") return this.layoutTab.draw();
+    if (tabId === "finances") return this.financesTab.draw();
+    if (tabId === "handbook") return this.handbookTab.draw();
+    if (tabId === "reviews") return this.reviewsTab.draw();
     if (tabId === "textStyles") return renderTextStylesPage();
     throw new Error(`Unknown tablet tab: ${tabId}`);
   }
@@ -347,14 +275,16 @@ export class ManagerTablet {
   switchTab(tabId) {
     if (this.bodyElement.contains(document.activeElement)) document.activeElement.blur();
     this.fixtureHighlight.reset();
-    this.fixturePurchaseNotice = "";
-    this.fixtureSaleConfirmation = null;
-    if (tabId === "inventory") this.refreshInventoryPanel();
-    if (tabId === "employee") this.refreshEmployeePanel();
+    this.fixturesTab.purchaseNotice = "";
+    this.fixturesTab.saleConfirmation = null;
+    if (tabId === "inventory") this.inventoryTab.redraw();
+    if (tabId === "employee") this.employeeTab.redraw();
+    if (tabId === "contracts") this.contractsTab.redraw();
     if (tabId === "supply") this.refreshSupplyPanel();
     if (tabId === "layout" || tabId === "fixtures") this.refreshLayoutPanels();
     if (tabId === "finances") this.refreshFinancesPanel();
     if (tabId === "handbook") this.refreshHandbookPanel();
+    if (tabId === "reviews") this.reviewsTab.redraw();
     this.bodyElement.querySelectorAll(".tablet-tab-btn").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.tab === tabId);
     });
@@ -367,132 +297,52 @@ export class ManagerTablet {
     if (!database.getItem(itemId)) throw new Error(`Unknown inventory item: ${itemId}`);
     this.openWindow();
     this.switchTab("inventory");
-    this.disableInventoryNavigation();
-    this.disableInventoryNavigation = InventoryRenderer.enableListNavigation(this.uiWindow.element, itemId);
-    const input = [...this.bodyElement.querySelectorAll(PRICE_INPUT_SELECTOR)]
-      .find((element) => element.dataset.priceItemId === itemId);
-    input?.focus();
-    input?.select();
-  }
-
-  // Re-renders while preserving selection, scroll, and focus on a price button.
-  refreshInventoryPanel() {
-    const panel = this.bodyElement.querySelector('[data-tab-panel="inventory"]');
-    if (!panel) return;
-    // Re-rendering would wipe a price the player is mid-way through typing.
-    if (this.editingPrice) {
-      this.inventoryRefreshPending = true;
-      return;
-    }
-    this.inventoryRefreshPending = false;
-    const activeElement = document.activeElement;
-    const focusedButton = panel.contains(activeElement) && activeElement.matches(PRICE_BUTTON_SELECTOR)
-      ? { itemId: activeElement.dataset.priceItemId, action: activeElement.dataset.priceAction }
-      : null;
-    const selectedItemId = panel.querySelector(".item-card.selected")?.dataset.itemId;
-    const scrollTop = panel.querySelector(".inventory-list").scrollTop;
-    this.disableInventoryNavigation();
-    panel.innerHTML = this.renderPanelContent("inventory");
-    this.disableInventoryNavigation = InventoryRenderer.enableListNavigation(
-      this.uiWindow.element,
-      selectedItemId,
-    );
-    panel.querySelector(".inventory-list").scrollTop = scrollTop;
-    if (focusedButton) {
-      const replacement = Array.from(panel.querySelectorAll(PRICE_BUTTON_SELECTOR)).find(
-        (button) =>
-          button.dataset.priceItemId === focusedButton.itemId &&
-          button.dataset.priceAction === focusedButton.action,
-      );
-      replacement?.focus({ preventScroll: true });
-    }
+    this.inventoryTab.focusItem(itemId);
   }
 
   refreshContractsPanel() {
-    const panel = this.bodyElement.querySelector('[data-tab-panel="contracts"]');
-    if (panel) panel.innerHTML = this.renderPanelContent("contracts");
+    this.contractsTab.redraw();
   }
 
   refreshEmployeePanel() {
-    const panel = this.bodyElement.querySelector('[data-tab-panel="employee"]');
-    if (!panel) return;
-    const activeElement = document.activeElement;
-    const focusedPriority = panel.contains(activeElement) && activeElement.matches(EMPLOYEE_PRIORITY_SELECTOR)
-      ? { employeeId: activeElement.dataset.employeePriorityId, jobId: activeElement.dataset.employeePriorityJob }
-      : null;
-    const scrollPositions = Array.from(panel.querySelectorAll("[data-employee-scroll]"), (element) => ({
-      name: element.dataset.employeeScroll, top: element.scrollTop,
-    }));
-    panel.innerHTML = this.renderPanelContent("employee");
-    for (const element of panel.querySelectorAll("[data-employee-scroll]")) {
-      const position = scrollPositions.find(({ name }) => name === element.dataset.employeeScroll);
-      if (position) element.scrollTop = position.top;
-    }
-    if (focusedPriority) {
-      const replacement = Array.from(panel.querySelectorAll(EMPLOYEE_PRIORITY_SELECTOR)).find(
-        (button) => button.dataset.employeePriorityId === focusedPriority.employeeId &&
-          button.dataset.employeePriorityJob === focusedPriority.jobId,
-      );
-      replacement?.focus({ preventScroll: true });
-    }
+    this.employeeTab.redraw();
   }
 
   refreshFinancesPanel() {
-    const panel = this.bodyElement.querySelector('[data-tab-panel="finances"]');
-    if (!panel) return;
-    const scrollTop = panel.querySelector(".finances-day-list")?.scrollTop ?? 0;
-    panel.innerHTML = this.renderPanelContent("finances");
-    const list = panel.querySelector(".finances-day-list");
-    if (list) list.scrollTop = scrollTop;
+    this.financesTab.redraw();
   }
 
   refreshHandbookPanel() {
-    const panel = this.bodyElement.querySelector('[data-tab-panel="handbook"]');
-    if (panel) panel.innerHTML = this.renderPanelContent("handbook");
+    this.handbookTab.redraw();
   }
 
   refreshSupplyPanel() {
-    const panel = this.bodyElement.querySelector('[data-tab-panel="supply"]');
-    if (!panel) return;
-    const scrollTop = panel.querySelector(".supply-list").scrollTop;
-    panel.innerHTML = this.renderPanelContent("supply");
-    panel.querySelector(".supply-list").scrollTop = scrollTop;
+    this.supplyTab.redraw();
   }
 
   refreshLayoutPanels() {
-    for (const id of ["layout", "fixtures"]) {
-      const panel = this.bodyElement.querySelector(`[data-tab-panel="${id}"]`);
-      if (!panel) continue;
-      const positions = [".fixtures-catalog-list", ".fixtures-owned-list", ".layout-expansions-list"].map((selector) => ({
-        selector,
-        top: panel.querySelector(selector)?.scrollTop ?? 0,
-      }));
-      panel.innerHTML = this.renderPanelContent(id);
-      for (const { selector, top } of positions) {
-        const list = panel.querySelector(selector);
-        if (list) list.scrollTop = top;
-      }
-    }
+    this.layoutTab.redraw();
+    this.fixturesTab.redraw();
     this.updateSaveStatus();
   }
 
   updateSaveStatus() {
     this.bodyElement.querySelectorAll("[data-save-status]").forEach((element) => {
-      element.textContent = this.scene.saveStatus;
+      element.textContent = this.scene.saves.status;
     });
   }
 
   prepareFixtureSale(kind, target) {
     const reason = kind === "placed"
-      ? this.scene.getFixtureSaleBlockReason(target)
-      : this.scene.getFixtureCrateSaleBlockReason(target);
+      ? this.scene.fixtureSystem.saleBlockReason(target)
+      : this.scene.fixtureSystem.crateSaleBlockReason(target);
     if (reason) {
-      this.scene.showShopMessage(reason);
+      this.scene.messages.show(reason);
       return;
     }
     const typeId = kind === "placed" ? target.type : target.typeId;
-    this.fixturePurchaseNotice = "";
-    this.fixtureSaleConfirmation = {
+    this.fixturesTab.purchaseNotice = "";
+    this.fixturesTab.saleConfirmation = {
       kind,
       target,
       name: kind === "placed"
@@ -504,95 +354,62 @@ export class ManagerTablet {
   }
 
   confirmFixtureSale() {
-    const sale = this.fixtureSaleConfirmation;
+    const sale = this.fixturesTab.saleConfirmation;
     if (!sale) {
-      this.scene.showShopMessage("Choose a fixture to sell first.");
+      this.scene.messages.show("Choose a fixture to sell first.");
       return;
     }
-    this.fixtureSaleConfirmation = null;
+    this.fixturesTab.saleConfirmation = null;
     if (sale.kind === "placed" && this.scene.fixtures.get(sale.target.id) !== sale.target) {
-      this.scene.showShopMessage("That fixture is no longer available.");
+      this.scene.messages.show("That fixture is no longer available.");
       this.refreshLayoutPanels();
       return;
     }
-    this.fixturePurchaseNotice = `Sold ${sale.name} for ${sale.value.toLocaleString()}.`;
+    this.fixturesTab.purchaseNotice = `Sold ${sale.name} for ${sale.value.toLocaleString()}.`;
     this.fixtureHighlight.reset();
     const sold = sale.kind === "placed"
-      ? this.scene.sellFixture(sale.target.id)
-      : this.scene.sellFixtureCrate(sale.target);
+      ? this.scene.fixtureSystem.sell(sale.target.id)
+      : this.scene.fixtureSystem.sellCrate(sale.target);
     if (!sold) {
-      this.fixturePurchaseNotice = "";
+      this.fixturesTab.purchaseNotice = "";
       this.refreshLayoutPanels();
     }
   }
 
-  // --- Prices, contracts, and supply orders ---
-
-  /**
-   * Step a store price: roughly Â±10% (at least 1 credit), or reset to market.
-   * @param {string} itemId
-   * @param {"decrease" | "increase" | "market"} action
-   */
-  handlePriceAdjustment(itemId, action) {
-    const nextPrice = adjustStorePrice(
-      this.scene.getStorePrice(itemId), this.scene.market.getPrice(itemId), action,
-    );
-    if (nextPrice !== null) this.scene.setStorePrice(itemId, nextPrice);
+  handleFixturePurchase(typeId) {
+    const name = getFixtureType(typeId)?.name ?? "Fixture";
+    this.fixturesTab.purchaseNotice = `Bought ${name}. Its crate is waiting on the Loading Pad.`;
+    if (!this.scene.fixtureSystem.buy(typeId)) {
+      this.fixturesTab.purchaseNotice = "";
+      this.scene.messages.show("Fixture purchase is unavailable. Check its license, cost, and requirements.");
+    }
   }
+
+  // --- Contracts and shared tablet actions ---
 
   handleSignContract(licenseId) {
     const license = database.getLicense(licenseId);
     if (!license) throw new Error(`Unknown supplier license: ${licenseId}.`);
-    if (this.playerState.activeLicenses.has(licenseId)) return; // already owned
-    if (!license.isUnlocked(this.playerState)) {
-      this.scene.showShopMessage("This contract is locked. Check its requirements in the Contracts tab.");
+    if (this.gameState.catalog.owns(licenseId)) return; // already owned
+    if (!license.isUnlocked(this.gameState)) {
+      this.scene.messages.show("This contract is locked. Check its requirements in the Contracts tab.");
       return;
     }
-    if (!license.canAfford(this.playerState)) return; // can't afford it
+    if (!license.canAfford(this.gameState)) return; // can't afford it
 
-    this.playerState.spendCredits(license.baseCost, { category: "licenses", label: license.name });
-    this.playerState.signLicense(licenseId);
-    this.scene.recalculateActiveFactions();
-    // The panel re-renders via the constructor's playerState subscription.
-  }
-
-  /**
-   * Add or remove crates of an item, rejecting additions the order can't hold.
-   * @param {string} itemId
-   * @param {number} delta - crates
-   */
-  changeSupplyOrder(itemId, delta) {
-    const count = (this.supplyOrder.get(itemId) || 0) + delta;
-    const summary = this.scene.getSupplyOrderSummary(this.supplyOrder);
-    if (delta > 0 && summary.crates >= summary.maxCrates) return;
-    if (delta > 0) {
-      const candidate = new Map(this.supplyOrder);
-      candidate.set(itemId, count);
-      const nextSummary = this.scene.getSupplyOrderSummary(candidate);
-      if (!nextSummary.canPlace) {
-        this.scene.showShopMessage(nextSummary.problem);
-        playErrorBuzz();
-        return;
-      }
-    }
-    if (count > 0) this.supplyOrder.set(itemId, count);
-    else this.supplyOrder.delete(itemId);
-    this.refreshSupplyPanel();
-  }
-
-  handlePlaceSupplyOrder() {
-    // Why an order can't be placed is already shown in the summary, so no popup here.
-    if (this.scene.placeSupplyOrder(this.supplyOrder)) this.supplyOrder.clear();
-    this.refreshSupplyPanel();
+    this.gameState.economy.spend(license.baseCost, { category: "licenses", label: license.name });
+    this.gameState.catalog.sign(licenseId);
+    this.scene.catalogSystem.recalculateActiveFactions();
+    // The panel re-renders via the constructor's game state subscription.
   }
 
   // --- Window ---
 
   openWindow() {
-    if (this.scene.startingShift || this.scene.fixturePlacement?.active || this.scene.loadFailed) return;
-    this.refreshInventoryPanel();
+    if (this.scene.shift.starting || this.scene.fixturePlacement?.active || this.scene.saves.loadFailed) return;
+    this.inventoryTab.redraw();
     this.refreshEmployeePanel();
-    this.refreshSupplyPanel(); // loading pad spots free up without any playerState change
+    this.refreshSupplyPanel(); // loading pad spots free up without any game state change
     this.refreshLayoutPanels();
     this.refreshFinancesPanel();
     this.uiWindow.openWindow();

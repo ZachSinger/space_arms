@@ -3,12 +3,13 @@
 ## Camera: player-controlled zoom
 
 A new game starts zoomed so the shop the player owns fills the area below the
-top status bar. PageUp zooms in (down to about 8 tile rows on screen) and
-PageDown zooms out, never further than the point where the whole owned shop
-fits. When the shop doesn't fit at the chosen zoom, the camera follows the
+top status bar. On the sales floor, PageUp zooms in (down to about 8 tile rows on
+screen) and PageDown zooms out, never further than the point where the whole owned
+shop fits. Zoom controls do nothing in the backroom and other rooms. When the shop
+doesn't fit at the chosen zoom, the camera follows the
 player, kept within the owned rooms. Buying an expansion keeps the current zoom;
 the player can zoom out to see more if they want. Resizing the window keeps the
-same amount of shop visible. See `GameScene.refreshCamera()`.
+same amount of shop visible. See `CameraRig.refresh()` (js/world/CameraRig.js).
 
 The whole shop, every expansion included, is limited to **39 by 21 tiles**, so
 it always fits on one 1920×1080 screen with tiles displayed at about 48 pixels
@@ -87,19 +88,11 @@ exists" means "already authored in data," not "already rendered."
   sales-floor or backroom expansion after reaching its required Shop Level and
   having enough credits. Purchases are limited to when the store is closed and
   must be made in order; the old free debug unlocks have been removed.
-- Tile art comes from `img/Icons_Extracted/Tileset/` (64 floor/wall tiles,
-  fixed 256×256 grid-sliced from `Sheet1_A.jpg`) and
-  `img/Icons_Extracted/Tileset/Fixtures/` (104 shop fixtures, chroma-key
-  extracted from `Sheet2_A.jpg`). `data/TilesetManifest.json` lists every tile
-  key/path so `boot.js` can bulk-load them without a hand-maintained list.
-  The Sales Floor and its expansion use plain floor and wall tiles cut from the
-  licensed sci-fi tileset in `img/Tilesets/scifi/` (see `js/logic/ShopTiles.js`;
-  local-only, never committed). Debug keys `T` and `H` cycle through its floor and
-  wall styles in-game.
-  **Known issue:** this batch has a visible dark outline baked into every
-  tile, so adjacent floor/wall tiles don't actually tile seamlessly — see
-  `img/prompts/resourceRequest_04_SeamlessTilesetFix.md` for the regeneration
-  request to fix this.
+- `RoomArt.js` creates the sales floor's panelled floor and walls and the backroom's
+  industrial surfaces at startup. They use the existing room layout and preserve the
+  authored doorway lights, entrance mat, and backroom floor edges. The local-only
+  source tiles are loaded through `ShopTiles.js` and `BackroomTiles.js`. Additional
+  tile and fixture images are listed in `data/TilesetManifest.json` and loaded by `boot.js`.
 
 ## Verified working
 
@@ -122,12 +115,14 @@ exists" means "already authored in data," not "already rendered."
    supports one hand-seeded demo shelf. Real shelf/register/fixture placement
    (using the newly-extracted `Tileset/Fixtures/` sprites) and a Build Mode
    placement UI are separate, larger pieces of work.
-5. **Pathfinding.** `Pathfinder.js` uses heap-based A* on an 8-pixel navigation
-   grid for character movement, then smooths routes wherever a straight walk
-   clears the room and character-sized fixture/wall boundaries. Customers and
+5. **Pathfinding.** `world/Navigation.js` uses heap-based A* on an 8-pixel navigation
+   grid for character movement (configured in `data/tuning/navigation.json`). It
+   smooths routes wherever a straight walk clears the room and character-sized
+   fixture/wall boundaries. Customers and
    staff can use narrow spaces that tile-center routes used to reject; staff
    routes use their smaller collision body, and register destinations can sit
    directly at the counter's front. Collision remains active as a safety net.
+   Routes between areas pass through their linked portals.
    Other characters are still not route obstacles; customers can pass through
    one another, as before. Fixture moves happen between shifts, so live routes
    do not need to be rebuilt during rearrangement.

@@ -21,7 +21,6 @@
       "up": { "left": 0.03125, "top": 0.25, "right": 0.03125, "bottom": 0 },
       "right": { "left": 0.15625, "top": 0.03125, "right": 0.15625, "bottom": 0 }
     },
-    "stackDepth": 10,
     "price": 150,
     "licenseId": "lic_fixture_basics"
   },
@@ -47,7 +46,6 @@
       "up": { "left": 0.057291666666666664, "top": 0.25, "right": 0.057291666666666664, "bottom": 0 },
       "right": { "left": 0.16666666666666666, "top": 0.078125, "right": 0.16666666666666666, "bottom": 0.036458333333333336 }
     },
-    "stackDepth": 10,
     "price": 225,
     "licenseId": "lic_fixture_basics"
   },
@@ -73,7 +71,6 @@
       "up": { "left": 0.020833333333333332, "top": 0.25, "right": 0.020833333333333332, "bottom": 0 },
       "right": { "left": 0.16666666666666666, "top": 0.041666666666666664, "right": 0.16666666666666666, "bottom": 0 }
     },
-    "stackDepth": 10,
     "price": 300,
     "licenseId": "lic_fixture_basics"
   },
@@ -99,7 +96,6 @@
       "up": { "left": 0.03125, "top": 0.020833333333333332, "right": 0.03125, "bottom": 0 },
       "right": { "left": 0.16666666666666666, "top": 0.052083333333333336, "right": 0.16666666666666666, "bottom": 0.010416666666666666 }
     },
-    "stackDepth": 10,
     "price": 200,
     "licenseId": "lic_fixture_basics"
   },
@@ -125,7 +121,6 @@
       "up": { "left": 0.057291666666666664, "top": 0.020833333333333332, "right": 0.057291666666666664, "bottom": 0 },
       "right": { "left": 0.16666666666666666, "top": 0.078125, "right": 0.16666666666666666, "bottom": 0.036458333333333336 }
     },
-    "stackDepth": 10,
     "price": 300,
     "licenseId": "lic_fixture_basics"
   },
@@ -151,7 +146,6 @@
       "up": { "left": 0.020833333333333332, "top": 0.020833333333333332, "right": 0.020833333333333332, "bottom": 0 },
       "right": { "left": 0.16666666666666666, "top": 0.041666666666666664, "right": 0.16666666666666666, "bottom": 0 }
     },
-    "stackDepth": 10,
     "price": 400,
     "licenseId": "lic_fixture_basics"
   },
@@ -220,5 +214,107 @@
     },
     "price": 40,
     "licenseId": "lic_fixture_basics"
+  },
+  "decor_holo_planet": {
+    "id": "decor_holo_planet", "name": "RINGWORLD HOLOGRAM", "kind": "decoration",
+    "artFamily": "hologram", "motif": "ringworld", "accent": "#55d9ee",
+    "description": "A ringed planet floating above a projector.",
+    "w": 0.75, "h": 1, "fixedFacing": true, "anyRoom": true,
+    "texture": "decor_holo_planet", "solidHeight": 0.25,
+    "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
+    "price": 320, "presentationPoints": 3, "licenseId": "lic_fixture_basics"
+  },
+  "decor_holo_rocket": {
+    "id": "decor_holo_rocket", "name": "STARSHIP HOLOGRAM", "kind": "decoration",
+    "artFamily": "hologram", "motif": "starship", "accent": "#f7ae64",
+    "description": "A rocket with swept fins and a glowing exhaust trail.",
+    "w": 0.75, "h": 1, "fixedFacing": true, "anyRoom": true,
+    "texture": "decor_holo_rocket", "solidHeight": 0.25,
+    "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
+    "price": 340, "presentationPoints": 3, "licenseId": "lic_fixture_basics"
+  },
+  "decor_holo_galaxy": {
+    "id": "decor_holo_galaxy", "name": "SPIRAL GALAXY HOLOGRAM", "kind": "decoration",
+    "artFamily": "hologram", "motif": "galaxy", "accent": "#b594f5",
+    "description": "Spiral arms curl around a bright galactic core.",
+    "w": 0.75, "h": 1, "fixedFacing": true, "anyRoom": true,
+    "texture": "decor_holo_galaxy", "solidHeight": 0.25,
+    "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
+    "price": 380, "presentationPoints": 3, "licenseId": "lic_fixture_basics"
+  },
+  "decor_holo_crystal": {
+    "id": "decor_holo_crystal", "name": "CRYSTAL HOLOGRAM", "kind": "decoration",
+    "artFamily": "hologram", "motif": "crystal", "accent": "#72ebba",
+    "description": "A faceted crystal suspended inside a scanning field.",
+    "w": 0.75, "h": 1, "fixedFacing": true, "anyRoom": true,
+    "texture": "decor_holo_crystal", "solidHeight": 0.25,
+    "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
+    "price": 300, "presentationPoints": 3, "licenseId": "lic_fixture_basics"
+  },
+  "decor_holo_atom": {
+    "id": "decor_holo_atom", "name": "ATOM HOLOGRAM", "kind": "decoration",
+    "artFamily": "hologram", "motif": "atom", "accent": "#f3de75",
+    "description": "Three electron orbits intersect around a nucleus.",
+    "w": 0.75, "h": 1, "fixedFacing": true, "anyRoom": true,
+    "texture": "decor_holo_atom", "solidHeight": 0.25,
+    "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
+    "price": 360, "presentationPoints": 3, "licenseId": "lic_fixture_basics"
+  },
+  "decor_holo_shield": {
+    "id": "decor_holo_shield", "name": "AEGIS HOLOGRAM", "kind": "decoration",
+    "artFamily": "hologram", "motif": "shield", "accent": "#75aaff",
+    "description": "A shield with a luminous central crest.",
+    "w": 0.75, "h": 1, "fixedFacing": true, "anyRoom": true,
+    "texture": "decor_holo_shield", "solidHeight": 0.25,
+    "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
+    "price": 350, "presentationPoints": 3, "licenseId": "lic_fixture_basics"
+  },
+  "decor_holo_gate": {
+    "id": "decor_holo_gate", "name": "JUMPGATE HOLOGRAM", "kind": "decoration",
+    "artFamily": "hologram", "motif": "jumpgate", "accent": "#8cf1ed",
+    "description": "A segmented jumpgate encircles a star-shaped portal.",
+    "w": 0.75, "h": 1, "fixedFacing": true, "anyRoom": true,
+    "texture": "decor_holo_gate", "solidHeight": 0.25,
+    "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
+    "price": 420, "presentationPoints": 3, "licenseId": "lic_fixture_basics"
+  },
+  "decor_holo_system": {
+    "id": "decor_holo_system", "name": "ORRERY HOLOGRAM", "kind": "decoration",
+    "artFamily": "hologram", "motif": "orrery", "accent": "#efc476",
+    "description": "Three planets trace nested orbits around a miniature sun.",
+    "w": 0.75, "h": 1, "fixedFacing": true, "anyRoom": true,
+    "texture": "decor_holo_system", "solidHeight": 0.25,
+    "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
+    "price": 400, "presentationPoints": 3, "licenseId": "lic_fixture_basics"
+  },
+  "hovercart_charger": {
+    "id": "hovercart_charger",
+    "name": "HOVERCART CHARGER",
+    "kind": "charger",
+    "equipment": true,
+    "fixedFacing": true,
+    "anyRoom": true,
+    "w": 1,
+    "h": 1.375,
+    "texture": "hovercart-charger",
+    "facingTextures": {
+      "down": "hovercart-charger",
+      "left": "hovercart-charger",
+      "up": "hovercart-charger",
+      "right": "hovercart-charger"
+    },
+    "facingFootprints": {
+      "down": { "w": 1, "h": 1.375 },
+      "left": { "w": 1, "h": 1.375 },
+      "up": { "w": 1, "h": 1.375 },
+      "right": { "w": 1, "h": 1.375 }
+    },
+    "artInsets": {
+      "down": { "left": 0.078125, "top": 0, "right": 0.078125, "bottom": 0.09375 },
+      "left": { "left": 0.078125, "top": 0, "right": 0.078125, "bottom": 0.09375 },
+      "up": { "left": 0.078125, "top": 0, "right": 0.078125, "bottom": 0.09375 },
+      "right": { "left": 0.078125, "top": 0, "right": 0.078125, "bottom": 0.09375 }
+    },
+    "price": 2200
   }
 }

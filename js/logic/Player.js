@@ -92,6 +92,8 @@ export class Player {
     this.stamina = MAX_STAMINA;
     this.exhausted = false;
     this.staminaRecoveryDelay = 0;
+    // Dev rooms only: dashing never drains stamina.
+    this.infiniteStamina = false;
 
     // False while an interaction owns positioning (e.g. operating the register). Velocity
     // is zeroed instead of disabling the body, so collisions still work.
@@ -111,10 +113,11 @@ export class Player {
   update(delta) {
     const canMove = this.inputEnabled && this.scene.input.keyboard.enabled &&
       this.scene.controlMode.allows("move");
-    const left = this.cursors.left.isDown || this.wasd.left.isDown;
-    const right = this.cursors.right.isDown || this.wasd.right.isDown;
-    const up = this.cursors.up.isDown || this.wasd.up.isDown;
-    const down = this.cursors.down.isDown || this.wasd.down.isDown;
+    const mapped = this.scene.controls?.isActionDown?.bind(this.scene.controls);
+    const left = mapped ? mapped("moveLeft") : this.cursors.left.isDown || this.wasd.left.isDown;
+    const right = mapped ? mapped("moveRight") : this.cursors.right.isDown || this.wasd.right.isDown;
+    const up = mapped ? mapped("moveUp") : this.cursors.up.isDown || this.wasd.up.isDown;
+    const down = mapped ? mapped("moveDown") : this.cursors.down.isDown || this.wasd.down.isDown;
 
     let vx = 0;
     let vy = 0;
@@ -123,7 +126,7 @@ export class Player {
     if (up) vy -= 1;
     if (down) vy += 1;
     // Null while a menu has the controller.
-    const pad = this.scene.getPadMovement?.() ?? null;
+    const pad = this.scene.controls?.padMovement() ?? null;
     if (vx === 0 && vy === 0 && pad) {
       vx = pad.x;
       vy = pad.y;
@@ -134,10 +137,12 @@ export class Player {
     }
 
     let speed = MOVE_SPEED;
-    const wantsDash = (vx !== 0 || vy !== 0) && (this.dashKey.isDown || Boolean(pad?.dash));
+    const wantsDash = (vx !== 0 || vy !== 0) && ((mapped ? mapped("dash") : this.dashKey.isDown) || Boolean(pad?.dash));
     if (wantsDash && !this.exhausted && this.stamina > 0) {
       const dashSeconds = Math.min(delta / 1000, this.stamina / STAMINA_DRAIN_PER_SECOND);
-      this.stamina = Math.max(0, this.stamina - dashSeconds * STAMINA_DRAIN_PER_SECOND);
+      if (!this.infiniteStamina) {
+        this.stamina = Math.max(0, this.stamina - dashSeconds * STAMINA_DRAIN_PER_SECOND);
+      }
       if (delta > 0) speed += (DASH_SPEED - MOVE_SPEED) * dashSeconds / (delta / 1000);
       this.staminaRecoveryDelay = STAMINA_RECOVERY_DELAY_MS;
       this.exhausted = this.stamina === 0;
@@ -183,7 +188,8 @@ export class Player {
   }
 
   updateCarryPose() {
-    const carrying = Boolean(this.scene.carriedCrates?.length || this.scene.carriedCrate);
+    const carrying = Boolean(this.scene.carriedCrates?.length || this.scene.carriedCrate ||
+      this.scene.hovercart?.carried);
     if (carrying === this.carryingPose) return;
     this.carryingPose = carrying;
     this.sprite.anims.stop();

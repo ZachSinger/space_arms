@@ -16,6 +16,7 @@ let cacheDirectory;
 let InventoryPool;
 let ShelfFixture;
 let ShelfStockingWindow;
+let nextTestCrateId = 1;
 
 before(async () => {
   cacheDirectory = await mkdtemp(join(tmpdir(), "space-arms-shelf-slots-test-"));
@@ -34,7 +35,7 @@ before(async () => {
       },
       load(id) {
         if (id === "\0shelf-slots-test-database") {
-          return `export const database = { getItem: (id) => ({ id, name: id, image: "item.png", tags: ["Firearm"], dimensions: { w: id === "wpn_hvy_01" ? 4 : 1, h: 1 }, boxSize: id === "wpn_hvy_01" ? 20 : 1, slots: 1, stackSize: id === "paste" ? 15 : 4 }) };`;
+          return `export const database = { getItem: (id) => ({ id, name: id, image: "item.png", tags: ["Firearm"], boxSize: id === "wpn_hvy_01" ? 20 : 1 }) };`;
         }
       },
     }],
@@ -50,7 +51,7 @@ after(async () => {
 });
 
 test("sold-out shelf slots keep their spot until deliberately removed while empty", () => {
-  const shelf = new ShelfFixture({ displayGrid: { w: 2, h: 1 }, stackDepth: 4 });
+  const shelf = new ShelfFixture({ displayGrid: { w: 2, h: 1 } });
   const slot = shelf.placeItem("amo_01", 0, 0);
   shelf.add("amo_01", 1);
 
@@ -68,12 +69,45 @@ test("sold-out shelf slots keep their spot until deliberately removed while empt
   assert.deepEqual(shelf.placements, []);
 });
 
+test("shelf slot IDs survive moving and saving, and new slots get unused IDs", () => {
+  const shelf = new ShelfFixture({
+    id: "shelf-stable",
+    displayGrid: { w: 2, h: 1 },
+  });
+  const slot = shelf.placeItem("amo_01", 0, 0);
+  const slotId = slot.id;
+  shelf.detachPlacement(slot);
+  assert.equal(shelf.attachPlacement(slot, 1, 0, false), true);
+
+  const restored = new ShelfFixture({
+    id: shelf.id,
+    displayGrid: shelf.displayGrid,
+    placements: shelf.placements,
+    nextPlacementId: shelf.nextPlacementId,
+  });
+  assert.equal(restored.placements[0].id, slotId);
+  assert.notEqual(restored.placeItem("amo_01", 0, 0).id, slotId);
+
+  const legacy = new ShelfFixture({
+    id: "shelf-legacy",
+    displayGrid: { w: 2, h: 1 },
+    placements: [{ itemId: "amo_01", gx: 0, gy: 0, w: 1, h: 1, rotated: false, quantity: 0 }],
+  });
+  assert.equal(legacy.placements[0].id, "shelf-slot:shelf-legacy:1");
+  assert.equal(legacy.placeItem("amo_01", 1, 0).id, "shelf-slot:shelf-legacy:2");
+});
+
 function itemCrate(itemId, quantity) {
-  return Object.assign(Object.create(Crate.prototype), { kind: "item", itemId, quantity });
+  return Object.assign(Object.create(Crate.prototype), {
+    id: `test-crate-${nextTestCrateId++}`,
+    kind: "item",
+    itemId,
+    quantity,
+  });
 }
 
 test("live stocking uses twenty units per space and selects the highest matching crate", () => {
-  const shelf = new ShelfFixture({ displayGrid: { w: 2, h: 2 }, stackDepth: 10, handsOn: true });
+  const shelf = new ShelfFixture({ displayGrid: { w: 2, h: 2 }, handsOn: true });
   const ammo = itemCrate("amo_01", 20);
   const heavy = itemCrate("wpn_hvy_01", 2);
   const crates = [ammo, heavy];
@@ -95,7 +129,7 @@ test("live stocking uses twenty units per space and selects the highest matching
 });
 
 test("pulling uses empty or matching crates and shares live quantities with customers", () => {
-  const shelf = new ShelfFixture({ displayGrid: { w: 2, h: 2 }, stackDepth: 10, handsOn: true });
+  const shelf = new ShelfFixture({ displayGrid: { w: 2, h: 2 }, handsOn: true });
   const placement = shelf.placeItem("amo_01", 0, 0, false, 3);
   const empty = itemCrate(null, 0);
   const wrong = itemCrate("wpn_hvy_01", 1);
@@ -121,7 +155,7 @@ test("pulling uses empty or matching crates and shares live quantities with cust
 });
 
 test("Q in the shelf window picks which carried crate stocks an empty space next", () => {
-  const shelf = new ShelfFixture({ displayGrid: { w: 3, h: 2 }, stackDepth: 10, handsOn: true });
+  const shelf = new ShelfFixture({ displayGrid: { w: 3, h: 2 }, handsOn: true });
   shelf.placeItem("amo_03", 1, 0, false, 1);
   const bottom = itemCrate("amo_01", 3);
   const empty = itemCrate(null, 0);
@@ -129,7 +163,7 @@ test("Q in the shelf window picks which carried crate stocks an empty space next
   const crates = [bottom, empty, top];
   const view = Object.assign(Object.create(ShelfStockingWindow.prototype), {
     uiWindow: { isOpen: true },
-    scene: { getCarriedCrates: () => crates },
+    scene: { crateSystem: { getStockableCrates: () => crates } },
     refresh() {},
   });
   assert.equal(view.getStockingCrate(), top);
@@ -149,7 +183,7 @@ test("Q in the shelf window picks which carried crate stocks an empty space next
 });
 
 test("the shelf window marks every space matching carried items and updates as crates change", () => {
-  const shelf = new ShelfFixture({ displayGrid: { w: 3, h: 2 }, stackDepth: 10, handsOn: true });
+  const shelf = new ShelfFixture({ displayGrid: { w: 3, h: 2 }, handsOn: true });
   shelf.placeItem("amo_01", 0, 0, false, 20);
   shelf.placeItem("wpn_pis_05", 1, 0, false, 0);
   shelf.placeItem("amo_03", 2, 0, false, 2);
@@ -172,7 +206,7 @@ test("the shelf window marks every space matching carried items and updates as c
   });
   const view = Object.assign(Object.create(ShelfStockingWindow.prototype), {
     uiWindow: { isOpen: true },
-    scene: { getCarriedCrates: () => crates },
+    scene: { crateSystem: { getStockableCrates: () => crates } },
     fixture: shelf,
     art: getBudgetShelfArt(2, 3),
     selected: null,
@@ -180,7 +214,7 @@ test("the shelf window marks every space matching carried items and updates as c
     status: {},
     stickers: [],
   });
-  const marked = () => cells.map((cell) => cell.classList.contains("matches-carried"));
+  const marked = () => cells.map((cell) => cell.classList.contains("matches-stockable"));
   const originalDocument = globalThis.document;
   globalThis.document = { createElement: () => ({ style: {} }) };
   try {
@@ -209,7 +243,7 @@ test("the shelf window marks every space matching carried items and updates as c
 });
 
 test("shelf price stickers show each stocked space's price, turn sold out, and hide on empty spaces", () => {
-  const shelf = new ShelfFixture({ displayGrid: { w: 3, h: 2 }, stackDepth: 10, handsOn: true });
+  const shelf = new ShelfFixture({ displayGrid: { w: 3, h: 2 }, handsOn: true });
   shelf.placeItem("amo_01", 0, 0, false, 5);
   shelf.placeItem("amo_03", 1, 0, false, 0);
   const prices = { amo_01: 1234.5, amo_03: 9 };
@@ -233,7 +267,7 @@ test("shelf price stickers show each stocked space's price, turn sold out, and h
   const stickers = Array.from({ length: 6 }, fakeElement);
   const view = Object.assign(Object.create(ShelfStockingWindow.prototype), {
     uiWindow: { isOpen: true },
-    scene: { getCarriedCrates: () => [], getStorePrice: (itemId) => prices[itemId] },
+    scene: { crateSystem: { getStockableCrates: () => [] }, catalogSystem: { getStorePrice: (itemId) => prices[itemId] } },
     fixture: shelf,
     art: getBudgetShelfArt(2, 3),
     selected: null,
@@ -280,24 +314,15 @@ test("every box size fits all shelf spaces and front boxes disappear before back
   }
 });
 
-test("stackSize is units per slot, capped by the shelf's depth, so small items always fit", () => {
-  const shelf = new ShelfFixture({ displayGrid: { w: 2, h: 1 }, stackDepth: 10 });
-  assert.equal(shelf.getPlacementCapacity({ itemId: "amo_01" }), 4);
-  assert.equal(shelf.getPlacementCapacity({ itemId: "paste" }), 10);
-
-  const slot = shelf.placeItem("paste", 0, 0);
-  assert.ok(slot);
-  assert.equal(slot.quantity, 1);
-  assert.equal(shelf.add("paste", 20), 9);
-});
-
 test("shared transfers stock a specific shelf slot and return items to an inventory pool", () => {
-  const shelf = new ShelfFixture({ displayGrid: { w: 2, h: 1 }, stackDepth: 4 });
+  const shelf = new ShelfFixture({ displayGrid: { w: 2, h: 1 } });
   const slot = shelf.placeItem("amo_01", 0, 0, false, 0);
   const pool = new InventoryPool({
+    id: "test-stock-pool",
     capacity: 3,
     stock: [{ itemId: "amo_01", quantity: 2 }],
   });
+  assert.equal(pool.id, "test-stock-pool");
 
   assert.equal(transferItems(pool, shelf, "amo_01", 1, {
     destinationEntry: slot,

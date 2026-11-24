@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
-import { ControlMode } from "../js/logic/ControlMode.js";
+import { ControlMode } from "../js/input/ControlMode.js";
 import { HUDController } from "../js/logic/HUDController.js";
 
 let server;
@@ -79,6 +79,7 @@ function createPlayer() {
   };
   const scene = {
     movementAllowed: true,
+    saves: { loadFailed: false },
     add: {
       sprite(x, y, texture, frame) {
         Object.assign(sprite, { x, y, texture, frame });
@@ -287,14 +288,14 @@ test("carrying two or three crates allows facing the direction of keyboard or co
         ["left", -1, 0], ["right", 1, 0], ["up", 0, -1], ["down", 0, 1],
       ]) {
         if (input === "keyboard") wasd[direction].isDown = true;
-        else scene.getPadMovement = () => ({ x, y });
+        else scene.controls = { padMovement: () => ({ x, y }) };
         player.update(16);
         assert.deepEqual(body.velocity, { x: x * speed, y: y * speed });
         assert.equal(player.currentFacing, direction);
         assert.equal(sprite.anims.key, `player_carry_walk_${direction}`);
         if (input === "keyboard") wasd[direction].isDown = false;
       }
-      scene.getPadMovement = () => null;
+      scene.controls = { padMovement: () => null };
       player.update(16);
       assert.equal(player.currentFacing, "down");
       assert.equal(sprite.anims.isPlaying, false);

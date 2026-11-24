@@ -74,6 +74,8 @@ export function splitCash(amount, currency = "credits") {
     }).filter(({ count }) => count > 0);
 }
 
+export const CASH_MISTAKES_TO_LOSE_SALE = 3;
+
 export class CashPayment {
   constructor(total, tender, currency = "credits") {
     this.currency = currency;
@@ -132,13 +134,16 @@ export class CashPayment {
   }
 
   handOver() {
-    if (this.completed) return { accepted: false, penalty: false };
+    if (this.completed) return { accepted: false, penalty: false, lost: false };
     if (this.changeUnits === this.changeDueUnits) {
       this.completed = true;
-      return { accepted: true, penalty: false };
+      return { accepted: true, penalty: false, lost: false };
     }
     this.mistakes += 1;
-    return { accepted: false, penalty: this.mistakes > 1 };
+    // First mistake warns, the second costs reputation, the third loses the sale.
+    const lost = this.mistakes >= CASH_MISTAKES_TO_LOSE_SALE;
+    if (lost) this.completed = true;
+    return { accepted: false, penalty: this.mistakes === 2, lost };
   }
 
   get tender() {

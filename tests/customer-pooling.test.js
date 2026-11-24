@@ -3,7 +3,6 @@ import test from "node:test";
 import {
   createCustomerArrivalSchedule,
   createCustomerPool,
-  getEmployeeScaler,
   getFactionRepMultiplier,
   getLicensedFactionIds,
   getStoreRepPool,
@@ -62,12 +61,6 @@ test("faction reputation multiplier is gradual and bounded", () => {
   assert.equal(getFactionRepMultiplier(-10000), 0.5);
 });
 
-test("employee scaler has diminishing returns and remains neutral with no employees", () => {
-  assert.equal(getEmployeeScaler(0), 1);
-  assert.ok(getEmployeeScaler(2) > getEmployeeScaler(1));
-  assert.ok(getEmployeeScaler(10) < 2);
-});
-
 test("every active faction gets one visitor even with no faction shelf assortment", () => {
   const pool = createCustomerPool({
     storeReputation: 2,
@@ -84,7 +77,6 @@ test("every active faction gets one visitor even with no faction shelf assortmen
   });
   assert.equal(pool.neutralCount, 18);
   assert.equal(pool.calculation.storeReputation, 2);
-  assert.equal(pool.calculation.employeeScaler, 1);
   assert.equal(pool.calculation.shelfStockUnits, 0);
   assert.equal(pool.calculation.calculatedPool, pool.totalCustomers);
   assert.equal(pool.calculation.groups[1].assortmentScore, 0);

@@ -1,0 +1,68 @@
+{
+  "presentationBase": {
+    "value": 20,
+    "min": 0,
+    "max": 100,
+    "integer": true,
+    "description": "Starting presentation points and the starting maximum. This base does not increase with shop size or level."
+  },
+  "decorationVarietyBonus": {
+    "value": 1,
+    "min": 0,
+    "max": 5,
+    "integer": true,
+    "description": "Extra presentation points awarded once per distinct decoration design on the sales floor."
+  },
+  "presentationPerSalesExpansion": {
+    "value": 20,
+    "min": 0,
+    "max": 100,
+    "integer": true,
+    "description": "Maximum presentation added by each sales-floor expansion."
+  },
+  "presentationPerLevelAboveFloor": {
+    "value": 2,
+    "min": 0,
+    "max": 20,
+    "integer": true,
+    "description": "Maximum presentation added for each shop level above the level floor."
+  },
+  "presentationLevelFloor": {
+    "value": 5,
+    "min": 1,
+    "max": 20,
+    "integer": true,
+    "description": "Shop levels at or below this level add no maximum presentation."
+  },
+  "floorCratePenalty": {
+    "value": 1,
+    "min": 0,
+    "max": 10,
+    "integer": true,
+    "description": "Presentation points lost for each crate resting on the sales floor."
+  },
+  "scavengersExpectationPercent": {
+    "value": [40, 60],
+    "min": 0,
+    "max": 100,
+    "description": "Presentation expectation range for Scavenger customers."
+  },
+  "civilianExpectationPercent": {
+    "value": [55, 75],
+    "min": 0,
+    "max": 100,
+    "description": "Presentation expectation range for regular customers."
+  },
+  "mercenariesExpectationPercent": {
+    "value": [65, 80],
+    "min": 0,
+    "max": 100,
+    "description": "Presentation expectation range for Mercenary customers."
+  },
+  "explorersExpectationPercent": {
+    "value": [70, 80],
+    "min": 0,
+    "max": 100,
+    "description": "Presentation expectation range for Explorer customers."
+  }
+}

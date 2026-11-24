@@ -21,6 +21,47 @@ test("walking straight into a crate pushes it straight ahead and slows the playe
   assert.ok(Math.abs(crate.y - playerVelocity.y) < 0.01);
 });
 
+test("a small contact overlap keeps pushing on every held-movement frame", () => {
+  const player = { ...PLAYER, top: 198.5 };
+  const crate = crateAt("a", 100, 179);
+  for (let frame = 0; frame < 10; frame += 1) {
+    const { playerVelocity, crateVelocities } = solve([crate], { player });
+    assert.ok(playerVelocity.y < 0, `player keeps moving on frame ${frame}`);
+    const pushed = crateVelocities.get("a");
+    assert.ok(pushed?.y < 0, `crate keeps moving on frame ${frame}`);
+    player.top += playerVelocity.y / 60;
+    crate.rect.top += pushed.y / 60;
+  }
+});
+
+test("small overlap contact still respects walls, loading-pad locks, and push weight limits", () => {
+  const player = { ...PLAYER, top: 198.5 };
+  const crate = crateAt("a", 100, 179);
+  for (const result of [
+    solve([crate], { player, isBlocked: () => true }),
+    solve([{ ...crate, locked: true }], { player }),
+    solve([{ ...crate, weight: 5 }], { player }),
+  ]) {
+    assert.deepEqual(result.playerVelocity, { x: 0, y: 0 });
+    assert.ok([...result.crateVelocities.values()].every((v) => v.x === 0 && v.y === 0));
+  }
+});
+
+test("pushing finishes at the same flush bottom-wall position allowed for dropping", () => {
+  const crate = crateAt("a", 100, 460);
+  const player = { left: 89, top: 419, width: 22, height: 20 };
+  for (let frame = 0; frame < 120; frame += 1) {
+    const { playerVelocity, crateVelocities } = solve([crate], {
+      player, velocity: { x: 0, y: 160 },
+      isBlocked: ({ top, height }) => top + height > 500,
+    });
+    player.top += playerVelocity.y / 60;
+    crate.rect.top += (crateVelocities.get("a")?.y ?? 0) / 60;
+    assert.ok(crate.rect.top + crate.rect.height <= 500);
+  }
+  assert.ok(Math.abs(crate.rect.top + crate.rect.height - 500) < 0.001);
+});
+
 test("a heavier crate and carried crates slow the player more", () => {
   const { playerVelocity } = solve([{ ...crateAt("a", 100, 179), weight: 2 }]);
   assert.ok(Math.abs(playerVelocity.y + 160 * PUSH_SPEED_BY_CRATE_COUNT[2]) < 0.01);
@@ -111,6 +152,27 @@ test("customers shove any number of crates out of their way", () => {
   });
   assert.ok(playerVelocity.y < 0);
   assert.ok(crateVelocities.get("b").y < 0);
+});
+
+test("linked-cart resistance stays at one crate for any number pushed, without bypassing walls", () => {
+  for (const count of [1, 3, 8]) {
+    const crates = Array.from({ length: count }, (_, i) => crateAt(`c${i}`, 100, 179 - i * 40));
+    const options = {
+      player: PLAYER, velocity: UP, dt: 1 / 60, crates,
+      maxMoved: Infinity, maxSlowdownWeight: 1,
+    };
+    const result = solveCratePush({ ...options, isBlocked: () => false });
+    const expected = { x: 0, y: UP.y * PUSH_SPEED_BY_CRATE_COUNT[1] };
+    assert.deepEqual(result.playerVelocity, expected);
+    assert.equal(result.crateVelocities.size, count);
+    for (const velocity of result.crateVelocities.values()) assert.deepEqual(velocity, expected);
+
+    const blocked = solveCratePush({
+      ...options, isBlocked: ({ top }) => top < crates.at(-1).rect.top,
+    });
+    assert.deepEqual(blocked.playerVelocity, { x: 0, y: 0 });
+    for (const velocity of blocked.crateVelocities.values()) assert.equal(Math.hypot(velocity.x, velocity.y), 0);
+  }
 });
 
 test("when customers push the same crates, the one further from their destination wins", () => {

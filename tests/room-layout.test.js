@@ -1,6 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { BACKROOM_UPGRADE_ORDER, EXPANSION_ORDER, SHOP_BACK_WALL_HEIGHT, ZONES, getAuthoredGridSize, getBackroomBounds, getBackroomDoorCell, getBackroomInteriorBounds, getBackroomLink, getLoadingPadBounds, getStoreDoorCell, getTotalGridSize, getZone, isBackroomRow } from "../js/logic/RoomLayout.js";
+import { TileRoom } from "../js/logic/TileRoom.js";
+
+test("the navigation key changes when room walkability changes", () => {
+  const room = Object.create(TileRoom.prototype);
+  const zone = { gridX: 0, gridY: 0, gridW: 4, gridH: 4, locked: false };
+  room.zones = [zone];
+  room.wallCells = new Map();
+  const initial = room.navigationWalkabilityKey();
+  assert.equal(room.isWalkable(2, 1), true);
+  room.wallCells.set("2,1", {});
+  assert.notEqual(room.navigationWalkabilityKey(), initial);
+  assert.equal(room.isWalkable(2, 1), false);
+  room.wallCells.clear();
+  zone.gridW = 2;
+  assert.notEqual(room.navigationWalkabilityKey(), initial);
+  assert.equal(room.isWalkable(2, 1), false);
+  zone.gridW = 4;
+  zone.locked = true;
+  assert.notEqual(room.navigationWalkabilityKey(), initial);
+  assert.equal(room.isWalkable(2, 1), false);
+});
 
 test("the full shop viewport is reserved at 39 by 21 tiles", () => {
   assert.deepEqual(getTotalGridSize(), { gridW: 39, gridH: 21 });
@@ -18,16 +39,16 @@ test("the starting sales floor has seven by three usable squares and both doors 
   assert.deepEqual(getBackroomDoorCell(), { gx: floor.gridX + 7, gy: floor.gridY + 1 });
 });
 
-test("the starting backroom is one floor square longer and the loading pad stays at the bottom", () => {
+test("the wider starting backroom leaves an aisle beside the unchanged loading pad", () => {
   const room = getBackroomBounds();
   const floor = getBackroomInteriorBounds();
   const pad = getLoadingPadBounds();
-  assert.equal(room.width, 256);
+  assert.equal(room.width, 384);
   assert.equal(room.height, 448);
-  assert.equal(floor.right - floor.left, 128);
+  assert.equal(floor.right - floor.left, 256);
   assert.equal(floor.bottom - floor.top, 320);
   assert.equal(pad.left, floor.left);
-  assert.equal(pad.right, floor.right);
+  assert.equal(floor.right - pad.right, 128);
   assert.equal(pad.top - floor.top, 192);
   assert.equal(pad.bottom, floor.bottom);
   const zones = ZONES.map((zone) => ({ ...zone }));
@@ -41,7 +62,7 @@ test("the starting backroom is one floor square longer and the loading pad stays
 
 test("sales floor expansions are locked, fit the map, and stay out of the backroom", () => {
   assert.equal(EXPANSION_ORDER.length, 5);
-  assert.deepEqual(EXPANSION_ORDER.map((id) => getZone(id).requiredShopLevel), [5, 9, 17, 24, 30]);
+  assert.deepEqual(EXPANSION_ORDER.map((id) => getZone(id).requiredShopLevel), [6, 13, 32, 42, 49]);
   for (const id of EXPANSION_ORDER) {
     const zone = getZone(id);
     assert.ok(zone.locked && zone.salesFloor && !zone.backroom && zone.cost > 0, id);
@@ -55,8 +76,8 @@ test("the backroom sits apart from the shop, and only its upgrades grow it", () 
     assert.ok(zone.backroom && isBackroomRow(zone.gridY), id);
   }
   assert.ok(BACKROOM_UPGRADE_ORDER.every((id) => getZone(id).locked));
-  assert.deepEqual(BACKROOM_UPGRADE_ORDER.map((id) => getZone(id).requiredShopLevel), [13, 20, 27]);
-  assert.deepEqual(BACKROOM_UPGRADE_ORDER.map((id) => getZone(id).cost), [4000, 6000, 9000]);
+  assert.deepEqual(BACKROOM_UPGRADE_ORDER.map((id) => getZone(id).requiredShopLevel), [22, 37, 46]);
+  assert.deepEqual(BACKROOM_UPGRADE_ORDER.map((id) => getZone(id).cost), [17500, 86000, 199500]);
   const link = getBackroomLink();
   assert.equal(isBackroomRow(link.shop.gy), false);
   assert.equal(isBackroomRow(link.backroom.gy), true);

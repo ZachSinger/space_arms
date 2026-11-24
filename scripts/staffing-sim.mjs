@@ -10,8 +10,9 @@ import { BASE_PATIENCE_MS } from "../js/logic/CustomerTraits.js";
 import { SHIFT_DURATION_MS } from "../js/logic/ShiftClock.js";
 
 // --- Real game constants (cited from the source) ---
-// Override the first one from the command line to test tunings: node scripts/staffing-sim.mjs 5000
-const REGISTER_MS_PER_ITEM = Number(process.argv[2] ?? 5000); // Employee.js REGISTER_SERVICE_MS_PER_ITEM
+// Override these from the command line to test tunings: node scripts/staffing-sim.mjs 1000 2000
+const REGISTER_MS_PER_ITEM = Number(process.argv[2] ?? 1000); // EmployeeTraining.js REGISTER_SERVICE_MS_PER_ITEM
+const REGISTER_MS_PER_CUSTOMER = Number(process.argv[3] ?? 2000); // EmployeeTraining.js REGISTER_SERVICE_MS_PER_CUSTOMER
 const WALK_SPEED = 120; // px/s, Employee.js WALK_SPEED
 const JOB_RETRY_MS = 1000; // Employee.js: idle employees re-check for work every second
 const CRATE_UNITS = 20; // one ordered crate of a boxSize-1 item (SupplyOrder.js)
@@ -160,7 +161,7 @@ function simulateShift({ customers, employees, registers = 1, shelfCapacity = 16
         const walk = travelMs(employee.location, "register");
         employee.task = { kind: "register", customer: nextCustomer };
         employee.busyUntil = now + walk +
-          Math.max(REGISTER_MS_PER_ITEM, nextCustomer.cart * REGISTER_MS_PER_ITEM) / employee.speedRegister;
+          (REGISTER_MS_PER_CUSTOMER + nextCustomer.cart * REGISTER_MS_PER_ITEM) / employee.speedRegister;
         employee.location = "register";
       } else if (pad > 0 && shelf < shelfCapacity &&
         !staff.some((other) => other !== employee && other.task?.kind?.startsWith("stock"))) {
@@ -203,7 +204,7 @@ function runScenario(label, options, trials = 100) {
 
 console.log("STAFFING SIMULATION - player AFK, employee(s) run the store");
 console.log(`Shift ${SHIFT_DURATION_MS / 1000}s, patience ${BASE_PATIENCE_MS / 1000}s, shelf 160 units, pad 180 units, ` +
-  `${REGISTER_MS_PER_ITEM / 1000}s per item at the register.`);
+  `${REGISTER_MS_PER_CUSTOMER / 1000}s per customer + ${REGISTER_MS_PER_ITEM / 1000}s per item at the register.`);
 console.log("");
 console.log("scenario                           | served | patience | no-stock | net rep | sold | busy");
 

@@ -17,13 +17,14 @@ factions get no customers: nobody goes to a burger joint for motorcycle parts.
 
 Every MVP faction has at least one license that needs no earned
 faction reputation: Basic Rations & Water for Explorers is available at Shop
-Level 1; Scrap-Yard Ballistics for Scavengers and Standard Munitions for
-Mercenaries become available at Shop Level 2.
+Level 1; Scrap-Yard Sidearms for Scavengers and Standard Pistol Ammo for
+Mercenaries become available at Shop Level 3.
 
-Store reputation sets the store's baseline traffic. Stock and employees adjust
-that total. The first-pass tuning values are in `CustomerPooling.js`.
+Store reputation sets the store's baseline traffic. Stock adjusts that total.
+Employees never bring in customers; they help serve the ones who come. The
+first-pass tuning values are in `CustomerPooling.js`.
 
-`Pre-Stock Pool = Store Rep Curve x Employee Scaler`
+`Pre-Stock Pool = Store Rep Curve`
 
 `Calculated Pool = Pre-Stock Pool x Overall Stock Scaler`
 
@@ -76,13 +77,12 @@ increase to guarantee one visitor per active faction.
   Even at zero or negative reputation, that faction can still send customers.
 - A faction can only be active if the player is licensed to sell something it
   wants. If a customer from an active faction finds none of those items
-  assigned to shelves, they leave without a reputation penalty and show a
-  hint about the kind of stock they want.
+  assigned to shelves, they leave without a message or reputation penalty.
 - If eligible shelf slots exist but their stock is sold out, existing Primary
   shortage rules apply. Assigned, sold-out slots still define the store's
   assortment. Restocking eligible items lets the player recover through sales.
 - Faction-specific licenses may depend on faction reputation, but each faction
-  has an early license that needs no earned faction reputation. Level 2 opens
+  has an early license that needs no earned faction reputation. Level 3 opens
   the initial Scavenger and Mercenary contracts.
 
 ## Scalers
@@ -124,21 +124,6 @@ All numerical values below are initial tuning values, not final balance.
 - Faction-specific shelf assortment also influences the *allocation* weights,
   not this total-pool calculation. Do not multiply the total by faction stock
   a second time.
-
-### Employee Scaler
-
-Apply the same employee scaler once to the total pool:
-
-`Employee Scaler = 1 + Max Employee Bonus x (1 - Falloff ^ Employees)`
-
-- Starting values: `Max Employee Bonus = 1.0`, `Falloff = 0.8`; the scaler
-  approaches but never exceeds 2.0.
-- Example: 0 employees = 1.00x, 1 = 1.20x, 2 = 1.36x, 3 = 1.49x,
-  5 = 1.67x, 10 = 1.89x.
-- Each hire increases traffic less than the previous one, and staff alone
-  cannot grow the pool without limit. Wages are an additional cost.
-- The employee system is not implemented yet, so the current employee count is
-  0 and this scaler remains 1.0.
 
 ## Arrivals
 

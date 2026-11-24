@@ -6,6 +6,7 @@
 // Sheets are 3 columns x 4 rows of 96 px frames: rows face down/left/right/up, and the middle
 // column is the standing pose. See CustomerCharacterManifest.json.
 import customerCharacterManifest from "../../data/CustomerCharacterManifest.json";
+import { gameRandom } from "../core/Random.js";
 
 const FRAME_SIZE = 96;
 const FACING_ROWS = Object.freeze({ down: 0, left: 1, right: 2, up: 3 });
@@ -130,7 +131,7 @@ export function pickRandomCustomerCharacter(factionId) {
   if (candidates.length === 0) {
     throw new Error(`No customer sprites are available for faction "${factionId}".`);
   }
-  const entry = Phaser.Utils.Array.GetRandom(candidates);
+  const entry = gameRandom.pick(candidates);
   return {
     factionId: factionId === undefined ? FACTION_IDS[entry.faction] : factionId,
     textureKey: entry.key,

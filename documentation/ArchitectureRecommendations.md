@@ -233,16 +233,18 @@ Doors and employees can use the same system when those interactions are added.
 Steam players expect rebinding, and it's nearly free with an action map.
 
 **Controller input (implemented).** `GamepadInput` polls the browser Gamepad API once per
-frame (all pads merged, deadzone, menu-direction repeat). In the world, `game.js
-handleGamepad` maps buttons onto the same actions as the keys (A = interact, X = pick up/throw,
-Y = put down or Go-Backs, R3 = next crate down, B = leave register, Back = tablet, Start = top bar). Every DOM screen uses
+frame (all pads merged, deadzone, menu-direction repeat). In the world, `PlayerControls.handleGamepad`
+maps buttons onto the same actions as the keys (A = interact, X = pick up/throw,
+Y = put down or Go-Backs, R3 = next crate down, B = leave register, Back = tablet, Start = top bar by default). Every DOM screen uses
 `UINavigator`, a menu cursor that fakes the mouse events a real click sends, so windows
 need no controller-specific code. Screens can opt in with `data-pad-autofocus`,
 `data-pad-world` (the controller drives the world, as in fixture placement),
 `data-pad-back="world"`, and the cancelable `pad-alt` event (Y). `InputDevice` tracks the
 last-used device: `controlLabel()` names the right key or button in prompts, and CSS hides
-`.kbd-only` / `.pad-only` text for the other device. A future rebinding table should cover
-both key and button maps.
+`.kbd-only` / `.pad-only` text for the other device. Settings lets players swap button
+assignments for controller actions; when a selected button is already assigned, the two
+actions switch buttons. The D-pad, analog stick directions, and triggers keep their existing
+movement, navigation, scrolling, and dash jobs.
 
 ---
 

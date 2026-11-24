@@ -10,6 +10,7 @@ let server;
 let cacheDirectory;
 let sprites;
 let employeeSprites;
+let gameRandom;
 const manifest = JSON.parse(await readFile(
   new URL("../data/CustomerCharacterManifest.json", import.meta.url), "utf8",
 ));
@@ -25,11 +26,11 @@ before(async () => {
     server: { middlewareMode: true },
   });
   globalThis.Phaser = {
-    Utils: { Array: { GetRandom: (items) => items[items.length - 1] } },
     Textures: { FilterMode: { NEAREST: "nearest" } },
   };
   sprites = await server.ssrLoadModule("/js/logic/CustomerSprites.js");
   employeeSprites = await server.ssrLoadModule("/js/logic/EmployeeSprites.js");
+  ({ gameRandom } = await server.ssrLoadModule("/js/core/Random.js"));
 });
 
 after(async () => {
@@ -53,12 +54,13 @@ function makeSprite() {
   };
 }
 
-test("every faction picks only its own characters, and neutral picks keep no faction", () => {
+test("every faction picks only its own characters, and neutral picks keep no faction", (t) => {
+  t.after(gameRandom.override(() => 0.999999));
   const mercenary = sprites.pickRandomCustomerCharacter("mercenaries");
   assert.equal(mercenary.factionId, "mercenaries");
   assert.match(mercenary.textureKey, /^customer_mercenary_/);
   assert.equal(sprites.pickRandomCustomerCharacter(null).factionId, null);
-  // The stub picks the last roster entry, an android, which belongs to no faction.
+  // The fixed roll picks the last roster entry, an android, which belongs to no faction.
   assert.equal(sprites.pickRandomCustomerCharacter().factionId, null);
   assert.throws(() => sprites.pickRandomCustomerCharacter("pirates"), /Unknown customer faction/);
 });

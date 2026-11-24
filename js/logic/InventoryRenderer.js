@@ -1,29 +1,38 @@
 // ==========================================
 // FILE: InventoryRenderer.js
 // ==========================================
-// HTML for the Manager Tablet's Inventory tab plus its keyboard/hover list navigation.
-// See also: ManagerTablet.js (hosts the tab).
+// Escaped HTML for the Manager Tablet's Inventory tab.
+// See also: InventoryTab.js (controls and list navigation).
+import { html, raw } from "../core/html.js";
 import { formatMoneyAmount, roundMoney } from "./Money.js";
+
 export class InventoryRenderer {
+  /**
+   * @param {number} storePrice
+   * @param {number} unitCost
+   * @returns {string}
+   */
   static generateProfitHTML(storePrice, unitCost) {
     const profit = roundMoney(storePrice - unitCost);
     const profitClass = profit > 0 ? "positive" : profit < 0 ? "negative" : "neutral";
-    return `<span class="inventory-profit ${profitClass}" data-inventory-profit title="Profit per item: your price minus the cost of one item in a supply crate. Delivery fees are not included.">${formatMoneyAmount(profit)}</span>`;
+    return String(html`<span class="inventory-profit ${profitClass}" data-inventory-profit title="Profit per item: your price minus the cost of one item in a supply crate. Delivery fees are not included.">${formatMoneyAmount(profit)}</span>`);
   }
 
   /**
    * Render just the Inventory tab's content; the hosting window owns the tab chrome.
-   * @param {{ item: object, stock: number, offShelves: number, unitCost: number, storePrice: number }[]} entries - stock is on shelves, offShelves is in crates; prices in credits
+   * @param {{ item: object, stock: number, offShelves: number, unitCost: number, storePrice: number, marketPricePinned?: boolean }[]} entries
    * @returns {string}
    */
   static generateHTML(entries) {
-    const rows = entries.map(({ item, stock, offShelves = 0, unitCost, storePrice }, index) => {
-      const iconHTML = item.image
-        ? `<img class="item-icon" src="${item.image}" alt="" />`
-        : `<div class="item-icon"></div>`;
-      return `
+    const rows = entries.map(({
+      item, stock, offShelves = 0, unitCost, storePrice, marketPricePinned = false,
+    }, index) => {
+      const icon = item.image
+        ? html`<img class="item-icon" src="${item.image}" alt="" />`
+        : html`<div class="item-icon"></div>`;
+      return html`
         <div class="item-card inventory-item-card" data-index="${index}" data-item-id="${item.id}">
-          <div class="inventory-name">${iconHTML}<span class="item-card-title">${item.name}</span></div>
+          <div class="inventory-name">${icon}<span class="item-card-title">${item.name}</span></div>
           <span class="inventory-quantity" data-inventory-stock title="${item.name} on your shop's shelves">${stock}</span>
           <span class="inventory-quantity" data-inventory-crates title="${item.name} still packed in crates (floor, backroom, loading pad, or being carried)">${offShelves}</span>
           <div class="inventory-price-controls">
@@ -39,13 +48,24 @@ export class InventoryRenderer {
               <button type="button" data-price-action="market" data-price-item-id="${item.id}"
                 aria-label="Set price to market for ${item.name}" title="Set price to current market price">MKT</button>
             </div>
+            <button type="button" class="inventory-market-pin" data-price-action="pin"
+              data-price-item-id="${item.id}" aria-pressed="${marketPricePinned}"
+              aria-label="${marketPricePinned ? "Stop following" : "Follow"} market price for ${item.name}"
+              title="${marketPricePinned
+    ? "This price will match the market whenever it changes."
+    : "Automatically match the market price whenever it changes."}">
+              ${marketPricePinned ? "FOLLOWING MARKET" : "FOLLOW MARKET"}
+            </button>
           </div>
-          ${this.generateProfitHTML(storePrice, unitCost)}
+          ${raw(this.generateProfitHTML(storePrice, unitCost))}
         </div>
       `;
-    }).join("");
+    });
 
-    return `
+    const emptyMessage = rows.length > 0
+      ? null
+      : html`<div class="fixture-empty-hint">No inventory owned yet -- order items from Supply.</div>`;
+    return String(html`
       <div class="inventory-column-header">
         <h3 class="type-h3">Name</h3>
         <h3 class="type-h3">On Shelves</h3>
@@ -54,70 +74,9 @@ export class InventoryRenderer {
         <h3 class="type-h3">Profit</h3>
       </div>
       <div class="retro-slot custom-scrollbar inventory-list" style="padding: 10px; display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto;">
-        ${rows || `<div class="fixture-empty-hint">No inventory owned yet -- order items from Supply.</div>`}
+        ${emptyMessage}
+        ${rows}
       </div>
-    `;
-  }
-
-  /**
-   * Wire arrow-key/hover selection with auto-scroll.
-   * @param {HTMLElement} rootElement
-   * @param {string | null} [selectedItemId] - card to select initially
-   * @returns {() => void} teardown
-   */
-  static enableListNavigation(rootElement, selectedItemId = null) {
-    const list = rootElement.querySelector(".inventory-list");
-    const cards = list ? Array.from(list.querySelectorAll(".item-card")) : [];
-
-    if (cards.length === 0) {
-      return () => {};
-    }
-
-    let selectedIndex = 0;
-
-    const selectCard = (index) => {
-      cards[selectedIndex]?.classList.remove("selected");
-      selectedIndex = Math.max(0, Math.min(index, cards.length - 1));
-
-      const card = cards[selectedIndex];
-      card.classList.add("selected");
-      card.scrollIntoView({ block: "nearest" });
-    };
-
-    const handlePointerEnter = (event) => {
-      const index = Number(event.currentTarget.dataset.index);
-      selectCard(index);
-    };
-
-    cards.forEach((card) =>
-      card.addEventListener("pointerenter", handlePointerEnter),
-    );
-
-    // Ignore keys while the window or this tab panel is hidden, so arrows don't hijack
-    // another tab.
-    const handleKeydown = (event) => {
-      if (rootElement.classList.contains("hidden")) return;
-      if (event.target instanceof HTMLInputElement) return;
-      const panel = list.closest(".tablet-tab-panel");
-      if (panel && panel.classList.contains("hidden")) return;
-
-      if (event.code === "ArrowDown") {
-        event.preventDefault();
-        selectCard(selectedIndex + 1);
-      } else if (event.code === "ArrowUp") {
-        event.preventDefault();
-        selectCard(selectedIndex - 1);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeydown);
-    selectCard(Math.max(0, cards.findIndex((card) => card.dataset.itemId === selectedItemId)));
-
-    return () => {
-      window.removeEventListener("keydown", handleKeydown);
-      cards.forEach((card) =>
-        card.removeEventListener("pointerenter", handlePointerEnter),
-      );
-    };
+    `);
   }
 }

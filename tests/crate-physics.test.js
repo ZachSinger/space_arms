@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Crate, CRATE_STACK_SPACING, INTERACT_RANGE, THROW_ACCELERATION_MS } from "../js/logic/Crate.js";
+import { CrateWorld } from "../js/world/CrateWorld.js";
 
 function createScene(obstacles = []) {
   const scene = {
@@ -135,6 +136,40 @@ function createScene(obstacles = []) {
   return scene;
 }
 
+test("crates can rest on a delivery platform but ordinary solid fixtures still block them", () => {
+  const surface = {
+    enable: true, left: 180, right: 240, top: 180, bottom: 240,
+    gameObject: { getData: (key) => key === "allowsCrates" },
+  };
+  const scene = createScene([surface]);
+  const crate = new Crate(scene, "item", 1, 210, 210);
+  const rect = { left: 194, top: 206, width: 32, height: 18 };
+  assert.equal(crate.isDropPositionClear(210, 210), true);
+  assert.equal(CrateWorld.prototype.isCrateSpaceBlocked.call({ shop: scene }, rect), false);
+
+  surface.gameObject.getData = () => false;
+  assert.equal(crate.isDropPositionClear(210, 210), false);
+  assert.equal(CrateWorld.prototype.isCrateSpaceBlocked.call({ shop: scene }, rect), true);
+});
+
+test("pushing and dropping agree on exact bottom-wall contact for both crate kinds", () => {
+  const wall = { enable: true, left: 0, right: 500, top: 400, bottom: 500 };
+  const scene = createScene([wall]);
+  for (const kind of ["item", "fixture"]) {
+    const crate = new Crate(scene, "item", 1, 200, 386, { kind, typeId: "shelf_budget_3x4" });
+    const blocked = (y) => {
+      const rect = crate.getFloorBounds(200, y);
+      return CrateWorld.prototype.isCrateSpaceBlocked.call({ shop: scene }, {
+        left: rect.left, top: rect.top, width: rect.right - rect.left, height: rect.bottom - rect.top,
+      });
+    };
+    assert.equal(crate.isDropPositionClear(200, 386), true);
+    assert.equal(blocked(386), false, "touching the wall is allowed even if overlapRect returns it");
+    assert.equal(crate.isDropPositionClear(200, 386.01), false);
+    assert.equal(blocked(386.01), true, "neither action lets the base enter the wall");
+  }
+});
+
 test("three carried crates stay straight, cover the lids below, and draw newest in front", () => {
   const scene = createScene();
   const lower = new Crate(scene, "item", 5, 100, 100);
@@ -174,7 +209,9 @@ test("fixture crates preserve their fixture type", () => {
     kind: "fixture",
     typeId: "shelf_budget_3x4",
   });
-  assert.deepEqual(crate.serializePayload(), {
+  const payload = crate.serializePayload();
+  assert.match(payload.id, /^crate-local-[1-9]\d*$/);
+  assert.deepEqual({ kind: payload.kind, typeId: payload.typeId }, {
     kind: "fixture",
     typeId: "shelf_budget_3x4",
   });
@@ -182,7 +219,9 @@ test("fixture crates preserve their fixture type", () => {
   assert.equal(crate.pickUp({ x: 120, y: 120, depth: 1 }), true);
   crate.drop(120, 140, 80, 0, false);
   assert.equal(crate.isThrown, true);
-  assert.deepEqual(crate.serializePayload(), {
+  const afterDrop = crate.serializePayload();
+  assert.equal(afterDrop.id, payload.id);
+  assert.deepEqual({ kind: afterDrop.kind, typeId: afterDrop.typeId }, {
     kind: "fixture",
     typeId: "shelf_budget_3x4",
   });
@@ -571,7 +610,7 @@ test("forward releases cannot skip through obstacles, other crates, or the loadi
   scene.restockCrates = [{ sprite: { body: { enable: true, left: 280, right: 320, top: 230, bottom: 270 } } }];
   assert.equal(crate.findThrowPosition(carrier, 160, 0), null);
   scene.restockCrates = [];
-  scene.loadingPadRect = { left: 280, right: 416, top: 200, bottom: 328 };
+  scene.supply = { padRect: { left: 280, right: 416, top: 200, bottom: 328 } };
   assert.equal(crate.findThrowPosition(carrier, 160, 0), null);
   assert.equal(crate.findThrowPosition(carrierAt(25, 250), -160, 0), null, "must stay inside world bounds");
   assert.equal(crate.findThrowPosition(carrier, 0, 0), null);
@@ -654,6 +693,30 @@ test("only active throws can hit customers", () => {
   assert.equal(crate.tryHitCustomer(customer), false);
 });
 
+test("a thrown crate bounces off people instead of passing through, but not off its thrower", () => {
+  const crate = new Crate(createScene(), "item", 5, 100, 100);
+  crate.drop(100, 100, 160, 0, false);
+  const body = crate.sprite.body;
+  body.center = { x: (body.left + body.right) / 2, y: (body.top + body.bottom) / 2 };
+  const nudges = [];
+  crate.nudge = (dx, dy) => nudges.push([dx, dy]);
+  const person = {
+    left: body.right - 4, right: body.right + 20, top: body.top - 10, bottom: body.bottom + 10,
+    center: { x: body.right + 8, y: body.center.y },
+  };
+  const personSprite = { body: { enable: true } };
+  assert.equal(crate.canHitPerson(personSprite), true);
+  assert.equal(crate.bounceOffPerson(person), true);
+  assert.deepEqual(nudges, [[-4, 0]], "pushed back out of the person, who stays put");
+  assert.ok(body.velocity.x < 0, "bounces back the way it came");
+
+  crate.throwCarrier = personSprite;
+  assert.equal(crate.canHitPerson(personSprite), false);
+  crate.throwCarrier = null;
+  body.stop();
+  assert.equal(crate.canHitPerson(personSprite), false, "a resting crate is just an obstacle");
+});
+
 test("drop position avoids corners and world bounds, or reports no room", () => {
   const walls = [
     { enable: true, left: 0, right: 100, top: 0, bottom: 500 },
@@ -716,7 +779,7 @@ test("a delivered crate stays locked on the loading pad until picked up", () => 
 
 test("a carried crate can't be dropped onto the loading pad", () => {
   const scene = createScene();
-  scene.loadingPadRect = { left: 200, top: 200, right: 336, bottom: 328 };
+  scene.supply = { padRect: { left: 200, top: 200, right: 336, bottom: 328 } };
   const crate = new Crate(scene, "item", 5, 0, 0);
   const position = crate.findDropPosition(268, 264, null, [], 48);
   assert.equal(position, null);

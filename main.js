@@ -8,6 +8,9 @@ import { app, BrowserWindow, ipcMain, net, protocol, screen, shell } from "elect
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import fs from "fs/promises";
+import os from "os";
+import { sendBugReport, validateBugReport } from "./js/logic/BugReport.js";
+import { PendingErrorStore } from "./js/logic/PendingErrors.js";
 
 // ES modules have no __dirname.
 const __filename = fileURLToPath(import.meta.url);
@@ -20,6 +23,24 @@ const DIST_DIRECTORY = path.join(__dirname, "dist");
 
 // Pin the save folder so it doesn't move with the packaged app's display name.
 app.setPath("userData", path.join(app.getPath("appData"), "space-arms-dealer"));
+const pendingErrors = new PendingErrorStore(path.join(app.getPath("userData"), "pending-errors.json"));
+
+function recordProcessError(type, error, extra = {}) {
+  try {
+    pendingErrors.append({
+      type,
+      message: error?.message ?? String(error),
+      stack: error?.stack,
+      ...extra,
+    });
+  } catch (saveError) {
+    console.error("Could not save process error:", saveError);
+  }
+}
+
+process.on("uncaughtExceptionMonitor", (error, origin) => {
+  recordProcessError("main-process-error", error, { reason: origin });
+});
 
 // A standard, secure scheme behaves like a website for relative paths, fetch, and storage.
 protocol.registerSchemesAsPrivileged([
@@ -123,6 +144,7 @@ const pendingFileWrites = new Set();
 // Serialize writes so two saves (or two captures) never interleave.
 let saveQueue = Promise.resolve();
 let debugQueue = Promise.resolve();
+let developmentServer = null;
 // One debug folder per app run, created on the first capture.
 let debugSession = null;
 
@@ -140,6 +162,13 @@ const createWindow = () => {
 
   displayModes.set(win, "fullscreen");
   win.setMenuBarVisibility(false);
+  win.webContents.on("render-process-gone", (_event, details) => {
+    if (details.reason === "clean-exit") return;
+    recordProcessError("renderer-process-gone", new Error(
+      `The game window stopped unexpectedly (${details.reason}).`,
+    ), { exitCode: details.exitCode, reason: details.reason });
+    app.quit();
+  });
   win.on("close", (event) => {
     if (pendingFileWrites.size === 0) return;
     event.preventDefault();
@@ -155,6 +184,58 @@ ipcMain.handle("display:get-settings", (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   return getDisplaySettings(win);
 });
+
+ipcMain.handle("app:quit", async () => {
+  await Promise.all([...pendingFileWrites]);
+  app.quit();
+  return true;
+});
+
+ipcMain.handle("bug-report:send", async (event, report) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win || win.isDestroyed()) throw new Error("The game window is unavailable.");
+  validateBugReport(report);
+  const rendererMetrics = app.getAppMetrics()
+    .find(({ pid }) => pid === event.sender.getOSProcessId()) ?? null;
+  let screenshotBlob;
+  if (report.includeScreenshot) {
+    const image = await event.sender.capturePage();
+    if (image.isEmpty()) throw new Error("The game window screenshot was empty.");
+    screenshotBlob = new Blob([image.toPNG()], { type: "image/png" });
+  }
+  return sendBugReport({
+    title: report.title,
+    message: report.message,
+    screenshotBlob,
+    sessionData: {
+      ...report.sessionData,
+      version: app.getVersion(),
+      platform: process.platform,
+      architecture: process.arch,
+      operatingSystemRelease: os.release(),
+      processor: {
+        model: os.cpus()[0]?.model ?? null,
+        logicalCoreCount: os.cpus().length,
+      },
+      memory: {
+        totalBytes: os.totalmem(),
+        freeBytes: os.freemem(),
+        gameProcess: rendererMetrics?.memory ?? null,
+      },
+      displays: screen.getAllDisplays().map(({ size, scaleFactor }) => ({ size, scaleFactor })),
+      runtimeVersions: {
+        electron: process.versions.electron,
+        chrome: process.versions.chrome,
+        node: process.versions.node,
+        v8: process.versions.v8,
+      },
+    },
+  });
+});
+
+ipcMain.handle("runtime-error:record", (_event, error) => pendingErrors.append(error));
+ipcMain.handle("runtime-error:list", () => pendingErrors.read());
+ipcMain.handle("runtime-error:clear", (_event, ids) => pendingErrors.clear(ids).length);
 
 ipcMain.handle("display:set-resolution", (event, resolution) => {
   const win = BrowserWindow.fromWebContents(event.sender);
@@ -215,13 +296,32 @@ ipcMain.handle("display:set-mode", (event, mode) => {
   return getDisplaySettings(win);
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  if (app.isPackaged === false) {
+    const { createServer } = await import("vite");
+    developmentServer = await createServer({
+      server: { port: 5173, strictPort: true },
+    });
+    await developmentServer.listen();
+  }
+
   protocol.handle("app", serveGameFile);
   createWindow();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+}).catch((error) => {
+  recordProcessError("startup-error", error);
+  console.error("Could not start the game:", error);
+  app.quit();
+});
+
+app.on("before-quit", () => {
+  if (!developmentServer) return;
+  const server = developmentServer;
+  developmentServer = null;
+  void server.close();
 });
 
 app.on("window-all-closed", () => {

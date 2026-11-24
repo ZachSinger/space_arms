@@ -5,6 +5,7 @@
 // neutral and faction groups, and when each one arrives.
 // See also: documentation/CustomerPooling.md (design and formulas).
 import { CUSTOMER_FACTION_IDS, factionMatches } from "./CustomerBuyLists.js";
+import { gameRandom } from "../core/Random.js";
 
 // First-pass tuning values; see CustomerPooling.md before changing them.
 export const CUSTOMER_POOL_TUNING = Object.freeze({
@@ -32,9 +33,6 @@ export const CUSTOMER_POOL_TUNING = Object.freeze({
   shelfTypesForMaximumAttraction: 3,
   // Faction rep at which a faction's attraction weight doubles (halves at the negative).
   factionRepForDoubleTrafficWeight: 250,
-  // Employees add up to +100% traffic, each one adding less than the last.
-  maximumEmployeeBonus: 1,
-  employeeFalloff: 0.8,
   // Random arrival offset as a fraction of the even spacing between customers.
   arrivalJitterFraction: 0.35,
 });
@@ -84,16 +82,6 @@ export function getStoreRepPool(reputation) {
   const last = curve[curve.length - 1];
   return last.customers + CUSTOMER_POOL_TUNING.storeRepTailGrowth *
     Math.log1p((reputation - last.reputation) / CUSTOMER_POOL_TUNING.storeRepTailSoftness);
-}
-
-/**
- * Pool multiplier from staff, from 1 (none) approaching 2.
- * @param {number} employeeCount
- */
-export function getEmployeeScaler(employeeCount = 0) {
-  const count = Math.max(0, employeeCount);
-  return 1 + CUSTOMER_POOL_TUNING.maximumEmployeeBonus *
-    (1 - CUSTOMER_POOL_TUNING.employeeFalloff ** count);
 }
 
 /**
@@ -181,13 +169,11 @@ export function createCustomerPool({
   activeFactions,
   shelfPlacements,
   getItem,
-  employeeCount = 0,
   tieBreakOffset = 0,
 }) {
   const factions = CUSTOMER_FACTION_IDS.filter((id) => activeFactions.has(id));
   const baseCustomers = getStoreRepPool(storeReputation);
-  const employeeScaler = getEmployeeScaler(employeeCount);
-  const preStockPool = baseCustomers * employeeScaler;
+  const preStockPool = baseCustomers;
   const groups = [{
     factionId: null,
     weight: 1,
@@ -252,9 +238,7 @@ export function createCustomerPool({
     stockScaler,
     calculation: {
       storeReputation,
-      employeeCount,
       baseCustomers,
-      employeeScaler,
       averageUnitsPerCustomer,
       expectedDemand,
       shelfStockUnits,
@@ -278,7 +262,7 @@ export function growCustomerArrivalSchedule({
   nextPool,
   elapsedMs,
   shiftDurationMs,
-  random = Math.random,
+  random = gameRandom,
 }) {
   const remainingMs = shiftDurationMs - elapsedMs;
   if (remainingMs <= 0 || nextPool.totalCustomers <= currentPool.totalCustomers) {
@@ -321,7 +305,7 @@ export function growCustomerArrivalSchedule({
 export function createCustomerArrivalSchedule(
   customerFactionIds,
   shiftDurationMs,
-  random = Math.random,
+  random = gameRandom,
 ) {
   const shuffled = shuffle([...customerFactionIds], random);
   if (shuffled.length === 0) return [];

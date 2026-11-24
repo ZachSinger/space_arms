@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,8 +17,16 @@ test("native display choices work across modes and Windows display scaling", asy
   };
   let window;
   let server;
+  let quitCalls = 0;
   globalThis.__nativeDisplayTest = {
-    app: { getPath: () => directory, setPath() {}, whenReady: () => Promise.resolve(), on() {} },
+    app: {
+      isPackaged: true,
+      getPath: () => directory,
+      setPath() {},
+      whenReady: () => Promise.resolve(),
+      on() {},
+      quit() { quitCalls += 1; },
+    },
     protocol: { registerSchemesAsPrivileged() {}, handle() {} },
     net: {},
     shell: {},
@@ -28,6 +36,7 @@ test("native display choices work across modes and Windows display scaling", asy
       static fromWebContents(value) { return value === sender ? window : null; }
       constructor() {
         window = this;
+        this.webContents = { on() {} };
         this.content = [display.size.width, display.size.height];
         this.fullscreen = true;
         this.kiosk = false;
@@ -104,6 +113,13 @@ test("native display choices work across modes and Windows display scaling", asy
     assert.deepEqual(fullscreen.current, small);
     assert.equal(window.menuVisible, false);
     assert.deepEqual(window.getContentSize(), [1280, 720]);
+    const payload = { pendingExitTest: true };
+    const write = handlers.get("save:write")(event, payload);
+    const exit = handlers.get("app:quit")(event);
+    assert.equal(quitCalls, 0, "exit must wait for the pending save");
+    await Promise.all([write, exit]);
+    assert.equal(quitCalls, 1);
+    assert.deepEqual(JSON.parse(await readFile(join(directory, "savegame.json"), "utf8")), payload);
   } finally {
     delete globalThis.__nativeDisplayTest;
     if (server) await server.close();

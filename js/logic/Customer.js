@@ -3,33 +3,36 @@
 // ==========================================
 // One shopper: picks a faction buy list, walks to the shelves holding those items, buys at
 // acceptable prices, then queues for player-driven checkout (or leaves angry).
-// See also: CustomerBuyLists.js (what they want), Pathfinder.js (how they route).
+// See also: CustomerBuyLists.js (what they want), Navigation.js (how they route).
 
 import {
-  addCharacterSprite,
   CHARACTER_ART_WIDTH,
   CHARACTER_HEAD_HEIGHT,
   pickRandomCustomerCharacter,
   showCharacterFacing,
 } from "./CustomerSprites.js";
 import { CUSTOMER_COLLISION_HEIGHT, CUSTOMER_COLLISION_WIDTH } from "./CharacterDimensions.js";
-import { BARGAIN_PRICE_RATIO, createCustomerBuyList } from "./CustomerBuyLists.js";
+import {
+  BARGAIN_PRICE_RATIO, CUSTOMER_FACTION_IDS, createCustomerBuyList, MIN_BARGAIN_PRICE_RATIO,
+} from "./CustomerBuyLists.js";
+import { GAME_EVENTS } from "../core/Events.js";
 import { transferItems } from "./InventoryTransfer.js";
 import { sumMoney } from "./Money.js";
 import { BASE_PATIENCE_MS, getPatienceMs, planShelfRoute, rollCustomerTraits } from "./CustomerTraits.js";
 import { fixtureFacing } from "./FixtureLayout.js";
-import {
-  CLEANLINESS_JUDGE_MS, TRASH_DROP_CHANCE, TRASH_DROP_WALK_MS, judgeCleanliness, rollCleanlinessTolerance,
-} from "./Litter.js";
+import { Mover } from "../world/Mover.js";
+import { gameRandom } from "../core/Random.js";
 
 const SPEED = 100; // px/s
 // Giving way to another customer's crate push: step aside, then wait, then try again.
 const CRATE_YIELD_STEP_MS = 400;
 const CRATE_YIELD_WAIT_MS = 600;
 const CRATE_YIELD_STEP_SPEED = 0.6; // share of walking speed
-// Bible Step 52: each customer accepts up to this random markup over the market price.
-export const MIN_PRICE_TOLERANCE = 1.0;
-export const MAX_PRICE_TOLERANCE = 1.3;
+// Customer price reactions vary slightly inside shared ranges.
+export const MIN_PRICE_TOLERANCE = 1.1;
+export const MAX_PRICE_TOLERANCE = 1.2;
+export const MIN_PRICE_DISGUST_TOLERANCE = 1.5;
+export const MAX_PRICE_DISGUST_TOLERANCE = 1.7;
 // Safety nets (ms) so an unreachable destination can never block the shift from ending.
 // The seeking and leaving limits count only time spent stuck: any real step forward resets
 // them, so a long walk across a big shop never trips them. The walking limit caps the whole
@@ -40,7 +43,8 @@ const MAX_WALK_MS = 60000;
 const PROGRESS_DISTANCE = 24; // px from the last checkpoint that counts as a step forward
 const CUSTOMER_REACTION_MS = 1800;
 const CUSTOMER_REACTION_FADE_MS = 300;
-const BIG_PURCHASE_ITEM_COUNT = 3;
+const QUEUE_JOIN_POSITION_BONUS_MS = 10000;
+const QUEUE_ADVANCE_BONUS_MS = 5000;
 // How long a customer stands looking at a shelf before taking anything from it.
 const BROWSE_SHELF_MS = Object.freeze([1500, 3500]);
 // Chance to look around another stocked shelf before heading to the next planned shelf.
@@ -48,10 +52,11 @@ const WANDER_CHANCE = 0.3;
 const WANDER_LOOK_MS = Object.freeze([1000, 2500]);
 const LOOK_AROUND_FACINGS = Object.freeze(["left", "right", "up", "down"]);
 const FACING_TOWARD_FIXTURE = Object.freeze({ down: "up", up: "down", left: "right", right: "left" });
+let nextCustomerId = 1;
 
-function getCustomerItemNames(scene, itemIds) {
+function getCustomerItemNames(store, itemIds) {
   return itemIds.map((itemId) => {
-    const item = scene.getItem(itemId);
+    const item = store.getItem(itemId);
     if (!item?.name) throw new Error(`Unknown customer item: ${itemId}`);
     return item.name;
   });
@@ -82,11 +87,12 @@ export const SPRITE_DISPLAY_HEIGHT = CUSTOMER_COLLISION_HEIGHT;
 
 /**
  * One customer's sprite, shopping state machine, and patience bubble.
- * Created by the scene's spawner; destroys itself on reaching the exit.
+ * Created by the customer-flow system; destroys itself on reaching the exit.
  */
 export class Customer {
   constructor({
-    scene,
+    id = null,
+    store,
     getShoppingPlan,
     getStoreConditions,
     registerPoint,
@@ -94,7 +100,7 @@ export class Customer {
     onReserveShelfSlot,
     onReserveQueueSlot,
     onReserveExitSlot,
-    playerState,
+    gameState,
     spawnBounds,
     factionId,
     onJoinQueue,
@@ -102,7 +108,12 @@ export class Customer {
     onMissingPrimary,
     onComplete,
   }) {
-    this.scene = scene;
+    if (!store || typeof store.findPath !== "function") {
+      throw new Error("Customer requires a store interface with findPath.");
+    }
+    this.id = id ?? `customer-${nextCustomerId++}`;
+    this.location = { kind: "customer-cart", customerId: this.id };
+    this.store = store;
     this.registerPoint = registerPoint;
     this.exitPoint = exitPoint || { x: registerPoint.x, y: registerPoint.y };
     // Each claims a distinct waypoint near a shared destination so converging customers
@@ -111,7 +122,7 @@ export class Customer {
     this.onReserveQueueSlot = onReserveQueueSlot;
     this.onReserveExitSlot = onReserveExitSlot;
     this.reservedTarget = null;
-    this.playerState = playerState;
+    this.gameState = gameState;
     this.onJoinQueue = onJoinQueue;
     this.onLeaveAngry = onLeaveAngry;
     this.onMissingPrimary = onMissingPrimary;
@@ -119,9 +130,20 @@ export class Customer {
 
     this.state = "SEEK_SHELF";
     this.cart = []; // [{ itemId, price }]
-    this.priceTolerance = Phaser.Math.FloatBetween(MIN_PRICE_TOLERANCE, MAX_PRICE_TOLERANCE);
+    this.bargainTolerance = gameRandom.float(MIN_BARGAIN_PRICE_RATIO, BARGAIN_PRICE_RATIO);
+    this.priceTolerance = gameRandom.float(MIN_PRICE_TOLERANCE, MAX_PRICE_TOLERANCE);
+    this.priceDisgustTolerance = gameRandom.float(
+      MIN_PRICE_DISGUST_TOLERANCE, MAX_PRICE_DISGUST_TOLERANCE,
+    );
+    this.boughtBargainItem = false;
     this.queueTarget = null; // set by the scene once this customer has a spot in line
+    this.queuePosition = null;
     this.patienceRemainingMs = null; // only ticks once queued
+    this.queueWaitMs = 0; // total time spent in line, for the customer's review
+    this.firstQueuePosition = null;
+    this.gaveUpInLine = false;
+    this.gotStuck = false;
+    this.checkoutMistakes = 0;
     this.patienceBubble = null;
     this.patienceLevel = -1;
     this.reactionBubble = null;
@@ -133,6 +155,7 @@ export class Customer {
     this.onArriveAtDestination = null;
     this.onPathUnavailable = null;
     this.isDestroyed = false;
+    this.waitingAtDoor = false;
     // Customers built without a constructor (tests) shop instantly instead of pausing.
     this.browseShelfMs = BROWSE_SHELF_MS;
     this.wanderChance = WANDER_CHANCE;
@@ -142,23 +165,33 @@ export class Customer {
     this.onBrowseDone = null;
 
     // World (not viewport) px: the camera may show only part of a larger room (RoomLayout.js).
-    const bounds = spawnBounds || { xMin: 40, xMax: 120, yMin: 80, yMax: scene.scale.height - 80 };
-    const spawnX = Phaser.Math.Between(bounds.xMin, bounds.xMax);
-    const spawnY = Phaser.Math.Between(bounds.yMin, bounds.yMax);
+    const bounds = spawnBounds || { xMin: 40, xMax: 120, yMin: 80, yMax: store.scale.height - 80 };
+    const spawnX = gameRandom.int(bounds.xMin, bounds.xMax);
+    const spawnY = gameRandom.int(bounds.yMin, bounds.yMax);
 
     const character = pickRandomCustomerCharacter(factionId);
     this.factionId = character.factionId;
-    this.traits = rollCustomerTraits(this.factionId, Math.random, getStoreConditions?.());
+    this.traits = rollCustomerTraits(this.factionId, gameRandom, getStoreConditions?.());
     this.maxPatienceMs = getPatienceMs(this.traits);
-    this.cleanlinessTolerance = rollCleanlinessTolerance(this.factionId);
+    this.cleaning = store.cleaning ?? null;
+    const cleaningProfile = this.cleaning ? this.cleaning.createCustomerProfile(this.factionId) : null;
+    if (this.cleaning && (!cleaningProfile?.tolerance || !Number.isFinite(cleaningProfile.judgeAfterMs))) {
+      throw new Error("Cleaning must provide a customer tolerance and judgment time.");
+    }
+    this.cleanlinessTolerance = cleaningProfile?.tolerance ?? null;
+    this.cleanlinessJudgeMs = cleaningProfile?.judgeAfterMs ?? null;
     this.cleanlinessJudged = false;
+    this.cleanlinessVerdict = null;
     this.cleanlinessTimerMs = 0;
-    this.trashDropAtWalkMs = Math.random() < TRASH_DROP_CHANCE
-      ? TRASH_DROP_WALK_MS[0] + Math.random() * (TRASH_DROP_WALK_MS[1] - TRASH_DROP_WALK_MS[0])
-      : null;
+    this.trashDropAtWalkMs = cleaningProfile?.trashDropAtWalkMs ?? null;
+    this.dirtDropAtWalkMs = cleaningProfile?.dirtDropAtWalkMs ?? null;
     this.trashWalkMs = 0;
+    this.presentationExpectation = store.presentation?.createCustomerExpectation(this.factionId) ?? null;
+    if (store.presentation && !Number.isFinite(this.presentationExpectation)) {
+      throw new Error("Presentation must provide a numeric customer expectation.");
+    }
     this.shoppingPlan = getShoppingPlan
-      ? getShoppingPlan(this.factionId, this.traits)
+      ? getShoppingPlan(this.factionId, this.traits, this.bargainTolerance)
       : createCustomerBuyList(this.factionId, [], () => null);
     this.shelfStops = this.shoppingPlan.shelfStops || [];
     this.shelfStopIndex = 0;
@@ -166,13 +199,15 @@ export class Customer {
     this.primaryBought = new Set();
     this.primaryMissing = new Set();
     this.priceRejectedItemIds = new Set();
+    this.priceReactionKinds = new Set();
     this.bonusBought = new Set();
     this.bonusAttempted = new Set();
     this.purchasedFirearms = new Set();
     this.currentFacing = "down";
-    this.sprite = addCharacterSprite(
-      scene, spawnX, spawnY, character.textureKey, SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT,
+    this.sprite = store.createCustomerSprite(
+      spawnX, spawnY, character.textureKey, SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT,
     ).setDepth(2);
+    this.mover = this.createMover();
 
     this.visitNextShelf("primary");
   }
@@ -184,27 +219,17 @@ export class Customer {
    */
   update(delta = 0) {
     if (this.isDestroyed) return; // guards against being updated the same frame it self-destructed
+    if (this.waitingAtDoor) return;
 
     if (this.path === null) {
-      this.sprite.body?.setVelocity(0, 0);
-      this.scene.debugInfo?.recordCustomer("customer-path-unavailable", this);
-      this.scene.noteCustomerGaveUp?.(this, "found no way through");
-      const onPathUnavailable = this.onPathUnavailable;
-      this.path = [];
-      this.onPathUnavailable = null;
-      if (onPathUnavailable) {
-        onPathUnavailable();
-      } else if (this.state === "LEAVING") {
-        this.destroy();
-      } else {
-        this.enterLeaving();
-      }
+      this.getMover().handlePathUnavailable();
       return;
     }
 
-    if (this.cleanlinessTolerance && !this.cleanlinessJudged && this.state !== "LEAVING") {
+    if (this.cleaning && this.cleanlinessTolerance && this.cleanlinessJudgeMs != null &&
+      !this.cleanlinessJudged && this.state !== "LEAVING") {
       this.cleanlinessTimerMs += delta;
-      if (this.cleanlinessTimerMs >= CLEANLINESS_JUDGE_MS && this.judgeStoreCleanliness() === "walk-out") return;
+      if (this.cleanlinessTimerMs >= this.cleanlinessJudgeMs && this.judgeStoreCleanliness() === "walk-out") return;
     }
 
     switch (this.state) {
@@ -219,8 +244,9 @@ export class Customer {
         this.seekingTimer += delta;
         if (this.madeWalkingProgress(delta)) this.seekingTimer = 0;
         if (this.seekingTimer > SEEKING_TIMEOUT_MS || this.walkingMs > MAX_WALK_MS) {
-          this.scene.debugInfo?.recordCustomer("customer-seeking-timeout", this);
-          this.scene.noteCustomerGaveUp?.(this, this.walkingMs > MAX_WALK_MS
+          this.gotStuck = true;
+          this.store.debugInfo?.recordCustomer("customer-seeking-timeout", this);
+          this.store.noteCustomerGaveUp?.(this, this.walkingMs > MAX_WALK_MS
             ? "walked a full minute without arriving" : "stood stuck for 15 seconds");
           console.warn(
             `Customer gave up seeking a destination (state=${this.state}); abandoning and leaving.`,
@@ -245,8 +271,8 @@ export class Customer {
         this.leavingTimer += delta;
         if (this.madeWalkingProgress(delta)) this.leavingTimer = 0;
         if (this.leavingTimer > LEAVING_TIMEOUT_MS || this.walkingMs > MAX_WALK_MS) {
-          this.scene.debugInfo?.recordCustomer("customer-exit-timeout", this);
-          this.scene.noteCustomerGaveUp?.(this, "vanished after getting stuck on the way out");
+          this.store.debugInfo?.recordCustomer("customer-exit-timeout", this);
+          this.store.noteCustomerGaveUp?.(this, "vanished after getting stuck on the way out");
           this.destroy(); // safety net -- see LEAVING_TIMEOUT_MS
           break;
         }
@@ -259,13 +285,25 @@ export class Customer {
 
   // --- Shopping ---
 
-  /**
-   * True if the store price is within this customer's tolerance over the market price.
-   * @param {string} itemId
-   */
-  acceptsPrice(itemId) {
-    const marketPrice = this.scene.market.getPrice(itemId);
-    return this.scene.getStorePrice(itemId) <= marketPrice * this.priceTolerance;
+  /** @param {string} itemId */
+  getPriceReaction(itemId) {
+    const marketPrice = this.store.gameState.market.getPrice(itemId);
+    const storePrice = this.store.getStorePrice(itemId);
+    if (storePrice >= marketPrice * this.priceDisgustTolerance) return "disgusted";
+    if (storePrice > marketPrice * this.priceTolerance) return "skipped";
+    if (storePrice <= marketPrice * this.bargainTolerance) return "bargain";
+    return "acceptable";
+  }
+
+  /** @param {"bargain" | "skipped" | "disgusted"} reaction */
+  recordPriceReaction(reaction) {
+    if (!this.priceReactionKinds) this.priceReactionKinds = new Set();
+    if (this.priceReactionKinds.has(reaction)) return;
+    this.priceReactionKinds.add(reaction);
+    this.store.eventBus?.emit(GAME_EVENTS.CUSTOMER_PRICE_REACTION, {
+      customer: this,
+      reaction,
+    });
   }
 
   getRemainingUnitsFor(itemId) {
@@ -274,12 +312,43 @@ export class Customer {
     return Math.max(0, wanted - pickedUp);
   }
 
+  getAvailableUnitsFor(itemId) {
+    return this.cart.filter((entry) => entry.itemId === itemId).length;
+  }
+
+  getLocation() {
+    return this.location;
+  }
+
+  getContainerId() {
+    return this.id;
+  }
+
+  canPut() {
+    return true;
+  }
+
+  canTake(itemId) {
+    return this.getAvailableUnitsFor(itemId) > 0;
+  }
+
   add(itemId, quantity) {
+    if (!this.canPut(itemId)) return 0;
     const accepted = Math.min(quantity, this.getRemainingUnitsFor(itemId));
     for (let index = 0; index < accepted; index += 1) {
-      this.cart.push({ itemId, price: this.scene.getStorePrice(itemId) });
+      this.cart.push({ itemId, price: this.store.getStorePrice(itemId) });
     }
     return accepted;
+  }
+
+  remove(itemId, quantity) {
+    let removed = 0;
+    for (let index = this.cart.length - 1; index >= 0 && removed < quantity; index -= 1) {
+      if (this.cart[index].itemId !== itemId) continue;
+      this.cart.splice(index, 1);
+      removed += 1;
+    }
+    return removed;
   }
 
   /**
@@ -346,10 +415,10 @@ export class Customer {
         ),
       );
       if (unreachableItemIds.length > 0) {
-        this.scene.showFloatingText(
+        this.store.showFloatingText(
           this.sprite.x,
           this.sprite.y - 50,
-          `Can't reach:\n${getCustomerItemNames(this.scene, unreachableItemIds).join(", ")}`,
+          `Can't reach:\n${getCustomerItemNames(this.store, unreachableItemIds).join(", ")}`,
           "#f59e0b",
         );
       }
@@ -364,8 +433,8 @@ export class Customer {
    * @returns {boolean} true if the customer is wandering and will call `then` afterward
    */
   maybeWander(then, nextShelf) {
-    if (!this.wanderChance || Math.random() >= this.wanderChance) return false;
-    const fixture = this.scene.getRandomBrowseShelf(nextShelf);
+    if (!this.wanderChance || gameRandom() >= this.wanderChance) return false;
+    const fixture = this.store.getRandomBrowseShelf(nextShelf);
     if (!fixture) return false;
     this.fixture = fixture;
     const spot = this.onReserveShelfSlot
@@ -395,7 +464,7 @@ export class Customer {
     }
     const [min, max] = durationRange;
     this.state = "BROWSING";
-    this.browseRemainingMs = min + Math.random() * (max - min);
+    this.browseRemainingMs = min + gameRandom() * (max - min);
     this.browseFacing = facing;
     this.browseLookTimerMs = 0;
     this.onBrowseDone = onDone;
@@ -409,9 +478,9 @@ export class Customer {
     } else {
       this.browseLookTimerMs -= delta;
       if (this.browseLookTimerMs <= 0) {
-        this.browseLookTimerMs = 600 + Math.random() * 600;
+        this.browseLookTimerMs = 600 + gameRandom() * 600;
         const options = LOOK_AROUND_FACINGS.filter((facing) => facing !== this.currentFacing);
-        this.updateFacing(options[Math.floor(Math.random() * options.length)]);
+        this.updateFacing(gameRandom.pick(options));
       }
     }
     this.browseRemainingMs -= delta;
@@ -436,12 +505,21 @@ export class Customer {
       // Mercenaries can buy multiples, but not a different firearm of the same type.
       if (this.shoppingPhase === "bonus" && this.factionId === "mercenaries" &&
         !this.cart.some((entry) => entry.itemId === itemId) &&
-        this.purchasedFirearms.has(this.scene.getItem(itemId)?.tags.find((tag) =>
+        this.purchasedFirearms.has(this.store.getItem(itemId)?.tags.find((tag) =>
           ["Pistol", "Rifle", "Heavy"].includes(tag),
         ))) continue;
 
-      if (!this.acceptsPrice(itemId)) {
+      const priceReaction = this.getPriceReaction(itemId);
+      if (priceReaction === "disgusted") {
+        this.priceRejectedItemIds.add(itemId);
+        this.recordPriceReaction("disgusted");
+        this.reportPriceIssues();
+        this.leaveAngry({ factionReputationPenalty: false });
+        return;
+      }
+      if (priceReaction === "skipped") {
         this.showReaction("price-too-high", "disappointed");
+        this.recordPriceReaction("skipped");
         this.priceRejectedItemIds.add(itemId);
         continue;
       }
@@ -452,22 +530,23 @@ export class Customer {
         if (remaining === 0) break;
         const transfer = transferItems(this.fixture, this, itemId, remaining, {
           sourceEntry: placement,
-          eventBus: this.scene.eventBus,
+          eventBus: this.store.eventBus,
           sourceName: "shelf",
           destinationName: "customer-cart",
         });
         moved += transfer.moved;
       }
       if (moved === 0) continue;
-      this.scene.refreshShelfStockDisplay?.(this.fixture);
-      if (this.scene.getStorePrice(itemId) <=
-        this.scene.market.getPrice(itemId) * BARGAIN_PRICE_RATIO) {
+      this.store.refreshShelfStockDisplay?.(this.fixture);
+      if (priceReaction === "bargain") {
+        this.boughtBargainItem = true;
         this.showReaction("good-deal", "happy");
+        this.recordPriceReaction("bargain");
       }
       if (this.shoppingPhase === "primary") this.primaryBought.add(itemId);
       else this.bonusBought.add(itemId);
 
-      const item = this.scene.getItem(itemId);
+      const item = this.store.getItem(itemId);
       if (this.factionId === "mercenaries" && item?.tags.includes("Firearm")) {
         const weaponType = item.tags.find((tag) => ["Pistol", "Rifle", "Heavy"].includes(tag));
         if (weaponType) this.purchasedFirearms.add(weaponType);
@@ -480,7 +559,7 @@ export class Customer {
   getBonusItemIds() {
     const ids = [...this.shoppingPlan.bonusItemIds];
     for (const { itemId: firearmId } of this.cart) {
-      if (!this.scene.getItem(firearmId)?.tags.includes("Firearm")) continue;
+      if (!this.store.getItem(firearmId)?.tags.includes("Firearm")) continue;
       ids.push(...(this.shoppingPlan.matchingAmmoIdsByFirearm?.[firearmId] || []));
     }
     return [...new Set(ids)].filter((id) =>
@@ -492,19 +571,9 @@ export class Customer {
   finishShoppingPhase() {
     if (this.shoppingPhase === "primary") {
       if (this.shoppingPlan.primaryItemIds.length === 0) {
-        const hints = {
-          scavengers: "No matching stock. Scavengers want older gear.",
-          mercenaries: "No matching stock. Mercenaries want weapons, ammo, or armor.",
-          explorers: "No matching stock. Explorers want tools or survival gear.",
-        };
-        const hint = this.factionId ? hints[this.factionId] : "No products are on the shelves yet.";
-        if (this.factionId && !hint) throw new Error(`Unknown customer faction: ${this.factionId}`);
-        this.scene.showFloatingText(
-          this.sprite.x,
-          this.sprite.y - 50,
-          hint,
-          "#38bdf8",
-        );
+        if (this.factionId && !CUSTOMER_FACTION_IDS.includes(this.factionId)) {
+          throw new Error(`Unknown customer faction: ${this.factionId}`);
+        }
         this.enterLeaving();
         return;
       }
@@ -521,7 +590,7 @@ export class Customer {
         ),
       );
       if (this.primaryMissing.size > 0) this.reportMissingPrimary();
-      if (this.primaryBought.size === 0) {
+      if (this.primaryBought.size === 0 && this.priceRejectedItemIds.size === 0) {
         this.reportPriceIssues();
         this.enterLeaving();
         return;
@@ -549,7 +618,7 @@ export class Customer {
       this.enterLeaving();
       return;
     }
-    this.playerState.notifyListeners();
+    this.gameState.shop.changed();
     this.reservedTarget = this.onReserveQueueSlot
       ? this.onReserveQueueSlot(this)
       : this.registerPoint;
@@ -558,7 +627,7 @@ export class Customer {
       this.reservedTarget.y,
       () => this.joinQueue(),
       () => {
-        this.scene.showFloatingText(
+        this.store.showFloatingText(
           this.sprite.x,
           this.sprite.y - 110,
           "Can't reach the checkout!",
@@ -572,9 +641,9 @@ export class Customer {
 
   reportPriceIssues() {
     if (this.priceRejectedItemIds.size === 0) return;
-    const names = getCustomerItemNames(this.scene, [...this.priceRejectedItemIds]);
+    const names = getCustomerItemNames(this.store, [...this.priceRejectedItemIds]);
     const offset = this.primaryMissing.size > 0 ? 100 : 40;
-    this.scene.showFloatingText(
+    this.store.showFloatingText(
       this.sprite.x,
       this.sprite.y - offset,
       `Too expensive:\n${names.join("\n")}`,
@@ -587,7 +656,7 @@ export class Customer {
   reportMissingPrimary() {
     this.showReaction("primary-item-out-of-stock", "disappointed");
     const itemIds = [...this.primaryMissing];
-    this.onMissingPrimary?.(this, itemIds, getCustomerItemNames(this.scene, itemIds));
+    this.onMissingPrimary?.(this, itemIds, getCustomerItemNames(this.store, itemIds));
   }
 
   // --- Queue and patience ---
@@ -595,24 +664,38 @@ export class Customer {
   joinQueue() {
     this.state = "QUEUEING";
     this.queueTarget = { x: this.registerPoint.x, y: this.registerPoint.y };
-    this.resetPatience();
     this.onJoinQueue(this);
   }
 
-  resetPatience() {
-    this.patienceRemainingMs = this.maxPatienceMs ?? PATIENCE_MS;
+  /**
+   * @param {number} position - zero-based position in this register's line
+   */
+  setQueuePosition(position) {
+    const previousPosition = this.queuePosition;
+    if (previousPosition == null) {
+      this.firstQueuePosition ??= position;
+      this.patienceRemainingMs = (this.maxPatienceMs ?? PATIENCE_MS) +
+        position * QUEUE_JOIN_POSITION_BONUS_MS;
+    } else if (position === 0 && previousPosition !== 0) {
+      this.patienceRemainingMs = this.maxPatienceMs ?? PATIENCE_MS;
+    } else if (position > 0 && position < previousPosition) {
+      this.patienceRemainingMs += QUEUE_ADVANCE_BONUS_MS;
+    }
+    this.queuePosition = position;
   }
 
   /**
-   * Drains while waiting in line, except while served or while the store is temporarily closed.
+   * Drains behind the front of the line, except while the store is temporarily closed.
    * @param {number} delta - ms
    */
   updatePatience(delta) {
     if (this.patienceRemainingMs == null) return;
-    if (!this.scene.storeTemporarilyClosed && !this.scene.isServingCustomer?.(this)) {
+    if (!this.store.customerFlow.temporarilyClosed) this.queueWaitMs = (this.queueWaitMs ?? 0) + delta;
+    if (this.queuePosition !== 0 && !this.store.customerFlow.temporarilyClosed) {
       this.patienceRemainingMs = Math.max(0, this.patienceRemainingMs - delta);
     }
-    if (this.patienceRemainingMs <= 0) {
+    if (this.queuePosition !== 0 && this.patienceRemainingMs <= 0) {
+      this.gaveUpInLine = true;
       this.leaveAngry();
       return;
     }
@@ -623,8 +706,8 @@ export class Customer {
     const x = this.sprite.x;
     const y = this.sprite.y - CHARACTER_HEAD_HEIGHT - 14;
     if (!this.patienceBubble) {
-      const background = this.scene.add.circle(0, 0, 12, 0xffffff).setStrokeStyle(2, 0x000000);
-      const glyph = this.scene.add
+      const background = this.store.add.circle(0, 0, 12, 0xffffff).setStrokeStyle(2, 0x000000);
+      const glyph = this.store.add
         .text(0, -1, "", {
           fontFamily: '"Courier New", monospace',
           fontSize: "14px",
@@ -632,10 +715,10 @@ export class Customer {
           color: "#000000",
         })
         .setOrigin(0.5);
-      this.patienceBubble = this.scene.add.container(x, y, [background, glyph]).setDepth(9000);
+      this.patienceBubble = this.store.add.container(x, y, [background, glyph]).setDepth(9000);
     }
     this.patienceBubble.setPosition(x, y);
-    this.patienceBubble.setScale?.(this.scene.getPopupScale?.() ?? 1);
+    this.patienceBubble.setScale?.(this.store.cameraRig?.popupScale() ?? 1);
 
     // Only restyle when the level changes.
     const level = getPatienceLevel(this.patienceRemainingMs / (this.maxPatienceMs ?? PATIENCE_MS));
@@ -648,6 +731,7 @@ export class Customer {
   }
 
   clearPatience() {
+    this.queuePosition = null;
     this.patienceRemainingMs = null;
     this.patienceLevel = -1;
     this.patienceBubble?.destroy();
@@ -664,7 +748,7 @@ export class Customer {
     const color = colors[mood];
     if (color === undefined) throw new RangeError(`Unknown customer reaction: ${mood}`);
 
-    const graphics = this.scene.add.graphics().setDepth(9001);
+    const graphics = this.store.add.graphics().setDepth(9001);
     graphics.fillStyle(color, 1);
     graphics.fillCircle(0, 0, 10);
     graphics.lineStyle(1.5, 0x1f2937, 1);
@@ -703,7 +787,7 @@ export class Customer {
       this.sprite.x + CHARACTER_ART_WIDTH / 2,
       this.sprite.y - CHARACTER_HEAD_HEIGHT - 12,
     );
-    this.reactionBubble.setScale?.(this.scene.getPopupScale?.() ?? 1);
+    this.reactionBubble.setScale?.(this.store.cameraRig?.popupScale() ?? 1);
   }
 
   updateReaction(delta) {
@@ -724,14 +808,14 @@ export class Customer {
    * @returns {"fine" | "upset" | "walk-out" | null} null if already decided
    */
   judgeStoreCleanliness() {
-    if (this.cleanlinessJudged || !this.cleanlinessTolerance) return null;
+    if (this.cleanlinessJudged || !this.cleanlinessTolerance || !this.cleaning) return null;
     this.cleanlinessJudged = true;
-    const percent = this.scene.getCleanlinessPercent?.();
-    if (percent == null) return "fine";
-    const verdict = judgeCleanliness(percent, this.cleanlinessTolerance);
+    const percent = this.cleaning.getCleanlinessPercent();
+    const verdict = this.cleaning.judgeCustomerCleanliness(percent, this.cleanlinessTolerance);
+    this.cleanlinessVerdict = verdict;
     if (verdict === "fine") return verdict;
     this.showReaction("cleanliness", verdict === "walk-out" ? "angry" : "disappointed");
-    this.scene.reportCleanlinessVerdict?.(this, verdict);
+    this.cleaning.reportCleanlinessVerdict(this, verdict);
     if (verdict === "walk-out") {
       this.clearPatience();
       this.enterLeaving();
@@ -739,24 +823,25 @@ export class Customer {
     return verdict;
   }
 
-  // At most one piece of trash per customer, dropped partway through their walking.
+  // At most one trash piece and one dirt mark per customer, dropped during their walking.
   updateTrashDrop(delta) {
-    if (this.trashDropAtWalkMs == null) return;
+    if (this.trashDropAtWalkMs == null && this.dirtDropAtWalkMs == null) return;
     this.trashWalkMs += delta;
-    if (this.trashWalkMs < this.trashDropAtWalkMs) return;
     const body = this.sprite.body;
-    if (this.scene.dropTrash?.(this.sprite.x, body?.bottom ?? this.sprite.y)) this.trashDropAtWalkMs = null;
-    // Not a good spot (e.g. the doorway): try again a moment later.
-    else this.trashDropAtWalkMs += 500;
+    for (const [timer, drop] of [["trashDropAtWalkMs", "dropTrash"], ["dirtDropAtWalkMs", "dropDirt"]]) {
+      if (this[timer] == null || this.trashWalkMs < this[timer]) continue;
+      if (this.cleaning[drop](this.sprite.x, body?.bottom ?? this.sprite.y)) this[timer] = null;
+      // Not a good spot (e.g. the doorway): try again a moment later.
+      else this[timer] += 500;
+    }
   }
 
   // Bible Steps 12/51: abandons the cart for the scene to process, then leaves.
-  leaveAngry() {
+  leaveAngry({ reputationPenalty = true, factionReputationPenalty = true } = {}) {
     this.showReaction("left-angry", "angry");
-    const cart = this.cart;
-    this.cart = [];
+    const cart = this.cart.map((entry) => ({ ...entry }));
     this.clearPatience();
-    this.onLeaveAngry?.(this, cart);
+    this.onLeaveAngry?.(this, cart, { reputationPenalty, factionReputationPenalty });
     this.enterLeaving();
   }
 
@@ -773,9 +858,6 @@ export class Customer {
   // Finish the customer's sale state and return proceeds for the scene's sale event.
   completeSale() {
     const total = sumMoney(this.cart.map((entry) => entry.price));
-    if (this.cart.length >= BIG_PURCHASE_ITEM_COUNT) {
-      this.showReaction("large-purchase", "happy");
-    }
     this.clearPatience();
     this.enterLeaving();
     return total;
@@ -787,7 +869,7 @@ export class Customer {
     this.state = "LEAVING";
     this.leavingTimer = 0;
     this.setDestination(exitTarget.x, exitTarget.y, () => this.destroy(), () => {
-      this.scene.showFloatingText(
+      this.store.showFloatingText(
         this.sprite.x,
         this.sprite.y - 110,
         "Can't reach the exit!",
@@ -799,6 +881,44 @@ export class Customer {
 
   // --- Movement ---
 
+  createMover() {
+    if (!this.store?.findPath) throw new Error("Customer requires a store route interface.");
+    return new Mover(this, {
+      findPath: (fromX, fromY, toX, toY) => this.store.findPath(fromX, fromY, toX, toY),
+      canFindPath: () => Boolean(this.store.findPath),
+      getSpeed: () => SPEED,
+      replanIntervalMs: 200,
+      collisionTolerance: 0.1,
+      waypointArrivalDistance: 0.0001,
+      destinationArrivalDistance: 6,
+      onReroute: () => this.store.debugInfo?.recordCustomer("customer-collision-reroute", this),
+      onRerouteUnavailable() {},
+      onPortal: ({ x, y }) => this.sprite.body.reset(x, y),
+      onPathUnavailable: () => this.handlePathUnavailable(),
+    });
+  }
+
+  getMover() {
+    if (!this.mover) this.mover = this.createMover();
+    return this.mover;
+  }
+
+  handlePathUnavailable() {
+    this.gotStuck = true;
+    this.store.debugInfo?.recordCustomer("customer-path-unavailable", this);
+    this.store.noteCustomerGaveUp?.(this, "found no way through");
+    const onPathUnavailable = this.onPathUnavailable;
+    this.path = [];
+    this.onPathUnavailable = null;
+    if (onPathUnavailable) {
+      onPathUnavailable();
+    } else if (this.state === "LEAVING") {
+      this.destroy();
+    } else {
+      this.enterLeaving();
+    }
+  }
+
   /**
    * Path to a new target via the scene's pathfinder.
    * @param {number} targetX
@@ -807,17 +927,7 @@ export class Customer {
    * @param {() => void} [onPathUnavailable]
    */
   setDestination(targetX, targetY, onArrive, onPathUnavailable) {
-    this.destination = { x: targetX, y: targetY };
-    this.onArriveAtDestination = onArrive;
-    this.seekingTimer = 0;
-    this.walkingMs = 0;
-    this.progressCheckpoint = null;
-    this.pathRetryMs = 0;
-
-    const { x, y } = this.sprite.body?.center ?? this.sprite;
-    const path = this.scene.findPath?.(x, y, targetX, targetY);
-    this.path = path === null ? null : path || [];
-    this.onPathUnavailable = onPathUnavailable;
+    this.getMover().setDestination(targetX, targetY, onArrive, onPathUnavailable);
   }
 
   /**
@@ -850,12 +960,12 @@ export class Customer {
         const stepping = yieldInfo.msLeft > CRATE_YIELD_WAIT_MS;
         const speed = stepping ? SPEED * CRATE_YIELD_STEP_SPEED : 0;
         this.sprite.body.setVelocity(yieldInfo.away.x * speed, yieldInfo.away.y * speed);
-        this.scene.pushCratesForCustomer?.(this, delta, { canPush: false });
+        this.store.crateWorld?.pushCratesForCustomer?.(this, delta, { canPush: false });
         return;
       }
     }
     this.followPath(delta);
-    if (!this.isDestroyed) this.scene.pushCratesForCustomer?.(this, delta);
+    if (!this.isDestroyed) this.store.crateWorld?.pushCratesForCustomer?.(this, delta);
   }
 
   /**
@@ -869,55 +979,18 @@ export class Customer {
   }
 
   repathAfterYield() {
-    if (!this.destination || !this.scene.findPath) return;
-    const { x, y } = this.sprite.body?.center ?? this.sprite;
-    const path = this.scene.findPath(x, y, this.destination.x, this.destination.y);
-    if (path) this.path = path;
+    this.getMover().repathAfterYield();
   }
 
   // px still to walk: along the remaining waypoints, then on to the destination.
   remainingWalkDistance() {
-    let { x, y } = this.sprite.body?.center ?? this.sprite;
-    let total = 0;
-    for (const point of [...(this.path ?? []), this.destination].filter(Boolean)) {
-      total += Math.hypot(point.x - x, point.y - y);
-      ({ x, y } = point);
-    }
-    return total;
+    return this.getMover().remainingWalkDistance();
   }
 
   // Walks the path waypoint by waypoint, then directly to the exact destination (which may
   // not sit on a grid-cell center) before firing the arrival callback.
   followPath(delta = 1000 / 60) {
-    this.pathRetryMs = Math.max(0, (this.pathRetryMs ?? 0) - delta);
-    const target = this.path[0] ?? this.destination;
-    const { blocked, touching } = this.sprite.body ?? {};
-    const { x, y } = this.sprite.body?.center ?? this.sprite;
-    const hitting = (direction) => blocked?.[direction] || touching?.[direction];
-    const dx = target.x - x;
-    const dy = target.y - y;
-    if (this.pathRetryMs === 0 && this.scene.findPath &&
-        ((dx > 0.1 && hitting("right")) || (dx < -0.1 && hitting("left")) ||
-         (dy > 0.1 && hitting("down")) || (dy < -0.1 && hitting("up")))) {
-      this.pathRetryMs = 200;
-      this.path = this.scene.findPath(
-        x, y, this.destination.x, this.destination.y,
-      );
-      this.scene.debugInfo?.recordCustomer("customer-collision-reroute", this);
-      if (this.path === null) {
-        this.sprite.body.setVelocity(0, 0);
-        return;
-      }
-    }
-    if (this.path.length > 0) {
-      const waypoint = this.path[0];
-      // Corner waypoints must be reached before turning; the destination's 6px tolerance
-      // would cut across nearby shelves. Capped velocity below prevents overshooting.
-      this.moveToward(waypoint.x, waypoint.y, () => this.path.shift(), delta, 0.0001);
-      return;
-    }
-
-    this.moveToward(this.destination.x, this.destination.y, () => this.onArriveAtDestination(), delta);
+    this.getMover().followPath(delta);
   }
 
   /**
@@ -928,20 +1001,7 @@ export class Customer {
    * @param {number} arrivalDistance - px; corners use a tighter tolerance than destinations
    */
   moveToward(targetX, targetY, onArrive, delta = 1000 / 60, arrivalDistance = 6) {
-    // Physics has already moved the body; the drawn sprite catches up after scene update.
-    const { x, y } = this.sprite.body?.center ?? this.sprite;
-    const distance = Phaser.Math.Distance.Between(x, y, targetX, targetY);
-
-    if (distance < arrivalDistance) {
-      this.sprite.body.setVelocity(0, 0);
-      onArrive();
-      return;
-    }
-
-    const angle = Phaser.Math.Angle.Between(x, y, targetX, targetY);
-    const stepMs = Math.max(delta, 1000 / 60);
-    const speed = delta > 0 ? Math.min(SPEED, distance / (stepMs / 1000)) : 0;
-    this.sprite.body.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    this.getMover().moveToward(targetX, targetY, onArrive, delta, arrivalDistance);
   }
 
   /**
@@ -960,6 +1020,22 @@ export class Customer {
     }
     this.currentFacing = facing;
     showCharacterFacing(this.sprite, facing, moving);
+  }
+
+  // New arrivals wait unseen in the doorway until the front door has opened, so they never
+  // appear through a closed door or get pushed out of its solid frame.
+  waitOutsideDoor() {
+    this.waitingAtDoor = true;
+    this.sprite.setVisible(false);
+    this.sprite.body.enable = false;
+  }
+
+  enterThroughDoor() {
+    if (this.isDestroyed || !this.waitingAtDoor) return;
+    this.waitingAtDoor = false;
+    this.sprite.body.enable = true;
+    this.sprite.body.reset(this.sprite.x, this.sprite.y);
+    this.sprite.setVisible(true);
   }
 
   // Holds the standing pose, e.g. while the game is paused.

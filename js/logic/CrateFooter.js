@@ -35,9 +35,11 @@ export class CrateFooter {
   }
 
   /**
-   * @param {{ marked: CrateDescription | null, carried: CrateDescription[] }} view - carried is top crate first
+   * @param {{ marked: CrateDescription | null, carried: CrateDescription[],
+   *   cart?: (CrateDescription & { outOfReach?: boolean })[], linked?: boolean }} view - carried and cart are top crate first;
+   *   cart crates are greyed out while the hovercart is too far away to use
    */
-  render({ marked, carried }) {
+  render({ marked, carried, cart = [], linked = false }) {
     const footerKey = JSON.stringify(marked);
     if (footerKey !== this.footerKey) {
       this.footerKey = footerKey;
@@ -49,17 +51,27 @@ export class CrateFooter {
       if (marked?.image) this.image.src = marked.image;
       else this.image.removeAttribute("src");
     }
-    const cardsKey = JSON.stringify(carried);
+    const cardsKey = JSON.stringify({ carried, cart, linked });
     if (cardsKey === this.cardsKey) return;
     this.cardsKey = cardsKey;
-    this.cards.replaceChildren(...carried.map((crate) => this.createCard(crate)));
+    const cartCards = [];
+    if (cart.length) {
+      const heading = this.doc.createElement("div");
+      heading.className = "holding-cards-heading";
+      const title = linked ? "ON LINKED HOVERCARTS" : "ON HOVERCART";
+      heading.textContent = cart.every((crate) => crate.outOfReach) ? `${title} - NOT IN REACH` : title;
+      cartCards.push(heading, ...cart.map((crate) => this.createCard(crate)));
+    }
+    this.cards.replaceChildren(...carried.map((crate) => this.createCard(crate)), ...cartCards);
+    this.cards.querySelector(".stocking-next")?.scrollIntoView({ block: "nearest" });
   }
 
-  createCard({ name, count, image, stockingNext }) {
+  createCard({ name, count, image, stockingNext, outOfReach }) {
     const card = this.doc.createElement("div");
     card.className = "holding-card";
     // While a shelf window is open, the crate that will stock the next empty space glows.
     if (stockingNext) card.classList.add("stocking-next");
+    if (outOfReach) card.classList.add("out-of-reach");
     const picture = this.doc.createElement("img");
     picture.className = "holding-card-image";
     picture.alt = "";

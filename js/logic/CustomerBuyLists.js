@@ -1,13 +1,14 @@
+import { gameRandom } from "../core/Random.js";
 // ==========================================
 // FILE: CustomerBuyLists.js
 // ==========================================
 // Builds each customer's shopping list from what's on the shelves: primary items matching
 // their faction, plus faction-flavored bonus (impulse) items.
 
-// Reputation thresholds are intentionally empty until the pace and value of reputation
-// changes have been established through playtesting. Counts are items; bonusCount is [min, max].
+// The first five shop levels keep shopping lists small; these later milestones are first-pass
+// values to review after playtesting. Counts are items; bonusCount is [min, max].
 export const CUSTOMER_BUY_LIST_TUNING = Object.freeze({
-  reputationPrimaryThresholds: [],
+  reputationPrimaryThresholds: [138, 1128, 2343],
   primaryCount: {
     default: 1,
     mercenaries: 2,
@@ -19,11 +20,13 @@ export const CUSTOMER_BUY_LIST_TUNING = Object.freeze({
   },
 });
 
+export const MIN_BARGAIN_PRICE_RATIO = 0.8;
 export const BARGAIN_PRICE_RATIO = 0.9;
 export const DISCOUNT_BONUS_CHANCE = 0.5;
+export const MAX_DISCOUNT_BONUS_ITEMS = 2;
 
 // Most wants are one unit; larger purchases give identical stock a reason to be stacked.
-export function createCustomerItemQuantities(itemIds, random = Math.random) {
+export function createCustomerItemQuantities(itemIds, random = gameRandom) {
   return Object.fromEntries([...new Set(itemIds)].map((itemId) => {
     const roll = random();
     return [itemId, roll < 0.5 ? 1 : roll < 0.85 ? 2 : 3];
@@ -82,13 +85,19 @@ function takeRandomItems(candidates, count, random, { uniqueWeaponTypes = false 
  * @param {string[]} shelfItemIds
  * @param {(id: string) => object | undefined} getItem
  * @param {() => number} [random]
+ * @param {number} [storeReputation]
  * @returns {{ primaryItemIds: string[], bonusItemIds: string[], matchingAmmoIdsByFirearm: Object<string, string[]> }}
  */
-export function createCustomerBuyList(factionId, shelfItemIds, getItem, random = Math.random) {
+export function createCustomerBuyList(
+  factionId, shelfItemIds, getItem, random = gameRandom, storeReputation = 0,
+) {
   const shelfItems = [...new Set(shelfItemIds)].map(getItem).filter(Boolean);
   const factionItems = shelfItems.filter((item) => factionMatches(item, factionId));
-  const primaryCount = CUSTOMER_BUY_LIST_TUNING.primaryCount[factionId] ??
+  const startingPrimaryCount = CUSTOMER_BUY_LIST_TUNING.primaryCount[factionId] ??
     CUSTOMER_BUY_LIST_TUNING.primaryCount.default;
+  const reputationBonus = CUSTOMER_BUY_LIST_TUNING.reputationPrimaryThresholds
+    .filter((threshold) => storeReputation >= threshold).length;
+  const primaryCount = startingPrimaryCount + reputationBonus;
 
   const primary = takeRandomItems(factionItems, primaryCount, random, {
     uniqueWeaponTypes: factionId === "mercenaries",
@@ -143,19 +152,23 @@ export function createCustomerBuyList(factionId, shelfItemIds, getItem, random =
 }
 
 /**
- * Give a customer a chance to add one extra item priced at least 10% below market.
+ * Give a customer a chance to add up to two extra bargain-priced items.
  * @param {{ primaryItemIds: string[], bonusItemIds: string[] }} buyList
  * @param {string[]} shelfItemIds
  * @param {(id: string) => boolean} isBargain
  * @param {() => number} [random]
  * @returns {string[]} the updated bonus list
  */
-export function addDiscountBonusItem(buyList, shelfItemIds, isBargain, random = Math.random) {
+export function addDiscountBonusItem(buyList, shelfItemIds, isBargain, random = gameRandom) {
   const wanted = new Set([...buyList.primaryItemIds, ...buyList.bonusItemIds]);
   const candidates = [...new Set(shelfItemIds)].filter((id) => !wanted.has(id) && isBargain(id));
   if (candidates.length === 0 || random() >= DISCOUNT_BONUS_CHANCE) {
     return buyList.bonusItemIds;
   }
-  const index = Math.floor(Math.max(0, Math.min(1 - Number.EPSILON, random())) * candidates.length);
-  return [...buyList.bonusItemIds, candidates[index]];
+  const extras = [];
+  while (extras.length < MAX_DISCOUNT_BONUS_ITEMS && candidates.length > 0) {
+    const index = Math.floor(Math.max(0, Math.min(1 - Number.EPSILON, random())) * candidates.length);
+    extras.push(candidates.splice(index, 1)[0]);
+  }
+  return [...buyList.bonusItemIds, ...extras];
 }

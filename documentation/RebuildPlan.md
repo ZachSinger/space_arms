@@ -305,8 +305,25 @@ Order: least connected first.
 **After 3.7, stop and re-estimate.** It's the first step that moves saved map data. How long
 it took tells us whether the rest of the plan's sizes are right.
 
+> **Re-estimate after 3.7:** 3.1?3.7 took about as long as planned, and 3.7 (the first saved map
+> data move) went through with old saves loading and resaving exactly as before. `game.js` is down
+> to about 3,300 lines. The steps left in Phase 3 are the biggest pieces still in it (customers,
+> the register, crates), so Phase 3 stays at the top of its range. The total stays about
+> **32?34 sessions**. Feel check owed for 3.5?3.7: walking in and out of the backroom, zoom, moving
+> a fixture, and buying an expansion.
+
 **Done when:** `game.js` only creates and connects systems (target under 500 lines), and
 tests don't need to fake the whole shop.
+
+> **Phase 3 finished (3.13–3.23):** after the planned steps, the last pieces left the shop file:
+> staff decisions, saving, player controls, crate handling, prices and licenses, reputation penalties, the player's
+> reach and facing checks, the Go-Backs "!" badge, the main-menu prompt, and the people depth
+> sort. Every system now shows messages through `shop.messages`. `game.js` is about 440 lines:
+> setup is a short list of named steps (map, register, people, crates, pause, systems, shutdown,
+> session), plus the frame update. Tests build the real systems on a light scene instead of
+> faking each scene method. Known leftovers, kept on purpose: the scene still exposes the crate
+> lists and held trash as shortcuts, because the crate physics (shared with the crate and shelf
+> labs) and the customer/staff "store" read them by those names.
 
 **Milestone check:** a 5-minute feel check (walk, stock, throw, register, backroom, End Day).
 
@@ -326,6 +343,11 @@ walking code. Make one shared version with room for their differences.
 **Done when:** one walking implementation, characters don't touch the scene, the scripted
 shift's give-up and stuck counts are unchanged, and the walking feel check passes.
 
+**Phase 4 finished (4.1–4.3):** customers and employees both walk with the shared `Mover`, and
+they reach the shop only through the narrow store from `CharacterStore`. Scripted-shift counts
+are unchanged. The optional step 4 waits for a feature that needs it; the walking feel check
+is still outstanding.
+
 ### Phase 5 — Input contexts, actions, and hints (3 sessions)
 
 **In plain words:** today the hint bar is a long hand-written list of situations, and every
@@ -336,6 +358,9 @@ match what the button does.
 1. `input/`: contexts (walking, menu, placing, register, paused), held modifiers, and tap
    vs. hold, with today's timings. Decide the Gear Modifier's buttons here, including the
    conflict with dash (Shift) and zoom (left bumper). This is a design question for the owner
+   **Default:** keep the planned Shift / left bumper bindings. They act as the Gear Modifier
+   only when combined with a crate action while a parked hovercart is in reach; otherwise
+   Shift remains dash and the bumpers remain zoom. This is a design question for the owner
    before the code starts.
 2. `interaction/`: `getActions(player, input)` per interactable, with target choice per
    action (an action can target something other than what you're facing, such as the
@@ -348,6 +373,11 @@ match what the button does.
 
 **Done when:** the old hint and interact functions are gone, a new interactable needs no
 edits outside its own file, and the controls feel check passes.
+
+**Phase 5 finished (5.1–5.7, with 3.20):** input contexts live in `input/`, every interactable
+registers its own actions in `interaction/`, the handbook's controls come from the same list,
+and the old scene-level hint and interact functions are gone. Hint wording tests pass word for
+word. The controls feel check is still outstanding.
 
 ### Phase 6 — Containers (3 sessions)
 
@@ -363,6 +393,11 @@ hovercart (crates you can stock from without holding them).
 4. Split "crates in your hands" from "crates you can stock from" (Part 2, idea 8).
 
 **Done when:** nothing changes stock except through the container rules.
+
+**Phase 6 finished (6.1–6.4):** every stock holder has a stable ID, one location, and put-in and
+take-out permissions; deliveries, Go-Backs, sales, and abandoned carts go through transfers,
+sources, and sinks; and a test of thousands of random moves checks the stock ledger. The
+5-minute feel check below is still outstanding.
 
 **Milestone check:** a 5-minute feel check (stocking from crates and the pad, Go-Backs, checkout).
 
@@ -380,6 +415,13 @@ Use one way, and give each window its own style file. Done one window at a time.
 
 **Done when:** every window uses one pattern and every screenshot matches.
 
+**Phase 7 finished:** every tablet tab and window builds its markup with the `html` helper, and
+styles are split into `tokens.css`, the shared `space_dealer_window.css`, and one file per window
+under `styles/windows/`. Rules no page used were removed (including the old dialogue window's
+file). The remaining forced overrides are intentional: hidden/pad-only/keyboard-only switches,
+the pad-focus cursor, and two checkout widths that must beat inline sizes. All eight tablet tabs
+were screenshot-compared before and after the cleanup at a fixed window size and match.
+
 ### Phase 8 — Modules plug in (2 sessions)
 
 **In plain words:** finish turning Cleaning into a self-contained add-on, and use it to set the
@@ -396,6 +438,12 @@ pattern for every future add-on.
 
 **Done when:** turning Cleaning off in one line removes it cleanly, and all three paper checks fit.
 
+**Implemented foundation:** Cleaning is optional, and the guide covers all three planned modules.
+The Shooting Range gap now has registered rooms, module-owned floor checks, paired stairs,
+multi-room character routes, and a shared framed room camera. A temporary-room browser check
+tests entry, exit, routing, and cleanup; the existing backroom screenshot is unchanged.
+This does not implement the future modules' gameplay.
+
 ### Phase 9 — Performance and build size (2 sessions)
 
 **In plain words:** make the slow parts fast, measured against the Phase 0 baseline.
@@ -403,8 +451,7 @@ pattern for every future add-on.
 1. Per-frame work only when something changes (shelf glow, hints, pool refresh).
 2. Pathfinding: cache the walk grid per layout, reuse paths, and limit searches per frame.
    Only coarsen the grid if measurements demand it and the scripted shift shows the same routes.
-3. The slow fixture-placement overlay.
-4. Icons: shrink them to display size and pack them into atlases. The build's art copier
+3. Icons: shrink them to display size and pack them into atlases. The build's art copier
    learns about atlases.
 
 **Done when:**
@@ -413,6 +460,22 @@ pattern for every future add-on.
 - the packaged-app check passes.
 
 **Final milestone check:** a 10-minute feel check across the whole game.
+
+Search-limit measurement (45 s busy shop, seed 4242): fewer than 30 of ~7,970 frames start
+any new route search, and the worst burst (18 searches, ~7 ms) still fits one 60 fps frame.
+A per-frame cap would delay staff decisions and change replays, so none was added. Instead,
+staff skip same-room spots that cannot beat their best route; spots behind doors are always
+checked, and equal routes still pick the same spot.
+
+Icon atlases and further art squeezing were measured and skipped: item pictures are already
+shrunk at build time, floor and wall art is shown larger than its source at the closest zoom,
+and lossless re-saving would save only ~320 KB (4%) while visibly changing some pictures.
+
+**Phase 9 finished (automated part):** the busy-shop speed check averages ~1.9 ms per frame,
+the game's files are ~14.75 MB, and the packaged-app check passed after the rebuild: the
+packaged Windows app started, opened a new game and the tablet, saved, and read the save back
+with no errors (the real save folder was backed up first and restored byte-for-byte).
+Still outstanding: the 10-minute feel check, which needs a person playing.
 
 ### Total
 
@@ -425,7 +488,7 @@ After Phase 3, any finished phase is a safe place to pause and build features.
 
 | Feature | Can start after | Why |
 |---|---|---|
-| Cleaning slice 2 (dirt, mop bucket) | Phase 5 | Dirt marks and the mop bucket are interactables. "Press E to fill the gauge" is a hold action |
+| Cleaning slice 2 (dirt, mopping) | Phase 5 | Dirt marks are interactables; the mop appears when you tap E at dirt (no bucket). "Press E to fill the gauge" is a hold action |
 | Employees who clean | Phase 4 | A new job on the shared movement core |
 | Presentation | Phase 3 (checkout) + Phase 8 | Decorations are fixtures with a value. The "no gain if too low" rule is a reputation rule |
 | Drone Deliveries | Phase 6 | Locked mixed crates tied to an order ID; filling from nearby crates and shelves are actions |

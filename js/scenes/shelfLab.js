@@ -3,7 +3,7 @@
 // ==========================================
 // Dev harness for prototyping hands-on shelf stocking. Opened from the title screen's DEV
 // option. The player walks a small room with a Budget Shelf, crates of every box size, and a
-// trash bin. Crates use the shop's controls (pick up, stack, drop, throw). Pressing the
+// trash bin. Crates use the shop's controls (pick up, stack, drop). Pressing the
 // interact key at the shelf opens an up-close view where items are stocked or pulled one at a
 // time from the carried crates, while pretend customers take items off. Nothing here touches
 // the saved game.
@@ -16,9 +16,8 @@ import { getFixtureTexture } from "../logic/FixtureTexture.js";
 import { ITEM_CRATE_TINTS, getItemCrateCategory } from "../logic/CrateCategory.js";
 import { Crate, INTERACT_RANGE } from "../logic/Crate.js";
 import { MAX_CARRIED_CRATES } from "../logic/CrateStack.js";
-import { solveCratePush } from "../logic/CratePushing.js";
-import { separateOverlappingCrates } from "../logic/CrateSeparation.js";
-import { controlLabel } from "../logic/InputDevice.js";
+import { CrateWorld } from "../world/CrateWorld.js";
+import { controlLabel } from "../input/InputDevice.js";
 import { Player, PLAYER_CRATE_HOLD_OFFSET } from "../logic/Player.js";
 import { Market } from "../logic/Market.js";
 import { formatMoneyAmount } from "../logic/Money.js";
@@ -107,14 +106,11 @@ export class ShelfLabScene extends Phaser.Scene {
     this.roomHeight = ROOM.rows * TILE_SIZE;
     this.physics.world.setBounds(0, 0, this.roomWidth, this.roomHeight);
     this.solids = this.physics.add.staticGroup();
-    this.crateBounds = new Phaser.Geom.Rectangle(0, 0, this.roomWidth, this.roomHeight);
-    this.crateGroup = this.physics.add.group();
-    this.physics.add.collider(this.crateGroup, this.crateGroup, (spriteA, spriteB) => {
-      for (const sprite of [spriteA, spriteB]) {
-        this.restockCrates.find((crate) => crate.sprite === sprite)?.refreshDrag();
-      }
+    this.crateWorld = new CrateWorld(this, {
+      width: this.roomWidth,
+      height: this.roomHeight,
+      colliders: [this.solids],
     });
-    this.physics.add.collider(this.crateGroup, this.solids);
     this.drawFloor();
     this.placeShelf();
     this.placeTrash();
@@ -190,10 +186,9 @@ export class ShelfLabScene extends Phaser.Scene {
   }
 
   update(_time, delta) {
-    for (const crate of this.restockCrates) crate.updateThrow(delta);
-    this.separateStuckCrates();
+    this.crateWorld.update(delta);
     this.player.update(delta);
-    this.updateCratePushing(delta);
+    this.crateWorld.updateCratePushing(delta);
     this.syncCarriedCrates();
     if (this.hold && this.hold.slot !== null) {
       this.hold.timer -= delta;
@@ -268,7 +263,7 @@ export class ShelfLabScene extends Phaser.Scene {
     }
   }
 
-  // A real shop crate (so it can be pushed, stacked, and thrown) carrying the lab's
+  // A real shop crate (so it can be pushed and stacked) carrying the lab's
   // stocking contents in `lab`.
   spawnCrate(contents, x, y) {
     const crate = new Crate(this, contents.itemId, contents.count, x, y);
@@ -321,7 +316,7 @@ export class ShelfLabScene extends Phaser.Scene {
     return null;
   }
 
-  // What the crate key does right now, matching the shop: pick up, stack, set down, or throw.
+  // What the crate key does right now, matching the shop: pick up, stack, or set down.
   crateAction() {
     const key = controlLabel("crate", "keyboard");
     const floorCrate = this.nearestTarget(["crate"])?.crate ?? null;
@@ -341,7 +336,7 @@ export class ShelfLabScene extends Phaser.Scene {
       };
     }
     return {
-      label: `${key}: ${stackSize > 1 ? "Set the stack down" : "Put the crate down (throw it while walking)"}`,
+      label: `${key}: ${stackSize > 1 ? "Set the stack down" : "Put the crate down"}`,
       run: () => this.dropCarried(),
     };
   }
@@ -403,26 +398,20 @@ export class ShelfLabScene extends Phaser.Scene {
     this.refresh();
   }
 
-  // Like the shop: one crate is thrown if the player is walking, otherwise set down; a stack
-  // is always set down.
+  // One crate or a whole stack is set down in front of the player.
   dropCarried() {
     const stack = this.carriedCrates;
     if (stack.length === 1) {
       const crate = stack[0];
-      const { x: velocityX, y: velocityY } = this.player.sprite.body.velocity;
-      const throwing = velocityX !== 0 || velocityY !== 0;
-      const position = throwing
-        ? crate.findThrowPosition(this.player.sprite, velocityX, velocityY)
-        : crate.findDropPosition(this.player.sprite.x, this.player.sprite.y, this.player.sprite,
-          [], undefined, this.player.currentFacing);
+      const position = crate.findDropPosition(this.player.sprite.x, this.player.sprite.y, this.player.sprite,
+        [], undefined, this.player.currentFacing);
       if (!position) {
-        this.lastEvent = throwing ? "There's no room to throw the crate." : "There's no room to put the crate down.";
+        this.lastEvent = "There's no room to put the crate down.";
         this.refresh();
         return;
       }
-      if (throwing) crate.startThrow(this.player.sprite, velocityX, velocityY);
-      else crate.drop(position.x, position.y, 0, 0, false);
-      this.lastEvent = `${throwing ? "Threw" : "Put down"} ${this.describeCrate(crate)}.`;
+      crate.drop(position.x, position.y, 0, 0, false);
+      this.lastEvent = `Put down ${this.describeCrate(crate)}.`;
     } else {
       const reserved = [];
       const drops = [];
@@ -458,45 +447,6 @@ export class ShelfLabScene extends Phaser.Scene {
     this.syncCarriedCrates();
     this.lastEvent = "Threw the empty crate in the trash.";
     this.refresh();
-  }
-
-  // Loose crates get pushed when the player walks into them, as in the shop.
-  updateCratePushing(delta) {
-    const body = this.player.sprite.body;
-    const rectOf = (b) => ({ left: b.x, top: b.y, width: b.width, height: b.height });
-    const crates = this.restockCrates
-      .filter((crate) => crate.isPushed || crate.isStationary() || crate.isSliding())
-      .map((crate) => ({ key: crate, rect: rectOf(crate.sprite.body), locked: false }));
-    const { playerVelocity, crateVelocities } = solveCratePush({
-      player: rectOf(body),
-      velocity: body.velocity,
-      dt: Math.min(delta, 50) / 1000,
-      crates,
-      isBlocked: (rect) => this.isCrateSpaceBlocked(rect),
-    });
-    body.setVelocity(playerVelocity.x, playerVelocity.y);
-    for (const crate of this.restockCrates) {
-      const velocity = crateVelocities.get(crate);
-      if (velocity && (velocity.x || velocity.y)) crate.push(velocity);
-      else if (crate.isPushed) crate.stopPush();
-    }
-  }
-
-  // Pull apart crates that a fast throw pushed into each other.
-  separateStuckCrates() {
-    const crates = this.restockCrates
-      .filter((crate) => crate.sprite.body?.enable)
-      .map((crate) => {
-        const b = crate.sprite.body;
-        return { key: crate, rect: { left: b.x, top: b.y, width: b.width, height: b.height }, locked: false };
-      });
-    const offsets = separateOverlappingCrates(crates, (_crate, rect) => this.isCrateSpaceBlocked(rect));
-    for (const [crate, offset] of offsets) crate.nudge(offset.x, offset.y);
-  }
-
-  isCrateSpaceBlocked({ left, top, width, height }) {
-    if (left < 0 || top < 0 || left + width > this.roomWidth || top + height > this.roomHeight) return true;
-    return this.physics.overlapRect(left, top, width, height, false, true).some((b) => b.enable);
   }
 
   // --- Up-close shelf ---
@@ -692,7 +642,7 @@ export class ShelfLabScene extends Phaser.Scene {
     const interactKey = controlLabel("interact", "keyboard");
     this.helpText.setText(this.popupOpen
       ? `SHELF LAB  -  Left-hold a space to stock it from your crates. Right-hold to pull items back into a crate. ${interactKey} or Esc to step away.`
-      : `SHELF LAB  -  WASD or arrows to walk. ${controlLabel("crate", "keyboard")} picks up, stacks, puts down, or throws crates. ${interactKey} uses the shelf or trash.`);
+      : `SHELF LAB  -  WASD or arrows to walk. ${controlLabel("crate", "keyboard")} picks up, stacks, or puts down crates. ${interactKey} uses the shelf or trash.`);
     this.statusText.setText(`Holding ${this.describeCarried()}. Customers: ${this.customersOn ? "shopping" : "away"}. ${this.lastEvent}`);
   }
 

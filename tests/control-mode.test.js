@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ControlMode, CONTROL_MODES } from "../js/logic/ControlMode.js";
+import { ControlMode, CONTROL_MODES } from "../js/input/ControlMode.js";
 
 function createScene() {
   return {
-    startingShift: false,
-    loadFailed: false,
+    shift: { starting: false },
+    saves: { loadFailed: false },
     fixturePlacement: { active: false },
-    operatingRegister: false,
+    checkoutSystem: { operatingRegister: false },
     carriedCrate: null,
     windowManager: { windows: new Map() },
   };
@@ -22,7 +22,7 @@ test("selects the active control mode by state priority", () => {
   assert.equal(controls.getMode(), CONTROL_MODES.CARRYING);
   assert.equal(controls.allows("move"), true);
 
-  scene.operatingRegister = true;
+  scene.checkoutSystem.operatingRegister = true;
   assert.equal(controls.getMode(), CONTROL_MODES.REGISTER);
   assert.equal(controls.allows("move"), false);
 
@@ -32,13 +32,13 @@ test("selects the active control mode by state priority", () => {
   scene.fixturePlacement.active = true;
   assert.equal(controls.getMode(), CONTROL_MODES.PLACING);
 
-  scene.startingShift = true;
+  scene.shift.starting = true;
   assert.equal(controls.getMode(), CONTROL_MODES.LOADING);
 });
 
 test("register windows retain register controls, while other open windows take modal control", () => {
   const scene = createScene();
-  scene.operatingRegister = true;
+  scene.checkoutSystem.operatingRegister = true;
   scene.windowManager.windows.set("checkout-window", { id: "checkout-window", isOpen: true });
   const controls = new ControlMode(scene);
   assert.equal(controls.getMode(), CONTROL_MODES.REGISTER);
@@ -63,7 +63,7 @@ test("placement allows walking unless another window or controller menu has focu
   };
   scene.fixturePlacement = { active: true };
   scene.windowManager.windows.set(tablet.id, tablet);
-  scene.uiNavigator = { hasScope: () => controllerMenuOpen };
+  scene.controls = { uiNavigator: { hasScope: () => controllerMenuOpen } };
   const controls = new ControlMode(scene);
 
   assert.equal(controls.getMode(), CONTROL_MODES.PLACING);
@@ -84,30 +84,27 @@ test("each mode exposes only its declared actions", () => {
   const controls = new ControlMode(scene);
 
   assert.equal(controls.allows("move"), true);
-  assert.equal(controls.allows("debugGrid"), true);
   scene.fixturePlacement.active = true;
   assert.equal(controls.allows("rotateFixture"), true);
-  assert.equal(controls.allows("debugGrid"), true);
   assert.equal(controls.allows("debug"), false);
   assert.equal(controls.allows("crate"), false);
 
   scene.fixturePlacement.active = false;
   assert.equal(controls.allows("rotateFixture"), false);
-  scene.startingShift = true;
+  scene.shift.starting = true;
   assert.equal(controls.allows("pause"), false);
-  assert.equal(controls.allows("debugGrid"), false);
 });
 
 test("manual pause overrides register, placement and menus and allows only resume", () => {
   const scene = createScene();
   scene.shiftClock = { started: true, isPaused: true };
-  scene.operatingRegister = true;
+  scene.checkoutSystem.operatingRegister = true;
   scene.fixturePlacement.active = true;
   scene.windowManager.windows.set("manager-tablet", { id: "manager-tablet", isOpen: true });
   const controls = new ControlMode(scene);
   assert.equal(controls.getMode(), CONTROL_MODES.PAUSED);
   assert.equal(controls.allows("pause"), true);
-  for (const action of ["move", "interact", "crate", "goBacks", "tablet", "debug", "debugGrid", "cameraZoom", "rotateFixture"]) {
+  for (const action of ["move", "interact", "crate", "goBacks", "tablet", "debug", "cameraZoom", "rotateFixture"]) {
     assert.equal(controls.allows(action), false, action);
   }
   scene.shiftClock.isPaused = false;

@@ -1,33 +1,44 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
+import { useFixedStart } from "./support/fixed-start.js";
 import { HUDController } from "../js/logic/HUDController.js";
-import { SaveManager } from "../SaveManager.js";
-import { ControlMode } from "../js/logic/ControlMode.js";
-import { GAME_EVENTS } from "../js/logic/EventBus.js";
+import { ControlMode } from "../js/input/ControlMode.js";
+import { PlayerControls } from "../js/input/PlayerControls.js";
+import { UINavigator } from "../js/logic/UINavigator.js";
+import { GAME_EVENTS } from "../js/core/Events.js";
 import { SupplierLicense } from "../js/logic/Licenses.js";
 import { ContractRenderer } from "../js/logic/ContractRenderer.js";
 import { BACKROOM_UPGRADE_ORDER, EXPANSION_ORDER, ZONES } from "../js/logic/RoomLayout.js";
-import { FIXTURE_TYPES, fixtureBounds, fixtureFacingStep, fixtureFootprint, positionRegisterQueue } from "../js/logic/FixtureLayout.js";
+import { FIXTURE_TYPES, fixtureFacingStep, fixtureFootprint, fixtureSolidBounds, positionRegisterQueue } from "../js/logic/FixtureLayout.js";
+import { upgradeContractSplit } from "../js/state/migrations/contractSplit.js";
 
 let server;
 let cacheDirectory;
 let GameScene;
 let CheckoutWindow;
-let PlayerState;
+let GameState;
 let CHARACTER_ART_WIDTH;
 let CHARACTER_FEET_DROP;
+let DebugTools;
+let ShiftSystem;
+let StaffSystem;
+let SaveSystem;
+let FixtureSystem;
+let FixtureViews;
+let CustomerFlow;
+let CheckoutSystem;
+let CatalogSystem;
 const originalPhaser = globalThis.Phaser;
 
 before(async () => {
   globalThis.Phaser = { Scene: class {} };
   const licenses = JSON.parse(await readFile(new URL("../data/Licenses.json", import.meta.url), "utf8"));
   globalThis.__progressionTestLicenses = licenses.map((data) => new SupplierLicense(data));
-  cacheDirectory = await mkdtemp(join(tmpdir(), "space-arms-manual-save-test-"));
+  cacheDirectory = await mkdtemp(join(fileURLToPath(new URL("..", import.meta.url)), ".manual-save-test-"));
   server = await createServer({
     root: fileURLToPath(new URL("..", import.meta.url)),
     configFile: false,
@@ -50,9 +61,19 @@ before(async () => {
       },
     }],
   });
+  await useFixedStart(server);
   ({ GameScene } = await server.ssrLoadModule("/js/scenes/game.js"));
   ({ CheckoutWindow } = await server.ssrLoadModule("/js/logic/CheckoutWindow.js"));
-  ({ PlayerState } = await server.ssrLoadModule("/js/logic/PlayerState.js"));
+  ({ GameState } = await server.ssrLoadModule("/js/state/GameState.js"));
+  ({ DebugTools } = await server.ssrLoadModule("/js/debug/DebugTools.js"));
+  ({ ShiftSystem } = await server.ssrLoadModule("/js/systems/ShiftSystem.js"));
+  ({ StaffSystem } = await server.ssrLoadModule("/js/systems/StaffSystem.js"));
+  ({ SaveSystem } = await server.ssrLoadModule("/js/systems/SaveSystem.js"));
+  ({ FixtureSystem } = await server.ssrLoadModule("/js/systems/FixtureSystem.js"));
+  ({ FixtureViews } = await server.ssrLoadModule("/js/world/FixtureViews.js"));
+  ({ CustomerFlow } = await server.ssrLoadModule("/js/systems/CustomerFlow.js"));
+  ({ CheckoutSystem } = await server.ssrLoadModule("/js/systems/CheckoutSystem.js"));
+  ({ CatalogSystem } = await server.ssrLoadModule("/js/systems/CatalogSystem.js"));
   ({ CHARACTER_ART_WIDTH, CHARACTER_FEET_DROP } = await server.ssrLoadModule("/js/logic/CustomerSprites.js"));
 });
 
@@ -71,53 +92,49 @@ function createHarness(write = async () => true) {
   const writes = [];
   const controls = [];
   Object.assign(scene, {
-    loadFailed: false,
-    startingShift: false,
-    shiftEnded: false,
+    shift: { starting: false, ended: false },
     shiftClock: { started: false },
     customers: [],
-    autosaveBlocked: false,
-    saveInProgress: null,
-    lastSavedSnapshot: null,
-    saveStatus: "Not saved yet",
     credits: 436,
     hud: { renderSaveState: (state) => controls.push(state) },
-    serialize: () => ({ credits: scene.credits }),
-    showShopMessage: (message) => messages.push(message),
-    handlePersistenceError: (error) => {
-      errors.push(error);
-      scene.autosaveBlocked = true;
-      scene.setSaveStatus(`Not saved: ${error.message}`);
-    },
+    messages: { closeSaveError() {}, show: (message) => messages.push(message) },
   });
-  scene.saveManager = new SaveManager({ shop: scene }, {
+  scene.saves = new SaveSystem(scene, {
     write: async (payload) => {
       writes.push(payload);
       return write(payload);
     },
   });
+  scene.saves.serialize = () => ({ credits: scene.credits });
+  scene.saves.handleError = (error) => {
+    errors.push(error);
+    scene.saves.autosaveBlocked = true;
+    scene.saves.setStatus(`Not saved: ${error.message}`);
+  };
+  scene.fixtureSystem = new FixtureSystem(scene);
+  scene.customerFlow = new CustomerFlow(scene);
   return { scene, messages, errors, writes, controls };
 }
 
 test("fixtures can be placed during a closed mid-shift without unlocking saving or expansions", () => {
   const { scene } = createHarness();
-  assert.equal(scene.canRearrangeFixtures(), true);
+  assert.equal(scene.fixtureSystem.canRearrange(), true);
   Object.assign(scene.shiftClock, { started: true, isPaused: false, softClosed: false });
   scene.customers.push({});
-  assert.equal(scene.canRearrangeFixtures(), false);
-  scene.storeTemporarilyClosed = true;
-  assert.equal(scene.canRearrangeFixtures(), true);
-  assert.equal(scene.canSaveOffShift(), false);
-  assert.equal(scene.canExpandStore(), false);
+  assert.equal(scene.fixtureSystem.canRearrange(), false);
+  scene.customerFlow.temporarilyClosed = true;
+  assert.equal(scene.fixtureSystem.canRearrange(), true);
+  assert.equal(scene.saves.canSaveOffShift(), false);
+  assert.equal(scene.fixtureSystem.canExpand(), false);
   scene.shiftClock.isPaused = true;
-  assert.equal(scene.canRearrangeFixtures(), false);
+  assert.equal(scene.fixtureSystem.canRearrange(), false);
   scene.shiftClock.isPaused = false;
-  scene.startingShift = true;
-  assert.equal(scene.canRearrangeFixtures(), false);
-  scene.startingShift = false;
-  scene.storeTemporarilyClosed = false;
+  scene.shift.starting = true;
+  assert.equal(scene.fixtureSystem.canRearrange(), false);
+  scene.shift.starting = false;
+  scene.customerFlow.temporarilyClosed = false;
   scene.shiftClock.softClosed = true;
-  assert.equal(scene.canRearrangeFixtures(), true);
+  assert.equal(scene.fixtureSystem.canRearrange(), true);
 });
 
 test("pause consumes menu, mouse and keyboard actions, leaving only resume available", () => {
@@ -126,51 +143,137 @@ test("pause consumes menu, mouse and keyboard actions, leaving only resume avail
   scene.shiftClock.isPaused = true;
   scene.shiftClock.togglePause = () => { scene.shiftClock.isPaused = !scene.shiftClock.isPaused; };
   scene.controlMode = new ControlMode(scene);
+  scene.controls = new PlayerControls(scene);
   const event = (type, options = {}) => ({
     type, blocked: false, prevented: false,
     preventDefault() { this.prevented = true; },
     stopImmediatePropagation() { this.blocked = true; },
     ...options,
   });
+
   for (const input of [
     event("keydown", { code: "KeyE" }),
     event("keydown", { code: "Tab" }),
     event("keydown", { code: "KeyP", repeat: true }),
     ...["pointerdown", "mousedown", "click", "dblclick", "wheel", "contextmenu", "touchstart", "touchmove", "pointermove"].map((type) => event(type)),
   ]) {
-    scene.handlePausedInput(input);
+    scene.controls.handlePausedInput(input);
     assert.equal(input.blocked, true, input.type);
     assert.equal(input.prevented, true, input.type);
     assert.equal(scene.shiftClock.isPaused, true);
   }
   const resumeClick = event("click", { target: { closest: () => ({}) } });
-  scene.handlePausedInput(resumeClick);
+  scene.controls.handlePausedInput(resumeClick);
   assert.equal(resumeClick.blocked, false);
+  for (const type of ["keydown", "pointerdown", "mousedown", "click"]) {
+    const reportInput = event(type, {
+      code: "KeyP",
+      target: { closest: (selector) => selector.includes("#bug-report-window") ? {} : null },
+    });
+    scene.controls.handlePausedInput(reportInput);
+    assert.equal(reportInput.blocked, false, `report form ${type}`);
+    assert.equal(reportInput.prevented, false, `report form ${type}`);
+    assert.equal(scene.shiftClock.isPaused, true);
+  }
   for (const key of [{ code: "KeyP" }, { key: "Escape" }]) {
     scene.shiftClock.isPaused = true;
     const resumeKey = event("keydown", key);
-    scene.handlePausedInput(resumeKey);
+    scene.controls.handlePausedInput(resumeKey);
     assert.equal(resumeKey.blocked, true, "resume must not also close an open window");
     assert.equal(scene.shiftClock.isPaused, false);
   }
   const normalClick = event("click");
-  scene.handlePausedInput(normalClick);
+  scene.controls.handlePausedInput(normalClick);
   assert.equal(normalClick.blocked, false);
 });
 
+test("a paused scene polls menu input without updating any world systems", () => {
+  let polls = 0;
+  const scene = Object.create(GameScene.prototype);
+  Object.assign(scene, {
+    gamePaused: true,
+    worldElapsedMs: 345,
+    controls: { handleGamepad: () => { polls += 1; } },
+  });
+  scene.update(1000, 16);
+  scene.update(9000, 32);
+  assert.equal(polls, 2);
+  assert.equal(scene.worldElapsedMs, 345);
+});
+
+test("a paused cash handover cannot take the controller away from the pause menu", (t) => {
+  const originalDocument = globalThis.document;
+  t.after(() => {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  });
+  const cash = {};
+  const menu = { hasAttribute: () => false };
+  globalThis.document = {
+    querySelector(selector) {
+      if (selector === ".cash-tender-overlay:not(.hidden)") return cash;
+      if (selector === ".retro-window.active:not(.hidden)") return menu;
+      return null;
+    },
+  };
+  assert.equal(new UINavigator().getScope(), menu);
+});
+
+test("explicit pause freezes physics, animations, tweens, timers, and resumes them", (t) => {
+  const originalDocument = globalThis.document;
+  t.after(() => {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  });
+  const calls = [];
+  const animation = { playState: "running", pause: () => calls.push("dom-pause"), play: () => calls.push("dom-resume") };
+  globalThis.document = { body: { classList: { toggle() {} } }, getAnimations: () => [animation] };
+  const scene = Object.create(GameScene.prototype);
+  const toggle = (name) => ({ setPaused: (paused) => calls.push(`${name}:${paused}`) });
+  const engine = (name) => ({
+    pause: () => calls.push(`${name}-pause`), resume: () => calls.push(`${name}-resume`),
+    pauseAll: () => calls.push(`${name}-pause`), resumeAll: () => calls.push(`${name}-resume`),
+  });
+  Object.assign(scene, {
+    gamePaused: false, time: { paused: false },
+    checkoutWindow: toggle("checkout"),
+    crateSystem: { setMotionPaused: (paused) => calls.push(`crates:${paused}`) },
+    messages: { timers: toggle("messages") },
+    controls: { cancelPresses() {} }, shelfStockingWindow: { stopHolding() {} },
+    physics: { world: engine("physics") }, anims: engine("animations"),
+    tweens: engine("tweens"), sound: engine("sound"),
+  });
+  scene.setGamePaused(true);
+  assert.equal(scene.time.paused, true);
+  scene.setGamePaused(true);
+  assert.equal(calls.filter((value) => value === "physics-pause").length, 1);
+  scene.setGamePaused(false);
+  assert.equal(scene.time.paused, false);
+  assert.deepEqual(calls, [
+    "checkout:true", "crates:true", "messages:true", "physics-pause", "animations-pause",
+    "tweens-pause", "sound-pause", "dom-pause",
+    "checkout:false", "crates:false", "messages:false", "physics-resume", "tweens-resume",
+    "animations-resume", "sound-resume", "dom-resume",
+  ]);
+});
+
+const ITEMS = [{ id: "ration", baseCost: 10 }];
+const newGame = () => new GameState({ items: ITEMS, random: () => 0.5 });
+const reload = (state) => GameState.fromSave(JSON.parse(JSON.stringify(state.toSave())), { items: ITEMS });
+const loadPlayer = (player) =>
+  GameState.fromSave({ playerState: player, market: { day: 1, ...newGame().market.serialize() } }, { items: ITEMS });
+
 function createExpansionHarness({ shopLevel, credits }) {
   const scene = Object.create(GameScene.prototype);
-  const playerState = new PlayerState();
-  playerState.shopLevel = shopLevel;
-  playerState.credits = credits;
+  const gameState = newGame();
+  gameState.reputation.shopLevel = shopLevel;
+  gameState.economy.credits = credits;
   const messages = [];
   let cameraRefreshes = 0;
   let autosaves = 0;
   Object.assign(scene, {
-    playerState,
-    startingShift: false,
-    loadFailed: false,
-    shiftEnded: false,
+    gameState,
+    shift: { starting: false, ended: false },
     shiftClock: { started: false },
     customers: [],
     room: {
@@ -180,10 +283,12 @@ function createExpansionHarness({ shopLevel, credits }) {
         zone.locked = false;
       },
     },
-    refreshCamera() { cameraRefreshes++; },
-    requestAutosave() { autosaves++; },
-    showShopMessage(message) { messages.push(message); },
+    cameraRig: { refresh() { cameraRefreshes++; }, reset() { cameraRefreshes++; } },
+    messages: { show(message) { messages.push(message); } },
   });
+  scene.saves = new SaveSystem(scene, { write: async () => true });
+  scene.saves.requestAutosave = () => { autosaves++; };
+  scene.fixtureSystem = new FixtureSystem(scene);
   return {
     scene,
     messages,
@@ -193,40 +298,52 @@ function createExpansionHarness({ shopLevel, credits }) {
 }
 
 test("store expansions require their level, credits, and previous purchases", () => {
-  const locked = createExpansionHarness({ shopLevel: 4, credits: 5000 });
-  assert.equal(locked.scene.getExpansionPurchaseOptions()[0].levelMet, false);
-  assert.equal(locked.scene.buyExpansion("expansion_west"), false);
-  assert.equal(locked.scene.playerState.credits, 5000);
-  assert.match(locked.messages[0], /Shop Level 5/);
+  const locked = createExpansionHarness({ shopLevel: 5, credits: 5000 });
+  assert.equal(locked.scene.fixtureSystem.expansionOptions()[0].levelMet, false);
+  assert.equal(locked.scene.fixtureSystem.buyExpansion("expansion_west"), false);
+  assert.equal(locked.scene.gameState.economy.credits, 5000);
+  assert.match(locked.messages[0], /Shop Level 6/);
 
-  const poor = createExpansionHarness({ shopLevel: 5, credits: 3999 });
-  assert.equal(poor.scene.buyExpansion("expansion_west"), false);
+  const poor = createExpansionHarness({ shopLevel: 6, credits: 2699 });
+  assert.equal(poor.scene.fixtureSystem.buyExpansion("expansion_west"), false);
   assert.equal(poor.scene.room.zones.find((zone) => zone.id === "expansion_west").locked, true);
-  assert.equal(poor.scene.playerState.credits, 3999);
+  assert.equal(poor.scene.gameState.economy.credits, 2699);
 
-  const open = createExpansionHarness({ shopLevel: 5, credits: 4000 });
+  const open = createExpansionHarness({ shopLevel: 6, credits: 2700 });
   open.scene.shiftClock.started = true;
-  assert.equal(open.scene.buyExpansion("expansion_west"), false);
-  assert.equal(open.scene.playerState.credits, 4000);
+  assert.equal(open.scene.fixtureSystem.buyExpansion("expansion_west"), false);
+  assert.equal(open.scene.gameState.economy.credits, 2700);
   assert.match(open.messages[0], /while the store is closed/);
 
-  const wrongOrder = createExpansionHarness({ shopLevel: 30, credits: 100000 });
-  assert.equal(wrongOrder.scene.buyExpansion("expansion_a"), false);
-  assert.equal(wrongOrder.scene.playerState.credits, 100000);
+  const wrongOrder = createExpansionHarness({ shopLevel: 50, credits: 100000 });
+  assert.equal(wrongOrder.scene.fixtureSystem.buyExpansion("expansion_a"), false);
+  assert.equal(wrongOrder.scene.gameState.economy.credits, 100000);
   assert.match(wrongOrder.messages[0], /in order/);
 });
 
-test("buying the first store expansion deducts credits and records a receipt line", () => {
-  const harness = createExpansionHarness({ shopLevel: 5, credits: 4000 });
+test("Decorator Mode can buy a later store expansion, opening the earlier ones with it", () => {
+  const harness = createExpansionHarness({ shopLevel: 50, credits: 100000 });
   const { scene } = harness;
-  assert.equal(scene.getExpansionPurchaseOptions()[0].canAfford, true);
-  assert.equal(scene.buyExpansion("expansion_west"), true);
-  assert.equal(scene.playerState.credits, 0);
+  scene.fixtureSystem.anyZoneOrder = true;
+  assert.equal(scene.fixtureSystem.expansionOptions()[1].isNext, true);
+  assert.equal(scene.fixtureSystem.buyExpansion("expansion_a"), true);
+  assert.equal(scene.room.zones.find((zone) => zone.id === "expansion_west").locked, false);
+  assert.equal(scene.room.zones.find((zone) => zone.id === "expansion_a").locked, false);
+  assert.equal(scene.gameState.economy.credits, 100000 - 2700 - 6400);
+});
+
+test("buying the first store expansion deducts credits and records a receipt line", () => {
+  const harness = createExpansionHarness({ shopLevel: 6, credits: 2700 });
+  const { scene } = harness;
+  assert.equal(scene.fixtureSystem.expansionOptions()[0].canAfford, true);
+  assert.equal(scene.fixtureSystem.buyExpansion("expansion_west"), true);
+  assert.equal(scene.gameState.economy.credits, 0);
   assert.equal(scene.room.zones.find((zone) => zone.id === EXPANSION_ORDER[0]).locked, false);
-  assert.deepEqual(scene.playerState.dayLedger.serialize().lines, [{
+  assert.ok(scene.gameState.shop.unlockedZones.has(EXPANSION_ORDER[0]), "the save keeps the new zone");
+  assert.deepEqual(scene.gameState.economy.dayLedger.serialize().lines, [{
     category: "expansions",
     label: "Sales Floor Expansion West",
-    amount: -4000,
+    amount: -2700,
     quantity: 1,
   }]);
   assert.equal(harness.cameraRefreshes, 1);
@@ -234,32 +351,32 @@ test("buying the first store expansion deducts credits and records a receipt lin
 });
 
 test("backroom expansions require their level, credits, and previous purchases", () => {
-  const locked = createExpansionHarness({ shopLevel: 12, credits: 20000 });
-  assert.equal(locked.scene.getBackroomPurchaseOptions()[0].levelMet, false);
-  assert.equal(locked.scene.buyBackroomUpgrade(BACKROOM_UPGRADE_ORDER[0]), false);
-  assert.match(locked.messages[0], /Shop Level 13/);
+  const locked = createExpansionHarness({ shopLevel: 21, credits: 20000 });
+  assert.equal(locked.scene.fixtureSystem.backroomOptions()[0].levelMet, false);
+  assert.equal(locked.scene.fixtureSystem.buyBackroomUpgrade(BACKROOM_UPGRADE_ORDER[0]), false);
+  assert.match(locked.messages[0], /Shop Level 22/);
 
-  const poor = createExpansionHarness({ shopLevel: 13, credits: 3999 });
-  assert.equal(poor.scene.buyBackroomUpgrade(BACKROOM_UPGRADE_ORDER[0]), false);
-  assert.equal(poor.scene.playerState.credits, 3999);
-  assert.match(poor.messages[0], /costs 4,000\./);
+  const poor = createExpansionHarness({ shopLevel: 22, credits: 17499 });
+  assert.equal(poor.scene.fixtureSystem.buyBackroomUpgrade(BACKROOM_UPGRADE_ORDER[0]), false);
+  assert.equal(poor.scene.gameState.economy.credits, 17499);
+  assert.match(poor.messages[0], /costs 17,500\./);
 
-  const wrongOrder = createExpansionHarness({ shopLevel: 27, credits: 20000 });
-  assert.equal(wrongOrder.scene.buyBackroomUpgrade(BACKROOM_UPGRADE_ORDER[1]), false);
+  const wrongOrder = createExpansionHarness({ shopLevel: 46, credits: 20000 });
+  assert.equal(wrongOrder.scene.fixtureSystem.buyBackroomUpgrade(BACKROOM_UPGRADE_ORDER[1]), false);
   assert.match(wrongOrder.messages[0], /in order/);
 });
 
 test("buying all backroom expansions records costs and opens the wider room", () => {
-  const harness = createExpansionHarness({ shopLevel: 27, credits: 19000 });
+  const harness = createExpansionHarness({ shopLevel: 46, credits: 303000 });
   const { scene } = harness;
   for (const id of BACKROOM_UPGRADE_ORDER) {
-    assert.equal(scene.buyBackroomUpgrade(id), true);
+    assert.equal(scene.fixtureSystem.buyBackroomUpgrade(id), true);
   }
-  assert.equal(scene.playerState.credits, 0);
+  assert.equal(scene.gameState.economy.credits, 0);
   assert.ok(BACKROOM_UPGRADE_ORDER.every((id) =>
     !scene.room.zones.find((zone) => zone.id === id).locked));
-  assert.deepEqual(scene.playerState.dayLedger.serialize().lines.map((line) => line.amount), [
-    -4000, -6000, -9000,
+  assert.deepEqual(scene.gameState.economy.dayLedger.serialize().lines.map((line) => line.amount), [
+    -17500, -86000, -199500,
   ]);
   assert.equal(harness.cameraRefreshes, 3);
   assert.equal(harness.autosaves, 3);
@@ -269,55 +386,43 @@ test("debug upgrade buttons open the next zone free, even at Level 1 with the st
   const harness = createExpansionHarness({ shopLevel: 1, credits: 0 });
   const { scene } = harness;
   scene.shiftClock.started = true;
+  const debugTools = new DebugTools(scene);
   for (const [order, area] of [[EXPANSION_ORDER, "sales floor"], [BACKROOM_UPGRADE_ORDER, "backroom"]]) {
     for (const id of order) {
-      assert.equal(scene.debugUnlockNextZone(order, area), true);
+      assert.equal(debugTools.unlockNextZone(order, area), true);
       assert.equal(scene.room.zones.find((zone) => zone.id === id).locked, false);
     }
-    assert.equal(scene.debugUnlockNextZone(order, area), false);
+    assert.equal(debugTools.unlockNextZone(order, area), false);
     assert.match(harness.messages.at(-1), new RegExp(`Every ${area} upgrade is already open`));
   }
-  assert.equal(scene.playerState.credits, 0);
+  assert.equal(scene.gameState.economy.credits, 0);
 });
 
-test("the placement grid toggle stays hidden outside placement and independent of the tile grid", () => {
-  const scene = Object.create(GameScene.prototype);
-  const created = [];
-  scene.debugGridOverlays = new Map();
-  scene.fixturePlacement = { active: false };
-  scene.add = {
-    graphics() {
-      const graphics = {
-        visible: true,
-        lines: [],
-        clear() { return this; },
-        setDepth(depth) { this.depth = depth; return this; },
-        lineStyle(...style) { this.style = style; return this; },
-        lineBetween(...line) { this.lines.push(line); return this; },
-        setVisible(visible) { this.visible = visible; return this; },
-      };
-      created.push(graphics);
-      return graphics;
-    },
+test("debug shortcuts bind the spawn-customer, Quickstart, and employee-testing keys", (t) => {
+  const originalDocument = globalThis.document;
+  t.after(() => {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  });
+  globalThis.document = { getElementById: () => null };
+  const bindings = new Map();
+  const scene = {
+    controls: { bindKey: (key, action, handler) => bindings.set(key, { action, handler }) },
   };
+  new DebugTools(scene).install();
+  assert.deepEqual([...bindings.keys()], ["keydown-Y", "keydown-K", "keydown-L"]);
+});
 
-  scene.toggleDebugGrid(8, 0x00ff00, 1);
-  const fine = created[0];
-  assert.equal(fine.visible, false);
-  assert.equal(scene.debugPlacementGrid.enabled, true);
-  assert.equal(fine.depth, 9998);
+test("Employee Test refuses to run during a shift and changes nothing", () => {
+  const harness = createExpansionHarness({ shopLevel: 1, credits: 500 });
+  const { scene } = harness;
+  scene.shiftClock.started = true;
 
-  scene.toggleDebugGrid();
-  const coarse = created[1];
-  assert.equal(coarse.visible, true);
-  assert.deepEqual(coarse.style, [1, 0x00ffff, 0.5]);
-  scene.toggleDebugGrid(8, 0x00ff00, 1);
-  assert.equal(fine.visible, false);
-  assert.equal(scene.debugPlacementGrid.enabled, false);
-  assert.equal(coarse.visible, true);
-  scene.toggleDebugGrid(8, 0x00ff00, 1);
-  assert.equal(scene.debugPlacementGrid.enabled, true);
-  assert.equal(created.length, 2);
+  assert.equal(new DebugTools(scene).prepareEmployeeTesting(), false);
+  assert.equal(scene.gameState.reputation.shopLevel, 1);
+  assert.equal(scene.gameState.economy.credits, 500);
+  assert.equal(harness.autosaves, 0);
+  assert.match(harness.messages.at(-1), /only works before a shift starts/);
 });
 
 test("temporarily closing the store pauses arrivals and reschedules them on reopening", () => {
@@ -327,40 +432,38 @@ test("temporarily closing the store pauses arrivals and reschedules them on reop
   const messages = [];
   const scene = Object.create(GameScene.prototype);
   Object.assign(scene, {
-    storeTemporarilyClosed: false,
-    storeTemporarilyClosedSinceMs: null,
     shiftClock: {
       started: true,
       softClosed: false,
       isPaused: false,
       getElapsedMs: () => elapsedMs,
     },
-    customerArrivalSchedule: [
-      { factionId: "mercenaries", atMs: 1000 },
-      { factionId: "explorers", atMs: 5000 },
-    ],
-    nextScheduledArrival: 0,
-    spawnCustomer: (factionId) => spawned.push(factionId),
     hud: { renderStoreStatus: (closed) => storeStates.push(closed) },
-    showGameMessage: (message) => messages.push(message),
+    messages: { show: (message) => messages.push(message) },
   });
+  const flow = new CustomerFlow(scene);
+  flow.schedule = [
+    { factionId: "mercenaries", atMs: 1000 },
+    { factionId: "explorers", atMs: 5000 },
+  ];
+  flow.spawn = (factionId) => spawned.push(factionId);
 
-  assert.equal(scene.toggleTemporaryStoreClosure(), true);
+  assert.equal(flow.toggleTemporaryClosure(), true);
   elapsedMs = 3000;
-  scene.spawnScheduledCustomers();
+  flow.spawnScheduled();
   assert.deepEqual(spawned, []);
-  assert.equal(scene.nextScheduledArrival, 0);
+  assert.equal(flow.nextArrival, 0);
   assert.equal(scene.shiftClock.isPaused, false);
 
-  assert.equal(scene.toggleTemporaryStoreClosure(), true);
-  assert.deepEqual(scene.customerArrivalSchedule.map(({ atMs }) => atMs), [4000, 8000]);
+  assert.equal(flow.toggleTemporaryClosure(), true);
+  assert.deepEqual(flow.schedule.map(({ atMs }) => atMs), [4000, 8000]);
   assert.deepEqual(storeStates, [true, false]);
   assert.match(messages[0], /Customers inside can finish shopping/);
 
   elapsedMs = 4000;
-  scene.spawnScheduledCustomers();
+  flow.spawnScheduled();
   elapsedMs = 8000;
-  scene.spawnScheduledCustomers();
+  flow.spawnScheduled();
   assert.deepEqual(spawned, ["mercenaries", "explorers"]);
 });
 
@@ -386,10 +489,6 @@ function createRegisterHarness() {
   const registerFixture = { id: "register_1", sprite: {} };
   const line = [];
   Object.assign(scene, {
-    operatingRegister: true,
-    operatingRegisterFixture: registerFixture,
-    registerLine: line,
-    registerLines: new Map([[registerFixture.id, line]]),
     fixtures: {
       register: () => registerFixture,
       registers: () => [registerFixture],
@@ -399,68 +498,71 @@ function createRegisterHarness() {
     windowManager: { windows: new Map([
       [tablet.id, tablet], [checkout.uiWindow.id, checkout.uiWindow],
     ]) },
-    layoutRegisterLine() {},
-    beginRegisterSession(register = registerFixture) {
-      this.operatingRegister = true;
-      this.operatingRegisterFixture = register;
-    },
-    playerState: { addToGoBacks() {} },
+    gameState: { goBacks: { addCart() {} } },
     employees: [],
+    saves: { loadFailed: false },
   });
+  scene.carriedCrates = [];
+  scene.carriedCrate = null;
+  scene.crateSystem = { getCarriedCrates: () => scene.carriedCrates, syncCarriedCrate() {}, syncFloorStacks() {} };
   scene.controlMode = new ControlMode(scene);
+  scene.checkoutSystem = new CheckoutSystem(scene);
+  scene.checkoutSystem.operatingRegister = true;
+  scene.checkoutSystem.operatingRegisterFixture = registerFixture;
+  scene.checkoutSystem.registerLines.set(registerFixture.id, line);
+  scene.checkoutSystem.layoutRegisterLine = () => {};
   return { scene, checkout, tablet };
 }
 
 test("the shift-end event, receipt, and save observers see the applied reputation and level", () => {
   const scene = Object.create(GameScene.prototype);
-  const state = new PlayerState();
+  const state = newGame();
   const events = [];
   const messages = [];
   const savedStates = [];
   Object.assign(scene, {
-    playerState: state,
-    customersServedThisShift: 16,
+    gameState: state,
     customers: [],
-    loadFailed: false,
-    startingShift: false,
-    shiftEnded: false,
     shiftClock: { started: true, isPaused: false, notifyListeners() {} },
     hud: { renderStoreStatus() {} },
     room: { zones: ZONES },
-    market: { day: 1 },
     fixturePlacement: { active: false },
     eventBus: { emit: (name, details) => events.push({ name, details }) },
-    clearEmployees() {},
-    getEmergencyLoanOffer: () => ({ available: false, amount: 0, repayTotal: 0 }),
-    showGameMessage: (message) => messages.push(message),
+    messages: { show: (message) => messages.push(message) },
   });
+  scene.shift = new ShiftSystem(scene);
+  scene.saves = new SaveSystem(scene, { write: async () => true });
+  scene.staffSystem = { clear() {} };
+  scene.customerFlow = new CustomerFlow(scene);
+  scene.shift.customersServed = 21;
+  scene.shift.loanOffer = () => ({ available: false, amount: 0, repayTotal: 0 });
   state.subscribe((current) => {
-    if (current.awaitingEndDay && scene.canSaveOffShift()) {
-      savedStates.push(current.serialize());
+    if (current.calendar.awaitingEndDay && scene.saves.canSaveOffShift()) {
+      savedStates.push(current.toSave().playerState);
     }
   });
-  state.addReputation(16, "scavengers");
-  state.subReputation(1, "mercenaries");
-  assert.equal(state.globalReputation, 0);
-  assert.equal(scene.getFinancesView().pendingReputationChange, 15);
+  state.reputation.gain(21, "scavengers");
+  state.reputation.lose(1, "mercenaries");
+  assert.equal(state.reputation.global, 0);
+  assert.equal(scene.shift.financesView().pendingReputationChange, 20);
 
-  scene.endShift();
-  assert.equal(state.globalReputation, 15);
-  assert.equal(state.shopLevel, 2);
+  scene.shift.end();
+  assert.equal(state.reputation.global, 20);
+  assert.equal(state.reputation.shopLevel, 2);
   assert.equal(scene.shiftClock.started, false);
   assert.deepEqual(events, [{
     name: GAME_EVENTS.SHIFT_ENDED,
     details: {
-      served: 16,
+      served: 21,
       turnedAway: 0,
-      reputation: 15,
-      factionReputation: { scavengers: 16, mercenaries: -1, explorers: 0 },
+      reputation: 20,
+      factionReputation: { scavengers: 21, mercenaries: -1, explorers: 0 },
     },
   }]);
-  assert.equal(scene.getFinancesView().today.reputationChange, 15);
-  assert.equal(scene.getFinancesView().pendingReputationChange, null);
+  assert.equal(scene.shift.financesView().today.reputationChange, 20);
+  assert.equal(scene.shift.financesView().pendingReputationChange, null);
   assert.equal(savedStates.length, 1);
-  assert.equal(savedStates[0].globalReputation, 15);
+  assert.equal(savedStates[0].globalReputation, 20);
   assert.equal(savedStates[0].shopLevel, 2);
   assert.match(messages[0], /Shop Level 2 reached/);
   assert.match(messages[0], /Frontier Survival Kit.*Contracts tab/);
@@ -468,256 +570,286 @@ test("the shift-end event, receipt, and save observers see the applied reputatio
 });
 
 test("a shift that earns multiple levels announces each implemented unlock", () => {
-  const state = new PlayerState();
+  const state = newGame();
   const scene = Object.create(GameScene.prototype);
   const messages = [];
   Object.assign(scene, {
-    playerState: state,
-    customersServedThisShift: 60,
-    shiftEnded: false,
+    gameState: state,
     shiftClock: { started: true, isPaused: false, notifyListeners() {} },
     hud: { renderStoreStatus() {} },
     room: { zones: ZONES },
     eventBus: { emit() {} },
-    clearEmployees() {},
-    showGameMessage: (message) => messages.push(message),
+    messages: { show: (message) => messages.push(message) },
   });
-  state.addReputation(72);
-  scene.endShift();
-  assert.equal(state.shopLevel, 4);
+  scene.shift = new ShiftSystem(scene);
+  scene.staffSystem = { clear() {} };
+  scene.customerFlow = new CustomerFlow(scene);
+  scene.shift.customersServed = 60;
+  state.reputation.gain(90);
+  scene.shift.end();
+  assert.equal(state.reputation.shopLevel, 4);
   assert.match(messages[0], /Shop Level 4 reached/);
   assert.match(messages[0], /Standard Pistol Ammo/);
   assert.match(messages[0], /You can now have 1 employee hired at once \(Employee tab\)/);
 
-  state.endDay(2);
-  state.addReputation(42);
-  scene.endShift();
-  assert.equal(state.shopLevel, 5);
+  state.endDay();
+  state.reputation.gain(48);
+  scene.shift.end();
+  assert.equal(state.reputation.shopLevel, 5);
   assert.match(messages[1], /Shop Level 5 reached/);
-  assert.doesNotMatch(messages[1], /Contracts unlocked|employees? hired at once/);
-  assert.match(messages[1], /Sales-floor expansion available to buy in the Layout tab/);
+  assert.doesNotMatch(messages[1], /Contracts unlocked|employees? hired at once|Sales-floor expansion/);
   assert.doesNotMatch(messages[1], /Some later level rewards are not in the game yet/);
 
-  state.endDay(3);
-  state.addReputation(51);
-  scene.endShift();
-  assert.equal(state.shopLevel, 6);
+  state.endDay();
+  state.reputation.gain(180);
+  scene.shift.end();
+  assert.equal(state.reputation.shopLevel, 6);
   assert.match(messages[2], /Shop Level 6 reached/);
   assert.match(messages[2], /Lyra Casual Wear.*Contracts tab/);
+  assert.match(messages[2], /Sales-floor expansion available to buy in the Layout tab/);
   assert.doesNotMatch(messages[2], /Some later level rewards are not in the game yet/);
 });
 
-test("a shift from Shop Level 6 to 30 announces all remaining reward types", () => {
-  const state = new PlayerState();
-  state.shopLevel = 6;
-  state.globalReputation = 165;
+test("a shift from Shop Level 6 to 37 announces all remaining reward types", () => {
+  const state = newGame();
+  state.reputation.shopLevel = 6;
+  state.reputation.global = 318;
   const scene = Object.create(GameScene.prototype);
   const messages = [];
   Object.assign(scene, {
-    playerState: state,
-    customersServedThisShift: 60,
+    gameState: state,
     shiftClock: { started: true, isPaused: false, notifyListeners() {} },
     hud: { renderStoreStatus() {} },
     room: { zones: ZONES.map((zone) => ({ ...zone })) },
     eventBus: { emit() {} },
-    clearEmployees() {},
-    showGameMessage: (message) => messages.push(message),
+    messages: { show: (message) => messages.push(message) },
   });
-  state.addReputation(3924);
-  scene.endShift();
+  scene.shift = new ShiftSystem(scene);
+  scene.staffSystem = { clear() {} };
+  scene.customerFlow = new CustomerFlow(scene);
+  scene.shift.customersServed = 60;
+  state.reputation.gain(10044);
+  scene.shift.end();
 
-  assert.equal(state.shopLevel, 30);
+  assert.equal(state.reputation.shopLevel, 37);
   assert.match(messages[0], /You can now have 6 employees hired at once/);
-  assert.match(messages[0], /Breach-Tech Heavy Tools/);
+  assert.match(messages[0], /Aulin NT Firearms/);
   assert.match(messages[0], /Sales-floor expansions available to buy/);
   assert.match(messages[0], /Backroom expansions available to buy/);
   assert.doesNotMatch(messages[0], /Some later level rewards are not in the game yet/);
 });
 
 test("level-up messages do not reannounce contracts or staff already owned in older saves", () => {
-  const state = new PlayerState();
-  for (const id of ["lic_start_survival", "lic_start_surplus", "lic_start_ammo"]) {
-    state.activeLicenses.add(id);
-  }
-  state.hiredEmployees.push("tavi_stock_clerk");
+  const state = newGame();
+  for (const id of ["lic_start_survival", "lic_start_surplus", "lic_start_ammo"]) state.catalog.sign(id);
+  state.staff.add("tavi_stock_clerk");
   const scene = Object.create(GameScene.prototype);
   const messages = [];
   Object.assign(scene, {
-    playerState: state,
-    customersServedThisShift: 60,
+    gameState: state,
     shiftClock: { started: true, isPaused: false, notifyListeners() {} },
     hud: { renderStoreStatus() {} },
     room: { zones: ZONES },
     eventBus: { emit() {} },
-    clearEmployees() {},
-    showGameMessage: (message) => messages.push(message),
+    messages: { show: (message) => messages.push(message) },
   });
-  state.addReputation(72);
-  scene.endShift();
+  scene.shift = new ShiftSystem(scene);
+  scene.staffSystem = { clear() {} };
+  scene.customerFlow = new CustomerFlow(scene);
+  scene.shift.customersServed = 60;
+  state.reputation.gain(90);
+  scene.shift.end();
   assert.match(messages[0], /Shop Level 4 reached/);
   assert.doesNotMatch(messages[0], /Contracts unlocked|Standard Pistol Ammo|Staff unlocked/);
 });
 
 test("level 1 saves keep starting contracts signed before their level requirement changed", () => {
-  const state = new PlayerState();
-  for (const id of ["lic_start_surplus", "lic_start_ammo"]) state.signLicense(id);
-  const restored = PlayerState.deserialize(state.serialize());
+  const state = newGame();
+  for (const id of ["lic_start_surplus", "lic_start_ammo"]) state.catalog.sign(id);
+  const restored = reload(state);
   const contracts = globalThis.__progressionTestLicenses.filter((license) =>
     ["lic_start_surplus", "lic_start_ammo"].includes(license.id));
-  assert.equal(restored.shopLevel, 1);
-  assert.ok(contracts.every((license) => restored.activeLicenses.has(license.id)));
+  assert.equal(restored.reputation.shopLevel, 1);
+  assert.ok(contracts.every((license) => restored.catalog.owns(license.id)));
   const html = ContractRenderer.generateHTML(contracts, restored);
   assert.equal((html.match(/>PURCHASED</g) ?? []).length, 2);
   assert.doesNotMatch(html, />LOCKED</);
 });
 
 test("saves from before contracts were split keep every product they could already order", () => {
-  const state = new PlayerState();
-  state.signLicense("lic_start_ammo");
-  const { contractsSplit, ...oldSave } = state.serialize();
+  const state = newGame();
+  state.catalog.sign("lic_start_ammo");
+  const { contractsSplit, ...oldSave } = state.toSave().playerState;
   assert.equal(contractsSplit, true);
-  const restored = PlayerState.deserialize(oldSave);
-  assert.ok(restored.activeLicenses.has("lic_start_ammo"));
-  assert.ok(restored.activeLicenses.has("lic_start_rifle_ammo"));
-  assert.equal(restored.activeLicenses.has("lic_start_survival"), false);
+  const restored = loadPlayer(upgradeContractSplit({ playerState: oldSave }).playerState);
+  assert.ok(restored.catalog.owns("lic_start_ammo"));
+  assert.ok(restored.catalog.owns("lic_start_rifle_ammo"));
+  assert.equal(restored.catalog.owns("lic_start_survival"), false);
 
-  const current = PlayerState.deserialize(state.serialize());
-  assert.equal(current.activeLicenses.has("lic_start_rifle_ammo"), false,
+  const current = loadPlayer(upgradeContractSplit({ playerState: state.toSave().playerState }).playerState);
+  assert.equal(current.catalog.owns("lic_start_rifle_ammo"), false,
     "new saves do not get the follow-up contract for free");
 });
 
 test("the actual hire action explains the level lock and allows hiring after the unlock", () => {
-  const scene = Object.create(GameScene.prototype);
-  const state = new PlayerState();
+  const state = newGame();
   const warnings = [];
   let autosaves = 0;
-  Object.assign(scene, {
-    playerState: state,
-    canHireEmployees: () => true,
-    showShopMessage: (message) => warnings.push(message),
-    showGameMessage() {},
-    requestAutosave: () => { autosaves += 1; },
-  });
-  assert.equal(scene.hireEmployee("tavi_stock_clerk"), false);
-  assert.match(warnings[0], /Shop Level 4.*72 store reputation/);
-  assert.equal(state.credits, 1500);
+  const scene = {
+    gameState: state,
+    messages: { show: (message) => warnings.push(message) },
+    saves: { requestAutosave: () => { autosaves += 1; } },
+  };
+  const staffSystem = new StaffSystem(scene);
+  staffSystem.canManage = () => true;
+  assert.equal(staffSystem.hire("tavi_stock_clerk"), false);
+  assert.match(warnings[0], /Shop Level 4.*90 store reputation/);
+  assert.equal(state.economy.credits, 1500);
   assert.equal(autosaves, 0);
 
-  state.addReputation(72);
-  state.finishShift({ customersServed: 72, customersTurnedAway: 0 });
-  assert.equal(scene.hireEmployee("tavi_stock_clerk"), true);
-  assert.equal(state.credits, 1250);
+  state.reputation.gain(90);
+  state.finishShift({ customersServed: 90, customersTurnedAway: 0 });
+  assert.equal(staffSystem.hire("tavi_stock_clerk"), true);
+  assert.equal(state.economy.credits, 1000);
   assert.equal(autosaves, 1);
 });
 
 test("taking an employee off shift is between shifts only, stops wages, and keeps them hired", () => {
-  const state = new PlayerState();
-  state.shopLevel = 4;
+  const state = newGame();
+  state.reputation.shopLevel = 4;
   assert.equal(state.hireEmployee("tavi_stock_clerk"), true);
-  const creditsAfterHire = state.credits;
-  const scene = Object.create(GameScene.prototype);
-  const warnings = [];
+  const creditsAfterHire = state.economy.credits;
   const messages = [];
   let autosaves = 0;
-  Object.assign(scene, {
-    playerState: state,
-    canHireEmployees: () => false,
-    showShopMessage: (message) => warnings.push(message),
-    showGameMessage: (message) => messages.push(message),
-    requestAutosave: () => { autosaves += 1; },
-  });
+  const scene = {
+    gameState: state,
+    employees: [],
+    messages: { show: (message) => messages.push(message) },
+    saves: { requestAutosave: () => { autosaves += 1; } },
+  };
+  const staffSystem = new StaffSystem(scene);
+  staffSystem.canManage = () => false;
 
-  assert.equal(scene.setEmployeeOnShift("tavi_stock_clerk", false), false);
-  assert.match(warnings[0], /between shifts/);
-  assert.deepEqual(state.offShiftEmployees, []);
+  assert.equal(staffSystem.setOnShift("tavi_stock_clerk", false), false);
+  assert.match(messages[0], /between shifts/);
+  assert.deepEqual(state.staff.offShift, []);
 
-  scene.canHireEmployees = () => true;
-  assert.equal(scene.setEmployeeOnShift("tavi_stock_clerk", false), true);
-  assert.deepEqual(state.hiredEmployees, ["tavi_stock_clerk"]);
-  assert.match(messages[0], /Off Shift.*won't be paid/i);
-  assert.equal(scene.payEmployeeWages(), 0);
-  assert.equal(state.credits, creditsAfterHire);
-  scene.spawnHiredEmployees();
+  staffSystem.canManage = () => true;
+  assert.equal(staffSystem.setOnShift("tavi_stock_clerk", false), true);
+  assert.deepEqual(state.staff.hired, ["tavi_stock_clerk"]);
+  assert.match(messages[1], /Off Shift.*won't be paid/i);
+  assert.equal(staffSystem.payWages(), 0);
+  assert.equal(state.economy.credits, creditsAfterHire);
+  staffSystem.spawnWorking();
   assert.deepEqual(scene.employees, []);
   assert.equal(autosaves, 1);
 
-  const restored = new PlayerState();
-  restored.applySave(state.serialize());
-  assert.deepEqual(restored.offShiftEmployees, ["tavi_stock_clerk"]);
-  assert.equal(scene.setEmployeeOnShift("tavi_stock_clerk", true), true);
-  assert.equal(scene.payEmployeeWages(), 50);
+  const restored = reload(state);
+  assert.deepEqual(restored.staff.offShift, ["tavi_stock_clerk"]);
+  assert.equal(staffSystem.setOnShift("tavi_stock_clerk", true), true);
+  assert.equal(staffSystem.payWages(), 100);
+});
+
+test("moving employee jobs preserves full order and saves only valid between-shift changes", () => {
+  const state = newGame();
+  state.reputation.shopLevel = 4;
+  state.hireEmployee("tavi_stock_clerk");
+  const messages = [];
+  let autosaves = 0;
+  const staffSystem = new StaffSystem({
+    gameState: state,
+    messages: { show: (message) => messages.push(message) },
+    saves: { requestAutosave: () => { autosaves += 1; } },
+  });
+  const employeeId = "tavi_stock_clerk";
+  state.staff.jobPriorities[employeeId] = ["register", "stock_shelves", "clean"];
+  staffSystem.canManage = () => false;
+  assert.equal(staffSystem.moveJob(employeeId, "clean", 1), false);
+  assert.match(messages[0], /between shifts/);
+  assert.deepEqual(state.staff.jobPriorities[employeeId], ["register", "stock_shelves", "clean"]);
+  staffSystem.canManage = () => true;
+  assert.equal(staffSystem.moveJob(employeeId, "clean", 1), true);
+  assert.deepEqual(state.staff.jobPriorities[employeeId], ["register", "clean", "stock_shelves"]);
+  assert.equal(staffSystem.moveJob(employeeId, "register", 2), true);
+  assert.deepEqual(reload(state).staff.jobPriorities[employeeId], ["clean", "stock_shelves", "register"]);
+  for (const [id, job, index] of [
+    [employeeId, "register", 2], [employeeId, "register", -1],
+    [employeeId, "clean", 3], [employeeId, "unknown", 1],
+    ["not-hired", "clean", 1], [employeeId, "clean", 0.5],
+  ]) {
+    assert.equal(staffSystem.moveJob(id, job, index), false);
+  }
+  assert.equal(autosaves, 2);
 });
 
 test("training can only be booked between shifts and trainees are paid without spawning for work", () => {
-  const state = new PlayerState();
-  state.shopLevel = 4;
+  const state = newGame();
+  state.reputation.shopLevel = 4;
   state.hireEmployee("tavi_stock_clerk");
-  const scene = Object.create(GameScene.prototype);
   const warnings = [];
   let autosaves = 0;
-  Object.assign(scene, {
-    playerState: state,
-    canHireEmployees: () => false,
-    showShopMessage: (message) => warnings.push(message),
-    showGameMessage() {},
-    requestAutosave: () => { autosaves += 1; },
-  });
-  assert.equal(scene.trainEmployee("tavi_stock_clerk", "register"), false);
+  const scene = {
+    gameState: state,
+    employees: [],
+    messages: { show: (message) => warnings.push(message) },
+    saves: { requestAutosave: () => { autosaves += 1; } },
+  };
+  const staffSystem = new StaffSystem(scene);
+  staffSystem.canManage = () => false;
+  assert.equal(staffSystem.train("tavi_stock_clerk", "register"), false);
   assert.match(warnings[0], /between shifts/);
-  assert.equal(state.credits, 1250);
-  scene.canHireEmployees = () => true;
-  assert.equal(scene.trainEmployee("tavi_stock_clerk", "register"), true);
+  assert.equal(state.economy.credits, 1000);
+  staffSystem.canManage = () => true;
+  assert.equal(staffSystem.train("tavi_stock_clerk", "register"), true);
   assert.equal(autosaves, 1);
-  assert.equal(scene.setEmployeeOnShift("tavi_stock_clerk", false), false);
+  assert.equal(staffSystem.setOnShift("tavi_stock_clerk", false), false);
   assert.match(warnings.at(-1), /away training/);
-  assert.equal(scene.payEmployeeWages(), 50);
-  assert.equal(state.credits, 950);
-  scene.spawnHiredEmployees();
+  assert.equal(staffSystem.payWages(), 100);
+  assert.equal(state.economy.credits, 400);
+  staffSystem.spawnWorking();
   assert.deepEqual(scene.employees, []);
   state.finishShift({ customersServed: 0, customersTurnedAway: 0 });
-  assert.equal(state.getEmployeeProfile("tavi_stock_clerk").skillLevels.register, 2);
-  assert.equal(scene.payEmployeeWages(), 55);
+  assert.equal(state.staff.profile("tavi_stock_clerk").skillLevels.register, 2);
+  assert.equal(staffSystem.payWages(), 110);
 });
 
 test("actual store price edits preserve cents and explain invalid prices", () => {
   const scene = Object.create(GameScene.prototype);
   const prices = new Map([["ration", 10]]);
   const warnings = [];
-  scene.playerState = { setStorePrice: (id, price) => prices.set(id, price) };
-  scene.showShopMessage = (message) => warnings.push(message);
-  assert.equal(scene.setStorePrice("ration", 10.23), true);
+  scene.gameState = { catalog: { setPrice: (id, price) => prices.set(id, price) } };
+  scene.messages = { show: (message) => warnings.push(message) };
+  scene.catalogSystem = new CatalogSystem(scene);
+  assert.equal(scene.catalogSystem.setStorePrice("ration", 10.23), true);
   assert.equal(prices.get("ration"), 10.23);
   for (const invalid of [0.99, 10.234, NaN, Infinity]) {
-    assert.equal(scene.setStorePrice("ration", invalid), false);
+    assert.equal(scene.catalogSystem.setStorePrice("ration", invalid), false);
     assert.equal(prices.get("ration"), 10.23);
   }
   assert.equal(warnings.length, 4);
   assert.match(warnings[0], /two decimal places/);
 });
 
-test("customers queue without opening the register or freezing patience while the tablet is open", () => {
+test("customers queue without opening the register while the tablet is open", () => {
   const { scene, checkout, tablet } = createRegisterHarness();
   tablet.isOpen = true;
   const first = { cart: [{ itemId: "rifle", price: 100 }] };
   const second = { cart: [{ itemId: "pistol", price: 50 }] };
-  scene.handleJoinQueue(first);
-  scene.handleJoinQueue(second);
-  assert.deepEqual(scene.registerLine, [first, second]);
+  scene.checkoutSystem.handleJoinQueue(first);
+  scene.checkoutSystem.handleJoinQueue(second);
+  assert.deepEqual(scene.checkoutSystem.lineFor(scene.fixtures.register()), [first, second]);
   assert.equal(checkout.uiWindow.isOpen, false);
   assert.deepEqual(checkout.openedCarts, []);
-  assert.equal(scene.isServingCustomer(first), false);
-
   tablet.isOpen = false;
-  scene.resumeRegisterCheckout();
+  scene.checkoutSystem.resumeRegisterCheckout();
   assert.equal(checkout.uiWindow.isOpen, true);
   assert.deepEqual(checkout.openedCarts, [first.cart]);
-  assert.equal(scene.isServingCustomer(first), false, "the player's checkout never freezes patience");
 });
 
 test("hiding checkout for the tablet preserves scanned items and payment progress on return", () => {
   const { scene, checkout, tablet } = createRegisterHarness();
   const customer = { cart: [{ itemId: "rifle", price: 100 }] };
-  scene.handleJoinQueue(customer);
+  scene.checkoutSystem.handleJoinQueue(customer);
   const onComplete = checkout.onComplete;
   checkout.paymentBuffer = "10";
   checkout.isScanning = true;
@@ -725,12 +857,11 @@ test("hiding checkout for the tablet preserves scanned items and payment progres
   checkout.suspend();
   assert.equal(checkout.uiWindow.isOpen, false);
   assert.equal(checkout.isScanning, false);
-  assert.equal(scene.isServingCustomer(customer), false);
-  scene.resumeRegisterCheckout();
+  scene.checkoutSystem.resumeRegisterCheckout();
   assert.equal(checkout.uiWindow.isOpen, false);
 
   tablet.isOpen = false;
-  scene.resumeRegisterCheckout();
+  scene.checkoutSystem.resumeRegisterCheckout();
   assert.equal(checkout.uiWindow.isOpen, true);
   assert.equal(checkout.onComplete, onComplete);
   assert.equal(checkout.paymentBuffer, "10");
@@ -740,10 +871,10 @@ test("hiding checkout for the tablet preserves scanned items and payment progres
 test("stepping away from the register mid-sale and coming back resumes the same sale", () => {
   const { scene, checkout } = createRegisterHarness();
   const customer = { cart: [{ itemId: "rifle", price: 100 }] };
-  scene.handleJoinQueue(customer);
+  scene.checkoutSystem.handleJoinQueue(customer);
   checkout.paymentBuffer = "10";
   checkout.suspend(); // what leaving the register does mid-sale
-  scene.startCheckout(customer);
+  scene.checkoutSystem.startCheckout(customer);
   assert.equal(checkout.uiWindow.isOpen, true);
   assert.equal(checkout.paymentBuffer, "10");
   assert.equal(checkout.openedCarts.length, 1, "not started over");
@@ -758,9 +889,9 @@ test("a customer's payment type is picked once, even if their sale is started ov
     open(cart, onComplete);
   };
   const customer = { cart: [{ itemId: "rifle", price: 100 }] };
-  scene.handleJoinQueue(customer);
+  scene.checkoutSystem.handleJoinQueue(customer);
   checkout.mode = null; // the sale was thrown away
-  scene.startCheckout(customer);
+  scene.checkoutSystem.startCheckout(customer);
   assert.equal(options.length, 2);
   assert.equal(options[1].paymentType, options[0].paymentType);
   assert.equal(options[1].exact, options[0].exact);
@@ -771,18 +902,18 @@ test("a customer leaving while the tablet is open cannot leave a stale checkout 
   const { scene, checkout, tablet } = createRegisterHarness();
   const first = { cart: [{ itemId: "rifle", price: 100 }] };
   const second = { cart: [{ itemId: "pistol", price: 50 }] };
-  scene.handleJoinQueue(first);
+  scene.checkoutSystem.handleJoinQueue(first);
   tablet.isOpen = true;
   checkout.suspend();
-  scene.handleJoinQueue(second);
-  scene.handleAngryLeave(first, first.cart);
+  scene.checkoutSystem.handleJoinQueue(second);
+  scene.checkoutSystem.handleAngryLeave(first, first.cart);
   assert.equal(checkout.mode, null);
   assert.equal(checkout.onComplete, null);
   assert.equal(checkout.uiWindow.isOpen, false);
-  assert.deepEqual(scene.registerLine, [second]);
+  assert.deepEqual(scene.checkoutSystem.lineFor(scene.fixtures.register()), [second]);
 
   tablet.isOpen = false;
-  scene.resumeRegisterCheckout();
+  scene.checkoutSystem.resumeRegisterCheckout();
   assert.deepEqual(checkout.openedCarts, [first.cart, second.cart]);
   assert.equal(checkout.uiWindow.isOpen, true);
 });
@@ -805,11 +936,11 @@ test("Escape never clears the amount typed at the register; Delete does", () => 
 
 test("closing the tablet does not start checkout with no customers or after leaving the register", () => {
   const { scene, checkout } = createRegisterHarness();
-  scene.resumeRegisterCheckout();
+  scene.checkoutSystem.resumeRegisterCheckout();
   assert.equal(checkout.uiWindow.isOpen, false);
-  scene.operatingRegister = false;
-  scene.registerLine.push({ cart: [] });
-  scene.resumeRegisterCheckout();
+  scene.checkoutSystem.operatingRegister = false;
+  scene.checkoutSystem.lineFor(scene.fixtures.register()).push({ cart: [] });
+  scene.checkoutSystem.resumeRegisterCheckout();
   assert.equal(checkout.uiWindow.isOpen, false);
 });
 
@@ -830,46 +961,46 @@ test("the register refuses a player whose hands are full of crates", () => {
     checkoutWindow: { mode: "closed" },
     player: { sprite, inputEnabled: true,
       teleportTo(x, y) { sprite.x = x; sprite.y = y; }, forceFacing() {} },
-    operatingRegister: false,
     carriedCrates: [{ id: "crate_1" }],
     carriedCrate: { id: "crate_1" },
-    showShopMessage: (text) => messages.push(text),
+    messages: { show: (text) => messages.push(text) },
   });
-  scene.beginRegisterSession(register);
-  assert.equal(scene.operatingRegister, false);
+  scene.crateSystem = { getCarriedCrates: () => scene.carriedCrates, syncCarriedCrate() {}, syncFloorStacks() {} };
+  scene.checkoutSystem = new CheckoutSystem(scene);
+  scene.checkoutSystem.beginRegisterSession(register);
+  assert.equal(scene.checkoutSystem.operatingRegister, false);
   assert.equal(sprite.body.enable, true);
   assert.match(messages[0], /Put down what you're carrying/);
 
   scene.carriedCrates = [];
   scene.carriedCrate = null;
-  scene.beginRegisterSession(register);
-  assert.equal(scene.operatingRegister, true);
+  scene.checkoutSystem.beginRegisterSession(register);
+  assert.equal(scene.checkoutSystem.operatingRegister, true);
 });
 
 test("a customer arriving while the player holds crates near the register never opens checkout", () => {
   const { scene, checkout } = createRegisterHarness();
-  delete scene.beginRegisterSession; // use the real method so its crates guard applies
-  scene.operatingRegister = false;
-  scene.operatingRegisterFixture = null;
+  scene.checkoutSystem.operatingRegister = false;
+  scene.checkoutSystem.operatingRegisterFixture = null;
   scene.carriedCrates = [{ id: "crate_1" }];
-  scene.getNearbyRegisterTarget = () => scene.fixtures.register();
-  scene.showShopMessage = () => {};
-  scene.handleJoinQueue({ cart: [{ itemId: "rifle", price: 100 }] });
+  scene.checkoutSystem.getNearbyRegisterTarget = () => scene.fixtures.register();
+  scene.messages = { show() {} };
+  scene.checkoutSystem.handleJoinQueue({ cart: [{ itemId: "rifle", price: 100 }] });
   assert.equal(checkout.uiWindow.isOpen, false);
-  assert.equal(scene.operatingRegister, false);
+  assert.equal(scene.checkoutSystem.operatingRegister, false);
 });
 
 test("manual save persists the current shop and confirms unchanged saves without another write", async () => {
   const { scene, writes, messages, controls } = createHarness();
-  await scene.saveManually();
+  await scene.saves.saveManually();
   assert.equal(writes.length, 1);
   assert.deepEqual(writes[0].data.shop, { credits: 436 });
-  assert.equal(scene.lastSavedSnapshot, JSON.stringify({ credits: 436 }));
+  assert.equal(scene.saves.lastSavedSnapshot, JSON.stringify({ credits: 436 }));
   assert.deepEqual(messages, ["Game saved."]);
   assert.equal(controls.at(-1).canSave, true);
   assert.equal(controls.at(-1).saving, false);
 
-  await scene.saveManually();
+  await scene.saves.saveManually();
   assert.equal(writes.length, 1);
   assert.equal(messages.at(-1), "Game saved.");
 });
@@ -879,7 +1010,7 @@ test("manual save shows busy controls until the write finishes", async () => {
   const { scene, controls, messages } = createHarness(() =>
     new Promise((resolve) => { finishWrite = resolve; }),
   );
-  const saving = scene.saveManually();
+  const saving = scene.saves.saveManually();
   assert.equal(controls.at(-1).saving, true);
   assert.equal(messages.length, 0);
 
@@ -892,27 +1023,28 @@ test("manual save shows busy controls until the write finishes", async () => {
 test("manual save failures use the save error path and never confirm success", async () => {
   const failure = new Error("Disk full");
   const { scene, errors, messages, controls } = createHarness(async () => { throw failure; });
-  await scene.saveManually();
+  await scene.saves.saveManually();
   assert.deepEqual(errors, [failure]);
   assert.deepEqual(messages, []);
-  assert.equal(scene.lastSavedSnapshot, null);
-  assert.equal(scene.saveInProgress, null);
+  assert.equal(scene.saves.lastSavedSnapshot, null);
+  assert.equal(scene.saves.inProgress, null);
   assert.equal(controls.at(-1).saving, false);
-  assert.match(scene.saveStatus, /Disk full/);
+  assert.match(scene.saves.status, /Disk full/);
 });
 
 test("manual saving stays blocked mid-shift, while starting a shift, and after a load error", async () => {
   for (const flags of [
     { shiftClock: { started: true, isPaused: false } },
     { shiftClock: { started: true, isPaused: true } },
-    { startingShift: true },
-    { loadFailed: true },
+    { shift: { starting: true, ended: false } },
+    { saves: { loadFailed: true } },
   ]) {
     const { scene, writes, messages, controls } = createHarness();
-    Object.assign(scene, flags);
-    scene.updateSaveControls();
+    if (flags.saves) Object.assign(scene.saves, flags.saves);
+    else Object.assign(scene, flags);
+    scene.saves.updateControls();
     assert.equal(controls.at(-1).canSave, false);
-    await scene.saveManually();
+    await scene.saves.saveManually();
     assert.equal(writes.length, 0);
     assert.equal(messages.length, 1);
     assert.doesNotMatch(messages[0], /Game saved/);
@@ -952,11 +1084,7 @@ test("HUD Save button is wired, reflects availability, and removes its handler o
   });
   let saves = 0;
   let mainMenuRequests = 0;
-  const hud = new HUDController({
-    subscribe(callback) {
-      callback({ credits: 436, globalReputation: 2, shopLevel: 1 });
-    },
-  }, {
+  const hud = new HUDController(newGame(), {
     subscribe(callback) { callback({ started: false, isPaused: true, softClosed: false }); },
   }, () => {}, () => { saves += 1; }, () => {}, () => {}, () => { mainMenuRequests += 1; });
   const mainMenuButton = elements.get("hud-main-menu-btn");
@@ -992,21 +1120,23 @@ test("HUD Save button is wired, reflects availability, and removes its handler o
   assert.equal(hudRoot.listeners.size, 0);
 });
 
-test("all placeable fixture physics bodies use the same art-trimmed bounds as placement", () => {
-  const scene = Object.create(GameScene.prototype);
+test("all placeable fixture physics bodies match the solid part of their placement bounds", () => {
+  const views = new FixtureViews(Object.create(GameScene.prototype));
   const tree = { remove() {}, insert() {} };
   const body = { world: { staticTree: tree }, position: { set(x, y) { this.x = x; this.y = y; } },
     center: { set(x, y) { this.x = x; this.y = y; } } };
   const sprite = { displayWidth: 0, displayHeight: 0, body,
     setTexture() { return this; },
     setDisplaySize(width, height) { this.displayWidth = width; this.displayHeight = height; return this; },
-    setPosition() { return this; }, setAngle(angle) { this.angle = angle; return this; } };
+    setPosition() { return this; }, setAngle(angle) { this.angle = angle; return this; },
+    setDepth(depth) { this.depth = depth; return this; } };
   for (const type of Object.keys(FIXTURE_TYPES)) {
     for (let rotation = 0; rotation < 4; rotation++) {
+      if (FIXTURE_TYPES[type].fixedFacing && rotation !== 0) continue;
       const fixture = { type, x: 832, y: 192, rotation, sprite };
-      scene.orientFixtureSprite(fixture);
+      views.orient(fixture);
       const footprint = fixtureFootprint(fixture);
-      const bounds = fixtureBounds({ ...fixture, gx: 832 / 64 - footprint.w / 2, gy: 192 / 64 - footprint.h / 2 });
+      const bounds = fixtureSolidBounds({ ...fixture, gx: 832 / 64 - footprint.w / 2, gy: 192 / 64 - footprint.h / 2 });
       assert.ok(Math.abs(body.width - (bounds.right - bounds.left) * 64) < 1e-9);
       assert.ok(Math.abs(body.height - (bounds.bottom - bounds.top) * 64) < 1e-9);
       assert.ok(Math.abs(body.position.x - bounds.left * 64) < 1e-9);
@@ -1016,13 +1146,33 @@ test("all placeable fixture physics bodies use the same art-trimmed bounds as pl
   }
 });
 
+test("the register's solid box leaves its front strip open, like customer routes", () => {
+  const views = new FixtureViews(Object.create(GameScene.prototype));
+  const makeBody = () => ({ world: { staticTree: { remove() {}, insert() {} } },
+    position: { set(x, y) { this.x = x; this.y = y; } }, center: { set() {} } });
+  const sprite = { body: makeBody(), setTexture() { return this; }, setDisplaySize() { return this; },
+    setPosition() { return this; }, setAngle() { return this; }, setDepth() { return this; } };
+  for (let rotation = 0; rotation < 4; rotation++) {
+    const registerSolid = { body: makeBody() };
+    views.orient({ type: "register_basic", x: 832, y: 192, rotation, sprite, registerSolid });
+    const full = sprite.body;
+    const solid = registerSolid.body;
+    const { dx, dy } = fixtureFacingStep({ type: "register_basic", rotation });
+    assert.equal(solid.width, full.width - (dx ? 10 : 0));
+    assert.equal(solid.height, full.height - (dy ? 10 : 0));
+    assert.equal(solid.position.x, full.position.x + (dx < 0 ? 10 : 0));
+    assert.equal(solid.position.y, full.position.y + (dy < 0 ? 10 : 0));
+  }
+});
+
 test("side-facing register queue and cashier align with the body box rather than transparent art", () => {
   const scene = Object.create(GameScene.prototype);
   const body = { width: 30, height: 68, center: { x: 100, y: 100 } };
   const register = { type: "register_basic", rotation: 1, sprite: { body } };
+  scene.checkoutSystem = new CheckoutSystem(scene);
   scene.fixtures = { register: () => register };
   scene.player = { sprite: { displayWidth: 48, displayHeight: 72 } };
-  assert.deepEqual(scene.getBehindRegisterPoint(), { x: 129, y: 100 });
+  assert.deepEqual(scene.checkoutSystem.behindRegisterPoint(), { x: 129, y: 100 });
   const first = positionRegisterQueue([{ x: 0, y: 100 }, { x: -64, y: 100 }], body, fixtureFacingStep(register))[0];
   assert.deepEqual(first, {
     x: 85 - CHARACTER_ART_WIDTH / 2 + 10,
@@ -1043,14 +1193,16 @@ test("side-facing register queue and cashier align with the body box rather than
       scene.employees = [];
       scene.eventBus = { emit() {} };
       scene.checkoutWindow = { mode: "closed" };
+      scene.crateSystem = { getCarriedCrates: () => [], syncCarriedCrate() {}, syncFloorStacks() {} };
+      scene.checkoutSystem = new CheckoutSystem(scene);
       scene.player = { sprite, inputEnabled: true,
         teleportTo(x, y) { sprite.x = x; sprite.y = y; }, forceFacing() {} };
-      scene.beginRegisterSession(register);
-      assert.equal(scene.operatingRegister, true);
+      scene.checkoutSystem.beginRegisterSession(register);
+      assert.equal(scene.checkoutSystem.operatingRegister, true);
       assert.equal(sprite.body.enable, false);
       assert.ok(Number.isFinite(sprite.x) && Number.isFinite(sprite.y));
-      scene.endRegisterSession();
-      assert.equal(scene.operatingRegister, false);
+      scene.checkoutSystem.endRegisterSession();
+      assert.equal(scene.checkoutSystem.operatingRegister, false);
       assert.equal(sprite.body.enable, true);
       assert.equal(scene.player.inputEnabled, true);
       assert.deepEqual({ x: sprite.x, y: sprite.y, depth: sprite.depth }, { x: 200, y: 200, depth: 2 });
@@ -1059,8 +1211,8 @@ test("side-facing register queue and cashier align with the body box rather than
   });
 });
 
-test("the budget shelf art fills its footprint in every direction; only the visible shelf is solid", () => {
-  const scene = Object.create(GameScene.prototype);
+test("the budget shelf art fills its footprint in every direction; only its feet or visible sides are solid", () => {
+  const views = new FixtureViews(Object.create(GameScene.prototype));
   const tree = { remove() {}, insert() {} };
   const body = { world: { staticTree: tree }, position: { set() {} }, center: { set() {} } };
   const sprite = {
@@ -1074,15 +1226,17 @@ test("the budget shelf art fills its footprint in every direction; only the visi
     setDisplaySize(width, height) { this.displayWidth = width; this.displayHeight = height; return this; },
     setPosition() { return this; },
     setAngle(angle) { this.angle = angle; return this; },
+    setDepth(depth) { this.depth = depth; return this; },
   };
   for (let rotation = 0; rotation < 4; rotation++) {
-    scene.orientFixtureSprite({ type: "shelf_budget_2x2", x: 100, y: 200, rotation, sprite });
+    views.orient({ type: "shelf_budget_2x2", x: 100, y: 200, rotation, sprite });
     const [width, height] = rotation % 2 === 0 ? [72, 64] : [64, 72];
     assert.equal(sprite.displayWidth, width);
     assert.equal(sprite.displayHeight, height);
     assert.equal(sprite.angle, 0);
-    // The 2x2 art leaves an empty band at its top (facing up/down) or sides (facing left/right).
-    const [solidWidth, solidHeight] = rotation % 2 === 0 ? [68, 48] : [44, 70];
+    // Facing up/down only the bottom 24px (half the player's height) is solid; facing
+    // left/right the art leaves empty bands at its sides.
+    const [solidWidth, solidHeight] = rotation % 2 === 0 ? [68, 24] : [44, 70];
     assert.equal(body.width, solidWidth);
     assert.equal(body.height, solidHeight);
   }

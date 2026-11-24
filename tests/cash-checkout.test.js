@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { CashPayment, getCashDenominations } from "../js/logic/CashPayment.js";
 import { ChitPayment } from "../js/logic/ChitPayment.js";
+import { PausableTimers } from "../js/core/Clock.js";
 import { cashFaceValue, CheckoutRenderer, renderCurrentChange } from "../js/logic/CheckoutRenderer.js";
 
 let server;
@@ -86,6 +87,7 @@ function harness({ cash = true, tender = 5, chit = false } = {}) {
   let penalties = 0;
   const checkout = Object.create(CheckoutWindow.prototype);
   Object.assign(checkout, {
+    timers: new PausableTimers(),
     total: 1.23, paymentStage: "total", paymentBuffer: "",
     cashPayment: cash ? new CashPayment(1.23, tender) : null,
     chitPayment: chit ? new ChitPayment(1.23, "314") : null,
@@ -138,6 +140,7 @@ test("closing a belt gap pins unscanned items before continuing at normal speed"
     },
   };
   const checkout = Object.create(CheckoutWindow.prototype);
+  checkout.timers = new PausableTimers();
   checkout.bodyElement = {
     querySelector: (selector) => selector === "#checkout-belt" ? belt : { offsetLeft: 400 },
   };
@@ -233,6 +236,22 @@ test("cash customers hand over money once scanning ends, with no total to key in
     '1.23 - <span class="checkout-paid">5.00</span>');
 });
 
+test("handing over change uses the rebound crate control", async (t) => {
+  const { defaultBindings, setBindings } = await server.ssrLoadModule("/js/input/KeyBindings.js");
+  const bindings = defaultBindings();
+  bindings.crate[0] = "KeyZ";
+  setBindings(bindings);
+  t.after(() => setBindings(defaultBindings()));
+  const h = harness();
+  h.checkout.paymentStage = "change";
+  let attempts = 0;
+  h.checkout.handOverChange = () => { attempts += 1; };
+  h.checkout.handleNumpadKeydown({ code: "Space", key: " ", preventDefault() {} });
+  assert.equal(attempts, 0);
+  h.checkout.handleNumpadKeydown({ code: "KeyZ", key: "z", preventDefault() {} });
+  assert.equal(attempts, 1);
+});
+
 test("the held scan gesture is released before customer cash can be swept up", (context) => {
   context.mock.timers.enable({ apis: ["setTimeout"] });
   const h = harness();
@@ -261,7 +280,7 @@ test("drawer clicks and right-clicks adjust change, and Space rejects mistakes u
   const h = harness();
   h.checkout.startTakingPayment();
   h.takeAll();
-  h.button.listeners.get("click")();
+  h.button.listeners.get("mousedown")({ button: 0, preventDefault() {} });
   assert.equal(h.elements.get("#checkout-change-selected").innerHTML, "0.01");
   const current = h.elements.get("#checkout-change-current").classList;
   assert.equal(current.contains("change-exact") || current.contains("change-over"), false);
@@ -303,6 +322,42 @@ test("drawer clicks and right-clicks adjust change, and Space rejects mistakes u
   assert.equal(prevented, 4);
 });
 
+test("a third wrong change hand-over loses the sale without another penalty", () => {
+  const h = harness();
+  let failed = 0;
+  h.checkout.onChangeFailed = () => { failed += 1; };
+  h.checkout.paymentStage = "change";
+  h.checkout.handOverChange();
+  h.checkout.handOverChange();
+  assert.match(h.elements.get("#checkout-payment-feedback").textContent, /One more mistake and the customer leaves/);
+  assert.equal(failed, 0);
+  h.checkout.handOverChange();
+  assert.equal(failed, 1);
+  assert.equal(h.penalties(), 1);
+  assert.equal(h.checkout.paymentStage, "lost");
+  h.checkout.handOverChange();
+  assert.equal(failed, 1);
+  assert.equal(h.completed(), 0);
+});
+
+test("handover diagnostics preserve the amount tested even after change is corrected", () => {
+  const h = harness();
+  const attempts = [];
+  h.checkout.onCashAttempt = (attempt) => attempts.push(attempt);
+  h.checkout.startTakingPayment();
+  h.takeAll();
+  h.checkout.cashPayment.change = new Map([[1, 376]]);
+  h.checkout.handOverChange("keyboard");
+  h.checkout.cashPayment.adjustChange(1, 1);
+  h.checkout.handOverChange("keyboard");
+  assert.equal(attempts[0].selectedUnits, 376);
+  assert.equal(attempts[0].dueUnits, 377);
+  assert.equal(attempts[0].accepted, false);
+  assert.deepEqual(attempts[0].pieces, [[1, 376]]);
+  assert.equal(attempts[1].selectedUnits, 377);
+  assert.equal(attempts[1].accepted, true);
+});
+
 test("held Space and a hidden register cannot hand over change", () => {
   const h = harness();
   h.checkout.paymentStage = "change";
@@ -334,6 +389,15 @@ test("a card total ending in .00 still needs the cents keyed in", () => {
   for (const digit of "25.00") h.checkout.appendDigit(digit);
   h.checkout.confirmPayment();
   assert.equal(h.completed(), 1);
+});
+
+test("a card total accepts a digit typed where the decimal point belongs, then rejects it", () => {
+  const h = harness({ cash: false });
+  for (const digit of "123") h.checkout.appendDigit(digit);
+  assert.equal(h.checkout.paymentBuffer, "123");
+  h.checkout.confirmPayment();
+  assert.equal(h.completed(), 0);
+  assert.equal(h.elements.get("#checkout-payment-feedback").textContent, "AMOUNT INCORRECT");
 });
 
 test("keypad Backspace removes one character, including the decimal point, while Clear resets all", () => {
@@ -379,6 +443,34 @@ test("Explorer Chit keyboard input resets mistakes and completes on the last rig
   assert.equal(prevented, 4);
 });
 
+test("the last coin counts on mouse-down before Space hands over change", () => {
+  const h = harness();
+  h.checkout.startTakingPayment();
+  h.takeAll();
+  h.checkout.cashPayment.change = new Map([[1, 376]]);
+  h.checkout.refreshCash();
+
+  h.button.listeners.get("mousedown")({ button: 0, preventDefault() {} });
+  assert.equal(h.checkout.cashPayment.changeUnits, h.checkout.cashPayment.changeDueUnits);
+
+  h.checkout.handleNumpadKeydown({ key: " ", preventDefault() {} });
+  assert.equal(h.checkout.paymentStage, "complete");
+  assert.equal(h.completed(), 1);
+});
+
+test("drawer denominations still respond to keyboard-generated clicks without double-counting mouse clicks", () => {
+  const h = harness();
+  h.checkout.startTakingPayment();
+  h.takeAll();
+
+  h.button.listeners.get("mousedown")({ button: 0, preventDefault() {} });
+  h.button.listeners.get("click")({ detail: 1 });
+  assert.equal(h.checkout.cashPayment.changeUnits, 1);
+
+  h.button.listeners.get("click")({ detail: 0 });
+  assert.equal(h.checkout.cashPayment.changeUnits, 2);
+});
+
 test("a five-digit Chit stays open until the fifth direction is entered", () => {
   const h = harness({ cash: false, chit: true });
   h.checkout.chitPayment = new ChitPayment(1.23, "12341");
@@ -411,7 +503,7 @@ test("a third wrong Explorer Chit key in one order loses the sale", () => {
 });
 
 test("each Chit attempt gets 10 seconds; only a mistake restarts the clock", (context) => {
-  context.mock.timers.enable({ apis: ["setInterval", "Date"] });
+  context.mock.timers.enable({ apis: ["setTimeout", "Date"] });
   const h = harness({ cash: false, chit: true });
   let failed = 0;
   h.checkout.onChitFailed = () => { failed += 1; };
@@ -446,6 +538,15 @@ test("about half of customers pay cash, with a clear card keypad prompt", () => 
   assert.equal(customerPaysCash(() => 0.5), false);
   const html = CheckoutRenderer.generateHTML([], {}, null);
   assert.match(html, /CARD PAYMENT - ENTER TOTAL/);
+});
+
+test("item image paths cannot add markup to the checkout window", () => {
+  const markup = CheckoutRenderer.generateHTML(
+    [{ itemId: "item", price: 1 }],
+    { getItem: () => ({ image: 'image.png" onerror="unexpected' }) },
+  );
+  assert.match(markup, /src="image\.png&quot; onerror=&quot;unexpected"/);
+  assert.doesNotMatch(markup, /src="image\.png" onerror=/);
 });
 
 test("the register window opens beside the register, on whichever side has room", () => {
@@ -498,8 +599,8 @@ test("Scavenger cash shows only M-Scrip bills and prices the sale in M-Scrips", 
 
 test("Explorer Chit display fits a five-digit code and shows all five input spaces", async () => {
   const html = CheckoutRenderer.generateHTML([], {}, null, new ChitPayment(100, "31421"));
-  const css = await readFile(new URL("../styles/space_dealer_window.css", import.meta.url), "utf8");
-  assert.match(css, /\.chit-card\s*\{[^}]*background-image:\s*url\("\.\.\/img\/Generated\/explorer_travel_chit\.png"\)/s);
+  const css = await readFile(new URL("../styles/windows/checkout.css", import.meta.url), "utf8");
+  assert.match(css, /\.chit-card\s*\{[^}]*background-image:\s*url\("\.\.\/\.\.\/img\/Generated\/explorer_travel_chit\.png"\)/s);
   assert.match(css, /\.chit-card\s*\{[^}]*min-height:\s*calc\(240px \* var\(--text-scale\)\)/s);
   assert.match(html, /class="chit-screen"/);
   assert.match(html, /EXPLORER TRAVEL CHIT/);
@@ -514,11 +615,11 @@ test("Explorer Chit display fits a five-digit code and shows all five input spac
 test("change counted appears first on the left, and the bills use a narrow upright layout", async () => {
   const html = CheckoutRenderer.generateHTML([], {}, new CashPayment(1.23, 5));
   assert.ok(html.indexOf("CURRENT CHANGE") < html.indexOf("CHANGE OWED"));
-  const css = await readFile(new URL("../styles/space_dealer_window.css", import.meta.url), "utf8");
+  const css = await readFile(new URL("../styles/windows/checkout.css", import.meta.url), "utf8");
   assert.match(css, /\.cash-summary\s*\{[^}]*justify-content:\s*flex-start/s);
   assert.match(css, /\.cash-bills\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*60px\)/s);
   assert.match(css, /\.cash-bill \.cash-art\s*\{[^}]*width:\s*46px;[^}]*height:\s*84px/s);
   assert.match(css, /\.cash-loose\.cash-bill\s*\{[^}]*width:\s*52px;[^}]*height:\s*96px/s);
-  assert.match(css, /background-image:\s*url\("\.\.\/img\/Generated\/currency_bill\.png"\)/);
-  assert.match(css, /background-image:\s*url\("\.\.\/img\/Generated\/currency_coin\.png"\)/);
+  assert.match(css, /background-image:\s*url\("\.\.\/\.\.\/img\/Generated\/currency_bill\.png"\)/);
+  assert.match(css, /background-image:\s*url\("\.\.\/\.\.\/img\/Generated\/currency_coin\.png"\)/);
 });

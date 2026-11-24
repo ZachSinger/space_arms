@@ -7,6 +7,7 @@
 import items from "../../data/Items.json" with { type: "json" };
 import { getCrateItemLimit } from "./ShelfSlotStocking.js";
 import { getItemCrateTint } from "./CrateCategory.js";
+import { REMOTE_ORDER_CRATE_SPRITES } from "../modules/droneDeliveries/DroneTerminalArt.js";
 
 const ITEMS_BY_ID = new Map(items.map((item) => [item.id, item]));
 
@@ -40,6 +41,12 @@ const DROP_SEARCH_RADIUS = INTERACT_RANGE + 2 * DROP_SEARCH_STEP;
 const FACING_DIRECTIONS = Object.freeze({
   up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
 });
+let nextStandaloneCrateId = 1;
+
+// Delivery platforms stop people, but support crates placed on their surface.
+export function isCrateObstacle(body) {
+  return Boolean(body.enable) && !body.gameObject?.getData?.("allowsCrates");
+}
 
 // The space a set-down crate must keep clear of: the carrier's feet (physics body) with a
 // small margin, so crates can be set down right beside him; art overlap is depth-sorted.
@@ -55,27 +62,62 @@ function carrierFootprint(carrierSprite, margin = 4) {
  * Created by deliveries and fixture crating. Hand-stocked crates stay around when empty.
  */
 export class Crate {
-  constructor(scene, itemId, quantity, x, y, { kind = "item", typeId = null, tint = null } = {}) {
+  constructor(scene, itemId, quantity, x, y, {
+    id = null, kind = "item", typeId = null, tint = null,
+    orderId = null, requiredItems = [], contents = [],
+  } = {}) {
     this.scene = scene;
+    this.id = id ?? scene.crateSystem?.createId?.() ?? `crate-local-${nextStandaloneCrateId++}`;
     this.kind = kind;
     this.typeId = kind === "fixture" ? typeId : null;
+    this.orderId = kind === "remote-order" ? orderId : null;
+    this.requiredItems = kind === "remote-order" ? requiredItems.map((entry) => ({ ...entry })) : [];
+    this.contents = kind === "remote-order"
+      ? new Map(contents.map(({ itemId: contentId, quantity: amount }) => [contentId, amount]))
+      : new Map();
     this.itemId = kind === "item" ? itemId : null;
-    this.quantity = kind === "item" ? quantity : 1;
-    this.isCarried = false;
+    this.quantity = kind === "item" ? quantity
+      : kind === "remote-order" ? [...this.contents.values()].reduce((sum, amount) => sum + amount, 0)
+        : 1;
+    this.locationState = { kind: "world" };
     this.isThrown = false;
     this.isPushed = false;
-    this.lockedToPad = false;
     this.launch = null;
     this.flight = null;
     this.throwCarrier = null;
     this.hitCustomers = new Set();
 
-    const art = kind === "fixture" ? FIXTURE_CRATE_SPRITE : ITEM_CRATE_SPRITE;
-    this.sprite = scene.add
-      .image(x, y, art.key)
+    const art = kind === "fixture" ? FIXTURE_CRATE_SPRITE
+      : kind === "remote-order"
+        ? this.isRemoteOrderComplete() ? REMOTE_ORDER_CRATE_SPRITES.complete : REMOTE_ORDER_CRATE_SPRITES.incomplete
+        : ITEM_CRATE_SPRITE;
+    const sprite = kind === "remote-order"
+      ? scene.add.sprite(x, y, art.key, 0)
+      : scene.add.image(x, y, art.key);
+    this.sprite = sprite
       .setDisplaySize(art.width, art.height)
       .setDepth(2);
     if (tint !== null) this.sprite.setTint?.(tint);
+    this.remoteOrderLidOpen = false;
+    this.inTerminal = false;
+    this.remoteOrderShipping = false;
+    if (kind === "remote-order" && scene.anims && !scene.anims.exists(art.animation)) {
+      for (const appearance of Object.values(REMOTE_ORDER_CRATE_SPRITES)) {
+        if (scene.anims.exists(appearance.animation)) continue;
+        scene.anims.create({
+          key: appearance.animation,
+          frames: [0, 1, 2, 3].map((frame) => ({ key: appearance.key, frame })),
+          frameRate: 1000 / 60,
+          repeat: 0,
+        });
+        scene.anims.create({
+          key: `${appearance.animation}-close`,
+          frames: [3, 2, 1, 0].map((frame) => ({ key: appearance.key, frame })),
+          frameRate: 1000 / 60,
+          repeat: 0,
+        });
+      }
+    }
 
     scene.crateGroup.add(this.sprite);
     this.sprite.body
@@ -104,15 +146,69 @@ export class Crate {
   }
 
   canPickUp() {
+    if (this.inTerminal || this.remoteOrderShipping) return false;
     return this.isPushed || this.isStationary() || this.isSliding();
   }
 
+  get isCarried() {
+    return this.locationState?.kind === "carried" || this.locationState?.kind === "crate-stack";
+  }
+
+  get lockedToPad() {
+    return this.locationState?.kind === "loading-pad";
+  }
+
+  canTake() {
+    return this.kind === "item" && !this.lockedToPad;
+  }
+
+  canPut(itemId) {
+    if (this.kind === "remote-order") {
+      return this.requiredItems.some((entry) =>
+        entry.itemId === itemId && this.getAvailableUnitsFor(itemId) < entry.quantity);
+    }
+    return this.kind === "item" && (this.quantity === 0 || this.itemId === itemId);
+  }
+
+  getLocation() {
+    const location = this.locationState ?? { kind: "world" };
+    if (location.kind !== "world") return { ...location };
+    return {
+      kind: "world",
+      x: this.sprite?.x ?? null,
+      y: this.sprite?.y ?? null,
+    };
+  }
+
+  getContainerId() {
+    return this.id;
+  }
+
+  setCarriedBy(holderId) {
+    if (typeof holderId !== "string" || holderId.length === 0) {
+      throw new TypeError("Carried crates require a holder ID.");
+    }
+    this.isPushed = false;
+    this.locationState = { kind: "carried", holderId };
+  }
+
   getAvailableUnitsFor(itemId) {
-    return this.kind === "item" && this.itemId === itemId ? this.quantity : 0;
+    if (this.kind === "remote-order") return this.contents.get(itemId) ?? 0;
+    return this.canTake() && this.itemId === itemId ? this.quantity : 0;
   }
 
   add(itemId, quantity) {
-    if (this.kind !== "item" || (this.quantity > 0 && this.itemId !== itemId)) return 0;
+    if (this.kind === "remote-order") {
+      if (!this.canPut(itemId)) return 0;
+      const required = this.requiredItems.find((entry) => entry.itemId === itemId).quantity;
+      const accepted = Math.min(quantity, required - this.getAvailableUnitsFor(itemId));
+      if (accepted <= 0) return 0;
+      this.contents.set(itemId, this.getAvailableUnitsFor(itemId) + accepted);
+      this.quantity += accepted;
+      this.setRemoteOrderAppearance(this.isRemoteOrderComplete());
+      return accepted;
+    }
+    if (!this.canPut(itemId)) return 0;
     this.itemId = itemId;
     const tint = getItemCrateTint(ITEMS_BY_ID.get(itemId)?.tags);
     if (tint !== null) this.sprite?.setTint?.(tint);
@@ -121,11 +217,16 @@ export class Crate {
   }
 
   getRemainingUnitsFor(itemId) {
-    if (this.kind !== "item" || (this.quantity > 0 && this.itemId !== itemId)) return 0;
+    if (this.kind === "remote-order") {
+      const required = this.requiredItems.find((entry) => entry.itemId === itemId)?.quantity ?? 0;
+      return Math.max(0, required - this.getAvailableUnitsFor(itemId));
+    }
+    if (!this.canPut(itemId)) return 0;
     return Math.max(0, getCrateItemLimit(ITEMS_BY_ID.get(itemId)?.boxSize) - this.quantity);
   }
 
   remove(itemId, quantity) {
+    if (this.kind === "remote-order") return 0;
     const removed = Math.min(this.getAvailableUnitsFor(itemId), quantity);
     this.quantity -= removed;
     // The last item out turns it back into a plain, uncolored empty crate.
@@ -136,27 +237,79 @@ export class Crate {
     return removed;
   }
 
+  isRemoteOrderComplete() {
+    return this.kind === "remote-order" && this.requiredItems.length > 0 &&
+      this.requiredItems.every((entry) => this.getAvailableUnitsFor(entry.itemId) >= entry.quantity);
+  }
+
+  setRemoteOrderAppearance(complete) {
+    if (this.kind !== "remote-order") return;
+    const appearance = complete
+      ? REMOTE_ORDER_CRATE_SPRITES.complete
+      : REMOTE_ORDER_CRATE_SPRITES.incomplete;
+    this.sprite?.anims?.stop?.();
+    this.sprite?.setTexture?.(appearance.key, this.remoteOrderLidOpen ? 3 : 0);
+  }
+
+  animateRemoteOrderLid(open = true) {
+    if (this.kind !== "remote-order") return;
+    if (this.remoteOrderLidOpen === open) return;
+    this.remoteOrderLidOpen = open;
+    const appearance = this.isRemoteOrderComplete()
+      ? REMOTE_ORDER_CRATE_SPRITES.complete
+      : REMOTE_ORDER_CRATE_SPRITES.incomplete;
+    if (this.sprite.anims) this.sprite.anims.play(open ? appearance.animation : `${appearance.animation}-close`, true);
+    else this.sprite.setFrame?.(open ? 3 : 0);
+  }
+
+  setTerminalStored(stored) {
+    if (this.kind !== "remote-order" || this.isCarried) throw new Error("Only an uncarried delivery crate can enter the terminal.");
+    this.inTerminal = stored;
+    this.sprite.setVisible(!stored);
+    const body = this.sprite.body;
+    body.stop();
+    body.enable = !stored;
+    body.moves = !stored && !this.scene.crateSystem?.motionPaused;
+    if (!stored) body.reset(this.sprite.x, this.sprite.y);
+  }
+
+  resetRemoteOrderContents() {
+    if (this.kind !== "remote-order") throw new Error("Only a remote order crate can be reset.");
+    this.contents.clear();
+    this.quantity = 0;
+    this.sprite?.anims?.stop?.();
+    this.setRemoteOrderAppearance(false);
+  }
+
   /**
    * Resting, pushed, and sliding crates can be picked up; a crate still being launched cannot.
    * @param {Phaser.GameObjects.Sprite} carrierSprite
    */
-  pickUp(carrierSprite) {
+  pickUp(carrierSprite, { holderId = "player", stackedOnId = null } = {}) {
     if (!this.canPickUp()) return false;
 
-    this.isCarried = true;
+    if (stackedOnId !== null) this.setStackedOn(stackedOnId);
+    else this.setCarriedBy(holderId);
     this.isThrown = false;
     this.isPushed = false;
     this.flight = null;
     this.setThrowHeight(0);
     this.stopThrowAcceleration();
     this.throwCarrier = null;
-    this.lockedToPad = false;
     this.hitCustomers.clear();
     this.sprite.body.setImmovable(false);
     this.sprite.body.stop();
     this.sprite.body.enable = false;
     this.followCarrier(carrierSprite);
     return true;
+  }
+
+  setStackedOn(baseCrateId) {
+    if (typeof baseCrateId !== "string" || baseCrateId.length === 0) {
+      throw new TypeError("Stacked crates require a base crate ID.");
+    }
+    this.isPushed = false;
+    this.locationState = { kind: "crate-stack", baseCrateId };
   }
 
   /**
@@ -179,7 +332,7 @@ export class Crate {
     const clearRight = right + clearance;
     const clearTop = top - clearance;
     const clearBottom = bottom + clearance;
-    const pad = this.scene.loadingPadRect;
+    const pad = this.scene.supply?.padRect;
     if (pad && clearLeft < pad.right && clearRight > pad.left && clearTop < pad.bottom && clearBottom > pad.top) {
       return false;
     }
@@ -195,7 +348,7 @@ export class Crate {
         clearLeft, clearTop, clearRight - clearLeft, clearBottom - clearTop, false, true),
       ...(this.scene.restockCrates ?? []).filter((crate) => crate !== this).map((crate) => crate.sprite.body),
     ];
-    return !bodies.some((body) => body.enable &&
+    return !bodies.some((body) => isCrateObstacle(body) &&
       clearLeft < body.right && clearRight > body.left && clearTop < body.bottom && clearBottom > body.top);
   }
 
@@ -407,7 +560,7 @@ export class Crate {
    * @param {boolean} paused
    */
   drop(x, y, velocityX, velocityY, paused) {
-    this.isCarried = false;
+    this.locationState = { kind: "world" };
     this.isPushed = false;
     this.throwCarrier = null;
     this.flight = null;
@@ -423,8 +576,6 @@ export class Crate {
     body.moves = !paused;
     body.enable = true;
     body.setImmovable(false);
-    this.lockedToPad = false;
-
     this.isThrown = Math.hypot(velocityX, velocityY) > 0;
     this.hitCustomers.clear();
     body.setVelocity(velocityX * CRATE_THROW_MULTIPLIER, velocityY * CRATE_THROW_MULTIPLIER);
@@ -463,7 +614,36 @@ export class Crate {
       return false;
     }
     this.hitCustomers.add(customer);
-    this.hitCustomers.add(customer);
+    return true;
+  }
+
+  // A crate in flight that people stop rather than pass through: the player, staff, customers.
+  canHitPerson(personSprite) {
+    const body = this.sprite.body;
+    return this.isThrown && !this.isCarried && !this.isPushed && body.enable && body.moves &&
+      !this.isStationary() && this.throwCarrier !== personSprite && personSprite.body?.enable !== false;
+  }
+
+  /**
+   * Push the crate out of a person's feet box and bounce it back; the person isn't moved.
+   * @param {{ left: number, right: number, top: number, bottom: number, center: { x: number, y: number } }} person
+   */
+  bounceOffPerson(person) {
+    const body = this.sprite.body;
+    const overlapX = Math.min(body.right - person.left, person.right - body.left);
+    const overlapY = Math.min(body.bottom - person.top, person.bottom - body.top);
+    if (overlapX <= 0 || overlapY <= 0) return false;
+    const velocity = body.velocity;
+    if (overlapX < overlapY) {
+      const away = body.center.x >= person.center.x ? 1 : -1;
+      this.nudge(away * overlapX, 0);
+      if (velocity.x * away < 0) velocity.x = -velocity.x * CRATE_BOUNCE;
+    } else {
+      const away = body.center.y >= person.center.y ? 1 : -1;
+      this.nudge(0, away * overlapY);
+      if (velocity.y * away < 0) velocity.y = -velocity.y * CRATE_BOUNCE;
+    }
+    this.refreshDrag();
     return true;
   }
 
@@ -474,7 +654,8 @@ export class Crate {
   lockToPad() {
     this.stopThrowAcceleration();
     this.throwCarrier = null;
-    this.lockedToPad = true;
+    this.isPushed = false;
+    this.locationState = { kind: "loading-pad", padId: "loading-pad" };
     this.isThrown = false;
     const body = this.sprite.body;
     body.stop();
@@ -489,6 +670,7 @@ export class Crate {
   push(velocity) {
     this.stopThrowAcceleration();
     this.throwCarrier = null;
+    this.locationState = { kind: "world" };
     this.sprite.setDepth(2);
     this.isPushed = true;
     this.isThrown = false;
@@ -519,7 +701,7 @@ export class Crate {
   }
 
   setPaused(paused) {
-    this.sprite.body.moves = !paused && !this.lockedToPad;
+    this.sprite.body.moves = !paused && !this.lockedToPad && !this.inTerminal;
   }
 
   // --- Saving ---
@@ -538,12 +720,24 @@ export class Crate {
   }
 
   serializePayload() {
-    return this.kind === "fixture"
+    const payload = this.kind === "fixture"
       ? { kind: "fixture", typeId: this.typeId }
-      : { kind: "item", itemId: this.itemId, quantity: this.quantity };
+      : this.kind === "remote-order"
+        ? {
+          kind: "remote-order",
+          orderId: this.orderId,
+          requiredItems: this.requiredItems.map((entry) => ({ ...entry })),
+          contents: [...this.contents].map(([contentId, amount]) => ({ itemId: contentId, quantity: amount })),
+          quantity: this.quantity,
+          lidOpen: this.remoteOrderLidOpen,
+          inTerminal: this.inTerminal,
+        }
+        : { kind: "item", itemId: this.itemId, quantity: this.quantity };
+    return this.id ? { id: this.id, ...payload } : payload;
   }
 
   applySave(data) {
+    this.id = data.id ?? this.id;
     // drop() re-applies the throw multiplier, so undo it on the saved velocity.
     this.drop(data.x, data.y, data.velocityX / CRATE_THROW_MULTIPLIER,
       data.velocityY / CRATE_THROW_MULTIPLIER, false);
@@ -552,6 +746,11 @@ export class Crate {
       this.flight = { ...data.flight };
       this.isThrown = true;
       this.setThrowHeight(this.flight.height);
+    }
+    if (this.kind === "remote-order") {
+      this.remoteOrderLidOpen = data.lidOpen ?? true;
+      this.setRemoteOrderAppearance(this.isRemoteOrderComplete());
+      if (data.inTerminal) this.setTerminalStored(true);
     }
   }
 

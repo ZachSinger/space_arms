@@ -7,8 +7,8 @@
 import fixtureTypes from "../../data/Fixtures.json" with { type: "json" };
 import { roundMoney } from "./Money.js";
 import { getSlotItemLimit } from "./ShelfSlotStocking.js";
-import { createFloorReachability, FLOOR_NODE_STEP } from "./FloorReachability.js";
-import { PLAYER_BODY_HEIGHT, PLAYER_BODY_WIDTH } from "./Player.js";
+import { createFloorReachability, FLOOR_NODE_STEP } from "../world/Navigation.js";
+import { PLAYER_BODY_HEIGHT, PLAYER_BODY_WIDTH, PLAYER_CHARACTER_HEIGHT } from "./Player.js";
 import {
   CHARACTER_ART_HEIGHT, CHARACTER_ART_WIDTH, CHARACTER_FEET_DROP,
   CUSTOMER_COLLISION_HEIGHT, CUSTOMER_COLLISION_WIDTH,
@@ -34,11 +34,17 @@ export const SHELF_FEET_BELOW_WALL = 1 / 4;
 // Shelf art never reaches outside the shelf's own space, so facing shelves this close apart
 // still never hide each other.
 export const FIXTURE_FRONT_CLEARANCE = 1 / 2;
+// Upright shelf backs can share projected artwork, but their floor bases need this depth.
+const SHELF_BACK_TO_BACK_DEPTH = 1 / 4;
+// Tiles of an upright shelf's feet that people bump into: half the player character's height.
+export const SHELF_SOLID_HEIGHT = PLAYER_CHARACTER_HEIGHT / 2 / TILE_SIZE;
 // px, the feet box every walker (customers, staff, the player) must fit through.
 const WALKING_BODY_WIDTH = Math.max(PLAYER_BODY_WIDTH, CUSTOMER_COLLISION_WIDTH);
 const WALKING_BODY_HEIGHT = Math.max(PLAYER_BODY_HEIGHT, CUSTOMER_COLLISION_HEIGHT);
 // How far the first customer may overlap the front of the register art, in pixels.
 export const REGISTER_FRONT_OVERLAP = 10;
+// A player pressed against a fixture can stop a hair inside its front edge (physics rounding).
+const FRONT_EDGE_TOLERANCE_PX = 0.5;
 const REGISTER_QUEUE_SPACING = 52;
 const MIN_REGISTER_QUEUE_SEPARATION = 32;
 
@@ -53,8 +59,9 @@ export function snapFixturePosition(value) {
 // Placed fixtures are instances ({ id, type, gx, gy }) owned by FixtureRegistry.
 export const FIXTURE_TYPES = fixtureTypes;
 
-// A new game's layout: no shelves, so the player buys their first one from the Fixtures tab.
-export const STARTING_FIXTURES = [
+// The bare shop: one trash can and one register. New games start from the Starting Template
+// (data/StartingTemplate.json) instead; tests start from this layout (tests/support/fixed-start.js).
+export const BASIC_FIXTURES = [
   { id: "trash_can_01", type: "trash_can", gx: 18, gy: 2 },
   { id: "register", type: "register_basic", gx: 13, gy: 3 },
 ];
@@ -67,20 +74,11 @@ const LEGACY_FIXTURE_TYPES = {
 };
 
 /**
- * Hands-on spaces hold 20 box-size units; legacy slots cap stackSize by stackDepth.
- * @param {number} stackDepth
+ * Each shelf space holds one item kind, up to 20 box-size units.
  * @param {object} item
- * @param {boolean} handsOn
  */
-export function getShelfSlotCapacity(stackDepth, item, handsOn = false) {
-  if (handsOn) return getSlotItemLimit(item?.boxSize);
-  if (!item?.stackSize) return 0;
-  return Math.min(item.stackSize, stackDepth);
-}
-
-export function getShelfItemFootprint(item, rotated = false, handsOn = false) {
-  if (handsOn) return { w: 1, h: 1 };
-  return rotated ? { w: item.dimensions.h, h: item.dimensions.w } : { ...item.dimensions };
+export function getShelfSlotCapacity(item) {
+  return getSlotItemLimit(item?.boxSize);
 }
 
 export function getShelfDisplayGrid(fixtureType) {
@@ -176,6 +174,23 @@ export function fixtureBounds(placement) {
   };
 }
 
+/**
+ * The part people actually bump into, in tiles. An upright shelf (facing up or down) is only
+ * solid around its feet, up to half a person's height. Decorations use their catalog's
+ * solid foot height. Anyone further up walks behind the art; placement and walking routes
+ * still use the full body box (fixtureBounds).
+ */
+export function fixtureSolidBounds(placement) {
+  const bounds = fixtureBounds(placement);
+  const spec = getFixtureType(placement.type);
+  if (spec.kind === "decoration") {
+    return { ...bounds, top: Math.max(bounds.top, bounds.bottom - spec.solidHeight) };
+  }
+  const facing = fixtureFacing(placement);
+  if (spec.kind !== "shelf" || (facing !== "up" && facing !== "down")) return bounds;
+  return { ...bounds, top: Math.max(bounds.top, bounds.bottom - SHELF_SOLID_HEIGHT) };
+}
+
 export function fixtureAtWorldPoint(placement, worldX, worldY) {
   const { w, h } = fixtureFootprint(placement);
   return {
@@ -212,9 +227,20 @@ export function rectanglesOverlap(a, b) {
 export function fixturesOverlap(a, b) {
   const first = fixtureBounds(a);
   const second = fixtureBounds(b);
-  return rectanglesOverlap(first, second) ||
+  return (rectanglesOverlap(first, second) && !shelfBacksFit(a, b, first, second)) ||
     fixtureProjectionBoxes(a).some((projection) => rectanglesOverlap(projection, second)) ||
     fixtureProjectionBoxes(b).some((projection) => rectanglesOverlap(first, projection));
+}
+
+function shelfBacksFit(a, b, first, second) {
+  if (getFixtureType(a.type).kind !== "shelf" || getFixtureType(b.type).kind !== "shelf") return false;
+  const down = fixtureFacing(a) === "down" ? first : fixtureFacing(b) === "down" ? second : null;
+  const up = fixtureFacing(a) === "up" ? first : fixtureFacing(b) === "up" ? second : null;
+  if (!down || !up || down.bottom < up.bottom) return false;
+  // Unlike spun art, both upright pictures rise above their feet. Only outward-facing
+  // backs share that height; fronts and all other fixture pairs keep their full body box.
+  const base = (bounds) => ({ ...bounds, top: Math.max(bounds.top, bounds.bottom - SHELF_BACK_TO_BACK_DEPTH) });
+  return !rectanglesOverlap(base(down), base(up));
 }
 
 // The range of floor squares the fixture covers by more than a sliver.
@@ -343,12 +369,14 @@ export function fixtureInteractionDistance(placement, { x, y }) {
   // Shared edges belong to the fixture on the right (or below), not both neighbors.
   const alongX = x >= left && x < right;
   const alongY = y >= top && y < bottom;
-  switch (fixtureFacing(placement)) {
-    case "down": return alongX && y >= bottom ? y - bottom : Infinity;
-    case "up": return alongX && y <= top ? top - y : Infinity;
-    case "left": return alongY && x <= left ? left - x : Infinity;
-    default: return alongY && x >= right ? x - right : Infinity;
-  }
+  // Walking into the front can leave the feet a rounding sliver inside the edge; that's touching.
+  const gap = {
+    down: alongX ? y - bottom : NaN,
+    up: alongX ? top - y : NaN,
+    left: alongY ? left - x : NaN,
+    right: alongY ? x - right : NaN,
+  }[fixtureFacing(placement)];
+  return gap >= -FRONT_EDGE_TOLERANCE_PX ? Math.max(0, gap) : Infinity;
 }
 
 /**
@@ -378,7 +406,6 @@ export function validateFixtureLayout(placements, {
   occupiedRectangles = [], gridSize = getAuthoredGridSize(), queueSize = 6, requireSalesFloor = true,
   links = [], backroomBounds = null, reservedRectangles = [], doorwayClearanceRectangles = [],
   fixtureReservedCells = reservedCells,
-  connectivityCache = null,
 }) {
   const invalid = (reason) => ({ valid: false, reason });
   if (!Array.isArray(placements)) return invalid("The fixture layout is invalid.");
@@ -392,6 +419,8 @@ export function validateFixtureLayout(placements, {
       !isValidFixtureRotation(placement.rotation)) {
       return invalid("The fixture layout is invalid.");
     }
+    // Art drawn for one facing only (the hovercart charger) can't be turned.
+    if (spec.fixedFacing && fixtureRotation(placement) !== 0) return invalid("The fixture layout is invalid.");
     ids.add(placement.id);
     const bounds = fixtureBounds(placement);
     const projections = fixtureProjectionBoxes(placement);
@@ -412,8 +441,10 @@ export function validateFixtureLayout(placements, {
       left: rect.left * TILE_SIZE, right: rect.right * TILE_SIZE,
       top: rect.top * TILE_SIZE, bottom: rect.bottom * TILE_SIZE,
     }));
-    if (pixelRectangles.some((rect) => reservedRectangles.some((reserved) => rectanglesOverlap(rect, reserved))) ||
-      doorwayClearanceRectangles.some((door) => rectanglesOverlap(pixelRectangles[0], door))) {
+    const hitReserved = reservedRectangles.find((reserved) =>
+      pixelRectangles.some((rect) => rectanglesOverlap(rect, reserved)));
+    if (hitReserved?.reason) return invalid(hitReserved.reason);
+    if (hitReserved || doorwayClearanceRectangles.some((door) => rectanglesOverlap(pixelRectangles[0], door))) {
       return invalid("Keep entrances and the loading area clear.");
     }
     for (const [index, projection] of projections.entries()) {
@@ -440,7 +471,7 @@ export function validateFixtureLayout(placements, {
           ? "Too far into the wall. Move it down a little."
           : "Place fixtures on unlocked floor, away from walls.");
       }
-      if (!tucked && requireSalesFloor && !zoneAt(cell.gx, cell.gy)?.salesFloor) {
+      if (!tucked && requireSalesFloor && !spec.anyRoom && !zoneAt(cell.gx, cell.gy)?.salesFloor) {
         return invalid(`The ${spec.name} must go on the sales floor.`);
       }
       if (fixtureReservedCells.has(key)) return invalid("Keep entrances and the loading area clear.");
@@ -474,17 +505,6 @@ export function validateFixtureLayout(placements, {
       back: isRegister ? fixtureAccessCells(placement, true) : [],
     };
   });
-  // The caller scopes this cache to a fixed room/layout snapshot.
-  const cacheKey = connectivityCache && JSON.stringify(
-    placements.map((placement) => [
-      placement.id, placement.type, placement.gx, placement.gy, fixtureRotation(placement),
-    ]),
-  );
-  if (connectivityCache?.has(cacheKey)) return connectivityCache.get(cacheKey);
-  const remember = (result) => {
-    connectivityCache?.set(cacheKey, result);
-    return result;
-  };
   const canWalk = (gx, gy) => isWalkable(gx, gy) && !blockedCells.has(`${gx},${gy}`);
   // Everyone walks on the same size of feet box (customers, staff, and the player).
   const reachableFloor = (solids) => {
@@ -509,13 +529,14 @@ export function validateFixtureLayout(placements, {
   const floor = reachableFloor(placements.map(fixturePixelBounds));
   // Otherwise whatever is through the door gets the blame.
   if (links.some((pair) => pair.some((cell) => isWalkable(cell.gx, cell.gy) && !floor.reachesCell(cell)))) {
-    return remember(invalid("Keep a path open to the backroom door."));
+    return invalid("Keep a path open to the backroom door.");
   }
   const access = new Map();
   const accessCells = new Map();
+  const backAccess = new Map();
   for (const { id, type, placement, isRegister, front, back } of requirements) {
     if ([...front, ...back].some((cell) => doorwayCells.has(cellKey(cell)))) {
-      return remember(invalid(`The ${isRegister ? "front and back" : "front"} of ${getFixtureType(type).name} can't face into a doorway.`));
+      return invalid(`The ${isRegister ? "front and back" : "front"} of ${getFixtureType(type).name} can't face into a doorway.`);
     }
     const reachableCells = (cells, behind = false) => cells.filter((cell) =>
       !doorwayCells.has(cellKey(cell)) &&
@@ -524,12 +545,13 @@ export function validateFixtureLayout(placements, {
     const usableFront = reachableCells(front);
     const usableBack = isRegister ? reachableCells(back, true) : [];
     if (usableFront.length === 0 || (isRegister && usableBack.length === 0)) {
-      return remember(invalid(`Keep the front${isRegister ? " and back" : ""} of ${getFixtureType(type).name} accessible.`));
+      return invalid(`Keep the front${isRegister ? " and back" : ""} of ${getFixtureType(type).name} accessible.`);
     }
     access.set(id, usableFront[Math.floor(usableFront.length / 2)]);
     accessCells.set(id, usableFront);
+    if (isRegister) backAccess.set(id, usableBack[Math.floor(usableBack.length / 2)]);
   }
-  if (floor.hasCutOffFloor()) return remember(invalid("This placement cuts off part of the shop."));
+  if (floor.hasCutOffFloor()) return invalid("This placement cuts off part of the shop.");
 
   // One checkout line per register. Earlier registers' lines reserve their floor so the
   // next register's line can't be planned through them.
@@ -633,7 +655,7 @@ export function validateFixtureLayout(placements, {
   for (const register of registers) {
     const queue = planQueueFor(register);
     if (!queue) {
-      return remember(invalid("Leave room in front of each register for its customer queue."));
+      return invalid("Leave room in front of each register for its customer queue.");
     }
     queuePointsById.set(register.id, queue.queuePoints);
     firstQueue ??= queue;
@@ -642,11 +664,11 @@ export function validateFixtureLayout(placements, {
       queueFloorReserved.add(`${Math.floor(point.x / TILE_SIZE)},${Math.floor(point.y / TILE_SIZE)}`);
     }
   }
-  return remember({
+  return {
     valid: true, reason: "Click to place. Contents stay on the fixture.",
-    blockedCells, access, accessCells, queuePointsById,
+    blockedCells, access, accessCells, backAccess, queuePointsById,
     queueCells: firstQueue.queueCells, queuePoints: firstQueue.queuePoints,
-  });
+  };
 }
 
 const ORTHOGONAL_STEPS = [[0, 1], [0, -1], [1, 0], [-1, 0]];

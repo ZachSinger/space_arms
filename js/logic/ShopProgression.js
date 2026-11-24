@@ -1,13 +1,16 @@
-// Total store reputation required at shift end; tuned for a ~100-day run to Level 30
-// (see scripts/balance-audit.mjs). Early levels stay quick; each step grows by 9.
+// Total store reputation required at shift end. Serving every arriving customer without
+// penalties earns Levels 2-5 in four shifts; later steps take several shifts.
 const SHOP_LEVEL_REPUTATION = [
-  0, 15, 39, 72, 114, 165, 225, 294, 372, 459,
-  555, 660, 774, 897, 1029, 1170, 1320, 1479, 1647, 1824,
-  2010, 2205, 2409, 2622, 2844, 3075, 3315, 3564, 3822, 4089,
+  0, 20, 50, 90, 138, 318, 507, 705, 912, 1128,
+  1353, 1587, 1830, 2082, 2343, 2613, 2892, 3180, 3477, 3783,
+  4098, 4422, 4755, 5097, 5448, 5808, 6177, 6555, 6942, 7338,
+  7743, 8157, 8580, 9012, 9453, 9903, 10362, 10830, 11307, 11793,
+    12288, 12792, 13305, 13827, 14358, 14898, 15447, 16005, 16572, 17148,
 ];
 
+// Includes levels intentionally without a reward.
 export const IMPLEMENTED_SHOP_REWARD_LEVELS = Object.freeze(
-  Array.from({ length: 29 }, (_, index) => index + 2),
+  Array.from({ length: SHOP_LEVEL_REPUTATION.length - 1 }, (_, index) => index + 2),
 );
 
 export function hasUnimplementedShopRewardBetween(previousLevel, currentLevel) {

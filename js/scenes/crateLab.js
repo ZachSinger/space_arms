@@ -3,7 +3,7 @@
 // ==========================================
 // Dev harness for working on crates: an empty room with a few full and empty crates and a
 // couple of pillars to push against. Crates use the shop's controls (pick up, stack, drop,
-// throw, push). Opened from the title screen's DEV option. Nothing here touches the saved game.
+// push). Opened from the title screen's DEV option. Nothing here touches the saved game.
 import Phaser from "phaser";
 import { installSceneTextSize } from "../logic/GameTextSize.js";
 import { TILE_SIZE } from "../logic/RoomLayout.js";
@@ -12,9 +12,8 @@ import { Crate, CRATE_STACK_SPACING, INTERACT_RANGE } from "../logic/Crate.js";
 import {
   FLOOR_STACK_MAX, HOLD_KEY_MS, MAX_CARRIED_CRATES, isInFacingCone, isSquarelyInFront,
 } from "../logic/CrateStack.js";
-import { solveCratePush } from "../logic/CratePushing.js";
-import { separateOverlappingCrates } from "../logic/CrateSeparation.js";
-import { controlLabel } from "../logic/InputDevice.js";
+import { CrateWorld } from "../world/CrateWorld.js";
+import { controlLabel } from "../input/InputDevice.js";
 import { Player, PLAYER_CRATE_HOLD_OFFSET } from "../logic/Player.js";
 
 const HEADER_HEIGHT = 100;
@@ -24,7 +23,7 @@ const HOLDING_CARD = Object.freeze({ width: 320, height: 56, nameWrap: 200 });
 const TEXT_STYLE = { fontFamily: "monospace", fontSize: "14px", color: "#e2e8f0" };
 const ROOM = Object.freeze({ columns: 14, rows: 10 });
 const PLAYER_START = Object.freeze({ x: 7 * TILE_SIZE, y: 5.5 * TILE_SIZE });
-// Floor squares for pillars, so pushing and throwing have something to hit.
+// Floor squares for pillars, so pushing has something to hit.
 const PILLARS = Object.freeze([{ gx: 3, gy: 7 }, { gx: 10, gy: 2 }]);
 const FULL_CRATE_COUNT = 5;
 const EMPTY_CRATE_COUNT = 3;
@@ -62,15 +61,12 @@ export class CrateLabScene extends Phaser.Scene {
     this.roomWidth = ROOM.columns * TILE_SIZE;
     this.roomHeight = ROOM.rows * TILE_SIZE;
     this.physics.world.setBounds(0, 0, this.roomWidth, this.roomHeight);
-    this.crateBounds = new Phaser.Geom.Rectangle(0, 0, this.roomWidth, this.roomHeight);
     this.solids = this.physics.add.staticGroup();
-    this.crateGroup = this.physics.add.group();
-    this.physics.add.collider(this.crateGroup, this.crateGroup, (spriteA, spriteB) => {
-      for (const sprite of [spriteA, spriteB]) {
-        this.restockCrates.find((crate) => crate.sprite === sprite)?.refreshDrag();
-      }
+    this.crateWorld = new CrateWorld(this, {
+      width: this.roomWidth,
+      height: this.roomHeight,
+      colliders: [this.solids],
     });
-    this.physics.add.collider(this.crateGroup, this.solids);
 
     this.drawFloor();
     this.placePillars();
@@ -108,7 +104,7 @@ export class CrateLabScene extends Phaser.Scene {
         event.preventDefault();
         if (event.repeat || this.keyPress) return;
         const action = this.crateActions()[which];
-        // Actions with no hold (like throwing) happen right away.
+        // Actions with no hold happen right away.
         if (action && !action.hold) action.tap();
         else if (action) this.keyPress = { which, startedAt: this.time.now, fired: false };
       });
@@ -131,10 +127,9 @@ export class CrateLabScene extends Phaser.Scene {
   }
 
   update(_time, delta) {
-    for (const crate of this.restockCrates) crate.updateThrow(delta);
-    this.separateStuckCrates();
+    this.crateWorld.update(delta);
     this.player.update(delta);
-    this.updateCratePushing(delta);
+    this.crateWorld.updateCratePushing(delta);
     this.syncCarriedCrates();
     this.syncFloorStacks();
     if (this.keyPress && !this.keyPress.fired && this.time.now - this.keyPress.startedAt >= HOLD_KEY_MS) {
@@ -228,8 +223,6 @@ export class CrateLabScene extends Phaser.Scene {
           : { tap: full, hold: full, full: true };
       } else {
         actions.putDown = { tap: () => this.dropTopCrate(), hold: () => this.dropWholeStack() };
-        // With no green arrow, Space throws your top crate while you're walking.
-        actions.pickUp = { tap: () => this.throwTopCrate(), throws: true };
       }
     }
     return actions;
@@ -241,9 +234,7 @@ export class CrateLabScene extends Phaser.Scene {
     const { pickUp, putDown } = this.crateActions();
     const holding = this.carriedCrates.length;
     const parts = [];
-    if (pickUp?.throws) {
-      parts.push(`${key} while walking: Throw your top crate`);
-    } else if (pickUp) {
+    if (pickUp) {
       const room = MAX_CARRIED_CRATES - holding;
       if (room === 0) parts.push(`Your hands are full (${MAX_CARRIED_CRATES} crates max)`);
       else parts.push(`Tap ${key}: Pick up ${this.describeCrate(this.markedFloorStack().marked)}`);
@@ -336,6 +327,7 @@ export class CrateLabScene extends Phaser.Scene {
       if (newBase) {
         newBase.drop(x, y, 0, 0, false);
         this.restockCrates.push(newBase);
+        for (const crate of rest) crate.setStackedOn(newBase.id);
         if (rest.length) this.floorStacks.set(newBase, rest);
       }
     } else {
@@ -343,6 +335,7 @@ export class CrateLabScene extends Phaser.Scene {
       if (remaining.length) this.floorStacks.set(base, remaining);
       else this.floorStacks.delete(base);
     }
+    for (const crate of lifted) crate.setCarriedBy("player");
     this.carriedCrates.push(...lifted);
     this.markedStackBase = null;
     this.syncCarriedCrates();
@@ -357,6 +350,7 @@ export class CrateLabScene extends Phaser.Scene {
   setCratesOnStack({ base }, count) {
     const placed = this.carriedCrates.slice(-count);
     this.carriedCrates = this.carriedCrates.slice(0, -count);
+    for (const crate of placed) crate.setStackedOn(base.id);
     this.floorStacks.set(base, [...(this.floorStacks.get(base) ?? []), ...placed]);
     this.markedStackBase = null;
     this.syncCarriedCrates();
@@ -534,35 +528,20 @@ export class CrateLabScene extends Phaser.Scene {
       crate.followCarrier(this.player.sprite, index, PLAYER_CRATE_HOLD_OFFSET, FLOOR_STACK_SPACING));
   }
 
-  // Tap Q: your top crate goes on the floor in front of you. Space uses throwing to throw it
-  // the way you're walking instead.
-  dropTopCrate(throwing = false) {
+  // Tap Q: your top crate goes on the floor in front of you.
+  dropTopCrate() {
     const crate = this.carriedCrates[this.carriedCrates.length - 1];
-    const { x: velocityX, y: velocityY } = this.player.sprite.body.velocity;
-    const position = throwing
-      ? crate.findThrowPosition(this.player.sprite, velocityX, velocityY)
-      : crate.findDropPosition(this.player.sprite.x, this.player.sprite.y, this.player.sprite,
-        [], undefined, this.player.currentFacing);
+    const position = crate.findDropPosition(this.player.sprite.x, this.player.sprite.y, this.player.sprite,
+      [], undefined, this.player.currentFacing);
     if (!position) {
-      this.say(throwing ? "There's no room to throw the crate." : "There's no room to put the crate down.");
+      this.say("There's no room to put the crate down.");
       return;
     }
-    if (throwing) crate.startThrow(this.player.sprite, velocityX, velocityY);
-    else crate.drop(position.x, position.y, 0, 0, false);
+    crate.drop(position.x, position.y, 0, 0, false);
     this.carriedCrates.pop();
     this.restockCrates.push(crate);
     this.syncCarriedCrates();
-    this.say(`${throwing ? "Threw" : "Put down"} ${this.describeCrate(crate)}.`);
-  }
-
-  // Space with no green arrow: throws your top crate the way you're walking.
-  throwTopCrate() {
-    const { x: velocityX, y: velocityY } = this.player.sprite.body.velocity;
-    if (velocityX === 0 && velocityY === 0) {
-      this.say(`To throw a crate, walk and press ${controlLabel("crate", "keyboard")}.`);
-      return;
-    }
-    this.dropTopCrate(true);
+    this.say(`Put down ${this.describeCrate(crate)}.`);
   }
 
   // Hold: everything you're carrying goes on the floor in front of you as one stack.
@@ -576,57 +555,14 @@ export class CrateLabScene extends Phaser.Scene {
     }
     bottom.drop(position.x, position.y, 0, 0, false);
     this.restockCrates.push(bottom);
-    if (rest.length) this.floorStacks.set(bottom, rest);
+    if (rest.length) {
+      for (const crate of rest) crate.setStackedOn(bottom.id);
+      this.floorStacks.set(bottom, rest);
+    }
     this.carriedCrates = [];
     this.syncCarriedCrates();
     this.syncFloorStacks();
     this.say(rest.length ? `Set all ${rest.length + 1} crates down as a stack.` : `Put down ${this.describeCrate(bottom)}.`);
-  }
-
-  // Loose crates get pushed when the player walks into them, as in the shop. A floor stack is
-  // as heavy as its height, and whatever you're carrying adds to the load; you can never move
-  // more than MAX_MOVED_CRATES in total.
-  updateCratePushing(delta) {
-    const body = this.player.sprite.body;
-    const rectOf = (b) => ({ left: b.x, top: b.y, width: b.width, height: b.height });
-    const holding = this.carriedCrates.length;
-    const crates = this.restockCrates
-      .filter((crate) => crate.isPushed || crate.isStationary() || crate.isSliding())
-      .map((crate) => ({
-        key: crate, rect: rectOf(crate.sprite.body),
-        weight: 1 + (this.floorStacks.get(crate)?.length ?? 0), locked: false,
-      }));
-    const { playerVelocity, crateVelocities } = solveCratePush({
-      player: rectOf(body),
-      velocity: body.velocity,
-      dt: Math.min(delta, 50) / 1000,
-      crates,
-      isBlocked: (rect) => this.isCrateSpaceBlocked(rect),
-      carriedWeight: holding,
-    });
-    body.setVelocity(playerVelocity.x, playerVelocity.y);
-    for (const crate of this.restockCrates) {
-      const velocity = crateVelocities.get(crate);
-      if (velocity && (velocity.x || velocity.y)) crate.push(velocity);
-      else if (crate.isPushed) crate.stopPush();
-    }
-  }
-
-  // Pull apart crates that a fast throw pushed into each other.
-  separateStuckCrates() {
-    const crates = this.restockCrates
-      .filter((crate) => crate.sprite.body?.enable)
-      .map((crate) => {
-        const b = crate.sprite.body;
-        return { key: crate, rect: { left: b.x, top: b.y, width: b.width, height: b.height }, locked: false };
-      });
-    const offsets = separateOverlappingCrates(crates, (_crate, rect) => this.isCrateSpaceBlocked(rect));
-    for (const [crate, offset] of offsets) crate.nudge(offset.x, offset.y);
-  }
-
-  isCrateSpaceBlocked({ left, top, width, height }) {
-    if (left < 0 || top < 0 || left + width > this.roomWidth || top + height > this.roomHeight) return true;
-    return this.physics.overlapRect(left, top, width, height, false, true).some((b) => b.enable);
   }
 
   // --- Cameras and header ---

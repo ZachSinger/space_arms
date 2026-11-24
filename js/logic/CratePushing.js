@@ -3,11 +3,14 @@
 // ==========================================
 // Walking into a crate pushes it: dead-on moves it straight, off-center turns it sideways.
 // Pushed crates push others and each slows the player; a crate that can't move blocks.
+import { loadTuning } from "../core/Tuning.js";
+import crateTuning from "../../data/tuning/crates.json" with { type: "json" };
 
+export const CRATE_TUNING = loadTuning("crates", crateTuning);
 // Player speed multiplier by number of crates being pushed at once (index = count).
-export const PUSH_SPEED_BY_CRATE_COUNT = [1, 0.6, 0.4, 0.25];
+export const PUSH_SPEED_BY_CRATE_COUNT = CRATE_TUNING.pushSpeedByCrateCount;
 // Most crates the player can move at once: everything pushed plus everything carried.
-export const MAX_MOVED_CRATES = 4;
+export const MAX_MOVED_CRATES = CRATE_TUNING.maxMovedCrates;
 // px; reach() extends motion by this so touching counts as contact.
 const CONTACT_SKIN = 2;
 const EPSILON = 0.001;
@@ -70,10 +73,13 @@ function pushDirection(from, to, direction) {
  *   weight whenever anything is pushed
  * @param {number} [options.maxMoved] - most crates moved at once, carried ones included;
  *   customers pass Infinity since they shove anything in their way
+ * @param {number} [options.maxSlowdownWeight] - caps only the slowdown, not the number
+ *   moved; linked hovercarts together have the resistance of one crate
  * @returns {{playerVelocity:{x:number,y:number}, crateVelocities: Map<any,{x:number,y:number}>}}
  */
 export function solveCratePush({
   player, velocity, dt, crates, isBlocked, carriedWeight = 0, maxMoved = MAX_MOVED_CRATES,
+  maxSlowdownWeight = Infinity,
 }) {
   const run = (intended) => {
     const crateVelocities = new Map();
@@ -81,21 +87,29 @@ export function solveCratePush({
     let budget = maxMoved - carriedWeight;
 
     const slideAgainstStatic = (rect, v) => {
-      const fits = (candidate) => !isBlocked(reach(rect, candidate, dt));
+      // Contact skin finds crates, not walls: reserve only the space actually moved.
+      const fits = (candidate) => !isBlocked({
+        ...rect, left: rect.left + candidate.x * dt, top: rect.top + candidate.y * dt,
+      });
       if (fits(v)) return v;
-      // Creep in smaller steps so a crate finishes flush against a wall instead of
-      // stopping a whole step early.
-      for (const fraction of [0.5, 0.25, 0.125]) {
-        const crept = scale(v, fraction);
-        if (fits(crept)) return crept;
-      }
+      const creep = (candidate) => {
+        if (!fits({ x: 0, y: 0 })) return { x: 0, y: 0 };
+        let low = 0;
+        let high = 1;
+        for (let step = 0; step < 16; step += 1) {
+          const fraction = (low + high) / 2;
+          if (fits(scale(candidate, fraction))) low = fraction;
+          else high = fraction;
+        }
+        return scale(candidate, low);
+      };
+      const crept = creep(v);
+      if (Math.hypot(crept.x, crept.y) > EPSILON) return crept;
       for (const axis of [v.x && { x: v.x, y: 0 }, v.y && { x: 0, y: v.y }]) {
         if (!axis) continue;
         if (fits(axis)) return axis;
-        for (const fraction of [0.5, 0.25, 0.125]) {
-          const crept = scale(axis, fraction);
-          if (fits(crept)) return crept;
-        }
+        const slid = creep(axis);
+        if (Math.hypot(slid.x, slid.y) > EPSILON) return slid;
       }
       return { x: 0, y: 0 };
     };
@@ -104,7 +118,14 @@ export function solveCratePush({
       let out = mover ? slideAgainstStatic(rect, v) : { ...v };
       for (const crate of crates) {
         if (crate === mover || inChain.has(crate)) continue;
-        if (overlaps(rect, crate.rect)) {
+        const penetration = depthInside(rect, crate.rect);
+        const next = {
+          ...rect, left: rect.left + out.x * dt, top: rect.top + out.y * dt,
+        };
+        // Small integration overlaps are still push contact, not an embedded mover.
+        const pushContact = !crate.locked && penetration <= CONTACT_SKIN &&
+          depthInside(next, crate.rect) > penetration + EPSILON;
+        if (penetration > 0 && !pushContact) {
           // Allow escape and sliding along an edge, but not movement through the crate.
           const centerX = rect.left + rect.width / 2;
           const centerY = rect.top + rect.height / 2;
@@ -163,7 +184,7 @@ export function solveCratePush({
     .filter(([, v]) => Math.hypot(v.x, v.y) > EPSILON);
   const weight = moving.reduce((sum, [crate]) => sum + (crate.weight ?? 1), 0) +
     (moving.length ? carriedWeight : 0);
-  const factor = PUSH_SPEED_BY_CRATE_COUNT[Math.min(weight, PUSH_SPEED_BY_CRATE_COUNT.length - 1)];
+  const factor = PUSH_SPEED_BY_CRATE_COUNT[Math.min(weight, maxSlowdownWeight, PUSH_SPEED_BY_CRATE_COUNT.length - 1)];
   const result = run({ x: velocity.x * factor, y: velocity.y * factor });
   const crateVelocities = new Map();
   for (const [crate, v] of result.crateVelocities) crateVelocities.set(crate.key, v);
@@ -175,7 +196,7 @@ export function solveCratePush({
 }
 
 // How long (ms) a customer's claim on the crates they're pushing lasts without renewal.
-export const CUSTOMER_PUSH_CLAIM_MS = 150;
+export const CUSTOMER_PUSH_CLAIM_MS = CRATE_TUNING.customerPushClaimMs;
 
 /**
  * Two customers shoving the same crates: whoever is further from their destination keeps

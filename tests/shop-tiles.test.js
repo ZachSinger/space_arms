@@ -37,7 +37,7 @@ test("each shop tile loads from the extracted art folder", () => {
 const backroomOpen = (gx, gy) => gx >= 0 && gx <= 5 && gy >= 100 && gy <= 111;
 const backroomFloor = (gx, gy) => gx >= 1 && gx <= 4 && gy >= 101 && gy <= 110;
 
-test("the backroom's top wall shows its face; every other wall is the black border", () => {
+test("the backroom's top wall shows its face; every other wall is the outer border", () => {
   assert.deepEqual(backroomWallStack(2, 100, backroomOpen), [BACKROOM_TILES.wall]);
   assert.deepEqual(backroomWallStack(0, 100, backroomOpen), [BACKROOM_TILES.border], "corner");
   assert.deepEqual(backroomWallStack(5, 104, backroomOpen), [BACKROOM_TILES.border], "side");

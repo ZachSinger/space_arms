@@ -8,6 +8,7 @@ import { isMoney, sumMoney } from "./Money.js";
 // Receipt sections, in display order.
 export const LEDGER_CATEGORIES = Object.freeze([
   "sales",
+  "drone_deliveries",
   "stock_orders",
   "delivery_fees",
   "fixtures",
@@ -20,12 +21,27 @@ export const LEDGER_CATEGORIES = Object.freeze([
   "training",
   "wages",
   "loan_repayments",
+  "debug",
 ]);
 
 const isWholeNumber = (value, minimum = Number.MIN_SAFE_INTEGER) =>
   Number.isSafeInteger(value) && value >= minimum;
 
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+const PRICE_REACTION_TYPES = Object.freeze(["bargain", "skipped", "disgusted"]);
+
+function isValidPriceReactions(reactions) {
+  return isRecord(reactions) &&
+    PRICE_REACTION_TYPES.every((type) => isWholeNumber(reactions[type], 0));
+}
+
+function copyShift(shift) {
+  if (!shift) return null;
+  return {
+    ...shift,
+    ...(shift.priceReactions ? { priceReactions: { ...shift.priceReactions } } : {}),
+  };
+}
 
 function isValidLine(line) {
   return isRecord(line) && LEDGER_CATEGORIES.includes(line.category) &&
@@ -35,7 +51,8 @@ function isValidLine(line) {
 
 function isValidShift(shift) {
   return shift === null || (isRecord(shift) &&
-    isWholeNumber(shift.customersServed, 0) && isWholeNumber(shift.customersTurnedAway, 0));
+    isWholeNumber(shift.customersServed, 0) && isWholeNumber(shift.customersTurnedAway, 0) &&
+    (shift.priceReactions === undefined || isValidPriceReactions(shift.priceReactions)));
 }
 
 /**
@@ -91,12 +108,15 @@ export class DayLedger {
   }
 
   /**
-   * @param {{ customersServed: number, customersTurnedAway: number }} results
+   * @param {{ customersServed: number, customersTurnedAway: number, priceReactions?: object }} results
    */
-  recordShift({ customersServed, customersTurnedAway }) {
-    const shift = { customersServed, customersTurnedAway };
+  recordShift({
+    customersServed, customersTurnedAway,
+    priceReactions = { bargain: 0, skipped: 0, disgusted: 0 },
+  }) {
+    const shift = { customersServed, customersTurnedAway, priceReactions };
     if (!isValidShift(shift)) throw new TypeError("Invalid shift results.");
-    this.shift = shift;
+    this.shift = { ...shift, priceReactions: { ...priceReactions } };
   }
 
   /**
@@ -114,7 +134,7 @@ export class DayLedger {
       openingCredits: this.openingCredits,
       openingReputation: this.openingReputation,
       lines: this.lines.map((line) => ({ ...line })),
-      shift: this.shift ? { ...this.shift } : null,
+      shift: copyShift(this.shift),
     };
   }
 
@@ -122,7 +142,7 @@ export class DayLedger {
     if (!isValidLedgerData(data)) throw new TypeError("Invalid saved day ledger.");
     const ledger = new DayLedger(data);
     ledger.lines = data.lines.map((line) => ({ ...line }));
-    ledger.shift = data.shift ? { ...data.shift } : null;
+    ledger.shift = copyShift(data.shift);
     return ledger;
   }
 }
@@ -147,6 +167,6 @@ export function summarizeReceipt(data, currentCredits, currentReputation) {
     spent,
     totalEarned: sumMoney(earned.map((line) => line.amount)),
     totalSpent: -sumMoney(spent.map((line) => line.amount)),
-    shift: data.shift ?? null,
+    shift: copyShift(data.shift),
   };
 }

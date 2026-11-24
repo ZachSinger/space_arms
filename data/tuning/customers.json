@@ -1,0 +1,16 @@
+{
+  "maxCustomersInStore": {
+    "value": 6,
+    "min": 1,
+    "max": 20,
+    "integer": true,
+    "description": "Most shoppers inside the store at once. When full, the next arrival is lost for good."
+  },
+  "poolRefreshIntervalMs": {
+    "value": 1000,
+    "min": 100,
+    "max": 10000,
+    "integer": true,
+    "description": "How often (ms of play) a mid-shift restock can add late arrivals to the shift."
+  }
+}

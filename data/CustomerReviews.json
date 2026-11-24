@@ -1,0 +1,218 @@
+{
+  "appName": "Stargaze",
+  "usernames": [
+    "xX_VoidReaper_Xx", "PlasmaPete", "NebulaNancy", "CaptainCrunchwrap", "GravWellGary",
+    "Zorg_the_Reasonable", "LaserLad99", "QuasarQueen", "SpaceBarbara", "AsteroidAndy",
+    "TheRealBobFromAccounting", "Cmdr_Snackbreak", "N0Sc0peN0rman", "WarpDriveWendy", "Glorbnax",
+    "MoonMan_Mike", "PewPewPatricia", "DarkMatterDave", "StarDust_Steve", "OrbitalOlga",
+    "IonStormIvan", "xenoKaren", "CosmicCarl", "BlasterBetty", "Kr4kenSlayer",
+    "HyperspaceHank", "Comet_Connie", "TheLegendOfZed", "RedDwarfRandy", "GalaxyBrainGreg",
+    "Sgt_Sprinkles", "Bounty_Barry", "MeteorMolly", "ZeroGZoe", "TriggerHappyTrevor",
+    "Lt_Lukewarm", "SolarFlareSally", "PulsarPaul", "Xylophonix", "MiningRigMarge",
+    "Grumbleton_Vex", "ThrusterThelma", "CryoSleepCraig", "AirlockArnold", "BigIronBeatrice",
+    "OxygenOptional", "LastLightLarry", "Skrall_from_Sector9", "MercForHire_420", "TotallyNotAPirate",
+    "NotABountyHunter", "JustHereForAmmo", "ScrapKing_Sid", "RustBucketRita", "SalvageSusan",
+    "JunkyardJerome", "WreckDiver_Wes", "ChromeDomeCharlie", "HullBreachHarold", "Spacewalk_Spencer",
+    "TheOneTrueKlaxon", "Doctor_Pew", "ProfessorBoom", "Baron_von_Blastington", "Lady_Laserface",
+    "SirReloadsALot", "Countess_Kaboom", "MajorInconvenience", "Ensign_Oops", "AdmiralSnackbar",
+    "Glip_Glorp", "Zxqvyn", "Blorp_9000", "Snarfle", "Vrrrrk",
+    "Mx_Tentacles", "Squidward_from_Sirius", "OneEyedEdna", "ThreeArmedTony", "FourEyesFiona",
+    "Kevin", "kevin2", "kevin_the_third", "Definitely_Kevin", "notkevin",
+    "MomOfThreeMercs", "DadJokesInSpace", "RetiredSmuggler", "HobbyistArsonist", "WeekendWarlord",
+    "CasualCombatant", "PacifistButCurious", "AsksForTheManager", "Gerald", "GeraldsSecondAccount",
+    "PlanetBuster_Pam", "SupernovaSam", "BlackHoleBen", "EventHorizonEve", "RedshiftRoy",
+    "Parsec_Pat", "LightyearLinda", "TerraformTed", "AlienAuntie", "CyborgCindy",
+    "Android_Arthur", "Unit_734", "BeepBoopBernard", "SynthSandra", "ServoSteve",
+    "TheMoistAstronaut", "SpaceDiaper_Dan", "Tang_Enthusiast", "FreezeDriedFred", "NutriPasteNina",
+    "Vac_Suit_Vince", "HelmetHairHelen", "MagbootMaggie", "JetpackJudy", "RocketRonnie",
+    "Hangar_Hal", "DockMaster_Dee", "CargoBayCal", "BulkheadBella", "ReactorRick",
+    "ShieldsUpShirley", "PhotonPhil", "TorpedoTina", "RailgunRalph", "MinigunMildred",
+    "ShotgunShelly", "SniperSnyder", "Grenadine_Grace", "BoomStickBert", "PistolPete_Jr",
+    "AmmoHoarder", "ReloadRhonda", "HollowPointHarvey", "TracerRoundTracy", "BulletBudgetBob",
+    "xX_N00bSl4yer_Xx", "ProGamerMove", "GG_EZ_Larry", "RespawnRoger", "LagSwitchLeon",
+    "Headshot_Heather", "CampingCarlos", "SpawnKillSpike", "TeabagTerry", "LootGoblin_Lou",
+    "QuestGiverQuinn", "SideQuestSue", "GrindsetGabe", "SpeedrunSpud", "AnyPercentAlice",
+    "Zim_Zarbleflax", "Vorrak_the_Polite", "Klaatu_Barada", "Xenon_Xavier", "Krypton_Kim",
+    "Argon_Arlene", "Neon_Nate", "Helium_Hattie", "Radon_Ron", "Plutonium_Pearl",
+    "Moon_Pie_Murphy", "Saturn_Rings_Sid", "Jupiter_Jen", "Martian_Marvin", "Venusian_Val",
+    "OuterRimOtis", "InnerRimIrene", "BackwaterBuck", "FrontierFrank", "OutpostOlive",
+    "StationKeeper_Stu", "DriftingDiane", "LoneWanderer_Lyle", "Nomad_Nell", "PathfinderPip",
+    "MapMaker_Mo", "ScoutTrooperSkip", "Trailblazer_Tess", "Waypoint_Walt", "CompassRose_Cora",
+    "ShopperOfDoom", "RetailRaider", "CouponClipper3000", "BargainBountyHunter", "PriceCheckPrudence",
+    "FiveStarFrankie", "OneStarOscar", "ReviewsEverything", "HonestHelga", "BrutallyHonestBrad",
+    "SarcasticSpaceman", "PassiveAggressivePam", "VerifiedBuyer_Vic", "LongTimeLurker", "FirstTimeReviewer",
+    "Space_Cowboy_Clint", "Rootin_Tootin_Rhea", "Yeehaw_In_Zero_G", "Saddle_Up_Sal", "Wrangler_Wanda",
+    "ThatGuyWithTheCape", "CapeAndCannon", "Monocle_Mercenary", "TophatTerminator", "Bowtie_Bandit",
+    "SpaceGrandma_Gert", "Nana_Neutron", "Grandpa_Gamma", "Uncle_Ultraviolet", "Cousin_Cosmos"
+  ],
+  "lines": {
+    "gaveUpInLine": [
+      "Stood in the checkout line so long I aged. Visibly. Left without paying because I needed to see my family before they forgot my face.",
+      "The line did not move. I checked. Twice. With a scanner. Walked out with nothing but regret.",
+      "Waited in line until my oxygen tank started beeping. Gave up. The register is decorative, apparently.",
+      "I've seen glaciers on ice moons move faster than this checkout line. Put my stuff down and left.",
+      "Got in line, blinked, and a whole season passed. Abandoned my cart. Somebody else can have it.",
+      "Nobody was at the register. Or maybe somebody was, very slowly. Either way I left."
+    ],
+    "longWait": [
+      "The checkout line was a spiritual journey I did not sign up for.",
+      "Great stuff, but I waited in line long enough to learn a new language. Hello in Zorbish is 'glrk'.",
+      "Checkout took forever. I made friends in that line. I made enemies in that line.",
+      "Bring a snack for the line. Maybe two snacks. Maybe a tent.",
+      "The wait to pay was so long I almost started charging rent.",
+      "Line moved at the speed of bureaucracy. Eventually got out alive."
+    ],
+    "fastCheckout": [
+      "In and out of the checkout before I could even finish complaining about something.",
+      "Checkout was lightning fast. Suspiciously fast. I love it.",
+      "Paid in seconds. My ship's meter didn't even have time to tick.",
+      "Fastest checkout this side of the nebula."
+    ],
+    "missingItem": [
+      "Came all this way for {item}. They did not have {item}. Why do I even have legs.",
+      "OUT OF {ITEM}?? In THIS economy??",
+      "The shelf where {item} should be just stared back at me. Empty. Like my heart.",
+      "Wanted {item}. Got disappointment instead. Restock your shelves, please, I'm begging.",
+      "No {item}. I flew past three asteroid belts for this.",
+      "They were out of {item}. I will be telling my grandchildren about this betrayal.",
+      "Asked about {item}. Shelf was empty. Universe is cold and indifferent.",
+      "One star for every {item} they had in stock. Oh wait."
+    ],
+    "tooExpensive": [
+      "Prices are steep. Like, cliff-on-a-low-gravity-moon steep.",
+      "Some of these prices made my wallet file a complaint.",
+      "Put a few things back after seeing the price. Then put my dignity back too.",
+      "Who prices these things, a dragon? Skipped a few items.",
+      "Love the selection, hate looking at the price tags."
+    ],
+    "priceDisgust": [
+      "I saw a price tag and physically left the building. Highway robbery. Space-highway robbery.",
+      "Do they think we're made of money? Some of us are made of carbon, thank you.",
+      "The prices here are a crime. I would report it but I can't afford the call.",
+      "Walked in, looked at one price, walked right back out. Never again.",
+      "Charging that much should require a license. A pirate license."
+    ],
+    "bargain": [
+      "Found an absolute steal. Felt like I robbed them. Legally!",
+      "Prices so good I checked if the tags were a misprint.",
+      "Got a deal so good I bought a second one out of respect.",
+      "Bargain city. Population: me, with a full cart.",
+      "My accountant is going to cry happy tears."
+    ],
+    "dirty": [
+      "Floor was sticky. Not sure with what. Not going to ask.",
+      "Somebody please introduce this store to a mop.",
+      "Stepped over three wrappers and a mystery puddle just to reach the shelf.",
+      "Smelled like a cargo hold that lost a fight with a sandwich.",
+      "Great stuff, but the floor has its own ecosystem now.",
+      "Saw a piece of trash on the floor. It saw me back. We nodded at each other."
+    ],
+    "dirtyWalkout": [
+      "Walked in, saw the floor, walked out. Some things can't be unseen.",
+      "Too filthy to shop. And I live on a mining barge.",
+      "The mess was so bad my boots filed for divorce. Left immediately.",
+      "I've been in cleaner trash compactors. Turned right around."
+    ],
+    "drab": [
+      "Shop looks like a storage unit somebody forgot about. Needs some flair.",
+      "Zero vibes. Not a single decoration. Just shelves and sadness.",
+      "Felt like shopping inside a cardboard box. A grey one.",
+      "There were crates just sitting on the floor. Is this a store or a warehouse?",
+      "Would it kill them to put up a hologram or something?"
+    ],
+    "gorgeous": [
+      "Gorgeous shop! The decorations really sell the whole 'premium space arms' vibe.",
+      "Classiest arms dealer in the sector. I felt fancy buying ammo.",
+      "The decor here is out of this world. Literally, we're in space.",
+      "Store looks amazing. I took a holo-selfie by the decorations.",
+      "Beautiful setup. Ten out of ten ambiance, would browse again."
+    ],
+    "crateHit": [
+      "GOT HIT BY A FLYING CRATE. Is that a store policy?? Is it a promotion??",
+      "Someone threw a box at my head. I'm fine. I'm not fine.",
+      "Was minding my business and a crate came out of nowhere. Bruised and confused.",
+      "The staff here throw crates like they're training for the zero-G olympics. Got hit. Ow.",
+      "Took a crate to the face. Saw stars. Five of them, which is more than this review gets."
+    ],
+    "stuck": [
+      "Got completely stuck trying to walk around. Is this store a maze on purpose?",
+      "Couldn't reach where I needed to go. Somebody built this layout with their eyes closed.",
+      "Spent more time lost in the aisles than shopping. Bring a map.",
+      "Hit a dead end trying to get to a shelf. Gave up. Fun puzzle, bad store."
+    ],
+    "crowded": [
+      "The line was a mile long. Everybody and their clone was shopping today.",
+      "Packed in there like ration bars in a tin.",
+      "So many people in line I thought it was a concert.",
+      "Crowded. Elbow-to-elbow. Tentacle-to-tentacle."
+    ],
+    "leftEmptyHanded": [
+      "Left with nothing. Not one thing. Just the memories.",
+      "Walked in with money, walked out with money. Which is the opposite of how a store should work.",
+      "Could not find a single thing to buy. Great store if you collect disappointment."
+    ],
+    "changeMistake": [
+      "Cashier gave me the wrong change. Math is hard, I get it, but come on.",
+      "The person at the register fumbled my money like it was hot plasma.",
+      "Had to count my change twice. It was wrong both times.",
+      "Cashier was very nice but I don't think they've met numbers before."
+    ],
+    "hunting": [
+      "Had to walk to every shelf in the place to find what I wanted. Got my steps in, I guess.",
+      "Stuff is scattered everywhere. A scavenger hunt, but I'm paying for it.",
+      "Took a tour of the whole store just to fill one shopping list."
+    ],
+    "generic5": [
+      "Flawless. Would get shot at with the stuff I bought here again.",
+      "Best arms dealer in the sector. Don't tell the others.",
+      "Perfect visit. My blaster has never felt more loved.",
+      "Everything was great. I'm suspicious. But it was great.",
+      "Five stars. I'd give six but the app won't let me.",
+      "Friendly staff, good stuff, no explosions. A perfect day."
+    ],
+    "generic4": [
+      "Solid shop. Got what I came for, nobody got hurt. Mostly.",
+      "Pretty good! A few little things, but I'd come back.",
+      "Good selection, fair enough prices. Would recommend to my less-dangerous friends.",
+      "Nice place. Not perfect, but neither am I."
+    ],
+    "generic3": [
+      "It was fine. A store. With things. That I bought.",
+      "Middle of the road. Like a moon. Not the best moon. Not the worst moon.",
+      "Mixed feelings. Some good, some bad, all very medium.",
+      "Three stars. Make of that what you will."
+    ],
+    "generic2": [
+      "Not great. I've had better shopping trips in an asteroid field.",
+      "Could be worse. Could also be a lot better.",
+      "Would not recommend, unless you're out of options. Which I was."
+    ],
+    "generic1": [
+      "Never again. Not even if the galaxy is ending.",
+      "Worst visit of my life, and I've been sucked out of an airlock. Twice.",
+      "Zero stars if I could. The app says I can't. The app is also wrong."
+    ]
+  },
+  "closers": {
+    "scavengers": [
+      "Anyway, I'm keeping the receipt to sell for scrap.",
+      "Scavenger's honor.",
+      "Might come back to dig through the trash. Professionally."
+    ],
+    "mercenaries": [
+      "Mission status: shopping complete.",
+      "Will update this review after I test everything on a target.",
+      "Rating based on firepower per coin."
+    ],
+    "explorers": [
+      "Logged this shop on my star charts.",
+      "Adding a pin to my map, for better or worse.",
+      "Onward to the next planet."
+    ],
+    "civilian": [
+      "Just a regular person reviewing a regular arms dealer, as one does.",
+      "My kids loved it. Is that a problem?",
+      "Was just looking for a gift for my brother-in-law."
+    ]
+  }
+}

@@ -19,7 +19,7 @@ export const BACKROOM_GRID_Y = 100;
 const BACKROOM_FLOOR_TILE = BACKROOM_TILES.floor;
 export const LOADING_PAD_WIDTH = 128;
 export const LOADING_PAD_HEIGHT = 128;
-const BACKROOM_GRID_WIDTH = LOADING_PAD_WIDTH / TILE_SIZE + 2;
+const BACKROOM_GRID_WIDTH = 6; // Four floor columns between the side walls.
 const STOREROOM_GRID_HEIGHT = 4;
 const LOADING_PAD_GRID_HEIGHT = LOADING_PAD_HEIGHT / TILE_SIZE + 1;
 const BACKROOM_GRID_HEIGHT = STOREROOM_GRID_HEIGHT + LOADING_PAD_GRID_HEIGHT;
@@ -62,8 +62,8 @@ export const ZONES = [
     locked: true,
     backroom: true,
     floorTile: BACKROOM_FLOOR_TILE,
-    cost: 4000,
-    requiredShopLevel: 13,
+    cost: 17500,
+    requiredShopLevel: 22,
   },
   {
     id: "backroom_upgrade_b",
@@ -75,8 +75,8 @@ export const ZONES = [
     locked: true,
     backroom: true,
     floorTile: BACKROOM_FLOOR_TILE,
-    cost: 6000,
-    requiredShopLevel: 20,
+    cost: 86000,
+    requiredShopLevel: 37,
   },
   {
     id: "backroom_upgrade_c",
@@ -88,8 +88,8 @@ export const ZONES = [
     locked: true,
     backroom: true,
     floorTile: BACKROOM_FLOOR_TILE,
-    cost: 9000,
-    requiredShopLevel: 27,
+    cost: 199500,
+    requiredShopLevel: 46,
   },
   // The top center of the ShopA map: the store's front door and the backroom door are both in its back wall.
   {
@@ -113,8 +113,8 @@ export const ZONES = [
     locked: true,
     salesFloor: true,
     floorTile: SHOP_FLOOR_TILE,
-    cost: 4000,
-    requiredShopLevel: 5,
+    cost: 2700,
+    requiredShopLevel: 6,
   },
   {
     id: "expansion_a",
@@ -126,8 +126,8 @@ export const ZONES = [
     locked: true,
     salesFloor: true,
     floorTile: SHOP_FLOOR_TILE,
-    cost: 5000,
-    requiredShopLevel: 9,
+    cost: 6400,
+    requiredShopLevel: 13,
   },
   // Runs under the West expansion, the Sales Floor, and Expansion A.
   {
@@ -140,8 +140,8 @@ export const ZONES = [
     locked: true,
     salesFloor: true,
     floorTile: SHOP_FLOOR_TILE,
-    cost: 7500,
-    requiredShopLevel: 17,
+    cost: 53000,
+    requiredShopLevel: 32,
   },
   {
     id: "expansion_c",
@@ -153,8 +153,8 @@ export const ZONES = [
     locked: true,
     salesFloor: true,
     floorTile: SHOP_FLOOR_TILE,
-    cost: 10000,
-    requiredShopLevel: 24,
+    cost: 135500,
+    requiredShopLevel: 42,
   },
   {
     id: "expansion_d",
@@ -166,8 +166,8 @@ export const ZONES = [
     locked: true,
     salesFloor: true,
     floorTile: SHOP_FLOOR_TILE,
-    cost: 12500,
-    requiredShopLevel: 30,
+    cost: 232000,
+    requiredShopLevel: 49,
   },
 ];
 

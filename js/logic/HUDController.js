@@ -7,7 +7,7 @@ import { formatMoneyAmount } from "./Money.js";
 import { getNextShopLevel } from "./ShopProgression.js";
 export class HUDController {
     /**
-     * @param {PlayerState} playerState
+     * @param {import('../state/GameState.js').GameState} gameState - shows money, reputation, shop level and the day
      * @param {ShiftClock | null} shiftClock - omit to skip the clock and shift buttons
      * @param {() => void} onStartShift
      * @param {() => void} onSave
@@ -15,14 +15,19 @@ export class HUDController {
      * @param {() => void} onToggleStore - temporarily stops or resumes customer arrivals
      * @param {() => void} onMainMenu - asks to leave the game for the title screen
      */
-    constructor(playerState, shiftClock, onStartShift, onSave, onEndDay, onToggleStore, onMainMenu) {
+    constructor(gameState, shiftClock, onStartShift, onSave, onEndDay, onToggleStore, onMainMenu) {
         this.creditsEl = document.getElementById('hud-credits');
         this.repEl = document.getElementById('hud-rep');
         this.shopLevelEl = document.getElementById('hud-shop-level');
         this.cleanlinessEl = document.getElementById('hud-cleanliness');
+        this.presentationEl = document.getElementById('hud-presentation');
         this.staminaEl = document.getElementById('hud-stamina');
         this.staminaFillEl = document.getElementById('hud-stamina-fill');
         this.staminaValueEl = document.getElementById('hud-stamina-value');
+        this.hovercartEl = document.getElementById('hud-hovercart');
+        this.hovercartFillEl = document.getElementById('hud-hovercart-fill');
+        this.hovercartValueEl = document.getElementById('hud-hovercart-value');
+        this.hovercartKey = null;
         this.shiftTimeEl = document.getElementById('hud-shift-time');
         this.pauseBtn = document.getElementById('hud-pause-btn');
         this.storeToggleBtn = document.getElementById('hud-store-toggle-btn');
@@ -49,7 +54,10 @@ export class HUDController {
         this.awaitingEndDay = false;
         this.storeTemporarilyClosed = false;
 
-        playerState.subscribe((state) => this.render(state));
+        this.gameState = gameState;
+        this.unsubscribes = [gameState.economy, gameState.reputation, gameState.calendar]
+            .map((slice) => slice.subscribe(() => this.render(), { immediate: false }));
+        this.render();
 
         if (shiftClock) {
             shiftClock.subscribe((clock) => this.renderShiftClock(clock));
@@ -65,6 +73,7 @@ export class HUDController {
     }
 
     destroy() {
+        for (const unsubscribe of this.unsubscribes) unsubscribe();
         this.rootEl.classList.add('hidden');
         this.rootEl.removeEventListener('mousedown', this.preventButtonFocus);
         this.pauseBtn.removeEventListener('click', this.handlePause);
@@ -98,8 +107,37 @@ export class HUDController {
         this.staminaEl.classList.toggle('exhausted', exhausted);
     }
 
-    renderCleanliness({ score, max, trashCount }) {
-        const key = `${score}/${max}/${trashCount}`;
+    /**
+     * Hovercart battery gauge, shown only while the hovercart is off its charger.
+     * @param {{ percent: number, level: 'high' | 'mid' | 'low', dead: boolean } | null} battery
+     */
+    renderHovercartBattery(battery) {
+        if (!this.hovercartEl) return;
+        const key = JSON.stringify(battery);
+        if (key === this.hovercartKey) return;
+        this.hovercartKey = key;
+        this.hovercartEl.classList.toggle('hidden', !battery);
+        if (!battery) return;
+        const { percent, level, dead } = battery;
+        this.hovercartFillEl.style.width = `${percent}%`;
+        this.hovercartValueEl.textContent = dead ? 'EMPTY' : `${percent}%`;
+        this.hovercartEl.setAttribute('aria-valuenow', String(percent));
+        this.hovercartEl.setAttribute('aria-valuetext', dead
+            ? 'Hovercart battery empty. Drag it back to its charger.'
+            : `${percent}% hovercart battery`);
+        for (const name of ['high', 'mid', 'low']) this.hovercartEl.classList.toggle(`battery-${name}`, level === name);
+    }
+
+    setCleanlinessEnabled(enabled) {
+        this.cleanlinessEl.parentElement.style.display = enabled ? '' : 'none';
+    }
+
+    setPresentationEnabled(enabled) {
+        this.presentationEl.parentElement.style.display = enabled ? '' : 'none';
+    }
+
+    renderCleanliness({ score, max, trashCount, dirtCount = 0 }) {
+        const key = `${score}/${max}/${trashCount}/${dirtCount}`;
         if (!this.cleanlinessEl || key === this.cleanlinessKey) return;
         this.cleanlinessKey = key;
         this.cleanlinessEl.textContent = `${score}/${max}`;
@@ -107,29 +145,45 @@ export class HUDController {
         this.cleanlinessEl.classList.toggle('clean-warn', ratio < 0.75 && ratio >= 0.5);
         this.cleanlinessEl.classList.toggle('clean-bad', ratio < 0.5);
         const pieces = trashCount === 1 ? '1 piece of trash' : `${trashCount} pieces of trash`;
-        this.cleanlinessEl.title = `Store cleanliness. ${pieces} on the floor right now. ` +
-            'Customers drop trash; pick it up and put it in a trashcan. Hold H to light up every piece, even behind shelves. ' +
+        const dirt = dirtCount === 1 ? '1 dirt mark' : `${dirtCount} dirt marks`;
+        this.cleanlinessEl.title = `Store cleanliness. ${pieces} and ${dirt} right now. ` +
+            'Pick up trash and put it in a trashcan. Face dirt and tap the use button to mop it. ' +
             'Customers who find the store too dirty cost you store reputation, and very dirty stores make them walk out.';
     }
 
-    render(state) {
-        this.creditsEl.innerText = formatMoneyAmount(state.credits);
+    renderPresentation({ score, max, floorCrateCount }) {
+        const key = `${score}/${max}/${floorCrateCount}`;
+        if (!this.presentationEl || key === this.presentationKey) return;
+        this.presentationKey = key;
+        this.presentationEl.textContent = `${score}/${max}`;
+        const ratio = score / max;
+        this.presentationEl.classList.toggle('clean-warn', ratio < 0.75 && ratio >= 0.5);
+        this.presentationEl.classList.toggle('clean-bad', ratio < 0.5);
+        const crates = floorCrateCount === 1 ? '1 crate' : `${floorCrateCount} crates`;
+        this.presentationEl.title = `Store presentation. ${crates} on the sales floor right now. ` +
+            'Each crate on the floor lowers presentation by 1 point. Customers whose presentation ' +
+            'expectation is higher than this will not give reputation, but they will keep shopping.';
+    }
+
+    render() {
+        const { economy, reputation, calendar } = this.gameState;
+        this.creditsEl.innerText = formatMoneyAmount(economy.credits);
         
-        if (state.credits < 0) {
+        if (economy.credits < 0) {
             this.creditsEl.classList.add('deficit');
         } else {
             this.creditsEl.classList.remove('deficit');
         }
         
-        this.repEl.innerText = state.globalReputation;
+        this.repEl.innerText = reputation.global;
         this.repEl.title = 'Store reputation changes at the end of each shift.';
-        this.shopLevelEl.innerText = state.shopLevel;
-        const nextLevel = getNextShopLevel(state.shopLevel);
+        this.shopLevelEl.innerText = reputation.shopLevel;
+        const nextLevel = getNextShopLevel(reputation.shopLevel);
         this.shopLevelEl.title = nextLevel
             ? `Finish a shift with at least ${nextLevel.reputation} store reputation to reach Shop Level ${nextLevel.level}.`
             : 'Your shop keeps its earned level even if reputation falls.';
 
-        this.awaitingEndDay = Boolean(state.awaitingEndDay);
+        this.awaitingEndDay = calendar.awaitingEndDay;
         this.renderShiftButtons();
     }
 

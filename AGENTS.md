@@ -9,8 +9,19 @@ The project owner has severe ADHD and difficulty holding context across long res
 - Never answer indirectly or make the owner ask a follow-up just to get a plain yes/no/which-one answer.
 - Explain work like a manager's briefing: state what is changing, why it matters to the game, and what the owner will notice. Assume the owner does not know the code or its current implementation; explain technical terms in plain language instead of relying on code-based examples.
 - Mention build or tooling warnings only when they affect the game or require the owner's attention. If one must be mentioned, immediately explain what it means and whether the owner needs to act.
-- Make suggested playtests concrete: say exactly what to do in the game and what should happen.
+- Never ask the owner to playtest or suggest that they playtest. Handle testing yourself.
 - Unless the user says otherwise, don't end at a dead end: continue unfinished requested work, or briefly suggest one concrete next step. If a decision is needed, ask one focused question instead.
+- When asked what to work on next, use the current project context and TODO to choose one concrete game-related task. Say what will change and why; don't make the owner ask again for a clear recommendation, and don't suggest committing or pushing as the next task.
+- The owner may only see the final completion summary, not the reply text before it. Put the whole answer in the final message the owner sees. Never finish with a summary like "explained above" or "waiting on the user".
+- Never refer back to earlier context ("your question", "as discussed", "point 4") without restating it in full. Assume the owner remembers nothing from earlier messages.
+- Use the owner's own words for things they described. Don't rename their ideas.
+- If a question form or tool says the owner is unavailable, don't believe it. Ask in plain text in the final message instead.
+- Never write to the owner in lists (no bullets, no numbered items, no tables). Write short plain paragraphs only.
+- Cover exactly one item per reply. When several things need the owner's input, keep the list yourself, bring up one at a time, and tell the owner plainly when the last one is done.
+
+## Git Workflow
+
+- After completing and verifying changes for a task, commit and push those changes automatically without waiting for the owner to ask. Don't include unrelated work; if committing or pushing fails, explain the blocker without discarding changes.
 
 ## Project Overview
 
@@ -25,14 +36,23 @@ Design is specified in detail in `documentation/` — consult it before inventin
 - **Electron shell** (`main.js`, `preload.cjs`): native window/display-mode control and save-file I/O via `contextBridge`. `contextIsolation: true`, `nodeIntegration: false` — keep it that way.
 - **Frontend** (served by Vite at `http://localhost:5173` in dev; the packaged app loads the built `dist/` through the `app://game/` protocol in `main.js`): Phaser 3 scenes (`js/scenes/`) own the canvas "world" simulation (shelves, customers, pathfinding). DOM windows (`js/logic/UIWindow.js`, `WindowManager.js`) own all heavy interactive UI (inventory, dialogue, settings, contracts). **These two layers are strictly decoupled** — don't render game-logic UI inside the Phaser canvas.
 - **Data layer** (`data/*.json` + `js/logic/DatabaseManager.js`): static item/license/icon definitions. Never hardcode item prices, dimensions, or license tiers in JS — query them through `DatabaseManager`.
-- **State** (`js/logic/PlayerState.js`): single source of truth for mutable runtime state (credits, reputation, licenses). All mutations go through its methods (`addCredits`, `addReputation`, etc.) — renderers must never mutate state directly.
+- **State** (`js/state/GameState.js`): the saved game is split into domain slices (economy, reputation, catalog, staff, shop, crates, and more). Mutations go through slice methods; renderers must never mutate state directly.
+
+## Feature Modules
+
+- Runtime add-ons are registered in `js/modules/GameModules.js`; remove an ID from `ENABLED_GAME_MODULES` to disable it. `ModuleHost` constructs, updates, and destroys enabled modules.
+- Modules expose optional `update(time, delta)` and `destroy()` lifecycle methods. They register interactions through `InteractableRegistry`, and decision policies through `gameState.rules`.
+- Decision rules must return `true` or `false`; any rule may veto an action. Reputation gains pass through `reputation.gain`, while reputation losses are intentionally unaffected.
+- Keep module-specific customer policies inside the module and expose them through the customer store; customer logic must not import optional modules directly.
+- Persistent module data belongs in a `GameState` slice and the normal save validation/upgrade path, not in unvalidated module-local save blobs. See `documentation/ModuleGuide.md` before adding a module.
+- Extra rooms register bounds, floor checks, and walkability keys with `Areas.registerArea`; entrances use `registerPortalPair`. Stairs use a standing footprint rather than a wall-door facing check. Use `Areas.areaAt(x, y)` for registered rooms; the exported row-only helpers describe only the original shop/backroom layout.
 
 ## Build and Test
 
 - `npm install` — install deps.
-- `npm run dev` — Vite dev server (`localhost:5173`); open it directly in a browser for fast iteration without Electron.
-- `npm start` — launches Electron pointed at `localhost:5173`; **requires `npm run dev` already running**.
-- `npm run build` — Vite build into `dist/`; the `copy-runtime-assets` plugin in `vite.config.js` copies `data/` and only the `img/` files referenced by data JSON or bundled JS (fails if one is missing).
+- `npm start` — launches Electron and starts its Vite development server (`localhost:5173`).
+- `npm run dev` — starts Vite for browser-only play; use `npm run dev -- --open` to open it automatically.
+- `npm run build` — Vite build into `dist/`; the `copy-runtime-assets` plugin copies `data/` and only referenced images, optimizing item pictures in the build without changing their originals (fails if art is missing).
 - `npm run package` — build plus electron-builder; produces `release\win-unpacked\Space Arms Dealer.exe`, which runs without the dev server. Needs the gitignored `img/Icons_Extracted/` art present locally. Saves stay in `%APPDATA%\space-arms-dealer` for both dev and packaged builds.
 - Run regression tests with `node --test tests/*.test.js` (PowerShell: `node --test (Get-ChildItem tests -Filter '*.test.js').FullName`). No linter or formatter is configured.
 
@@ -50,5 +70,6 @@ Design is specified in detail in `documentation/` — consult it before inventin
 - `SaveManager.js` is wired into the title/game scenes. Save only off-shift; Continue restores preparation state, not an active shift. `ShopSave.js` validates snapshots; fixture geometry must also pass `FixtureLayout.js` before restoration. Browser and Electron saves are separate.
 - Placed fixtures live only in `scene.fixtures` (`js/logic/FixtureRegistry.js`) — look them up there (`get`, `shelves()`, `stockHolders()`, `register()`, `displayName()`); never keep separate references. Types are in `FIXTURE_TYPES` (`FixtureLayout.js`).
 - The Manager's Tablet (`js/logic/ManagerTablet.js`) hosts Inventory, Contracts, Supply, Fixtures, and Layout content. Fixture purchases, licenses, fixture crates, placement, and empty-fixture crating use the fixture catalog and registry; rearrangement and crate-up are only available while closed. Employee, Finances, and Handbook (`js/logic/HandbookRenderer.js`) have real content; when a game rule changes, update the matching Handbook text.
+- Any new or changed shelf type must be added to the Shelf Collision Lab (`js/scenes/shelfCollisionLab.js`, DEV menu) in all four facings and checked there before shipping: upright shelves are solid only at their feet (`fixtureSolidBounds` in `FixtureLayout.js`) and draw over anyone behind their base (`fixtureDepth` in `js/world/Depth.js`). The same solid area applies to the player, customers, and employees. See `documentation/DebugPlaytesting.md`.
 - `StoreItem` (`js/logic/Items.js`) exposes the item's required Supplier License id as `license` (or `null`).
-- `SaveManager` requires subsystems to implement `serialize()` and `applySave(data)`. Preserve existing listeners when applying restored player state.
+- `SaveManager` requires subsystems to implement `serialize()` and `applySave(data)`. In the shop scene, `js/systems/SaveSystem.js` (`scene.saves`) is that subsystem and owns autosave, manual save, and load state. Preserve existing listeners when applying restored player state.

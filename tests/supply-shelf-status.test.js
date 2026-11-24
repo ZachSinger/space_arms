@@ -22,17 +22,19 @@ test("shelved items sort to the top of the Supply tab, most urgent first", () =>
 });
 
 test("the Supply tab keeps crate ordering and cost details in its split-panel layout", () => {
-  const item = { id: "rations", name: "Basic Rations", image: null, stackSize: 10, boxSize: 1 };
+  const item = { id: "rations", name: "Basic Rations", image: null, boxSize: 1 };
   const scene = {
-    getRestockableItems: () => [{
-      item, ownedQuantity: 60,
-      shelf: { quantity: 0, capacity: 10 }, cost: 25,
-    }],
-    getSupplyOrderSummary: () => ({
-      crates: 2, maxCrates: 9, stockCost: 50, deliveryFee: 25, total: 75,
-      canPlace: true, problem: null,
-    }),
-    getLoadingPadSpawnPositions: () => Array(9),
+    supply: {
+      restockableItems: () => [{
+        item, ownedQuantity: 60,
+        shelf: { quantity: 0, capacity: 10 }, cost: 25,
+      }],
+      orderSummary: () => ({
+        crates: 2, maxCrates: 9, stockCost: 50, deliveryFee: 25, total: 75,
+        canPlace: true, problem: null,
+      }),
+      freePadSpots: () => Array(9),
+    },
   };
   const html = SupplyRenderer.generateHTML(scene, new Map([["rations", 2]]));
 
@@ -44,7 +46,7 @@ test("the Supply tab keeps crate ordering and cost details in its split-panel la
   assert.match(html, /Sold out on shelves/);
   assert.match(html, /Own: 60/);
   assert.match(html, /<strong>25<\/strong>/);
-  assert.match(html, /20 items/);
+  assert.match(html, /Crate of 20/);
   assert.match(html, /data-supply-remove="rations"/);
   assert.match(html, /data-supply-add="rations"/);
   assert.match(html, /Items:<\/span><strong>2\/9/);
@@ -53,4 +55,32 @@ test("the Supply tab keeps crate ordering and cost details in its split-panel la
   assert.match(html, /divider-thin/);
   assert.match(html, /Total<\/span><strong>75/);
   assert.match(html, /data-supply-place/);
+});
+
+test("the Supply tab escapes item data in text and attributes", () => {
+  const item = {
+    id: 'rations" onmouseover="run()',
+    name: '<img src=x onerror="run()"> & Supply',
+    image: 'images/" onerror="run()',
+    boxSize: 1,
+  };
+  const scene = {
+    supply: {
+      restockableItems: () => [{
+        item, ownedQuantity: 0, shelf: null, cost: 25,
+      }],
+      orderSummary: () => ({
+        crates: 0, maxCrates: 9, stockCost: 0, deliveryFee: 25, total: 25,
+        canPlace: false, problem: null,
+      }),
+    },
+  };
+
+  const markup = SupplyRenderer.generateHTML(scene);
+
+  assert.match(markup, /&lt;img src=x onerror=&quot;run\(\)&quot;&gt; &amp; Supply/);
+  assert.match(markup, /data-pad-row="rations&quot; onmouseover=&quot;run\(\)"/);
+  assert.match(markup, /src="images\/&quot; onerror=&quot;run\(\)"/);
+  assert.doesNotMatch(markup, /<img src=x onerror=/);
+  assert.doesNotMatch(markup, /data-pad-row="rations" onmouseover=/);
 });

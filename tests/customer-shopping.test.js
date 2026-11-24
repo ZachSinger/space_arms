@@ -4,13 +4,23 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { EventBus, GAME_EVENTS } from "../js/logic/EventBus.js";
+import { Events, GAME_EVENTS } from "../js/core/Events.js";
 import { createServer } from "vite";
+import { useFixedStart } from "./support/fixed-start.js";
 
 let server;
 let cacheDirectory;
 let Customer;
 let GameScene;
+let Navigation;
+let SPRITE_DISPLAY_WIDTH;
+let SPRITE_DISPLAY_HEIGHT;
+let CustomerFlow;
+let CheckoutSystem;
+let gameRandom;
+let nextTestShelfId = 1;
+let nextTestShelfSlotId = 1;
+let nextTestCustomerId = 1;
 const originalPhaser = globalThis.Phaser;
 
 before(async () => {
@@ -48,8 +58,14 @@ before(async () => {
       },
     }],
   });
-  ({ Customer } = await server.ssrLoadModule("/js/logic/Customer.js"));
+  ({ Customer, SPRITE_DISPLAY_WIDTH, SPRITE_DISPLAY_HEIGHT } =
+    await server.ssrLoadModule("/js/logic/Customer.js"));
+  ({ Navigation } = await server.ssrLoadModule("/js/world/Navigation.js"));
+  ({ gameRandom } = await server.ssrLoadModule("/js/core/Random.js"));
+  await useFixedStart(server);
   ({ GameScene } = await server.ssrLoadModule("/js/scenes/game.js"));
+  ({ CustomerFlow } = await server.ssrLoadModule("/js/systems/CustomerFlow.js"));
+  ({ CheckoutSystem } = await server.ssrLoadModule("/js/systems/CheckoutSystem.js"));
 });
 
 after(async () => {
@@ -60,11 +76,28 @@ after(async () => {
 });
 
 function fixture(standPoint, placements) {
+  const id = `test-shelf-${nextTestShelfId++}`;
+  placements.forEach((placement) => {
+    if (!placement.id) placement.id = `test-shelf-slot-${nextTestShelfSlotId++}`;
+  });
   return {
+    id,
     standPoint,
     placements,
+    getContainerId(placement = null) {
+      return placement?.id ?? id;
+    },
+    getLocation(placement) {
+      return { kind: "shelf-slot", shelfId: id, slotId: placement?.id ?? null };
+    },
     findAvailableSlot() {
       return this.placements.find((placement) => placement.quantity > 0) || null;
+    },
+    canTake() {
+      return true;
+    },
+    canPut() {
+      return true;
     },
     getAvailableUnitsFor(itemId, placement) {
       return this.placements.includes(placement) && placement.itemId === itemId
@@ -97,8 +130,74 @@ function makeNavigationScene(obstacles = [], register = null) {
   };
   scene.obstacleGroup = { getChildren: () => obstacles };
   scene.fixtures = { register: () => register, registers: () => register ? [register] : [] };
+  scene.areas = {
+    crossings: () => [],
+    isWalkable: (gx, gy) => scene.room.isWalkable(gx, gy),
+    navigationWalkabilityKey: () => typeof scene.room.navigationWalkabilityKey === "function"
+      ? scene.room.navigationWalkabilityKey() : null,
+  };
+  scene.navigation = new Navigation({
+    room: scene.room,
+    areas: scene.areas,
+    obstacleGroup: scene.obstacleGroup,
+    fixtures: scene.fixtures,
+    getStoreDoorBlocker: () => scene.storeDoorAnimation?.door.blocker ?? null,
+    getRegisterFacing: () => "down",
+    registerFrontOverlap: 10,
+    defaultBodySize: { width: SPRITE_DISPLAY_WIDTH, height: SPRITE_DISPLAY_HEIGHT },
+  });
   return scene;
 }
+
+test("cross-area paths use matching portal approaches and a teleport waypoint", () => {
+  const scene = makeNavigationScene();
+  const pathCalls = [];
+  const near = { x: 80, y: 96 };
+  const far = { x: 96, y: 160 };
+  scene.areas.crossings = () => [{ near, far }];
+  scene.navigation.findAreaPath = (...args) => {
+    pathCalls.push(args);
+    return [{ x: args[2], y: args[3] }];
+  };
+  const bodySize = { width: 22, height: 20 };
+
+  const path = scene.navigation.findPath(32, 96, 224, 160, bodySize);
+
+  assert.deepEqual(pathCalls, [
+    [32, 96, near.x, near.y, bodySize],
+    [far.x, far.y, 224, 160, bodySize],
+  ]);
+  assert.deepEqual(path, [
+    near,
+    { ...near, teleportTo: far },
+    { x: 224, y: 160 },
+  ]);
+});
+
+test("customers require an injected store route interface", () => {
+  assert.throws(
+    () => new Customer({ store: {} }),
+    /Customer requires a store interface with findPath/,
+  );
+});
+
+test("multi-room paths include every portal leg and reject disconnected rooms", () => {
+  const scene = makeNavigationScene();
+  scene.areas.crossings = () => [
+    { near: { x: 64, y: 64 }, far: { x: 128, y: 128 } },
+    { near: { x: 160, y: 160 }, far: { x: 192, y: 192 } },
+  ];
+  scene.navigation.findAreaPath = (_x, _y, x, y) => [{ x, y }];
+  assert.deepEqual(scene.navigation.findPath(32, 32, 224, 224), [
+    { x: 64, y: 64 },
+    { x: 64, y: 64, teleportTo: { x: 128, y: 128 } },
+    { x: 160, y: 160 },
+    { x: 160, y: 160, teleportTo: { x: 192, y: 192 } },
+    { x: 224, y: 224 },
+  ]);
+  scene.areas.crossings = () => null;
+  assert.equal(scene.navigation.findPath(32, 32, 224, 224), null);
+});
 
 test("characters can walk through a clear passage narrower than one floor square", () => {
   const scene = makeNavigationScene([
@@ -106,7 +205,7 @@ test("characters can walk through a clear passage narrower than one floor square
     { body: { x: 80, y: 120, width: 80, height: 136 } },
   ]);
 
-  assert.deepEqual(scene.findAreaPath(32, 96, 224, 96), []);
+  assert.deepEqual(scene.navigation.findAreaPath(32, 96, 224, 96), []);
 });
 
 test("the public door remains a route through the wall while its blocker opens on approach", () => {
@@ -114,7 +213,7 @@ test("the public door remains a route through the wall while its blocker opens o
   const scene = makeNavigationScene([blocker]);
   scene.storeDoorAnimation = { door: { blocker } };
 
-  assert.deepEqual(scene.findAreaPath(32, 96, 224, 96), []);
+  assert.deepEqual(scene.navigation.findAreaPath(32, 96, 224, 96), []);
 });
 
 test("staff routes avoid the public door even while a customer holds it open", () => {
@@ -123,11 +222,11 @@ test("staff routes avoid the public door even while a customer holds it open", (
   scene.storeDoorAnimation = { door: { blocker } };
   for (const enabled of [true, false]) {
     blocker.body.enable = enabled;
-    const path = scene.findAreaPath(32, 96, 224, 96, {
+    const path = scene.navigation.findAreaPath(32, 96, 224, 96, {
       width: 22, height: 20, avoidStoreDoor: true,
     });
     assert.ok(path && path.length > 0, "staff must go around, not wait for a customer to open the door");
-    assert.deepEqual(scene.findAreaPath(32, 96, 224, 96), []);
+    assert.deepEqual(scene.navigation.findAreaPath(32, 96, 224, 96), []);
   }
 });
 
@@ -137,31 +236,196 @@ test("shoppers fit any passage wider than their feet, which the old whole-body b
     { body: { x: 0, y: 120, width: 256, height: 136 } },
   ]);
 
-  assert.ok(scene.findAreaPath(32, 100, 224, 100));
-  assert.equal(scene.findAreaPath(32, 100, 224, 100, { width: 46, height: 48 }), null);
+  assert.ok(scene.navigation.findAreaPath(32, 100, 224, 100));
+  assert.equal(scene.navigation.findAreaPath(32, 100, 224, 100, { width: 46, height: 48 }), null);
 });
 
 test("characters route around the true edges of a fixture body", () => {
   const scene = makeNavigationScene([
     { body: { x: 80, y: 32, width: 80, height: 96 } },
   ]);
-  const path = scene.findAreaPath(32, 96, 224, 96);
+  const path = scene.navigation.findAreaPath(32, 96, 224, 96);
 
   assert.ok(path);
   assert.ok(path.length > 0);
   assert.ok(path.some(({ y }) => y <= 22 || y >= 138));
   let previous = { x: 32, y: 96 };
   for (const point of [...path, { x: 224, y: 96 }]) {
-    assert.equal(scene.isStraightWalkClear(previous.x, previous.y, point.x, point.y), true);
+    assert.equal(scene.navigation.isStraightWalkClear(previous.x, previous.y, point.x, point.y), true);
     previous = point;
   }
+});
+
+test("reused routes stay independent and are invalidated when the shop changes", () => {
+  const obstacle = { body: { x: 80, y: 32, width: 80, height: 96, enable: true } };
+  const scene = makeNavigationScene([obstacle]);
+  const zone = { gridX: 0, gridY: 0, gridW: 4, gridH: 4, locked: false };
+  scene.room.zones = [zone];
+  scene.room.wallCells = new Map();
+  scene.room.navigationWalkabilityKey = () => JSON.stringify([zone.locked, [...scene.room.wallCells.keys()]]);
+  const onFloor = scene.room.isWalkable;
+  let checks = 0;
+  scene.room.isWalkable = (gx, gy) => {
+    checks += 1;
+    return !zone.locked && !scene.room.wallCells.has(`${gx},${gy}`) && onFloor(gx, gy);
+  };
+  const route = () => scene.navigation.findAreaPath(32, 96, 224, 96);
+  const first = route();
+  assert.ok(first?.length);
+  const expected = structuredClone(first);
+  const firstChecks = checks;
+  let cachedRouteReads = 0;
+  const getCachedRoute = scene.navigation.routeCache.get.bind(scene.navigation.routeCache);
+  scene.navigation.routeCache.get = (key) => {
+    cachedRouteReads += 1;
+    return getCachedRoute(key);
+  };
+  first[0].x = -1;
+  first.pop();
+  checks = 0;
+  assert.deepEqual(route(), expected, "moving one character must not change another character's route");
+  assert.equal(cachedRouteReads, 1, "the repeated route uses its cached result");
+  assert.ok(checks < firstChecks, "the repeated route avoids another search");
+
+  obstacle.body.x += 16;
+  const cachedRoutes = scene.navigation.routeCache.size;
+  checks = 0;
+  const moved = route();
+  assert.equal(scene.navigation.routeCache.size, cachedRoutes + 1, "a moved fixture needs a new route");
+  assert.ok(checks < firstChecks, "a moved fixture can reuse the unchanged room walk grid");
+  scene.navigation.routeCache.clear();
+  assert.deepEqual(moved, route());
+  obstacle.body.enable = false;
+  assert.deepEqual(route(), [], "a disabled obstacle no longer blocks the direct path");
+  obstacle.body.enable = true;
+
+  zone.locked = true;
+  assert.equal(route(), null, "locking the room invalidates the route");
+  zone.locked = false;
+  assert.ok(route()?.length);
+  scene.room.wallCells.set("1,1", {});
+  const withWall = route();
+  scene.navigation.routeCache.clear();
+  assert.deepEqual(withWall, route(), "adding a wall recalculates the route");
+  scene.room.isWalkable = () => false;
+  assert.equal(route(), null, "changing the room's walkability function invalidates routes");
+});
+
+test("the walkability grid is reused across routes and refreshed when the room changes", () => {
+  const scene = makeNavigationScene([
+    { body: { x: 80, y: 32, width: 80, height: 96, enable: true } },
+  ]);
+  const floor = scene.room.isWalkable;
+  let checks = 0;
+  let revision = 0;
+  let floorOpen = true;
+  scene.room.isWalkable = (gx, gy) => {
+    checks += 1;
+    return floorOpen && floor(gx, gy);
+  };
+  scene.room.navigationWalkabilityKey = () => String(revision);
+
+  assert.ok(scene.navigation.findAreaPath(32, 96, 224, 96)?.length);
+  const firstSearchChecks = checks;
+  assert.ok(scene.navigation.walkGridCache.size > 0);
+
+  checks = 0;
+  scene.navigation.routeCache.clear();
+  assert.ok(scene.navigation.findAreaPath(40, 96, 216, 96)?.length);
+  assert.ok(checks < firstSearchChecks, "a second route reuses cells already checked");
+
+  revision += 1;
+  floorOpen = false;
+  checks = 0;
+  assert.equal(scene.navigation.findAreaPath(32, 96, 224, 96), null);
+  assert.ok(checks > 0, "a changed layout recomputes walkable cells");
+  assert.ok([...scene.navigation.walkGridCache.values()].every((walkable) => !walkable));
+});
+
+test("removing a room's walkability key disables and clears its cached grid", () => {
+  const scene = makeNavigationScene([
+    { body: { x: 80, y: 32, width: 80, height: 96, enable: true } },
+  ]);
+  let floorOpen = true;
+  const floor = scene.room.isWalkable;
+  scene.room.isWalkable = (gx, gy) => floorOpen && floor(gx, gy);
+  scene.room.navigationWalkabilityKey = () => "fixed-layout";
+
+  assert.ok(scene.navigation.findAreaPath(32, 96, 224, 96)?.length);
+  assert.ok(scene.navigation.walkGridCache.size > 0);
+
+  delete scene.room.navigationWalkabilityKey;
+  floorOpen = false;
+  assert.equal(scene.navigation.findAreaPath(32, 96, 224, 96), null);
+  assert.equal(scene.navigation.walkGridCache.size, 0);
+});
+
+test("straight walks reuse floor checks but refresh them when the floor changes", () => {
+  const scene = makeNavigationScene();
+  const floor = scene.room.isWalkable;
+  let checks = 0;
+  let revision = 0;
+  let closed = false;
+  scene.room.isWalkable = (gx, gy) => {
+    checks += 1;
+    return !closed && floor(gx, gy);
+  };
+  scene.room.navigationWalkabilityKey = () => String(revision);
+
+  assert.deepEqual(scene.navigation.findAreaPath(32, 96, 224, 96), []);
+  assert.ok(checks > 0);
+  checks = 0;
+  assert.deepEqual(scene.navigation.findAreaPath(32, 96, 224, 96), []);
+  assert.equal(scene.navigation.isStraightWalkClear(32, 96, 224, 96), true);
+  assert.equal(checks, 0, "route and movement checks share the cached floor cells");
+
+  closed = true;
+  revision += 1;
+  assert.equal(scene.navigation.isStraightWalkClear(32, 96, 224, 96), false);
+  assert.equal(scene.navigation.findAreaPath(32, 96, 224, 96), null);
+
+  closed = false;
+  delete scene.room.navigationWalkabilityKey;
+  assert.deepEqual(scene.navigation.findAreaPath(32, 96, 224, 96), []);
+  assert.equal(scene.navigation.walkGridCache.size, 0);
+  closed = true;
+  assert.equal(scene.navigation.isStraightWalkClear(32, 96, 224, 96), false);
+});
+
+test("cached routes respect each character's size", () => {
+  const scene = makeNavigationScene([
+    { body: { x: 80, y: 32, width: 80, height: 96 } },
+  ]);
+  scene.room.navigationWalkabilityKey = () => "unchanged";
+  const normal = scene.navigation.findAreaPath(32, 96, 224, 96);
+  const larger = scene.navigation.findAreaPath(32, 96, 224, 96, { width: 46, height: 48 });
+  assert.ok(normal?.length);
+  assert.ok(larger?.length);
+  assert.notDeepEqual(larger, normal);
+  assert.deepEqual(scene.navigation.findAreaPath(32, 96, 224, 96), normal);
+});
+
+test("a room without a walkability key never reuses routes", () => {
+  const scene = makeNavigationScene([{ body: { x: 80, y: 32, width: 80, height: 96 } }]);
+  const onFloor = scene.room.isWalkable;
+  let closed = false;
+  scene.room.isWalkable = (gx, gy) => !closed && onFloor(gx, gy);
+  assert.ok(scene.navigation.findAreaPath(32, 96, 224, 96)?.length);
+  closed = true;
+  assert.equal(scene.navigation.findAreaPath(32, 96, 224, 96), null);
+});
+
+test("a room that opts into route caching must provide a valid key", () => {
+  const scene = makeNavigationScene([{ body: { x: 80, y: 32, width: 80, height: 96 } }]);
+  scene.room.navigationWalkabilityKey = () => undefined;
+  assert.throws(() => scene.navigation.findAreaPath(32, 96, 224, 96), /walkability key must be a string/);
 });
 
 test("the register queue can approach the counter's exact front edge", () => {
   const register = { rotation: 0, sprite: { body: { x: 80, y: 40, width: 90, height: 75 } } };
   const scene = makeNavigationScene([], register);
 
-  assert.deepEqual(scene.findAreaPath(125, 200, 125, 129), []);
+  assert.deepEqual(scene.navigation.findAreaPath(125, 200, 125, 129), []);
 });
 
 test("customers clear the captured door-side shelf corner before turning, even from its collision edge", () => {
@@ -172,9 +436,12 @@ test("customers clear the captured door-side shelf corner before turning, even f
   for (const start of [{ x: 864, y: 266 }, { x: 1046.2471345207866, y: 192 }]) {
     for (const delta of [1000 / 60, 33, 8]) {
       const customer = Object.create(Customer.prototype);
+      customer.id = `test-customer-${nextTestCustomerId++}`;
+      customer.location = { kind: "customer-cart", customerId: customer.id };
       let arrived = false;
       const velocity = { x: 0, y: 0 };
       customer.scene = scene;
+      customer.store = scene.navigation.store;
       customer.sprite = { ...start, body: {
         setVelocity(x, y) { Object.assign(velocity, { x, y }); },
       } };
@@ -184,7 +451,7 @@ test("customers clear the captured door-side shelf corner before turning, even f
         customer.followPath(delta);
         const from = { x: customer.sprite.x, y: customer.sprite.y };
         const to = { x: from.x + velocity.x * delta / 1000, y: from.y + velocity.y * delta / 1000 };
-        assert.equal(scene.isStraightWalkClear(from.x, from.y, to.x, to.y), true,
+        assert.equal(scene.navigation.isStraightWalkClear(from.x, from.y, to.x, to.y), true,
           `customer must not cut into the shelf from ${JSON.stringify(from)} to ${JSON.stringify(to)}`);
         Object.assign(customer.sprite, to);
       }
@@ -202,6 +469,7 @@ test("customer movement uses the current physics position, not the sprite from t
     setVelocity(x, y) { Object.assign(velocity, { x, y }); },
   } };
   customer.scene = { findPath: (...args) => { calls.push(args); return []; } };
+  customer.store = customer.scene;
   let arrived = false;
   customer.setDestination(102, 100, () => { arrived = true; });
   assert.deepEqual(calls, [[100, 100, 102, 100]]);
@@ -218,7 +486,7 @@ test("customers on a long walk across a big shop keep going; only a stuck one gi
   const walkFor = (state, ms, stepPx) => {
     const customer = Object.create(Customer.prototype);
     Object.assign(customer, {
-      state, sprite: { x: 0, y: 0 }, path: [], scene: {}, seekingTimer: 0, leavingTimer: 0,
+      state, sprite: { x: 0, y: 0 }, path: [], store: {}, seekingTimer: 0, leavingTimer: 0,
       gaveUp: false,
       followPath() { this.sprite.x += stepPx; },
       updateFacing() {},
@@ -251,6 +519,7 @@ test("a customer hitting an obstacle reroutes immediately without resetting thei
     findPath: (...args) => { calls.push(args); return detour.map((point) => ({ ...point })); },
     debugInfo: { recordCustomer: (event) => events.push(event) },
   };
+  customer.store = customer.scene;
   customer.destination = { x: 160, y: 96 };
   customer.path = [];
   customer.seekingTimer = 1234;
@@ -278,7 +547,12 @@ function makeShelfScene(shelves) {
   const scene = Object.create(GameScene.prototype);
   scene.fixtures = { shelves: () => shelves };
   scene.getStorePrice = () => 10;
-  scene.market = { getPrice: () => 10 };
+  scene.catalogSystem = { getStorePrice: () => 10 };
+  scene.gameState = {
+    market: { getPrice: () => 10 },
+    reputation: { global: 0 },
+  };
+  scene.customerFlow = new CustomerFlow(scene);
   return scene;
 }
 
@@ -288,6 +562,8 @@ function makeCustomer({ factionId = "scavengers", plan }) {
   const missingPrimaryEvents = [];
   const inventoryTransfers = [];
   const reactionGraphics = [];
+  const priceReactions = [];
+  const angryLeaves = [];
   const addReactionGraphics = () => {
     const graphic = {
       x: 0,
@@ -310,9 +586,12 @@ function makeCustomer({ factionId = "scavengers", plan }) {
     reactionGraphics.push(graphic);
     return graphic;
   };
-  const eventBus = new EventBus();
+  const eventBus = new Events();
   eventBus.on(GAME_EVENTS.INVENTORY_TRANSFERRED, (event) => inventoryTransfers.push(event));
+  eventBus.on(GAME_EVENTS.CUSTOMER_PRICE_REACTION, (event) => priceReactions.push(event));
   const customer = Object.create(Customer.prototype);
+  customer.id = `test-customer-${nextTestCustomerId++}`;
+  customer.location = { kind: "customer-cart", customerId: customer.id };
   customer.scene = {
     eventBus,
     getItem: (id) => ({
@@ -321,33 +600,43 @@ function makeCustomer({ factionId = "scavengers", plan }) {
       tags: id === "gun" ? ["Firearm", "Rifle"] : [],
     }),
     getStorePrice: () => 10,
-    market: { getPrice: () => 100 },
+    gameState: { market: { getPrice: () => 100 } },
     showFloatingText: (...args) => floatingText.push(args),
     add: { graphics: addReactionGraphics },
   };
+  customer.store = customer.scene;
   customer.sprite = { x: 100, y: 100 };
   customer.factionId = factionId;
-  customer.playerState = {
-    subReputation: (amount, id) => repChanges.push({ amount, factionId: id }),
-    notifyListeners() {},
+  customer.gameState = {
+    reputation: {
+      lose: (amount, id) => repChanges.push({ amount: -amount, factionId: id }),
+      gain: (amount, id) => repChanges.push({ amount, factionId: id }),
+    },
+    shop: { changed() {} },
   };
   customer.shoppingPlan = plan;
   customer.state = "SEEK_SHELF";
   customer.cart = [];
-  customer.priceTolerance = 1.3;
+  customer.bargainTolerance = 0.9;
+  customer.priceTolerance = 1.15;
+  customer.priceDisgustTolerance = 1.6;
+  customer.boughtBargainItem = false;
   customer.registerPoint = { x: 900, y: 900 };
   customer.onReserveShelfSlot = (_shelf) => _shelf.standPoint;
   customer.onReserveQueueSlot = () => ({ x: 900, y: 900 });
   customer.onJoinQueue = () => {};
   customer.onMissingPrimary = (who, itemIds, itemNames) =>
     missingPrimaryEvents.push({ customer: who, itemIds, itemNames });
+  customer.onLeaveAngry = (who, cart, options) => angryLeaves.push({ customer: who, cart, options });
   customer.setDestination = (x, y, onArrive) => {
     if (x < 900 && y < 900) onArrive();
   };
   customer.enterLeaving = () => { customer.state = "LEAVING"; };
+  customer.clearPatience = () => {};
   customer.primaryBought = new Set();
   customer.primaryMissing = new Set();
   customer.priceRejectedItemIds = new Set();
+  customer.priceReactionKinds = new Set();
   customer.bonusBought = new Set();
   customer.bonusAttempted = new Set();
   customer.purchasedFirearms = new Set();
@@ -357,6 +646,7 @@ function makeCustomer({ factionId = "scavengers", plan }) {
   customer.onComplete = () => {};
   customer.isDestroyed = false;
   customer.scene.showFloatingText = (...args) => floatingText.push(args);
+  customer.store = customer.scene;
   return {
     customer,
     repChanges,
@@ -364,6 +654,8 @@ function makeCustomer({ factionId = "scavengers", plan }) {
     missingPrimaryEvents,
     inventoryTransfers,
     reactionGraphics,
+    priceReactions,
+    angryLeaves,
   };
 }
 
@@ -371,9 +663,10 @@ test("departing customers use distinct spots across the entrance", () => {
   const scene = Object.create(GameScene.prototype);
   scene.exitPoint = { x: 1000, y: 96 };
   scene.customers = [];
+  scene.checkoutSystem = new CheckoutSystem(scene);
 
   const slots = Array.from({ length: 6 }, () => {
-    const slot = scene.reserveExitSlot();
+    const slot = scene.checkoutSystem.reserveExitSlot();
     scene.customers.push({ state: "LEAVING", destination: slot });
     return slot;
   });
@@ -382,7 +675,7 @@ test("departing customers use distinct spots across the entrance", () => {
   assert.ok(slots.every(({ x, y }) =>
     Math.abs(x - scene.exitPoint.x) <= 36 && Math.abs(y - scene.exitPoint.y) <= 8,
   ));
-  assert.throws(() => scene.reserveExitSlot(), /No unoccupied customer exit slot/);
+  assert.throws(() => scene.checkoutSystem.reserveExitSlot(), /No unoccupied customer exit slot/);
 });
 
 test("random browsing chooses only stocked shelves other than the next stop", () => {
@@ -393,27 +686,41 @@ test("random browsing chooses only stocked shelves other than the next stop", ()
   const scene = makeShelfScene([empty, soldOut, first, second]);
 
   for (let i = 0; i < 20; i += 1) {
-    assert.ok([first, second].includes(scene.getRandomBrowseShelf()));
+    assert.ok([first, second].includes(scene.customerFlow.getRandomBrowseShelf()));
   }
-  assert.equal(scene.getRandomBrowseShelf(first), second);
+  assert.equal(scene.customerFlow.getRandomBrowseShelf(first), second);
   first.placements[0].quantity = 0;
-  assert.equal(scene.getRandomBrowseShelf(), second);
-  assert.equal(scene.getRandomBrowseShelf(second), null);
+  assert.equal(scene.customerFlow.getRandomBrowseShelf(), second);
+  assert.equal(scene.customerFlow.getRandomBrowseShelf(second), null);
   second.placements[0].quantity = 0;
-  assert.equal(scene.getRandomBrowseShelf(), null);
+  assert.equal(scene.customerFlow.getRandomBrowseShelf(), null);
 });
 
 test("wanderer routes include stocked shelves while keeping sold-out wants for reporting", (t) => {
-  t.mock.method(Math, "random", () => 0);
+  t.after(gameRandom.override(() => 0));
   const soldOut = fixture({ x: 100, y: 100 }, [{ itemId: "missing", quantity: 0 }]);
   const stocked = fixture({ x: 200, y: 100 }, [{ itemId: "available", quantity: 2 }]);
   const empty = fixture({ x: 300, y: 100 }, []);
-  const plan = makeShelfScene([soldOut, stocked, empty])
-    .createCustomerShoppingPlan(null, ["wanderer"]);
+  const plan = new CustomerFlow(makeShelfScene([soldOut, stocked, empty]))
+    .shoppingPlan(null, ["wanderer"]);
 
   assert.deepEqual(plan.primaryItemIds, ["missing"]);
   assert.deepEqual(plan.shelfStops.map((stop) => stop.fixture), [soldOut]);
   assert.deepEqual(plan.allShelfStops.map((stop) => stop.fixture), [stocked]);
+});
+
+test("shopping plans use current store reputation to grow primary lists", () => {
+  const shelf = fixture({ x: 100, y: 100 }, [
+    { itemId: "first", quantity: 1 },
+    { itemId: "second", quantity: 1 },
+    { itemId: "third", quantity: 1 },
+  ]);
+  const scene = makeShelfScene([shelf]);
+  scene.gameState.reputation.global = 138;
+
+  const plan = scene.customerFlow.shoppingPlan(null);
+
+  assert.equal(plan.primaryItemIds.length, 2);
 });
 
 test("customer emoticons appear only for a new event and fade while following the customer", () => {
@@ -473,12 +780,20 @@ test("customers report missing primary stock while continuing to buy remaining i
       quantity: 1,
       source: "shelf",
       destination: "customer-cart",
+      sourceId: inStock.placements[0].id,
+      destinationId: customer.id,
+      sourceLocation: { kind: "shelf-slot", shelfId: inStock.id, slotId: inStock.placements[0].id },
+      destinationLocation: customer.location,
     },
     {
       itemId: "bonus",
       quantity: 1,
       source: "shelf",
       destination: "customer-cart",
+      sourceId: bonusShelf.placements[0].id,
+      destinationId: customer.id,
+      sourceLocation: { kind: "shelf-slot", shelfId: bonusShelf.id, slotId: bonusShelf.placements[0].id },
+      destinationLocation: customer.location,
     },
   ]);
   assert.deepEqual(missingPrimaryEvents, [{
@@ -499,7 +814,7 @@ test("customers name items they cannot afford after shopping", () => {
   };
   const { customer, floatingText } = makeCustomer({ plan });
   customer.scene.getStorePrice = () => 200;
-  customer.scene.market.getPrice = () => 100;
+  customer.scene.gameState.market.getPrice = () => 100;
 
   customer.visitNextShelf("primary");
 
@@ -523,9 +838,8 @@ test("customers do not walk through obstacles when a shelf has no route", () => 
   customer.exitPoint = { x: 900, y: 900 };
   customer.onReserveExitSlot = () => customer.exitPoint;
   customer.sprite.body = { setVelocity() {} };
-  customer.moveToward = () => { moved = true; };
-
   customer.visitNextShelf("primary");
+  customer.mover.moveToward = () => { moved = true; };
   assert.equal(customer.path, null);
   customer.update(16);
 
@@ -558,7 +872,7 @@ test("a shelf that sells out while a customer approaches is skipped and reported
 });
 
 test("a browsing detour reserves a stocked shelf and skips it if it sells out on the way", (t) => {
-  t.mock.method(Math, "random", () => 0);
+  t.after(gameRandom.override(() => 0));
   const wanted = fixture({ x: 100, y: 100 }, [{ itemId: "wanted", quantity: 1 }]);
   const detour = fixture({ x: 200, y: 100 }, [{ itemId: "other", quantity: 1 }]);
   const plan = {
@@ -599,7 +913,7 @@ test("a browsing detour reserves a stocked shelf and skips it if it sells out on
 });
 
 test("a customer changes course as soon as a browsing destination sells out", (t) => {
-  t.mock.method(Math, "random", () => 0);
+  t.after(gameRandom.override(() => 0));
   const wanted = fixture({ x: 100, y: 100 }, [{ itemId: "wanted", quantity: 1 }]);
   const detour = fixture({ x: 200, y: 100 }, [{ itemId: "other", quantity: 1 }]);
   const plan = {
@@ -717,7 +1031,7 @@ test("a customer stops looking at a shelf if it sells out during the pause", () 
 
 test("customers react happily when they pick up an item priced at least 10% below market", () => {
   const shelf = fixture({ x: 100, y: 100 }, [{ itemId: "bargain", quantity: 1 }]);
-  const { customer, reactionGraphics } = makeCustomer({
+  const { customer, reactionGraphics, priceReactions } = makeCustomer({
     factionId: null,
     plan: { primaryItemIds: [], bonusItemIds: [], matchingAmmoIdsByFirearm: {}, shelfStops: [] },
   });
@@ -731,6 +1045,46 @@ test("customers react happily when they pick up an item priced at least 10% belo
   assert.deepEqual(customer.cart, [{ itemId: "bargain", price: 90 }]);
   assert.equal(reactionGraphics.length, 1);
   assert.equal(customer.reactionEventsShown.has("good-deal"), true);
+  assert.equal(customer.boughtBargainItem, true);
+  assert.deepEqual(priceReactions.map(({ reaction }) => reaction), ["bargain"]);
+});
+
+test("customers skip items above their limit and keep looking for other planned items", () => {
+  const primary = fixture({ x: 100, y: 100 }, [{ itemId: "main", quantity: 1 }]);
+  const bonus = fixture({ x: 200, y: 100 }, [{ itemId: "optional", quantity: 1 }]);
+  const plan = {
+    primaryItemIds: ["main"],
+    bonusItemIds: ["optional"],
+    matchingAmmoIdsByFirearm: {},
+    shelfStops: [
+      { fixture: primary, standPoint: primary.standPoint },
+      { fixture: bonus, standPoint: bonus.standPoint },
+    ],
+  };
+  const { customer, priceReactions } = makeCustomer({ plan });
+  customer.scene.getStorePrice = (itemId) => itemId === "main" ? 116 : 100;
+  customer.visitNextShelf("primary");
+
+  assert.deepEqual(customer.cart.map(({ itemId }) => itemId), ["optional"]);
+  assert.deepEqual(priceReactions.map(({ reaction }) => reaction), ["skipped"]);
+  assert.equal(customer.state, "SEEK_REGISTER");
+});
+
+test("a price beyond the disgust threshold makes the customer leave without faction reputation loss", () => {
+  const shelf = fixture({ x: 100, y: 100 }, [{ itemId: "wanted", quantity: 1 }]);
+  const { customer, priceReactions, angryLeaves } = makeCustomer({
+    plan: { primaryItemIds: ["wanted"], bonusItemIds: [], matchingAmmoIdsByFirearm: {}, shelfStops: [] },
+  });
+  customer.scene.getStorePrice = () => 160;
+  customer.fixture = shelf;
+  customer.phaseItemIds = ["wanted"];
+  customer.shoppingPhase = "primary";
+  customer.visitNextShelfStop = () => {};
+  customer.shopAtCurrentShelf();
+
+  assert.equal(customer.state, "LEAVING");
+  assert.deepEqual(priceReactions.map(({ reaction }) => reaction), ["disgusted"]);
+  assert.equal(angryLeaves[0].options.factionReputationPenalty, false);
 });
 
 test("customers report all missing primary items once and skip bonuses when none are in stock", () => {
@@ -837,35 +1191,36 @@ test("Mercenaries collect matching ammunition after buying a firearm", () => {
   assert.equal(customer.state, "SEEK_REGISTER");
 });
 
-test("factions with no eligible shelf assignments leave with a hint and no penalty", () => {
+test("customers with no eligible shelf assignments leave without a message or penalty", () => {
+  const bonusShelf = fixture({ x: 200, y: 100 }, [{ itemId: "bonus", quantity: 1 }]);
   const plan = {
     primaryItemIds: [],
-    bonusItemIds: [],
+    bonusItemIds: ["bonus"],
     matchingAmmoIdsByFirearm: {},
-    shelfStops: [],
+    shelfStops: [{ fixture: bonusShelf, standPoint: bonusShelf.standPoint }],
   };
-  const { customer, repChanges, floatingText } = makeCustomer({
-    factionId: "explorers",
-    plan,
-  });
-  customer.shoppingPhase = "primary";
-  customer.finishShoppingPhase();
+  for (const factionId of [null, "scavengers", "mercenaries", "explorers"]) {
+    const { customer, repChanges, floatingText, missingPrimaryEvents } = makeCustomer({ factionId, plan });
+    customer.shoppingPhase = "primary";
+    customer.finishShoppingPhase();
 
-  assert.deepEqual(repChanges, []);
-  assert.equal(customer.state, "LEAVING");
-  assert.match(floatingText[0][2], /no matching stock/i);
-  assert.match(floatingText[0][2], /tools or survival gear/i);
+    assert.deepEqual(repChanges, []);
+    assert.deepEqual(missingPrimaryEvents, []);
+    assert.deepEqual(floatingText, []);
+    assert.deepEqual(customer.cart, []);
+    assert.equal(customer.state, "LEAVING");
+    assert.equal(bonusShelf.placements[0].quantity, 1);
+  }
 });
 
-test("neutral customers explain when there are no products to browse", () => {
-  const { customer, floatingText } = makeCustomer({
-    factionId: null,
+test("customers with unknown factions still report an error", () => {
+  const { customer } = makeCustomer({
+    factionId: "pirates",
     plan: { primaryItemIds: [], bonusItemIds: [], shelfStops: [] },
   });
   customer.shoppingPhase = "primary";
-  customer.finishShoppingPhase();
 
-  assert.match(floatingText[0][2], /no products are on the shelves/i);
+  assert.throws(() => customer.finishShoppingPhase(), /Unknown customer faction: pirates/);
 });
 
 test("customers decide about cleanliness once, before taking anything, and a filthy store sends them out", () => {
@@ -873,6 +1228,13 @@ test("customers decide about cleanliness once, before taking anything, and a fil
     const verdicts = [];
     const customer = Object.create(Customer.prototype);
     Object.assign(customer, {
+      cleaning: {
+        getCleanlinessPercent: () => percent,
+        reportCleanlinessVerdict: (_customer, verdict) => verdicts.push(verdict),
+        judgeCustomerCleanliness: (value, tolerance) => value < tolerance.walkOutBelow
+          ? "walk-out"
+          : value < tolerance.upsetBelow ? "upset" : "fine",
+      },
       cleanlinessTolerance: { upsetBelow: 70, walkOutBelow: 30 },
       cleanlinessJudged: false,
       cleanlinessTimerMs: 0,
@@ -880,10 +1242,6 @@ test("customers decide about cleanliness once, before taking anything, and a fil
       cart: [],
       phaseItemIds: ["wpn_rif_01"],
       fixture: { placements: [{ itemId: "wpn_rif_01", quantity: 3 }] },
-      scene: {
-        getCleanlinessPercent: () => percent,
-        reportCleanlinessVerdict: (_customer, verdict) => verdicts.push(verdict),
-      },
       left: false,
       showReaction() {},
       clearPatience() {},
@@ -891,6 +1249,15 @@ test("customers decide about cleanliness once, before taking anything, and a fil
       shopped: false,
       getRemainingUnitsFor() { this.shopped = true; return 0; },
       visitNextShelfStop() {},
+    });
+
+    test("a broken enabled cleaning policy is not treated as a clean store", () => {
+      const customer = Object.assign(Object.create(Customer.prototype), {
+        cleaning: {},
+        cleanlinessTolerance: { upsetBelow: 70, walkOutBelow: 30 },
+        cleanlinessJudged: false,
+      });
+      assert.throws(() => customer.judgeStoreCleanliness(), /getCleanlinessPercent/);
     });
     customer.shopAtCurrentShelf();
     return { customer, verdicts };

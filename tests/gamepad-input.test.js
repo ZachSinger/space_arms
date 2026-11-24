@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { GamepadInput, PAD, applyDeadzone } from "../js/logic/GamepadInput.js";
+import { GamepadInput, PAD, applyDeadzone } from "../js/input/GamepadInput.js";
 import { pickNeighbor, pickNearest } from "../js/logic/PadNavigation.js";
-import { controlLabel, getInputDevice, setInputDevice, watchKeyboardAndMouse } from "../js/logic/InputDevice.js";
+import { controlLabel, getInputDevice, setInputDevice, watchKeyboardAndMouse } from "../js/input/InputDevice.js";
 
 function fakePad() {
   const state = { buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })), axes: [0, 0, 0, 0] };
@@ -49,6 +49,15 @@ test("holding B dashes", () => {
   press(PAD.B);
   input.poll(16);
   assert.equal(input.wantsDash(), true);
+});
+
+test("holding the left stick in shows trash instead of dashing", () => {
+  const { input, press } = fakePad();
+  input.poll(0);
+  press(PAD.L3);
+  input.poll(16);
+  assert.equal(input.wantsTrashHighlight(), true);
+  assert.equal(input.wantsDash(), false);
 });
 
 test("small stick drift is ignored and the rest rescales from zero", () => {
@@ -137,7 +146,7 @@ test("on-screen prompts name the key or the controller button", () => {
   assert.equal(controlLabel("putDown", "gamepad"), "Y");
   assert.equal(controlLabel("nextCrate", "keyboard"), "Ctrl");
   assert.equal(controlLabel("nextCrate", "gamepad"), "Right stick click");
-  assert.equal(controlLabel("goBacks", "gamepad"), "Y");
+  assert.equal(controlLabel("cancelFixture", "gamepad"), "X");
   assert.throws(() => controlLabel("jump"));
 });
 

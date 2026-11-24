@@ -22,6 +22,7 @@ test("native saves replace atomically, serialize writes, recover from errors, an
     BrowserWindow: class {
       constructor() {
         window = this;
+        this.webContents = { on() {} };
         this.handlers = new Map();
         this.destroyed = false;
         this.enabled = true;

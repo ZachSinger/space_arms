@@ -1,0 +1,27 @@
+.tutorial-hint {
+  position: absolute;
+  top: 52px;
+  right: 12px;
+  width: 310px;
+  padding: 10px 12px;
+  background: rgba(9, 13, 22, 0.96);
+  border: 2px solid var(--color-border-active);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+  color: var(--color-text-main);
+  font: bold var(--font-size-16) "Courier New", monospace;
+  line-height: 1.35;
+  pointer-events: none;
+  z-index: 450;
+}
+
+.tutorial-hint-title {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--color-border-active);
+  font-size: var(--font-size-14);
+  letter-spacing: 1px;
+}
+
+.tutorial-hint.complete {
+  border-color: #4ade80;
+}

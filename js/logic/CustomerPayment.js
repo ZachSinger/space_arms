@@ -1,10 +1,11 @@
 import { generateChitCode } from "./ChitPayment.js";
+import { gameRandom } from "../core/Random.js";
 
 export const FACTION_CURRENCY_PAYMENT_CHANCE = 0.75;
 export const EXACT_CASH_PAYMENT_CHANCE = 0.25;
 export const CASH_PAYMENT_CHANCE = 0.5;
 
-export function chooseCustomerPayment(factionId, random = Math.random) {
+export function chooseCustomerPayment(factionId, random = gameRandom) {
   if (factionId === "scavengers" && random() < FACTION_CURRENCY_PAYMENT_CHANCE) {
     return {
       type: "m-scrips",

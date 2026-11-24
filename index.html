@@ -20,6 +20,10 @@
               title="Debug: open the next backroom upgrade for free">+Backroom</button>
             <button id="hud-debug-quickstart-btn" class="hud-pause-btn" type="button"
               title="Debug: buy and place two 2x2 shelves, each spot filled with one of the first 6 items">Quickstart</button>
+            <button id="hud-debug-skip-shifts-btn" class="hud-pause-btn" type="button"
+              title="Debug: play the next 4 shifts instantly, signing the next contract and keeping every item fully stocked">Skip 4 Shifts</button>
+            <button id="hud-debug-employee-testing-btn" class="hud-pause-btn" type="button"
+              title="Debug: play shifts like a good player until the shop reaches Level 5, restock every shelf, and make sure there's enough money to hire one employee">Employee Test</button>
             <div class="hud-stat">
               <span class="hud-label">MONEY</span>
               <span id="hud-credits" class="hud-value">0</span>
@@ -36,12 +40,23 @@
               <span class="hud-label">CLEANLINESS</span>
               <span id="hud-cleanliness" class="hud-value">20/20</span>
             </div>
+            <div class="hud-stat" style="display:none">
+              <span class="hud-label">PRESENTATION</span>
+              <span id="hud-presentation" class="hud-value">20/20</span>
+            </div>
             <div id="hud-stamina" class="hud-stat hud-stamina" role="progressbar"
               aria-label="Player stamina" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"
               title="Hold Shift while moving to dash. Stamina recovers while walking or resting. When empty, recover to 25% before dashing again.">
               <span class="hud-label">STAMINA</span>
               <div class="hud-stamina-track"><div id="hud-stamina-fill" class="hud-stamina-fill"></div></div>
               <span id="hud-stamina-value" class="hud-value time">100%</span>
+            </div>
+            <div id="hud-hovercart" class="hud-stat hud-hovercart hidden" role="progressbar"
+              aria-label="Hovercart battery" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"
+              title="Hovercart battery. It drains while the hovercart is on, faster while it moves and for every crate on it. It charges while docked at its charger.">
+              <span class="hud-label">HOVERCART</span>
+              <div class="hud-stamina-track"><div id="hud-hovercart-fill" class="hud-hovercart-fill"></div></div>
+              <span id="hud-hovercart-value" class="hud-value time">100%</span>
             </div>
           </div>
           <div class="hud-section">
@@ -85,7 +100,59 @@
         </div>
         <div id="holding-cards" class="holding-cards hidden"></div>
       </div>
+      <div id="loading-screen" class="loading-screen hidden" role="status" aria-live="polite">LOADING...</div>
     </div>
+    <dialog id="runtime-error-dialog" class="runtime-error-dialog" aria-labelledby="runtime-error-heading">
+      <div class="runtime-error-form">
+        <h2 id="runtime-error-heading">Something went wrong</h2>
+        <p>The game recorded an error. You can send a report to help us find the cause. Nothing is sent unless you choose Send Report.</p>
+        <label for="runtime-error-title">Report title</label>
+        <input data-runtime-error-title id="runtime-error-title" type="text" maxlength="200">
+        <label for="runtime-error-message">What happened?</label>
+        <textarea data-runtime-error-message id="runtime-error-message" maxlength="4000" rows="7"></textarea>
+        <p data-runtime-error-status class="runtime-error-status" role="status" aria-live="polite"></p>
+        <div class="runtime-error-actions">
+          <button data-runtime-error-dismiss class="action-btn" type="button">Not now</button>
+          <button data-runtime-error-send class="action-btn" type="button">Send Report</button>
+        </div>
+      </div>
+    </dialog>
+    <script>
+      window.__earlyErrorCapture = (() => {
+        const save = (type, error) => {
+          if (!window.desktopApi?.recordRuntimeError) return;
+          // Live-reloaded files ("?t=<timestamp>") mid-edit aren't game bugs; see ErrorReportPrompt.js.
+          if (/[?&]t=\d{10,}/.test(`${error?.message ?? ""} ${error?.filename ?? ""}`)) return;
+          const record = {
+            type,
+            message: error?.message ?? String(error ?? "Unknown error"),
+            filename: error?.filename,
+            line: error?.lineno,
+            column: error?.colno,
+            stack: error?.error?.stack ?? error?.reason?.stack,
+          };
+          Promise.resolve().then(() => window.desktopApi.recordRuntimeError(record))
+            .catch((saveError) => console.error("Could not save startup error:", saveError));
+        };
+        // A file that fails to load (script, image, stylesheet) sends a plain event with no message.
+        const handleError = (event) => {
+          const target = event.target;
+          if (target && target !== window && !(event instanceof ErrorEvent)) {
+            const file = target.src || target.href || target.currentSrc || "unknown file";
+            save("renderer-error", { message: `Could not load ${String(target.tagName).toLowerCase()} ${file}` });
+            return;
+          }
+          save("renderer-error", event);
+        };
+        const handleRejection = (event) => save("unhandled-rejection", event);
+        window.addEventListener("error", handleError, true);
+        window.addEventListener("unhandledrejection", handleRejection);
+        return () => {
+          window.removeEventListener("error", handleError, true);
+          window.removeEventListener("unhandledrejection", handleRejection);
+        };
+      })();
+    </script>
     <script type="module" src="/js/scenes/main.js"></script>
   </body>
 </html>

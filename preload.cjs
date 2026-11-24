@@ -12,6 +12,11 @@ contextBridge.exposeInMainWorld("desktopApi", {
   setDisplayMode: (mode) => ipcRenderer.invoke("display:set-mode", mode),
   saveGame: (payload) => ipcRenderer.invoke("save:write", payload),
   loadGame: () => ipcRenderer.invoke("save:read"),
+  quitGame: () => ipcRenderer.invoke("app:quit"),
+  sendBugReport: (report) => ipcRenderer.invoke("bug-report:send", report),
+  recordRuntimeError: (error) => ipcRenderer.invoke("runtime-error:record", error),
+  getPendingRuntimeErrors: () => ipcRenderer.invoke("runtime-error:list"),
+  clearPendingRuntimeErrors: (ids) => ipcRenderer.invoke("runtime-error:clear", ids),
   captureDebugInfo: (snapshot) => ipcRenderer.invoke("debug:capture", snapshot),
   openDebugFolder: () => ipcRenderer.invoke("debug:open-folder"),
 });

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   addDiscountBonusItem, createCustomerBuyList, CUSTOMER_BUY_LIST_TUNING,
-  BARGAIN_PRICE_RATIO, DISCOUNT_BONUS_CHANCE,
+  BARGAIN_PRICE_RATIO, DISCOUNT_BONUS_CHANCE, MAX_DISCOUNT_BONUS_ITEMS,
   createCustomerItemQuantities,
 } from "../js/logic/CustomerBuyLists.js";
 
@@ -32,8 +32,29 @@ test("customers can want one, two, or three of each item without rerolling dupli
   }
 });
 
-test("reputation thresholds stay unset and neutral customers want a shelf-assigned item", () => {
-  assert.deepEqual(CUSTOMER_BUY_LIST_TUNING.reputationPrimaryThresholds, []);
+test("primary shopping lists grow at reputation milestones", () => {
+  const extraItems = Array.from({ length: 6 }, (_, index) => ({
+    id: `extra_${index}`,
+    name: `Extra ${index}`,
+    tags: [],
+  }));
+  const items = [...catalog, ...extraItems];
+  const getAnyItem = (itemId) => items.find((item) => item.id === itemId);
+  const shelfItemIds = items.map((item) => item.id);
+  const countAt = (reputation) => createCustomerBuyList(
+    null, shelfItemIds, getAnyItem, () => 0, reputation,
+  ).primaryItemIds.length;
+  const [first, second, third] = CUSTOMER_BUY_LIST_TUNING.reputationPrimaryThresholds;
+
+  assert.equal(countAt(-1), 1);
+  assert.equal(countAt(first - 1), 1);
+  assert.equal(countAt(first), 2);
+  assert.equal(countAt(second - 1), 2);
+  assert.equal(countAt(second), 3);
+  assert.equal(countAt(third), 4);
+});
+
+test("neutral customers without reputation still want a shelf-assigned item", () => {
   const list = createCustomerBuyList(null, ["tool", "survival"], getItem, () => 0);
   assert.deepEqual(list.primaryItemIds, ["tool"]);
   assert.deepEqual(list.bonusItemIds, []);
@@ -86,7 +107,7 @@ test("Explorers can choose either a Tool or Survival gear as a primary", () => {
   );
 });
 
-test("customers sometimes add one extra bargain item when an unrequested item is 10% below market", () => {
+test("customers sometimes add up to two extra bargain items they did not plan to buy", () => {
   const buyList = { primaryItemIds: ["tool"], bonusItemIds: ["survival"] };
   const result = addDiscountBonusItem(
     buyList,
@@ -96,7 +117,8 @@ test("customers sometimes add one extra bargain item when an unrequested item is
   );
   assert.equal(BARGAIN_PRICE_RATIO, 0.9);
   assert.equal(DISCOUNT_BONUS_CHANCE, 0.5);
-  assert.deepEqual(result, ["survival", "apparel"]);
+  assert.equal(MAX_DISCOUNT_BONUS_ITEMS, 2);
+  assert.deepEqual(result, ["survival", "apparel", "old_ration"]);
   assert.deepEqual(buyList.bonusItemIds, ["survival"]);
 });
 

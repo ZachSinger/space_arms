@@ -121,23 +121,37 @@ export class SlidingDoor {
     this.doorwayPoint = { x, y };
     // Arriving customers hold the door open until they've walked clear of it.
     this.arrivals = new Set();
+    // Arrivals still waiting for the door to finish opening, with what to do once it has.
+    this.waiting = new Map();
   }
 
   get state() {
     return this.door.state;
   }
 
-  letIn(actor) {
+  /**
+   * @param {object} actor
+   * @param {() => void} [onDoorOpen] - called once the door is fully open
+   */
+  letIn(actor, onDoorOpen) {
     this.arrivals.add(actor);
+    if (onDoorOpen) this.waiting.set(actor, onDoorOpen);
   }
 
   // `nearbyActors` are everyone who opens the door by walking up to it.
   update(delta, nearbyActors) {
     for (const actor of this.arrivals) {
-      if (actor.active === false || !this.door.isNear(actor)) this.arrivals.delete(actor);
+      if (actor.active === false || (!this.waiting.has(actor) && !this.door.isNear(actor))) {
+        this.arrivals.delete(actor);
+      }
     }
+    for (const actor of this.waiting.keys()) if (actor.active === false) this.waiting.delete(actor);
     const someoneNear = nearbyActors.some((actor) => actor && this.door.isNear(actor));
     this.door.update(delta, this.arrivals.size > 0 || someoneNear);
+    if (this.door.state !== "open") return;
+    const entering = [...this.waiting.values()];
+    this.waiting.clear();
+    for (const onDoorOpen of entering) onDoorOpen();
   }
 
   destroy() {

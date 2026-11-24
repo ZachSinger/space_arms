@@ -6,6 +6,8 @@
 // player types the total, then counts cash change from an unlimited placeholder drawer.
 
 import { UIWindow } from "./UIWindow.js";
+import { PausableTimers } from "../core/Clock.js";
+import { html } from "../core/html.js";
 import { CheckoutRenderer, cashFaceValue, renderCurrentChange } from "./CheckoutRenderer.js";
 import {
   CashPayment, creditCentsToScrips, formatCashAmount, splitCash,
@@ -20,9 +22,12 @@ import {
   playErrorBuzz,
 } from "./Sfx.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
+import { matchesBinding } from "../input/KeyBindings.js";
+import { controlLabel } from "../input/InputDevice.js";
 
 // Belt layout (px) and animation speeds.
 const CARD_SIZE = 72;
+import { gameRandom } from "../core/Random.js";
 const CARD_GAP = 8;
 const SCANNER_GAP = 12;
 const BELT_SPEED_PX_PER_S = 260;
@@ -43,7 +48,7 @@ export const CHIT_MISTAKES_TO_LOSE_SALE = 3;
 export const CHIT_KEY_TIME_MS = 10000;
 const CHIT_TIMER_TICK_MS = 50;
 
-export function customerPaysCash(random = Math.random) {
+export function customerPaysCash(random = gameRandom) {
   return random() < CASH_PAYMENT_CHANCE;
 }
 
@@ -78,6 +83,7 @@ function formatCheckoutTotal(total, currency = "credits") {
 export class CheckoutWindow {
   constructor(windowManager) {
     this.windowManager = windowManager;
+    this.timers = new PausableTimers();
     const rightAlignedX =
       DESIGN_WIDTH - (DESIGN_WIDTH * CHECKOUT_WIDTH_PERCENT) / 100 - RIGHT_MARGIN_PX;
 
@@ -101,7 +107,6 @@ export class CheckoutWindow {
     this.uiWindow.element.dataset.padBack = "world";
     this.onComplete = null;
     this.mode = null; // "checkout" while ringing up a cart
-    this.onFirstScan = null; // the game resets the customer's patience when scanning starts
     this.isScanning = false;
     this.paymentBuffer = "";
     this.total = 0;
@@ -113,6 +118,12 @@ export class CheckoutWindow {
 
     // Global, so a drag-scan works even if it doesn't start on a card.
     this.handleMouseDown = (event) => {
+      if (event.target?.tagName === "CANVAS" && this.usesSpaceKey() && matchesBinding("crate", event)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        this.handOverChange("keyboard");
+        return;
+      }
       this.isScanning = event.button === 0 && !this.paused;
       this.lastPointer = { x: event.clientX, y: event.clientY };
     };
@@ -128,9 +139,7 @@ export class CheckoutWindow {
   }
 
   destroy() {
-    this.stopChitTimer();
-    clearTimeout(this.beltStopTimer);
-    for (const timer of this.registerTimers ?? []) clearTimeout(timer.id);
+    this.timers.clear();
     window.removeEventListener("mousedown", this.handleMouseDown);
     window.removeEventListener("mouseup", this.handleMouseUp);
     window.removeEventListener("keydown", this.handleKeyDown);
@@ -171,9 +180,9 @@ export class CheckoutWindow {
     }
 
     if (this.paymentStage === "change") {
-      if (event.key === " ") {
+      if (matchesBinding("crate", event)) {
         event.preventDefault();
-        this.handOverChange();
+        this.handOverChange("keyboard");
       }
       return;
     }
@@ -196,6 +205,8 @@ export class CheckoutWindow {
     this.cart = null;
     this.onComplete = null;
     this.onWrongChange = null;
+    this.onCashAttempt = null;
+    this.onChangeFailed = null;
     this.cashPayment = null;
     this.chitPayment = null;
     this.stopChitTimer();
@@ -235,19 +246,11 @@ export class CheckoutWindow {
    */
   freezeMotion(frozen) {
     const animations = this.uiWindow.element.getAnimations?.({ subtree: true }) ?? [];
-    const now = Date.now();
     for (const animation of animations) {
       if (!frozen) animation.play();
     }
     if (frozen) this.pauseAnimations();
-    for (const timer of this.registerTimers ?? []) {
-      clearTimeout(timer.id);
-      if (frozen) {
-        timer.remaining = Math.max(0, timer.remaining - (now - timer.startedAt));
-      } else {
-        this.startRegisterTimer(timer);
-      }
-    }
+    this.timers.setPaused(frozen);
     // The belt's "rolling" stripes stop on a timer, so restart it from the cards' positions.
     if (!frozen && this.mode === "checkout") this.advanceBelt();
   }
@@ -258,18 +261,7 @@ export class CheckoutWindow {
    * @param {number} ms
    */
   delayRegister(callback, ms) {
-    this.registerTimers ??= new Set();
-    const timer = { callback, remaining: ms };
-    this.registerTimers.add(timer);
-    if (!this.paused) this.startRegisterTimer(timer);
-  }
-
-  startRegisterTimer(timer) {
-    timer.startedAt = Date.now();
-    timer.id = setTimeout(() => {
-      this.registerTimers.delete(timer);
-      timer.callback();
-    }, timer.remaining);
+    this.timers.after(ms, callback);
   }
 
   resume() {
@@ -293,19 +285,23 @@ export class CheckoutWindow {
    * @param {{ itemId: string, price: number }[]} cart - prices in credits
    * @param {() => void} onComplete - fired when payment and change are correct
    * @param {{ cash?: boolean, exact?: boolean, currency?: string, chitCode?: string,
-   *   paymentType?: string, onWrongChange?: () => void, onChitFailed?: () => void }} [options]
+   *   paymentType?: string, onWrongChange?: () => void, onChangeFailed?: () => void,
+   *   onChitFailed?: () => void, onCashAttempt?: (attempt: object) => void }} [options]
    *   exact: the customer pays the exact cash amount; rolled here if not given
+   *   onChangeFailed: the player handed over wrong change too many times; the sale is lost
    *   onChitFailed: the player pressed a wrong Chit key too many times; the sale is lost
    */
   openForCustomer(cart, onComplete, {
     cash = true, exact = null, currency = "credits", chitCode, paymentType, onWrongChange = null,
-    onChitFailed = null,
+    onChangeFailed = null, onChitFailed = null, onCashAttempt = null,
   } = {}) {
     this.mode = "checkout";
     this.stopChitTimer();
     this.cart = cart;
     this.onComplete = onComplete;
     this.onWrongChange = onWrongChange;
+    this.onCashAttempt = onCashAttempt;
+    this.onChangeFailed = onChangeFailed;
     this.onChitFailed = onChitFailed;
     this.chitMistakes = 0;
     this.paymentBuffer = "";
@@ -315,7 +311,7 @@ export class CheckoutWindow {
     this.currency = this.paymentType === "m-scrips" ? "m-scrips" : "credits";
     // Some customers count out the exact amount, coins included, so no change is owed.
     const usesCash = this.paymentType === "cash" || this.paymentType === "m-scrips";
-    const isExact = usesCash && (exact ?? Math.random() < EXACT_PAYMENT_CHANCE);
+    const isExact = usesCash && (exact ?? gameRandom() < EXACT_PAYMENT_CHANCE);
     const exactTender = this.currency === "m-scrips"
       ? creditCentsToScrips(toCents(this.total))
       : this.total;
@@ -377,9 +373,9 @@ export class CheckoutWindow {
       card.style.transition = `left ${seconds}s linear, border-color 0.1s ease`;
       card.style.left = `${targetX}px`;
     });
-    clearTimeout(this.beltStopTimer);
+    this.beltStopTimer?.cancel();
     belt.classList.toggle("rolling", longestSeconds > 0);
-    this.beltStopTimer = setTimeout(() => belt.classList.remove("rolling"), longestSeconds * 1000);
+    this.beltStopTimer = this.timers.after(longestSeconds * 1000, () => belt.classList.remove("rolling"));
     // A register opened during a pause waits, frozen, for the shift to resume.
     if (this.paused) this.pauseAnimations();
   }
@@ -427,7 +423,6 @@ export class CheckoutWindow {
       if (card.dataset.scanned === "true") return;
       card.dataset.scanned = "true";
       scannedCount += 1;
-      if (scannedCount === 1) this.onFirstScan?.();
 
       const index = Number(card.dataset.index);
       runningTotal = sumMoney([runningTotal, cart[index].price]);
@@ -501,8 +496,8 @@ export class CheckoutWindow {
       if (this.paymentStage !== "total") return;
       playKeypadClick();
       const next = this.paymentBuffer + digit;
-      const maxWholeDigits = Math.floor(this.total).toString().length;
-      if (!new RegExp(`^\\d{0,${maxWholeDigits}}(?:\\.\\d{0,2})?$`).test(next)) return;
+      // Extra whole digits are allowed so a mistyped total fails on confirm instead of being ignored.
+      if (!/^\d{0,8}(?:\.\d{0,2})?$/.test(next)) return;
       this.paymentBuffer = next === "." ? "0." : next;
       refreshDisplay();
     };
@@ -564,9 +559,15 @@ export class CheckoutWindow {
           playKeypadClick();
           this.refreshCash();
         };
-        button.addEventListener("click", () => adjust(1));
-        // Keep focus off drawer buttons, or Space would also press the last one clicked.
-        button.addEventListener("mousedown", (event) => event.preventDefault());
+        button.addEventListener("mousedown", (event) => {
+          if (event.button === 0) adjust(1);
+          // Keep focus off drawer buttons, or Space would also press the last one clicked.
+          event.preventDefault();
+        });
+        // Preserve keyboard activation; mouse clicks have already been counted on mousedown.
+        button.addEventListener("click", (event) => {
+          if (event.detail === 0) adjust(1);
+        });
         button.addEventListener("contextmenu", (event) => {
           event.preventDefault();
           adjust(-1);
@@ -576,7 +577,7 @@ export class CheckoutWindow {
       this.bodyElement.querySelector("#checkout-cash").addEventListener("pad-alt", (event) => {
         if (this.paymentStage !== "change") return;
         event.preventDefault();
-        this.handOverChange();
+        this.handOverChange("controller");
       });
     }
   }
@@ -634,20 +635,17 @@ export class CheckoutWindow {
   restartChitTimer() {
     this.stopChitTimer();
     this.chitTimeLeftMs = CHIT_KEY_TIME_MS;
-    this.chitTimerLastTick = Date.now();
     this.refreshChitTimer();
-    this.chitTimerId = setInterval(() => this.tickChitTimer(), CHIT_TIMER_TICK_MS);
+    this.chitTimer = this.timers.every(CHIT_TIMER_TICK_MS, (elapsed) => this.tickChitTimer(elapsed));
   }
 
   stopChitTimer() {
-    clearInterval(this.chitTimerId);
-    this.chitTimerId = null;
+    this.chitTimer?.cancel();
+    this.chitTimer = null;
   }
 
-  tickChitTimer() {
-    const now = Date.now();
-    const elapsed = now - this.chitTimerLastTick;
-    this.chitTimerLastTick = now;
+  /** @param {number} elapsed - running (unpaused) ms since the last tick */
+  tickChitTimer(elapsed) {
     if (this.paymentStage !== "chit") {
       this.stopChitTimer();
       return;
@@ -693,12 +691,12 @@ export class CheckoutWindow {
     this.removeTenderOverlay();
     const overlay = document.createElement("div");
     overlay.className = "cash-tender-overlay";
-    overlay.innerHTML = `
+    overlay.innerHTML = html`
       <div class="cash-tender-panel">
         <div class="cash-tender-title">THE CUSTOMER HANDS YOU ${formatCashAmount(this.cashPayment.tenderUnits, this.cashPayment.currency).toUpperCase()}</div>
         <div class="cash-tender-area"></div>
         <div class="cash-tender-hint kbd-only">Release the mouse button, then click each bill${this.cashPayment.currency === "credits" ? " or coin" : ""} or click and hold to sweep across them.</div>
-        <div class="cash-tender-hint pad-only">Press A on each bill${this.cashPayment.currency === "credits" ? " or coin" : ""} to take it.</div>
+        <div class="cash-tender-hint pad-only">Press ${controlLabel("tenderAdd", "gamepad")} to take the selected bill${this.cashPayment.currency === "credits" ? " or coin" : ""}. Hold it to collect them one after another.</div>
       </div>`;
     const area = overlay.querySelector(".cash-tender-area");
     this.cashPayment.tenderPieces.forEach((piece, index) => {
@@ -706,8 +704,11 @@ export class CheckoutWindow {
       const element = document.createElement("button");
       element.type = "button";
       element.className = `cash-loose cash-${piece.kind}`;
+      element.dataset.tenderIndex = String(index);
+      element.dataset.padAutofocus = "";
+      element.dataset.padRepeat = "80";
       element.setAttribute("aria-label", `Take ${piece.label}`);
-      element.innerHTML = `<span class="cash-value">${cashFaceValue(piece, this.cashPayment.currency)}</span>`;
+      element.innerHTML = html`<span class="cash-value">${cashFaceValue(piece, this.cashPayment.currency)}</span>`;
       // Random spot and tilt inside the area, kept clear of its edges.
       element.style.left = `${8 + Math.random() * 64}%`;
       element.style.top = `${10 + Math.random() * 60}%`;
@@ -773,7 +774,7 @@ export class CheckoutWindow {
       ? formatCashAmount(this.cashPayment.tenderUnits, "m-scrips")
       : formatTransactionTotal(this.cashPayment.tenderUnits / 100);
     this.bodyElement.querySelector("#checkout-total-value").innerHTML =
-      `${formatCheckoutTotal(this.total, this.cashPayment.currency)} - <span class="checkout-paid">${paid}</span>`;
+      String(html`${formatCheckoutTotal(this.total, this.cashPayment.currency)} - <span class="checkout-paid">${paid}</span>`);
     this.bodyElement.querySelector("#checkout-payment").classList.remove("hidden");
     this.bodyElement.querySelector("#checkout-payment").classList.add("counting-change");
     this.setWidth("change");
@@ -851,25 +852,35 @@ export class CheckoutWindow {
     const current = this.bodyElement.querySelector("#checkout-change-current");
     current.classList.toggle("change-exact", cash.changeUnits === cash.changeDueUnits);
     current.classList.toggle("change-over", cash.changeUnits > cash.changeDueUnits);
-    this.bodyElement.querySelectorAll("[data-cash-count]").forEach((element) => {
-      element.textContent = `${cash.change.get(Number(element.dataset.cashCount)) ?? 0} in change`;
-    });
-    const piecesHTML = (pieces) => pieces.map(({ kind, units, count }) => `
+    const piecesHTML = (pieces) => pieces.map(({ kind, units, count }) => html`
       <span class="cash-pile-item">
         <span class="cash-piece cash-${kind}"><span class="cash-value">${cashFaceValue({ kind, units }, cash.currency)}</span></span>
         <span class="cash-pile-count">x${count}</span>
-      </span>`).join("");
+      </span>`);
     const selected = [...cash.change].map(([units, count]) => ({
       ...splitCash(units, cash.currency)[0], count,
     }));
     this.bodyElement.querySelector("#checkout-change-pile").innerHTML = selected.length
-      ? `<span class="cash-row-label">CHANGE TO HAND OVER</span>${piecesHTML(selected)}`
+      ? String(html`<span class="cash-row-label">CHANGE TO HAND OVER</span>${piecesHTML(selected)}`)
       : "No change selected.";
   }
 
-  handOverChange() {
+  handOverChange(input = "button") {
     if (this.paymentStage !== "change") return;
     const result = this.cashPayment.handOver();
+    this.onCashAttempt?.({
+      input,
+      currency: this.cashPayment.currency,
+      totalUnits: this.cashPayment.totalUnits,
+      tenderUnits: this.cashPayment.tenderUnits,
+      dueUnits: this.cashPayment.changeDueUnits,
+      selectedUnits: this.cashPayment.changeUnits,
+      displayedSelected: this.bodyElement.querySelector("#checkout-change-selected").textContent,
+      pieces: [...this.cashPayment.change],
+      mouseHeld: this.isScanning,
+      accepted: result.accepted,
+      mistakes: this.cashPayment.mistakes,
+    });
     if (result.accepted) {
       this.paymentStage = "complete";
       playSaleComplete();
@@ -877,8 +888,13 @@ export class CheckoutWindow {
       return;
     }
     playErrorBuzz();
+    if (result.lost) {
+      this.paymentStage = "lost";
+      this.onChangeFailed?.();
+      return;
+    }
     this.bodyElement.querySelector("#checkout-payment-feedback").textContent = result.penalty
-      ? "Wrong change refused. Lose 1 store reputation at the end of the shift. Correct the change and try again."
+      ? "Wrong change refused. Lose 1 store reputation at the end of the shift. One more mistake and the customer leaves."
       : "Wrong change refused. Correct it and try again. Another mistake will cost store reputation at the end of the shift.";
     if (result.penalty) this.onWrongChange?.();
   }

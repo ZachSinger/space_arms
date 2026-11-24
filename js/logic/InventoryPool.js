@@ -4,14 +4,34 @@
 // Capacity-pool stock model used by Go-Backs and customer carts.
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
 
+let nextPoolId = 1;
+
 export class InventoryPool {
-  constructor({ capacity, stock } = {}) {
+  constructor({ id = null, location = null, capacity, stock } = {}) {
+    this.id = id ?? `inventory-pool-${nextPoolId++}`;
+    this.location = location ?? { kind: "inventory-pool", containerId: this.id };
     this.capacity = capacity;
     this.stock = stock || []; // [{ itemId, quantity }]
   }
 
+  getLocation() {
+    return this.location;
+  }
+
+  getContainerId() {
+    return this.id;
+  }
+
   findStockEntry(itemId) {
     return this.stock.find((entry) => entry.itemId === itemId) || null;
+  }
+
+  canTake() {
+    return true;
+  }
+
+  canPut() {
+    return true;
   }
 
   getAvailableUnitsFor(itemId) {
@@ -19,10 +39,7 @@ export class InventoryPool {
   }
 
   usedCapacity() {
-    return this.stock.reduce((sum, entry) => {
-      const item = database.getItem(entry.itemId);
-      return sum + entry.quantity * (item?.slots || 1);
-    }, 0);
+    return this.stock.reduce((sum, entry) => sum + entry.quantity, 0);
   }
 
   getRemainingCapacity() {
@@ -30,10 +47,8 @@ export class InventoryPool {
   }
 
   getRemainingUnitsFor(itemId) {
-    const item = database.getItem(itemId);
-    const itemSize = item?.slots;
-    if (!itemSize || !Number.isFinite(itemSize)) return 0;
-    return Math.floor(this.getRemainingCapacity() / itemSize);
+    if (!database.getItem(itemId)) return 0;
+    return this.getRemainingCapacity();
   }
 
   // First stock entry with quantity left, or null if the pool is empty.
@@ -63,6 +78,7 @@ export class InventoryPool {
    * @returns {number} units actually accepted
    */
   add(itemId, quantity) {
+    if (!this.canPut(itemId)) return 0;
     const accepted = Math.min(this.getRemainingUnitsFor(itemId), quantity);
     if (accepted <= 0) return 0;
 
@@ -81,6 +97,7 @@ export class InventoryPool {
    * @returns {number} units actually removed (capped by what's stocked)
    */
   remove(itemId, quantity) {
+    if (!this.canTake(itemId)) return 0;
     const entry = this.findStockEntry(itemId);
     if (!entry) return 0;
 

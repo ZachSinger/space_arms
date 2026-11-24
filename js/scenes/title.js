@@ -11,9 +11,10 @@ import { WindowManager } from "../logic/WindowManager.js";
 import { SaveManager } from "../../SaveManager.js";
 import { validateShopSave } from "../logic/ShopSave.js";
 import { database } from "./boot.js";
-import { GamepadInput, PAD } from "../logic/GamepadInput.js";
+import { GamepadInput } from "../input/GamepadInput.js";
 import { UINavigator } from "../logic/UINavigator.js";
-import { setInputDevice } from "../logic/InputDevice.js";
+import { setInputDevice } from "../input/InputDevice.js";
+import { showLoadingThen, hideLoadingScreen } from "./loadingScreen.js";
 
 export class TitleScene extends Phaser.Scene {
   constructor() {
@@ -21,6 +22,8 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create() {
+    this.startingGame = false;
+    hideLoadingScreen();
     installSceneTextSize(this, Phaser);
     const { width, height } = this.scale;
 
@@ -107,17 +110,24 @@ export class TitleScene extends Phaser.Scene {
     }, this.windowManager);
     this.newGameWindow.element.querySelector("[data-confirm-new-game]").addEventListener("click", () => {
       this.newGameWindow.close();
-      this.scene.start("scene-game");
+      this.startGameScene();
     });
     this.newGameWindow.element.querySelector("[data-cancel-new-game]").addEventListener("click", () => this.newGameWindow.close());
     this.devWindow = new UIWindow({
       id: "dev-area-chooser", title: "DEV", width: "380px", height: "auto",
       x: 80, y: 120, onClose: () => this.setMenuActive(true),
       contentHTML: `
-        <p>Pick a test area. Nothing you do in any of them is saved.</p>
+        <p>Pick a test area. Nothing you do in any of them is saved, except the Snapshot button in Starting Template.</p>
         <button class="action-btn" data-dev-crate-lab>CRATE LAB</button>
+        <button class="action-btn" data-dev-delivery-crate-lab>DELIVERY CRATE LAB</button>
+        <button class="action-btn" data-dev-shelf-collision-lab>SHELF COLLISION LAB</button>
         <button class="action-btn" data-dev-shelf-room>SHELF TEST ROOM</button>
         <button class="action-btn" data-dev-ui-lab>UI LAB</button>
+        <button class="action-btn" data-dev-starting-template>STARTING TEMPLATE</button>
+        <button class="action-btn" data-dev-decorator>DECORATOR MODE</button>
+        <button class="action-btn" data-dev-decoration-gallery>DECORATION GALLERY</button>
+        <button class="action-btn" data-dev-tutorial>FIRST DAY TUTORIAL</button>
+        <button class="action-btn" data-dev-crate-test>CRATE TEST ROOM</button>
         <button class="action-btn" data-dev-cancel>CANCEL</button>
       `,
     }, this.windowManager);
@@ -127,13 +137,41 @@ export class TitleScene extends Phaser.Scene {
       this.devWindow.close();
       this.scene.start("scene-crate-lab");
     });
+    devButton("[data-dev-delivery-crate-lab]", () => {
+      this.devWindow.close();
+      this.scene.start("scene-delivery-crate-lab");
+    });
+    devButton("[data-dev-shelf-collision-lab]", () => {
+      this.devWindow.close();
+      this.scene.start("scene-shelf-collision-lab");
+    });
     devButton("[data-dev-shelf-room]", () => {
       this.devWindow.close();
-      this.scene.start("scene-game", { sandbox: true });
+      this.startGameScene({ sandbox: true });
     });
     devButton("[data-dev-ui-lab]", () => {
       this.devWindow.close();
-      this.scene.start("scene-game", { sandbox: true, lab: "ui" });
+      this.startGameScene({ sandbox: true, lab: "ui" });
+    });
+    devButton("[data-dev-starting-template]", () => {
+      this.devWindow.close();
+      this.startGameScene({ sandbox: true, lab: "template" });
+    });
+    devButton("[data-dev-decorator]", () => {
+      this.devWindow.close();
+      this.startGameScene({ sandbox: true, lab: "decorator" });
+    });
+    devButton("[data-dev-decoration-gallery]", () => {
+      this.devWindow.close();
+      this.startGameScene({ sandbox: true, lab: "decorations" });
+    });
+    devButton("[data-dev-tutorial]", () => {
+      this.devWindow.close();
+      this.startGameScene({ sandbox: true, lab: "tutorial" });
+    });
+    devButton("[data-dev-crate-test]", () => {
+      this.devWindow.close();
+      this.startGameScene({ sandbox: true, lab: "crates" });
     });
     devButton("[data-dev-cancel]", () => this.devWindow.close());
     this.padInput = new GamepadInput();
@@ -155,11 +193,15 @@ export class TitleScene extends Phaser.Scene {
     const pad = this.padInput;
     pad.poll(time);
     if (pad.hadInput) setInputDevice("gamepad");
+    if (this.settingsPanel.isCapturingController) {
+      for (const button of pad.pressed) this.settingsPanel.captureControllerButton(button);
+      return;
+    }
     if (this.uiNavigator.handle(pad, delta)) return;
     if (!this.input.keyboard.enabled) return;
     if (pad.navDirection === "up") this.selectCommand(-1);
     else if (pad.navDirection === "down") this.selectCommand(1);
-    if (pad.justPressed(PAD.A) || pad.justPressed(PAD.START)) this.activateCommand();
+    if (pad.justPressedAction("interact") || pad.justPressedAction("pause")) this.activateCommand();
   }
 
   /**
@@ -180,7 +222,15 @@ export class TitleScene extends Phaser.Scene {
   // REAL skips the save-overwrite question and starts a debug-free fresh game.
   startRealGame() {
     if (this.loadingSave) return;
-    this.scene.start("scene-game", { real: true });
+    this.startGameScene({ real: true });
+  }
+
+  /** @param {object} [data] - passed to the game scene's init */
+  startGameScene(data) {
+    if (this.startingGame) return;
+    this.startingGame = true;
+    this.setMenuActive(false);
+    showLoadingThen(() => this.scene.start("scene-game", data));
   }
 
   openDevChooser() {
@@ -202,7 +252,7 @@ export class TitleScene extends Phaser.Scene {
         return;
       }
       const savedShopData = validateShopSave(payload.data.shop, database);
-      this.scene.start("scene-game", { savedShopData });
+      this.startGameScene({ savedShopData });
     } catch (error) {
       console.error("Could not load saved game", error);
       this.showStatus(`LOAD FAILED: ${error.message}`);

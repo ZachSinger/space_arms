@@ -4,20 +4,81 @@
 > earlier. This is a new design and does not bring that one back.
 
 ## Overview
-- Purchasable at Store Level 7.
-- A floating platform about as wide as a crate that holds a stack of up to 5 crates.
-- It follows the player. Each crate on it slows it down, but it does its best to keep up.
+- Unlocks at Store Level 7. Up to three can be bought, for 2,200 each, in the Equipment section of the Manager's
+  Tablet Layout tab, while the store is closed. The price is a starting guess.
+- A floating platform about as wide as a crate that holds a stack of up to 3 crates at first.
+- Unassigned carts follow the player as a linked chain. Assigned carts follow their employee
+  during stocking instead. Each crate slows its cart down, but it does its best to keep up.
 - You can still hold three crates yourself while using it.
+
+## Buying it
+- It arrives packed with its charger in one crate on the Loading Pad, like a bought fixture, so
+  the Loading Pad needs a free spot. Pick the crate up and place the HOVERCART CHARGER anywhere
+  in the store, sales floor or backroom. The charger can't be turned; the cart always pulls out
+  in front of it.
+- The charger is a fixture: hold to move it, or crate it, like any other fixture.
+  The cart must be docked on it first. Crating the charger packs the cart away with it (its
+  charge is kept), and the cart comes back docked when the charger is placed again. Selling the
+  charger sells the hovercart.
+- The Level 7 news at the end of a shift mentions it, and the Handbook's Level Rewards list it.
+- The purchase shows on the day's receipt as "Bought equipment: Hovercart".
+
+## Saving
+- A save remembers that you own it, which crates are on it, how much charge its battery has,
+  and whether it was out or on its charger. It doesn't remember exactly where the cart was.
+  The charger is saved like any fixture or fixture crate.
+- Loading a save keeps the battery charge, so reloading never refills it. A cart that was out,
+  or has crates on it, comes back next to you. It's switched on with its crates, or dead if its
+  battery was empty, so you still carry it back. Otherwise it loads on its charger and keeps
+  charging from where it was.
+- Saves from before the charger could be placed get a charger in the backroom's top-left
+  corner, or the nearest free spot, or a charger crate on the Loading Pad if there's no room.
+
+The DEV Crate Test Room gives you the cart for free, with a battery that never runs out and
+endless stamina, for testing. Nothing there is saved.
 
 ## Counting as held crates
 - When it's not moving (it has finished approaching you), its crates count as a stack you're
   holding.
 - In a shelf screen, its crates count as if you were holding them, so you can stock from up to
   8 crates at once.
+- The crate cards in the bottom right list the hovercart's crates under an "ON HOVERCART"
+  heading, below the crates in your hands. While the cart is too far away, those cards are greyed
+  out and the heading says so; once it is close enough they look normal again. Crates in your
+  hands are never greyed out.
 
 ## Following behavior
 - It only moves after you've gotten a few steps away. It must always get close enough to be
   used, but it shouldn't fidget every time you move at all.
+- It only follows you directly while it's in the same room as you. Once you leave the room,
+  it stops chasing you and heads for the door you left through, then follows you on the other
+  side. It never jumps across the map to catch up.
+- It goes through doors the way you do: the door slides open as it comes near, it glides into
+  the doorway, comes out of the matching door on the other side, and floats out after you. If
+  you're still standing just inside, it waits in the doorway until you step clear, so it never
+  ends up on top of you or past you.
+- It steers around floor crates instead of shoving them. If a crate sits right in front of the
+  door, it pulls up beside the crate and slips through the door anyway.
+- In your room it retraces your footsteps, cutting straight to the furthest spot along them it
+  can reach without bumping anything. If it gets stuck, or stops getting closer to where you are
+  right now (whether you're standing still or walking), it plans its own way around for a moment
+  and then goes back to your footsteps. Where you squeezed past a corner too tight for the cart
+  (like the end of a shelf), it plans its own way around instead of trying to follow you there.
+- The DEV Crate Test Room has a maze of sideways shelves on the lower sales floor, entered at the
+  far right end, for testing how the cart gets around shelves.
+- Being close only counts if nothing stands between you. A cart right behind the register from
+  you still comes around to your side.
+- It plans its route with a little room to spare around fixtures like the register and racks,
+  so it rounds their corners instead of catching on them. It only cuts it close in gaps too
+  narrow to pass otherwise.
+
+## Bumping into it
+- It's solid: you can never walk over it, whether it's on, out of battery, or docked.
+- Walking into it pushes it like a single floor crate, always at the one-crate push speed
+  (60% of walking), no matter how many crates are on it or in your hands.
+- Docked on its charger it doesn't move; it's part of the charger, so the charger is what
+  you bump into and face to turn it on.
+- While you carry it over your head it doesn't bump into anything.
 
 ## Gear Modifier button
 - Shift on keyboard (L1 or equivalent on a controller).
@@ -30,8 +91,56 @@
 - The station is where you turn the hovercart on and off. Face it and press E (same rules as a
   door: you must actually face it, not be far off-center) to activate the hovercart so it
   follows you.
+- A full battery holds 300 energy. While the cart is on, it uses energy every second:
+
+  | Crates on cart | Sitting still | Moving |
+  |---|---|---|
+  | 0 | 1 | 4 |
+  | 1 | 2 | 6 |
+  | 2 | 3 | 8 |
+  | 3 | 4 | 10 |
+
+  So moving with 3 crates empties a full battery in 30 seconds.
+- It charges only while docked at its station: empty to full in 60 seconds (a starting guess).
+- The charge shows in three places: a bar under the cart, the charger's screen, and a
+  HOVERCART gauge in the top bar while the cart is off its charger.
+- When the battery runs out, the cart drops to the floor where it is and stops following.
+  You can still take crates off it but not put any on. Once it has no crates on it and your
+  hands are empty, face it and press E to pick it up and carry it over your head. You can't
+  handle crates while carrying it. Take it to its station and press E to dock it and charge.
 
 ## Upgrades
-- **Length:** each upgrade adds another 5-crate stack, up to 4 stacks (20 crates).
-- **Speed:** can be upgraded until it follows at full running speed (the speed you'd have
-  holding no crates).
+- Buy them in Layout > Equipment while the store is closed. Each upgrade belongs to the
+  hovercart you own and is saved with it.
+- **Speed:** three steps at Levels 10, 20, and 32, costing 3,000, 12,000, and 45,000. Each step
+  makes the cart faster and lets it carry more crates without becoming painfully slow. The last
+  step matches your running speed, even when full.
+- **Length:** three steps at Levels 13, 22, and 32, costing 4,000, 14,000, and 40,000. They raise
+  capacity from 3 to 4, 5, and 6 crates. Each Length step requires the matching Speed step first.
+- **Battery:** six steps at Levels 13, 22, 32, 37, 42, and 49, costing 3,000, 8,000, 15,000,
+  30,000, 60,000, and 100,000. They raise battery capacity to 450, 600, 800, 1,000, 1,300, and
+  1,600. Buying a battery upgrade keeps the same percentage of charge. An empty battery still
+  takes 60 seconds to fill.
+- Upgrades are shared by all three carts, including employee carts.
+- The full numbers and design notes are in [HovercartUpgrades.md](./HovercartUpgrades.md).
+
+## Employee use
+- Between shifts, the Employee tab assigns a placed charger's cart to one hired employee.
+  An employee has at most one cart; assigning an already-owned cart replaces its employee.
+  NONE releases the cart for the player. Both affected carts must be docked to change assignments.
+  Docked leftover cargo stays with the cart and can be handled by the player after releasing it.
+- The assigned register still outranks stocking. Within their normal job priorities, staff use
+  carts for cross-room stock or batches of useful floor crates. Single same-room crates and work
+  while the cart charges use the existing hand-carry workflow.
+- They load useful crates from the source room, top of each stack first, respecting reservations
+  by other employees and the purchased capacity. Only the assigned employee accesses its cargo.
+  Player carts link only to other player carts; the Inventory totals include everyone's cargo once.
+- Staff wait for the stopped cart to catch up before each load or shelf transfer. Individual
+  stocking intervals and training still apply. Empty crates are taken to a reachable trashcan;
+  remaining stock stays on the cart at its charger, not on the sales floor.
+- Provisional development rules: return at 20% battery, depart once charged to at least 80%.
+  Charge and drain use the existing battery simulation. Running flat triggers physical towing
+  at 60 px/s along the normal room/door routes, preserving cargo without refilling the battery.
+  Blocked return routes are retried with a shop notification, never silently discarded.
+- Staff dock before clocking out. Off-shift/training staff do not borrow player carts.
+  A docked staff cart with cargo restores docked; its charge, cargo and charger assignment persist.

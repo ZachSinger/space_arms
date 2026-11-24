@@ -215,7 +215,7 @@ At least 10 logic modules take `scene` and use its internals:
 
 ## 🟡 15. Debug features live in production code paths
 
-- `U` (unlock an expansion zone) and `G` (grid overlay) are bound in normal play.
+- `U` (unlock an expansion zone) is bound in normal play.
 - `DebugInfo` reads nearly every scene field.
 - **Nothing is gated** by `import.meta.env.DEV` or a release flag, so players could find
   `U` and unlock a 5,000-credit zone for free.
