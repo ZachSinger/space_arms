@@ -6,6 +6,7 @@
     "flavor": "The ubiquitous, mass-produced workhorse of the galaxy.",
     "tags": ["Firearm", "Standard", "Rifle"],
     "baseCost": 130,
+    "supplyCost": 64.48,
     "ammo": "Rifle Light Caliber",
     "license": "lic_corp_aulin",
     "image": "img/Icons_Extracted/Weapons/Rifles/rifle-ar-black-red-dot-foregrip.png"
@@ -17,6 +18,7 @@
     "flavor": "A heavy-duty, military-grade energy rifle used by professional corporate security.",
     "tags": ["Firearm", "High-Tier", "Rifle"],
     "baseCost": 290,
+    "supplyCost": 144.42,
     "ammo": "Plasma Cartridge",
     "license": "lic_pro_kodiak",
     "image": "img/Icons_Extracted/Weapons/Rifles/rifle-tech-angular-black-grey.png"
@@ -28,6 +30,7 @@
     "flavor": "A heavy, bulky ballistic rifle known for never jamming, even in mud or vacuum.",
     "tags": ["Firearm", "Standard", "Rifle"],
     "baseCost": 300,
+    "supplyCost": 148.8,
     "ammo": "Rifle Heavy Caliber",
     "license": "lic_corp_vanguard",
     "image": "img/Icons_Extracted/Weapons/Rifles/rifle-ak-black-folding-stock-long.png"
@@ -39,6 +42,7 @@
     "flavor": "A sleek, lightweight civilian energy weapon with a synthetic white stock.",
     "tags": ["Firearm", "Standard", "Rifle"],
     "baseCost": 38,
+    "supplyCost": 18.77,
     "ammo": "Thermal Battery",
     "license": "lic_corp_stellaris",
     "image": "img/Icons_Extracted/Weapons/Rifles/rifle-white-tactical-scoped.png"
@@ -50,6 +54,7 @@
     "flavor": "A mass-produced, flat-packed kinetic rifle famous for being easily repaired almost anywhere with basic hand tools.",
     "tags": ["Firearm", "Surplus", "Rifle"],
     "baseCost": 17,
+    "supplyCost": 8.36,
     "ammo": "Rifle Light Caliber",
     "license": "lic_start_long_guns",
     "image": "img/Icons_Extracted/Weapons/Rifles/rifle-industrial-olive-scoped.png"
@@ -61,6 +66,7 @@
     "flavor": "An antique wooden-stock rifle from before the galactic expansion.",
     "tags": ["Firearm", "Rare", "Old", "Rifle"],
     "baseCost": 260,
+    "supplyCost": 128.44,
     "ammo": "Rifle Heavy Caliber",
     "license": "lic_edge_antique",
     "image": "img/Icons_Extracted/Weapons/Rifles/rifle-sniper-wood-stock-suppressed-bipod.png"
@@ -72,6 +78,7 @@
     "flavor": "An overly complex, ridiculously expensive weapon that fires frictionless smart-flechettes.",
     "tags": ["Firearm", "Cutting-Edge", "Rifle"],
     "baseCost": 460,
+    "supplyCost": 227.24,
     "ammo": "Smart-Flechettes",
     "license": "lic_edge_tessier",
     "image": "img/Icons_Extracted/Weapons/Rifles/rifle-energy-purple-gold-ornate.png"
@@ -83,6 +90,7 @@
     "flavor": "Standard issue for frontier patrols; cheap, plastic, and easily replaceable.",
     "tags": ["Firearm", "Surplus", "Rifle"],
     "baseCost": 185,
+    "supplyCost": 92.87,
     "ammo": "Rifle Light Caliber",
     "license": "lic_corp_omni",
     "image": "img/Icons_Extracted/Weapons/Rifles/rifle-bullpup-tan-red-dot.png"
@@ -94,6 +102,7 @@
     "flavor": "A devastating, shoulder-bruising magnetic accelerator rifle.",
     "tags": ["Firearm", "High-Tier", "Rifle"],
     "baseCost": 230,
+    "supplyCost": 115.46,
     "ammo": "Gauss Spikes",
     "license": "lic_pro_zastava",
     "image": "img/Icons_Extracted/Weapons/Rifles/rifle-sniper-anti-materiel-scoped-bipod.png"
@@ -105,6 +114,7 @@
     "flavor": "A rusted out, wide-spread kinetic rifle favored by miners and asteroid hoppers.",
     "tags": ["Firearm", "Surplus", "Old", "Rifle"],
     "baseCost": 37,
+    "supplyCost": 18.2,
     "ammo": "Scatter Shells",
     "license": "lic_corp_scatter",
     "image": "img/Icons_Extracted/Weapons/Rifles/scatter-rifle-rusty-lever-action.png"
@@ -116,6 +126,7 @@
     "flavor": "The companion piece to the NT Assault Rifle. Reliable, blocky, and completely devoid of personality.",
     "tags": ["Firearm", "Standard", "Pistol"],
     "baseCost": 85,
+    "supplyCost": 44.71,
     "ammo": "Pistol Light Caliber",
     "license": "lic_corp_aulin",
     "image": "img/Icons_Extracted/Weapons/Pistols/pistol-glock-black-striker.png"
@@ -127,6 +138,7 @@
     "flavor": "A heavy, crude ballistic pistol manufactured from reclaimed ship plating. Cheap and prone to overheating.",
     "tags": ["Firearm", "Surplus", "Old", "Pistol"],
     "baseCost": 8,
+    "supplyCost": 4.22,
     "ammo": "Pistol Light Caliber",
     "license": "lic_start_surplus",
     "image": "img/Icons_Extracted/Weapons/Pistols/revolver-rusty-bandaged-grip.png"
@@ -138,6 +150,7 @@
     "flavor": "A massively overpowered, high-caliber revolver favored by flashy bounty hunters.",
     "tags": ["Firearm", "High-Tier", "Pistol"],
     "baseCost": 440,
+    "supplyCost": 232.32,
     "ammo": "Pistol Heavy Caliber",
     "license": "lic_corp_vanguard",
     "image": "img/Icons_Extracted/Weapons/Pistols/revolver-chrome-wood-grip-flashy.png"
@@ -149,6 +162,7 @@
     "flavor": "A slick, pearl-handled energy emitter popular among wealthy civilians for personal defense.",
     "tags": ["Firearm", "Standard", "Pistol"],
     "baseCost": 27,
+    "supplyCost": 14.26,
     "ammo": "Thermal Battery",
     "license": "lic_corp_stellaris",
     "image": "img/Icons_Extracted/Weapons/Pistols/pistol-energy-tech-chrome-blue-screen.png"
@@ -160,6 +174,7 @@
     "flavor": "A cutting-edge, palm-sized holdout weapon that bypasses standard energy shielding.",
     "tags": ["Firearm", "Cutting-Edge", "Pistol"],
     "baseCost": 320,
+    "supplyCost": 169.6,
     "ammo": "Thermal Battery",
     "license": "lic_edge_tessier",
     "image": "img/Icons_Extracted/Weapons/Pistols/pistol-energy-tech-purple-cell.png"
@@ -171,6 +186,7 @@
     "flavor": "Standard-issue sidearm for corporate mall cops. Includes biometric grip locks that constantly malfunction.",
     "tags": ["Firearm", "Surplus", "Pistol"],
     "baseCost": 135,
+    "supplyCost": 71.55,
     "ammo": "Gauss Spikes",
     "license": "lic_corp_omni",
     "image": "img/Icons_Extracted/Weapons/Pistols/pistol-tactical-silver-rail-light.png"
@@ -182,6 +198,7 @@
     "flavor": "A meticulously maintained six-shooter from Earth's ancient history. A true collector's piece.",
     "tags": ["Firearm", "Rare", "Old", "Pistol"],
     "baseCost": 220,
+    "supplyCost": 117.04,
     "ammo": "Pistol Heavy Caliber",
     "license": "lic_edge_antique",
     "image": "img/Icons_Extracted/Weapons/Pistols/derringer-pearl-black-western.png"
@@ -193,6 +210,7 @@
     "flavor": "An inaccurate, rapid-fire sub-pistol designed to spray lead down narrow ship corridors.",
     "tags": ["Firearm", "High-Tier", "Pistol"],
     "baseCost": 135,
+    "supplyCost": 70.2,
     "ammo": "Pistol Light Caliber",
     "license": "lic_pro_zastava",
     "image": "img/Icons_Extracted/Weapons/Pistols/pistol-glock-fde-red-dot-threaded.png"
@@ -204,6 +222,7 @@
     "flavor": "A bulky, top-heavy sidearm that fires superheated plasma. Requires frequent venting.",
     "tags": ["Firearm", "Rare", "Pistol"],
     "baseCost": 200,
+    "supplyCost": 104,
     "ammo": "Plasma Cartridge",
     "license": "lic_pro_high_energy",
     "image": "img/Icons_Extracted/Weapons/Pistols/pistol-energy-tech-orange-cell.png"
@@ -215,6 +234,7 @@
     "flavor": "A tiny, twin-barrel kinetic pistol that easily fits in an asteroid miner's boot.",
     "tags": ["Firearm", "Surplus", "Old", "Pistol"],
     "baseCost": 12,
+    "supplyCost": 6.36,
     "ammo": "Pistol Light Caliber",
     "license": "lic_start_surplus",
     "image": "img/Icons_Extracted/Weapons/Pistols/derringer-twin-barrel-brass-wood.png"
@@ -226,6 +246,7 @@
     "flavor": "A massive, multi-barrel ballistic minigun. Requires an exoskeleton or zero-G just to handle the recoil.",
     "tags": ["Firearm", "Standard", "Heavy"],
     "baseCost": 270,
+    "supplyCost": 146.34,
     "ammo": "Autocannon Shells",
     "license": "lic_corp_vanguard_rotary",
     "image": "img/Icons_Extracted/Weapons/Heavy/rotary-gun-grey-minigun.png"
@@ -237,6 +258,7 @@
     "flavor": "A sleek, high-end demolition tool repurposed into a terrifying, sustained-beam weapon.",
     "tags": ["Firearm", "High-Tier", "Heavy"],
     "baseCost": 200,
+    "supplyCost": 108.8,
     "ammo": "Heavy Plasma Canisters",
     "license": "lic_corp_stellaris_optics",
     "image": "img/Icons_Extracted/Weapons/Heavy/plasma-projector-white-blue-sleek.png"
@@ -248,6 +270,7 @@
     "flavor": "Fires a contained, micro-gravitational anomaly. Prohibitively expensive and violates several galactic treaties.",
     "tags": ["Firearm", "Cutting-Edge", "Heavy"],
     "baseCost": 710,
+    "supplyCost": 386.24,
     "ammo": "Micro-Singularity Cores",
     "license": "lic_edge_exotic",
     "image": "img/Icons_Extracted/Weapons/Heavy/singularity-launcher-purple-black-orb.png"
@@ -259,6 +282,7 @@
     "flavor": "Fires wide, suppressive bursts of shrapnel. Standard issue for corporate riot-control dreadnoughts.",
     "tags": ["Firearm", "Surplus", "Heavy"],
     "baseCost": 150,
+    "supplyCost": 81,
     "ammo": "Flak Canisters",
     "license": "lic_corp_omni_flak",
     "image": "img/Icons_Extracted/Weapons/Heavy/flak-cannon-gold-black-minigun.png"
@@ -270,6 +294,7 @@
     "flavor": "A terrifying, archaic weapon that uses liquid fuel. Highly illegal to fire inside any pressurized ship or station.",
     "tags": ["Firearm", "Rare", "Old", "Heavy"],
     "baseCost": 430,
+    "supplyCost": 231.34,
     "ammo": "Liquid Fuel",
     "license": "lic_edge_exotic",
     "image": "img/Icons_Extracted/Weapons/Heavy/flamethrower-olive-tank-hose.png"
@@ -281,6 +306,7 @@
     "flavor": "A shoulder-mounted magnetic accelerator that requires a heavy, humming backpack generator to operate.",
     "tags": ["Firearm", "High-Tier", "Heavy"],
     "baseCost": 170,
+    "supplyCost": 92.14,
     "ammo": "Heavy Gauss Slugs",
     "license": "lic_pro_zastava_gauss",
     "image": "img/Icons_Extracted/Weapons/Heavy/gauss-cannon-copper-wired-minigun.png"
@@ -292,6 +318,7 @@
     "flavor": "An industrial laser ripped from an asteroid drilling rig and fitted with a crude trigger mechanism.",
     "tags": ["Firearm", "Surplus", "Old", "Heavy"],
     "baseCost": 95,
+    "supplyCost": 51.3,
     "ammo": "High-Capacity Battery",
     "license": "lic_start_power_tools",
     "image": "img/Icons_Extracted/Weapons/Heavy/mining-laser-orange-black-scoped.png"
@@ -303,6 +330,7 @@
     "flavor": "A highly volatile, welded-together explosive launcher. Often just as dangerous to the user as it is to the target.",
     "tags": ["Firearm", "Surplus", "Heavy"],
     "baseCost": 170,
+    "supplyCost": 91.12,
     "ammo": "High-Explosive Rockets",
     "license": "lic_pro_artillery",
     "image": "img/Icons_Extracted/Weapons/Heavy/rpg-launcher-brown-rocket.png"
@@ -314,6 +342,7 @@
     "flavor": "A portable, indirect-fire explosive lobber. Favored by entrenched mercenaries for clearing out fortified positions.",
     "tags": ["Firearm", "Standard", "Heavy"],
     "baseCost": 330,
+    "supplyCost": 176.88,
     "ammo": "Mortar Shells",
     "license": "lic_pro_artillery",
     "image": "img/Icons_Extracted/Weapons/Heavy/mortar-tube-olive-tripod.png"
@@ -325,6 +354,7 @@
     "flavor": "A brutally simple, shoulder-fired kinetic tube designed to punch fist-sized holes through reinforced starship bulkheads.",
     "tags": ["Firearm", "Standard", "Heavy"],
     "baseCost": 80,
+    "supplyCost": 43.04,
     "ammo": "Kinetic Breaching Slugs",
     "license": "lic_corp_scatter",
     "image": "img/Icons_Extracted/Weapons/Heavy/recoilless-cannon-grey-long-tube.png"
@@ -336,6 +366,7 @@
     "flavor": "A perfectly balanced, serrated tactical knife. The standard backup weapon for mercenaries across the sector.",
     "tags": ["Melee", "Standard", "Blade"],
     "baseCost": 165,
+    "supplyCost": 78.54,
     "license": "lic_corp_vanguard",
     "image": "img/Icons_Extracted/Weapons/Melee/knife-combat-serrated-black.png"
   },
@@ -346,6 +377,7 @@
     "flavor": "A telescoping rod capable of delivering a non-lethal (usually) electrical shock. Standard issue for station security.",
     "tags": ["Melee", "Standard", "Blunt"],
     "baseCost": 16,
+    "supplyCost": 7.58,
     "license": "lic_pro_adv_melee",
     "image": "img/Icons_Extracted/Weapons/Melee/baton-collapsible-black.png"
   },
@@ -356,6 +388,7 @@
     "flavor": "An elegant, synthetic-grip sword with an edge honed down to a single molecule. Favored by eccentric executives.",
     "tags": ["Melee", "High-Tier", "Blade"],
     "baseCost": 40,
+    "supplyCost": 18.96,
     "license": "lic_pro_adv_melee",
     "image": "img/Icons_Extracted/Weapons/Melee/sword-katana-teal-tech-engraved.png"
   },
@@ -366,6 +399,7 @@
     "flavor": "A heavy, stamped-steel blade originally designed for clearing alien flora, now frequently used for settling disputes.",
     "tags": ["Melee", "Surplus", "Blade"],
     "baseCost": 14,
+    "supplyCost": 6.61,
     "license": "lic_start_armor_melee",
     "image": "img/Icons_Extracted/Weapons/Melee/machete-black-handle.png"
   },
@@ -376,6 +410,7 @@
     "flavor": "An illegal assassination tool. The blade vibrates at a frequency that allows it to passively slip through standard kinetic shielding.",
     "tags": ["Melee", "Cutting-Edge", "Blade"],
     "baseCost": 370,
+    "supplyCost": 174.64,
     "license": "lic_edge_tessier",
     "image": "img/Icons_Extracted/Weapons/Melee/dagger-energy-blade-orange.png"
   },
@@ -386,6 +421,7 @@
     "flavor": "A beautifully preserved wooden sports relic from Old Earth. Surprisingly effective at denting cheap armor.",
     "tags": ["Melee", "Rare", "Old", "Blunt"],
     "baseCost": 155,
+    "supplyCost": 72.85,
     "license": "lic_edge_antique",
     "image": "img/Icons_Extracted/Weapons/Melee/baseball-bat-wood-wrapped-grip.png"
   },
@@ -396,6 +432,7 @@
     "flavor": "A brutal, heavy-duty boarding weapon. The superheated plasma edge can cleave through ship bulkheads and blast doors.",
     "tags": ["Melee", "High-Tier", "Blade"],
     "baseCost": 34,
+    "supplyCost": 16.05,
     "license": "lic_pro_adv_melee",
     "image": "img/Icons_Extracted/Weapons/Melee/axe-flaming-orange-energy.png"
   },
@@ -406,6 +443,7 @@
     "flavor": "A massive, two-handed blunt instrument meant for manual salvage operations in zero-G.",
     "tags": ["Melee", "Standard", "Blunt"],
     "baseCost": 34,
+    "supplyCost": 15.91,
     "license": "lic_start_armor_melee",
     "image": "img/Icons_Extracted/Weapons/Melee/hammer-warhammer-tech-blue-cells.png"
   },
@@ -416,6 +454,7 @@
     "flavor": "A cheap, mass-produced survival tool sold in hard plastic clamshell packaging. Popular with budget-conscious explorers.",
     "tags": ["Melee", "Surplus", "Blade"],
     "baseCost": 14,
+    "supplyCost": 6.58,
     "license": "lic_start_armor_melee",
     "image": "img/Icons_Extracted/Weapons/Melee/hatchet-tactical-black.png"
   },
@@ -426,6 +465,7 @@
     "flavor": "A heavy, gyro-stabilized club topped with a concussive explosive charge. Used by shock-troops to cave in reinforced fortifications.",
     "tags": ["Melee", "High-Tier", "Blunt"],
     "baseCost": 25,
+    "supplyCost": 11.35,
     "license": "lic_pro_adv_melee",
     "image": "img/Icons_Extracted/Weapons/Melee/mace-spiked-steel.png"
   },
@@ -436,6 +476,7 @@
     "flavor": "A standard paper box of light kinetic rounds. Cheap, reliable, and fits in a pocket.",
     "tags": ["Ammunition", "Standard"],
     "baseCost": 7,
+    "supplyCost": 3.58,
     "count": 30,
     "ammo": "Pistol Light Caliber",
     "license": "lic_start_ammo",
@@ -448,6 +489,7 @@
     "flavor": "A sealed metal surplus tin filled with loose kinetic rounds. Popular with scavengers.",
     "tags": ["Ammunition", "Surplus"],
     "baseCost": 12,
+    "supplyCost": 6.12,
     "count": 100,
     "ammo": "Pistol Light Caliber",
     "license": "lic_start_ammo",
@@ -460,6 +502,7 @@
     "flavor": "Two pre-loaded cylinders of high-velocity magnum rounds in blister packaging.",
     "tags": ["Ammunition", "Standard"],
     "baseCost": 110,
+    "supplyCost": 56.1,
     "count": 12,
     "ammo": "Pistol Heavy Caliber",
     "license": "lic_edge_antique_ammo",
@@ -472,6 +515,7 @@
     "flavor": "A foam-lined hard case of heavy-hitting handgun ammunition.",
     "tags": ["Ammunition", "Standard"],
     "baseCost": 220,
+    "supplyCost": 113.52,
     "count": 50,
     "ammo": "Pistol Heavy Caliber",
     "license": "lic_edge_antique_ammo",
@@ -484,6 +528,7 @@
     "flavor": "A single, pre-loaded polymer magazine. Grab and go.",
     "tags": ["Ammunition", "Standard"],
     "baseCost": 9,
+    "supplyCost": 4.63,
     "count": 30,
     "ammo": "Rifle Light Caliber",
     "license": "lic_start_rifle_ammo",
@@ -496,6 +541,7 @@
     "flavor": "Literally a plastic bucket of assorted, reclaimed light rifle rounds.",
     "tags": ["Ammunition", "Surplus"],
     "baseCost": 17,
+    "supplyCost": 8.74,
     "count": 120,
     "ammo": "Rifle Light Caliber",
     "license": "lic_start_rifle_ammo",
@@ -508,6 +554,7 @@
     "flavor": "Match-grade heavy ballistics packed carefully into a cardboard slipcase.",
     "tags": ["Ammunition", "Standard"],
     "baseCost": 140,
+    "supplyCost": 71.96,
     "count": 20,
     "ammo": "Rifle Heavy Caliber",
     "license": "lic_edge_antique_ammo",
@@ -520,6 +567,7 @@
     "flavor": "A heavy, stamped-wood crate of armor-piercing kinetic rounds.",
     "tags": ["Ammunition", "Standard"],
     "baseCost": 310,
+    "supplyCost": 160.58,
     "count": 100,
     "ammo": "Rifle Heavy Caliber",
     "license": "lic_edge_antique_ammo",
@@ -532,6 +580,7 @@
     "flavor": "Standard buckshot, useful for clearing both asteroid pests and boarding parties.",
     "tags": ["Ammunition", "Standard"],
     "baseCost": 13,
+    "supplyCost": 6.73,
     "count": 12,
     "ammo": "Scatter Shells",
     "license": "lic_corp_scatter",
@@ -544,6 +593,7 @@
     "flavor": "A wearable canvas belt stuffed with assorted scatter ammunition.",
     "tags": ["Ammunition", "Surplus"],
     "baseCost": 25,
+    "supplyCost": 12.7,
     "count": 50,
     "ammo": "Scatter Shells",
     "license": "lic_corp_scatter",
@@ -556,6 +606,7 @@
     "flavor": "A standard civilian-grade power pack for light energy emitters.",
     "tags": ["Ammunition", "Standard"],
     "baseCost": 11,
+    "supplyCost": 5.59,
     "count": 1,
     "ammo": "Thermal Battery",
     "license": "lic_corp_stellaris",
@@ -568,6 +619,7 @@
     "flavor": "A blister-pack of four charge cells. Often sold near the register as an impulse buy.",
     "tags": ["Ammunition", "Standard"],
     "baseCost": 13,
+    "supplyCost": 6.63,
     "count": 4,
     "ammo": "Thermal Battery",
     "license": "lic_corp_stellaris",
@@ -580,6 +632,7 @@
     "flavor": "A highly pressurized glass tube glowing with volatile superheated gas.",
     "tags": ["Ammunition", "High-Tier"],
     "baseCost": 34,
+    "supplyCost": 17.34,
     "count": 1,
     "ammo": "Plasma Cartridge",
     "license": "lic_pro_high_energy",
@@ -592,6 +645,7 @@
     "flavor": "A reinforced chest-rig insert containing six military-grade plasma cartridges.",
     "tags": ["Ammunition", "High-Tier"],
     "baseCost": 80,
+    "supplyCost": 40.8,
     "count": 6,
     "ammo": "Plasma Cartridge",
     "license": "lic_pro_high_energy",
@@ -604,6 +658,7 @@
     "flavor": "A heavy spool of solid tungsten spikes designed for magnetic acceleration.",
     "tags": ["Ammunition", "High-Tier"],
     "baseCost": 55,
+    "supplyCost": 28.16,
     "count": 50,
     "ammo": "Gauss Spikes",
     "license": "lic_pro_zastava",
@@ -616,6 +671,7 @@
     "flavor": "An incredibly expensive, proprietary reel of micro-guided darts.",
     "tags": ["Ammunition", "Cutting-Edge"],
     "baseCost": 150,
+    "supplyCost": 76.8,
     "count": 1000,
     "ammo": "Smart-Flechettes",
     "license": "lic_edge_tessier",
@@ -628,6 +684,7 @@
     "flavor": "A heavy, slung belt of massive caliber rounds meant for rotary weapons.",
     "tags": ["Ammunition", "Standard"],
     "baseCost": 440,
+    "supplyCost": 226.16,
     "count": 100,
     "ammo": "Autocannon Shells",
     "license": "lic_edge_blackwood",
@@ -640,6 +697,7 @@
     "flavor": "A thick, shielded cylinder originally used to fuel fusion torches.",
     "tags": ["Ammunition", "High-Tier"],
     "baseCost": 55,
+    "supplyCost": 28.27,
     "count": 1,
     "ammo": "Heavy Plasma Canisters",
     "license": "lic_pro_high_energy",
@@ -652,6 +710,7 @@
     "flavor": "A humming, magnetically-sealed lockbox holding a highly illegal gravity anomaly.",
     "tags": ["Ammunition", "Cutting-Edge"],
     "baseCost": 270,
+    "supplyCost": 138.78,
     "count": 1,
     "ammo": "Micro-Singularity Cores",
     "license": "lic_edge_exotic",
@@ -664,6 +723,7 @@
     "flavor": "Suppressive shrapnel payloads packed in protective sawdust.",
     "tags": ["Ammunition", "Surplus"],
     "baseCost": 60,
+    "supplyCost": 31.32,
     "count": 4,
     "ammo": "Flak Canisters",
     "license": "lic_corp_omni_flak",
@@ -676,6 +736,7 @@
     "flavor": "A dangerously volatile, heavy sloshing tank of archaic incendiary fluid.",
     "tags": ["Ammunition", "Rare"],
     "baseCost": 175,
+    "supplyCost": 91.35,
     "count": 1,
     "ammo": "Liquid Fuel",
     "license": "lic_edge_exotic",
@@ -688,6 +749,7 @@
     "flavor": "Solid slugs of dense, radioactive material. Warning labels cover the box.",
     "tags": ["Ammunition", "High-Tier"],
     "baseCost": 70,
+    "supplyCost": 36.68,
     "count": 10,
     "ammo": "Heavy Gauss Slugs",
     "license": "lic_pro_zastava_gauss",
@@ -700,6 +762,7 @@
     "flavor": "A heavy, backpack-sized power unit meant for industrial laser drills.",
     "tags": ["Ammunition", "Surplus"],
     "baseCost": 27,
+    "supplyCost": 14.09,
     "count": 1,
     "ammo": "High-Capacity Battery",
     "license": "lic_start_power_tools",
@@ -712,6 +775,7 @@
     "flavor": "Three unguided, highly destructive projectiles in a stenciled metal case.",
     "tags": ["Ammunition", "Surplus"],
     "baseCost": 85,
+    "supplyCost": 44.54,
     "count": 3,
     "ammo": "High-Explosive Rockets",
     "license": "lic_pro_artillery",
@@ -724,6 +788,7 @@
     "flavor": "Indirect-fire explosive shells safely nestled in a shock-absorbent foam crate.",
     "tags": ["Ammunition", "Standard"],
     "baseCost": 130,
+    "supplyCost": 68.12,
     "count": 4,
     "ammo": "Mortar Shells",
     "license": "lic_pro_artillery",
@@ -736,6 +801,7 @@
     "flavor": "A single piece of ordinance the size of a soda can, meant to destroy starship bulkheads.",
     "tags": ["Ammunition", "Standard"],
     "baseCost": 32,
+    "supplyCost": 16.83,
     "count": 1,
     "ammo": "Kinetic Breaching Slugs",
     "license": "lic_corp_scatter",
@@ -748,6 +814,7 @@
     "flavor": "A lightweight, UV-reflective head covering favored by desert scavengers and sun-miners.",
     "tags": ["Apparel", "Standard", "Head", "Labor"],
     "baseCost": 39,
+    "supplyCost": 20.05,
     "license": "lic_corp_aegis_field",
     "image": "img/Icons_Extracted/Apparel/Helmets/helmet-hooded-goggles-brown-leather.png"
   },
@@ -758,6 +825,7 @@
     "flavor": "A fully pressurized flight helmet featuring a real-time tactical overlay projected directly onto the visor.",
     "tags": ["Apparel", "High-Tier", "Head", "Pressurized"],
     "baseCost": 105,
+    "supplyCost": 53.76,
     "license": "lic_pro_aegis_gear",
     "image": "img/Icons_Extracted/Apparel/Helmets/helmet-hooded-cyan-visor-stealth.png"
   },
@@ -768,6 +836,7 @@
     "flavor": "Thick, vacuum-safe gloves with micro-gyros to prevent hand tremors during delicate spacewalk repairs.",
     "tags": ["Apparel", "High-Tier", "Hands", "Pressurized", "Labor"],
     "baseCost": 75,
+    "supplyCost": 38.4,
     "license": "lic_pro_aegis_gear",
     "image": "img/Icons_Extracted/Apparel/Gloves/glove-tech-silver-blue-panel.png"
   },
@@ -778,6 +847,7 @@
     "flavor": "Tough, non-pressurized gloves woven from cut-resistant fibers. They smell faintly of engine grease.",
     "tags": ["Apparel", "Standard", "Hands", "Labor"],
     "baseCost": 20,
+    "supplyCost": 10.36,
     "license": "lic_corp_labor",
     "image": "img/Icons_Extracted/Apparel/Gloves/glove-work-orange-gauge.png"
   },
@@ -788,6 +858,7 @@
     "flavor": "Heavy, non-pressurized boots with togglable electromagnets in the soles for zero-G environments.",
     "tags": ["Apparel", "Standard", "Feet", "Labor"],
     "baseCost": 46,
+    "supplyCost": 23.74,
     "license": "lic_corp_labor",
     "image": "img/Icons_Extracted/Apparel/Boots/boot-mechanical-tubed-brown.png"
   },
@@ -798,6 +869,7 @@
     "flavor": "Fully pressurized, environment-sealed boots with integrated magnetic locks for exterior hull walks.",
     "tags": ["Apparel", "High-Tier", "Feet", "Pressurized", "Labor"],
     "baseCost": 95,
+    "supplyCost": 49.02,
     "license": "lic_pro_aegis_gear",
     "image": "img/Icons_Extracted/Apparel/Boots/boot-armored-grey-hazard-stripe.png"
   },
@@ -808,6 +880,7 @@
     "flavor": "A thick, insulating top layer that regulates body temperature and resists minor abrasions.",
     "tags": ["Apparel", "Standard", "Torso", "Labor"],
     "baseCost": 40,
+    "supplyCost": 20.56,
     "license": "lic_corp_labor",
     "image": "img/Icons_Extracted/Apparel/Torso/pullover-grey-quilted-orange-trim.png"
   },
@@ -818,6 +891,7 @@
     "flavor": "Heavy-duty pants favored by mechanics, featuring reinforced knees and plenty of tool loops.",
     "tags": ["Apparel", "Standard", "Legs", "Labor"],
     "baseCost": 47,
+    "supplyCost": 23.88,
     "license": "lic_corp_aegis_field",
     "image": "img/Icons_Extracted/Apparel/Pants/trousers-fibroweave-black-purple-straps.png"
   },
@@ -828,6 +902,7 @@
     "flavor": "Durable eye protection that syncs with nearby diagnostic tools to display basic telemetry.",
     "tags": ["Apparel", "Standard", "Head", "Labor"],
     "baseCost": 70,
+    "supplyCost": 35.42,
     "license": "lic_corp_aegis_field",
     "image": "img/Icons_Extracted/Apparel/Helmets/helmet-combat-white-tan-goggles.png"
   },
@@ -838,6 +913,7 @@
     "flavor": "A sleek, form-fitting civilian vacuum suit with chrome accents. Looks great, but offers minimal armor.",
     "tags": ["Apparel", "Standard", "Suit", "Pressurized", "Exploration"],
     "baseCost": 46,
+    "supplyCost": 23.46,
     "license": "lic_corp_stellaris_suits",
     "image": "img/Icons_Extracted/Apparel/Suits/suit-pressurized-blue-tactical.png"
   },
@@ -848,6 +924,7 @@
     "flavor": "A tailored, high-end pressure suit often worn by corporate VIPs traveling between stations.",
     "tags": ["Apparel", "High-Tier", "Suit", "Pressurized", "Casual"],
     "baseCost": 80,
+    "supplyCost": 40.8,
     "license": "lic_corp_stellaris_suits",
     "image": "img/Icons_Extracted/Apparel/Suits/suit-pressurized-gold-white-astronaut.png"
   },
@@ -858,6 +935,7 @@
     "flavor": "A stylish, bubble-style pressurized helmet offering an unobstructed 180-degree view of the cosmos.",
     "tags": ["Apparel", "Standard", "Head", "Pressurized"],
     "baseCost": 35,
+    "supplyCost": 17.85,
     "license": "lic_corp_stellaris_suits",
     "image": "img/Icons_Extracted/Apparel/Helmets/helmet-astronaut-gold-visor.png"
   },
@@ -868,6 +946,7 @@
     "flavor": "A slick, opaque black helmet with one-way vision glass and built-in noise cancellation.",
     "tags": ["Apparel", "High-Tier", "Head", "Pressurized"],
     "baseCost": 40,
+    "supplyCost": 20.48,
     "license": "lic_corp_stellaris_suits",
     "image": "img/Icons_Extracted/Apparel/Helmets/helmet-obsidian-black-mirrored-visor.png"
   },
@@ -878,6 +957,7 @@
     "flavor": "A pressurized helm featuring an elegant, external antenna array for long-range communications.",
     "tags": ["Apparel", "Standard", "Head", "Pressurized"],
     "baseCost": 36,
+    "supplyCost": 18.43,
     "license": "lic_corp_stellaris_suits",
     "image": "img/Icons_Extracted/Apparel/Helmets/helmet-pilot-blue-white-visor.png"
   },
@@ -888,6 +968,7 @@
     "flavor": "A mass-produced, brightly colored plastic helmet. Barely meets standard safety regulations.",
     "tags": ["Apparel", "Surplus", "Head", "Pressurized", "Casual"],
     "baseCost": 32,
+    "supplyCost": 16.45,
     "license": "lic_start_outerwear",
     "image": "img/Icons_Extracted/Apparel/Helmets/helmet-alien-purple-ornate.png"
   },
@@ -898,6 +979,7 @@
     "flavor": "A cheap, flashy, synthetic shirt popular in station nightclubs and recreational sectors.",
     "tags": ["Apparel", "Standard", "Torso", "Casual"],
     "baseCost": 13,
+    "supplyCost": 6.68,
     "license": "lic_start_apparel",
     "image": "img/Icons_Extracted/Apparel/Torso/croptop-holographic-asymmetric.png"
   },
@@ -908,6 +990,7 @@
     "flavor": "A casual, oversized shirt stamped with auto-translating corporate slogans.",
     "tags": ["Apparel", "Standard", "Torso", "Casual"],
     "baseCost": 15,
+    "supplyCost": 7.71,
     "license": "lic_start_apparel",
     "image": "img/Icons_Extracted/Apparel/Torso/jacket-bomber-brown-fur-collar-patches.png"
   },
@@ -918,6 +1001,7 @@
     "flavor": "A thin, brightly colored base layer meant to be worn under heavier, uncomfortable gear.",
     "tags": ["Apparel", "Standard", "Torso", "Casual"],
     "baseCost": 16,
+    "supplyCost": 8.06,
     "license": "lic_start_apparel",
     "image": "img/Icons_Extracted/Apparel/Torso/undershirt-thermal-ribbed-orange-trim.png"
   },
@@ -928,6 +1012,7 @@
     "flavor": "Baggy, synthetic trousers with an excessive number of un-secured pockets.",
     "tags": ["Apparel", "Standard", "Legs", "Casual"],
     "baseCost": 20,
+    "supplyCost": 10.08,
     "license": "lic_start_outerwear",
     "image": "img/Icons_Extracted/Apparel/Pants/cargo-pants-grey-orange-trim.png"
   },
@@ -938,6 +1023,7 @@
     "flavor": "Form-fitting, brightly patterned athletic wear.",
     "tags": ["Apparel", "Standard", "Legs", "Casual"],
     "baseCost": 22,
+    "supplyCost": 13.16,
     "license": "lic_start_outerwear",
     "image": "img/Icons_Extracted/Apparel/Pants/leggings-second-skin-purple-cyan.png"
   },
@@ -948,6 +1034,7 @@
     "flavor": "Lightweight, breathable shorts strictly for climate-controlled station sectors.",
     "tags": ["Apparel", "Standard", "Legs", "Casual"],
     "baseCost": 13,
+    "supplyCost": 7.77,
     "license": "lic_start_apparel",
     "image": "img/Icons_Extracted/Apparel/Pants/shorts-station-grey-cyan-belt.png"
   },
@@ -958,6 +1045,7 @@
     "flavor": "Flimsy, comfortable footwear intended for indoor, gravity-controlled environments.",
     "tags": ["Apparel", "Standard", "Feet", "Casual"],
     "baseCost": 14,
+    "supplyCost": 8.4,
     "license": "lic_start_footwear",
     "image": "img/Icons_Extracted/Apparel/Boots/loafer-white-orange-slipon.png"
   },
@@ -968,6 +1056,7 @@
     "flavor": "Mass-market athletic shoes with flashing LEDs built into the soles.",
     "tags": ["Apparel", "Standard", "Feet", "Casual"],
     "baseCost": 20,
+    "supplyCost": 12,
     "license": "lic_start_footwear",
     "image": "img/Icons_Extracted/Apparel/Boots/boot-neon-tron-pink.png"
   },
@@ -978,6 +1067,7 @@
     "flavor": "Retro-styled synthetic boots that offer absolutely zero ankle support.",
     "tags": ["Apparel", "Standard", "Feet", "Casual"],
     "baseCost": 19,
+    "supplyCost": 7.64,
     "license": "lic_start_footwear",
     "image": "img/Icons_Extracted/Apparel/Boots/sneaker-hightop-black-cyan-glow.png"
   },
@@ -988,6 +1078,7 @@
     "flavor": "A bulky, heavily insulated suit designed for sub-zero planetary exploration.",
     "tags": ["Apparel", "High-Tier", "Suit", "Pressurized", "Exploration"],
     "baseCost": 60,
+    "supplyCost": 24,
     "license": "lic_pro_kessler",
     "image": "img/Icons_Extracted/Apparel/Suits/coverall-grey-insulated-winter.png"
   },
@@ -998,6 +1089,7 @@
     "flavor": "A thermal-reflective suit built to withstand the ambient heat of volcanic mining ops.",
     "tags": ["Apparel", "High-Tier", "Suit", "Pressurized", "Exploration"],
     "baseCost": 65,
+    "supplyCost": 26.26,
     "license": "lic_pro_kessler",
     "image": "img/Icons_Extracted/Apparel/Suits/suit-pressurized-orange-astronaut.png"
   },
@@ -1008,6 +1100,7 @@
     "flavor": "A rugged, highly durable exploration suit coated in dust-repellent polymers.",
     "tags": ["Apparel", "Standard", "Suit", "Pressurized", "Exploration"],
     "baseCost": 55,
+    "supplyCost": 22.11,
     "license": "lic_pro_kessler",
     "image": "img/Icons_Extracted/Apparel/Suits/suit-pressurized-brown-mining-industrial.png"
   },
@@ -1018,6 +1111,7 @@
     "flavor": "A thick, blocky helmet designed to withstand micrometeorite impacts.",
     "tags": ["Apparel", "Standard", "Head", "Pressurized", "Exploration"],
     "baseCost": 70,
+    "supplyCost": 28.28,
     "license": "lic_pro_kessler_gear",
     "image": "img/Icons_Extracted/Apparel/Helmets/helmet-hardhat-yellow-goggles.png"
   },
@@ -1028,6 +1122,7 @@
     "flavor": "Features a reinforced, wide-angle visor for maximum peripheral vision in unknown territory.",
     "tags": ["Apparel", "High-Tier", "Head", "Pressurized", "Exploration"],
     "baseCost": 85,
+    "supplyCost": 34.34,
     "license": "lic_pro_kessler_gear",
     "image": "img/Icons_Extracted/Apparel/Helmets/helmet-combat-red-visor-wired.png"
   },
@@ -1038,6 +1133,7 @@
     "flavor": "Heavy gauntlets with reinforced joints to prevent crushing injuries in a vacuum.",
     "tags": ["Apparel", "Standard", "Hands", "Pressurized", "Exploration"],
     "baseCost": 49,
+    "supplyCost": 20.48,
     "license": "lic_pro_kessler_gear",
     "image": "img/Icons_Extracted/Apparel/Gloves/glove-spacesuit-white-blue.png"
   },
@@ -1048,6 +1144,7 @@
     "flavor": "Vacuum-sealed gloves coated in a micro-suction material for climbing sheer surfaces.",
     "tags": ["Apparel", "High-Tier", "Hands", "Pressurized", "Exploration"],
     "baseCost": 55,
+    "supplyCost": 23.1,
     "license": "lic_pro_kessler_gear",
     "image": "img/Icons_Extracted/Apparel/Gloves/glove-tech-black-cyan-wired.png"
   },
@@ -1058,6 +1155,7 @@
     "flavor": "Massive, heavy-tread boots designed to leave footprints in alien soil.",
     "tags": ["Apparel", "Standard", "Feet", "Pressurized", "Exploration"],
     "baseCost": 65,
+    "supplyCost": 27.17,
     "license": "lic_pro_kessler_camp",
     "image": "img/Icons_Extracted/Apparel/Boots/boot-insulated-snow-white.png"
   },
@@ -1068,6 +1166,7 @@
     "flavor": "Features deployable pitons in the toe for traversing icy or highly unstable terrain.",
     "tags": ["Apparel", "High-Tier", "Feet", "Pressurized", "Exploration"],
     "baseCost": 70,
+    "supplyCost": 29.26,
     "license": "lic_pro_kessler_camp",
     "image": "img/Icons_Extracted/Apparel/Boots/boot-tactical-black-orange-trim.png"
   },
@@ -1078,6 +1177,7 @@
     "flavor": "A rigid, utilitarian, gray pressure suit. Completely devoid of aesthetic flair.",
     "tags": ["Apparel", "Standard", "Suit", "Pressurized", "Labor"],
     "baseCost": 140,
+    "supplyCost": 58.24,
     "license": "lic_corp_arx_uniforms",
     "image": "img/Icons_Extracted/Apparel/Suits/coverall-navy-work-plain.png"
   },
@@ -1088,6 +1188,7 @@
     "flavor": "A heavy face shield with extreme polarization to protect against industrial flash-burns.",
     "tags": ["Apparel", "Standard", "Head", "Labor"],
     "baseCost": 60,
+    "supplyCost": 24.96,
     "license": "lic_corp_arx_boots",
     "image": "img/Icons_Extracted/Apparel/Helmets/mask-welder-grey-rusty-visor.png"
   },
@@ -1098,6 +1199,7 @@
     "flavor": "A stiff, non-pressurized work shirt that requires rigid posture to wear comfortably.",
     "tags": ["Apparel", "Standard", "Torso", "Labor"],
     "baseCost": 39,
+    "supplyCost": 16.15,
     "license": "lic_corp_arx_uniforms",
     "image": "img/Icons_Extracted/Apparel/Torso/jacket-work-navy-orange-trim-tools.png"
   },
@@ -1108,6 +1210,7 @@
     "flavor": "A heavy canvas jacket lined with a thin layer of protective ballistic mesh.",
     "tags": ["Apparel", "Standard", "Torso", "Labor"],
     "baseCost": 65,
+    "supplyCost": 26.91,
     "license": "lic_corp_arx_uniforms",
     "image": "img/Icons_Extracted/Apparel/Jackets/jacket-tactical-black-strapped-long.png"
   },
@@ -1118,6 +1221,7 @@
     "flavor": "Blocky, symmetrical pants with exactly four strictly regulated pockets.",
     "tags": ["Apparel", "Standard", "Legs", "Labor"],
     "baseCost": 41,
+    "supplyCost": 16.89,
     "license": "lic_corp_arx_uniforms",
     "image": "img/Icons_Extracted/Apparel/Pants/pants-tactical-black-orange-pouches.png"
   },
@@ -1128,6 +1232,7 @@
     "flavor": "Industrial pants with thick, built-in knee pads for crawling through maintenance shafts.",
     "tags": ["Apparel", "Standard", "Legs", "Labor"],
     "baseCost": 60,
+    "supplyCost": 24.84,
     "license": "lic_corp_arx_boots",
     "image": "img/Icons_Extracted/Apparel/Pants/pants-tactical-black-yellow-cargo.png"
   },
@@ -1138,6 +1243,7 @@
     "flavor": "Incredibly heavy, non-pressurized boots designed to stop dropped cargo crates from crushing toes.",
     "tags": ["Apparel", "Standard", "Feet", "Labor"],
     "baseCost": 65,
+    "supplyCost": 33.02,
     "license": "lic_corp_arx_boots",
     "image": "img/Icons_Extracted/Apparel/Boots/boot-scavenged-patchwork-brown.png"
   },
@@ -1148,6 +1254,7 @@
     "flavor": "Non-slip, thick-soled boots standard-issued to all hangar and dock workers.",
     "tags": ["Apparel", "Standard", "Feet", "Labor"],
     "baseCost": 65,
+    "supplyCost": 32.89,
     "license": "lic_corp_arx_boots",
     "image": "img/Icons_Extracted/Apparel/Boots/boot-hazmat-biohazard-olive.png"
   },
@@ -1158,6 +1265,7 @@
     "flavor": "A bright yellow, non-pressurized suit designed strictly to keep pathogens and corrosive liquids out.",
     "tags": ["Apparel", "High-Tier", "Suit", "Labor"],
     "baseCost": 180,
+    "supplyCost": 91.08,
     "license": "lic_corp_hazard_wear",
     "image": "img/Icons_Extracted/Apparel/Suits/coverall-yellow-navy-hi-vis.png"
   },
@@ -1168,6 +1276,7 @@
     "flavor": "An easy-to-clean, antimicrobial shirt favored by station medics and ripper-docs alike.",
     "tags": ["Apparel", "Standard", "Torso", "Labor"],
     "baseCost": 47,
+    "supplyCost": 23.78,
     "license": "lic_corp_hazard",
     "image": "img/Icons_Extracted/Apparel/Torso/scrub-top-teal-medical.png"
   },
@@ -1178,6 +1287,7 @@
     "flavor": "Lightweight, sterile pants that resist fluid absorption.",
     "tags": ["Apparel", "Standard", "Legs", "Labor"],
     "baseCost": 47,
+    "supplyCost": 23.69,
     "license": "lic_corp_hazard",
     "image": "img/Icons_Extracted/Apparel/Pants/scrub-bottoms-teal-medical.png"
   },
@@ -1188,6 +1298,7 @@
     "flavor": "Seamless, slip-on white boots designed to leave absolutely zero trace contaminants.",
     "tags": ["Apparel", "Standard", "Feet", "Labor"],
     "baseCost": 60,
+    "supplyCost": 30.24,
     "license": "lic_corp_hazard",
     "image": "img/Icons_Extracted/Apparel/Boots/boot-cleanroom-white.png"
   },
@@ -1198,6 +1309,7 @@
     "flavor": "Elbow-length, chemical-resistant gloves. Not rated for vacuum exposure.",
     "tags": ["Apparel", "Standard", "Hands", "Labor"],
     "baseCost": 37,
+    "supplyCost": 18.65,
     "license": "lic_corp_hazard",
     "image": "img/Icons_Extracted/Apparel/Gloves/glove-sterilization-grey-blue.png"
   },
@@ -1208,6 +1320,7 @@
     "flavor": "A half-face respirator that filters out toxic fumes and airborne spores.",
     "tags": ["Apparel", "Standard", "Head", "Labor"],
     "baseCost": 65,
+    "supplyCost": 32.63,
     "license": "lic_corp_hazard_wear",
     "image": "img/Icons_Extracted/Apparel/Helmets/mask-rebreather-teal-grey.png"
   },
@@ -1218,6 +1331,7 @@
     "flavor": "A thick, rubberized apron used in both surgery and xenobiology labs.",
     "tags": ["Apparel", "Standard", "Torso", "Labor"],
     "baseCost": 36,
+    "supplyCost": 18.5,
     "license": "lic_corp_hazard_wear",
     "image": "img/Icons_Extracted/Apparel/Torso/apron-white-red-biohazard.png"
   },
@@ -1228,6 +1342,7 @@
     "flavor": "A lightweight headband that projects patient vitals or chemical data over one eye.",
     "tags": ["Apparel", "High-Tier", "Head", "Labor"],
     "baseCost": 105,
+    "supplyCost": 53.97,
     "license": "lic_corp_hazard_wear",
     "image": "img/Icons_Extracted/Apparel/Helmets/visor-diagnostic-blue-belt-cable.png"
   },
@@ -1238,6 +1353,7 @@
     "flavor": "A highly reflective, durable jacket packed with secure pockets for medical supplies.",
     "tags": ["Apparel", "Standard", "Torso", "Labor"],
     "baseCost": 75,
+    "supplyCost": 30.3,
     "license": "lic_corp_hazard_wear",
     "image": "img/Icons_Extracted/Apparel/Jackets/jacket-armored-white-orange.png"
   },
@@ -1248,6 +1364,7 @@
     "flavor": "A rugged vacuum-sealed combat helm featuring reinforced composite plating and a hardened quartz visor.",
     "tags": ["Armor", "High-Tier", "Head", "Pressurized"],
     "baseCost": 95,
+    "supplyCost": 39.9,
     "license": "lic_pro_aegis_sec",
     "image": "img/Icons_Extracted/Apparel/Helmets/helmet-tech-black-teal-hud-visor.png"
   },
@@ -1258,6 +1375,7 @@
     "flavor": "A lightweight tactical vest treated with a hardened ceramic coating to deflect shrapnel and low-caliber rounds.",
     "tags": ["Armor", "Standard", "Torso"],
     "baseCost": 85,
+    "supplyCost": 35.53,
     "license": "lic_pro_aegis_sec",
     "image": "img/Icons_Extracted/Apparel/Torso/vest-flak-blue-grey-segmented.png"
   },
@@ -1268,6 +1386,7 @@
     "flavor": "A high-tech chest rig humming with a micro-capacitor grid designed to disrupt incoming directed-energy beams.",
     "tags": ["Armor", "High-Tier", "Torso", "Pressurized"],
     "baseCost": 160,
+    "supplyCost": 67.2,
     "license": "lic_pro_aegis_sec",
     "image": "img/Icons_Extracted/Apparel/Torso/vest-energy-repulsor-dark-cyan-circuit.png"
   },
@@ -1278,6 +1397,7 @@
     "flavor": "Armored gloves embedded with localized kinetic dampening fields that absorb the shock of heavy blows.",
     "tags": ["Armor", "High-Tier", "Hands"],
     "baseCost": 100,
+    "supplyCost": 42.4,
     "license": "lic_pro_aegis_sec",
     "image": "img/Icons_Extracted/Apparel/Gloves/glove-gauntlet-red-gold-powered.png"
   },
@@ -1288,6 +1408,7 @@
     "flavor": "A heavy, industrial-grade pressure suit reinforced with steel plating over critical life-support nodes.",
     "tags": ["Armor", "Standard", "Suit", "Pressurized", "Labor"],
     "baseCost": 90,
+    "supplyCost": 38.16,
     "license": "lic_pro_arx_heavy",
     "image": "img/Icons_Extracted/Apparel/Suits/suit-armored-yellow-hazard-mech.png"
   },
@@ -1298,6 +1419,7 @@
     "flavor": "A rigid, fire-retardant sub-layer designed to be zipped inside standard work coveralls for basic protection.",
     "tags": ["Armor", "Standard", "Torso", "Labor"],
     "baseCost": 40,
+    "supplyCost": 16.88,
     "license": "lic_pro_arx_heavy",
     "image": "img/Icons_Extracted/Apparel/Torso/lining-armored-olive-brown-padded.png"
   },
@@ -1308,6 +1430,7 @@
     "flavor": "Sturdy, reinforced work gloves lined with chain-mail weave to prevent lacerations in heavy industrial yards.",
     "tags": ["Armor", "Standard", "Hands", "Labor"],
     "baseCost": 31,
+    "supplyCost": 13.08,
     "license": "lic_pro_arx_heavy",
     "image": "img/Icons_Extracted/Apparel/Gloves/glove-gauntlet-yellow-worn.png"
   },
@@ -1318,6 +1441,7 @@
     "flavor": "Heavy steel-capped leg guards built to withstand industrial drops and hazardous worksite debris.",
     "tags": ["Armor", "Standard", "Legs", "Labor"],
     "baseCost": 43,
+    "supplyCost": 17.8,
     "license": "lic_pro_arx_heavy",
     "image": "img/Icons_Extracted/Apparel/Legs/greaves-reinforced-grey-segmented.png"
   },
@@ -1328,6 +1452,7 @@
     "flavor": "A sealed medical-combat helmet equipped with a multi-stage air filter and chemical-splash visor.",
     "tags": ["Armor", "High-Tier", "Head", "Pressurized"],
     "baseCost": 110,
+    "supplyCost": 45.54,
     "license": "lic_corp_veles_armor",
     "image": "img/Icons_Extracted/Apparel/Helmets/helmet-gasmask-black-teal-visor.png"
   },
@@ -1338,6 +1463,7 @@
     "flavor": "A lightweight, non-pressurized face shield treated to resist caustic sprays and bio-pathogen mists.",
     "tags": ["Armor", "Standard", "Head", "Labor"],
     "baseCost": 70,
+    "supplyCost": 29.68,
     "license": "lic_corp_veles_armor",
     "image": "img/Icons_Extracted/Apparel/Helmets/visor-hazmat-yellow-black.png"
   },
@@ -1348,6 +1474,7 @@
     "flavor": "A heavy white-and-grey responder jacket with internal ceramic inserts protecting vital organs during rescue ops.",
     "tags": ["Armor", "Standard", "Torso", "Labor"],
     "baseCost": 95,
+    "supplyCost": 40.28,
     "license": "lic_corp_veles_armor",
     "image": "img/Icons_Extracted/Apparel/Torso/jacket-medical-white-red-ballistic.png"
   },
@@ -1358,6 +1485,7 @@
     "flavor": "An impact-absorbent under-vest worn by field medics entering active station skirmishes.",
     "tags": ["Armor", "Standard", "Torso"],
     "baseCost": 85,
+    "supplyCost": 36.21,
     "license": "lic_corp_veles_armor",
     "image": "img/Icons_Extracted/Apparel/Torso/tunic-subdermal-silver-metallic.png"
   },
@@ -1368,6 +1496,7 @@
     "flavor": "Heavy synthetic trousers coated in a slick, non-reactive polymer compound.",
     "tags": ["Armor", "Standard", "Legs", "Labor"],
     "baseCost": 75,
+    "supplyCost": 31.95,
     "license": "lic_corp_veles_legs",
     "image": "img/Icons_Extracted/Apparel/Pants/leggings-acid-resistant-grey-yellow.png"
   },
@@ -1378,6 +1507,7 @@
     "flavor": "Environmentally sealed tactical boots with slip-resistant soles built for slick laboratory or hangar floors.",
     "tags": ["Armor", "Standard", "Feet", "Pressurized", "Labor"],
     "baseCost": 85,
+    "supplyCost": 35.87,
     "license": "lic_corp_veles_legs",
     "image": "img/Icons_Extracted/Apparel/Boots/boot-formal-navy-gold-trim.png"
   },
@@ -1388,6 +1518,7 @@
     "flavor": "Thick-soled boots with internal gel cushions to reduce fatigue during long shifts on station decks.",
     "tags": ["Armor", "Standard", "Feet", "Labor"],
     "baseCost": 60,
+    "supplyCost": 25.2,
     "license": "lic_corp_veles_legs",
     "image": "img/Icons_Extracted/Apparel/Boots/boot-impact-damped-grey-orange.png"
   },
@@ -1398,6 +1529,7 @@
     "flavor": "A massive, military-spec vacuum suit featuring thick composite armor plating across all vital sectors.",
     "tags": ["Armor", "High-Tier", "Suit", "Pressurized"],
     "baseCost": 135,
+    "supplyCost": 57.24,
     "license": "lic_pro_kodiak_suits",
     "image": "img/Icons_Extracted/Apparel/Suits/suit-armored-combat-dark-blue.png"
   },
@@ -1408,6 +1540,7 @@
     "flavor": "An imposing corporate security vacuum suit built to project authority and absorb heavy sustained fire.",
     "tags": ["Armor", "High-Tier", "Suit", "Pressurized"],
     "baseCost": 125,
+    "supplyCost": 52.75,
     "license": "lic_pro_kodiak_suits",
     "image": "img/Icons_Extracted/Apparel/Suits/suit-armored-tech-white-red.png"
   },
@@ -1418,6 +1551,7 @@
     "flavor": "A hardened, radiation-shielded pressure suit designed for hazardous planetary surface operations.",
     "tags": ["Armor", "High-Tier", "Suit", "Pressurized", "Exploration"],
     "baseCost": 120,
+    "supplyCost": 50.16,
     "license": "lic_pro_kodiak_suits",
     "image": "img/Icons_Extracted/Apparel/Suits/suit-armored-tech-white-cyan.png"
   },
@@ -1428,6 +1562,7 @@
     "flavor": "A heavy, deployable ballistic shield with a view-port designed to withstand concentrated kinetic rifle rounds.",
     "tags": ["Armor", "High-Tier", "Torso"],
     "baseCost": 125,
+    "supplyCost": 52.25,
     "license": "lic_pro_kodiak_shields",
     "image": "img/Icons_Extracted/Armor/Shields/shield-kinetic-breaching-grey-screen.png"
   },
@@ -1438,6 +1573,7 @@
     "flavor": "A wide, interlocking riot shield favored by corporate security details during station uprisings.",
     "tags": ["Armor", "Standard", "Torso"],
     "baseCost": 105,
+    "supplyCost": 43.05,
     "license": "lic_pro_kodiak_shields",
     "image": "img/Icons_Extracted/Armor/Shields/shield-riot-rusty-riveted.png"
   },
@@ -1448,6 +1584,7 @@
     "flavor": "A heavy barrier shield projecting a high-density localized magnetic field to catch incoming energy bolts.",
     "tags": ["Armor", "High-Tier", "Torso"],
     "baseCost": 145,
+    "supplyCost": 59.74,
     "license": "lic_pro_kodiak_shields",
     "image": "img/Icons_Extracted/Armor/Shields/shield-deflector-blue-hex-orb.png"
   },
@@ -1458,6 +1595,7 @@
     "flavor": "A crude headpiece hammered together from discarded reactor shielding and welded mesh.",
     "tags": ["Armor", "Surplus", "Head", "Old"],
     "baseCost": 17,
+    "supplyCost": 7,
     "license": "lic_start_armor",
     "image": "img/Icons_Extracted/Apparel/Helmets/helmet-scrap-rusty-cage.png"
   },
@@ -1468,6 +1606,7 @@
     "flavor": "A patchwork leather harness bolted with curved pieces of industrial boiler wall.",
     "tags": ["Armor", "Surplus", "Torso", "Old"],
     "baseCost": 26,
+    "supplyCost": 10.76,
     "license": "lic_start_armor",
     "image": "img/Icons_Extracted/Apparel/Torso/chestrig-boilermaker-rusty-leather.png"
   },
@@ -1478,6 +1617,7 @@
     "flavor": "Asymmetrical leg plating fashioned from old pipe segments and secured with heavy duct tape.",
     "tags": ["Armor", "Surplus", "Legs", "Old"],
     "baseCost": 22,
+    "supplyCost": 8.98,
     "license": "lic_start_armor",
     "image": "img/Icons_Extracted/Apparel/Legs/legguards-salvage-gasket-rusty.png"
   },
@@ -1488,6 +1628,7 @@
     "flavor": "Heavy work gloves reinforced with discarded machine teeth and jagged scrap metal.",
     "tags": ["Armor", "Surplus", "Hands", "Old"],
     "baseCost": 18,
+    "supplyCost": 7.34,
     "license": "lic_start_armor",
     "image": "img/Icons_Extracted/Apparel/Gloves/glove-mechanical-copper-wired.png"
   },
@@ -1498,6 +1639,7 @@
     "flavor": "An extended polymer box magazine designed to fit standard light kinetic rifles.",
     "tags": ["Attachment", "Standard", "Magazine"],
     "baseCost": 41,
+    "supplyCost": 17.14,
     "fits": ["Rifle Light Caliber"],
     "license": "lic_corp_aulin",
     "image": "img/Icons_Extracted/Attachments/Misc/magazine-curved-ak-black.png"
@@ -1509,6 +1651,7 @@
     "flavor": "A spring-loaded aluminum cylinder that holds heavy caliber rounds for rapid revolver reloads.",
     "tags": ["Attachment", "Standard", "Magazine"],
     "baseCost": 105,
+    "supplyCost": 43.89,
     "fits": ["Pistol Heavy Caliber"],
     "license": "lic_edge_kinetic",
     "image": "img/Icons_Extracted/Attachments/Misc/speed-loader-cylinder-brass-rounds.png"
@@ -1520,6 +1663,7 @@
     "flavor": "A massive, spring-fed double drum that doubles the capacity of heavy caliber kinetic rifles.",
     "tags": ["Attachment", "High-Tier", "Magazine"],
     "baseCost": 165,
+    "supplyCost": 68.64,
     "fits": ["Rifle Heavy Caliber"],
     "license": "lic_corp_vanguard",
     "image": "img/Icons_Extracted/Attachments/Misc/drum-magazine-grey-round.png"
@@ -1531,6 +1675,7 @@
     "flavor": "A stamped metal tube that screws onto the end of standard scatter-rifles, allowing for two extra shells.",
     "tags": ["Attachment", "Surplus", "Magazine"],
     "baseCost": 23,
+    "supplyCost": 9.57,
     "fits": ["Scatter Shells"],
     "license": "lic_start_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/tube-extender-rusty.png"
@@ -1542,6 +1687,7 @@
     "flavor": "A heavy, elongated thermal battery block that provides significantly more shots before a required cooldown.",
     "tags": ["Attachment", "Standard", "Magazine"],
     "baseCost": 27,
+    "supplyCost": 11.23,
     "fits": ["Thermal Battery"],
     "license": "lic_corp_stellaris_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/battery-overcharge-white-cyan-sleek.png"
@@ -1553,6 +1699,7 @@
     "flavor": "A military-grade plasma cartridge extender with additional built-in venting fins to prevent overheating.",
     "tags": ["Attachment", "High-Tier", "Magazine"],
     "baseCost": 115,
+    "supplyCost": 47.61,
     "fits": ["Plasma Cartridge"],
     "license": "lic_pro_kodiak",
     "image": "img/Icons_Extracted/Attachments/Misc/coolant-rig-cyan-gauge-hose.png"
@@ -1564,6 +1711,7 @@
     "flavor": "An oversized, motorized spool of magnetic wire that feeds spikes into Gauss weapons at a faster rate.",
     "tags": ["Attachment", "High-Tier", "Magazine"],
     "baseCost": 185,
+    "supplyCost": 76.59,
     "fits": ["Gauss Spikes"],
     "license": "lic_pro_zastava_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/spool-high-feed-copper-wired.png"
@@ -1575,6 +1723,7 @@
     "flavor": "A proprietary, ultra-lightweight carbon drum loaded with thousands of smart-flechettes.",
     "tags": ["Attachment", "Cutting-Edge", "Magazine"],
     "baseCost": 350,
+    "supplyCost": 144.2,
     "fits": ["Tessier-Ashpool Needle-Carbine"],
     "license": "lic_edge_tessier_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/module-drum-teal-tech.png"
@@ -1586,6 +1735,7 @@
     "flavor": "A heavy armor-plated box that holds a massive disintegrating belt of autocannon shells.",
     "tags": ["Attachment", "Standard", "Magazine"],
     "baseCost": 270,
+    "supplyCost": 111.24,
     "fits": ["Autocannon Shells"],
     "license": "lic_edge_blackwood",
     "image": "img/Icons_Extracted/Attachments/Misc/belt-box-olive-ammo-can.png"
@@ -1597,6 +1747,7 @@
     "flavor": "A dented, salvaged light pistol magazine bound with industrial tape. Cheap and prone to minor feed hitches.",
     "tags": ["Attachment", "Surplus", "Old", "Magazine"],
     "baseCost": 18,
+    "supplyCost": 7.45,
     "fits": ["Pistol Light Caliber"],
     "license": "lic_start_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/scrap-mag-pistol-clip-rusty.png"
@@ -1608,6 +1759,7 @@
     "flavor": "A ribbed, synthetic foregrip that provides excellent vertical recoil mitigation.",
     "tags": ["Attachment", "Standard", "Grip"],
     "baseCost": 70,
+    "supplyCost": 37.66,
     "fits": ["Rifle Light Caliber", "Rifle Heavy Caliber"],
     "license": "lic_corp_aulin_grips",
     "image": "img/Icons_Extracted/Attachments/Misc/foregrip-vertical-olive.png"
@@ -1619,6 +1771,7 @@
     "flavor": "A heavy, sloped aluminum grip favored for aggressive, close-quarters cornering.",
     "tags": ["Attachment", "Standard", "Grip"],
     "baseCost": 220,
+    "supplyCost": 118.36,
     "fits": ["Scatter Shells", "Rifle Light Caliber"],
     "license": "lic_corp_vanguard_grips",
     "image": "img/Icons_Extracted/Attachments/Misc/foregrip-angled-black.png"
@@ -1630,6 +1783,7 @@
     "flavor": "A rubberized replacement handle modeled to fit the exact contours of the user's palm.",
     "tags": ["Attachment", "High-Tier", "Grip"],
     "baseCost": 145,
+    "supplyCost": 77.72,
     "fits": ["Pistol Light Caliber", "Pistol Heavy Caliber"],
     "license": "lic_edge_kinetic",
     "image": "img/Icons_Extracted/Attachments/Misc/grip-pistol-tech-teal-black.png"
@@ -1641,6 +1795,7 @@
     "flavor": "A sleek, white synthetic grip with heat-dispersing micro-channels.",
     "tags": ["Attachment", "Standard", "Grip"],
     "baseCost": 23,
+    "supplyCost": 12.33,
     "fits": ["Thermal Battery", "Plasma Cartridge"],
     "license": "lic_corp_stellaris_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/foregrip-nimbus-silver-blue-angled.png"
@@ -1652,6 +1807,7 @@
     "flavor": "A literal piece of bent construction rebar, welded onto a crude attachment rail.",
     "tags": ["Attachment", "Surplus", "Old", "Grip"],
     "baseCost": 18,
+    "supplyCost": 9.65,
     "fits": ["Scatter Shells", "Pistol Heavy Caliber"],
     "license": "lic_start_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/hand-stop-rebar-rusty-bent.png"
@@ -1663,6 +1819,7 @@
     "flavor": "A heavy, insulated handle designed to protect the user's hand from magnetic coil burn.",
     "tags": ["Attachment", "High-Tier", "Grip"],
     "baseCost": 130,
+    "supplyCost": 69.42,
     "fits": ["Gauss Spikes", "Heavy Gauss Slugs"],
     "license": "lic_pro_zastava_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/grip-mag-olive-black-vertical.png"
@@ -1674,6 +1831,7 @@
     "flavor": "A cheap plastic vertical grip that springs open into a flimsy bipod. Breaks easily.",
     "tags": ["Attachment", "Surplus", "Grip"],
     "baseCost": 150,
+    "supplyCost": 80.1,
     "fits": ["Rifle Heavy Caliber", "Autocannon Shells"],
     "license": "lic_corp_omni_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/bipod-folding-black.png"
@@ -1685,6 +1843,7 @@
     "flavor": "A slip-on friction sleeve that fits over existing handles to provide better grip in wet environments.",
     "tags": ["Attachment", "Standard", "Grip"],
     "baseCost": 23,
+    "supplyCost": 12.56,
     "fits": ["Pistol Light Caliber", "Thermal Battery"],
     "license": "lic_start_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/sleeve-rubberized-black-textured.png"
@@ -1696,6 +1855,7 @@
     "flavor": "A massive, bolted steel grip required just to wrangle the recoil of heavy ordinance.",
     "tags": ["Attachment", "Standard", "Grip"],
     "baseCost": 240,
+    "supplyCost": 130.56,
     "fits": ["Autocannon Shells", "Flak Canisters"],
     "license": "lic_edge_blackwood",
     "image": "img/Icons_Extracted/Attachments/Misc/handle-heavy-black-ridged.png"
@@ -1707,6 +1867,7 @@
     "flavor": "A biometric locking handle that completely disables the firing mechanism if held by an unauthorized user.",
     "tags": ["Attachment", "Cutting-Edge", "Grip"],
     "baseCost": 370,
+    "supplyCost": 160.58,
     "fits": ["Tessier-Ashpool Needle-Carbine", "Tessier-Ashpool Micro-Emitter"],
     "license": "lic_edge_tessier_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/grip-smart-black-purple-cyan.png"
@@ -1718,6 +1879,7 @@
     "flavor": "A fixed, no-nonsense polymer rifle stock. Uncomfortable, but nearly indestructible.",
     "tags": ["Attachment", "Standard", "Stock"],
     "baseCost": 85,
+    "supplyCost": 44.71,
     "fits": ["Rifle Light Caliber", "Rifle Heavy Caliber"],
     "license": "lic_corp_aulin_grips",
     "image": "img/Icons_Extracted/Attachments/Misc/stock-rigid-core-grey-polymer.png"
@@ -1729,6 +1891,7 @@
     "flavor": "Features a heavy gel-pad at the rear designed to absorb the bruising kick of buckshot and heavy rounds.",
     "tags": ["Attachment", "Standard", "Stock"],
     "baseCost": 300,
+    "supplyCost": 157.8,
     "fits": ["Scatter Shells", "Rifle Heavy Caliber"],
     "license": "lic_corp_vanguard_grips",
     "image": "img/Icons_Extracted/Attachments/Misc/stock-recoil-pad-olive-purple.png"
@@ -1740,6 +1903,7 @@
     "flavor": "A minimalist, ultra-lightweight frame designed for agility and aesthetic appeal.",
     "tags": ["Attachment", "High-Tier", "Stock"],
     "baseCost": 33,
+    "supplyCost": 17.36,
     "fits": ["Thermal Battery", "Plasma Cartridge"],
     "license": "lic_corp_stellaris_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/stock-skeletonized-white-cyan.png"
@@ -1751,6 +1915,7 @@
     "flavor": "Two pieces of industrial copper piping welded together and wrapped in electrical tape.",
     "tags": ["Attachment", "Surplus", "Old", "Stock"],
     "baseCost": 19,
+    "supplyCost": 10.03,
     "fits": ["Scatter Shells", "Rifle Light Caliber"],
     "license": "lic_start_barrels",
     "image": "img/Icons_Extracted/Attachments/Misc/stock-welded-pipe-rusty.png"
@@ -1762,6 +1927,7 @@
     "flavor": "A heavily braced, spring-loaded stock built to handle the violent rearward force of magnetic acceleration.",
     "tags": ["Attachment", "High-Tier", "Stock"],
     "baseCost": 165,
+    "supplyCost": 87.12,
     "fits": ["Gauss Spikes", "Heavy Gauss Slugs"],
     "license": "lic_pro_zastava_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/stock-shock-absorber-brass-gold.png"
@@ -1773,6 +1939,7 @@
     "flavor": "A thin, retractable metal brace meant for extreme close-quarters. Digs painfully into the shoulder.",
     "tags": ["Attachment", "Surplus", "Stock"],
     "baseCost": 170,
+    "supplyCost": 90.1,
     "fits": ["Pistol Light Caliber", "Rifle Light Caliber"],
     "license": "lic_corp_omni_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/stock-collapsible-black.png"
@@ -1784,6 +1951,7 @@
     "flavor": "A massive, locking shoulder brace designed to interface directly with powered combat armor.",
     "tags": ["Attachment", "High-Tier", "Stock"],
     "baseCost": 95,
+    "supplyCost": 50.35,
     "fits": ["Heavy Plasma Canisters", "Autocannon Shells"],
     "license": "lic_pro_kodiak_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/brace-juggernaut-yellow-black-gyro.png"
@@ -1795,6 +1963,7 @@
     "flavor": "A rear assembly filled with dense lead shot to perfectly balance out top-heavy explosive launchers.",
     "tags": ["Attachment", "Standard", "Stock"],
     "baseCost": 290,
+    "supplyCost": 150.22,
     "fits": ["Flak Canisters", "Mortar Shells"],
     "license": "lic_edge_blackwood_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/stock-counterweight-black-walnut.png"
@@ -1806,6 +1975,7 @@
     "flavor": "A hand-carved, lacquered wooden stock. Adds a touch of vintage frontier charm to any weapon.",
     "tags": ["Attachment", "Rare", "Old", "Stock"],
     "baseCost": 85,
+    "supplyCost": 44.03,
     "fits": ["Rifle Heavy Caliber", "Scatter Shells"],
     "license": "lic_edge_antique",
     "image": "img/Icons_Extracted/Attachments/Misc/stock-wood-carved-brown-tan.png"
@@ -1817,6 +1987,7 @@
     "flavor": "A velcro strap and rigid rail system that locks a heavy handgun securely to the user's forearm.",
     "tags": ["Attachment", "Standard", "Stock"],
     "baseCost": 260,
+    "supplyCost": 137.8,
     "fits": ["Pistol Heavy Caliber"],
     "license": "lic_corp_vanguard_grips",
     "image": "img/Icons_Extracted/Attachments/Misc/brace-stabilizer-black-ribbed.png"
@@ -1828,6 +1999,7 @@
     "flavor": "A blindingly bright, wide-angle LED emitter powered by a micro-cell.",
     "tags": ["Attachment", "Standard", "Tactical"],
     "baseCost": 20,
+    "supplyCost": 10.48,
     "fits": ["Pistol Light Caliber", "Pistol Heavy Caliber", "Thermal Battery"],
     "license": "lic_corp_stellaris_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/flashlight-tactical-rail-mount.png"
@@ -1839,6 +2011,7 @@
     "flavor": "A standard red-dot laser emitter. Easily visible in smoke, but gives away your position.",
     "tags": ["Attachment", "Standard", "Tactical"],
     "baseCost": 85,
+    "supplyCost": 44.54,
     "fits": ["Rifle Light Caliber", "Rifle Heavy Caliber"],
     "license": "lic_corp_aulin_grips",
     "image": "img/Icons_Extracted/Attachments/Misc/laser-sight-designator-green.png"
@@ -1850,6 +2023,7 @@
     "flavor": "A small, underbarrel display that pulses when large kinetic masses move nearby.",
     "tags": ["Attachment", "High-Tier", "Tactical"],
     "baseCost": 430,
+    "supplyCost": 226.18,
     "fits": ["Scatter Shells", "Rifle Light Caliber"],
     "license": "lic_corp_vanguard_grips",
     "image": "img/Icons_Extracted/Attachments/Misc/tracker-node-dish-laptop.png"
@@ -1861,6 +2035,7 @@
     "flavor": "A high-frequency strobing light designed to disorient and blind targets in dark corridors.",
     "tags": ["Attachment", "Standard", "Tactical"],
     "baseCost": 60,
+    "supplyCost": 31.2,
     "fits": ["Scatter Shells", "Pistol Heavy Caliber"],
     "license": "lic_pro_kodiak_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/strobe-breacher-yellow-black-hazard.png"
@@ -1872,6 +2047,7 @@
     "flavor": "A side-mounted laser tool that continuously feeds exact distance-to-target data to a linked HUD.",
     "tags": ["Attachment", "High-Tier", "Tactical"],
     "baseCost": 410,
+    "supplyCost": 213.2,
     "fits": ["Rifle Heavy Caliber", "Gauss Spikes"],
     "license": "lic_corp_vanguard_optics",
     "image": "img/Icons_Extracted/Attachments/Misc/rangefinder-module-olive-twin-lens.png"
@@ -1883,6 +2059,7 @@
     "flavor": "Detects hidden energy shields and cloaking fields, lighting up when pointed at concealed technology.",
     "tags": ["Attachment", "Cutting-Edge", "Tactical"],
     "baseCost": 260,
+    "supplyCost": 135.72,
     "fits": ["Gauss Spikes", "Heavy Gauss Slugs"],
     "license": "lic_pro_zastava_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/sensor-scanner-module-grey-blue.png"
@@ -1894,6 +2071,7 @@
     "flavor": "An incredibly loud, pre-recorded audio deterrent speaker. Mostly just annoys people.",
     "tags": ["Attachment", "Surplus", "Tactical"],
     "baseCost": 125,
+    "supplyCost": 65.25,
     "fits": ["Pistol Light Caliber", "Thermal Battery"],
     "license": "lic_corp_omni_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/siren-mallcop-black-red-blue.png"
@@ -1905,6 +2083,7 @@
     "flavor": "A cracked chemical glowstick hastily bound to a rail mount. Good for about six hours.",
     "tags": ["Attachment", "Surplus", "Old", "Tactical"],
     "baseCost": 13,
+    "supplyCost": 6.89,
     "fits": ["Scatter Shells", "Pistol Light Caliber"],
     "license": "lic_start_barrels",
     "image": "img/Icons_Extracted/Attachments/Misc/glowstick-ducttaped-brown-orange.png"
@@ -1916,6 +2095,7 @@
     "flavor": "A passive scanner that highlights recent organic footprints and blood trails.",
     "tags": ["Attachment", "Cutting-Edge", "Tactical"],
     "baseCost": 380,
+    "supplyCost": 201.4,
     "fits": ["Tessier-Ashpool Needle-Carbine"],
     "license": "lic_edge_tessier_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/bioscanner-purple-pink-alien.png"
@@ -1927,6 +2107,7 @@
     "flavor": "A bulky transceiver that communicates with station security IFF tags to prevent friendly fire.",
     "tags": ["Attachment", "Standard", "Tactical"],
     "baseCost": 310,
+    "supplyCost": 163.68,
     "fits": ["Autocannon Shells", "Flak Canisters"],
     "license": "lic_edge_blackwood_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/scanner-friend-foe-olive-twin-light.png"
@@ -1938,6 +2119,7 @@
     "flavor": "A thick, threaded tube that marginally quiets the report of light kinetic rounds.",
     "tags": ["Attachment", "Standard", "Barrel"],
     "baseCost": 100,
+    "supplyCost": 59,
     "fits": ["Rifle Light Caliber", "Pistol Light Caliber"],
     "license": "lic_corp_aulin_optics",
     "image": "img/Icons_Extracted/Attachments/Misc/suppressor-black-cylindrical.png"
@@ -1949,6 +2131,7 @@
     "flavor": "Vents expanding gasses aggressively to the sides, reducing recoil but deafening the user.",
     "tags": ["Attachment", "Standard", "Barrel"],
     "baseCost": 110,
+    "supplyCost": 65.34,
     "fits": ["Rifle Heavy Caliber", "Pistol Heavy Caliber"],
     "license": "lic_corp_vanguard_rotary",
     "image": "img/Icons_Extracted/Attachments/Misc/muzzle-brake-compensator.png"
@@ -1960,6 +2143,7 @@
     "flavor": "An elongated crystal emitter that tightly focuses thermal energy for increased effective range.",
     "tags": ["Attachment", "High-Tier", "Barrel"],
     "baseCost": 49,
+    "supplyCost": 29.01,
     "fits": ["Thermal Battery"],
     "license": "lic_corp_stellaris_optics",
     "image": "img/Icons_Extracted/Attachments/Misc/focusing-lens-teal-crystal-barrel.png"
@@ -1971,6 +2155,7 @@
     "flavor": "A vented thermal jacket that rapidly draws heat away from a blistering plasma nozzle.",
     "tags": ["Attachment", "High-Tier", "Barrel"],
     "baseCost": 115,
+    "supplyCost": 68.31,
     "fits": ["Plasma Cartridge", "Heavy Plasma Canisters"],
     "license": "lic_pro_kodiak",
     "image": "img/Icons_Extracted/Attachments/Misc/barrel-heatsink-orange-grey.png"
@@ -1982,6 +2167,7 @@
     "flavor": "Adds an extra set of electromagnets to the end of the barrel, increasing projectile velocity.",
     "tags": ["Attachment", "High-Tier", "Barrel"],
     "baseCost": 130,
+    "supplyCost": 77.22,
     "fits": ["Gauss Spikes"],
     "license": "lic_pro_zastava_optics",
     "image": "img/Icons_Extracted/Attachments/Misc/barrel-energy-coil-blue-grey.png"
@@ -1993,6 +2179,7 @@
     "flavor": "A dangerously modified, hacked-off piece of scrap metal that drastically widens a scatter shell's spread.",
     "tags": ["Attachment", "Surplus", "Old", "Barrel"],
     "baseCost": 23,
+    "supplyCost": 13.71,
     "fits": ["Scatter Shells"],
     "license": "lic_start_barrels",
     "image": "img/Icons_Extracted/Attachments/Misc/choke-sawed-off-rusty-vented.png"
@@ -2004,6 +2191,7 @@
     "flavor": "A cheap, slotted cone that prevents the weapon's muzzle flash from blinding the shooter in dark areas.",
     "tags": ["Attachment", "Surplus", "Barrel"],
     "baseCost": 160,
+    "supplyCost": 95.36,
     "fits": ["Pistol Light Caliber", "Scatter Shells"],
     "license": "lic_corp_omni_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/flash-hider-black-slotted.png"
@@ -2015,6 +2203,7 @@
     "flavor": "An incredibly thick, fluted steel barrel designed to survive thousands of rounds of sustained cyclic fire.",
     "tags": ["Attachment", "Standard", "Barrel"],
     "baseCost": 340,
+    "supplyCost": 199.24,
     "fits": ["Autocannon Shells"],
     "license": "lic_edge_blackwood_mods",
     "image": "img/Icons_Extracted/Attachments/Misc/barrel-fluted-silver-ribbed.png"
@@ -2026,6 +2215,7 @@
     "flavor": "A flared, archaic funnel attachment designed purely to make the weapon sound more terrifying.",
     "tags": ["Attachment", "Surplus", "Barrel"],
     "baseCost": 30,
+    "supplyCost": 17.52,
     "fits": ["Rifle Heavy Caliber", "Scatter Shells"],
     "license": "lic_start_barrels",
     "image": "img/Icons_Extracted/Attachments/Misc/compensator-worn-silver-vented.png"
@@ -2037,6 +2227,7 @@
     "flavor": "An internal barrel sleeve coated in a proprietary zero-friction compound.",
     "tags": ["Attachment", "Cutting-Edge", "Barrel"],
     "baseCost": 290,
+    "supplyCost": 169.94,
     "fits": ["Tessier-Ashpool Needle-Carbine"],
     "license": "lic_edge_tessier_optics",
     "image": "img/Icons_Extracted/Attachments/Misc/barrel-energy-tech-grey-wired.png"
@@ -2048,6 +2239,7 @@
     "flavor": "A reliable, battery-powered emitter that projects a crisp targeting reticle onto a pane of hardened glass.",
     "tags": ["Attachment", "Standard", "Sight"],
     "baseCost": 95,
+    "supplyCost": 47.31,
     "fits": ["Rifle Light Caliber", "Scatter Shells"],
     "license": "lic_corp_aulin_optics",
     "image": "img/Icons_Extracted/Attachments/Optics/sight-holographic-boxy-tan.png"
@@ -2059,6 +2251,7 @@
     "flavor": "A rugged, fixed-magnification ACOG-style scope built to withstand the punishing recoil of heavy kinetic rifles.",
     "tags": ["Attachment", "Standard", "Sight"],
     "baseCost": 340,
+    "supplyCost": 169.32,
     "fits": ["Rifle Heavy Caliber"],
     "license": "lic_corp_vanguard_optics",
     "image": "img/Icons_Extracted/Attachments/Optics/scope-acog-tan-trijicon-style-black.png"
@@ -2070,6 +2263,7 @@
     "flavor": "A high-end optical sensor that highlights organic heat signatures in bright contrast against cold station corridors.",
     "tags": ["Attachment", "High-Tier", "Sight"],
     "baseCost": 70,
+    "supplyCost": 34.86,
     "fits": ["Rifle Light Caliber", "Thermal Battery", "Plasma Cartridge"],
     "license": "lic_corp_stellaris_optics",
     "image": "img/Icons_Extracted/Attachments/Optics/scope-thermal-digital-black.png"
@@ -2081,6 +2275,7 @@
     "flavor": "Crude metal posts painted with a highly radioactive, luminous isotope. They glow brightly in the dark, but might cause long-term health issues.",
     "tags": ["Attachment", "Surplus", "Old", "Sight"],
     "baseCost": 34,
+    "supplyCost": 16.8,
     "fits": ["Pistol Light Caliber", "Scatter Shells"],
     "license": "lic_start_sights",
     "image": "img/Icons_Extracted/Attachments/Optics/sight-reflex-red-dot-black.png"
@@ -2092,6 +2287,7 @@
     "flavor": "A heavy, specialized sniper scope that pulses micro-x-rays to outline targets hiding behind thin starship bulkheads.",
     "tags": ["Attachment", "High-Tier", "Sight"],
     "baseCost": 185,
+    "supplyCost": 91.39,
     "fits": ["Gauss Spikes", "Heavy Gauss Slugs"],
     "license": "lic_pro_zastava_optics",
     "image": "img/Icons_Extracted/Attachments/Optics/scope-variable-zoom-black.png"
@@ -2103,6 +2299,7 @@
     "flavor": "Lacks a physical glass lens entirely; instead, it wirelessly beams a targeting reticle directly into the user's cybernetic optic nerve.",
     "tags": ["Attachment", "Cutting-Edge", "Sight"],
     "baseCost": 430,
+    "supplyCost": 213.28,
     "fits": ["Tessier-Ashpool Needle-Carbine", "Tessier-Ashpool Micro-Emitter"],
     "license": "lic_edge_tessier_optics",
     "image": "img/Icons_Extracted/Attachments/Optics/sight-smart-tech-blue-hud.png"
@@ -2114,6 +2311,7 @@
     "flavor": "A cheap, mass-produced plastic red-dot. Prone to losing its zero if bumped against a wall.",
     "tags": ["Attachment", "Surplus", "Sight"],
     "baseCost": 135,
+    "supplyCost": 66.96,
     "fits": ["Pistol Light Caliber", "Rifle Light Caliber"],
     "license": "lic_corp_omni_mods",
     "image": "img/Icons_Extracted/Attachments/Optics/sight-reflex-open-black.png"
@@ -2125,6 +2323,7 @@
     "flavor": "A massive, long-range optic featuring an onboard micro-computer that automatically calculates bullet drop and atmospheric density.",
     "tags": ["Attachment", "High-Tier", "Sight"],
     "baseCost": 115,
+    "supplyCost": 57.73,
     "fits": ["Rifle Heavy Caliber", "Gauss Spikes"],
     "license": "lic_pro_kodiak_mods",
     "image": "img/Icons_Extracted/Attachments/Optics/scope-variable-leupold-style-black.png"
@@ -2136,6 +2335,7 @@
     "flavor": "A sleek optic that digitally syncs with the weapon's magazine, displaying a floating ammo counter right beside the crosshairs.",
     "tags": ["Attachment", "High-Tier", "Sight"],
     "baseCost": 250,
+    "supplyCost": 126,
     "fits": ["Rifle Light Caliber", "Pistol Heavy Caliber"],
     "license": "lic_edge_kinetic",
     "image": "img/Icons_Extracted/Attachments/Optics/sight-reflex-compact-black.png"
@@ -2147,6 +2347,7 @@
     "flavor": "A tube-style optic that gathers ambient starlight or emergency station lighting and amplifies it into daytime visibility.",
     "tags": ["Attachment", "Standard", "Sight"],
     "baseCost": 310,
+    "supplyCost": 155.62,
     "fits": ["Rifle Light Caliber", "Scatter Shells"],
     "license": "lic_corp_vanguard_optics",
     "image": "img/Icons_Extracted/Attachments/Optics/scope-night-vision-blue-lens.png"
@@ -2158,6 +2359,7 @@
     "flavor": "A miniaturized holographic dot sight designed specifically to sit flush on the slide of a sidearm.",
     "tags": ["Attachment", "Standard", "Sight"],
     "baseCost": 100,
+    "supplyCost": 50,
     "fits": ["Pistol Light Caliber", "Pistol Heavy Caliber"],
     "license": "lic_corp_aulin_optics",
     "image": "img/Icons_Extracted/Attachments/Optics/sight-micro-reflex-black.png"
@@ -2169,6 +2371,7 @@
     "flavor": "Heavy-duty, oversized iron sights designed for rapid target acquisition in claustrophobic ship-boarding actions.",
     "tags": ["Attachment", "Standard", "Sight"],
     "baseCost": 230,
+    "supplyCost": 115,
     "fits": ["Scatter Shells"],
     "license": "lic_corp_vanguard_optics",
     "image": "img/Icons_Extracted/Attachments/Optics/sight-magnifier-flip-black.png"
@@ -2180,6 +2383,7 @@
     "flavor": "An extreme long-range scope equipped with polarizing filters to prevent the user from being blinded by solar flares.",
     "tags": ["Attachment", "High-Tier", "Sight"],
     "baseCost": 80,
+    "supplyCost": 39.84,
     "fits": ["Thermal Battery", "Plasma Cartridge"],
     "license": "lic_corp_stellaris_optics",
     "image": "img/Icons_Extracted/Attachments/Optics/scope-tactical-blue-gold-lens.png"
@@ -2191,6 +2395,7 @@
     "flavor": "Literally just a piece of scrap copper piping welded onto a rail mount. It narrows your field of view, which technically helps you focus.",
     "tags": ["Attachment", "Surplus", "Old", "Sight"],
     "baseCost": 30,
+    "supplyCost": 14.94,
     "fits": ["Rifle Light Caliber", "Scatter Shells"],
     "license": "lic_start_sights",
     "image": "img/Icons_Extracted/Attachments/Optics/sight-welded-tube-rusty-reddot.png"
@@ -2202,6 +2407,7 @@
     "flavor": "A bulky, dial-operated scope that allows the user to cycle between thermal, night-vision, and electromagnetic viewing modes.",
     "tags": ["Attachment", "High-Tier", "Sight"],
     "baseCost": 200,
+    "supplyCost": 99.6,
     "fits": ["Gauss Spikes", "Heavy Gauss Slugs", "Rifle Heavy Caliber"],
     "license": "lic_pro_zastava_optics",
     "image": "img/Icons_Extracted/Attachments/Optics/scope-night-vision-monocular-black.png"
@@ -2213,6 +2419,7 @@
     "flavor": "Utilizing a localized micro-processor, this sight projects a ghost-reticle showing exactly where a moving target will be in 0.5 seconds.",
     "tags": ["Attachment", "Cutting-Edge", "Sight"],
     "baseCost": 470,
+    "supplyCost": 233.12,
     "fits": ["Tessier-Ashpool Needle-Carbine"],
     "license": "lic_edge_tessier_optics",
     "image": "img/Icons_Extracted/Attachments/Optics/sight-holographic-eotech-style-black.png"
@@ -2224,6 +2431,7 @@
     "flavor": "An even cheaper red-dot variant. The battery life is abysmal, and the dot itself is notoriously blurry.",
     "tags": ["Attachment", "Surplus", "Sight"],
     "baseCost": 65,
+    "supplyCost": 32.24,
     "fits": ["Pistol Light Caliber"],
     "license": "lic_corp_omni",
     "image": "img/Icons_Extracted/Attachments/Optics/sight-reflex-amber-dot-black.png"
@@ -2235,6 +2443,7 @@
     "flavor": "An absurdly over-engineered targeting scope that paints targets with a high-frequency laser meant to guide in ship-to-surface ordinance.",
     "tags": ["Attachment", "High-Tier", "Sight"],
     "baseCost": 155,
+    "supplyCost": 78.74,
     "fits": ["Mortar Shells", "High-Explosive Rockets", "Autocannon Shells"],
     "license": "lic_pro_kodiak_mods",
     "image": "img/Icons_Extracted/Attachments/Optics/scope-rangefinder-tan-amber.png"
@@ -2246,6 +2455,7 @@
     "flavor": "A scope that monitors the user's pupil dilation and micro-movements, automatically adjusting the zoom level based on where they are looking.",
     "tags": ["Attachment", "High-Tier", "Sight"],
     "baseCost": 320,
+    "supplyCost": 161.92,
     "fits": ["Rifle Light Caliber", "Rifle Heavy Caliber"],
     "license": "lic_edge_kinetic",
     "image": "img/Icons_Extracted/Attachments/Optics/scope-acog-style-orange-lens.png"
@@ -2257,6 +2467,7 @@
     "flavor": "A clunky, heavily armored optical array required to properly aim mortar tubes and flak cannons over long distances.",
     "tags": ["Attachment", "Standard", "Sight"],
     "baseCost": 380,
+    "supplyCost": 154.28,
     "fits": ["Mortar Shells", "Flak Canisters"],
     "license": "lic_edge_blackwood_mods",
     "image": "img/Icons_Extracted/Attachments/Optics/scope-tan-orange-lens.png"
@@ -2268,6 +2479,7 @@
     "flavor": "A heavy, rugged acetylene-equivalent torch used for patching bulkheads or cutting through derelict ship plating.",
     "tags": ["Tool", "Standard", "Repair"],
     "baseCost": 19,
+    "supplyCost": 9.61,
     "license": "lic_start_tools",
     "image": "img/Icons_Extracted/Tools/welding-torch-orange-black-flame.png"
   },
@@ -2278,6 +2490,7 @@
     "flavor": "A bulky, two-handed cutting rig salvaged from an old mining mech. Ugly, but cuts through starship hulls like butter.",
     "tags": ["Tool", "Surplus", "Salvage"],
     "baseCost": 29,
+    "supplyCost": 14.67,
     "license": "lic_start_salvage_rigs",
     "image": "img/Icons_Extracted/Tools/plasma-cutter-blue-silver-arc.png"
   },
@@ -2288,6 +2501,7 @@
     "flavor": "A heavy, motorized wrench capable of torqueing industrial bolts. Can double as a blunt weapon in a pinch.",
     "tags": ["Tool", "Standard", "Repair"],
     "baseCost": 14,
+    "supplyCost": 7.06,
     "license": "lic_start_tools",
     "image": "img/Icons_Extracted/Tools/fusion-spanner-wrench-glowing-cell.png"
   },
@@ -2298,6 +2512,7 @@
     "flavor": "A heavy rotary drill designed to extract deep mineral samples from asteroids.",
     "tags": ["Tool", "Standard", "Mining"],
     "baseCost": 41,
+    "supplyCost": 20.66,
     "license": "lic_start_salvage_rigs",
     "image": "img/Icons_Extracted/Tools/core-sampler-drill-black-auger.png"
   },
@@ -2308,6 +2523,7 @@
     "flavor": "A magnetic belt-mounted spool of high-tensile carbon cable used to prevent drifting into the void during exterior repairs.",
     "tags": ["Tool", "Standard", "Exploration"],
     "baseCost": 32,
+    "supplyCost": 16.13,
     "license": "lic_start_salvage_rigs",
     "image": "img/Icons_Extracted/Tools/tether-winch-cable-reel-hook.png"
   },
@@ -2318,6 +2534,7 @@
     "flavor": "A handheld emitter that blasts high-frequency sound waves to strip rust and cosmic buildup off metal surfaces.",
     "tags": ["Tool", "Standard", "Salvage"],
     "baseCost": 21,
+    "supplyCost": 10.54,
     "license": "lic_start_tools",
     "image": "img/Icons_Extracted/Tools/rust-remover-sonic-emitter-dish.png"
   },
@@ -2328,6 +2545,7 @@
     "flavor": "A heavy, dented power box meant for jump-starting dead airlocks. Smells faintly of ozone and burnt plastic.",
     "tags": ["Tool", "Surplus", "Repair"],
     "baseCost": 43,
+    "supplyCost": 21.59,
     "license": "lic_start_power_tools",
     "image": "img/Icons_Extracted/Tools/micro-generator-tan-gauges-coils.png"
   },
@@ -2338,6 +2556,7 @@
     "flavor": "A sleek, high-precision micro-welder favored by station engineers for delicate circuit-board and cybernetic repairs.",
     "tags": ["Tool", "High-Tier", "Repair"],
     "baseCost": 210,
+    "supplyCost": 105,
     "license": "lic_corp_diagnostics",
     "image": "img/Icons_Extracted/Tools/laser-welder-blue-grey-pistol.png"
   },
@@ -2348,6 +2567,7 @@
     "flavor": "A high-end, compact device folding out into a dozen different precision screwdrivers, wire strippers, and micro-blades.",
     "tags": ["Tool", "Standard", "Repair"],
     "baseCost": 200,
+    "supplyCost": 100,
     "license": "lic_corp_diagnostics",
     "image": "img/Icons_Extracted/Tools/multitool-pocket-blue-pliers.png"
   },
@@ -2358,6 +2578,7 @@
     "flavor": "An illegal, highly sought-after electronic skeleton key capable of brute-forcing standard corporate cargo locks.",
     "tags": ["Tool", "High-Tier", "Exploration"],
     "baseCost": 260,
+    "supplyCost": 130.52,
     "license": "lic_corp_quasar_scanners",
     "image": "img/Icons_Extracted/Tools/decrypter-circuit-board-probes.png"
   },
@@ -2368,6 +2589,7 @@
     "flavor": "A reliable Geiger counter that clicks aggressively when pointed at unstable reactor cores or unshielded cargo.",
     "tags": ["Tool", "Standard", "Exploration"],
     "baseCost": 125,
+    "supplyCost": 63,
     "license": "lic_corp_quasar_scanners",
     "image": "img/Icons_Extracted/Tools/dosimeter-handheld-black-dial.png"
   },
@@ -2378,6 +2600,7 @@
     "flavor": "A portable sniffer that rapidly samples alien atmospheres for toxins, spores, and breathable oxygen ratios.",
     "tags": ["Tool", "High-Tier", "Exploration"],
     "baseCost": 200,
+    "supplyCost": 100.8,
     "license": "lic_corp_quasar_scanners",
     "image": "img/Icons_Extracted/Tools/biosphere-analyzer-handheld-black.png"
   },
@@ -2388,6 +2611,7 @@
     "flavor": "A flexible fiber-optic snake camera with a digital screen, used for inspecting clogged station vents and engine manifolds.",
     "tags": ["Tool", "Standard", "Repair"],
     "baseCost": 135,
+    "supplyCost": 68.04,
     "license": "lic_corp_quasar_scanners",
     "image": "img/Icons_Extracted/Tools/borescope-handheld-coiled-cable.png"
   },
@@ -2398,6 +2622,7 @@
     "flavor": "A rapid-heating pen tool for soldering microscopic circuitry. Battery powered for field use.",
     "tags": ["Tool", "Standard", "Repair"],
     "baseCost": 115,
+    "supplyCost": 57.5,
     "license": "lic_corp_diagnostics",
     "image": "img/Icons_Extracted/Tools/soldering-iron-blue-flame-tip.png"
   },
@@ -2408,6 +2633,7 @@
     "flavor": "A professional-grade, perfectly calibrated plasma torch. Clean cuts, high heat, and extremely reliable.",
     "tags": ["Tool", "High-Tier", "Salvage"],
     "baseCost": 290,
+    "supplyCost": 145,
     "license": "lic_corp_breach",
     "image": "img/Icons_Extracted/Tools/industrial-plasma-cutter-grey-gold-gauge.png"
   },
@@ -2418,6 +2644,7 @@
     "flavor": "The galactic 'Jaws of Life.' A massive, heavy pneumatic tool meant to force open jammed blast doors.",
     "tags": ["Tool", "Standard", "Salvage"],
     "baseCost": 340,
+    "supplyCost": 170,
     "license": "lic_corp_breach",
     "image": "img/Icons_Extracted/Tools/hydraulic-spreader-yellow-claw.png"
   },
@@ -2428,6 +2655,7 @@
     "flavor": "A loud, heavy kinetic driver used to forcefully anchor hull plates together in a vacuum.",
     "tags": ["Tool", "Standard", "Repair"],
     "baseCost": 220,
+    "supplyCost": 110.44,
     "license": "lic_corp_breach",
     "image": "img/Icons_Extracted/Tools/rivet-gun-grey-pneumatic.png"
   },
@@ -2438,6 +2666,7 @@
     "flavor": "A heavy, blocky multi-tool favored by combat engineers. Features a dedicated pry-bar and kinetic hammer function.",
     "tags": ["Tool", "Standard", "Repair"],
     "baseCost": 160,
+    "supplyCost": 79.36,
     "license": "lic_corp_breach",
     "image": "img/Icons_Extracted/Tools/field-multitool-yellow-black-hazard.png"
   },
@@ -2448,6 +2677,7 @@
     "flavor": "A military-grade external capacitor bank capable of jump-starting a grounded shuttlecraft.",
     "tags": ["Tool", "Standard", "Repair"],
     "baseCost": 250,
+    "supplyCost": 124.5,
     "license": "lic_corp_breach",
     "image": "img/Icons_Extracted/Tools/jump-box-orange-black-cables.png"
   },
@@ -2458,6 +2688,7 @@
     "flavor": "A heavily processed, flavorless slurry containing all essential daily vitamins. Dirt cheap and completely joyless.",
     "tags": ["Survival", "Standard", "Ration"],
     "baseCost": 6,
+    "supplyCost": 2.42,
     "license": "lic_start_rations",
     "image": "img/Icons_Extracted/Survival/paste-tube-silver.png"
   },
@@ -2468,6 +2699,7 @@
     "flavor": "A vacuum-sealed brick of dehydrated textured protein. Highly popular among mercenaries for its long shelf life and tolerable taste.",
     "tags": ["Survival", "Standard", "Ration"],
     "baseCost": 10,
+    "supplyCost": 4.06,
     "license": "lic_start_rations",
     "image": "img/Icons_Extracted/Survival/ration-block-red-foil.png"
   },
@@ -2478,6 +2710,7 @@
     "flavor": "A dense, rock-hard bar of concentrated calories designed to keep an explorer walking for 48 hours on a single bite.",
     "tags": ["Survival", "High-Tier", "Ration"],
     "baseCost": 14,
+    "supplyCost": 5.68,
     "license": "lic_start_rations",
     "image": "img/Icons_Extracted/Survival/survival-bar-tan-foil-wrapped.png"
   },
@@ -2488,6 +2721,7 @@
     "flavor": "A simple, pocket-sized carbon filter that purifies stagnant or mildly toxic ground water on alien worlds.",
     "tags": ["Survival", "Surplus", "Exploration"],
     "baseCost": 7,
+    "supplyCost": 2.81,
     "license": "lic_start_survival",
     "image": "img/Icons_Extracted/Survival/filtration-straw-syringe-blue.png"
   },
@@ -2498,6 +2732,7 @@
     "flavor": "A reusable, spark-emitting block that uses a tiny fusion reaction to instantly ignite kindling in sub-zero environments.",
     "tags": ["Survival", "Standard", "Exploration"],
     "baseCost": 11,
+    "supplyCost": 4.42,
     "license": "lic_start_survival",
     "image": "img/Icons_Extracted/Survival/fire-starter-metal-spark.png"
   },
@@ -2508,6 +2743,7 @@
     "flavor": "A tightly folded square of heat-reflective foil. Essential for surviving a sudden drop in life-support temperatures.",
     "tags": ["Survival", "Standard", "Exploration"],
     "baseCost": 11,
+    "supplyCost": 4.44,
     "license": "lic_start_survival",
     "image": "img/Icons_Extracted/Survival/mylar-blanket-silver-gold-rolled.png"
   },
@@ -2518,6 +2754,7 @@
     "flavor": "A small, pressurized bottle of breathable oxygen. Provides roughly two hours of air for standard hazard masks.",
     "tags": ["Survival", "Standard", "Filter"],
     "baseCost": 40,
+    "supplyCost": 16.08,
     "license": "lic_corp_air_supply",
     "image": "img/Icons_Extracted/Survival/o2-canister-blue-silver-gauge.png"
   },
@@ -2528,6 +2765,7 @@
     "flavor": "A heavy, twin-cylinder tank designed to mount to the back of a space suit for extended extravehicular activities.",
     "tags": ["Survival", "High-Tier", "Filter"],
     "baseCost": 80,
+    "supplyCost": 32.96,
     "license": "lic_corp_air_supply",
     "image": "img/Icons_Extracted/Survival/oxygen-tank-twin-cylinder-hoses.png"
   },
@@ -2538,6 +2776,7 @@
     "flavor": "A dense replacement puck for rebreather masks, capable of scrubbing heavy industrial fumes and caustic spores.",
     "tags": ["Survival", "Standard", "Filter"],
     "baseCost": 33,
+    "supplyCost": 13.53,
     "license": "lic_corp_air_supply",
     "image": "img/Icons_Extracted/Survival/carbon-filter-dark-mesh-cylinder.png"
   },
@@ -2548,6 +2787,7 @@
     "flavor": "A small, hard-plastic lunchbox containing bandages, coagulants, and basic splints.",
     "tags": ["Survival", "Standard", "Medical"],
     "baseCost": 60,
+    "supplyCost": 30,
     "license": "lic_corp_air_supply",
     "image": "img/Icons_Extracted/Survival/trauma-kit-white-red-case.png"
   },
@@ -2558,6 +2798,7 @@
     "flavor": "A heavy, fold-out medical case packed with auto-sutures, synthetic blood, and sterile surgical tools.",
     "tags": ["Survival", "High-Tier", "Medical"],
     "baseCost": 400,
+    "supplyCost": 200.8,
     "license": "lic_edge_unrestricted",
     "image": "img/Icons_Extracted/Survival/surgery-kit-case-open-tools.png"
   },
@@ -2568,6 +2809,7 @@
     "flavor": "Also known as 'Rad-Flush.' A harsh, painful chemical cocktail that rapidly purges radioactive isotopes from the bloodstream.",
     "tags": ["Survival", "Standard", "Medical"],
     "baseCost": 230,
+    "supplyCost": 114.54,
     "license": "lic_edge_unrestricted",
     "image": "img/Icons_Extracted/Survival/rad-injector-chrome-orange-gun.png"
   },
@@ -2578,6 +2820,7 @@
     "flavor": "A pressurized aerosol can that sprays a fast-hardening, sterile foam over severe burns and lacerations.",
     "tags": ["Survival", "Standard", "Medical"],
     "baseCost": 170,
+    "supplyCost": 85,
     "license": "lic_edge_unrestricted",
     "image": "img/Icons_Extracted/Survival/skin-salve-spray-bottle-gel-tube.png"
   },
@@ -2588,6 +2831,7 @@
     "flavor": "A heavy, compressed disc that pops open into a rigid, fully pressurized 2-person survival tent with its own micro-atmosphere.",
     "tags": ["Survival", "High-Tier", "Exploration"],
     "baseCost": 95,
+    "supplyCost": 47.88,
     "license": "lic_pro_kessler_camp",
     "image": "img/Icons_Extracted/Survival/bivouac-backpack-orange-grey-bedroll.png"
   },
@@ -2598,6 +2842,7 @@
     "flavor": "A durable, battery-powered radio box that broadcasts an encrypted SOS on all known galactic frequencies when activated.",
     "tags": ["Survival", "Standard", "Exploration"],
     "baseCost": 50,
+    "supplyCost": 25.2,
     "license": "lic_pro_kessler_camp",
     "image": "img/Icons_Extracted/Survival/geo-locator-yellow-black-radio.png"
   }

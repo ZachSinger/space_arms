@@ -64,15 +64,12 @@
 <div class="help" id="help"></div>
 <div class="wrap"><table><thead id="head"></thead><tbody id="body"></tbody></table></div>
 <script type="module">
-import { supplyRatioFor } from "/js/logic/Market.js";
 const state = { items: [], original: [], licenses: new Map(), rules: null, sort: { key: "level", desc: false }, picked: new Set(), maxProfit: 1 };
 
 const money = (value) => Math.round(value).toLocaleString("en-US");
-const exactMoney = (value) => value.toLocaleString("en-US", { maximumFractionDigits: 2 });
 const levelOf = (item) => state.licenses.get(item.license)?.level ?? null;
 const perCrate = (item) => Math.floor(state.rules.crateUnits / item.boxSize) || 0;
-const share = (item) => supplyRatioFor(String(item.id ?? ""));
-const supplierPrice = (item) => item.baseCost * share(item);
+const supplierPrice = (item) => item.supplyCost;
 const crateValue = (item) => perCrate(item) * item.baseCost;
 // Same rounding as Market.getSupplyCost: once for the whole order, not per item.
 const crateCost = (item) => Math.max(1, Math.round(supplierPrice(item) * perCrate(item)));
@@ -87,7 +84,7 @@ const COLUMNS = [
   { key: "name", label: "Item", left: true, sort: (item) => item.name },
   { key: "level", label: "Unlocks at", left: true, edit: true, sort: (item) => (levelOf(item) ?? 999) * 1000 + item.baseCost / 1e6 },
   { key: "baseCost", label: "Base price", edit: true, sort: (item) => item.baseCost },
-  { key: "supplier", label: "Supplier price", sort: supplierPrice },
+  { key: "supplyCost", label: "Supplier price", edit: true, sort: supplierPrice },
   { key: "boxSize", label: "Item size", edit: true, sort: (item) => item.boxSize },
   { key: "perCrate", label: "Crate holds", sort: perCrate },
   { key: "crateValue", label: "Crate sells for", sort: crateValue },
@@ -103,11 +100,9 @@ async function load() {
   state.original = data.items.map((item) => JSON.stringify(item));
   const types = [...new Set(state.items.map(typeOf))].filter(Boolean).sort();
   document.getElementById("typeFilter").innerHTML = '<option value="">All item types</option>' + types.map((type) => `<option>${escape(type)}</option>`).join("");
-  const percent = (ratio) => Math.round(ratio * 100);
   document.getElementById("help").innerHTML =
     `You can change the <b>yellow</b> columns. ` +
     `A crate has room for ${state.rules.crateUnits}, so an item of size 4 fits 5 per crate. One shelf space holds the same as one crate. ` +
-    `Supplier price is ${percent(state.rules.minSupply)}-${percent(state.rules.maxSupply)}% of base price, fixed per item. ` +
     `Profit is selling a full crate at base price, minus what the supplier charges for it.`;
   render();
   setStatus(`${state.items.length} items.`);
@@ -161,7 +156,8 @@ function cell(item, index, key) {
         .map((license) => `<option value="${escape(license.id)}" ${license.id === item.license ? "selected" : ""}>Lv ${license.level ?? "?"}: ${escape(license.name)}</option>`);
       return `<td><select class="contract" data-edit="${index}" data-key="license">${options.join("")}</select></td>`;
     }
-    case "baseCost": return `<td class="num"><input type="number" class="price" data-edit="${index}" data-key="baseCost" value="${item.baseCost}"></td>`;
+    case "baseCost":
+    case "supplyCost": return `<td class="num"><input type="number" step="any" class="price" data-edit="${index}" data-key="${key}" value="${item[key]}"></td>`;
     case "boxSize": {
       const options = state.rules.boxSizes.map((size) => `<option ${size === item.boxSize ? "selected" : ""}>${size}</option>`);
       return `<td class="num"><select data-edit="${index}" data-key="boxSize">${options.join("")}</select></td>`;
@@ -171,7 +167,6 @@ function cell(item, index, key) {
 }
 
 function outputHtml(item, key) {
-  if (key === "supplier") return exactMoney(supplierPrice(item));
   if (key === "perCrate") return `${perCrate(item)}`;
   if (key === "crateValue") return money(crateValue(item));
   if (key === "crateCost") return money(crateCost(item));
@@ -225,7 +220,7 @@ function applyEdit(target) {
   const key = target.dataset.key;
   const value = key === "license" ? target.value : Number(target.value);
   state.items[index][key] = value;
-  target.classList.toggle("invalid", key === "baseCost" && !(value > 0));
+  target.classList.toggle("invalid", key !== "license" && key !== "boxSize" && !(value > 0));
   refreshRow(index);
   refreshButtons();
 }

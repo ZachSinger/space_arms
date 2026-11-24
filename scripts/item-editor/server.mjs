@@ -10,7 +10,6 @@ import { readFile, writeFile } from "node:fs/promises";
 import { exec } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { MIN_SUPPLY_RATIO, MAX_SUPPLY_RATIO } from "../../js/logic/Market.js";
 import { CRATE_CAPACITY_UNITS } from "../../js/logic/ShelfSlotStocking.js";
 
 const PORT = 5180;
@@ -52,6 +51,7 @@ export function problemsIn(items, licenseIds) {
     seen.add(item?.id);
     if (typeof item?.name !== "string" || !item.name.trim()) problems.push(`${label}: needs a name.`);
     if (!Number.isFinite(item?.baseCost) || item.baseCost <= 0) problems.push(`${label}: base price must be above 0.`);
+    if (!Number.isFinite(item?.supplyCost) || item.supplyCost <= 0) problems.push(`${label}: supplier price must be above 0.`);
     if (!BOX_SIZES.includes(item?.boxSize)) problems.push(`${label}: box size must be one of ${BOX_SIZES.join(", ")}.`);
     if (!licenseIds.has(item?.license)) problems.push(`${label}: unknown contract "${item?.license}".`);
     if (!Array.isArray(item?.tags) || !item.tags.length) problems.push(`${label}: needs at least one tag.`);
@@ -84,7 +84,7 @@ async function handle(request, response) {
     return send(response, 200, {
       items,
       licenses: licenses.map(({ id, name, requiredShopLevel }) => ({ id, name, level: requiredShopLevel ?? null })),
-      rules: { crateUnits: CRATE_CAPACITY_UNITS, boxSizes: BOX_SIZES, minSupply: MIN_SUPPLY_RATIO, maxSupply: MAX_SUPPLY_RATIO },
+      rules: { crateUnits: CRATE_CAPACITY_UNITS, boxSizes: BOX_SIZES },
     });
   }
   if (request.method === "POST" && url.pathname === "/api/items") {

@@ -12,13 +12,12 @@ import { getStoreRepPool, CUSTOMER_POOL_TUNING } from "../js/logic/CustomerPooli
 import { ZONES } from "../js/logic/RoomLayout.js";
 import { getFixtureType, FIXTURE_TYPES, getFixtureResaleValue } from "../js/logic/FixtureLayout.js";
 import { getCrateOrderQuantity, DELIVERY_FEE } from "../js/logic/SupplyOrder.js";
-import { MIN_SUPPLY_RATIO, MAX_SUPPLY_RATIO } from "../js/logic/Market.js";
 import { EMPLOYEE_HIRE_COST, EMPLOYEE_BASE_WAGE } from "../js/logic/EmployeeTraining.js";
 
 // --- Player model (ideal-but-plausible play; every result below depends on these) ---
 const STOCK_SCALER = CUSTOMER_POOL_TUNING.stockScalerMaximum; // shelves kept full
 const AVG_UNITS_PER_CUSTOMER = 2.5; // between neutral (2) and faction (3-3.5) buyers
-const AVG_SUPPLY_RATIO = (MIN_SUPPLY_RATIO + MAX_SUPPLY_RATIO) / 2; // avg crate cost vs base
+const AVG_SUPPLY_RATIO = items.reduce((sum, item) => sum + item.supplyCost / item.baseCost, 0) / items.length; // avg crate cost vs base
 const SELL_AT = 1.0; // player prices at market, which hovers around base cost
 // The player keeps only their most valuable item kinds on the shelves.
 const STOCKED_ITEM_KINDS = 24;

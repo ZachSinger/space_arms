@@ -468,7 +468,6 @@ test("invalid saved inventory and economy are rejected before restoration", () =
     (data) => { data.playerState.marketPricePinnedItems = ["wpn_rif_01"]; },
     (data) => { data.market.day = 0; },
     (data) => { data.market.prices.wpn_rif_01 = 100000; },
-    (data) => { data.market.supplyRatios.wpn_rif_01 = 0; },
     (data) => { data.fixtures[0].placements[0].quantity = 99; },
     (data) => { data.fixtures[0].placements.push({ ...data.fixtures[0].placements[0] }); },
     (data) => { data.fixtures[0].placements[0].itemId = "unknown"; },

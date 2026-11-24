@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Market, DAILY_SWING, MIN_BASE_RATIO, MAX_BASE_RATIO, MIN_SUPPLY_RATIO, MAX_SUPPLY_RATIO } from "../js/logic/Market.js";
+import { Market, DAILY_SWING, MIN_BASE_RATIO, MAX_BASE_RATIO } from "../js/logic/Market.js";
 import { isMoney, roundMoney } from "../js/logic/Money.js";
 
 const items = [{ id: "rifle", baseCost: 1000 }];
@@ -34,18 +34,14 @@ test("price stays within the band around the hidden base", () => {
   assert.equal(down.getPrice("rifle"), 1000 * MIN_BASE_RATIO);
 });
 
-test("supply cost uses a hidden per-item rate that is the same every game and every day", () => {
-  const twoItems = [...items, { id: "pistol", baseCost: 1000 }];
-  const first = new Market(twoItems, () => 0);
-  const second = new Market(twoItems, () => 0.99);
-  for (const id of ["rifle", "pistol"]) {
-    const cost = first.getSupplyCost(id, 5);
-    assert.ok(cost >= 1000 * MIN_SUPPLY_RATIO * 5 && cost <= 1000 * MAX_SUPPLY_RATIO * 5);
-    assert.equal(second.getSupplyCost(id, 5), cost);
-  }
-  assert.notEqual(first.getSupplyCost("rifle", 5), first.getSupplyCost("pistol", 5));
+test("supply cost is the item's supplier price, the same every game and every day", () => {
+  const rifle = [{ id: "rifle", baseCost: 1000, supplyCost: 512.4 }];
+  const first = new Market(rifle, () => 0);
+  const second = new Market(rifle, () => 0.99);
+  assert.equal(first.getSupplyCost("rifle", 5), 2562);
+  assert.equal(second.getSupplyCost("rifle", 5), 2562);
   first.advanceDay();
-  assert.equal(first.getSupplyCost("rifle", 5), second.getSupplyCost("rifle", 5));
+  assert.equal(first.getSupplyCost("rifle", 5), 2562);
 });
 
 test("restoring a market keeps its prices, supplier rates, and subsequent price changes", () => {

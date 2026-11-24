@@ -5,7 +5,7 @@ import employeeRoster from "../../data/Employees.json" with { type: "json" };
 import { EMPLOYEE_JOB_IDS } from "../logic/EmployeeJobs.js";
 import { MAX_EMPLOYEE_SKILL_LEVEL } from "../logic/EmployeeTraining.js";
 import { TILE_SIZE, ZONES, getAuthoredGridSize } from "../logic/RoomLayout.js";
-import { MIN_BASE_RATIO, MAX_BASE_RATIO, MIN_SUPPLY_RATIO, MAX_SUPPLY_RATIO } from "../logic/Market.js";
+import { MIN_BASE_RATIO, MAX_BASE_RATIO } from "../logic/Market.js";
 import { THROW_ACCELERATION_MS } from "../logic/Crate.js";
 import { FLOOR_STACK_MAX, MAX_CARRIED_CRATES } from "../logic/CrateStack.js";
 import { isValidLedgerData } from "../logic/DayLedger.js";
@@ -136,19 +136,15 @@ export function checkShopSave(data, database) {
   if (player.goBacks !== undefined) stockCapacity(player.goBacks, Infinity);
   const market = data.market;
   requireSave(isRecord(market) && integer(market.day, 1) &&
-    isRecord(market.prices) && isRecord(market.supplyRatios), "missing market state.");
-  requireSave(Object.keys(market.prices).length === items.length &&
-    Object.keys(market.supplyRatios).length === items.length, "incomplete market prices.");
+    isRecord(market.prices), "missing market state.");
+  requireSave(Object.keys(market.prices).length === items.length, "incomplete market prices.");
   for (const item of items) {
     const price = market.prices[item.id];
-    const ratio = market.supplyRatios[item.id];
     // Whole-credit saves can sit just outside today's cent-rounded bounds.
     requireSave(isMoney(price) && price >= 1 &&
       price >= Math.max(1, Math.min(Math.round(item.baseCost * MIN_BASE_RATIO), roundMoney(item.baseCost * MIN_BASE_RATIO))) &&
       price <= Math.max(1, Math.max(Math.round(item.baseCost * MAX_BASE_RATIO), roundMoney(item.baseCost * MAX_BASE_RATIO))),
     `invalid market price for ${item.id}.`);
-    requireSave(Number.isFinite(ratio) && ratio >= MIN_SUPPLY_RATIO && ratio <= MAX_SUPPLY_RATIO,
-      `invalid supplier rate for ${item.id}.`);
   }
   for (const itemId of player.marketPricePinnedItems ?? []) {
     requireSave(player.storePrices[itemId] === market.prices[itemId],
