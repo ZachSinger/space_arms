@@ -77,6 +77,7 @@ const crateValue = (item) => perCrate(item) * item.baseCost;
 const crateCost = (item) => Math.max(1, Math.round(supplierPrice(item) * perCrate(item)));
 const crateProfit = (item) => crateValue(item) - crateCost(item);
 const crateProfitPercent = (item) => (crateProfit(item) / crateValue(item)) * 100;
+const profitPer20 = (item) => 20 * (item.baseCost - supplierPrice(item));
 const typeOf = (item) => item.tags?.[0] ?? "";
 const kindOf = (item) => item.tags?.[item.tags.length - 1] ?? "";
 
@@ -95,6 +96,7 @@ const COLUMNS = [
   { key: "crateCost", label: "Crate costs", sort: crateCost },
   { key: "crateProfit", label: "Crate profit", sort: crateProfit },
   { key: "crateProfitPercent", label: "Crate profit %", sort: crateProfitPercent },
+  { key: "profitPer20", label: "Profit per 20", sort: profitPer20 },
 ];
 
 async function load() {
@@ -109,7 +111,8 @@ async function load() {
     `You can change the <b>yellow</b> columns. ` +
     `A crate has room for ${state.rules.crateUnits}, so an item of size 4 fits 5 per crate. One shelf space holds the same as one crate. ` +
     `Profit is selling a full crate at base price, minus what the supplier charges for it. ` +
-    `Crate profit % is the percentage of that sale left as profit.`;
+    `Crate profit % is the percentage of that sale left as profit. ` +
+    `Profit per 20 is the profit from selling 20 of the item at base price.`;
   render();
   setStatus(`${state.items.length} items.`);
 }
@@ -177,6 +180,7 @@ function outputHtml(item, key) {
   if (key === "perCrate") return `${perCrate(item)}`;
   if (key === "crateValue") return money(crateValue(item));
   if (key === "crateCost") return money(crateCost(item));
+  if (key === "profitPer20") return profitPer20(item).toLocaleString("en-US", { maximumFractionDigits: 2 });
   const isPercent = key === "crateProfitPercent";
   const profit = isPercent ? crateProfitPercent(item) : crateProfit(item);
   const width = Math.max(0, Math.min(100, isPercent ? profit : (profit / state.maxProfit) * 100));
