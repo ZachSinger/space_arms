@@ -29,8 +29,7 @@ export class CleaningSystem {
     this.trash = new TrashField(shop, (x, y) => this.isOpenTrashSpot(x, y));
     this.dirt = new DirtField(shop, (x, y) => this.isOpenTrashSpot(x, y));
     this.heldTrash = null;
-    // True while the player has the mop out. It appears on the first press at a dirt mark and
-    // goes away when they walk off, turn away, or finish the mark.
+    // The mop window appears on the first press and goes away when the player leaves or finishes.
     this.heldMop = false;
     this.mopAnimation = null;
     this.mopBar = null;
@@ -388,7 +387,7 @@ export class CleaningSystem {
     return clean;
   }
 
-  // Draws an employee's mop; while scrubbing, their arms sweep it back and forth.
+  // Show the mop window only while the employee is scrubbing, not while walking.
   updateStaffMop(holder, delta, scrubbing) {
     const mop = this.staffMops.get(holder);
     if (!mop) return;
@@ -520,7 +519,7 @@ export class CleaningSystem {
     const player = shop.player.sprite;
     const scale = shop.cameraRig.popupScale(player.x, player.y);
     const x = player.x - 24 * scale;
-    const y = player.y - player.displayHeight * player.originY - 12 * scale;
+    const y = this.mopAnimation.top - 10 * scale;
     const g = this.mopBar.clear().setVisible(true);
     g.fillStyle(0x080d1a).fillRoundedRect(x, y, 48 * scale, 8 * scale, 2 * scale);
     g.lineStyle(scale, 0x93a6c4).strokeRoundedRect(x, y, 48 * scale, 8 * scale, 2 * scale);

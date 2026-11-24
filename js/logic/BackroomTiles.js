@@ -1,11 +1,12 @@
 // ==========================================
 // FILE: BackroomTiles.js
 // ==========================================
-// Floor and wall art for the backroom, cut from the BackroomA map painted in Tiled
+// Source tiles for the backroom, cut from the BackroomA map painted in Tiled
 // (img/Tilesets/TiledProject/Tilesets/BackroomA.tmx). Like the sales floor, each game square
 // shows 2x2 of the map's 48px tiles. The back wall's face runs along the top; every other
-// wall is the black border. Floor squares next to a wall get the floor's dark edge, and a
+// wall is the outer border. Floor squares next to a wall get the floor's dark edge, and a
 // striped lip along the bottom wall.
+// RoomArt.js redraws the surfaces while retaining those authored floor edges.
 // The art pack is licensed for local game use only and is never committed (see .gitignore).
 // See also: TileRoom.js (which wall cells exist and drawing them), ShopTiles.js.
 
@@ -40,7 +41,7 @@ export const BACKROOM_TILE_ASSETS = Object.freeze([
 
 /**
  * Art for one backroom wall cell: the wall's face along the top (the row the exit door sits
- * in), and the black border everywhere else, so it always hugs the unlocked area.
+ * in), and the outer border everywhere else, so it always hugs the unlocked area.
  * @param {number} gx
  * @param {number} gy
  * @param {(gx: number, gy: number) => boolean} isOpen - true for cells in an unlocked zone

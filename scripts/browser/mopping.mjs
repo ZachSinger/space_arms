@@ -56,13 +56,17 @@ try {
       height: scene.player.sprite.displayHeight,
       frame: scene.player.sprite.frame.name,
       facing: scene.player.currentFacing,
+      window: scene.cleaningSystem.mopAnimation.window.texture.key,
+      windowVisible: scene.cleaningSystem.mopAnimation.window.visible,
     }));
-    assert.equal(animated.key, "player_mechanic_mopping");
+    assert.equal(animated.key, "player_mechanic");
     assert.equal(animated.width, 64);
     assert.equal(animated.height, 64);
     assert.equal(animated.facing, facing);
     const row = { down: 0, left: 1, right: 2, up: 3 }[facing];
-    assert.ok(animated.frame >= row * 8 && animated.frame < (row + 1) * 8);
+    assert.equal(animated.frame, row * 3 + 1);
+    assert.match(animated.window, /^mop-window-[0-7]$/);
+    assert.equal(animated.windowVisible, true);
     if (index === 0) {
       const phase = await h.game((scene) => {
         scene.setGamePaused(true);
@@ -120,7 +124,8 @@ try {
         actor.currentFacing = facing;
         animation.press(0);
         animation.update(200);
-        if (sprite.texture.key !== `${key}_mopping` || sprite.displayWidth !== 64) {
+        if (sprite.texture.key !== key || sprite.displayWidth !== 64 ||
+            !animation.window.visible || !/^mop-window-[0-7]$/.test(animation.window.texture.key)) {
           throw new Error(`Invalid employee mopping artwork: ${key}/${facing}.`);
         }
       }

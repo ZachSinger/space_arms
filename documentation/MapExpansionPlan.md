@@ -88,19 +88,11 @@ exists" means "already authored in data," not "already rendered."
   sales-floor or backroom expansion after reaching its required Shop Level and
   having enough credits. Purchases are limited to when the store is closed and
   must be made in order; the old free debug unlocks have been removed.
-- Tile art comes from `img/Icons_Extracted/Tileset/` (64 floor/wall tiles,
-  fixed 256×256 grid-sliced from `Sheet1_A.jpg`) and
-  `img/Icons_Extracted/Tileset/Fixtures/` (104 shop fixtures, chroma-key
-  extracted from `Sheet2_A.jpg`). `data/TilesetManifest.json` lists every tile
-  key/path so `boot.js` can bulk-load them without a hand-maintained list.
-  The Sales Floor and its expansion use plain floor and wall tiles cut from the
-  licensed sci-fi tileset in `img/Tilesets/scifi/` (see `js/logic/ShopTiles.js`;
-  local-only, never committed). Debug keys `T` and `H` cycle through its floor and
-  wall styles in-game.
-  **Known issue:** this batch has a visible dark outline baked into every
-  tile, so adjacent floor/wall tiles don't actually tile seamlessly — see
-  `img/prompts/resourceRequest_04_SeamlessTilesetFix.md` for the regeneration
-  request to fix this.
+- `RoomArt.js` creates the sales floor's panelled floor and walls and the backroom's
+  industrial surfaces at startup. They use the existing room layout and preserve the
+  authored doorway lights, entrance mat, and backroom floor edges. The local-only
+  source tiles are loaded through `ShopTiles.js` and `BackroomTiles.js`. Additional
+  tile and fixture images are listed in `data/TilesetManifest.json` and loaded by `boot.js`.
 
 ## Verified working
 

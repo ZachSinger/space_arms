@@ -24,15 +24,7 @@ completed or no longer relevant.
       when it helps (for example, moving several crates between the backroom and shelves).
 - [ ] Add a first-shift tutorial for ordering products, collecting deliveries, stocking
       shelves, and setting prices. Wait until the map and core loop are close to final.
-
-## Art and sound
-
-- [ ] Improve the floor, wall, and room art near the end of the project; Tiled map-making
-      is deferred until then.
-- [ ] Fix the mopping animation (an artist is drawing it). The mop and the back-and-forth
-      sweep should be hand-drawn frames in each character's sprite sheet. Right now the game draws the mop and arms
-      over the character with code while it runs. This applies to the player and every
-      employee, in all four directions.
+- [ ] Finish room map-making in Tiled once the layouts are final.
 
 ## Planned modules after the base shop
 

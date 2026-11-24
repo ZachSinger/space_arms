@@ -134,12 +134,8 @@ export class Employee {
       }
     }
     if (this.isDestroyed) return;
-    if (this.state === "MOPPING") {
-      this.store.cleaning?.updateStaffMop(this, delta, true);
-    } else {
-      this.updateFacing();
-      this.store.cleaning?.updateStaffMop(this, delta, false);
-    }
+    this.updateFacing();
+    this.store.cleaning?.updateStaffMop(this, delta, this.state === "MOPPING");
   }
 
   startNextTask() {
@@ -495,8 +491,7 @@ export class Employee {
     this.finishTask();
   }
 
-  // Each sweep is one stroke of progress, like one press of the player's button. Higher skill
-  // means quicker sweeps, and the arms visibly sweep faster to match.
+  // Each sweep is one stroke of progress; higher skill speeds up the mop window.
   updateMopping(delta) {
     const job = this.currentJob;
     if (job.finishingSweep) {

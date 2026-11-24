@@ -18,6 +18,7 @@ import { InteractionSystem } from "../interaction/InteractionSystem.js";
 import { ModuleHost } from "../modules/GameModules.js";
 import { createHovercartTextures } from "../modules/hovercart/HovercartArt.js";
 import { animateDecorations, createDecorationTextures } from "../world/DecorationArt.js";
+import { ensureRoomArtTextures } from "../world/RoomArt.js";
 import {
   DRONE_TERMINAL_PLATFORM_SPRITE,
   DRONE_TERMINAL_SCREEN_SPRITE,
@@ -185,6 +186,7 @@ export class GameScene extends Phaser.Scene {
   // Room, doors, areas, fixtures, and the walk grid.
   buildMap() {
     // Shop map: the authored tile room (see RoomLayout.js).
+    ensureRoomArtTextures(this);
     this.room = new TileRoom(this);
     this.cameraRig = new CameraRig(this);
 

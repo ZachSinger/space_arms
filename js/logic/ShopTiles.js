@@ -1,11 +1,12 @@
 // ==========================================
 // FILE: ShopTiles.js
 // ==========================================
-// Floor and wall art for the sales floor, cut from the TileSetB map painted in Tiled
-// (img/Tilesets/TiledProject/Maps/TileSetB.tmx). Each game square shows 2x2 of the map's
-// 48px tiles, so the room's pixels are the same size as the characters' (96 sheet px -> 64).
+// Source tiles for the sales floor, cut from the TileSetB map painted in Tiled
+// (img/Tilesets/TiledProject/Maps/TileSetB.tmx). Each game square uses 2x2 of the map's
+// 48px tiles (96 sheet px -> 64).
 // Every wall is the riveted border, except the back wall's lower row, which shows the
 // wall's face with the doors set into it.
+// RoomArt.js redraws the surfaces while retaining the authored door lights and mat.
 // The art pack is licensed for local game use only and is never committed (see .gitignore).
 // See also: TileRoom.js (which wall cells exist and drawing them).
 

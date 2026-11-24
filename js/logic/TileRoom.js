@@ -10,6 +10,7 @@ import {
 } from "./RoomLayout.js";
 import { SHOP_TILES, shopWallStack } from "./ShopTiles.js";
 import { BACKROOM_TILES, backroomFloorArt, backroomWallStack } from "./BackroomTiles.js";
+import { roomArtTexture } from "../world/RoomArt.js";
 
 export class TileRoom {
   constructor(scene) {
@@ -104,8 +105,7 @@ export class TileRoom {
   }
 
   /**
-   * The art for a wall at this cell, bottom layer first: TileSetB's walls on the sales
-   * floor, BackroomA's in the backroom.
+   * Choose the authored wall cell, before applying the room artwork.
    * @returns {string[]}
    */
   wallArtAt(gx, gy) {
@@ -163,7 +163,7 @@ export class TileRoom {
             this.addWall(gx, gy, art);
           } else {
             this.wallCells.get(`${rightColumn},${gy}`).layers.push(
-              this.scene.add.image(x + width / 2, y + TILE_SIZE / 2, art)
+              this.scene.add.image(x + width / 2, y + TILE_SIZE / 2, roomArtTexture(art))
                 .setDisplaySize(width, TILE_SIZE).setDepth(1),
             );
           }
@@ -177,7 +177,7 @@ export class TileRoom {
           : atLeft ? BACKROOM_TILES.floorLeft : atRight ? BACKROOM_TILES.floorRight : BACKROOM_TILES.floor;
         const sourceWidth = width * 96 / TILE_SIZE;
         const cropX = atRight ? 96 - sourceWidth : 0;
-        const image = this.scene.add.image(x - cropX * TILE_SIZE / 96, y, art)
+        const image = this.scene.add.image(x - cropX * TILE_SIZE / 96, y, roomArtTexture(art))
           .setOrigin(0, 0).setDisplaySize(TILE_SIZE, TILE_SIZE)
           .setCrop(cropX, 0, sourceWidth, 96).setDepth(0);
         this.floorCells.set(`${gx},${gy}`, image);
@@ -193,7 +193,7 @@ export class TileRoom {
     for (let gy = zone.gridY; gy < zone.gridY + zone.gridH; gy++) {
       for (let gx = zone.gridX; gx < zone.gridX + zone.gridW; gx++) {
         const image = this.scene.add
-          .image(this.worldX(gx), this.worldY(gy), this.floorArtAt(zone, gx, gy))
+          .image(this.worldX(gx), this.worldY(gy), roomArtTexture(this.floorArtAt(zone, gx, gy)))
           .setDisplaySize(TILE_SIZE, TILE_SIZE)
           .setDepth(0);
         this.floorCells.set(`${gx},${gy}`, image);
@@ -209,7 +209,7 @@ export class TileRoom {
   drawStack(gx, gy, keys, bounds = null) {
     return keys.map((key) => this.scene.add
       .image(bounds ? bounds.x + bounds.width / 2 : this.worldX(gx),
-        bounds ? bounds.y + bounds.height / 2 : this.worldY(gy), key)
+        bounds ? bounds.y + bounds.height / 2 : this.worldY(gy), roomArtTexture(key))
       .setDisplaySize(bounds?.width ?? TILE_SIZE, bounds?.height ?? TILE_SIZE)
       .setDepth(1));
   }

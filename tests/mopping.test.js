@@ -3,7 +3,8 @@ import { test } from "node:test";
 import { CleaningSystem } from "../js/modules/cleaning/CleaningSystem.js";
 import { CLEANING_TUNING } from "../js/modules/cleaning/Litter.js";
 import { randomDirtKind } from "../js/modules/cleaning/DirtField.js";
-import { MopMotion, mopPose } from "../js/modules/cleaning/MopAnimation.js";
+import { MopAnimation, MopMotion, mopWindowFrame } from "../js/modules/cleaning/MopAnimation.js";
+import { ensureMopWindowTextures, mopWindowTexture } from "../js/modules/cleaning/MopWindowArt.js";
 import { Trash } from "../js/state/slices/Trash.js";
 import { AREA } from "../js/world/Areas.js";
 
@@ -164,16 +165,74 @@ test("fast presses produce faster alternating sweeps, and motion settles when pr
   fast.press(800);
   fast.update(700);
   assert.equal(fast.phase, 1);
-  for (const facing of ["up", "down", "left", "right"]) {
-    assert.notDeepEqual(mopPose(facing, 0).head, mopPose(facing, 1).head, facing);
-    assert.notDeepEqual(mopPose(facing, 0).hands, mopPose(facing, 1).hands, facing);
-    for (const phase of [0, 0.5, 1]) {
-      const { head, handle, hands } = mopPose(facing, phase);
-      for (const hand of hands) {
-        const cross = (hand[0] - handle[0]) * (head[1] - handle[1]) -
-          (hand[1] - handle[1]) * (head[0] - handle[0]);
-        assert.ok(Math.abs(cross) < 1e-10, `${facing}: hands must grip the mop's handle`);
-      }
-    }
+});
+
+test("the mop window uses all eight frames as the strands follow both sweep directions", () => {
+  const phases = [0, 0.25, 0.5, 0.75, 1];
+  assert.deepEqual(phases.map((phase) => mopWindowFrame({ phase, target: 1 })), [6, 7, 0, 1, 2]);
+  assert.deepEqual(phases.map((phase) => mopWindowFrame({ phase, target: 0 })), [6, 5, 4, 3, 2]);
+
+  const textures = new Map();
+  const scene = { textures: {
+    exists: (key) => textures.has(key),
+    createCanvas(key, width, height) {
+      const pixels = Array.from({ length: height }, () => Array(width).fill(null));
+      const context = {
+        fillStyle: null,
+        fillRect(x, y, w, h) {
+          for (let row = y; row < y + h; row += 1) {
+            for (let col = x; col < x + w; col += 1) pixels[row][col] = this.fillStyle;
+          }
+        },
+      };
+      textures.set(key, pixels);
+      return { context, refresh() { return this; }, setFilter() { return this; } };
+    },
+  } };
+  ensureMopWindowTextures(scene);
+  ensureMopWindowTextures(scene);
+  const frames = phases.flatMap((phase) => [1, 0].map((target) =>
+    textures.get(mopWindowTexture(mopWindowFrame({ phase, target })))));
+  assert.equal(new Set(frames.map((frame) => JSON.stringify(frame))).size, 8);
+  for (const frame of frames) {
+    const handle = frame.flatMap((row, y) => row.flatMap((color, x) =>
+      color === "#d9b178" ? [[x, y]] : []));
+    assert.ok(handle.length > 3);
+    assert.equal(new Set(handle.map(([x, y]) => x + y)).size, 1, "handle stays at 45 degrees");
+    const strands = frame.flatMap((row, y) => row.map((color) =>
+      ["#e2e8ec", "#bac4ce", "#808c9a"].includes(color) ? y : -1));
+    assert.equal(Math.max(...strands), 26, "strands contact the top edge of the puddle");
   }
+});
+
+test("mopping shows a window above an unchanged character and hides it while employees walk", () => {
+  const image = {
+    texture: { key: "mop-window-6" },
+    setOrigin(x, y) { this.origin = [x, y]; return this; },
+    setDepth(depth) { this.depth = depth; return this; },
+    setVisible(visible) { this.visible = visible; return this; },
+    setTexture(key) { this.texture.key = key; return this; },
+    setPosition(x, y) { this.position = [x, y]; return this; },
+    setScale(scale) { this.scale = scale; return this; },
+    destroy() { this.destroyed = true; },
+  };
+  const scene = {
+    textures: { exists: () => true },
+    add: { image: () => image },
+    cameraRig: { popupScale: () => 0.5 },
+  };
+  const sprite = { x: 100, y: 200, displayHeight: 64, originY: 0.625, texture: { key: "player" } };
+  const animation = new MopAnimation(scene, { sprite, currentFacing: "down" });
+  animation.press(0);
+  animation.update(200);
+  assert.equal(sprite.texture.key, "player");
+  assert.equal(image.visible, true);
+  assert.equal(image.texture.key, "mop-window-0");
+  assert.deepEqual(image.position, [100, 157.5]);
+  assert.equal(image.scale, 1.5);
+  assert.equal(animation.top, 103.5);
+  animation.update(16, false);
+  assert.equal(image.visible, false);
+  animation.destroy();
+  assert.equal(image.destroyed, true);
 });

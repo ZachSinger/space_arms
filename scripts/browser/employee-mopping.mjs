@@ -1,5 +1,4 @@
-// Checks, in a real shift, that an employee on the cleaning job walks to dirt, mops it with the
-// sweeping animation in all four facing directions (no bucket needed), and puts the mop away.
+// Checks that an employee walks to dirt, shows the mop window in every facing, and puts it away.
 // Optional: pass a file path to save a screenshot of the employee mopping.
 import assert from "node:assert/strict";
 import { startGame } from "./harness.mjs";
@@ -34,15 +33,21 @@ try {
     for (const facing of ["down", "left", "right", "up"]) {
       employee.currentFacing = facing;
       await new Promise((resolve) => setTimeout(resolve, 80));
-      seen[facing] = { key: employee.sprite.texture.key, frame: Number(employee.sprite.frame.name) };
+      const window = scene.cleaningSystem.staffMops.get(employee).animation.window;
+      seen[facing] = {
+        key: employee.sprite.texture.key, frame: Number(employee.sprite.frame.name),
+        window: window.texture.key, visible: window.visible,
+      };
     }
     employee.currentFacing = natural;
     return seen;
   });
-  for (const [facing, { key, frame }] of Object.entries(rows)) {
+  for (const [facing, { key, frame, window, visible }] of Object.entries(rows)) {
     const row = { down: 0, left: 1, right: 2, up: 3 }[facing];
-    assert.match(key, /_mopping$/, `${facing}: employee is not in the mopping pose`);
-    assert.ok(frame >= row * 8 && frame < (row + 1) * 8, `${facing}: wrong mopping row (${frame})`);
+    assert.doesNotMatch(key, /_mopping$/);
+    assert.equal(frame, row * 3 + 1, `${facing}: wrong standing frame`);
+    assert.match(window, /^mop-window-[0-7]$/);
+    assert.equal(visible, true, `${facing}: mop window is hidden`);
   }
   if (screenshotPath) {
     await h.game((scene) => {

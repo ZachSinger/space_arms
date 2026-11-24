@@ -57,11 +57,10 @@ These answer the open questions in the design above.
   you do it. Then they pick their next job again.
 - Each employee reserves the piece they're walking to, so two employees never go for the same
   one. If you pick it up first, they give up on it and choose again.
-- Mopping: they reserve the nearest dirt mark, walk beside it, pull out a mop, and mop
-  it with the same four-direction sweeping animation as the player. One sweep equals one
-  player press (8 per mark); a sweep takes 250 ms at Level 1, so a mark takes about
-  2 seconds. The arms sweep faster as the skill goes up. The mop goes away when they leave
-  the mark; they then walk to the next unreserved mark until none are left.
+- Mopping: they reserve the nearest dirt mark, walk beside it, and show the same mop window
+  as the player. One sweep equals one player press (8 per mark); a sweep takes 250 ms at
+  Level 1, so a mark takes about 2 seconds. The window's mop sweeps faster as skill goes up.
+  The window disappears when they leave the mark.
 - The player and an employee can both mop the same mark; whoever finishes it, the other
   moves on.
 - Skill makes the whole trip faster: walking, picking up, throwing away, and mopping (+20%
@@ -113,19 +112,18 @@ for being bigger. Each customer rolls two numbers when they arrive:
 - If a fixture is placed on top of trash, the trash is pushed to the nearest open floor.
 
 ### Dirt and the mop
-- There is no mop to buy or fetch. Face a dirt mark with empty hands and press E: the mop
-  appears in your hands on the first press. It goes away on its own when you walk, turn
-  away, open the tablet, or finish the mark (after the last sweep plays out).
+- There is no mop to buy or fetch. Face a dirt mark with empty hands and press E: a small
+  mop window appears above you on the first press. It disappears when you walk, turn away,
+  open the tablet, or finish the mark (after the last sweep plays out).
 - Picking up trash, opening a shelf, or starting the register also puts it away.
 - New dirt marks randomly choose one of the three approved appearances: dark smudges,
   footprints, or scuffs. Their appearance never changes when saving or loading.
-- The mop uses the first mockup's cotton mop; the progress indicator uses its small
-  horizontal blue bar.
+- The window uses the approved eight-frame cotton mop; the blue progress bar sits above it.
 - Stand still, face the mark, and repeatedly press the current interaction button.
   Held keys and repeated keydown events do not count as new presses.
-- The character's arms and mop sweep back and forth in all four facing directions.
-  Faster fresh presses shorten the sweep; the animation settles when pressing stops.
-  Employees use the same renderer on their own uniforms (see Employees who clean).
+- The mop sweeps back and forth inside the window in all four facing directions. Faster
+  fresh presses shorten the sweep; the animation settles when pressing stops. Employees
+  use the same window above their own characters (see Employees who clean).
 - Dirt costs 2 cleanliness points until the mark is fully cleaned. Partial progress,
   position, and appearance persist overnight and through save/Continue. The additive dirt
   save field is optional for older saves.
