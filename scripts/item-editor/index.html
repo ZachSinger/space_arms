@@ -2,215 +2,209 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Item Editor - Space Arms Dealer</title>
+<title>Item Balancing - Space Arms Dealer</title>
 <style>
-  :root { color-scheme: dark; --bg: #0b1120; --panel: #111a2e; --line: #23314f; --text: #dbe4f3; --dim: #8796b3; --accent: #38bdf8; --good: #4ade80; --bad: #f87171; --changed: #3b2f0b; }
+  :root { color-scheme: dark; --bg: #0b1120; --panel: #111a2e; --line: #1f2b45; --text: #e2e8f5; --dim: #7d8cab; --accent: #38bdf8; --good: #4ade80; --bad: #f87171; --changed: #3a2e0c; }
   * { box-sizing: border-box; }
-  body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); font: 13px/1.35 system-ui, sans-serif; }
-  header { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--line); }
-  header h1 { font-size: 15px; margin: 0 8px 0 0; }
-  header input[type=search], header select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 5px 8px; }
-  header input[type=search] { width: 240px; }
-  header label { color: var(--dim); display: flex; gap: 5px; align-items: center; }
-  button { background: #1e293b; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 6px 12px; cursor: pointer; }
+  body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 17px; margin: 0 10px 0 0; }
+  header input[type=search], header select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 6px 9px; font: inherit; }
+  header input[type=search] { width: 220px; }
+  header label { color: var(--dim); display: flex; gap: 6px; align-items: center; }
+  button { background: #1e293b; color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 7px 14px; cursor: pointer; font: inherit; }
   button.primary { background: #0c4a6e; border-color: var(--accent); }
-  button:disabled { opacity: .45; cursor: default; }
+  button:disabled { opacity: .4; cursor: default; }
   #status { color: var(--dim); margin-left: auto; }
   #status.bad { color: var(--bad); white-space: pre-line; }
   #status.good { color: var(--good); }
-  .note { padding: 6px 14px; color: var(--dim); }
   .wrap { overflow: auto; flex: 1; min-height: 0; }
-  table { border-collapse: separate; border-spacing: 0; width: max-content; }
-  th { position: sticky; top: 0; z-index: 2; background: #16213a; text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); cursor: pointer; white-space: nowrap; user-select: none; }
-  th.sorted::after { content: " ▲"; color: var(--accent); }
+  table { border-collapse: separate; border-spacing: 0; min-width: 100%; }
+  th { position: sticky; top: 0; z-index: 2; background: #16213a; text-align: right; padding: 8px 9px; border-bottom: 2px solid var(--line); cursor: pointer; white-space: nowrap; user-select: none; vertical-align: bottom; }
+  th.left { text-align: left; }
+  th.sorted { color: var(--accent); }
+  th.sorted::after { content: " ▲"; }
   th.sorted.desc::after { content: " ▼"; }
-  th .sub { display: block; font-weight: normal; color: var(--dim); font-size: 11px; }
-  td { padding: 3px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th .sub { display: block; font-weight: normal; color: var(--dim); font-size: 12px; }
+  th.edit { color: #fde68a; }
+  td { padding: 4px 9px; border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.dim { color: var(--dim); }
+  td .sub { display: block; color: var(--dim); font-size: 12px; }
   tr.changed td { background: var(--changed); }
-  tr:hover td { background: #17223a; }
-  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  td img { width: 40px; height: 40px; object-fit: contain; image-rendering: pixelated; display: block; }
-  td input, td select { background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 3px; padding: 3px 4px; font: inherit; }
-  td input:hover, td select:hover { border-color: var(--line); }
-  td input:focus, td select:focus { border-color: var(--accent); outline: none; background: var(--bg); }
-  td select option { background: var(--panel); }
+  tr.item:hover td { background: #16213a; }
+  tr.group td { background: #0f1a30; color: var(--accent); font-weight: 600; padding: 14px 12px 6px; border-bottom: 2px solid var(--line); }
+  tr.group td span { color: var(--dim); font-weight: normal; margin-left: 10px; }
+  td img { width: 36px; height: 36px; object-fit: contain; image-rendering: pixelated; display: block; }
+  td.name { font-weight: 500; white-space: normal; min-width: 200px; max-width: 260px; }
+  td input, td select { background: #0f172a; color: #fde68a; border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: inherit; }
+  td input:focus, td select:focus { border-color: var(--accent); outline: none; }
+  td select option { background: var(--panel); color: var(--text); }
   td input.invalid { border-color: var(--bad); }
-  .w-name { width: 230px; } .w-id { width: 110px; } .w-num { width: 70px; text-align: right; } .w-tags { width: 220px; }
-  .w-ammo { width: 160px; } .w-fits { width: 200px; } .w-flavor { width: 380px; } .w-image { width: 380px; } .w-contract { width: 250px; }
-  .level { font-weight: 600; color: var(--accent); }
+  input.price { width: 70px; text-align: right; }
+  select.contract { width: 200px; color: var(--text); }
+  .profit { display: flex; align-items: center; justify-content: flex-end; gap: 10px; font-weight: 600; color: var(--good); }
+  .bar { width: 70px; height: 8px; background: #1e293b; border-radius: 4px; overflow: hidden; }
+  .bar div { height: 100%; background: var(--good); }
+  .help { padding: 8px 16px; color: var(--dim); border-bottom: 1px solid var(--line); }
+  .help b { color: #fde68a; font-weight: 600; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Item Editor</h1>
-  <input type="search" id="search" placeholder="Search name, id, tag, contract...">
-  <select id="tagFilter"><option value="">All tags</option></select>
-  <label><input type="checkbox" id="onlyPicked"> Only items ticked for comparing</label>
+  <h1>Item Balancing</h1>
+  <input type="search" id="search" placeholder="Search by name">
+  <select id="typeFilter"><option value="">All item types</option></select>
+  <label><input type="checkbox" id="onlyPicked"> Only ticked items</label>
   <label><input type="checkbox" id="onlyChanged"> Only edited items</label>
   <button id="save" class="primary" disabled>Save</button>
   <button id="revert" disabled>Undo all edits</button>
   <span id="status">Loading...</span>
 </header>
-<div class="note" id="note"></div>
+<div class="help" id="help"></div>
 <div class="wrap"><table><thead id="head"></thead><tbody id="body"></tbody></table></div>
 <script type="module">
 import { supplyRatioFor } from "/js/logic/Market.js";
-const state = { items: [], original: [], licenses: new Map(), rules: null, sort: { key: "level", desc: false }, picked: new Set() };
+const state = { items: [], original: [], licenses: new Map(), rules: null, sort: { key: "level", desc: false }, picked: new Set(), maxProfit: 1 };
 
 const money = (value) => Math.round(value).toLocaleString("en-US");
-const perCrate = (item) => Math.floor(state.rules.crateUnits / item.boxSize) || 0;
+const exactMoney = (value) => value.toLocaleString("en-US", { maximumFractionDigits: 2 });
 const levelOf = (item) => state.licenses.get(item.license)?.level ?? null;
+const perCrate = (item) => Math.floor(state.rules.crateUnits / item.boxSize) || 0;
+const share = (item) => supplyRatioFor(String(item.id ?? ""));
+const supplierPrice = (item) => item.baseCost * share(item);
 const crateValue = (item) => perCrate(item) * item.baseCost;
-const supplierPrice = (item) => item.baseCost * supplyRatioFor(String(item.id ?? ""));
 // Same rounding as Market.getSupplyCost: once for the whole order, not per item.
 const crateCost = (item) => Math.max(1, Math.round(supplierPrice(item) * perCrate(item)));
 const crateProfit = (item) => crateValue(item) - crateCost(item);
-const exactMoney = (value) => value.toLocaleString("en-US", { maximumFractionDigits: 2 });
-const listText = (list) => (Array.isArray(list) ? list.join(", ") : "");
-const toList = (text) => text.split(",").map((part) => part.trim()).filter(Boolean);
+const typeOf = (item) => item.tags?.[0] ?? "";
+const kindOf = (item) => item.tags?.[item.tags.length - 1] ?? "";
 
-// Each column: how it's shown, how it sorts, and (for editable ones) how an edit is stored.
+// Yellow headers are the ones you can change; the rest are worked out from them.
 const COLUMNS = [
-  { key: "pick", label: "Compare", sort: (item) => state.picked.has(item.id) ? 0 : 1 },
-  { key: "icon", label: "Icon" },
-  { key: "name", label: "Name", text: "w-name" },
-  { key: "level", label: "Unlocks at", sub: "shop level", sort: (item) => levelOf(item) ?? 999 },
-  { key: "license", label: "Supplier contract", sub: "sets the unlock level", sort: (item) => state.licenses.get(item.license)?.name ?? item.license },
-  { key: "baseCost", label: "Base price", sub: "per item", number: true },
-  { key: "supplierPrice", label: "Supplier price", sub: "per item, same every game", sort: supplierPrice },
-  { key: "boxSize", label: "Box size", sub: `of ${"{units}"} crate space` },
-  { key: "perCrate", label: "Items per crate", sort: perCrate },
-  { key: "crateValue", label: "Crate sells for", sub: "all at base price", sort: crateValue },
-  { key: "crateCost", label: "Crate costs", sub: "from the supplier", sort: crateCost },
-  { key: "crateProfit", label: "Crate profit", sub: "sells for minus costs", sort: crateProfit },
-  { key: "tags", label: "Tags", sub: "comma separated", list: true, text: "w-tags" },
-  { key: "ammo", label: "Ammo type", text: "w-ammo", optional: true },
-  { key: "count", label: "Rounds", sub: "per ammo box", number: true, optional: true },
-  { key: "fits", label: "Fits", sub: "attachments, comma separated", list: true, text: "w-fits", optional: true },
-  { key: "flavor", label: "Description", text: "w-flavor" },
-  { key: "id", label: "Id", text: "w-id" },
-  { key: "image", label: "Image file", text: "w-image" },
+  { key: "pick", label: "Compare", left: true, sort: (item) => (state.picked.has(item.id) ? 0 : 1) },
+  { key: "icon", label: "", left: true },
+  { key: "name", label: "Item", left: true, sort: (item) => item.name },
+  { key: "level", label: "Contract", sub: "sets the unlock level", left: true, edit: true, sort: (item) => (levelOf(item) ?? 999) * 1000 + item.baseCost / 1e6 },
+  { key: "baseCost", label: "Base price", sub: "per item", edit: true, sort: (item) => item.baseCost },
+  { key: "supplier", label: "Supplier price", sub: "per item", sort: supplierPrice },
+  { key: "boxSize", label: "Box size", sub: "space per item", edit: true, sort: (item) => item.boxSize },
+  { key: "perCrate", label: "Per crate", sub: "and per shelf space", sort: perCrate },
+  { key: "crateValue", label: "Crate sells for", sort: crateValue },
+  { key: "crateCost", label: "Crate costs", sort: crateCost },
+  { key: "crateProfit", label: "Crate profit", sort: crateProfit },
 ];
 
 async function load() {
-  const response = await fetch("/api/data");
-  const data = await response.json();
+  const data = await (await fetch("/api/data")).json();
   state.rules = data.rules;
   state.licenses = new Map(data.licenses.map((license) => [license.id, license]));
   state.items = data.items.map((item) => structuredClone(item));
   state.original = data.items.map((item) => JSON.stringify(item));
-  const tags = [...new Set(state.items.flatMap((item) => item.tags ?? []))].sort();
-  const tagFilter = document.getElementById("tagFilter");
-  tagFilter.innerHTML = '<option value="">All tags</option>' + tags.map((tag) => `<option>${escape(tag)}</option>`).join("");
+  const types = [...new Set(state.items.map(typeOf))].filter(Boolean).sort();
+  document.getElementById("typeFilter").innerHTML = '<option value="">All item types</option>' + types.map((type) => `<option>${escape(type)}</option>`).join("");
   const percent = (ratio) => Math.round(ratio * 100);
-  document.getElementById("note").textContent =
-    `A crate holds ${state.rules.crateUnits} space, and box size is how much one item takes. ` +
-    `The supplier price is what you pay per item: each item has its own fixed share of its base price, between ${percent(state.rules.minSupply)}% and ${percent(state.rules.maxSupply)}%, the same in every game. ` +
-    `Crate profit is selling the whole crate at base price minus what the supplier charged for it. Delivery fees aren't included. ` +
-    `To change when an item unlocks, pick a different supplier contract.`;
+  document.getElementById("help").innerHTML =
+    `You can change the <b>yellow</b> columns; everything else updates as you type. ` +
+    `A crate and a shelf space both hold ${state.rules.crateUnits} space, so box size decides how many fit. ` +
+    `Supplier price is a fixed ${percent(state.rules.minSupply)}-${percent(state.rules.maxSupply)}% of base price, different per item but the same every game. ` +
+    `Profit assumes you sell the whole crate at base price, with no delivery fee.`;
   render();
-  setStatus(`${state.items.length} items loaded.`);
+  setStatus(`${state.items.length} items.`);
 }
 
 function escape(text) {
   return String(text ?? "").replace(/[&<>"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char]);
 }
 
-function isChanged(index) {
-  return JSON.stringify(state.items[index]) !== state.original[index];
-}
-
-function changedCount() {
-  return state.items.filter((_item, index) => isChanged(index)).length;
-}
+const isChanged = (index) => JSON.stringify(state.items[index]) !== state.original[index];
+const changedCount = () => state.items.filter((_item, index) => isChanged(index)).length;
 
 function renderHead() {
   document.getElementById("head").innerHTML = "<tr>" + COLUMNS.map((column) => {
     const sorted = state.sort.key === column.key;
-    const sub = column.sub ? `<span class="sub">${escape(column.sub.replace("{units}", state.rules.crateUnits))}</span>` : "";
-    return `<th data-key="${column.key}" class="${sorted ? "sorted" : ""} ${sorted && state.sort.desc ? "desc" : ""}">${column.label}${sub}</th>`;
+    const classes = [column.left && "left", column.edit && "edit", sorted && "sorted", sorted && state.sort.desc && "desc"].filter(Boolean).join(" ");
+    const sub = column.sub ? `<span class="sub">${escape(column.sub)}</span>` : "";
+    return `<th data-key="${column.key}" class="${classes}">${column.label}${sub}</th>`;
   }).join("") + "</tr>";
-}
-
-function sortValue(item, key) {
-  const column = COLUMNS.find((entry) => entry.key === key);
-  if (column?.sort) return column.sort(item);
-  const value = item[key];
-  return Array.isArray(value) ? value.join(", ") : value ?? "";
 }
 
 function visibleRows() {
   const search = document.getElementById("search").value.trim().toLowerCase();
-  const tag = document.getElementById("tagFilter").value;
+  const type = document.getElementById("typeFilter").value;
   const onlyPicked = document.getElementById("onlyPicked").checked;
   const onlyChanged = document.getElementById("onlyChanged").checked;
-  const rows = state.items.map((item, index) => ({ item, index })).filter(({ item, index }) => {
-    if (tag && !(item.tags ?? []).includes(tag)) return false;
-    if (onlyPicked && !state.picked.has(item.id)) return false;
-    if (onlyChanged && !isChanged(index)) return false;
-    if (!search) return true;
-    const contract = state.licenses.get(item.license)?.name ?? "";
-    return [item.name, item.id, contract, item.ammo, ...(item.tags ?? []), ...(item.fits ?? [])]
-      .some((part) => String(part ?? "").toLowerCase().includes(search));
-  });
-  const { key, desc } = state.sort;
+  const rows = state.items.map((item, index) => ({ item, index })).filter(({ item, index }) =>
+    (!type || typeOf(item) === type) &&
+    (!onlyPicked || state.picked.has(item.id)) &&
+    (!onlyChanged || isChanged(index)) &&
+    (!search || item.name.toLowerCase().includes(search)));
+  const column = COLUMNS.find((entry) => entry.key === state.sort.key);
   rows.sort((a, b) => {
-    const left = sortValue(a.item, key);
-    const right = sortValue(b.item, key);
-    const order = typeof left === "number" && typeof right === "number" ? left - right : String(left).localeCompare(String(right));
-    return (desc ? -order : order) || (a.item.baseCost - b.item.baseCost);
+    const left = column.sort(a.item);
+    const right = column.sort(b.item);
+    const order = typeof left === "number" ? left - right : String(left).localeCompare(String(right));
+    return (state.sort.desc ? -order : order) || a.item.baseCost - b.item.baseCost;
   });
   return rows;
 }
 
-function cell(item, index, column) {
-  const key = column.key;
-  if (key === "pick") return `<td><input type="checkbox" data-pick="${index}" ${state.picked.has(item.id) ? "checked" : ""}></td>`;
-  if (key === "icon") return `<td>${item.image ? `<img src="/${escape(item.image)}" alt="" loading="lazy">` : ""}</td>`;
-  if (key === "level") return `<td class="num level" data-out="level">${levelOf(item) ?? "?"}</td>`;
-  if (key === "supplierPrice") return `<td class="num" data-out="supplierPrice">${exactMoney(supplierPrice(item))}</td>`;
-  if (key === "perCrate") return `<td class="num" data-out="perCrate">${perCrate(item)}</td>`;
-  if (key === "crateValue") return `<td class="num" data-out="crateValue">${money(crateValue(item))}</td>`;
-  if (key === "crateCost") return `<td class="num" data-out="crateCost">${money(crateCost(item))}</td>`;
-  if (key === "crateProfit") return `<td class="num" data-out="crateProfit">${money(crateProfit(item))}</td>`;
-  if (key === "license") {
-    const options = [...state.licenses.values()]
-      .filter((license) => license.level !== null || license.id === item.license)
-      .sort((a, b) => (a.level ?? 0) - (b.level ?? 0) || a.name.localeCompare(b.name))
-      .map((license) => `<option value="${escape(license.id)}" ${license.id === item.license ? "selected" : ""}>Lv ${license.level ?? "?"}: ${escape(license.name)}</option>`);
-    return `<td><select class="w-contract" data-edit="${index}" data-key="license">${options.join("")}</select></td>`;
+function cell(item, index, key) {
+  switch (key) {
+    case "pick": return `<td><input type="checkbox" data-pick="${index}" ${state.picked.has(item.id) ? "checked" : ""}></td>`;
+    case "icon": return `<td>${item.image ? `<img src="/${escape(item.image)}" alt="" loading="lazy">` : ""}</td>`;
+    case "name": return `<td class="name">${escape(item.name)}<span class="sub">${escape(typeOf(item))}: ${escape(kindOf(item))}</span></td>`;
+    case "level": {
+      const options = [...state.licenses.values()]
+        .filter((license) => license.level !== null || license.id === item.license)
+        .sort((a, b) => (a.level ?? 0) - (b.level ?? 0) || a.name.localeCompare(b.name))
+        .map((license) => `<option value="${escape(license.id)}" ${license.id === item.license ? "selected" : ""}>Lv ${license.level ?? "?"}: ${escape(license.name)}</option>`);
+      return `<td><select class="contract" data-edit="${index}" data-key="license">${options.join("")}</select></td>`;
+    }
+    case "baseCost": return `<td class="num"><input type="number" class="price" data-edit="${index}" data-key="baseCost" value="${item.baseCost}"></td>`;
+    case "boxSize": {
+      const options = state.rules.boxSizes.map((size) => `<option ${size === item.boxSize ? "selected" : ""}>${size}</option>`);
+      return `<td class="num"><select data-edit="${index}" data-key="boxSize">${options.join("")}</select></td>`;
+    }
+    default: return `<td class="num" data-out="${key}">${outputHtml(item, key)}</td>`;
   }
-  if (key === "boxSize") {
-    const options = state.rules.boxSizes.map((size) => `<option ${size === item.boxSize ? "selected" : ""}>${size}</option>`);
-    return `<td><select data-edit="${index}" data-key="boxSize">${options.join("")}</select></td>`;
-  }
-  const value = column.list ? listText(item[key]) : item[key] ?? "";
-  const type = column.number ? "number" : "text";
-  return `<td><input type="${type}" class="${column.number ? "w-num" : column.text}" data-edit="${index}" data-key="${key}" value="${escape(value)}" title="${escape(value)}"></td>`;
+}
+
+function outputHtml(item, key) {
+  if (key === "supplier") return `${exactMoney(supplierPrice(item))}<span class="sub">${Math.round(share(item) * 100)}% of base price</span>`;
+  if (key === "perCrate") return `${perCrate(item)}`;
+  if (key === "crateValue") return money(crateValue(item));
+  if (key === "crateCost") return money(crateCost(item));
+  const profit = crateProfit(item);
+  const width = Math.max(0, Math.min(100, (profit / state.maxProfit) * 100));
+  return `<div class="profit">${money(profit)}<div class="bar"><div style="width:${width}%"></div></div></div>`;
 }
 
 function render() {
+  state.maxProfit = Math.max(1, ...state.items.map(crateProfit));
   renderHead();
-  document.getElementById("body").innerHTML = visibleRows().map(({ item, index }) =>
-    `<tr data-row="${index}" class="${isChanged(index) ? "changed" : ""}">${COLUMNS.map((column) => cell(item, index, column)).join("")}</tr>`,
-  ).join("");
+  const grouped = state.sort.key === "level";
+  let lastLevel;
+  const html = [];
+  for (const { item, index } of visibleRows()) {
+    const level = levelOf(item);
+    if (grouped && level !== lastLevel) {
+      lastLevel = level;
+      const count = state.items.filter((other) => levelOf(other) === level).length;
+      html.push(`<tr class="group"><td colspan="${COLUMNS.length}">Shop level ${level ?? "?"}<span>${count} item${count === 1 ? "" : "s"} unlock here</span></td></tr>`);
+    }
+    html.push(`<tr class="item ${isChanged(index) ? "changed" : ""}" data-row="${index}">${COLUMNS.map((column) => cell(item, index, column.key)).join("")}</tr>`);
+  }
+  document.getElementById("body").innerHTML = html.join("");
   refreshButtons();
 }
 
-// Updates one row's worked-out numbers without redrawing the table, so typing keeps focus.
+// Updates one row's worked-out numbers without redrawing, so typing keeps focus.
 function refreshRow(index) {
   const row = document.querySelector(`tr[data-row="${index}"]`);
   if (!row) return;
-  const item = state.items[index];
   row.classList.toggle("changed", isChanged(index));
-  row.querySelector('[data-out="level"]').textContent = levelOf(item) ?? "?";
-  row.querySelector('[data-out="supplierPrice"]').textContent = exactMoney(supplierPrice(item));
-  row.querySelector('[data-out="perCrate"]').textContent = perCrate(item);
-  row.querySelector('[data-out="crateValue"]').textContent = money(crateValue(item));
-  row.querySelector('[data-out="crateCost"]').textContent = money(crateCost(item));
-  row.querySelector('[data-out="crateProfit"]').textContent = money(crateProfit(item));
-  const icon = row.querySelector("img");
-  if (icon && item.image) icon.src = `/${item.image}`;
+  for (const output of row.querySelectorAll("[data-out]")) output.innerHTML = outputHtml(state.items[index], output.dataset.out);
 }
 
 function refreshButtons() {
@@ -229,21 +223,9 @@ function setStatus(text, kind = "") {
 function applyEdit(target) {
   const index = Number(target.dataset.edit);
   const key = target.dataset.key;
-  const column = COLUMNS.find((entry) => entry.key === key);
-  const item = state.items[index];
-  const raw = target.value;
-  let value;
-  if (key === "boxSize") value = Number(raw);
-  else if (column.number) value = raw.trim() === "" ? undefined : Number(raw);
-  else if (column.list) value = toList(raw);
-  else value = raw;
-  const empty = value === undefined || value === "" || (Array.isArray(value) && !value.length);
-  if (column.optional && empty) delete item[key];
-  else item[key] = value;
-  const invalid = (column.number && value !== undefined && !Number.isFinite(value)) ||
-    (key === "baseCost" && !(value > 0)) || (["name", "id"].includes(key) && !String(value).trim());
-  target.classList.toggle("invalid", Boolean(invalid));
-  target.title = raw;
+  const value = key === "license" ? target.value : Number(target.value);
+  state.items[index][key] = value;
+  target.classList.toggle("invalid", key === "baseCost" && !(value > 0));
   refreshRow(index);
   refreshButtons();
 }
@@ -257,7 +239,11 @@ document.getElementById("body").addEventListener("change", (event) => {
     const id = state.items[Number(target.dataset.pick)].id;
     if (target.checked) state.picked.add(id);
     else state.picked.delete(id);
-  } else if (target.dataset.edit !== undefined) applyEdit(target);
+  } else if (target.dataset.edit !== undefined) {
+    applyEdit(target);
+    // A new contract can move the item to another level group.
+    if (target.dataset.key === "license" && state.sort.key === "level") render();
+  }
 });
 document.getElementById("head").addEventListener("click", (event) => {
   const key = event.target.closest("th")?.dataset.key;
@@ -265,7 +251,7 @@ document.getElementById("head").addEventListener("click", (event) => {
   state.sort = { key, desc: state.sort.key === key ? !state.sort.desc : false };
   render();
 });
-for (const id of ["search", "tagFilter", "onlyPicked", "onlyChanged"]) {
+for (const id of ["search", "typeFilter", "onlyPicked", "onlyChanged"]) {
   document.getElementById(id).addEventListener("input", render);
 }
 document.getElementById("revert").addEventListener("click", () => {
@@ -284,7 +270,7 @@ document.getElementById("save").addEventListener("click", async () => {
   }
   state.original = state.items.map((item) => JSON.stringify(item));
   render();
-  setStatus(`Saved ${result.saved} items to data/Items.json.`, "good");
+  setStatus(`Saved to data/Items.json.`, "good");
 });
 window.addEventListener("beforeunload", (event) => {
   if (changedCount()) event.preventDefault();
