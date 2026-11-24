@@ -61,7 +61,7 @@
     "description": "Boxes, tins, and speed-loaders of ordinary pistol ammunition.",
     "tier": 1,
     "baseCost": 275,
-    "requiredShopLevel": 3,
+    "requiredShopLevel": 4,
     "reqReputation": null
   },
   {
@@ -102,7 +102,7 @@
     "description": "Magazines, buckets, and crates of ordinary rifle ammunition.",
     "tier": 1,
     "baseCost": 1400,
-    "requiredShopLevel": 8,
+    "requiredShopLevel": 7,
     "reqReputation": null,
     "splitFrom": "lic_start_ammo"
   },
@@ -112,7 +112,7 @@
     "description": "Welding torches, spanners, and rust removers for salvage crews.",
     "tier": 1,
     "baseCost": 1500,
-    "requiredShopLevel": 9,
+    "requiredShopLevel": 10,
     "reqReputation": null,
     "reqFaction": "explorers",
     "reqFactionRep": 2
@@ -156,7 +156,7 @@
     "description": "Civilian laser rifles and pistols, with the batteries to run them.",
     "tier": 2,
     "baseCost": 3000,
-    "requiredShopLevel": 14,
+    "requiredShopLevel": 13,
     "reqReputation": null
   },
   {

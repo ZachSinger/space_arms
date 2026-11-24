@@ -5,7 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
-import { useFixedStart } from "./support/fixed-start.js";
+import { TEST_STARTING_TEMPLATE, useFixedStart } from "./support/fixed-start.js";
+import { getShopLevelRequirement, STAFF_LIMIT_LEVELS } from "../js/logic/ShopProgression.js";
+import { EMPLOYEE_HIRE_COST } from "../js/logic/EmployeeTraining.js";
 import { GAME_EVENTS } from "../js/core/Events.js";
 
 let server;
@@ -430,11 +432,13 @@ test("returned items collect in the Go-Backs bin and pack into crates up to thei
 
 test("hiring staff spends the fee once and keeps the hire when player state is restored", () => {
   const state = newGame();
-  state.reputation.gain(90);
-  state.finishShift({ customersServed: 90, customersTurnedAway: 0 });
+  const needed = getShopLevelRequirement(STAFF_LIMIT_LEVELS[0]);
+  state.reputation.gain(needed);
+  state.finishShift({ customersServed: needed, customersTurnedAway: 0 });
   state.endDay();
   assert.equal(state.hireEmployee("tavi_stock_clerk"), true);
-  assert.equal(state.economy.credits, 1000);
+  const afterHire = TEST_STARTING_TEMPLATE.money - EMPLOYEE_HIRE_COST;
+  assert.equal(state.economy.credits, afterHire);
   assert.deepEqual(state.staff.hired, ["tavi_stock_clerk"]);
   assert.deepEqual(state.staff.jobPriorities.tavi_stock_clerk, [
     "register", "stock_shelves", "clean",
@@ -445,7 +449,7 @@ test("hiring staff spends the fee once and keeps the hire when player state is r
   ]);
   assert.equal(state.staff.prioritizeJob("tavi_stock_clerk", "clean"), false, "already first");
   assert.equal(state.hireEmployee("tavi_stock_clerk"), false);
-  assert.equal(state.economy.credits, 1000);
+  assert.equal(state.economy.credits, afterHire);
 
   const saved = JSON.parse(JSON.stringify(state.toSave()));
   let restored = GameState.fromSave(saved, { items: ITEMS });
@@ -453,7 +457,7 @@ test("hiring staff spends the fee once and keeps the hire when player state is r
   assert.deepEqual(restored.staff.jobPriorities.tavi_stock_clerk, [
     "clean", "register", "stock_shelves",
   ]);
-  assert.equal(restored.economy.credits, 1000);
+  assert.equal(restored.economy.credits, afterHire);
 
   delete saved.playerState.employeeJobPriorities;
   restored = GameState.fromSave(saved, { items: ITEMS });

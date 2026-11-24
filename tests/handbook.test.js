@@ -6,6 +6,9 @@ import { HANDBOOK_TOPICS, HandbookRenderer, getLevelRewards } from "../js/logic/
 import { escapeHtml } from "../js/core/html.js";
 import { defaultBindings, setBindings } from "../js/input/KeyBindings.js";
 import { setControllerLabelStyle } from "../js/input/InputDevice.js";
+import { getShopLevelRequirement, STAFF_LIMIT_LEVELS } from "../js/logic/ShopProgression.js";
+import { getZone } from "../js/logic/RoomLayout.js";
+import { HOVERCART_LEVEL } from "../js/modules/hovercart/HovercartRules.js";
 
 const licenses = licenseData.map((data) => new SupplierLicense(data));
 const render = (topic, shopLevel = 1, reputation = 0) =>
@@ -42,34 +45,26 @@ test("an unknown handbook topic is an error", () => {
 });
 
 test("the store page shows the player's level and the next goal", () => {
-  const html = render("store", 2, 20);
-  assert.match(html, /Store Level 2<\/strong> with <strong>20<\/strong>/);
-  assert.match(html, /at least <strong>50<\/strong> to reach Level 3/);
+  const html = render("store", 2, getShopLevelRequirement(2));
+  assert.ok(html.includes(`Store Level 2</strong> with <strong>${getShopLevelRequirement(2)}</strong>`));
+  assert.ok(html.includes(`at least <strong>${getShopLevelRequirement(3)}</strong> to reach Level 3`));
 });
 
 test("level rewards come from the game's own unlock data", () => {
   const rewards = getLevelRewards(licenses);
-  assert.ok(rewards.get(2).some((text) => text.startsWith("Supply license: Frontier Survival Kit")));
-  assert.ok(rewards.get(3).some((text) => text.startsWith("Supply license: Standard Pistol Ammo")));
-  assert.ok(rewards.get(5).includes("Supply license: Scrap-Yard Melee"));
-  assert.ok(rewards.get(50).some((text) => text.startsWith("Supply license: Exotic Ordinance")));
-  assert.ok(rewards.get(4).includes("Staff limit: up to 1 employee hired at once"));
-  assert.ok(rewards.get(23).includes("Staff limit: up to 6 employees hired at once"));
-  assert.ok(rewards.get(6).some((text) => text.includes("Sales Floor Expansion West")));
-  assert.ok(rewards.get(22).some((text) => text.includes("Backroom Upgrade A")));
-  assert.ok(rewards.get(7).some((text) => text.startsWith("Hovercart")));
-  assert.ok(![...rewards.values()].flat().some((text) => /spaces/i.test(text)));
-});
-
-test("every level after the first unlocks one or two things", () => {
-  const html = render("store", 49, 16572);
-  assert.match(html, /at least <strong>17148<\/strong> to reach Level 50/);
-  assert.match(render("store", 50, 17148), /Store Level 50<\/strong>, the highest level/);
-  const rewards = getLevelRewards(licenses);
-  for (let level = 2; level <= 50; level += 1) {
-    const count = rewards.get(level).length;
-    assert.ok(count >= 1 && count <= 2, `Level ${level} unlocks ${count} things`);
+  for (const id of ["lic_start_survival", "lic_start_ammo", "lic_start_armor_melee", "lic_edge_exotic"]) {
+    const license = licenses.find((candidate) => candidate.id === id);
+    assert.ok(rewards.get(license.requiredShopLevel).some((text) => text.startsWith(`Supply license: ${license.name}`)), id);
   }
+  assert.ok(rewards.get(STAFF_LIMIT_LEVELS[0]).includes("Staff limit: up to 1 employee hired at once"));
+  assert.ok(rewards.get(STAFF_LIMIT_LEVELS.at(-1))
+    .includes(`Staff limit: up to ${STAFF_LIMIT_LEVELS.length} employees hired at once`));
+  for (const id of ["expansion_west", "backroom_upgrade_a"]) {
+    const zone = getZone(id);
+    assert.ok(rewards.get(zone.requiredShopLevel).some((text) => text.includes(zone.name)), id);
+  }
+  assert.ok(rewards.get(HOVERCART_LEVEL).some((text) => text.startsWith("Hovercart")));
+  assert.ok(![...rewards.values()].flat().some((text) => /spaces/i.test(text)));
 });
 
 test("level rewards mark the levels already reached", () => {

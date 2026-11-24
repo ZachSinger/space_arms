@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { createServer } from "vite";
-import { useFixedStart } from "./support/fixed-start.js";
+import { TEST_STARTING_TEMPLATE, useFixedStart } from "./support/fixed-start.js";
 import { summarizeSupplyOrder, DELIVERY_FEE } from "../js/logic/SupplyOrder.js";
 import { GAME_EVENTS } from "../js/core/Events.js";
 import { isMoney } from "../js/logic/Money.js";
@@ -466,15 +466,18 @@ test("contract signing enforces each shop level without spending credits early",
     messages: { show: (message) => warnings.push(message) },
     catalogSystem: { recalculateActiveFactions() {} },
   };
+  const apparel = globalThis.__inventoryTestLicenses.get("lic_start_apparel");
+  assert.ok(apparel.requiredShopLevel > 1 && apparel.baseCost <= TEST_STARTING_TEMPLATE.money);
+  state.reputation.shopLevel = apparel.requiredShopLevel - 1;
   tablet.handleSignContract("lic_start_apparel");
-  assert.equal(state.economy.credits, 1500);
+  assert.equal(state.economy.credits, TEST_STARTING_TEMPLATE.money);
   assert.equal(state.catalog.owns("lic_start_apparel"), false);
   assert.match(warnings[0], /locked.*requirements/i);
 
-  state.reputation.shopLevel = 6;
+  state.reputation.shopLevel = apparel.requiredShopLevel;
   state.reputation.global = -5;
   tablet.handleSignContract("lic_start_apparel");
-  assert.equal(state.economy.credits, 400);
+  assert.equal(state.economy.credits, TEST_STARTING_TEMPLATE.money - apparel.baseCost);
   assert.equal(state.catalog.owns("lic_start_apparel"), true);
   assert.deepEqual(state.economy.dayLedger.lines.map((line) => line.category), ["licenses"]);
 });

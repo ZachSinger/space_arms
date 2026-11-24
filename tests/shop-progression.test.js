@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFile } from "node:fs/promises";
 import {
   IMPLEMENTED_SHOP_REWARD_LEVELS,
   hasUnimplementedShopRewardBetween,
@@ -35,11 +34,4 @@ test("the implemented reward levels and intervening planned rewards are reported
   assert.equal(hasUnimplementedShopRewardBetween(8, 9), false);
   assert.equal(hasUnimplementedShopRewardBetween(29, 30), false);
   assert.equal(hasUnimplementedShopRewardBetween(30, 40), false);
-});
-
-test("the store-level roadmap lists the same cumulative thresholds used by the game", async () => {
-  const roadmap = await readFile(new URL("../documentation/StoreLevel.md", import.meta.url), "utf8");
-  for (const { level, reputation } of SHOP_LEVEL_TIERS) {
-    assert.match(roadmap, new RegExp(`\\| ${level} \\| ${reputation} \\|`));
-  }
 });

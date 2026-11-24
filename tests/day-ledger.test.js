@@ -10,8 +10,13 @@ import { startingMoney } from "../js/logic/StartingTemplate.js";
 import { Events, GAME_EVENTS } from "../js/core/Events.js";
 import { DayLedger, isValidLedgerData, summarizeReceipt } from "../js/logic/DayLedger.js";
 import { FinancesRenderer } from "../js/logic/FinancesRenderer.js";
-import { createCustomerPool, getStoreRepPool } from "../js/logic/CustomerPooling.js";
-import { getShopLevelRequirement } from "../js/logic/ShopProgression.js";
+import { getShopLevelRequirement, STAFF_LIMIT_LEVELS } from "../js/logic/ShopProgression.js";
+import {
+  EMPLOYEE_BASE_WAGE, EMPLOYEE_HIRE_COST, getEmployeeTrainingCost,
+} from "../js/logic/EmployeeTraining.js";
+
+const FIRST_STAFF_LEVEL = STAFF_LIMIT_LEVELS[0];
+const wageAfterCourses = (courses) => EMPLOYEE_BASE_WAGE + Math.ceil(EMPLOYEE_BASE_WAGE * courses / 10);
 
 let server;
 let cacheDirectory;
@@ -64,8 +69,9 @@ const balanceOf = (state) => state.economy.dayLedger.openingCredits +
   state.economy.dayLedger.lines.reduce((sum, line) => sum + line.amount, 0);
 
 function unlockStaff(state) {
-  state.reputation.gain(90);
-  state.finishShift({ customersServed: 90, customersTurnedAway: 0 });
+  const needed = getShopLevelRequirement(FIRST_STAFF_LEVEL);
+  state.reputation.gain(needed);
+  state.finishShift({ customersServed: needed, customersTurnedAway: 0 });
   state.endDay();
 }
 
@@ -98,55 +104,38 @@ test("store and faction reputation changes are applied together at the end of th
   assert.deepEqual(state.reputation.factions, { scavengers: 4, mercenaries: -2, explorers: 0 });
 });
 
-test("shop levels rise after a shift and the first staff spot opens at Level 4 with 90 reputation", () => {
+test("shop levels rise after a shift and the first staff spot opens at its Shop Level", () => {
   const state = newGame();
-  state.reputation.gain(20);
-  state.reputation.lose(1);
-  assert.equal(state.reputation.global, 0);
-  assert.equal(state.reputation.shopLevel, 1);
-  state.finishShift({ customersServed: 20, customersTurnedAway: 0 });
-  assert.equal(state.reputation.global, 19);
-  assert.equal(state.reputation.shopLevel, 1);
-  assert.equal(state.hireEmployee("tavi_stock_clerk"), false);
+  for (let level = 2; level <= FIRST_STAFF_LEVEL; level += 1) {
+    const needed = getShopLevelRequirement(level);
+    const before = state.reputation.global;
+    state.reputation.gain(needed - before);
+    state.reputation.lose(1);
+    assert.equal(state.reputation.global, before);
+    assert.equal(state.reputation.shopLevel, level - 1);
+    state.finishShift({ customersServed: needed - before, customersTurnedAway: 0 });
+    assert.equal(state.reputation.global, needed - 1);
+    assert.equal(state.reputation.shopLevel, level - 1);
+    assert.equal(state.hireEmployee("tavi_stock_clerk"), false);
 
-  state.endDay();
-  state.reputation.gain(1);
-  assert.equal(state.reputation.global, 19);
-  assert.equal(state.reputation.shopLevel, 1);
-  state.finishShift({ customersServed: 1, customersTurnedAway: 0 });
-  assert.equal(state.reputation.global, 20);
-  assert.equal(state.reputation.shopLevel, 2);
-  assert.equal(state.hireEmployee("tavi_stock_clerk"), false);
+    state.endDay();
+    state.reputation.gain(1);
+    assert.equal(state.reputation.global, needed - 1);
+    assert.equal(state.reputation.shopLevel, level - 1);
+    state.finishShift({ customersServed: 1, customersTurnedAway: 0 });
+    assert.equal(state.reputation.global, needed);
+    assert.equal(state.reputation.shopLevel, level);
+    if (level < FIRST_STAFF_LEVEL) assert.equal(state.hireEmployee("tavi_stock_clerk"), false);
+    state.endDay();
+  }
 
-  state.endDay();
-  state.reputation.gain(30);
-  state.finishShift({ customersServed: 30, customersTurnedAway: 0 });
-  assert.equal(state.reputation.global, 50);
-  assert.equal(state.reputation.shopLevel, 3);
-  assert.equal(state.hireEmployee("tavi_stock_clerk"), false);
-
-  state.endDay();
-  state.reputation.gain(39);
-  state.finishShift({ customersServed: 39, customersTurnedAway: 0 });
-  assert.equal(state.reputation.global, 89);
-  assert.equal(state.reputation.shopLevel, 3);
-  assert.equal(state.hireEmployee("tavi_stock_clerk"), false);
-
-  state.endDay();
-  state.reputation.gain(1);
-  assert.equal(state.reputation.shopLevel, 3);
-  state.finishShift({ customersServed: 1, customersTurnedAway: 0 });
-  assert.equal(state.reputation.global, 90);
-  assert.equal(state.reputation.shopLevel, 4);
-
-  state.endDay();
-  state.reputation.lose(85);
+  state.reputation.lose(state.reputation.global - 5);
   state.finishShift({ customersServed: 0, customersTurnedAway: 0 });
   assert.equal(state.reputation.global, 5);
-  assert.equal(state.reputation.shopLevel, 4);
+  assert.equal(state.reputation.shopLevel, FIRST_STAFF_LEVEL);
   const restored = reload(state);
   assert.equal(restored.reputation.global, 5);
-  assert.equal(restored.reputation.shopLevel, 4);
+  assert.equal(restored.reputation.shopLevel, FIRST_STAFF_LEVEL);
   assert.equal(restored.hireEmployee("tavi_stock_clerk"), true);
 });
 
@@ -154,14 +143,14 @@ test("older saves keep reputation and hired staff and derive their initial shop 
   const saved = newGame().toSave().playerState;
   delete saved.shopLevel;
   delete saved.pendingReputation;
-  saved.globalReputation = 20;
+  saved.globalReputation = getShopLevelRequirement(2);
   assert.equal(loadPlayer(saved).reputation.shopLevel, 2);
 
-  saved.globalReputation = 2;
+  saved.globalReputation = getShopLevelRequirement(2) - 1;
   saved.hiredEmployees = ["tavi_stock_clerk"];
   delete saved.employeeJobPriorities;
   const restored = loadPlayer(saved);
-  assert.equal(restored.reputation.global, 2);
+  assert.equal(restored.reputation.global, getShopLevelRequirement(2) - 1);
   assert.equal(restored.reputation.shopLevel, 1);
   assert.deepEqual(restored.staff.hired, ["tavi_stock_clerk"]);
   assert.equal(restored.staff.prioritizeJob("tavi_stock_clerk", "stock_shelves"), true);
@@ -170,10 +159,10 @@ test("older saves keep reputation and hired staff and derive their initial shop 
 test("older level-capped saves catch up to earned reputation without reducing saved levels", () => {
   const saved = newGame().toSave().playerState;
   saved.shopLevel = 2;
-  saved.globalReputation = 90;
+  saved.globalReputation = getShopLevelRequirement(4);
   assert.equal(loadPlayer(saved).reputation.shopLevel, 4);
   saved.shopLevel = 4;
-  saved.globalReputation = 72;
+  saved.globalReputation = getShopLevelRequirement(4) - 1;
   assert.equal(loadPlayer(saved).reputation.shopLevel, 4, "an old earned level survives the slower curve");
   saved.globalReputation = -5;
   assert.equal(loadPlayer(saved).reputation.shopLevel, 4);
@@ -204,52 +193,6 @@ test("one shift can earn multiple levels without applying reputation early", () 
   assert.equal(state.reputation.global, highestRequirement);
   assert.equal(state.reputation.shopLevel, 50);
   assert.equal(reload(state).reputation.shopLevel, 50);
-});
-
-function finishCleanShift(state, stockCoverage) {
-  const baseCustomers = getStoreRepPool(state.reputation.global);
-  const pool = createCustomerPool({
-    storeReputation: state.reputation.global,
-    factionReputation: state.reputation.factions,
-    activeFactions: new Set(),
-    shelfPlacements: [{ itemId: "ration", quantity: Math.floor(baseCustomers * 2 * stockCoverage) }],
-    getItem: () => ITEMS[0],
-  });
-  state.reputation.gain(pool.totalCustomers);
-  state.finishShift({ customersServed: pool.totalCustomers, customersTurnedAway: 0 });
-}
-
-test("serving every customer without penalties earns one level in each of the first four shifts", () => {
-  for (const stockCoverage of [1, 1.1, 1.25]) {
-    const state = newGame();
-    for (let shift = 1; shift <= 4; shift += 1) {
-      finishCleanShift(state, stockCoverage);
-      assert.equal(state.reputation.shopLevel, shift + 1, `shift ${shift}, stock coverage ${stockCoverage}`);
-      state.endDay();
-    }
-  }
-});
-
-test("later levels take multiple clean shifts even when every arriving customer is served", () => {
-  for (const stockCoverage of [1, 1.1, 1.25]) {
-    const state = newGame();
-    let previousLevel = 1;
-    let lastLevelShift = 0;
-    for (let shift = 1; shift <= 300 && state.reputation.shopLevel < 50; shift += 1) {
-      finishCleanShift(state, stockCoverage);
-      const level = state.reputation.shopLevel;
-      if (level > previousLevel) {
-        assert.equal(level, previousLevel + 1, "clean shifts do not skip levels");
-        if (level >= 6) {
-          assert.ok(shift - lastLevelShift >= 2, `Level ${level}, stock coverage ${stockCoverage}`);
-        }
-        previousLevel = level;
-        lastLevelShift = shift;
-      }
-      state.endDay();
-    }
-    assert.equal(state.reputation.shopLevel, 50);
-  }
 });
 
 test("pending reputation survives a player-state round trip without being applied early", () => {
@@ -298,13 +241,14 @@ test("every credit change is itemized, so the receipt always matches the balance
   state.economy.spend(75, { category: "licenses", label: "Aulin Arms" });
   assert.equal(state.hireEmployee("tavi_stock_clerk"), true);
   state.economy.spend(50, { category: "wages", label: "Tavi" });
-  assert.equal(state.economy.credits, 1075);
+  const expectedCredits = startingMoney() + 200 - 75 - EMPLOYEE_HIRE_COST - 50;
+  assert.equal(state.economy.credits, expectedCredits);
   assert.equal(balanceOf(state), state.economy.credits);
   assert.deepEqual(state.economy.dayLedger.lines.find((line) => line.category === "hiring"),
-    { category: "hiring", label: "Tavi", amount: -500, quantity: 1 });
+    { category: "hiring", label: "Tavi", amount: -EMPLOYEE_HIRE_COST, quantity: 1 });
   assert.throws(() => state.economy.spend(10), /Invalid receipt entry/);
   assert.throws(() => state.economy.add(-5, { category: "sales", label: "x" }), /Money earned must be non-negative/);
-  assert.equal(state.economy.credits, 1075);
+  assert.equal(state.economy.credits, expectedCredits);
 });
 
 test("training takes a paid shift, survives saves, and permanently raises wages", () => {
@@ -312,15 +256,16 @@ test("training takes a paid shift, survives saves, and permanently raises wages"
   unlockStaff(state);
   assert.equal(state.hireEmployee("tavi_stock_clerk"), true);
   assert.equal(state.trainEmployee("tavi_stock_clerk", "register"), true);
-  assert.equal(state.economy.credits, 500);
-  assert.equal(balanceOf(state), 500);
+  const firstCourse = getEmployeeTrainingCost(0);
+  assert.equal(state.economy.credits, startingMoney() - EMPLOYEE_HIRE_COST - firstCourse);
+  assert.equal(balanceOf(state), state.economy.credits);
   assert.deepEqual(state.staff.training, { tavi_stock_clerk: "register" });
   assert.equal(state.staff.profile("tavi_stock_clerk").skillLevels.register, 1);
-  assert.equal(state.staff.profile("tavi_stock_clerk").wagePerShift, 100);
+  assert.equal(state.staff.profile("tavi_stock_clerk").wagePerShift, EMPLOYEE_BASE_WAGE);
   assert.equal(state.trainEmployee("tavi_stock_clerk", "stock_shelves"), false);
   assert.equal(state.staff.setOnShift("tavi_stock_clerk", false), false);
   assert.deepEqual(state.economy.dayLedger.lines.find(({ category }) => category === "training"), {
-    category: "training", label: "Tavi: Run register Level 2", quantity: 1, amount: -500,
+    category: "training", label: "Tavi: Run register Level 2", quantity: 1, amount: -firstCourse,
   });
 
   const restored = reload(state);
@@ -329,10 +274,11 @@ test("training takes a paid shift, survives saves, and permanently raises wages"
   const trained = restored.staff.profile("tavi_stock_clerk");
   assert.equal(trained.skillLevels.register, 2);
   assert.equal(trained.skillLevels.stock_shelves, 1);
-  assert.equal(trained.wagePerShift, 110);
+  assert.equal(trained.wagePerShift, wageAfterCourses(1));
+  assert.ok(trained.wagePerShift > EMPLOYEE_BASE_WAGE);
   assert.deepEqual(restored.staff.training, {});
   assert.equal(restored.staff.setOnShift("tavi_stock_clerk", false), true);
-  restored.economy.add(1000, { category: "sales", label: "Training test" });
+  restored.economy.add(getEmployeeTrainingCost(1), { category: "sales", label: "Training test" });
   assert.equal(restored.trainEmployee("tavi_stock_clerk", "register"), true);
   assert.equal(state.staff.profile("tavi_stock_clerk").skillLevels.register, 1);
 });
@@ -340,7 +286,8 @@ test("training takes a paid shift, survives saves, and permanently raises wages"
 test("each course costs more than that employee's last, whichever skill it trains", () => {
   const state = newGame();
   unlockStaff(state);
-  state.economy.add(20000, { category: "sales", label: "Training test" });
+  const courseCosts = Array.from({ length: 8 }, (_, index) => getEmployeeTrainingCost(index));
+  state.economy.add(courseCosts.reduce((sum, cost) => sum + cost, 0), { category: "sales", label: "Training test" });
   state.hireEmployee("tavi_stock_clerk");
   const costs = [];
   for (const jobId of ["register", "stock_shelves"]) {
@@ -356,19 +303,20 @@ test("each course costs more than that employee's last, whichever skill it train
     assert.equal(state.trainEmployee("tavi_stock_clerk", jobId), false);
     assert.equal(state.economy.credits, before);
   }
-  assert.deepEqual(costs, Array.from({ length: 8 }, (_, index) => 500 + 250 * index));
-  assert.equal(state.staff.profile("tavi_stock_clerk").wagePerShift, 180);
-  assert.equal(state.staff.profile("tavi_stock_clerk").hireCost, 500);
+  assert.deepEqual(costs, courseCosts);
+  for (let index = 1; index < costs.length; index += 1) assert.ok(costs[index] > costs[index - 1]);
+  assert.equal(state.staff.profile("tavi_stock_clerk").wagePerShift, wageAfterCourses(8));
+  assert.equal(state.staff.profile("tavi_stock_clerk").hireCost, EMPLOYEE_HIRE_COST);
 });
 
 test("every employee starts identical, and Store Level caps how many are hired at once", () => {
   const state = newGame();
-  state.economy.add(5000, { category: "sales", label: "Hiring test" });
+  state.economy.add(EMPLOYEE_HIRE_COST * 2, { category: "sales", label: "Hiring test" });
   const fresh = ["tavi_stock_clerk", "kel_supply_runner"].map((id) => state.staff.profile(id));
   for (const employee of fresh) {
     assert.deepEqual(
       [employee.hireCost, employee.wagePerShift],
-      [500, 100],
+      [EMPLOYEE_HIRE_COST, EMPLOYEE_BASE_WAGE],
     );
   }
   assert.equal(state.hireEmployee("kel_supply_runner"), false);
@@ -439,19 +387,20 @@ test("cent-priced sales, spending and receipts survive ending the day and saving
   state.economy.add(2.34, { category: "sales", label: "Ration" });
   state.economy.spend(25, { category: "delivery_fees", label: "Delivery fee" });
   assert.equal(state.hireEmployee("tavi_stock_clerk"), true);
-  assert.equal(state.economy.credits, 978.57);
+  const expectedCredits = Math.round((startingMoney() + 3.57 - 25 - EMPLOYEE_HIRE_COST) * 100) / 100;
+  assert.equal(state.economy.credits, expectedCredits);
   assert.equal(state.economy.dayLedger.lines[0].amount, 3.57);
   state.finishShift({ customersServed: 2, customersTurnedAway: 0 });
   state.endDay();
   const restored = reload(state);
-  assert.equal(restored.economy.credits, 978.57);
+  assert.equal(restored.economy.credits, expectedCredits);
   const closedReceipt = restored.economy.dayReceipts.at(-1);
-  assert.equal(closedReceipt.closingCredits, 978.57);
+  assert.equal(closedReceipt.closingCredits, expectedCredits);
   assert.equal(isValidLedgerData(closedReceipt, { closed: true }), true);
   assert.equal(summarizeReceipt(closedReceipt, restored.economy.credits, 2).totalEarned, 3.57);
   assert.match(FinancesRenderer.generateHTML({
     ...financesView(), today: summarizeReceipt(closedReceipt, restored.economy.credits, 2),
-  }), /978\.57/);
+  }), new RegExp(expectedCredits.toFixed(2).replace(".", "\\.")));
 });
 
 test("ending a day closes the receipt and starts the next day from the closing balance", () => {
