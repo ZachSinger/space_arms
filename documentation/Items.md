@@ -2,7 +2,10 @@
 
 To view, compare, and edit items, run `npm run items`. It opens a local page (not part
 of the game) showing every item's price, unlock level, box size, and profit per crate,
-and its Save button writes `data/Items.json`.
+and its Save button writes `data/Items.json`. The final Crate profit % column shows
+profit divided by the crate's selling value, with a gauge on a 0-100% scale.
+The editor server restarts automatically when its code changes, without refreshing
+the page or discarding edits still in the page.
 
 ## Hands-on shelf boxes
 
@@ -24,7 +27,7 @@ onto several shelf spaces.
 | `tags` | What kind of product it is: customer interests, firearm/ammunition matching, and crate artwork use these. |
 | `boxSize` | Space taken by one product in a shelf space or crate. Both hold 20 space units: `2` means 10 products; `4` means 5. This also sets quantity per newly ordered crate. |
 | `baseCost` | Starting market price per product, before market changes. Also sets valid market-price ranges when reading saves. It is not the final supplier or selling price. |
-| `supplyPercent` | What the supplier charges per product, as a percent of `baseCost`, the same every game. A crate order costs base × percent × crate quantity, rounded to a whole number. |
+| `supplyPercent` | What the supplier charges per product, as a percent of `baseCost`, the same every game. A crate order costs base × percent × crate quantity, rounded to a whole number, with a minimum cost of 1. |
 | `license` | Supplier contract required before this product can be ordered. |
 | `ammo` | The ammunition type a firearm uses, or that an ammunition product supplies. Customers use it to buy matching ammunition. |
 | `count` | Intended rounds inside one ammunition product. Stored, but currently no gameplay reads it; it is not quantity per delivery crate. |

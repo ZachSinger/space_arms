@@ -18,7 +18,7 @@
     "check:build": "node scripts/check-build.mjs",
     "check:game": "node scripts/browser/run-checks.mjs",
     "check:crash": "npm run build && node scripts/browser/crash-recovery.mjs",
-    "items": "node scripts/item-editor/server.mjs"
+    "items": "node --watch --watch-path=scripts/item-editor/server.mjs scripts/item-editor/server.mjs"
   },
   "build": {
     "appId": "com.zachsinger.spacearmsdealer",

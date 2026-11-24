@@ -5,6 +5,7 @@ import { SaveManager, createSaveStorage, SAVE_STORAGE_KEY } from "../SaveManager
 import { DatabaseManager } from "../js/logic/DatabaseManager.js";
 import { BASIC_FIXTURES, getFixtureType } from "../js/logic/FixtureLayout.js";
 import { Market } from "../js/logic/Market.js";
+import { roundMoney } from "../js/logic/Money.js";
 import { SHOP_LAYOUT_VERSION, validateShopSave } from "../js/logic/ShopSave.js";
 
 const database = new DatabaseManager();
@@ -122,9 +123,10 @@ test("old pistol market prices are halved once, then both prices follow the mone
   old.market.prices.wpn_pis_02 = 55;
   old.playerState.storePrices.wpn_pis_02 = 70;
   const migrated = validateShopSave(old, database);
-  // Halved to 27.5, then the rebalance moves the base cost from 25 to 8.
-  assert.equal(migrated.market.prices.wpn_pis_02, 8.8);
-  assert.equal(migrated.playerState.storePrices.wpn_pis_02, 22.4);
+  // The halved market price keeps its 10% markup; the shelf price keeps its 70/25 ratio.
+  const baseCost = database.getItem("wpn_pis_02").baseCost;
+  assert.equal(migrated.market.prices.wpn_pis_02, roundMoney(baseCost * 1.1));
+  assert.equal(migrated.playerState.storePrices.wpn_pis_02, roundMoney(baseCost * 2.8));
   assert.equal(old.market.prices.wpn_pis_02, 55);
   assert.deepEqual(validateShopSave(migrated, database), migrated);
   const invalid = snapshot();

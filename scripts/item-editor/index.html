@@ -44,6 +44,7 @@
   input.price { width: 70px; text-align: right; }
   select.contract { width: 200px; color: var(--text); }
   .profit { display: flex; align-items: center; justify-content: flex-end; gap: 10px; font-weight: 600; color: var(--good); }
+  .profit.loss { color: var(--bad); }
   .bar { width: 70px; height: 8px; background: #1e293b; border-radius: 4px; overflow: hidden; }
   .bar div { height: 100%; background: var(--good); }
   .help { padding: 8px 16px; color: var(--dim); border-bottom: 1px solid var(--line); }
@@ -74,6 +75,7 @@ const crateValue = (item) => perCrate(item) * item.baseCost;
 // Same rounding as Market.getSupplyCost: once for the whole order, not per item.
 const crateCost = (item) => Math.max(1, Math.round(supplierPrice(item) * perCrate(item)));
 const crateProfit = (item) => crateValue(item) - crateCost(item);
+const crateProfitPercent = (item) => (crateProfit(item) / crateValue(item)) * 100;
 const typeOf = (item) => item.tags?.[0] ?? "";
 const kindOf = (item) => item.tags?.[item.tags.length - 1] ?? "";
 
@@ -91,6 +93,7 @@ const COLUMNS = [
   { key: "crateValue", label: "Crate sells for", sort: crateValue },
   { key: "crateCost", label: "Crate costs", sort: crateCost },
   { key: "crateProfit", label: "Crate profit", sort: crateProfit },
+  { key: "crateProfitPercent", label: "Crate profit %", sort: crateProfitPercent },
 ];
 
 async function load() {
@@ -104,7 +107,8 @@ async function load() {
   document.getElementById("help").innerHTML =
     `You can change the <b>yellow</b> columns. ` +
     `A crate has room for ${state.rules.crateUnits}, so an item of size 4 fits 5 per crate. One shelf space holds the same as one crate. ` +
-    `Profit is selling a full crate at base price, minus what the supplier charges for it (supplier % of base price).`;
+    `Profit is selling a full crate at base price, minus what the supplier charges for it. ` +
+    `Crate profit % is the percentage of that sale left as profit.`;
   render();
   setStatus(`${state.items.length} items.`);
 }
@@ -157,7 +161,7 @@ function cell(item, index, key) {
         .map((license) => `<option value="${escape(license.id)}" ${license.id === item.license ? "selected" : ""}>Lv ${license.level ?? "?"}: ${escape(license.name)}</option>`);
       return `<td><select class="contract" data-edit="${index}" data-key="license">${options.join("")}</select></td>`;
     }
-    case "baseCost":
+    case "baseCost": return `<td class="num"><input type="number" min="1" step="1" class="price" data-edit="${index}" data-key="${key}" value="${item[key]}"></td>`;
     case "supplyPercent": return `<td class="num"><input type="number" step="any" class="price" data-edit="${index}" data-key="${key}" value="${item[key]}"></td>`;
     case "boxSize": {
       const options = state.rules.boxSizes.map((size) => `<option ${size === item.boxSize ? "selected" : ""}>${size}</option>`);
@@ -172,9 +176,11 @@ function outputHtml(item, key) {
   if (key === "perCrate") return `${perCrate(item)}`;
   if (key === "crateValue") return money(crateValue(item));
   if (key === "crateCost") return money(crateCost(item));
-  const profit = crateProfit(item);
-  const width = Math.max(0, Math.min(100, (profit / state.maxProfit) * 100));
-  return `<div class="profit">${money(profit)}<div class="bar"><div style="width:${width}%"></div></div></div>`;
+  const isPercent = key === "crateProfitPercent";
+  const profit = isPercent ? crateProfitPercent(item) : crateProfit(item);
+  const width = Math.max(0, Math.min(100, isPercent ? profit : (profit / state.maxProfit) * 100));
+  const label = isPercent ? `${profit.toLocaleString("en-US", { maximumFractionDigits: 1 })}%` : money(profit);
+  return `<div class="profit${profit < 0 ? " loss" : ""}">${label}<div class="bar"><div style="width:${width}%"></div></div></div>`;
 }
 
 function render() {
@@ -220,9 +226,10 @@ function setStatus(text, kind = "") {
 function applyEdit(target) {
   const index = Number(target.dataset.edit);
   const key = target.dataset.key;
-  const value = key === "license" ? target.value : Number(target.value);
+  const value = key === "license" ? target.value : target.value === "" && key === "supplyPercent" ? NaN : Number(target.value);
   state.items[index][key] = value;
-  target.classList.toggle("invalid", key !== "license" && key !== "boxSize" && !(value > 0));
+  const valid = key === "supplyPercent" ? Number.isFinite(value) : value > 0;
+  target.classList.toggle("invalid", key !== "license" && key !== "boxSize" && !valid);
   refreshRow(index);
   refreshButtons();
 }
