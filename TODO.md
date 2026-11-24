@@ -29,6 +29,8 @@ completed or no longer relevant.
 - [ ] Let players redecorate with different floors, walls, and doors.
 - [ ] Add a redecorating mode that hides shelves, registers, and all other fixtures,
       showing only the walls, floors, and doors, so changes to them are easy to see.
+- [ ] Add multiple save file slots. Track how long the player has played each save, and
+      show on every save the date and time it was last saved and its total play time.
 
 ## Planned modules after the base shop
 
@@ -49,9 +51,10 @@ completed or no longer relevant.
 - [x] Add [Customer Experience](documentation/modules/CustomerExperience.md): customers
       quietly rate visits, some leave funny reviews, and the Manager's Tablet shows the store's
       rating and every review. Unlocks after the second shift.
-- [ ] Add Delivery Drones: little bots that put accepted remote orders together from stock
-      in the shop and ship them, plus a Deliveries tab on the Manager's Tablet. Open questions
-      are in [DeliveryDroneQuestions](documentation/modules/DeliveryDroneQuestions.md).
+- [x] Add Delivery Drones: little bots that put accepted remote orders together from stock
+      in the shop and ship them, plus a Deliveries tab on the Manager's Tablet. First-pass
+      picks are in [DroneDeliveries](documentation/modules/DroneDeliveries.md); unanswered
+      questions are in [DeliveryDroneQuestions](documentation/modules/DeliveryDroneQuestions.md).
 
 ## Other ideas
 
