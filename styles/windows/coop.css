@@ -1,0 +1,44 @@
+.coop-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 16px;
+  color: var(--color-text);
+  background: var(--color-panel);
+  border-bottom: 2px solid var(--color-border-subtle);
+  font-family: monospace;
+  font-size: var(--font-size-14);
+  z-index: 10;
+}
+.coop-bar .coop-bar-value { color: #fecaca; font-weight: bold; }
+.coop-bar .coop-bar-hint { margin-left: auto; color: var(--color-text-muted); }
+.coop-notice {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 16px 24px;
+  color: var(--color-text);
+  background: var(--color-panel);
+  border: 1px solid var(--color-border-subtle);
+  font-family: monospace;
+  font-size: var(--font-size-18);
+  z-index: 10;
+}
+.coop-notice.hidden,
+.coop-bar.hidden { display: none; }
+.coop-join-form { display: flex; flex-direction: column; gap: 10px; }
+.coop-join-form p { margin: 0; color: var(--color-text-muted); font-size: var(--font-size-14); }
+.coop-join-form input {
+  padding: 8px;
+  color: var(--color-text);
+  background: #0f172a;
+  border: 1px solid var(--color-border-subtle);
+  font: inherit;
+}
+.coop-join-status { min-height: 1.2em; color: var(--color-text-muted); font-size: var(--font-size-14); }

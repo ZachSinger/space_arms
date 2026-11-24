@@ -11,6 +11,8 @@ import fs from "fs/promises";
 import os from "os";
 import { sendBugReport, validateBugReport } from "./js/logic/BugReport.js";
 import { PendingErrorStore } from "./js/logic/PendingErrors.js";
+import { startSteam } from "./js/platform/steam.js";
+import { installCoop } from "./js/platform/coop.js";
 
 // ES modules have no __dirname.
 const __filename = fileURLToPath(import.meta.url);
@@ -21,9 +23,16 @@ const DEV_SERVER_URL = "http://localhost:5173";
 const GAME_URL = "app://game/index.html";
 const DIST_DIRECTORY = path.join(__dirname, "dist");
 
-// Pin the save folder so it doesn't move with the packaged app's display name.
-app.setPath("userData", path.join(app.getPath("appData"), "space-arms-dealer"));
+// Pin the save folder so it doesn't move with the packaged app's display name. A second copy
+// on the same PC (co-op testing) sets SPACE_ARMS_PROFILE to keep its own saves and settings.
+const profile = process.env.SPACE_ARMS_PROFILE?.replace(/[^\w-]/g, "") ?? "";
+app.setPath("userData", path.join(app.getPath("appData"), profile ? `space-arms-dealer-${profile}` : "space-arms-dealer"));
 const pendingErrors = new PendingErrorStore(path.join(app.getPath("userData"), "pending-errors.json"));
+const coop = installCoop({
+  ipcMain,
+  getWindows: () => BrowserWindow.getAllWindows(),
+  steam: startSteam(app),
+});
 
 function recordProcessError(type, error, extra = {}) {
   try {
@@ -152,7 +161,8 @@ const createWindow = () => {
   const win = new BrowserWindow({
     width: 1280,
     height: 720,
-    fullscreen: true,
+    // A second copy on the same PC opens in a window so both games fit on screen.
+    fullscreen: !profile,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -160,7 +170,7 @@ const createWindow = () => {
     },
   });
 
-  displayModes.set(win, "fullscreen");
+  displayModes.set(win, profile ? "windowed" : "fullscreen");
   win.setMenuBarVisibility(false);
   win.webContents.on("render-process-gone", (_event, details) => {
     if (details.reason === "clean-exit") return;
@@ -302,7 +312,14 @@ app.whenReady().then(async () => {
     developmentServer = await createServer({
       server: { port: 5173, strictPort: true },
     });
-    await developmentServer.listen();
+    try {
+      await developmentServer.listen();
+    } catch (error) {
+      // A second copy (co-op testing on one PC) uses the first copy's development server.
+      if (!String(error?.message).includes("5173")) throw error;
+      await developmentServer.close();
+      developmentServer = null;
+    }
   }
 
   protocol.handle("app", serveGameFile);
@@ -318,6 +335,7 @@ app.whenReady().then(async () => {
 });
 
 app.on("before-quit", () => {
+  coop.shutdown();
   if (!developmentServer) return;
   const server = developmentServer;
   developmentServer = null;

@@ -25,6 +25,7 @@ export class PauseMenu {
           <button class="action-btn" data-pause-action="resume" data-pad-autofocus>Resume</button>
           <button class="action-btn" data-pause-action="save">Save Game</button>
           <button class="action-btn" data-pause-action="load">Load Game</button>
+          <button class="action-btn" data-pause-action="invite">Invite a Friend</button>
           <button class="action-btn" data-pause-action="settings">Settings</button>
           <button class="action-btn" data-pause-action="bug-report">Report a Problem</button>
           <button class="action-btn" data-pause-action="menu">Exit to Main Menu</button>
@@ -132,6 +133,7 @@ export class PauseMenu {
     save.title = save.disabled ? reason : "";
     this.uiWindow.element.querySelector('[data-pause-action="desktop"]').disabled = !window.desktopApi?.quitGame;
     this.status(save.disabled ? reason : "");
+    this.refreshCoop();
     this.uiWindow.element.querySelector('[data-pause-action="resume"]').focus();
     this.shop.controls.uiNavigator?.setHudOpen(false);
   }
@@ -151,6 +153,28 @@ export class PauseMenu {
 
   status(message) {
     this.uiWindow.element.querySelector(".pause-status").textContent = message;
+  }
+
+  // Co-op needs the desktop game; with a friend already in the shop there's no one to invite.
+  refreshCoop() {
+    const invite = this.uiWindow.element.querySelector('[data-pause-action="invite"]');
+    const coop = this.shop.coop;
+    invite.disabled = !window.desktopApi?.coop || Boolean(coop?.friendConnected);
+    invite.title = !window.desktopApi?.coop ? "Playing with a friend needs the desktop game."
+      : coop?.friendConnected ? `${coop.status.peerName} is already in your shop.` : "";
+  }
+
+  async inviteFriend() {
+    const api = window.desktopApi.coop;
+    const hosting = await api.host();
+    if (hosting.steam && await api.invite()) {
+      this.status("Pick a friend in Steam's invite window. They'll appear in your shop when they accept.");
+      return;
+    }
+    const address = hosting.addresses[0];
+    this.status(address
+      ? `Steam isn't running, so invites are off. A friend on your home network can join from the title screen with this address: ${address}`
+      : "Steam isn't running and no network was found, so no one can join right now.");
   }
 
   restoreBackground() {
@@ -184,6 +208,7 @@ export class PauseMenu {
       this.bugReport.openWindow();
       this.bugReportTitle.focus();
     }
+    else if (action === "invite") await this.inviteFriend();
     else if (action === "save") {
       await this.shop.saves.saveManually();
       this.status(this.shop.saves.status);

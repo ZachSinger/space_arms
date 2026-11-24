@@ -19,22 +19,45 @@ export const PLAYER_CARRY_SPRITE = Object.freeze({
   frameHeight: PLAYER_SPRITE.frameHeight,
 });
 
+// The co-op partner: the same mechanic in red.
+export const PARTNER_SPRITE = Object.freeze({
+  ...PLAYER_SPRITE,
+  key: "player_partner_red",
+  path: "img/Icons_Extracted/Tileset/Characters/player_partner_red.png",
+});
+
+export const PARTNER_CARRY_SPRITE = Object.freeze({
+  ...PLAYER_SPRITE,
+  key: "player_partner_red_carry",
+  path: "img/Icons_Extracted/Tileset/Characters/player_partner_red_carry.png",
+});
+
+export const PLAYER_LOOK = Object.freeze({
+  sheet: PLAYER_SPRITE, carrySheet: PLAYER_CARRY_SPRITE, walk: "player_walk", carryWalk: "player_carry_walk",
+});
+
+export const PARTNER_LOOK = Object.freeze({
+  sheet: PARTNER_SPRITE, carrySheet: PARTNER_CARRY_SPRITE, walk: "partner_walk", carryWalk: "partner_carry_walk",
+});
+
 // The bottom crate rests on the raised hands above the player's head.
 export const PLAYER_CRATE_HOLD_OFFSET = 42;
 
 const FACING_ROWS = Object.freeze({ down: 0, left: 1, right: 2, up: 3 });
 
 export function registerPlayerAnimations(anims) {
-  for (const [sheet, prefix] of [[PLAYER_SPRITE, "player_walk"], [PLAYER_CARRY_SPRITE, "player_carry_walk"]]) {
-    for (const [facing, row] of Object.entries(FACING_ROWS)) {
-      const key = `${prefix}_${facing}`;
-      if (anims.exists(key)) continue;
-      anims.create({
-        key,
-        frames: [0, 1, 2, 1].map((column) => ({ key: sheet.key, frame: row * 3 + column })),
-        frameRate: 8,
-        repeat: -1,
-      });
+  for (const look of [PLAYER_LOOK, PARTNER_LOOK]) {
+    for (const [sheet, prefix] of [[look.sheet, look.walk], [look.carrySheet, look.carryWalk]]) {
+      for (const [facing, row] of Object.entries(FACING_ROWS)) {
+        const key = `${prefix}_${facing}`;
+        if (anims.exists(key)) continue;
+        anims.create({
+          key,
+          frames: [0, 1, 2, 1].map((column) => ({ key: sheet.key, frame: row * 3 + column })),
+          frameRate: 8,
+          repeat: -1,
+        });
+      }
     }
   }
 }
@@ -65,13 +88,20 @@ export const PLAYER_BODY_HEIGHT = 20;
 const BODY_BOTTOM_GAP = 4;
 
 export class Player {
-  constructor(scene, spawnX, spawnY) {
+  /**
+   * @param {object} scene
+   * @param {number} spawnX
+   * @param {number} spawnY
+   * @param {typeof PLAYER_LOOK} [look] - sprite sheets and animation names
+   */
+  constructor(scene, spawnX, spawnY, look = PLAYER_LOOK) {
     this.scene = scene;
+    this.look = look;
     this.currentFacing = "down";
     this.carryingPose = false;
 
     this.sprite = scene.add
-      .sprite(spawnX, spawnY, PLAYER_SPRITE.key, 1)
+      .sprite(spawnX, spawnY, look.sheet.key, 1)
       .setDisplaySize(PLAYER_DISPLAY_WIDTH, PLAYER_DISPLAY_HEIGHT)
       // Keep the collision box at its old world position despite the taller art canvas.
       .setOrigin(0.5, 0.625)
@@ -135,9 +165,19 @@ export class Player {
       vx = 0;
       vy = 0;
     }
+    this.move(vx, vy, (mapped ? mapped("dash") : this.dashKey.isDown) || Boolean(pad?.dash), delta);
+  }
 
+  /**
+   * Walk (or dash, while stamina lasts) in a direction for one frame.
+   * @param {number} vx - -1 to 1
+   * @param {number} vy - -1 to 1
+   * @param {boolean} dash
+   * @param {number} delta - ms
+   */
+  move(vx, vy, dash, delta) {
     let speed = MOVE_SPEED;
-    const wantsDash = (vx !== 0 || vy !== 0) && ((mapped ? mapped("dash") : this.dashKey.isDown) || Boolean(pad?.dash));
+    const wantsDash = (vx !== 0 || vy !== 0) && dash;
     if (wantsDash && !this.exhausted && this.stamina > 0) {
       const dashSeconds = Math.min(delta / 1000, this.stamina / STAMINA_DRAIN_PER_SECOND);
       if (!this.infiniteStamina) {
@@ -162,7 +202,7 @@ export class Player {
       vy /= magnitude;
     }
 
-    const crates = this.scene.carriedCrates ?? (this.scene.carriedCrate ? [this.scene.carriedCrate] : []);
+    const crates = this.carriedCrates();
     if (crates.length > 1) {
       const fullMultiplier = crates.length >= 3
         ? THREE_CRATE_CARRY_SPEED_MULTIPLIER : STACKED_CARRY_SPEED_MULTIPLIER;
@@ -184,17 +224,24 @@ export class Player {
     this.updateCarryPose();
     const facing = Math.abs(vx) > Math.abs(vy) ? (vx < 0 ? "left" : "right") : vy < 0 ? "up" : "down";
     this.currentFacing = facing;
-    this.sprite.play(`${this.carryingPose ? "player_carry_walk" : "player_walk"}_${facing}`, true);
+    this.sprite.play(`${this.carryingPose ? this.look.carryWalk : this.look.walk}_${facing}`, true);
+  }
+
+  carriedCrates() {
+    return this.scene.carriedCrates ?? (this.scene.carriedCrate ? [this.scene.carriedCrate] : []);
+  }
+
+  isCarrying() {
+    return Boolean(this.scene.carriedCrates?.length || this.scene.carriedCrate || this.scene.hovercart?.carried);
   }
 
   updateCarryPose() {
-    const carrying = Boolean(this.scene.carriedCrates?.length || this.scene.carriedCrate ||
-      this.scene.hovercart?.carried);
+    const carrying = this.isCarrying();
     if (carrying === this.carryingPose) return;
     this.carryingPose = carrying;
     this.sprite.anims.stop();
     this.sprite.setTexture(
-      carrying ? PLAYER_CARRY_SPRITE.key : PLAYER_SPRITE.key,
+      carrying ? this.look.carrySheet.key : this.look.sheet.key,
       FACING_ROWS[this.currentFacing] * 3 + 1,
     );
   }

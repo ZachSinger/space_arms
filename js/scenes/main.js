@@ -10,6 +10,7 @@ import "../../styles/windows/remote-orders.css";
 import "../../styles/windows/tutorial.css";
 import "../../styles/windows/settings.css";
 import "../../styles/windows/pause.css";
+import "../../styles/windows/coop.css";
 import "../../styles/windows/checkout.css";
 import "../../styles/windows/contracts.css";
 import "../../styles/windows/employee.css";
@@ -27,6 +28,7 @@ import { ShelfLabScene } from "./shelfLab.js";
 import { CrateLabScene } from "./crateLab.js";
 import { ShelfCollisionLabScene } from "./shelfCollisionLab.js";
 import { DeliveryCrateLabScene } from "./deliveryCrateLab.js";
+import { CoopFriendScene } from "./coopFriend.js";
 import { watchKeyboardAndMouse } from "../input/InputDevice.js";
 import { installGameCursor } from "../logic/GameCursor.js";
 import { ErrorReportPrompt } from "../debug/ErrorReportPrompt.js";
@@ -74,12 +76,28 @@ const config = {
       debug: false, // true only when tuning counter or wall hitboxes
     },
   },
-  scene: [BootScene, TitleScene, GameScene, ShelfLabScene, CrateLabScene, ShelfCollisionLabScene, DeliveryCrateLabScene],
+  scene: [BootScene, TitleScene, GameScene, ShelfLabScene, CrateLabScene, ShelfCollisionLabScene, DeliveryCrateLabScene, CoopFriendScene],
 };
 
 // Exposed for devtools/debugging convenience (e.g. `window.__game.scene.getScene(...)`).
 window.__game = game = new Phaser.Game(config);
 game.events.once("ready", () => applyGameRenderResolution(game));
+const coop = window.desktopApi?.coop;
+if (coop) {
+  let coopRole = null;
+  void coop.status().then((status) => { coopRole = status.role; });
+  // A Steam invite can be accepted from any screen. The title screen hands over to the friend's
+  // view right away; anywhere else, restarting the page lands on the title, which does the same.
+  coop.onStatus((status) => {
+    coopRole = status.role;
+    if (status.role !== "friend" || game.scene.isActive("scene-coop-friend")) return;
+    if (game.scene.isActive("scene-title")) game.scene.getScene("scene-title").scene.start("scene-coop-friend");
+    else if (!game.scene.isActive("scene-boot")) window.location.reload();
+  });
+  window.addEventListener("beforeunload", () => {
+    if (coopRole === "host") void coop.leave();
+  });
+}
 if (window.desktopApi) {
   window.desktopApi.getDisplaySettings()
     .then(setGameDisplaySettings)

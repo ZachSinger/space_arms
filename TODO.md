@@ -41,6 +41,7 @@ completed or no longer relevant.
 - [ ] Add security, including thieves and a minigame to stop them. This is postponed until
       the player can leave the shop.
 - [ ] Add more ways to customize the shop, including tinting.
+- [ ] Add a character creator so players can customize their shopkeeper.
 - [ ] Add a [Shooting Range](documentation/modules/ShootingRange.md) with paid customer
       lanes, firearm tuning, and stairs down to the range.
 - [ ] Add the new [Hovercart](documentation/modules/Hovercart.md) at Shop Level 7: a
@@ -61,5 +62,7 @@ completed or no longer relevant.
 - [ ] Consider Steam achievements.
 - [ ] Add Steam co-op as a post-launch update: one player hosts and a friend works in the
       host's shop, with saving and ending the day reserved for the host. The host owns the
-      game state. Start with a local two-window prototype, then add Steamworks lobbies,
-      invites, and peer-to-peer transport.
+      game state. First version works: the friend walks around the host's shop as the Red
+      partner (Steam invites or a home-network address). Next: partner jobs (crates, register,
+      stocking), the pause rule, and the open questions. Plan, how to test, and questions:
+      `documentation/Modules/SteamCoop.md`.

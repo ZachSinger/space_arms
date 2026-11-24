@@ -28,6 +28,7 @@ export function fixtureDepth(baseBottomPx) {
 export function sortPeopleByFeet(shop) {
   const people = [
     shop.player?.sprite,
+    shop.coop?.partner?.sprite,
     ...shop.customers.map((customer) => (customer.isDestroyed ? null : customer.sprite)),
     ...shop.employees.map((employee) => employee.sprite),
   ];
@@ -36,6 +37,7 @@ export function sortPeopleByFeet(shop) {
   }
   syncPeopleVisibilityOutlines(shop, [
     shop.player?.sprite,
+    shop.coop?.partner?.sprite,
     ...shop.employees.map((employee) => employee.isDestroyed ? null : employee.sprite),
   ]);
   // Tucked behind the counter, the register draws just over him and hides his legs.

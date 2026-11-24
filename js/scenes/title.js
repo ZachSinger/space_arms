@@ -38,6 +38,7 @@ export class TitleScene extends Phaser.Scene {
         label: "CONTINUE",
         action: () => this.continueGame(),
       },
+      { label: "JOIN A FRIEND", action: () => this.openJoinWindow() },
       {
         label: "SETTINGS",
         action: () => this.settingsPanel.open(),
@@ -174,6 +175,7 @@ export class TitleScene extends Phaser.Scene {
       this.startGameScene({ sandbox: true, lab: "crates" });
     });
     devButton("[data-dev-cancel]", () => this.devWindow.close());
+    this.buildJoinWindow();
     this.padInput = new GamepadInput();
     this.uiNavigator = new UINavigator();
     this.events.once("shutdown", () => {
@@ -182,6 +184,65 @@ export class TitleScene extends Phaser.Scene {
       this.settingsPanel.destroy();
       this.windowManager.destroy();
     });
+    // Accepting a Steam invite can happen on any screen; this game may already be joined.
+    void window.desktopApi?.coop?.status().then((status) => {
+      if (status.role === "friend" && this.scene.isActive()) this.scene.start("scene-coop-friend");
+    });
+  }
+
+  buildJoinWindow() {
+    this.joinWindow = new UIWindow({
+      id: "coop-join", title: "JOIN A FRIEND", width: "420px", height: "auto",
+      x: 80, y: 120, onClose: () => this.setMenuActive(true),
+      contentHTML: `
+        <div class="coop-join-form">
+          <p>You'll walk around your friend's shop as the red shopkeeper.</p>
+          <p>Playing on Steam: keep this screen open and accept your friend's invite in Steam. You'll join on your own.</p>
+          <p>On the same home network without Steam: type the address your friend's pause menu shows.</p>
+          <input type="text" data-coop-address placeholder="Address, like 192.168.1.20" spellcheck="false">
+          <div class="coop-join-status" data-coop-join-status></div>
+          <button class="action-btn" data-coop-join>JOIN</button>
+          <button class="action-btn" data-coop-join-cancel>CANCEL</button>
+        </div>
+      `,
+    }, this.windowManager);
+    const element = this.joinWindow.element;
+    const status = element.querySelector("[data-coop-join-status]");
+    const join = element.querySelector("[data-coop-join]");
+    element.querySelector("[data-coop-join-cancel]").addEventListener("click", () => this.joinWindow.close());
+    join.addEventListener("click", async () => {
+      const address = element.querySelector("[data-coop-address]").value.trim();
+      if (!address) {
+        status.textContent = "Type your friend's address first.";
+        return;
+      }
+      join.disabled = true;
+      status.textContent = "Joining...";
+      try {
+        const result = await window.desktopApi.coop.joinAddress(address);
+        if (result.role === "friend") {
+          this.joinWindow.close();
+          if (this.scene.isActive()) this.scene.start("scene-coop-friend");
+          return;
+        }
+        status.textContent = "Couldn't reach that address. Check it, and make sure your friend picked Invite a Friend.";
+      } catch (error) {
+        console.error("Could not join a friend:", error);
+        status.textContent = "Couldn't reach that address. Check it, and make sure your friend picked Invite a Friend.";
+      } finally {
+        join.disabled = false;
+      }
+    });
+  }
+
+  openJoinWindow() {
+    if (this.loadingSave) return;
+    if (!window.desktopApi?.coop) {
+      this.showStatus("PLAYING WITH A FRIEND NEEDS THE DESKTOP GAME");
+      return;
+    }
+    this.setMenuActive(false);
+    this.joinWindow.openWindow();
   }
 
   handleResize(gameSize) {
@@ -270,7 +331,7 @@ export class TitleScene extends Phaser.Scene {
       menuItem.setPosition(width / 2, height / 2 + index * 48);
     });
 
-    this.statusText.setPosition(width / 2, height / 2 + 175);
+    this.statusText.setPosition(width / 2, height / 2 + this.menuItems.length * 48 + 10);
   }
 
   /**

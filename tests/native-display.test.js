@@ -30,7 +30,7 @@ test("native display choices work across modes and Windows display scaling", asy
     protocol: { registerSchemesAsPrivileged() {}, handle() {} },
     net: {},
     shell: {},
-    ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
+    ipcMain: { handle: (name, handler) => handlers.set(name, handler), on() {} },
     screen: { getDisplayMatching: () => display },
     BrowserWindow: class {
       static fromWebContents(value) { return value === sender ? window : null; }

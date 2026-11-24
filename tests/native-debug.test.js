@@ -54,7 +54,7 @@ test("native debug captures keep numbered screenshot/report pairs and wait for w
     },
     protocol: { registerSchemesAsPrivileged() {}, handle() {} },
     net: {},
-    ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
+    ipcMain: { handle: (name, handler) => handlers.set(name, handler), on() {} },
     screen: {},
     shell: { openPath: async (value) => { openedPath = value; return openError; } },
     BrowserWindow: class {

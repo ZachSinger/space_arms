@@ -30,6 +30,8 @@ function syncOutline(shop, source, color, visible) {
       sprite.destroy();
       entry = { object: shop.add.graphics().setDepth(PEOPLE_VISIBILITY_DEPTH), boundsOutline: true };
     }
+    // Glow outlines don't copy to a co-op friend's screen; there they'd draw as a solid figure.
+    entry.object.mirrorSkip = true;
     outlines.set(source, entry);
   }
   if (entry.boundsOutline) {
@@ -69,7 +71,8 @@ export function syncPeopleVisibilityOutlines(shop, people) {
     const sprite = person?.sprite ?? person;
     if (!sprite?.active) continue;
     visiblePeople.add(sprite);
-    const color = sprite === shop.player?.sprite ? 0x67e8f9 : 0xfbbf24;
+    const color = sprite === shop.player?.sprite ? 0x67e8f9
+      : sprite === shop.coop?.partner?.sprite ? 0xfca5a5 : 0xfbbf24;
     syncOutline(shop, sprite, color, isOccludedByShelf(sprite, shelves));
   }
   for (const [source, entry] of shop.peopleVisibilityOutlines) {

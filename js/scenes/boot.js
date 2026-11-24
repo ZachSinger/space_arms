@@ -12,7 +12,7 @@ import { installSceneTextSize } from "../logic/GameTextSize.js";
 import { SHOP_TILE_ASSETS } from "../logic/ShopTiles.js";
 import { BACKROOM_TILE_ASSETS } from "../logic/BackroomTiles.js";
 import { BACKROOM_DOOR_SPRITE, STORE_DOOR_SPRITE } from "../logic/SlidingDoor.js";
-import { PLAYER_CARRY_SPRITE, PLAYER_SPRITE, registerPlayerAnimations } from "../logic/Player.js";
+import { PARTNER_CARRY_SPRITE, PARTNER_SPRITE, PLAYER_CARRY_SPRITE, PLAYER_SPRITE, registerPlayerAnimations } from "../logic/Player.js";
 import { FIXTURE_CRATE_SPRITE, ITEM_CRATE_SPRITE } from "../logic/Crate.js";
 import { ensureCleaningTextures } from "../modules/cleaning/CleaningArt.js";
 
@@ -27,7 +27,7 @@ export class BootScene extends Phaser.Scene {
   preload() {
     this.load.json("items", "data/Items.json");
     this.load.json("licenses", "data/Licenses.json");
-    for (const sheet of [PLAYER_SPRITE, PLAYER_CARRY_SPRITE]) {
+    for (const sheet of [PLAYER_SPRITE, PLAYER_CARRY_SPRITE, PARTNER_SPRITE, PARTNER_CARRY_SPRITE]) {
       this.load.spritesheet(sheet.key, sheet.path, {
         frameWidth: sheet.frameWidth,
         frameHeight: sheet.frameHeight,
@@ -51,7 +51,7 @@ export class BootScene extends Phaser.Scene {
     installSceneTextSize(this, Phaser);
     ensureCleaningTextures(this);
     // Pixel art drawn larger or smaller than its sheet stays crisp.
-    for (const key of [PLAYER_SPRITE.key, PLAYER_CARRY_SPRITE.key, STORE_DOOR_SPRITE.key, BACKROOM_DOOR_SPRITE.key,
+    for (const key of [PLAYER_SPRITE.key, PLAYER_CARRY_SPRITE.key, PARTNER_SPRITE.key, PARTNER_CARRY_SPRITE.key, STORE_DOOR_SPRITE.key, BACKROOM_DOOR_SPRITE.key,
       ITEM_CRATE_SPRITE.key, FIXTURE_CRATE_SPRITE.key,
       ...SHOP_TILE_ASSETS.map((asset) => asset.key), ...BACKROOM_TILE_ASSETS.map((asset) => asset.key)]) {
       this.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);

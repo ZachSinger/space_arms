@@ -72,6 +72,7 @@ import { hideLoadingScreen } from "./loadingScreen.js";
 import { installSceneTextSize } from "../logic/GameTextSize.js";
 import { gameRandom, randomSeed } from "../core/Random.js";
 import { PauseMenu } from "../logic/PauseMenu.js";
+import { CoopHost } from "../coop/CoopHost.js";
 import { playCrateHit, setSfxPaused } from "../logic/Sfx.js";
 
 // How far below the doorway cell's center a customer's feet must be for their head to stay
@@ -393,6 +394,7 @@ export class GameScene extends Phaser.Scene {
     this.managerTablet = new ManagerTablet(this.windowManager, this.gameState, this);
     this.diagnostics = new RecentDiagnostics(this);
     this.pauseMenu = new PauseMenu(this);
+    this.coop = new CoopHost(this);
     // REAL games run without the debug recorder; every call site uses debugInfo?.
     this.debugInfo = this.realMode ? null : new DebugInfo(this);
     this.reputationPenalties = new ReputationPenalties(this);
@@ -487,9 +489,11 @@ export class GameScene extends Phaser.Scene {
       // Skipping customer update() also freezes their state-machine timers, not just movement.
       this.player.sprite.body.setVelocity(0, 0);
       this.player.forceFacing(this.player.currentFacing);
+      this.coop?.update(delta, true);
       for (const crate of this.restockCrates) if (crate.isPushed) crate.stopPush();
     } else {
       this.player.update(delta);
+      this.coop?.update(delta, false);
       this.crateWorld.updateCratePushing(delta);
       this.crateSystem.syncCarriedCrate();
       this.crateSystem.syncFloorStacks();

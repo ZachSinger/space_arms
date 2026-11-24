@@ -17,7 +17,7 @@ test("native saves replace atomically, serialize writes, recover from errors, an
     app: { getPath: () => directory, setPath() {}, whenReady: () => Promise.resolve(), on() {} },
     protocol: { registerSchemesAsPrivileged() {}, handle() {} },
     net: {},
-    ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
+    ipcMain: { handle: (name, handler) => handlers.set(name, handler), on() {} },
     screen: {},
     BrowserWindow: class {
       constructor() {

@@ -13,6 +13,8 @@ let cacheDirectory;
 let Player;
 let PLAYER_SPRITE;
 let PLAYER_CARRY_SPRITE;
+let PARTNER_SPRITE;
+let PARTNER_CARRY_SPRITE;
 let registerPlayerAnimations;
 
 before(async () => {
@@ -25,7 +27,7 @@ before(async () => {
     optimizeDeps: { noDiscovery: true, include: [] },
     server: { middlewareMode: true },
   });
-  ({ Player, PLAYER_SPRITE, PLAYER_CARRY_SPRITE, registerPlayerAnimations } =
+  ({ Player, PLAYER_SPRITE, PLAYER_CARRY_SPRITE, PARTNER_SPRITE, PARTNER_CARRY_SPRITE, registerPlayerAnimations } =
     await server.ssrLoadModule("/js/logic/Player.js"));
 });
 
@@ -122,8 +124,9 @@ test("normal and carrying sheets have a looping walk cycle in all four direction
   };
   registerPlayerAnimations(manager);
   registerPlayerAnimations(manager);
-  assert.equal(animations.size, 8);
-  for (const [sheet, prefix] of [[PLAYER_SPRITE, "player_walk"], [PLAYER_CARRY_SPRITE, "player_carry_walk"]]) {
+  assert.equal(animations.size, 16);
+  for (const [sheet, prefix] of [[PLAYER_SPRITE, "player_walk"], [PLAYER_CARRY_SPRITE, "player_carry_walk"],
+    [PARTNER_SPRITE, "partner_walk"], [PARTNER_CARRY_SPRITE, "partner_carry_walk"]]) {
     for (const [facing, row] of [["down", 0], ["left", 1], ["right", 2], ["up", 3]]) {
       const config = animations.get(`${prefix}_${facing}`);
       assert.deepEqual(config.frames, [0, 1, 2, 1].map((column) =>
