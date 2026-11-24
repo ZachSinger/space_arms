@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Unlocks - Space Arms Dealer</title>
+<style>
+  :root { color-scheme: dark; --bg: #0b1120; --panel: #111a2e; --line: #1f2b45; --text: #e2e8f5; --dim: #7d8cab; --accent: #38bdf8; --good: #4ade80; --bad: #f87171; --changed: #3a2e0c; }
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 17px; margin: 0 10px 0 0; }
+  nav a { color: var(--dim); text-decoration: none; margin-right: 12px; }
+  nav a:hover { color: var(--accent); }
+  button { background: #1e293b; color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 7px 14px; cursor: pointer; font: inherit; }
+  button.primary { background: #0c4a6e; border-color: var(--accent); }
+  button:disabled { opacity: .4; cursor: default; }
+  #status { color: var(--dim); margin-left: auto; }
+  #status.bad { color: var(--bad); white-space: pre-line; }
+  #status.good { color: var(--good); }
+  main { overflow: auto; flex: 1; min-height: 0; padding: 0 16px 40px; }
+  section { margin-top: 22px; }
+  h2 { font-size: 15px; color: var(--accent); margin: 0 0 8px; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  .columns { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
+  table { border-collapse: separate; border-spacing: 0; }
+  th { background: #16213a; text-align: right; padding: 7px 9px; border-bottom: 2px solid var(--line); white-space: nowrap; }
+  th.left { text-align: left; }
+  th.edit { color: #fde68a; }
+  td { padding: 3px 9px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.dim { color: var(--dim); }
+  td.unlocks { white-space: normal; color: var(--dim); min-width: 320px; max-width: 560px; }
+  td.unlocks span { color: var(--text); }
+  tr.changed td, label.changed { background: var(--changed); }
+  input { background: #0f172a; color: #fde68a; border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: inherit; width: 90px; text-align: right; }
+  input.level { width: 60px; }
+  input:focus { border-color: var(--accent); outline: none; }
+  input.invalid { border-color: var(--bad); }
+  .fields { display: flex; flex-wrap: wrap; gap: 18px; }
+  .fields label { display: flex; gap: 8px; align-items: center; color: #fde68a; padding: 4px 6px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Unlocks</h1>
+  <nav>
+    <a href="#levels">Shop levels</a><a href="#contracts">Contracts</a><a href="#rooms">Expansions</a><a href="#staff">Staff</a><a href="#hovercart">Hovercart</a><a href="#fixtures">Fixtures</a>
+  </nav>
+  <button id="undo" disabled>Undo all</button>
+  <button id="save" class="primary" disabled>Save</button>
+  <span id="status">Loading...</span>
+</header>
+<main id="main"></main>
+<script>
+const $ = (selector) => document.querySelector(selector);
+const escape = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const money = (value) => Number(value).toLocaleString("en-US");
+const PATH_NAMES = { speed: "Speed", length: "Length", battery: "Battery" };
+let saved = null;
+let state = null;
+
+const clone = (value) => JSON.parse(JSON.stringify(value));
+const get = (path) => path.split(".").reduce((value, key) => value[key], state);
+const getFrom = (root, path) => path.split(".").reduce((value, key) => value?.[key], root);
+function set(path, value) {
+  const keys = path.split(".");
+  const last = keys.pop();
+  keys.reduce((value, key) => value[key], state)[last] = value;
+}
+
+function input(path, kind = "money") {
+  const value = get(path);
+  const level = kind === "level";
+  return `<input type="number" data-path="${path}" class="${level ? "level" : ""}" ${level ? `min="1" max="${state.reputation.length}"` : `min="0"`} step="1" value="${value ?? ""}">`;
+}
+
+function upgradeText(name, step) {
+  if (name === "speed") return `Top speed ${step.speed}, loses ${step.perCrate} per crate carried`;
+  if (name === "length") return `Carries ${step.capacity} crates`;
+  return `Battery ${money(step.capacity)}`;
+}
+
+function unlocksByLevel() {
+  const byLevel = new Map();
+  const add = (level, text) => {
+    if (!Number.isInteger(level)) return;
+    if (!byLevel.has(level)) byLevel.set(level, []);
+    byLevel.get(level).push(text);
+  };
+  for (const license of state.licenses) add(license.level ?? 1, `${license.name} contract`);
+  for (const zone of state.zones) add(zone.level, zone.name);
+  state.staffLevels.forEach((level, index) => add(level, `Employee ${index + 1}`));
+  add(state.hovercartLevel, "Hovercart");
+  for (const [name, steps] of Object.entries(state.upgrades)) {
+    steps.forEach((step, index) => add(step.level, `Hovercart ${PATH_NAMES[name].toLowerCase()} upgrade ${index + 1}`));
+  }
+  return byLevel;
+}
+
+function row(paths, cells) {
+  const changed = paths.some((path) => getFrom(saved, path) !== get(path));
+  return `<tr class="${changed ? "changed" : ""}">${cells}</tr>`;
+}
+
+function render() {
+  const byLevel = unlocksByLevel();
+  const levels = state.reputation.map((rep, index) => {
+    const gain = index ? rep - state.reputation[index - 1] : "";
+    const unlocks = (byLevel.get(index + 1) ?? []).map((text) => `<span>${escape(text)}</span>`).join(", ");
+    return row([`reputation.${index}`], `<td class="num">${index + 1}</td><td class="num">${index ? input(`reputation.${index}`) : "0"}</td><td class="num dim">${gain === "" ? "" : money(gain)}</td><td class="unlocks">${unlocks}</td>`);
+  }).join("");
+
+  const contracts = state.licenses.map((license, index) => row(
+    [`licenses.${index}.level`, `licenses.${index}.cost`],
+    `<td>${escape(license.name)}</td><td class="num">${license.level === null ? "Start" : input(`licenses.${index}.level`, "level")}</td><td class="num">${input(`licenses.${index}.cost`)}</td><td class="num dim">${license.itemCount || ""}</td>`,
+  )).join("");
+
+  const rooms = state.zones.map((zone, index) => row(
+    [`zones.${index}.level`, `zones.${index}.cost`],
+    `<td>${escape(zone.name)}</td><td class="num">${input(`zones.${index}.level`, "level")}</td><td class="num">${input(`zones.${index}.cost`)}</td>`,
+  )).join("");
+
+  const staff = state.staffLevels.map((level, index) => row(
+    [`staffLevels.${index}`],
+    `<td>Employee ${index + 1}</td><td class="num">${input(`staffLevels.${index}`, "level")}</td>`,
+  )).join("");
+
+  const upgrades = Object.entries(state.upgrades).flatMap(([name, steps]) => steps.map((step, index) => row(
+    [`upgrades.${name}.${index}.level`, `upgrades.${name}.${index}.cost`],
+    `<td>${PATH_NAMES[name]} ${index + 1}</td><td class="num">${input(`upgrades.${name}.${index}.level`, "level")}</td><td class="num">${input(`upgrades.${name}.${index}.cost`)}</td><td class="dim">${escape(upgradeText(name, step))}</td>`,
+  ))).join("");
+
+  const fixtures = state.fixtures.map((fixture, index) => row(
+    [`fixtures.${index}.price`],
+    `<td>${escape(fixture.name)}</td><td class="num">${input(`fixtures.${index}.price`)}</td>`,
+  )).join("");
+
+  const field = (label, path, kind) => `<label class="${getFrom(saved, path) !== get(path) ? "changed" : ""}">${label} ${input(path, kind)}</label>`;
+
+  $("#main").innerHTML = `
+    <section><h2>Starting money</h2><div class="fields">${field("Money at the start of a new game", "money")}</div></section>
+    <section id="levels"><h2>Shop levels</h2><table>
+      <tr><th>Level</th><th class="edit">Reputation needed</th><th>More than last level</th><th class="left">Unlocks</th></tr>${levels}</table></section>
+    <section id="contracts"><h2>Contracts</h2><table>
+      <tr><th class="left">Contract</th><th class="edit">Unlocks at level</th><th class="edit">Cost</th><th>Items</th></tr>${contracts}</table></section>
+    <section id="rooms"><h2>Shop expansions and backroom upgrades</h2><table>
+      <tr><th class="left">Room</th><th class="edit">Unlocks at level</th><th class="edit">Cost</th></tr>${rooms}</table></section>
+    <section id="staff"><h2>Staff</h2><div class="columns">
+      <div class="fields">${field("Hiring cost", "hireCost")}${field("Wage per shift", "baseWage")}</div>
+      <table><tr><th class="left">Employee</th><th class="edit">Unlocks at level</th></tr>${staff}</table></div></section>
+    <section id="hovercart"><h2>Hovercart</h2>
+      <div class="fields">${field("Price (comes with its charger)", "hovercartPrice")}${field("Unlocks at level", "hovercartLevel", "level")}</div>
+      <table style="margin-top:10px"><tr><th class="left">Upgrade</th><th class="edit">Unlocks at level</th><th class="edit">Cost</th><th class="left">What it does</th></tr>${upgrades}</table></section>
+    <section id="fixtures"><h2>Fixtures</h2><table>
+      <tr><th class="left">Fixture</th><th class="edit">Price</th></tr>${fixtures}</table></section>`;
+  updateButtons();
+}
+
+const dirty = () => JSON.stringify(state) !== JSON.stringify(saved);
+function updateButtons() {
+  const changed = dirty();
+  $("#save").disabled = !changed || document.querySelector("input.invalid") !== null;
+  $("#undo").disabled = !changed;
+}
+function status(text, kind = "") {
+  $("#status").textContent = text;
+  $("#status").className = kind;
+}
+
+$("#main").addEventListener("change", (event) => {
+  const field = event.target.closest("input[data-path]");
+  if (!field) return;
+  const value = field.value.trim() === "" ? NaN : Number(field.value);
+  if (!Number.isFinite(value) || value < 0) {
+    field.classList.add("invalid");
+    updateButtons();
+    return;
+  }
+  const scroll = $("#main").scrollTop;
+  set(field.dataset.path, value);
+  render();
+  $("#main").scrollTop = scroll;
+  status(dirty() ? "Unsaved changes" : "");
+});
+
+$("#undo").addEventListener("click", () => {
+  state = clone(saved);
+  const scroll = $("#main").scrollTop;
+  render();
+  $("#main").scrollTop = scroll;
+  status("");
+});
+
+$("#save").addEventListener("click", async () => {
+  status("Saving...");
+  const response = await fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(state) });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) return status((body.problems ?? ["Couldn't save."]).join("\n"), "bad");
+  saved = clone(state);
+  const scroll = $("#main").scrollTop;
+  render();
+  $("#main").scrollTop = scroll;
+  status("Saved", "good");
+});
+
+window.addEventListener("beforeunload", (event) => {
+  if (dirty()) event.preventDefault();
+});
+
+fetch("/api/data").then((response) => response.json()).then((data) => {
+  saved = data;
+  state = clone(data);
+  render();
+  status("");
+}).catch(() => status("Couldn't load the data. Is npm run unlocks still running?", "bad"));
+</script>
+</body>
+</html>

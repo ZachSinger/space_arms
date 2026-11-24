@@ -1,12 +1,7 @@
-// Total store reputation required at shift end. Serving every arriving customer without
-// penalties earns Levels 2-5 in four shifts; later steps take several shifts.
-const SHOP_LEVEL_REPUTATION = [
-  0, 20, 50, 90, 138, 318, 507, 705, 912, 1128,
-  1353, 1587, 1830, 2082, 2343, 2613, 2892, 3180, 3477, 3783,
-  4098, 4422, 4755, 5097, 5448, 5808, 6177, 6555, 6942, 7338,
-  7743, 8157, 8580, 9012, 9453, 9903, 10362, 10830, 11307, 11793,
-    12288, 12792, 13305, 13827, 14358, 14898, 15447, 16005, 16572, 17148,
-];
+import progression from "../../data/Progression.json" with { type: "json" };
+
+// Total store reputation required at shift end, edited with `npm run unlocks`.
+const SHOP_LEVEL_REPUTATION = progression.shopLevelReputation;
 
 // Includes levels intentionally without a reward.
 export const IMPLEMENTED_SHOP_REWARD_LEVELS = Object.freeze(
@@ -51,7 +46,7 @@ export function getNextShopLevel(level) {
 }
 
 // Each listed Store Level adds one more employee the shop can have hired at once.
-export const STAFF_LIMIT_LEVELS = Object.freeze([4, 7, 10, 15, 18, 23]);
+export const STAFF_LIMIT_LEVELS = Object.freeze([...progression.staffLimitLevels]);
 
 export function getStaffLimit(shopLevel) {
   return STAFF_LIMIT_LEVELS.filter((level) => level <= shopLevel).length;

@@ -1,0 +1,116 @@
+{
+  "shopLevelReputation": [0, 20, 50, 90, 138, 318, 507, 705, 912, 1128, 1353, 1587, 1830, 2082, 2343, 2613, 2892, 3180, 3477, 3783, 4098, 4422, 4755, 5097, 5448, 5808, 6177, 6555, 6942, 7338, 7743, 8157, 8580, 9012, 9453, 9903, 10362, 10830, 11307, 11793, 12288, 12792, 13305, 13827, 14358, 14898, 15447, 16005, 16572, 17148],
+  "staffLimitLevels": [4, 7, 10, 15, 18, 23],
+  "employees": {
+    "hireCost": 500,
+    "baseWage": 100
+  },
+  "hovercart": {
+    "level": 7,
+    "upgrades": {
+      "speed": [
+        {
+          "level": 10,
+          "cost": 3000,
+          "speed": 190,
+          "perCrate": 12
+        },
+        {
+          "level": 20,
+          "cost": 12000,
+          "speed": 235,
+          "perCrate": 6
+        },
+        {
+          "level": 32,
+          "cost": 45000,
+          "speed": 280,
+          "perCrate": 0
+        }
+      ],
+      "length": [
+        {
+          "level": 13,
+          "cost": 4000,
+          "capacity": 4
+        },
+        {
+          "level": 22,
+          "cost": 14000,
+          "capacity": 5
+        },
+        {
+          "level": 32,
+          "cost": 40000,
+          "capacity": 6
+        }
+      ],
+      "battery": [
+        {
+          "level": 13,
+          "cost": 3000,
+          "capacity": 450
+        },
+        {
+          "level": 22,
+          "cost": 8000,
+          "capacity": 600
+        },
+        {
+          "level": 32,
+          "cost": 15000,
+          "capacity": 800
+        },
+        {
+          "level": 37,
+          "cost": 30000,
+          "capacity": 1000
+        },
+        {
+          "level": 42,
+          "cost": 60000,
+          "capacity": 1300
+        },
+        {
+          "level": 49,
+          "cost": 100000,
+          "capacity": 1600
+        }
+      ]
+    }
+  },
+  "zones": {
+    "expansion_west": {
+      "cost": 2700,
+      "requiredShopLevel": 6
+    },
+    "expansion_a": {
+      "cost": 6400,
+      "requiredShopLevel": 13
+    },
+    "expansion_b": {
+      "cost": 53000,
+      "requiredShopLevel": 32
+    },
+    "expansion_c": {
+      "cost": 135500,
+      "requiredShopLevel": 42
+    },
+    "expansion_d": {
+      "cost": 232000,
+      "requiredShopLevel": 49
+    },
+    "backroom_upgrade_a": {
+      "cost": 17500,
+      "requiredShopLevel": 22
+    },
+    "backroom_upgrade_b": {
+      "cost": 86000,
+      "requiredShopLevel": 37
+    },
+    "backroom_upgrade_c": {
+      "cost": 199500,
+      "requiredShopLevel": 46
+    }
+  }
+}

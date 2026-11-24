@@ -7,6 +7,11 @@ profit divided by the crate's selling value, with a gauge on a 0-100% scale.
 The editor server restarts automatically when its code changes, without refreshing
 the page or discarding edits still in the page.
 
+To edit unlock levels and progression costs (reputation per shop level, contracts,
+expansions, staff, the hovercart, fixture prices, and starting money), run
+`npm run unlocks`. Most of these numbers live in `data/Progression.json`; contract,
+fixture, and starting-money numbers stay in their own data files.
+
 ## Hands-on shelf boxes
 
 `data/Items.json` now defines each item's `boxSize`, using the values agreed in

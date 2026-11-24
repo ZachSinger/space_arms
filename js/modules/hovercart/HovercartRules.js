@@ -1,9 +1,14 @@
 // The hovercart's numbers and save rules, kept free of Phaser so saves can be checked anywhere.
 import { TILE_SIZE, getBackroomInteriorBounds } from "../../logic/RoomLayout.js";
+import progression from "../../../data/Progression.json" with { type: "json" };
+import fixtures from "../../../data/Fixtures.json" with { type: "json" };
+
+const freezeSteps = (steps) => Object.freeze(steps.map((step) => Object.freeze({ ...step })));
 
 export const HOVERCART_NAME = "Hovercart";
-export const HOVERCART_LEVEL = 7;
-export const HOVERCART_PRICE = 2200;
+export const HOVERCART_LEVEL = progression.hovercart.level;
+// Buying a hovercart buys its charger, so the charger's fixture price is the hovercart's price.
+export const HOVERCART_PRICE = fixtures.hovercart_charger.price;
 export const MAX_LINKED_HOVERCARTS = 3;
 export const HOVERCART_CAPACITY = 3;
 // Energy per second: sitting still is 1 plus 1 per crate, moving is 4 plus 2 per crate.
@@ -11,24 +16,9 @@ export const HOVERCART_CAPACITY = 3;
 export const HOVERCART_BATTERY = Object.freeze({ capacity: 300, chargeSeconds: 60 });
 export const HOVERCART_DEFAULT_UPGRADES = Object.freeze({ speed: 0, length: 0, battery: 0 });
 export const HOVERCART_UPGRADES = Object.freeze({
-  speed: Object.freeze([
-    Object.freeze({ level: 10, cost: 3000, speed: 190, perCrate: 12 }),
-    Object.freeze({ level: 20, cost: 12000, speed: 235, perCrate: 6 }),
-    Object.freeze({ level: 32, cost: 45000, speed: 280, perCrate: 0 }),
-  ]),
-  length: Object.freeze([
-    Object.freeze({ level: 13, cost: 4000, capacity: 4 }),
-    Object.freeze({ level: 22, cost: 14000, capacity: 5 }),
-    Object.freeze({ level: 32, cost: 40000, capacity: 6 }),
-  ]),
-  battery: Object.freeze([
-    Object.freeze({ level: 13, cost: 3000, capacity: 450 }),
-    Object.freeze({ level: 22, cost: 8000, capacity: 600 }),
-    Object.freeze({ level: 32, cost: 15000, capacity: 800 }),
-    Object.freeze({ level: 37, cost: 30000, capacity: 1000 }),
-    Object.freeze({ level: 42, cost: 60000, capacity: 1300 }),
-    Object.freeze({ level: 49, cost: 100000, capacity: 1600 }),
-  ]),
+  speed: freezeSteps(progression.hovercart.upgrades.speed),
+  length: freezeSteps(progression.hovercart.upgrades.length),
+  battery: freezeSteps(progression.hovercart.upgrades.battery),
 });
 
 export function getHovercartCapacity(upgrades = HOVERCART_DEFAULT_UPGRADES) {

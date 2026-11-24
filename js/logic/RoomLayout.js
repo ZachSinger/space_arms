@@ -6,6 +6,7 @@
 // See also: TileRoom.js (unlockZone).
 import { SHOP_FLOOR_TILE } from "./ShopTiles.js";
 import { BACKROOM_TILES } from "./BackroomTiles.js";
+import progression from "../../data/Progression.json" with { type: "json" };
 
 export const TILE_SIZE = 64; // px
 export const MAX_MAP_GRID_WIDTH = 39;
@@ -24,7 +25,7 @@ const STOREROOM_GRID_HEIGHT = 4;
 const LOADING_PAD_GRID_HEIGHT = LOADING_PAD_HEIGHT / TILE_SIZE + 1;
 const BACKROOM_GRID_HEIGHT = STOREROOM_GRID_HEIGHT + LOADING_PAD_GRID_HEIGHT;
 
-// Expansion costs are paid in credits; all expansions also require a shop level.
+// Expansion costs and required shop levels come from data/Progression.json (`npm run unlocks`).
 // Sales-floor zones together fill the 34x13 ShopA map. Bought in order, each one keeps the
 // shop a rectangle, and their walls use TileSetB's art (see ShopTiles.js).
 export const ZONES = [
@@ -62,8 +63,7 @@ export const ZONES = [
     locked: true,
     backroom: true,
     floorTile: BACKROOM_FLOOR_TILE,
-    cost: 17500,
-    requiredShopLevel: 22,
+    ...progression.zones.backroom_upgrade_a,
   },
   {
     id: "backroom_upgrade_b",
@@ -75,8 +75,7 @@ export const ZONES = [
     locked: true,
     backroom: true,
     floorTile: BACKROOM_FLOOR_TILE,
-    cost: 86000,
-    requiredShopLevel: 37,
+    ...progression.zones.backroom_upgrade_b,
   },
   {
     id: "backroom_upgrade_c",
@@ -88,8 +87,7 @@ export const ZONES = [
     locked: true,
     backroom: true,
     floorTile: BACKROOM_FLOOR_TILE,
-    cost: 199500,
-    requiredShopLevel: 46,
+    ...progression.zones.backroom_upgrade_c,
   },
   // The top center of the ShopA map: the store's front door and the backroom door are both in its back wall.
   {
@@ -113,8 +111,7 @@ export const ZONES = [
     locked: true,
     salesFloor: true,
     floorTile: SHOP_FLOOR_TILE,
-    cost: 2700,
-    requiredShopLevel: 6,
+    ...progression.zones.expansion_west,
   },
   {
     id: "expansion_a",
@@ -126,8 +123,7 @@ export const ZONES = [
     locked: true,
     salesFloor: true,
     floorTile: SHOP_FLOOR_TILE,
-    cost: 6400,
-    requiredShopLevel: 13,
+    ...progression.zones.expansion_a,
   },
   // Runs under the West expansion, the Sales Floor, and Expansion A.
   {
@@ -140,8 +136,7 @@ export const ZONES = [
     locked: true,
     salesFloor: true,
     floorTile: SHOP_FLOOR_TILE,
-    cost: 53000,
-    requiredShopLevel: 32,
+    ...progression.zones.expansion_b,
   },
   {
     id: "expansion_c",
@@ -153,8 +148,7 @@ export const ZONES = [
     locked: true,
     salesFloor: true,
     floorTile: SHOP_FLOOR_TILE,
-    cost: 135500,
-    requiredShopLevel: 42,
+    ...progression.zones.expansion_c,
   },
   {
     id: "expansion_d",
@@ -166,8 +160,7 @@ export const ZONES = [
     locked: true,
     salesFloor: true,
     floorTile: SHOP_FLOOR_TILE,
-    cost: 232000,
-    requiredShopLevel: 49,
+    ...progression.zones.expansion_d,
   },
 ];
 
