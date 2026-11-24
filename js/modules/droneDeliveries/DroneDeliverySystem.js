@@ -19,6 +19,7 @@ import { AREA } from "../../world/Areas.js";
 import { PEOPLE_DEPTH_BASE } from "../../world/Depth.js";
 import { controlLabel } from "../../input/InputDevice.js";
 import { matchesBinding } from "../../input/KeyBindings.js";
+import { DeliveryDrones } from "./DeliveryDrones.js";
 import { describeOrderSources, findOrderItemSources } from "./OrderSources.js";
 import { OrderTracker } from "./OrderTracker.js";
 
@@ -100,6 +101,7 @@ export class DroneDeliverySystem {
     this.terminalRaised = false;
     this.terminalOpen = false;
     this.terminalAnimation = null;
+    this.drones = new DeliveryDrones(this);
     this.drawTerminal();
     this.registerInteractions();
     this.buildWindow();
@@ -646,6 +648,7 @@ export class DroneDeliverySystem {
     this.updateTerminalAnimation(delta);
     this.updateShipFeedback(delta);
     this.updateDeliveryPad(delta);
+    this.drones.update(delta);
     this.updateGuidance(time, delta);
   }
 
@@ -774,6 +777,7 @@ export class DroneDeliverySystem {
     if (this.guidanceMs <= 0) {
       this.guidanceMs = GUIDANCE_REFRESH_MS;
       this.refreshGuidance();
+      this.shop.managerTablet?.deliveriesTab?.refreshIfChanged();
     }
     this.positionSourceMarkers(time);
   }
@@ -857,6 +861,7 @@ export class DroneDeliverySystem {
       status = `Face a shelf or crate with a teal diamond over it and press ${controlLabel("interact")} to pack one item.`;
     } else if (crate.inTerminal) status = "The terminal is bringing up this order's crate.";
     else status = `The order crate is ${spot}. Pick it up to start packing.`;
+    if (this.drones?.owned && !carrying) status = this.drones.statusText(this.drones.orderStatus(order));
     const today = this.shop.gameState.calendar.day;
     this.tracker?.render({
       dueText: formatRemoteDeadline(order.expiresOnDay, today, "Due"),
@@ -1002,8 +1007,8 @@ export class DroneDeliverySystem {
     return order;
   }
 
-  resetOrder() {
-    const order = this.orderState.activeOrder;
+  resetOrder(id = this.orderState.activeOrder?.id) {
+    const order = this.orderState.orders.find((entry) => entry.id === id);
     if (!order) return false;
     const crate = this.findOrderCrate(order);
     if (!crate) throw new Error(`Remote order ${order.id} is missing its crate.`);
@@ -1018,20 +1023,20 @@ export class DroneDeliverySystem {
     });
     if (crate.inTerminal || crate.isCarried) replacement.setTerminalStored(true);
     else replacement.animateRemoteOrderLid();
-    this.orderState.updateActiveOrder({ crateId: replacement.id });
+    this.orderState.updateOrder(order.id, { crateId: replacement.id });
     this.shop.messages.show("Remote order crate reset. Its products are in Go-Backs; the order is still open.", "#10b981");
     this.refreshWindow();
     return true;
   }
 
-  cancelOrder() {
-    const order = this.orderState.activeOrder;
+  cancelOrder(id = this.orderState.activeOrder?.id) {
+    const order = this.orderState.orders.find((entry) => entry.id === id);
     if (!order) return false;
     const crate = this.findOrderCrate(order);
     if (!crate) throw new Error(`Remote order ${order.id} is missing its crate.`);
     this.returnContentsToGoBacks(order, crate);
     this.shop.gameState.reputation.lose(order.reputation);
-    this.orderState.close();
+    this.orderState.close(order.id);
     this.cancelConfirmation = false;
     this.activeTab = this.orderState.activeOrder ? "order" : this.orderState.offers.length ? "offers" : "order";
     this.shop.messages.show(`Remote order cancelled. Store reputation -${order.reputation}.`, "#f59e0b");

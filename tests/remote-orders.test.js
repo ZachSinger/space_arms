@@ -502,3 +502,94 @@ test("order item sources group shelves and crates by area and skip other items",
     "Sales floor shelves: 6 · Backroom crates: 12 · Crates you're carrying: 3",
   );
 });
+
+test("delivery drones wait until the store holds the whole order, take crates before shelves, then ship it", async () => {
+  const { DeliveryDrones, sortDroneSources } =
+    await server.ssrLoadModule("/js/modules/droneDeliveries/DeliveryDrones.js");
+  assert.deepEqual(sortDroneSources([
+    { kind: "shelf", area: "shop" },
+    { kind: "shelf", area: "backroom" },
+    { kind: "crate", area: "shop" },
+    { kind: "crate", area: "backroom" },
+  ]).map(({ kind, area }) => `${area} ${kind}`), ["backroom crate", "shop crate", "backroom shelf", "shop shelf"]);
+
+  const fixture = createDeliveryFixture({ contents: [] });
+  const { system, state, crates, changes } = fixture;
+  const scene = createScene();
+  const orderCrate = new Crate(scene, null, 0, 120, 180, {
+    id: "crate-order",
+    kind: "remote-order",
+    orderId: "remote-order-1",
+    requiredItems: [{ itemId: "wpn_rif_01", quantity: 2 }],
+  });
+  orderCrate.inTerminal = true;
+  crates.splice(0, crates.length, orderCrate);
+  const stock = new Crate(scene, "wpn_rif_01", 1, 100, 100, { id: "crate-stock" });
+  const placement = { itemId: "wpn_rif_01", quantity: 0 };
+  const shelf = {
+    placements: [placement],
+    getContainerId: () => "shelf-1",
+    getLocation: () => ({ kind: "shelf" }),
+    canTake: () => true,
+    getAvailableUnitsFor: (_itemId, entry) => entry.quantity,
+    remove(_itemId, amount, entry) { entry.quantity -= amount; return amount; },
+    add(_itemId, amount, entry) { entry.quantity += amount; return amount; },
+  };
+  system.sourceContext = () => ({
+    shelves: [shelf],
+    floorCrates: [orderCrate, stock],
+    carriedCrates: [],
+    shelfPoint: () => ({ x: 0, y: 0 }),
+    areaAtPoint: () => "backroom",
+  });
+  system.isCrateOnDeliveryPad = () => false;
+  system.getItem = () => ({ name: "Rifle" });
+  system.drones = new DeliveryDrones(system);
+
+  system.drones.update(5000);
+  assert.equal(stock.quantity, 1, "the drones do nothing until they're bought");
+
+  state.dronesOwned = true;
+  const waiting = system.drones.orderStatus(state.activeOrder);
+  assert.equal(waiting.state, "waiting");
+  assert.deepEqual(waiting.shortages, [{ itemId: "wpn_rif_01", short: 1 }]);
+  assert.match(system.drones.statusText(waiting), /Rifle \(1\)/);
+  assert.equal(system.drones.step(), false);
+  assert.equal(stock.quantity, 1, "nothing is packed while the store is short");
+
+  placement.quantity = 3;
+  system.drones.update(1499);
+  assert.equal(orderCrate.getAvailableUnitsFor("wpn_rif_01"), 0, "one item takes a moment to pack");
+  system.drones.update(1);
+  assert.equal(stock.quantity, 0, "crates are emptied before shelves");
+  assert.equal(placement.quantity, 3);
+  assert.equal(system.drones.step(), true);
+  assert.equal(placement.quantity, 2);
+  assert.equal(orderCrate.isRemoteOrderComplete(), true);
+
+  orderCrate.inTerminal = false;
+  orderCrate.locationState = { kind: "carried" };
+  assert.equal(system.drones.orderStatus(state.activeOrder).state, "carried");
+  assert.equal(system.drones.step(), false, "the drones can't ship a crate the player is holding");
+  orderCrate.locationState = null;
+  orderCrate.inTerminal = true;
+
+  assert.equal(system.drones.step(), true);
+  assert.equal(state.activeOrder, null);
+  assert.ok(changes.includes("paid:100:drone_deliveries"));
+});
+
+test("drone ownership is saved, and reset or cancel can target an order that isn't selected", () => {
+  const fixture = createDeliveryFixture();
+  const { system, state, order } = fixture;
+  state.dronesOwned = true;
+  assert.equal(DroneDeliveries.fromSave(state.toSave()).dronesOwned, true);
+  assert.equal(DroneDeliveries.fromSave({ droneDeliveries: { nextOrderId: 1 } }).dronesOwned, false);
+
+  state.open({ ...order, id: "remote-order-2", crateId: "crate-2" });
+  assert.equal(system.resetOrder(order.id), true);
+  assert.equal(state.activeOrder.id, "remote-order-2");
+  assert.equal(state.orders.find((entry) => entry.id === order.id).crateId, "crate-replacement");
+  assert.equal(system.cancelOrder(order.id), true);
+  assert.deepEqual(state.orders.map((entry) => entry.id), ["remote-order-2"]);
+});

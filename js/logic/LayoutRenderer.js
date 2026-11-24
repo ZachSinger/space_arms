@@ -75,8 +75,9 @@ export class LayoutRenderer {
 
   // Equipment purchases and upgrade steps.
   static equipmentHTML(scene, enabled) {
+    const drones = LayoutRenderer.deliveryDronesHTML(scene);
     const hovercart = scene.gameModules?.get("hovercart");
-    if (!hovercart) return "";
+    if (!hovercart) return drones ? html`<h3 class="type-h3 layout-zone-heading">Equipment</h3>${drones}` : "";
     const {
       name, price, capacity, cartCount, maxCarts, requiredShopLevel, isPurchased, levelMet, canAfford, hasDeliverySpace,
     } = hovercart.purchaseOption();
@@ -145,11 +146,34 @@ export class LayoutRenderer {
             ${canBuy ? "" : "disabled"}>${status}</button>
         </div>
       </div>
+      ${drones}
       ${isPurchased ? html`
         <h3 class="type-h3 layout-zone-heading">Hovercart Upgrades</h3>
         <p class="type-description">Upgrades apply to all linked carts. Buy each Speed upgrade before its matching extra crate space.</p>
         ${upgradeCards}
       ` : null}
+    `;
+  }
+
+  // The one-time Delivery Drone Delivery Drones purchase; they need no space, so they're buyable any time.
+  static deliveryDronesHTML(scene) {
+    const drones = scene.gameModules?.get("droneDeliveries")?.drones;
+    if (!drones) return null;
+    const { name, price, requiredShopLevel, owned, levelMet, canAfford } = drones.purchaseOption();
+    const status = owned ? "OWNED" : !levelMet ? "LOCKED" : !canAfford ? "INSUFFICIENT FUNDS" : "BUY";
+    return html`
+      <div class="item-card fixture-sale-card">
+        <div class="fixture-sale-info">
+          <h3 class="type-h3">${name}</h3>
+          <p class="type-description">Shop Level ${requiredShopLevel}</p>
+          <p class="type-description">Little drones that pack accepted remote orders by themselves whenever your store has every item an order needs, then ship them. They come with a Deliveries tab on this tablet for handling your orders from anywhere.</p>
+        </div>
+        <div class="fixture-sale-action">
+          ${owned ? null : html`<p class="type-description fixture-sale-price">${price.toLocaleString()}</p>`}
+          <button type="button" class="${!owned && !levelMet ? "retro-tab-btn" : "action-btn"}" data-buy-delivery-drones
+            ${!owned && levelMet && canAfford ? "" : "disabled"}>${status}</button>
+        </div>
+      </div>
     `;
   }
 

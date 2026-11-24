@@ -18,6 +18,7 @@ import "../../styles/windows/finances.css";
 import "../../styles/windows/handbook.css";
 import "../../styles/windows/inventory.css";
 import "../../styles/windows/reviews.css";
+import "../../styles/windows/deliveries.css";
 import "../../styles/windows/supply.css";
 import Phaser from "phaser";
 import { TitleScene } from "./title.js";

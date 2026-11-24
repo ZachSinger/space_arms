@@ -217,6 +217,9 @@ export function checkShopSave(data, database) {
     "invalid active remote order.");
     remoteOrderIds.add(order.id);
   }
+  // Optional: saves from before the drones existed have no ownership flag.
+  requireSave(droneDeliveries.dronesOwned === undefined || typeof droneDeliveries.dronesOwned === "boolean",
+    "invalid delivery drone ownership.");
   const remoteOffers = droneDeliveries.offers ?? [];
   requireSave(Array.isArray(remoteOffers), "invalid remote order offers.");
   for (const offer of remoteOffers) {

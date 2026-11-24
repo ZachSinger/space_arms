@@ -203,6 +203,9 @@ function orderingTopic() {
         "The order crate can only hold the products and amounts shown at the terminal. To take packed items back out, reset or cancel the order at the terminal; the items go into the Go-Backs bin.",
         "When every item is packed, set the order crate on the drone pad beside the terminal. It ships after a short wait, pays the amount shown, and adds store reputation.",
         "The terminal shows the shipping deadline and the reputation gained or lost. Cancelling an order or letting it expire loses that reputation.",
+        "At Shop Level 10, the <strong>Layout</strong> tab sells Delivery Drone Delivery Drones under Equipment. They pack accepted orders for you, one item every 1.5 seconds, and ship each order as soon as it is packed.",
+        "The drones start an order only once your shelves and crates hold every item it still needs. They take items from crates before shelves, and backroom stock before sales floor stock. They can't take items from a crate you are carrying or from crates still on the Loading Pad.",
+        "Buying the drones adds a <strong>Deliveries</strong> tab to this tablet. Use it to accept or decline offers, follow each order's packing, and reset or cancel orders from anywhere in the store.",
       ])}`),
     section("Ordering Fixtures", `
       ${list([

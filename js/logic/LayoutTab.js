@@ -47,6 +47,7 @@ export class LayoutTab {
       ["[data-buy-backroom-id]", "buyBackroomUpgrade", "buyBackroomId"],
       ["[data-buy-hovercart]", "buyHovercart", "buyHovercart"],
       ["[data-buy-hovercart-upgrade]", "buyHovercartUpgrade", "buyHovercartUpgrade"],
+      ["[data-buy-delivery-drones]", "buyDeliveryDrones", "buyDeliveryDrones"],
     ];
     for (const [selector, action, dataKey] of actions) {
       const button = event.target.closest(selector);
