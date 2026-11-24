@@ -34,14 +34,14 @@ test("price stays within the band around the hidden base", () => {
   assert.equal(down.getPrice("rifle"), 1000 * MIN_BASE_RATIO);
 });
 
-test("supply cost is the item's supplier price, the same every game and every day", () => {
-  const rifle = [{ id: "rifle", baseCost: 1000, supplyCost: 512.4 }];
+test("supply cost is the item's supplier percent of base, the same every game and every day", () => {
+  const rifle = [{ id: "rifle", baseCost: 133, supplyPercent: 45 }];
   const first = new Market(rifle, () => 0);
   const second = new Market(rifle, () => 0.99);
-  assert.equal(first.getSupplyCost("rifle", 5), 2562);
-  assert.equal(second.getSupplyCost("rifle", 5), 2562);
+  assert.equal(first.getSupplyCost("rifle", 5), 299);
+  assert.equal(second.getSupplyCost("rifle", 5), 299);
   first.advanceDay();
-  assert.equal(first.getSupplyCost("rifle", 5), 2562);
+  assert.equal(first.getSupplyCost("rifle", 5), 299);
 });
 
 test("restoring a market keeps its prices, supplier rates, and subsequent price changes", () => {

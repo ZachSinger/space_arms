@@ -24,7 +24,7 @@ onto several shelf spaces.
 | `tags` | What kind of product it is: customer interests, firearm/ammunition matching, and crate artwork use these. |
 | `boxSize` | Space taken by one product in a shelf space or crate. Both hold 20 space units: `2` means 10 products; `4` means 5. This also sets quantity per newly ordered crate. |
 | `baseCost` | Starting market price per product, before market changes. Also sets valid market-price ranges when reading saves. It is not the final supplier or selling price. |
-| `supplyCost` | What the supplier charges per product, the same every game. A crate order costs this times the crate quantity, rounded to a whole number. |
+| `supplyPercent` | What the supplier charges per product, as a percent of `baseCost`, the same every game. A crate order costs base × percent × crate quantity, rounded to a whole number. |
 | `license` | Supplier contract required before this product can be ordered. |
 | `ammo` | The ammunition type a firearm uses, or that an ammunition product supplies. Customers use it to buy matching ammunition. |
 | `count` | Intended rounds inside one ammunition product. Stored, but currently no gameplay reads it; it is not quantity per delivery crate. |

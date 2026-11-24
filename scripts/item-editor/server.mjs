@@ -51,7 +51,7 @@ export function problemsIn(items, licenseIds) {
     seen.add(item?.id);
     if (typeof item?.name !== "string" || !item.name.trim()) problems.push(`${label}: needs a name.`);
     if (!Number.isFinite(item?.baseCost) || item.baseCost <= 0) problems.push(`${label}: base price must be above 0.`);
-    if (!Number.isFinite(item?.supplyCost) || item.supplyCost <= 0) problems.push(`${label}: supplier price must be above 0.`);
+    if (!Number.isFinite(item?.supplyPercent) || item.supplyPercent <= 0) problems.push(`${label}: supplier % must be above 0.`);
     if (!BOX_SIZES.includes(item?.boxSize)) problems.push(`${label}: box size must be one of ${BOX_SIZES.join(", ")}.`);
     if (!licenseIds.has(item?.license)) problems.push(`${label}: unknown contract "${item?.license}".`);
     if (!Array.isArray(item?.tags) || !item.tags.length) problems.push(`${label}: needs at least one tag.`);

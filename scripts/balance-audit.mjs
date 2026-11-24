@@ -17,7 +17,7 @@ import { EMPLOYEE_HIRE_COST, EMPLOYEE_BASE_WAGE } from "../js/logic/EmployeeTrai
 // --- Player model (ideal-but-plausible play; every result below depends on these) ---
 const STOCK_SCALER = CUSTOMER_POOL_TUNING.stockScalerMaximum; // shelves kept full
 const AVG_UNITS_PER_CUSTOMER = 2.5; // between neutral (2) and faction (3-3.5) buyers
-const AVG_SUPPLY_RATIO = items.reduce((sum, item) => sum + item.supplyCost / item.baseCost, 0) / items.length; // avg crate cost vs base
+const AVG_SUPPLY_RATIO = items.reduce((sum, item) => sum + item.supplyPercent / 100, 0) / items.length; // avg crate cost vs base
 const SELL_AT = 1.0; // player prices at market, which hovers around base cost
 // The player keeps only their most valuable item kinds on the shelves.
 const STOCKED_ITEM_KINDS = 24;

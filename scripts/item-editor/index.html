@@ -69,7 +69,7 @@ const state = { items: [], original: [], licenses: new Map(), rules: null, sort:
 const money = (value) => Math.round(value).toLocaleString("en-US");
 const levelOf = (item) => state.licenses.get(item.license)?.level ?? null;
 const perCrate = (item) => Math.floor(state.rules.crateUnits / item.boxSize) || 0;
-const supplierPrice = (item) => item.supplyCost;
+const supplierPrice = (item) => (item.baseCost * item.supplyPercent) / 100;
 const crateValue = (item) => perCrate(item) * item.baseCost;
 // Same rounding as Market.getSupplyCost: once for the whole order, not per item.
 const crateCost = (item) => Math.max(1, Math.round(supplierPrice(item) * perCrate(item)));
@@ -84,7 +84,8 @@ const COLUMNS = [
   { key: "name", label: "Item", left: true, sort: (item) => item.name },
   { key: "level", label: "Unlocks at", left: true, edit: true, sort: (item) => (levelOf(item) ?? 999) * 1000 + item.baseCost / 1e6 },
   { key: "baseCost", label: "Base price", edit: true, sort: (item) => item.baseCost },
-  { key: "supplyCost", label: "Supplier price", edit: true, sort: supplierPrice },
+  { key: "supplyPercent", label: "Supplier %", edit: true, sort: (item) => item.supplyPercent },
+  { key: "supplierPrice", label: "Supplier price", sort: supplierPrice },
   { key: "boxSize", label: "Item size", edit: true, sort: (item) => item.boxSize },
   { key: "perCrate", label: "Crate holds", sort: perCrate },
   { key: "crateValue", label: "Crate sells for", sort: crateValue },
@@ -103,7 +104,7 @@ async function load() {
   document.getElementById("help").innerHTML =
     `You can change the <b>yellow</b> columns. ` +
     `A crate has room for ${state.rules.crateUnits}, so an item of size 4 fits 5 per crate. One shelf space holds the same as one crate. ` +
-    `Profit is selling a full crate at base price, minus what the supplier charges for it.`;
+    `Profit is selling a full crate at base price, minus what the supplier charges for it (supplier % of base price).`;
   render();
   setStatus(`${state.items.length} items.`);
 }
@@ -157,7 +158,7 @@ function cell(item, index, key) {
       return `<td><select class="contract" data-edit="${index}" data-key="license">${options.join("")}</select></td>`;
     }
     case "baseCost":
-    case "supplyCost": return `<td class="num"><input type="number" step="any" class="price" data-edit="${index}" data-key="${key}" value="${item[key]}"></td>`;
+    case "supplyPercent": return `<td class="num"><input type="number" step="any" class="price" data-edit="${index}" data-key="${key}" value="${item[key]}"></td>`;
     case "boxSize": {
       const options = state.rules.boxSizes.map((size) => `<option ${size === item.boxSize ? "selected" : ""}>${size}</option>`);
       return `<td class="num"><select data-edit="${index}" data-key="boxSize">${options.join("")}</select></td>`;
@@ -167,6 +168,7 @@ function cell(item, index, key) {
 }
 
 function outputHtml(item, key) {
+  if (key === "supplierPrice") return supplierPrice(item).toLocaleString("en-US", { maximumFractionDigits: 2 });
   if (key === "perCrate") return `${perCrate(item)}`;
   if (key === "crateValue") return money(crateValue(item));
   if (key === "crateCost") return money(crateCost(item));

@@ -10,7 +10,7 @@ export class StoreItem {
     this.tags = data.tags; // e.g. ['Firearm', 'Standard', 'Rifle']
     this.boxSize = data.boxSize;
     this.baseCost = data.baseCost; // credits; hidden base for Market prices
-    this.supplyCost = data.supplyCost; // credits per unit the supplier charges
+    this.supplyPercent = data.supplyPercent; // supplier charges this % of baseCost per unit
 
     // Optional fields, absent on most items.
     this.license = data.license || null; // Supplier License id required to order this item

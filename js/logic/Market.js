@@ -23,8 +23,8 @@ export class Market extends Slice {
     super();
     this.random = random;
     this.basePrices = new Map(items.map((item) => [item.id, item.baseCost]));
-    // Each item's supplier price per unit is set by hand in Items.json (supplyCost).
-    this.supplyCosts = new Map(items.map((item) => [item.id, item.supplyCost]));
+    // Each item's supplier price per unit is set by hand in Items.json as a % of base (supplyPercent).
+    this.supplyCosts = new Map(items.map((item) => [item.id, (item.baseCost * item.supplyPercent) / 100]));
     if (saved) {
       this.prices = new Map(Object.entries(saved.prices));
       return;
