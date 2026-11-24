@@ -42,6 +42,7 @@
   td select option { background: var(--panel); color: var(--text); }
   td input.invalid { border-color: var(--bad); }
   input.price { width: 70px; text-align: right; }
+  input.item-name { width: 100%; min-width: 220px; font-weight: 500; }
   select.contract { width: 200px; color: var(--text); }
   .profit { display: flex; align-items: center; justify-content: flex-end; gap: 10px; font-weight: 600; color: var(--good); }
   .profit.loss { color: var(--bad); }
@@ -83,7 +84,7 @@ const kindOf = (item) => item.tags?.[item.tags.length - 1] ?? "";
 const COLUMNS = [
   { key: "pick", label: "Compare", left: true, sort: (item) => (state.picked.has(item.id) ? 0 : 1) },
   { key: "icon", label: "", left: true },
-  { key: "name", label: "Item", left: true, sort: (item) => item.name },
+  { key: "name", label: "Item", left: true, edit: true, sort: (item) => item.name },
   { key: "level", label: "Unlocks at", left: true, edit: true, sort: (item) => (levelOf(item) ?? 999) * 1000 + item.baseCost / 1e6 },
   { key: "baseCost", label: "Base price", edit: true, sort: (item) => item.baseCost },
   { key: "supplyPercent", label: "Supplier %", edit: true, sort: (item) => item.supplyPercent },
@@ -153,7 +154,7 @@ function cell(item, index, key) {
   switch (key) {
     case "pick": return `<td><input type="checkbox" data-pick="${index}" ${state.picked.has(item.id) ? "checked" : ""}></td>`;
     case "icon": return `<td>${item.image ? `<img src="/${escape(item.image)}" alt="" loading="lazy">` : ""}</td>`;
-    case "name": return `<td class="name">${escape(item.name)}<span class="sub">${escape(typeOf(item))}: ${escape(kindOf(item))}</span></td>`;
+    case "name": return `<td class="name"><input class="item-name" data-edit="${index}" data-key="name" value="${escape(item.name)}"><span class="sub">${escape(typeOf(item))}: ${escape(kindOf(item))}</span></td>`;
     case "level": {
       const options = [...state.licenses.values()]
         .filter((license) => license.level !== null || license.id === item.license)
@@ -226,9 +227,9 @@ function setStatus(text, kind = "") {
 function applyEdit(target) {
   const index = Number(target.dataset.edit);
   const key = target.dataset.key;
-  const value = key === "license" ? target.value : target.value === "" && key === "supplyPercent" ? NaN : Number(target.value);
+  const value = key === "license" || key === "name" ? target.value : target.value === "" && key === "supplyPercent" ? NaN : Number(target.value);
   state.items[index][key] = value;
-  const valid = key === "supplyPercent" ? Number.isFinite(value) : value > 0;
+  const valid = key === "name" ? value.trim() !== "" : key === "supplyPercent" ? Number.isFinite(value) : value > 0;
   target.classList.toggle("invalid", key !== "license" && key !== "boxSize" && !valid);
   refreshRow(index);
   refreshButtons();
