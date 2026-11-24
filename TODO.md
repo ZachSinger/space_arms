@@ -28,7 +28,7 @@ completed or no longer relevant.
 - [ ] Make shelves and registers customizable, with greyscale art that is easy to tint.
 - [ ] Let players redecorate with different floors, walls, and doors.
 - [ ] Add a redecorating mode that hides shelves, registers, and all other fixtures,
-      showing only the walls.
+      showing only the walls, floors, and doors, so changes to them are easy to see.
 
 ## Planned modules after the base shop
 
