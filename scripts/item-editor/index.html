@@ -29,7 +29,6 @@
   tr.changed td { background: var(--changed); }
   tr:hover td { background: #17223a; }
   td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  td .range { color: var(--dim); font-size: 11px; display: block; }
   td img { width: 40px; height: 40px; object-fit: contain; image-rendering: pixelated; display: block; }
   td input, td select { background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 3px; padding: 3px 4px; font: inherit; }
   td input:hover, td select:hover { border-color: var(--line); }
@@ -54,15 +53,19 @@
 </header>
 <div class="note" id="note"></div>
 <div class="wrap"><table><thead id="head"></thead><tbody id="body"></tbody></table></div>
-<script>
+<script type="module">
+import { supplyRatioFor } from "/js/logic/Market.js";
 const state = { items: [], original: [], licenses: new Map(), rules: null, sort: { key: "level", desc: false }, picked: new Set() };
 
 const money = (value) => Math.round(value).toLocaleString("en-US");
 const perCrate = (item) => Math.floor(state.rules.crateUnits / item.boxSize) || 0;
 const levelOf = (item) => state.licenses.get(item.license)?.level ?? null;
 const crateValue = (item) => perCrate(item) * item.baseCost;
-const avgSupply = () => (state.rules.minSupply + state.rules.maxSupply) / 2;
-const crateProfit = (item, ratio = avgSupply()) => crateValue(item) * (1 - ratio);
+const supplierPrice = (item) => item.baseCost * supplyRatioFor(String(item.id ?? ""));
+// Same rounding as Market.getSupplyCost: once for the whole order, not per item.
+const crateCost = (item) => Math.max(1, Math.round(supplierPrice(item) * perCrate(item)));
+const crateProfit = (item) => crateValue(item) - crateCost(item);
+const exactMoney = (value) => value.toLocaleString("en-US", { maximumFractionDigits: 2 });
 const listText = (list) => (Array.isArray(list) ? list.join(", ") : "");
 const toList = (text) => text.split(",").map((part) => part.trim()).filter(Boolean);
 
@@ -74,10 +77,12 @@ const COLUMNS = [
   { key: "level", label: "Unlocks at", sub: "shop level", sort: (item) => levelOf(item) ?? 999 },
   { key: "license", label: "Supplier contract", sub: "sets the unlock level", sort: (item) => state.licenses.get(item.license)?.name ?? item.license },
   { key: "baseCost", label: "Base price", sub: "per item", number: true },
+  { key: "supplierPrice", label: "Supplier price", sub: "per item, same every game", sort: supplierPrice },
   { key: "boxSize", label: "Box size", sub: `of ${"{units}"} crate space` },
   { key: "perCrate", label: "Items per crate", sort: perCrate },
   { key: "crateValue", label: "Crate sells for", sub: "all at base price", sort: crateValue },
-  { key: "crateProfit", label: "Crate profit", sub: "at base price, after supplier cost", sort: (item) => crateProfit(item) },
+  { key: "crateCost", label: "Crate costs", sub: "from the supplier", sort: crateCost },
+  { key: "crateProfit", label: "Crate profit", sub: "sells for minus costs", sort: crateProfit },
   { key: "tags", label: "Tags", sub: "comma separated", list: true, text: "w-tags" },
   { key: "ammo", label: "Ammo type", text: "w-ammo", optional: true },
   { key: "count", label: "Rounds", sub: "per ammo box", number: true, optional: true },
@@ -100,9 +105,8 @@ async function load() {
   const percent = (ratio) => Math.round(ratio * 100);
   document.getElementById("note").textContent =
     `A crate holds ${state.rules.crateUnits} space, and box size is how much one item takes. ` +
-    `Crate profit is selling the whole crate at base price, minus what the supplier charged. ` +
-    `The supplier charges ${percent(state.rules.minSupply)}-${percent(state.rules.maxSupply)}% of base price per item (picked at random each new game): ` +
-    `the big number assumes ${percent(avgSupply())}%, the small numbers are the worst and best case. Delivery fees aren't included. ` +
+    `The supplier price is what you pay per item: each item has its own fixed share of its base price, between ${percent(state.rules.minSupply)}% and ${percent(state.rules.maxSupply)}%, the same in every game. ` +
+    `Crate profit is selling the whole crate at base price minus what the supplier charged for it. Delivery fees aren't included. ` +
     `To change when an item unlocks, pick a different supplier contract.`;
   render();
   setStatus(`${state.items.length} items loaded.`);
@@ -164,9 +168,11 @@ function cell(item, index, column) {
   if (key === "pick") return `<td><input type="checkbox" data-pick="${index}" ${state.picked.has(item.id) ? "checked" : ""}></td>`;
   if (key === "icon") return `<td>${item.image ? `<img src="/${escape(item.image)}" alt="" loading="lazy">` : ""}</td>`;
   if (key === "level") return `<td class="num level" data-out="level">${levelOf(item) ?? "?"}</td>`;
+  if (key === "supplierPrice") return `<td class="num" data-out="supplierPrice">${exactMoney(supplierPrice(item))}</td>`;
   if (key === "perCrate") return `<td class="num" data-out="perCrate">${perCrate(item)}</td>`;
   if (key === "crateValue") return `<td class="num" data-out="crateValue">${money(crateValue(item))}</td>`;
-  if (key === "crateProfit") return `<td class="num" data-out="crateProfit">${profitHtml(item)}</td>`;
+  if (key === "crateCost") return `<td class="num" data-out="crateCost">${money(crateCost(item))}</td>`;
+  if (key === "crateProfit") return `<td class="num" data-out="crateProfit">${money(crateProfit(item))}</td>`;
   if (key === "license") {
     const options = [...state.licenses.values()]
       .filter((license) => license.level !== null || license.id === item.license)
@@ -181,12 +187,6 @@ function cell(item, index, column) {
   const value = column.list ? listText(item[key]) : item[key] ?? "";
   const type = column.number ? "number" : "text";
   return `<td><input type="${type}" class="${column.number ? "w-num" : column.text}" data-edit="${index}" data-key="${key}" value="${escape(value)}" title="${escape(value)}"></td>`;
-}
-
-function profitHtml(item) {
-  const low = crateProfit(item, state.rules.maxSupply);
-  const high = crateProfit(item, state.rules.minSupply);
-  return `${money(crateProfit(item))}<span class="range">${money(low)} to ${money(high)}</span>`;
 }
 
 function render() {
@@ -204,9 +204,11 @@ function refreshRow(index) {
   const item = state.items[index];
   row.classList.toggle("changed", isChanged(index));
   row.querySelector('[data-out="level"]').textContent = levelOf(item) ?? "?";
+  row.querySelector('[data-out="supplierPrice"]').textContent = exactMoney(supplierPrice(item));
   row.querySelector('[data-out="perCrate"]').textContent = perCrate(item);
   row.querySelector('[data-out="crateValue"]').textContent = money(crateValue(item));
-  row.querySelector('[data-out="crateProfit"]').innerHTML = profitHtml(item);
+  row.querySelector('[data-out="crateCost"]').textContent = money(crateCost(item));
+  row.querySelector('[data-out="crateProfit"]').textContent = money(crateProfit(item));
   const icon = row.querySelector("img");
   if (icon && item.image) icon.src = `/${item.image}`;
 }

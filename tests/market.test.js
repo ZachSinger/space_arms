@@ -34,14 +34,18 @@ test("price stays within the band around the hidden base", () => {
   assert.equal(down.getPrice("rifle"), 1000 * MIN_BASE_RATIO);
 });
 
-test("supply cost uses a hidden per-item rate that stays fixed across days", () => {
+test("supply cost uses a hidden per-item rate that is the same every game and every day", () => {
   const twoItems = [...items, { id: "pistol", baseCost: 1000 }];
-  const rolls = [0, 1];
-  const market = new Market(twoItems, () => rolls.shift() ?? 0.5);
-  assert.equal(market.getSupplyCost("rifle", 5), 1000 * MIN_SUPPLY_RATIO * 5);
-  assert.equal(market.getSupplyCost("pistol", 5), 1000 * MAX_SUPPLY_RATIO * 5);
-  market.advanceDay();
-  assert.equal(market.getSupplyCost("rifle", 5), 1000 * MIN_SUPPLY_RATIO * 5);
+  const first = new Market(twoItems, () => 0);
+  const second = new Market(twoItems, () => 0.99);
+  for (const id of ["rifle", "pistol"]) {
+    const cost = first.getSupplyCost(id, 5);
+    assert.ok(cost >= 1000 * MIN_SUPPLY_RATIO * 5 && cost <= 1000 * MAX_SUPPLY_RATIO * 5);
+    assert.equal(second.getSupplyCost(id, 5), cost);
+  }
+  assert.notEqual(first.getSupplyCost("rifle", 5), first.getSupplyCost("pistol", 5));
+  first.advanceDay();
+  assert.equal(first.getSupplyCost("rifle", 5), second.getSupplyCost("rifle", 5));
 });
 
 test("restoring a market keeps its prices, supplier rates, and subsequent price changes", () => {

@@ -95,6 +95,15 @@ async function handle(request, response) {
     await writeFile(ITEMS_PATH, formatItems(items), "utf8");
     return send(response, 200, { saved: items.length });
   }
+  if (request.method === "GET" && url.pathname.startsWith("/js/")) {
+    const file = path.resolve(ROOT, decodeURIComponent(url.pathname.slice(1)));
+    if (!file.startsWith(path.join(ROOT, "js") + path.sep) || path.extname(file) !== ".js") return send(response, 404, { error: "Not found" });
+    try {
+      return send(response, 200, await readFile(file, "utf8"), "text/javascript; charset=utf-8");
+    } catch {
+      return send(response, 404, { error: "Not found" });
+    }
+  }
   if (request.method === "GET" && url.pathname.startsWith("/img/")) {
     const file = path.resolve(ROOT, decodeURIComponent(url.pathname.slice(1)));
     const type = IMAGE_TYPES[path.extname(file).toLowerCase()];
