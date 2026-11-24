@@ -29,6 +29,15 @@ completed or no longer relevant.
 - [ ] Let players redecorate with different floors, walls, and doors.
 - [ ] Add a redecorating mode that hides shelves, registers, and all other fixtures,
       showing only the walls, floors, and doors, so changes to them are easy to see.
+- [ ] When a crate ships out, add a short delay and a small window with an animation of the
+      crate flying through space away from the space station.
+- [ ] Show a small visual cue every time the player makes money, such as a little popup
+      showing the amount earned.
+- [ ] Replace or get rid of the top HUD bar, which looks bad. Before removing it, make sure
+      every piece of information and every button it has is still available somewhere else.
+- [ ] Add a space drive-thru window. A customer pulls up and places an order with the player
+      at a terminal; the player then gathers the order from the shop, sends it out through a
+      vacuum tube, and takes the customer's payment.
 - [ ] Add multiple save file slots. Track how long the player has played each save, and
       show on every save the date and time it was last saved and its total play time.
 

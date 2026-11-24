@@ -120,11 +120,18 @@ async function handle(request, response) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const address = `http://localhost:${PORT}`;
+  const openPage = () => {
+    if (!process.argv.includes("--no-open")) exec(process.platform === "win32" ? `start "" ${address}` : `open ${address}`);
+  };
   createServer((request, response) => {
     handle(request, response).catch((error) => send(response, 500, { problems: [String(error?.message ?? error)] }));
+  }).on("error", (error) => {
+    if (error.code !== "EADDRINUSE") throw error;
+    console.log(`The item editor is already running at ${address}, so this opens that one instead.`);
+    openPage();
   }).listen(PORT, "127.0.0.1", () => {
-    const address = `http://localhost:${PORT}`;
     console.log(`Item editor running at ${address} (Ctrl+C to stop).`);
-    if (!process.argv.includes("--no-open")) exec(process.platform === "win32" ? `start "" ${address}` : `open ${address}`);
+    openPage();
   });
 }
