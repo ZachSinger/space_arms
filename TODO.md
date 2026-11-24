@@ -25,6 +25,10 @@ completed or no longer relevant.
 - [ ] Add a first-shift tutorial for ordering products, collecting deliveries, stocking
       shelves, and setting prices. Wait until the map and core loop are close to final.
 - [ ] Finish room map-making in Tiled once the layouts are final.
+- [ ] Make shelves and registers customizable, with greyscale art that is easy to tint.
+- [ ] Let players redecorate with different floors, walls, and doors.
+- [ ] Add a redecorating mode that hides shelves, registers, and all other fixtures,
+      showing only the walls.
 
 ## Planned modules after the base shop
 
