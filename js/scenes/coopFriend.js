@@ -9,17 +9,20 @@ import { MirrorReader } from "../coop/DisplayMirror.js";
 import { GamepadInput } from "../input/GamepadInput.js";
 import { bindingForEvent, isBound } from "../input/KeyBindings.js";
 import { setInputDevice } from "../input/InputDevice.js";
+import { TILE_SIZE } from "../logic/RoomLayout.js";
 import { UIWindow } from "../logic/UIWindow.js";
 import { WindowManager } from "../logic/WindowManager.js";
 import { hideLoadingScreen } from "./loadingScreen.js";
 
 const BAR_HEIGHT = 38;
-// The friend sees the shop at the host's zoom; the wheel and zoom keys scale from there.
-const MIN_ZOOM_FACTOR = 0.4;
-const MAX_ZOOM_FACTOR = 2.5;
+// Same limits as the host's camera (CameraRig.js): zoomed out, the whole shop fits with a
+// small margin; zoomed in, at least this many tile rows show.
+const MAP_SCREEN_MARGIN = 8;
+const MIN_VISIBLE_ROWS = 8;
 const ZOOM_STEP = 1.15;
 const INPUT_KEEP_ALIVE_MS = 1000;
 const RETURN_TO_TITLE_MS = 3500;
+const HOST_AWAY_MS = 2500;
 
 const END_MESSAGES = Object.freeze({
   left: "Your friend closed their shop.",
@@ -43,8 +46,8 @@ export class CoopFriendScene extends Phaser.Scene {
     this.heldBindings = new Map();
     this.lastInput = "";
     this.lastInputAt = 0;
-    this.hostZoom = 1;
-    this.zoomFactor = 1;
+    this.shopBounds = null;
+    this.viewZoom = null;
     this.pad = new GamepadInput();
     this.windowManager = new WindowManager();
     this.buildScreen();
@@ -104,15 +107,47 @@ export class CoopFriendScene extends Phaser.Scene {
 
   layoutCamera() {
     const camera = this.cameras.main;
-    const width = this.scale.width;
+    const width = Math.max(1, this.scale.width);
     const height = Math.max(1, this.scale.height - BAR_HEIGHT);
     camera.setViewport(0, BAR_HEIGHT, width, height);
-    camera.setZoom(this.hostZoom * this.zoomFactor);
+    const shop = this.shopBounds;
+    if (!shop) return;
+    const fit = Math.min((width - 2 * MAP_SCREEN_MARGIN) / shop.width, (height - 2 * MAP_SCREEN_MARGIN) / shop.height);
+    const min = Math.max(0.05, fit);
+    const max = Math.max(min, height / (MIN_VISIBLE_ROWS * TILE_SIZE));
+    this.viewZoom = Phaser.Math.Clamp(this.viewZoom ?? min, min, max);
+    camera.setZoom(this.viewZoom);
+    // Like the host's camera: a margin around the shop, centered when it's smaller than the screen.
+    const margin = MAP_SCREEN_MARGIN / this.viewZoom;
+    const boundsW = Math.max(shop.width + 2 * margin, width / this.viewZoom);
+    const boundsH = Math.max(shop.height + 2 * margin, height / this.viewZoom);
+    camera.setBounds(shop.x + shop.width / 2 - boundsW / 2, shop.y + shop.height / 2 - boundsH / 2, boundsW, boundsH);
   }
 
   zoom(direction) {
-    this.zoomFactor = Phaser.Math.Clamp(this.zoomFactor * ZOOM_STEP ** direction, MIN_ZOOM_FACTOR, MAX_ZOOM_FACTOR);
+    if (!this.shopBounds) return;
+    this.viewZoom = (this.viewZoom ?? this.cameras.main.zoom) * ZOOM_STEP ** direction;
     this.layoutCamera();
+  }
+
+  // Centers on the partner, snapped to whole screen pixels the way the host's camera is,
+  // so the floor doesn't shimmer and jump while walking.
+  followFocus() {
+    const focus = this.mirror.objectFor(this.focusId);
+    if (!focus) return;
+    const camera = this.cameras.main;
+    const zoom = camera.zoom;
+    const visibleW = camera.width / zoom;
+    const visibleH = camera.height / zoom;
+    const bounds = camera.getBounds();
+    const snap = (target, min, max) => {
+      if (max <= min) return min;
+      const clamped = Phaser.Math.Clamp(target, min, max);
+      return Phaser.Math.Clamp(Math.round(clamped * zoom) / zoom, Math.ceil(min * zoom) / zoom, Math.floor(max * zoom) / zoom);
+    };
+    const left = snap(focus.x - visibleW / 2, bounds.x, bounds.x + bounds.width - visibleW);
+    const top = snap(focus.y - visibleH / 2, bounds.y, bounds.y + bounds.height - visibleH);
+    camera.setScroll(left - (camera.width - visibleW) / 2, top - (camera.height - visibleH) / 2);
   }
 
   send(message) {
@@ -137,6 +172,7 @@ export class CoopFriendScene extends Phaser.Scene {
     if (this.leaveWindow.isOpen) return;
     if (isBound("zoomIn", binding)) this.zoom(1);
     else if (isBound("zoomOut", binding)) this.zoom(-1);
+    else if (isBound("interact", binding)) this.send({ t: "use" });
     this.heldBindings.set(event.code || binding, binding);
   }
 
@@ -165,10 +201,14 @@ export class CoopFriendScene extends Phaser.Scene {
       this.mirror.apply(message);
       if (message.f) this.focusId = message.f;
       if (message.bg) this.cameras.main.setBackgroundColor(message.bg);
-      if (message.z > 0 && message.z !== this.hostZoom) {
-        this.hostZoom = message.z;
+      if (Array.isArray(message.sb) && message.sb.join() !== this.shopBoundsKey) {
+        this.shopBoundsKey = message.sb.join();
+        const [x, y, width, height] = message.sb;
+        this.shopBounds = { x, y, width, height };
         this.layoutCamera();
       }
+      this.showAway(false);
+      this.lastSnapAt = performance.now();
       if (message.hud) this.showHud(message.hud);
       if (!this.joined) {
         this.joined = true;
@@ -177,6 +217,15 @@ export class CoopFriendScene extends Phaser.Scene {
     } else if (message.t === "texture") {
       void this.mirror.addTexture(message).catch((error) => console.error("Could not load a picture from the host:", error));
     }
+  }
+
+  // The host's game sends a picture at least every second while it runs. When those stop
+  // (their game is in the background), their shop is on hold until they come back.
+  showAway(away) {
+    if (this.ended || !this.joined || away === this.away) return;
+    this.away = away;
+    this.notice.textContent = "Your friend switched away from the game. Their shop is on hold until they come back.";
+    this.notice.classList.toggle("hidden", !away);
   }
 
   showHud(hud) {
@@ -207,6 +256,7 @@ export class CoopFriendScene extends Phaser.Scene {
       if (this.leaveWindow.isOpen) this.leaveWindow.close();
       else this.leaveWindow.openWindow();
     }
+    if (!this.leaveWindow.isOpen && this.pad.justPressedAction("interact")) this.send({ t: "use" });
     const input = this.readInput();
     const key = JSON.stringify(input);
     if (key !== this.lastInput || time - this.lastInputAt >= INPUT_KEEP_ALIVE_MS) {
@@ -215,7 +265,7 @@ export class CoopFriendScene extends Phaser.Scene {
       this.send({ t: "input", ...input });
     }
     this.mirror.update(time);
-    const focus = this.mirror.objectFor(this.focusId);
-    if (focus) this.cameras.main.centerOn(Math.round(focus.x), Math.round(focus.y));
+    this.followFocus();
+    if (this.joined && performance.now() - this.lastSnapAt > HOST_AWAY_MS) this.showAway(true);
   }
 }

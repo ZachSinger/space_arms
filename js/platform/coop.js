@@ -27,6 +27,7 @@ const CHUNK_MORE = 1;
 const CHUNK_LAST = 2;
 // No message from the other game for this long ends the session.
 const SILENCE_TIMEOUT_MS = 15000;
+const PING_MS = 2000;
 
 /**
  * Split a message into Steam packets: one flag byte (more to come / last piece), then text.
@@ -151,6 +152,7 @@ export function installCoop({ ipcMain, getWindows, steam = null }) {
       if (status.role === "host") link?.send(JSON.stringify({ t: "hello", name: localName }));
       return;
     }
+    if (message?.t === "ping") return;
     if (message?.t === "bye") {
       endLink("left");
       return;
@@ -300,6 +302,12 @@ export function installCoop({ ipcMain, getWindows, steam = null }) {
     link.send(JSON.stringify({ t: "hello", name: localName }));
     sendStatus();
   };
+
+  // Sent from here rather than the game screen, because a game in the background stops
+  // drawing and would otherwise go quiet and look disconnected.
+  setInterval(() => {
+    if (link) link.send(JSON.stringify({ t: "ping" }));
+  }, PING_MS).unref();
 
   setInterval(() => {
     if (link && status.connected && Date.now() - lastHeard > SILENCE_TIMEOUT_MS) endLink("lost");

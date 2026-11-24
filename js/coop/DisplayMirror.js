@@ -12,6 +12,8 @@ const SUPPORTED_TYPES = new Set(["Image", "Sprite", "Text", "Rectangle", "Arc", 
 export const MIRROR_INTERVAL_MS = 50;
 // Further than this between updates is a jump (a teleport), not a glide.
 const GLIDE_MAX_DISTANCE = 160;
+const GLIDE_SLACK = 1.3;
+const GLIDE_MAX_MS = 160;
 
 const round = (value, places = 100) => Math.round(value * places) / places;
 const comparable = (value) => (value !== null && typeof value === "object" ? JSON.stringify(value) : value);
@@ -216,6 +218,14 @@ export class MirrorReader {
 
   apply(snapshot) {
     const now = this.scene.time.now;
+    // Glides last a little longer than the usual gap between updates, so a late update over
+    // the internet doesn't leave things stopping and starting.
+    if (this.lastApplyAt !== undefined) {
+      const gap = Math.min(GLIDE_MAX_MS, Math.max(MIRROR_INTERVAL_MS, now - this.lastApplyAt));
+      this.averageGap = (this.averageGap ?? MIRROR_INTERVAL_MS) * 0.85 + gap * 0.15;
+    }
+    this.lastApplyAt = now;
+    this.glideMs = Math.min(GLIDE_MAX_MS, (this.averageGap ?? MIRROR_INTERVAL_MS) * GLIDE_SLACK);
     for (const id of snapshot.r ?? []) {
       this.entries.get(id)?.object.destroy();
       this.entries.delete(id);
@@ -251,7 +261,7 @@ export class MirrorReader {
         object.setPosition(state.x, state.y);
         entry.glide = null;
       } else {
-        entry.glide = { fromX: object.x, fromY: object.y, toX: state.x, toY: state.y, startedAt: now };
+        entry.glide = { fromX: object.x, fromY: object.y, toX: state.x, toY: state.y, startedAt: now, ms: this.glideMs };
       }
     }
     if ("depth" in change) object.setDepth(state.depth);
@@ -353,7 +363,7 @@ export class MirrorReader {
     for (const entry of this.entries.values()) {
       const glide = entry.glide;
       if (!glide) continue;
-      const progress = Math.min(1, (now - glide.startedAt) / MIRROR_INTERVAL_MS);
+      const progress = Math.min(1, (now - glide.startedAt) / (glide.ms || MIRROR_INTERVAL_MS));
       entry.object.setPosition(
         glide.fromX + (glide.toX - glide.fromX) * progress,
         glide.fromY + (glide.toY - glide.fromY) * progress,

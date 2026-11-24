@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { ChunkAssembler, FrameReader, chunkMessage, frameMessage } from "../js/platform/coop.js";
-import { MirrorWriter } from "../js/coop/DisplayMirror.js";
+import { MirrorReader, MirrorWriter } from "../js/coop/DisplayMirror.js";
+import { CoopHost } from "../js/coop/CoopHost.js";
 
 test("a long Steam message split into pieces comes back whole, including multi-byte text", () => {
   const text = `{"t":"texture","url":"${"é".repeat(40)}${"x".repeat(25)}"}`;
@@ -50,4 +51,48 @@ test("the mirror sends only what changed, removals, and new draw order", () => {
 
   writer.reset();
   assert.equal(writer.snapshot([a]).c[0].tex, "crate");
+});
+
+test("a partner at a backroom door goes through when the friend presses use", () => {
+  const door = { area: "shop", to: "backroom", door: { x: 100, y: 100 }, front: { x: 100, y: 132 } };
+  const exit = { area: "backroom", to: "shop", door: { x: 300, y: 600 }, front: { x: 300, y: 632 } };
+  door.partner = exit;
+  exit.partner = door;
+  const shop = { areas: { portals: [door, exit], areaAt: (_x, y) => (y > 500 ? "backroom" : "shop") } };
+  const host = new CoopHost(shop);
+  const moves = [];
+  const partner = {
+    sprite: { x: 400, y: 132 },
+    teleportTo(x, y) { moves.push([x, y]); this.sprite.x = x; this.sprite.y = y; },
+    forceFacing() {},
+  };
+  host.partner = partner;
+  host.handleMessage(JSON.stringify({ t: "use" }));
+  assert.deepEqual(moves, [], "too far from the door");
+  partner.sprite.x = 104;
+  host.handleMessage(JSON.stringify({ t: "use" }));
+  assert.deepEqual(moves, [[300, 632]]);
+  host.handleMessage(JSON.stringify({ t: "use" }));
+  assert.deepEqual(moves, [[300, 632], [100, 132]], "and back out through the exit");
+});
+
+test("on a slow connection, mirrored movement keeps gliding between late updates", () => {
+  const scene = {
+    time: { now: 0 },
+    add: { image: () => ({ x: 0, y: 0, setPosition(x, y) { this.x = x; this.y = y; return this; } }) },
+    children: { add() {}, remove() {}, list: [] },
+  };
+  const reader = new MirrorReader(scene, () => {});
+  reader.applyChange = function (entry, change, now) {
+    Object.getPrototypeOf(this).applyChange.call(this, entry, { type: change.type, x: change.x, y: change.y }, now);
+  };
+  for (let step = 0; step <= 10; step += 1) {
+    scene.time.now = step * 100;
+    reader.apply({ c: [{ id: 1, type: "Image", x: step * 10, y: 0 }] });
+    reader.update(scene.time.now);
+  }
+  const object = reader.objectFor(1);
+  const before = object.x;
+  reader.update(scene.time.now + 80);
+  assert.ok(object.x > before && object.x < 100, `still gliding toward the latest spot, at ${object.x}`);
 });

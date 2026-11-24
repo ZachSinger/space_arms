@@ -14,6 +14,10 @@ const PARTNER_SPAWN_OFFSET_X = 48;
 const HUD_INTERVAL_MS = 250;
 // Even when nothing moves, the friend hears from the host this often, so the link stays alive.
 const KEEP_ALIVE_MS = 1000;
+// How close the partner must stand below a door (and how far off to its side) to use it;
+// a little more forgiving than the player's reach, since the friend sees the shop slightly late.
+const PARTNER_DOOR_REACH = 48;
+const PARTNER_DOOR_SIDE_REACH = 24;
 
 export class CoopHost {
   /** @param {any} shop - the game scene */
@@ -56,12 +60,15 @@ export class CoopHost {
     shop.physics.add.collider(this.partner.sprite, shop.room.wallGroup);
     shop.physics.add.collider(this.partner.sprite, shop.obstacleGroup);
     shop.physics.add.collider(this.partner.sprite, shop.registerGroup);
+    // Doors slide open while the partner stands at them, as they do for the player.
+    this.stopHoldingDoors = shop.areas?.addDoorUser((portal) => portal === this.partnerDoor());
     this.writer.reset();
     shop.messages.show(`${name} joined your shop.`);
   }
 
   removePartner() {
     const name = this.partner.nameTag.text;
+    this.stopHoldingDoors?.();
     this.partner.destroy();
     this.partner = null;
     this.shop.messages.show(`${name} left your shop.`);
@@ -75,6 +82,7 @@ export class CoopHost {
       return;
     }
     if (message.t === "input") this.partner?.setRemoteInput(message);
+    else if (message.t === "use") this.usePartnerDoor();
     else if (message.t === "sync") {
       this.writer.reset();
       this.lastHud = "";
@@ -91,9 +99,37 @@ export class CoopHost {
    * @param {boolean} frozen - the shop's clock is stopped, so nobody moves
    */
   update(delta, frozen) {
+    this.frozen = frozen;
     if (!this.partner) return;
     if (frozen) this.partner.stand();
     else this.partner.update(delta);
+  }
+
+  /** The door the partner is standing at, in whichever area they're in, or null. */
+  partnerDoor() {
+    const areas = this.shop.areas;
+    const sprite = this.partner?.sprite;
+    if (!areas || !sprite) return null;
+    const { x, y } = sprite;
+    const area = areas.areaAt(x, y);
+    return areas.portals.find((portal) => {
+      if (portal.area !== area) return false;
+      const bounds = portal.standingBounds;
+      if (bounds) return x >= bounds.x && x < bounds.x + bounds.width && y >= bounds.y && y < bounds.y + bounds.height;
+      const below = y - portal.door.y;
+      return Math.abs(x - portal.door.x) < PARTNER_DOOR_SIDE_REACH && below > 0 && below <= PARTNER_DOOR_REACH;
+    }) ?? null;
+  }
+
+  // The friend pressed their use key: at a door, the partner goes through it.
+  usePartnerDoor() {
+    if (this.frozen) return;
+    const portal = this.partnerDoor();
+    if (!portal) return;
+    const far = portal.partner ?? this.shop.areas.portalBetween(portal.to, portal.area);
+    if (!far) return;
+    this.partner.teleportTo(far.front.x, far.front.y);
+    this.partner.forceFacing(far.arrivalFacing ?? "down");
   }
 
   placeNameTag() {
@@ -122,8 +158,18 @@ export class CoopHost {
     if (!snapshot && !message.hud && now - this.lastSentAt < KEEP_ALIVE_MS) return;
     this.lastSentAt = now;
     message.bg = this.shop.cameras.main.backgroundColor.rgba;
-    message.z = this.shop.cameras.main.zoom;
+    // The outline of the room the partner is in, so the friend's camera can zoom and stop at
+    // its edges like the host's.
+    const bounds = this.partnerRoomBounds();
+    if (bounds) message.sb = [bounds.x, bounds.y, bounds.width, bounds.height];
     this.send(message);
+  }
+
+  partnerRoomBounds() {
+    const { areas, room } = this.shop;
+    const sprite = this.partner?.sprite;
+    if (areas && sprite) return areas.boundsFor(areas.areaAt(sprite.x, sprite.y));
+    return room?.getCameraBounds?.() ?? null;
   }
 
   // The friend's top bar shows the same money and clock as the host's.

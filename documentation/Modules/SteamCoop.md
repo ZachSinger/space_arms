@@ -10,11 +10,15 @@ tell you what I picked before building it.
 ## What works now
 
 The first working version is in. The friend plays the Red partner and can walk and dash around
-the host's shop while it runs. The friend's screen shows everything happening there (customers,
-shelves, crates, money, the clock), and the host sees the Red partner with the friend's name over
-their head. The partner can't do any shop jobs yet: no crates, register, stocking, or mopping.
-Only the host can save or end the day. When either player leaves, the other is told, and the
-friend goes back to the title screen.
+the host's shop while it runs, and press E at the backroom door to go in and out. The friend's
+screen shows everything happening there (customers, shelves, crates, money, the clock), and the
+host sees the Red partner with the friend's name over their head. The friend's camera follows
+the same rules as the host's: it stops at the room's edges, and zooming out stops when the whole
+room fits (at the starting shop size, the room already fills the screen, so there's no zoom).
+The partner can't do any shop jobs yet: no crates, register, stocking, or mopping. Only the host
+can save or end the day. When either player leaves, the other is told, and the friend goes back
+to the title screen. If the host switches away from the game, their shop stops; the friend sees
+a message saying so and stays connected until the host comes back.
 
 How to play it on two PCs: both PCs start Steam, then run `npm run start:steam` (on separate
 Steam accounts). The host starts or continues a shop, opens the pause menu, and picks Invite a
@@ -29,9 +33,9 @@ On one PC (for testing): run `npm start` for the host, then open a second termin
 `$env:SPACE_ARMS_PROFILE="b"; npm start` for the friend. The second copy opens in a window with
 its own saves and settings, and joins at the address `127.0.0.1`.
 
-Not done yet: partner jobs, a co-op pause rule (right now the host's pause stops the partner
-too), the host's backroom side window isn't shown on the friend's screen, the glowing outlines
-behind shelves don't show for the friend, and the open questions below.
+Not done yet: partner jobs (crates, register, stocking, mopping), a co-op pause rule (right now the host's pause stops the partner too), the host's
+backroom side window isn't shown on the friend's screen, the glowing outlines behind shelves
+don't show for the friend, and the open questions below.
 
 ## How it works
 

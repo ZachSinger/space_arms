@@ -7,6 +7,9 @@
 import { PARTNER_LOOK, Player } from "../logic/Player.js";
 
 const NAME_TAG_OFFSET_Y = 44;
+// The friend's game repeats its controls every second; past this, they've gone quiet
+// (game in the background), so the partner stops instead of walking on forever.
+const INPUT_STALE_MS = 1600;
 
 export class Partner extends Player {
   /**
@@ -31,9 +34,11 @@ export class Partner extends Player {
   setRemoteInput(input) {
     const clamp = (value) => Math.max(-1, Math.min(1, Number(value) || 0));
     this.remoteInput = { x: clamp(input.x), y: clamp(input.y), dash: Boolean(input.dash) };
+    this.inputAt = performance.now();
   }
 
   update(delta) {
+    if (performance.now() - (this.inputAt ?? 0) > INPUT_STALE_MS) this.remoteInput = { x: 0, y: 0, dash: false };
     const { x, y, dash } = this.remoteInput;
     this.move(x, y, dash, delta);
   }
