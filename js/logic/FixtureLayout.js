@@ -376,7 +376,10 @@ export function fixtureInteractionDistance(placement, { x, y }) {
     left: alongY ? left - x : NaN,
     right: alongY ? x - right : NaN,
   }[fixtureFacing(placement)];
-  return gap >= -FRONT_EDGE_TOLERANCE_PX ? Math.max(0, gap) : Infinity;
+  // An up-facing shelf is solid only near its base, so the player can walk partway into its
+  // art from the front; anywhere down to the solid part still counts as touching the front.
+  const openDepth = fixtureFacing(placement) === "up" ? (fixtureSolidBounds(placement).top - bounds.top) * TILE_SIZE : 0;
+  return gap >= -(openDepth + FRONT_EDGE_TOLERANCE_PX) ? Math.max(0, gap) : Infinity;
 }
 
 /**

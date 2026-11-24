@@ -1003,6 +1003,11 @@ test("the E key reaches a turned fixture only from its new front", () => {
   const top = fixtureBounds(upFacing).top * TILE_SIZE;
   assert.equal(fixtureInteractionDistance(upFacing, { x: left + 10, y: top - 15 }), 15);
   assert.equal(fixtureInteractionDistance(upFacing, { x: left + 10, y: 5 * TILE_SIZE + 15 }), Infinity);
+  const solidTop = fixtureSolidBounds(upFacing).top * TILE_SIZE;
+  assert.ok(solidTop > top);
+  assert.equal(fixtureInteractionDistance(upFacing, { x: left + 10, y: solidTop }), 0,
+    "feet stopped against the solid base of an up-facing shelf still reach its front");
+  assert.equal(fixtureInteractionDistance(upFacing, { x: left + 10, y: solidTop + 1 }), Infinity);
 });
 
 test("turned shelves can line the bottom and side walls", () => {
