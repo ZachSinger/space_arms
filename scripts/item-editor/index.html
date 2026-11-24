@@ -85,11 +85,11 @@ const COLUMNS = [
   { key: "pick", label: "Compare", left: true, sort: (item) => (state.picked.has(item.id) ? 0 : 1) },
   { key: "icon", label: "", left: true },
   { key: "name", label: "Item", left: true, sort: (item) => item.name },
-  { key: "level", label: "Contract", sub: "sets the unlock level", left: true, edit: true, sort: (item) => (levelOf(item) ?? 999) * 1000 + item.baseCost / 1e6 },
-  { key: "baseCost", label: "Base price", sub: "per item", edit: true, sort: (item) => item.baseCost },
-  { key: "supplier", label: "Supplier price", sub: "per item", sort: supplierPrice },
-  { key: "boxSize", label: "Box size", sub: "space per item", edit: true, sort: (item) => item.boxSize },
-  { key: "perCrate", label: "Per crate", sub: "and per shelf space", sort: perCrate },
+  { key: "level", label: "Unlocks at", left: true, edit: true, sort: (item) => (levelOf(item) ?? 999) * 1000 + item.baseCost / 1e6 },
+  { key: "baseCost", label: "Base price", edit: true, sort: (item) => item.baseCost },
+  { key: "supplier", label: "Supplier price", sort: supplierPrice },
+  { key: "boxSize", label: "Item size", edit: true, sort: (item) => item.boxSize },
+  { key: "perCrate", label: "Crate holds", sort: perCrate },
   { key: "crateValue", label: "Crate sells for", sort: crateValue },
   { key: "crateCost", label: "Crate costs", sort: crateCost },
   { key: "crateProfit", label: "Crate profit", sort: crateProfit },
@@ -105,10 +105,10 @@ async function load() {
   document.getElementById("typeFilter").innerHTML = '<option value="">All item types</option>' + types.map((type) => `<option>${escape(type)}</option>`).join("");
   const percent = (ratio) => Math.round(ratio * 100);
   document.getElementById("help").innerHTML =
-    `You can change the <b>yellow</b> columns; everything else updates as you type. ` +
-    `A crate and a shelf space both hold ${state.rules.crateUnits} space, so box size decides how many fit. ` +
-    `Supplier price is a fixed ${percent(state.rules.minSupply)}-${percent(state.rules.maxSupply)}% of base price, different per item but the same every game. ` +
-    `Profit assumes you sell the whole crate at base price, with no delivery fee.`;
+    `You can change the <b>yellow</b> columns. ` +
+    `A crate has room for ${state.rules.crateUnits}, so an item of size 4 fits 5 per crate. One shelf space holds the same as one crate. ` +
+    `Supplier price is ${percent(state.rules.minSupply)}-${percent(state.rules.maxSupply)}% of base price, fixed per item. ` +
+    `Profit is selling a full crate at base price, minus what the supplier charges for it.`;
   render();
   setStatus(`${state.items.length} items.`);
 }
@@ -171,7 +171,7 @@ function cell(item, index, key) {
 }
 
 function outputHtml(item, key) {
-  if (key === "supplier") return `${exactMoney(supplierPrice(item))}<span class="sub">${Math.round(share(item) * 100)}% of base price</span>`;
+  if (key === "supplier") return exactMoney(supplierPrice(item));
   if (key === "perCrate") return `${perCrate(item)}`;
   if (key === "crateValue") return money(crateValue(item));
   if (key === "crateCost") return money(crateCost(item));
