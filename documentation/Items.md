@@ -1,5 +1,9 @@
 # Item Roster: The "3-Number Lock" Methodology
 
+To view, compare, and edit items, run `npm run items`. It opens a local page (not part
+of the game) showing every item's price, unlock level, box size, and profit per crate,
+and its Save button writes `data/Items.json`.
+
 ## Hands-on shelf boxes
 
 `data/Items.json` now defines each item's `boxSize`, using the values agreed in
