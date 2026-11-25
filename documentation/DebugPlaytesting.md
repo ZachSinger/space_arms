@@ -151,6 +151,10 @@ wall tile in `img/Icons_Extracted/Tileset` (borders can use wall tiles too), all
 each with red, green, and blue plus brightness, contrast, and saturation (the same limits as the
 Shelf Color Lab). On Floor and Wall, **Single tiles** lays individual tiles over the base pattern:
 pick a pattern and color, then click or drag on the room; right-click or Shift-click removes one.
+**Turn left / Turn right** rotates the chosen floor, wall, or border pattern (or the next single
+tile) in quarter turns. The front door and backroom door stand in the wall row and have their own
+tabs to pick a door picture (its closed frame from `Tileset/Doors`) and color it. The
+`wall_*_no_stripe.png` tiles are copies of the striped walls with the caution stripe removed.
 **Save this look** (or Ctrl+S) writes `documentation/Modules/RoomColors.json`, with the single
 tiles under `details` keyed by "column,row".
 Nothing here changes the game.

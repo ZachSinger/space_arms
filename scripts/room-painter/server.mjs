@@ -21,6 +21,11 @@ const TYPES = { ".png": "image/png", ".js": "text/javascript; charset=utf-8" };
 // The game draws its own floor, wall and border in code (js/world/RoomArt.js); the page adds
 // those first. Borders can also use any wall tile, plus the original border art.
 const BORDER_ART = [["Shop/shop_border.png", "Shop border (original art)"], ["Backroom/backroom_border.png", "Backroom border (original art)"]];
+// Door pictures are four-frame animation strips; the page shows the first (closed) frame.
+const DOOR_ART = [["Doors/store_double_door.png", "Shop front door (in the game now)"],
+  ["Doors/backroom_glass_door.png", "Backroom glass door (in the game now)"], ["Doors/store_glass_door.png", "Glass shop door"]];
+const DOOR_FRAME = 96;
+const PARTS = ["floor", "wall", "border", "frontDoor", "backDoor"];
 
 function send(response, status, body, type = "application/json") {
   response.writeHead(status, { "Content-Type": type, "Cache-Control": "no-store" });
@@ -44,7 +49,10 @@ async function listTiles() {
   const tile = (file, name) => ({ id: file, label: name, url: `/img/Icons_Extracted/Tileset/${file}` });
   const pick = (prefix) => files.filter((file) => file.startsWith(prefix)).map((file) => tile(file, label(file, prefix)));
   const walls = pick("wall_");
-  return { floors: pick("floor_"), walls, borders: [...BORDER_ART.map(([file, name]) => tile(file, name)), ...walls] };
+  return {
+    floors: pick("floor_"), walls, borders: [...BORDER_ART.map(([file, name]) => tile(file, name)), ...walls],
+    doors: DOOR_ART.map(([file, name]) => ({ ...tile(file, name), frame: DOOR_FRAME })),
+  };
 }
 
 async function readLook() {
@@ -65,8 +73,8 @@ async function handle(request, response) {
   }
   if (request.method === "POST" && url.pathname === "/api/look") {
     const look = JSON.parse(await readBody(request));
-    if (["floor", "wall", "border"].some((part) => !look?.[part]?.tile || !look[part].color)) {
-      return send(response, 400, { problems: ["The floor, wall or border choice was missing, so nothing was saved."] });
+    if (PARTS.some((part) => !look?.[part]?.tile || !look[part].color)) {
+      return send(response, 400, { problems: ["A part of the room was missing its pattern or color, so nothing was saved."] });
     }
     await writeFile(LOOK_FILE, `${JSON.stringify(look, null, 2)}\n`, "utf8");
     return send(response, 200, { saved: true });

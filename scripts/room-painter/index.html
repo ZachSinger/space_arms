@@ -37,6 +37,9 @@
   .layers button { padding: 7px; font-size: 14px; }
   .hint { color: var(--dim); margin: -6px 0 4px; min-height: 1.4em; }
   #room.placing { cursor: crosshair; }
+  .surfaces button { padding: 10px 4px; font-size: 14px; }
+  .turn { align-items: center; margin: 0 0 8px; }
+  .turn span { color: var(--dim); }
 </style>
 </head>
 <body>
@@ -52,6 +55,8 @@
       <button data-surface="floor" class="on">Floor</button>
       <button data-surface="wall">Wall</button>
       <button data-surface="border">Border</button>
+      <button data-surface="frontDoor">Front door</button>
+      <button data-surface="backDoor">Backroom door</button>
     </div>
     <div class="surfaces layers" id="layers">
       <button data-layer="base" class="on">Whole surface</button>
@@ -59,6 +64,11 @@
     </div>
     <p class="hint" id="layerHint"></p>
     <h2>Pattern: <span class="chosen" id="tileName"></span></h2>
+    <div class="row turn" id="turn">
+      <button id="turnLeft">⟲ Turn left</button>
+      <button id="turnRight">Turn right ⟳</button>
+      <span id="turnText"></span>
+    </div>
     <div class="tiles" id="tiles"></div>
     <h2>Color</h2>
     <div class="swatches" id="swatches"></div>
@@ -96,7 +106,11 @@ const SLIDERS = [
   { key: "saturation", label: "Saturation", min: 0, max: 200 },
 ];
 const UNCHANGED = { brightness: 100, contrast: 0, saturation: 100 };
-const SURFACES = ["floor", "wall", "border"];
+const BASE_SURFACES = ["floor", "wall", "border"];
+// Both doors stand in the wall row like in the game: the shop's front door in the middle,
+// the backroom door off to the right.
+const DOORS = { frontDoor: { column: 7, tile: "Doors/store_double_door.png" }, backDoor: { column: 11, tile: "Doors/backroom_glass_door.png" } };
+const SURFACES = [...BASE_SURFACES, ...Object.keys(DOORS)];
 // The tiles the game draws in code today, so the current look is the starting point.
 const GAME_TILES = {
   floor: [["game-shop-floor", "Shop floor (in the game now)", (ctx) => drawRoomFloor(ctx, false)],
@@ -112,7 +126,7 @@ const roomContext = room.getContext("2d");
 room.width = CELL * COLUMNS;
 room.height = CELL * ROWS;
 
-const tiles = { floor: [], wall: [], border: [] };
+const tiles = { floor: [], wall: [], border: [], frontDoor: [], backDoor: [] };
 const grayArt = new Map();
 const ownColor = new Map();
 const originalArt = new Map();
@@ -129,6 +143,7 @@ let hoverCell = null;
 let dirty = false;
 
 function placing() { return layer === "details" && LAYERED.includes(surface); }
+function isDoor() { return surface in DOORS; }
 function editing() { return placing() ? stamp[surface] : look[surface]; }
 
 function setStatus(text) { document.getElementById("status").textContent = text; }
@@ -173,7 +188,12 @@ async function loadPicture(tile) {
   const image = new Image();
   image.src = tile.url;
   await image.decode();
-  makeGray(tile.id, image);
+  if (!tile.frame) return makeGray(tile.id, image);
+  // Door pictures are strips of animation frames; the closed door is the first one.
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = tile.frame;
+  canvas.getContext("2d").drawImage(image, 0, 0, tile.frame, tile.frame, 0, 0, tile.frame, tile.frame);
+  makeGray(tile.id, canvas);
 }
 
 function loadGameTile([id, label, draw]) {
@@ -195,10 +215,18 @@ function isOwnColor(tileId, color) {
   return Object.keys(own).every((key) => own[key] === color[key]);
 }
 
+function drawTurned(context, source, size, rotation) {
+  context.save();
+  context.translate(size / 2, size / 2);
+  context.rotate((rotation * Math.PI) / 180);
+  context.drawImage(source, -size / 2, -size / 2, size, size);
+  context.restore();
+}
+
 // Gray art times the color, the same way the game tints a shelf's gray art. One color over gray
 // can't rebuild art with several hues exactly (the game's wall is like that), so a tile at its
 // own color shows its real art, and the starting room matches the game pixel for pixel.
-function paintTile(tileId, color, size) {
+function paintTile(tileId, color, size, rotation = 0) {
   const gray = grayArt.get(tileId);
   const canvas = document.createElement("canvas");
   canvas.width = size;
@@ -206,15 +234,15 @@ function paintTile(tileId, color, size) {
   const context = canvas.getContext("2d");
   context.imageSmoothingEnabled = false;
   if (isOwnColor(tileId, color)) {
-    context.drawImage(originalArt.get(tileId), 0, 0, size, size);
+    drawTurned(context, originalArt.get(tileId), size, rotation);
     return canvas;
   }
-  context.drawImage(gray, 0, 0, size, size);
+  drawTurned(context, gray, size, rotation);
   context.globalCompositeOperation = "multiply";
   context.fillStyle = `rgb(${color.red}, ${color.green}, ${color.blue})`;
   context.fillRect(0, 0, size, size);
   context.globalCompositeOperation = "destination-in";
-  context.drawImage(gray, 0, 0, size, size);
+  drawTurned(context, gray, size, rotation);
   return canvas;
 }
 
@@ -224,9 +252,9 @@ function surfaceAt(column, row) {
 }
 
 function drawRoom() {
-  const painted = Object.fromEntries(SURFACES.map((part) => [part, paintTile(look[part].tile, look[part].color, CELL)]));
+  const painted = Object.fromEntries(BASE_SURFACES.map((part) => [part, paintTile(look[part].tile, look[part].color, CELL, look[part].rotation)]));
   roomContext.clearRect(0, 0, room.width, room.height);
-  for (const part of SURFACES) {
+  for (const part of BASE_SURFACES) {
     roomContext.filter = filterText(look[part].color);
     for (let row = 0; row < ROWS; row += 1) {
       for (let column = 0; column < COLUMNS; column += 1) {
@@ -238,8 +266,12 @@ function drawRoom() {
     for (const [cell, detail] of Object.entries(details[part])) {
       const [column, row] = cell.split(",").map(Number);
       roomContext.filter = filterText(detail.color);
-      roomContext.drawImage(paintTile(detail.tile, detail.color, CELL), column * CELL, row * CELL);
+      roomContext.drawImage(paintTile(detail.tile, detail.color, CELL, detail.rotation), column * CELL, row * CELL);
     }
+  }
+  for (const [part, door] of Object.entries(DOORS)) {
+    roomContext.filter = filterText(look[part].color);
+    roomContext.drawImage(paintTile(look[part].tile, look[part].color, CELL), door.column * CELL, CELL);
   }
   roomContext.filter = "none";
   if (placing() && hoverCell && surfaceAt(...hoverCell) === surface) {
@@ -267,7 +299,7 @@ function brushAt(event) {
     delete details[surface][key];
   } else {
     const current = details[surface][key];
-    const next = { tile: stamp[surface].tile, color: { ...stamp[surface].color } };
+    const next = { tile: stamp[surface].tile, color: { ...stamp[surface].color }, rotation: stamp[surface].rotation };
     if (current && JSON.stringify(current) === JSON.stringify(next)) return;
     details[surface][key] = next;
   }
@@ -299,7 +331,7 @@ function drawTiles() {
   holder.replaceChildren();
   const choice = editing();
   for (const tile of tiles[surface]) {
-    const thumb = paintTile(tile.id, choice.color, 96);
+    const thumb = paintTile(tile.id, choice.color, 96, choice.rotation ?? 0);
     thumb.title = tile.label;
     thumb.style.filter = filterText(choice.color);
     if (tile.id === choice.tile) thumb.classList.add("on");
@@ -358,6 +390,11 @@ function refresh() {
     : placing()
       ? `Pick a pattern and color, then click or drag on the ${NAMES[surface]} to place tiles. Right-click or Shift-click takes one off.`
       : `This pattern covers the whole ${NAMES[surface]}. Switch to Single tiles to place individual tiles on top.`;
+  const turns = !isDoor();
+  document.getElementById("turn").style.display = turns ? "" : "none";
+  document.getElementById("turnText").textContent = turns && editing().rotation ? `Turned ${editing().rotation}°` : "Not turned";
+  document.getElementById("gameColor").textContent = isDoor() ? "Back to this door's own colors" : "Back to the game's color";
+  document.getElementById("ownColor").style.display = isDoor() ? "none" : "";
   document.getElementById("clearDetails").style.display = placing() ? "" : "none";
   document.getElementById("clearName").textContent = NAMES[surface];
   room.classList.toggle("placing", placing());
@@ -383,8 +420,15 @@ document.getElementById("clearDetails").addEventListener("click", () => {
   markDirty();
   refresh();
 });
+for (const [id, step] of [["turnLeft", 270], ["turnRight", 90]]) {
+  document.getElementById(id).addEventListener("click", () => {
+    editing().rotation = ((editing().rotation ?? 0) + step) % 360;
+    changed();
+    refresh();
+  });
+}
 document.getElementById("gameColor").addEventListener("click", () => {
-  editing().color = { ...ownColor.get(GAME_TILES[surface][0][0]) };
+  editing().color = { ...ownColor.get(isDoor() ? editing().tile : GAME_TILES[surface][0][0]) };
   changed();
   refresh();
 });
@@ -412,27 +456,30 @@ window.addEventListener("beforeunload", (event) => { if (dirty) event.preventDef
 
 async function start() {
   const data = await (await fetch("/api/tiles")).json();
-  const pictures = { floor: data.floors, wall: data.walls, border: data.borders };
-  await Promise.all(Object.values(pictures).flat().map(loadPicture));
+  const pictures = { floor: data.floors, wall: data.walls, border: data.borders, frontDoor: data.doors, backDoor: data.doors };
+  await Promise.all([...data.floors, ...data.walls, ...data.borders, ...data.doors].map(loadPicture));
+  const turn = (value) => ([90, 180, 270].includes(value) ? value : 0);
   for (const part of SURFACES) {
-    tiles[part] = [...GAME_TILES[part].map(loadGameTile), ...pictures[part]];
+    tiles[part] = [...(GAME_TILES[part] ?? []).map(loadGameTile), ...pictures[part]];
     const saved = data.look?.[part];
     const known = tiles[part].some((tile) => tile.id === saved?.tile);
-    const gameTile = tiles[part][0].id;
+    const gameTile = DOORS[part]?.tile ?? tiles[part][0].id;
     look[part] = known
-      ? { tile: saved.tile, color: { ...ownColor.get(gameTile), ...saved.color } }
-      : { tile: gameTile, color: { ...ownColor.get(gameTile) } };
+      ? { tile: saved.tile, color: { ...ownColor.get(gameTile), ...saved.color }, rotation: turn(saved.rotation) }
+      : { tile: gameTile, color: { ...ownColor.get(gameTile) }, rotation: 0 };
     if (!LAYERED.includes(part)) continue;
     const firstPicture = pictures[part][0].id;
-    stamp[part] = { tile: firstPicture, color: { ...ownColor.get(firstPicture) } };
+    stamp[part] = { tile: firstPicture, color: { ...ownColor.get(firstPicture) }, rotation: 0 };
     for (const [cell, detail] of Object.entries(data.look?.details?.[part] ?? {})) {
-      if (tiles[part].some((tile) => tile.id === detail.tile)) details[part][cell] = { tile: detail.tile, color: { ...ownColor.get(detail.tile), ...detail.color } };
+      if (tiles[part].some((tile) => tile.id === detail.tile)) {
+        details[part][cell] = { tile: detail.tile, color: { ...ownColor.get(detail.tile), ...detail.color }, rotation: turn(detail.rotation) };
+      }
     }
   }
   drawSwatches();
   drawSliders();
   refresh();
-  setStatus("Pick Floor, Wall or Border, then a pattern and a color. Nothing here changes the game.");
+  setStatus("Pick a part of the room, then a pattern and a color. Nothing here changes the game.");
 }
 start().catch((error) => setStatus(`Could not load the tiles: ${error.message}`));
 </script>
