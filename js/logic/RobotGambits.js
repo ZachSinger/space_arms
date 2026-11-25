@@ -35,6 +35,8 @@ const COMBINE_BY_ID = new Map(COMBINES.map((entry) => [entry.id, entry]));
 
 // A check ("measure") turns facts into the one number a condition compares: a fact (boiled down
 // with a combine when it's a list), optionally minus a second fact. Its unit may be "singular/plural".
+// A check can be written down in plain words ("describe") before the game can work it out; until it
+// has a fact it's "not hooked up yet": it reads no number and conditions using it are never true.
 // The lab saves the list in data/RobotPrograms.json (parts.measures); MEASURES is the starting list.
 export const MEASURES = Object.freeze([
   { id: "my_charge", label: "My charge", fact: "my_charge", unit: "%" },
@@ -100,9 +102,13 @@ function factValue(factId, combineId, world, robot) {
   return combine.apply(value);
 }
 
-/** The number a check (a measure object, see MEASURES) reads from the store right now. */
+/** Whether the game can work a check out yet (it has a fact to read). */
+export const isHookedUp = (measure) => Boolean(measure?.fact);
+
+/** The number a check (a measure object, see MEASURES) reads from the store right now, or null when it isn't hooked up yet. */
 export function measureValue(measure, world, robot) {
-  if (!measure?.fact) throw new Error(`Unknown robot check: ${measure?.id ?? measure}`);
+  if (!measure) throw new Error("Unknown robot check");
+  if (!isHookedUp(measure)) return null;
   const value = factValue(measure.fact, measure.combine, world, robot);
   return measure.minus ? value - factValue(measure.minus, measure.minusCombine, world, robot) : value;
 }
@@ -160,7 +166,8 @@ export function conditionMet(condition, world, robot, measures = MEASURES) {
   if (!compare) throw new Error(`Unknown robot comparison: ${condition?.compare}`);
   const measure = measures.find((entry) => entry.id === condition.measure);
   if (!measure) throw new Error(`Unknown robot check: ${condition.measure}`);
-  return compare.test(measureValue(measure, world, robot), condition.value);
+  const value = measureValue(measure, world, robot);
+  return value !== null && compare.test(value, condition.value);
 }
 
 /** The register/shelf/station the action would use, or null when it can't be done right now. */
@@ -275,7 +282,8 @@ export function measureProblems(measures) {
     else if (seen.has(measure.id)) problems.push(`Two checks share the id "${measure.id}".`);
     seen.add(measure?.id);
     if (typeof measure?.label !== "string" || !measure.label.trim()) problems.push(`${name}: needs a name.`);
-    term(name, measure?.fact, measure?.combine, "fact");
+    if (measure?.fact !== undefined) term(name, measure.fact, measure.combine, "fact");
+    if (measure?.describe !== undefined && typeof measure.describe !== "string") problems.push(`${name}: the description must be text.`);
     if (measure?.minus !== undefined) term(name, measure.minus, measure.minusCombine, "fact to subtract");
   });
   return problems;

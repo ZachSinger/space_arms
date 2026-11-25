@@ -14,8 +14,8 @@
   button.ghost { background: none; border-color: transparent; color: var(--dim); }
   button.ghost:hover:not(:disabled) { color: var(--text); border-color: var(--line); }
   button:disabled { opacity: .35; cursor: default; }
-  input, select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px; font: inherit; }
-  input:focus, select:focus { border-color: var(--accent); outline: none; }
+  input, select, textarea { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px; font: inherit; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); outline: none; }
   input.invalid { border-color: var(--bad); }
   input[type=number] { width: 72px; text-align: right; }
   select option { background: var(--panel); color: var(--text); }
@@ -41,6 +41,7 @@
   .check-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; font-size: 13px; color: var(--dim); }
   .check-row select { max-width: 340px; }
   .check-row input.unit-in { width: 130px; }
+  textarea.describe { display: block; width: 100%; box-sizing: border-box; margin-top: 6px; resize: vertical; font: inherit; font-size: 13px; }
   .views { display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 2px; margin-right: 14px; }
   .view { background: none; border: none; color: var(--dim); padding: 3px 12px; border-radius: 5px; }
   .view.active { background: var(--panel2); color: var(--text); }
@@ -202,7 +203,7 @@
   <div id="checks"></div>
 </main>
 <script type="module">
-import { ACTIONS, ALWAYS, COMBINES, COMPARES, FACTS, PREFAB_ABILITIES, actionTarget, conditionLabel, conditionMet, findAbility, measureValue, unitFor } from "/js/logic/RobotGambits.js";
+import { ACTIONS, ALWAYS, COMBINES, COMPARES, FACTS, PREFAB_ABILITIES, actionTarget, conditionLabel, conditionMet, findAbility, isHookedUp, measureValue, unitFor } from "/js/logic/RobotGambits.js";
 import { boardPower, commandPower, findBoard, findCell, findFrame, partConditions, partMeasures, powerNeeded } from "/js/logic/RobotParts.js";
 import { applyBuild, createSim, step, SIM_RULES } from "/scripts/robot-lab/sim.js";
 
@@ -588,6 +589,12 @@ function updateTruth() {
     const condition = partConditions(setup.parts).find((entry) => entry.id === pill.dataset.condPill);
     let yes = false;
     const measure = partMeasures(setup.parts).find((entry) => entry.id === condition.measure);
+    if (measure && !isHookedUp(measure)) {
+      pill.textContent = "Not hooked up";
+      pill.className = "pill";
+      pill.title = "The game can't work out this condition's check yet, so robots treat it as never true.";
+      continue;
+    }
     try { yes = conditionMet(condition, world, robot, partMeasures(setup.parts)); } catch { pill.textContent = "?"; continue; }
     const now = measure ? ` (now ${round1(measureValue(measure, world, robot))})` : "";
     pill.textContent = yes ? "True" : "False";
@@ -597,6 +604,11 @@ function updateTruth() {
   for (const pill of document.querySelectorAll("[data-check-pill]")) {
     const measure = partMeasures(setup.parts).find((entry) => entry.id === pill.dataset.checkPill);
     let value;
+    if (!isHookedUp(measure)) {
+      pill.textContent = "Not hooked up yet";
+      pill.className = "pill";
+      continue;
+    }
     try { value = round1(measureValue(measure, world, robot)); } catch { pill.textContent = "?"; continue; }
     const unit = unitFor(measure, value);
     pill.textContent = `Now: ${value}${unit && !unit.startsWith("%") ? " " : ""}${unit}`;
@@ -617,9 +629,9 @@ function momentPanel(hint) {
 
 const conditionsUsing = (measureId) => partConditions(setup.parts).filter((condition) => condition.measure === measureId).length;
 
-function factPicker(where, factField, combineField, factId, combineId, withNone) {
+function factPicker(where, factField, combineField, factId, combineId, noneLabel) {
   const fact = FACTS.find((entry) => entry.id === factId);
-  const factSelect = `<select ${where} data-field="${factField}">${withNone ? `<option value="" ${factId ? "" : "selected"}>nothing</option>` : ""}${options(FACTS, factId)}</select>`;
+  const factSelect = `<select ${where} data-field="${factField}"><option value="" ${factId ? "" : "selected"}>${noneLabel}</option>${options(FACTS, factId)}</select>`;
   if (!fact?.list || fact.countOnly) return factSelect;
   return `${factSelect} <span>taking</span> <select ${where} data-field="${combineField}">${options(COMBINES, combineId)}</select>`;
 }
@@ -631,8 +643,9 @@ function renderChecks() {
     const uses = conditionsUsing(measure.id);
     return `<div class="cond">
       <div class="cond-row"><input class="check-name" type="text" ${where} data-field="label" value="${escape(measure.label)}" title="The name conditions show, like &quot;My charge&quot; in &quot;My charge is below 20%&quot;"><span class="pill" data-check-pill="${measure.id}"></span></div>
-      <div class="check-row"><span>Reads</span> ${factPicker(where, "fact", "combine", measure.fact, measure.combine, false)}</div>
-      <div class="check-row"><span>Minus</span> ${factPicker(where, "minus", "minusCombine", measure.minus ?? "", measure.minusCombine, true)}</div>
+      <textarea class="describe" rows="2" ${where} data-field="describe" placeholder="In your own words: what should a robot look at, and how does it count it?">${escape(measure.describe ?? "")}</textarea>
+      <div class="check-row"><span>How the game works it out:</span> ${factPicker(where, "fact", "combine", measure.fact ?? "", measure.combine, "Not hooked up yet")}</div>
+      ${isHookedUp(measure) ? `<div class="check-row"><span>Minus</span> ${factPicker(where, "minus", "minusCombine", measure.minus ?? "", measure.minusCombine, "nothing")}</div>` : ""}
       <div class="meta">
         <label title="Shown after the number in conditions. Write one/many, like customer/customers, to change it when the number is 1.">Unit <input class="unit-in" type="text" ${where} data-field="unit" value="${escape(measure.unit ?? "")}"></label>
         <span>${uses ? `Used in ${uses} condition${uses === 1 ? "" : "s"}` : "Not used yet"}</span>
@@ -643,7 +656,7 @@ function renderChecks() {
   $("#checks").innerHTML = `<div class="ws two">
     ${momentPanel("Set up a moment in the store. Each check shows the number it would read right now.")}
     <div><h2>Checks (what a condition looks at) <button class="small" id="addCheck">Add check</button></h2>
-      <p class="hint">A check reads something the store reports and turns it into one number. Where there's one per shelf, register or station, pick how to boil them down. Conditions then compare that number, like "is below 20".</p>${rows}</div>
+      <p class="hint">A check is anything you want a robot to look at, as long as it comes out as a number that conditions can compare, like "is below 20". Name it and describe it however you like. If the game can already work it out, pick how under "How the game works it out" and it goes live. If not, leave it as "Not hooked up yet": it's saved, can already be used in conditions (they just stay false), and tells me what the game needs to start keeping track of.</p>${rows}</div>
   </div>`;
   updateTruth();
 }
@@ -895,10 +908,9 @@ $("#checks").addEventListener("change", (event) => {
   const measure = setup.parts.measures.find((entry) => entry.id === data.check);
   const value = field.value;
   if (data.field === "label" && !value.trim()) return invalid(field, "Needs a name.");
-  if (data.field === "minus" && !value) {
-    delete measure.minus;
-    delete measure.minusCombine;
-  } else if (data.field === "unit" && !value.trim()) delete measure.unit;
+  if ((data.field === "fact" || data.field === "minus") && !value) {
+    for (const key of data.field === "fact" ? ["fact", "combine", "minus", "minusCombine"] : ["minus", "minusCombine"]) delete measure[key];
+  } else if ((data.field === "unit" || data.field === "describe") && !value.trim()) delete measure[data.field];
   else measure[data.field] = data.field === "label" ? value.trim() : value;
   // A fact that's one per shelf/register/station needs a way to combine; pick "the lowest" until told otherwise.
   for (const [factKey, combineKey] of [["fact", "combine"], ["minus", "minusCombine"]]) {
@@ -916,7 +928,7 @@ $("#checks").addEventListener("click", (event) => {
   if (target.id === "addCheck") {
     let n = measures.length + 1;
     while (measures.some((entry) => entry.id === `check_${n}`)) n += 1;
-    measures.push({ id: `check_${n}`, label: "New check", fact: "my_charge", unit: "%" });
+    measures.push({ id: `check_${n}`, label: "New check" });
   } else if (target.dataset.removeCheck) {
     measures.splice(measures.findIndex((entry) => entry.id === target.dataset.removeCheck), 1);
   } else return;

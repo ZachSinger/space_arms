@@ -140,3 +140,11 @@ test("checks are built from data too, so a new thing to check works without code
   assert.ok(measureProblems([{ id: "x", label: "X", fact: "shelf_fill" }]).length > 0);
   assert.ok(conditionProblems(conditions, []).length > 0);
 });
+
+test("a check written in plain words before the game can work it out is saved, but never makes a condition true", () => {
+  const measures = [{ id: "long_wait", label: "The longest any customer has waited", describe: "Seconds the longest-waiting customer has been in line" }];
+  const conditions = [{ id: "waited", measure: "long_wait", compare: "above", value: 0 }];
+  assert.deepEqual(measureProblems(measures), []);
+  assert.deepEqual(conditionProblems(conditions, measures), []);
+  assert.equal(chooseAction([{ condition: "waited", action: "wait" }], world(), robot, conditions, measures).checks[0].result, "condition false");
+});
