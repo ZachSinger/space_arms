@@ -116,7 +116,16 @@ What's already written below is only what the Robot Lab has today. Change it, de
 
 Commands decide what a robot does. Modifiers decide how well it does it.
 
-Every robot starts with a base speed for each job: cleaning, checking out customers, and stocking. The robot's parts only set how fast it moves around the store. Modifier boards raise those base speeds.
+Every robot starts with a base level in each skill. The robot's parts only set how fast it moves around the store. Modifier boards raise skills.
+
+### Skills
+
+Stocking: how fast the robot puts units on a shelf.
+Carry: how many crates the robot can carry at once.
+Scanning: how fast the robot scans a customer's items at a register.
+Counting: how fast the robot counts out a customer's change at a register.
+
+Scanning and Counting together decide how long the robot takes to check out each customer.
 
 Most modifier boards raise one stat. Some raise more than one. For example, Register 1 and Stock 2 could be on the same board, but that board costs much more and needs much more power than a board with either one on its own.
 
