@@ -16,16 +16,19 @@
 //   { frames: [{ id, name, power, boardSlots, speed }],
 //     cells: [{ id, name, capacity, charge, drainRate, chargeRate }],
 //     boards: [{ id, name, kind: "prefab", power, ability } | { id, name, kind: "custom", power, commands }],
+//     conditions: [{ id, measure, compare, value }] (see MEASURES in RobotGambits.js),
 //     commandPower: { conditions: { [conditionId]: number }, actions: { [actionId]: number } } }
 // and a robot looks like { name, frame, cell, boards: [{ board, program? }] } where `program`
 // is only stored for custom boards.
-import { findAbility, programProblems } from "./RobotGambits.js";
+import { CONDITIONS, conditionProblems, findAbility, programProblems } from "./RobotGambits.js";
 
 const byId = (list, id) => list?.find((entry) => entry.id === id) ?? null;
 
 export const findFrame = (parts, id) => byId(parts.frames, id);
 export const findCell = (parts, id) => byId(parts.cells, id);
 export const findBoard = (parts, id) => byId(parts.boards, id);
+/** The conditions commands can use: the saved list, or the starting list when there isn't one. */
+export const partConditions = (parts) => parts?.conditions ?? CONDITIONS;
 
 /** What a fitted board adds to the robot's list: one fixed ability for a prefab, the robot's commands for a custom one. */
 export function boardProgram(fitted, parts) {
@@ -83,7 +86,7 @@ export function buildProblems(robot, parts) {
     const board = findBoard(parts, fitted?.board);
     if (!board) return problems.push(`slot ${slot + 1}: unknown board "${fitted?.board}".`);
     if (board.kind !== "custom") return;
-    for (const problem of programProblems(fitted.program, board.commands)) problems.push(`slot ${slot + 1} (${board.name}): ${problem}`);
+    for (const problem of programProblems(fitted.program, board.commands, partConditions(parts))) problems.push(`slot ${slot + 1} (${board.name}): ${problem}`);
   });
   return problems;
 }
@@ -106,6 +109,7 @@ export function partsProblems(parts) {
     });
   }
   if (problems.length) return problems;
+  if (parts.conditions !== undefined) problems.push(...conditionProblems(parts.conditions));
   if (!parts.frames.length) problems.push("Needs at least one frame.");
   if (!parts.cells.length) problems.push("Needs at least one power cell.");
   const number = (part, key, what, minimum = 0) => {

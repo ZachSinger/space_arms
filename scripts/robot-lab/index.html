@@ -32,6 +32,39 @@
   main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 480px; }
   #store { overflow: auto; padding: 16px 20px 30px; }
   #side { overflow: auto; border-left: 1px solid var(--line); padding: 0 16px 30px; }
+  #workshop { display: none; }
+  main.commands { grid-template-columns: 1fr; }
+  main.commands #store, main.commands #side { display: none; }
+  main.commands #workshop { display: block; overflow: auto; padding: 16px 20px 40px; }
+  .views { display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 2px; margin-right: 14px; }
+  .view { background: none; border: none; color: var(--dim); padding: 3px 12px; border-radius: 5px; }
+  .view.active { background: var(--panel2); color: var(--text); }
+  #simControls { display: flex; gap: 10px; align-items: center; }
+
+  /* Commands workshop */
+  .ws { display: grid; grid-template-columns: 300px 1fr 1fr; gap: 20px; align-items: start; }
+  .ws h2 { font-size: 15px; margin: 0 0 4px; display: flex; justify-content: space-between; align-items: center; }
+  .ws .hint { font-size: 12px; }
+  .moment { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; position: sticky; top: 0; }
+  .moment label { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--dim); font-size: 13px; margin-bottom: 6px; }
+  .moment input[type=number] { width: 60px; }
+  .moment .group { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); margin: 10px 0 4px; }
+  .cond, .act { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; }
+  .cond-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .cond-row select.measure { flex: 1 1 220px; min-width: 0; }
+  .cond-row input[type=number] { width: 64px; }
+  .cond-row .unit { color: var(--dim); font-size: 13px; }
+  .meta { display: flex; gap: 12px; align-items: center; margin-top: 6px; font-size: 12px; color: var(--faint); }
+  .meta label { display: flex; gap: 5px; align-items: center; }
+  .meta input[type=number] { width: 52px; padding: 1px 4px; font-size: 12px; }
+  .meta .spacer { flex: 1; }
+  .meta .warn { color: var(--warn); }
+  .pill { font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 10px; white-space: nowrap; background: var(--panel2); color: var(--faint); }
+  .pill.yes { background: #173a29; color: var(--good); }
+  .pill.no { background: #3a1d24; color: var(--bad); }
+  .act .title { display: flex; justify-content: space-between; gap: 8px; align-items: center; font-weight: 600; }
+  .act .desc { font-size: 13px; color: var(--dim); margin-top: 3px; }
+  .act .cant { font-size: 12px; color: var(--faint); margin-top: 2px; }
 
   /* The store map */
   .map { position: relative; width: 100%; aspect-ratio: 16 / 9; max-height: calc(100vh - 230px); min-height: 360px; }
@@ -143,12 +176,15 @@
 <body>
 <header>
   <h1>Robot Lab</h1>
+  <span class="views"><button class="view active" data-view="store">Store</button><button class="view" data-view="commands">Commands</button></span>
+  <span id="simControls">
   <button id="play" class="primary">Play</button>
   <select id="speed" title="How fast time moves"></select>
   <button id="stepOne" class="ghost" title="Move time forward one second">Step</button>
   <button id="runAll" class="ghost" title="Run the rest of the shift instantly">Skip to end</button>
   <button id="restart" class="ghost">Restart</button>
   <span class="clock" id="clock"></span>
+  </span>
   <span class="spacer"></span>
   <span id="status">Loading...</span>
   <button id="undo" class="ghost" disabled>Undo all</button>
@@ -157,10 +193,11 @@
 <main>
   <div id="store"></div>
   <div id="side"></div>
+  <div id="workshop"></div>
 </main>
 <script type="module">
-import { CONDITIONS, ACTIONS, PREFAB_ABILITIES, findAbility } from "/js/logic/RobotGambits.js";
-import { boardPower, commandPower, findBoard, findCell, findFrame, powerNeeded } from "/js/logic/RobotParts.js";
+import { ACTIONS, COMPARES, MEASURES, PREFAB_ABILITIES, actionTarget, conditionLabel, conditionMet, findAbility, measureValue } from "/js/logic/RobotGambits.js";
+import { boardPower, commandPower, findBoard, findCell, findFrame, partConditions, powerNeeded } from "/js/logic/RobotParts.js";
 import { applyBuild, createSim, step, SIM_RULES } from "/scripts/robot-lab/sim.js";
 
 const $ = (selector) => document.querySelector(selector);
@@ -199,6 +236,9 @@ let timer = null;
 let speed = 5;
 let tab = "robots";
 let openRobot = 0;
+let view = "store";
+// The pretend moment on the Commands page, used to show which conditions are true and which actions could be done.
+let moment = { charge: 60, shelf: 40, line1: 1, line2: 0, registersTaken: false, pad: 2, stored: 3, capacity: 12, messes: 1, stations: 1 };
 
 const dirty = () => JSON.stringify(setup) !== JSON.stringify(saved);
 function status(text, kind = "") {
@@ -374,9 +414,13 @@ function ruleRow(rule, i, count, where, result) {
   return `<div class="rule ${rule.on === false ? "off" : ""} ${result === "chosen" ? "chosen" : ""}" title="${result ? escape(WHY[result]) : ""}">
     <span class="n">${i + 1}</span>
     <input type="checkbox" ${where} data-rule="${i}" data-field="on" title="Switch this command on or off" ${rule.on === false ? "" : "checked"}>
-    <span class="what"><span class="word">If</span><select ${where} data-rule="${i}" data-field="condition">${options(CONDITIONS, rule.condition)}</select><span class="word">then</span><select ${where} data-rule="${i}" data-field="action">${options(ACTIONS, rule.action)}</select></span>
+    <span class="what"><span class="word">If</span><select ${where} data-rule="${i}" data-field="condition">${conditionOptions(rule.condition)}</select><span class="word">then</span><select ${where} data-rule="${i}" data-field="action">${options(ACTIONS, rule.action)}</select></span>
     ${tools}
   </div>`;
+}
+
+function conditionOptions(selected) {
+  return partConditions(setup.parts).map((entry) => `<option value="${entry.id}" ${entry.id === selected ? "selected" : ""}>${escape(conditionLabel(entry))}</option>`).join("");
 }
 
 function boardOptions(selected, programLength) {
@@ -474,7 +518,6 @@ function partsTab() {
         ${removeButton("boards", board, usedBy("boards", board.id), false)}</div>
       <div class="desc">${escape(findAbility(board.ability)?.description ?? "Unknown ability")}</div></div>`;
   }).join("");
-  const costTable = (kind, list) => `<table class="parts-table"><tr><th>${kind === "conditions" ? "If..." : "Then..."}</th><th>Power</th></tr>${list.map((entry) => `<tr><td>${escape(entry.label)}</td><td><input type="number" min="0" step="any" data-cost="${kind}" data-id="${entry.id}" value="${parts.commandPower[kind][entry.id] ?? 0}"></td></tr>`).join("")}</table>`;
   return `
     <h3 class="part-title">Frames <button class="small" data-add-part="frames">Add</button></h3>
     <p class="part-help">The body. Sets speed and how many logic boards fit. Hover a heading for what it means.</p>
@@ -486,10 +529,8 @@ function partsTab() {
     <p class="part-help">Each does one fixed job built into the game. Players can't see inside or change it. Pick the job, name and power need.</p>
     ${prefabs}
     <h3 class="part-title">Custom boards <button class="small" data-add-part="custom">Add</button></h3>
-    <p class="part-help">Blank boards players write commands on. Each command adds its own power from the tables below.</p>
-    ${table("boards", PART_COLUMNS.custom, parts.boards.filter((board) => board.kind === "custom"))}
-    <h3 class="part-title">Power each command adds</h3>
-    <div class="costs">${costTable("conditions", CONDITIONS)}${costTable("actions", ACTIONS)}</div>`;
+    <p class="part-help">Blank boards players write commands on. Each command adds the power of its "if" and "then" parts, set on the Commands page.</p>
+    ${table("boards", PART_COLUMNS.custom, parts.boards.filter((board) => board.kind === "custom"))}`;
 }
 
 function storeTab() {
@@ -508,10 +549,95 @@ function renderSide() {
   updateButtons();
 }
 
+// ---------- Commands page ----------
+
+const MOMENT_FIELDS = [
+  ["Me", [["charge", "My charge (%)"]]],
+  ["Sales floor", [["shelf", "Emptiest shelf (% full)"], ["line1", "Customers at register 1"], ["line2", "Customers at register 2"], ["registersTaken", "Other robots are on both registers"], ["messes", "Messes on the floor"]]],
+  ["Backroom", [["pad", "Crates on the loading pad"], ["stored", "Crates stored"], ["capacity", "Backroom holds (crates)"], ["stations", "Free charging stations"]]],
+];
+function momentWorld() {
+  const taken = moment.registersTaken ? "another robot" : null;
+  return {
+    world: {
+      registers: [{ id: "Register 1", line: moment.line1, staffedBy: taken }, { id: "Register 2", line: moment.line2, staffedBy: taken }],
+      shelves: [{ id: "Shelf", fill: moment.shelf / 100 }],
+      padCrates: moment.pad,
+      backroomCrates: moment.stored,
+      backroomCapacity: moment.capacity,
+      messes: moment.messes,
+      stations: [...Array.from({ length: moment.stations }, (_unused, i) => ({ id: `Station ${i + 1}`, usedBy: null })), { id: "Busy station", usedBy: "another robot" }],
+    },
+    robot: { id: "me", battery: moment.charge / 100 },
+  };
+}
+const commandsUsing = (conditionId) => setup.robots.reduce((total, robot) => total + robot.boards.reduce((sum, fitted) => sum + (fitted.program ?? []).filter((rule) => rule.condition === conditionId).length, 0), 0);
+
+/** Updates the true/false and can/can't tags without redrawing, so typing in the moment isn't interrupted. */
+function updateTruth() {
+  const { world, robot } = momentWorld();
+  for (const pill of document.querySelectorAll("[data-cond-pill]")) {
+    const condition = partConditions(setup.parts).find((entry) => entry.id === pill.dataset.condPill);
+    let yes = false;
+    try { yes = conditionMet(condition, world, robot); } catch { pill.textContent = "?"; continue; }
+    const now = condition.measure === "always" ? "" : ` (now ${Math.round(measureValue(condition.measure, world, robot) * 10) / 10})`;
+    pill.textContent = yes ? "True" : "False";
+    pill.className = `pill ${yes ? "yes" : "no"}`;
+    pill.title = `In the test moment this is ${yes ? "true" : "false"}${now}.`;
+  }
+  for (const pill of document.querySelectorAll("[data-act-pill]")) {
+    const yes = Boolean(actionTarget(pill.dataset.actPill, world, robot));
+    pill.textContent = yes ? "Can do it" : "Can't do it";
+    pill.className = `pill ${yes ? "yes" : "no"}`;
+  }
+}
+
+function renderWorkshop() {
+  const conditions = partConditions(setup.parts);
+  const costs = setup.parts.commandPower;
+  const momentHtml = MOMENT_FIELDS.map(([group, fields]) => `<div class="group">${group}</div>${fields.map(([key, label]) => (typeof moment[key] === "boolean"
+    ? `<label>${label} <input type="checkbox" data-moment="${key}" ${moment[key] ? "checked" : ""}></label>`
+    : `<label>${label} <input type="number" min="0" step="1" data-moment="${key}" value="${moment[key]}"></label>`)).join("")}`).join("");
+  const conditionHtml = conditions.map((condition, index) => {
+    const where = `data-cond="${condition.id}"`;
+    const always = condition.measure === "always";
+    const measure = MEASURES.find((entry) => entry.id === condition.measure);
+    const same = conditions.findIndex((other) => other.measure === condition.measure && (always || (other.compare === condition.compare && other.value === condition.value)));
+    const uses = commandsUsing(condition.id);
+    return `<div class="cond"><div class="cond-row">
+        <span class="pill" data-cond-pill="${condition.id}"></span>
+        <select class="measure" ${where} data-field="measure">${options(MEASURES, condition.measure)}</select>
+        ${always ? "" : `<select ${where} data-field="compare">${options(COMPARES, condition.compare)}</select>
+        <input type="number" min="0" step="any" ${where} data-field="value" value="${condition.value}">
+        <span class="unit">${escape(measure?.unit?.(condition.value) ?? "")}</span>`}
+      </div><div class="meta">
+        <label title="How much power this adds to a custom board when a command uses it">Power <input type="number" min="0" step="any" data-cost="conditions" data-id="${condition.id}" value="${costs.conditions[condition.id] ?? 0}"></label>
+        <span>${uses ? `Used in ${uses} command${uses === 1 ? "" : "s"}` : "Not used yet"}</span>
+        ${same !== index ? `<span class="warn">Same as condition ${same + 1}</span>` : ""}
+        <span class="spacer"></span>
+        <button class="small ghost" data-remove-cond="${condition.id}" ${uses ? 'disabled title="A robot uses this. Change those commands first."' : 'title="Remove this condition"'}>✕</button>
+      </div></div>`;
+  }).join("");
+  const actionHtml = ACTIONS.map((action) => `<div class="act">
+      <div class="title"><span>${escape(action.label)}</span><span class="pill" data-act-pill="${action.id}"></span></div>
+      <div class="desc">${escape(action.description)}</div>
+      <div class="cant">Can't be done when: ${escape(action.cantWhen)}</div>
+      <div class="meta"><label title="How much power this adds to a custom board when a command uses it">Power <input type="number" min="0" step="any" data-cost="actions" data-id="${action.id}" value="${costs.actions[action.id] ?? 0}"></label></div>
+    </div>`).join("");
+  $("#workshop").innerHTML = `<div class="ws">
+    <div class="moment"><h2>Test moment</h2><p class="hint">Set up a moment in the store. The tags on the right show which conditions are true and which actions could be done.</p>${momentHtml}</div>
+    <div><h2>Conditions (the "if" part) <button class="small" id="addCondition">Add condition</button></h2>
+      <p class="hint">Each is something to check, a comparison and a number. Changes apply to every command that uses it.</p>${conditionHtml}</div>
+    <div><h2>Actions (the "then" part)</h2><p class="hint">The jobs a robot knows how to do. A command is skipped when its job can't be done.</p>${actionHtml}</div>
+  </div>`;
+  updateTruth();
+}
+
 function render() {
   renderSide();
   renderMap();
   renderControls();
+  if (view === "commands") renderWorkshop();
 }
 
 function restart() {
@@ -680,6 +806,72 @@ $("#side").addEventListener("click", (event) => {
   changed();
 });
 
+document.querySelector(".views").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-view]");
+  if (!button) return;
+  view = button.dataset.view;
+  for (const entry of document.querySelectorAll(".view")) entry.classList.toggle("active", entry === button);
+  $("main").classList.toggle("commands", view === "commands");
+  $("#simControls").style.visibility = view === "store" ? "" : "hidden";
+  if (view === "commands") renderWorkshop();
+});
+
+$("#workshop").addEventListener("input", (event) => {
+  const key = event.target.dataset.moment;
+  if (!key) return;
+  if (typeof moment[key] === "boolean") moment[key] = event.target.checked;
+  else {
+    const value = Number(event.target.value);
+    if (!Number.isFinite(value) || value < 0) return;
+    moment[key] = value;
+  }
+  updateTruth();
+});
+
+$("#workshop").addEventListener("change", (event) => {
+  const field = event.target;
+  const data = field.dataset;
+  if (data.moment) return;
+  if (data.cost) {
+    const value = Number(field.value);
+    if (!Number.isFinite(value) || value < 0) return invalid(field, "Must be 0 or more.");
+    setup.parts.commandPower[data.cost][data.id] = value;
+  } else if (data.cond) {
+    const condition = setup.parts.conditions.find((entry) => entry.id === data.cond);
+    if (data.field === "value") {
+      const value = Number(field.value);
+      if (!Number.isFinite(value) || value < 0) return invalid(field, "Must be 0 or more.");
+      condition.value = value;
+    } else if (data.field === "measure") {
+      condition.measure = field.value;
+      if (field.value === "always") {
+        delete condition.compare;
+        delete condition.value;
+      } else {
+        condition.compare ??= "below";
+        condition.value ??= 50;
+      }
+    } else condition[data.field] = field.value;
+  } else return;
+  changed();
+});
+
+$("#workshop").addEventListener("click", (event) => {
+  const target = event.target.closest("button");
+  if (!target) return;
+  const conditions = setup.parts.conditions;
+  if (target.id === "addCondition") {
+    let n = conditions.length + 1;
+    while (conditions.some((entry) => entry.id === `condition_${n}`)) n += 1;
+    conditions.push({ id: `condition_${n}`, measure: "my_charge", compare: "below", value: 50 });
+    setup.parts.commandPower.conditions[`condition_${n}`] = 1;
+  } else if (target.dataset.removeCond) {
+    conditions.splice(conditions.findIndex((entry) => entry.id === target.dataset.removeCond), 1);
+    delete setup.parts.commandPower.conditions[target.dataset.removeCond];
+  } else return;
+  changed();
+});
+
 $("#speed").addEventListener("change", (event) => {
   speed = Number(event.target.value);
 });
@@ -722,6 +914,7 @@ window.addEventListener("beforeunload", (event) => {
 fetch("/api/data").then((response) => response.json()).then((data) => {
   saved = data;
   setup = clone(data);
+  setup.parts.conditions ??= clone(partConditions(setup.parts));
   restart();
   status("");
 }).catch(() => status("Couldn't load. Is npm run robots still running?", "bad"));

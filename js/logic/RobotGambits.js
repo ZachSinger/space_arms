@@ -9,28 +9,77 @@
 //     backroomCapacity, messes, stations: [{ id, usedBy }] }
 // where `fill` runs from 0 (empty) to 1 (full) and `staffedBy`/`usedBy` are robot ids or null.
 
-export const CONDITIONS = Object.freeze([
+// A condition is built from three pieces: something to measure, a comparison and a number, like
+// "My charge" "is below" 20 (%). The lab saves the list in data/RobotPrograms.json (parts.conditions);
+// CONDITIONS below is the starting list, used when none is given.
+export const MEASURES = Object.freeze([
   { id: "always", label: "Always" },
-  { id: "customer_waiting", label: "A customer is waiting at a register" },
-  { id: "line_3", label: "3 or more customers are waiting at one register" },
-  { id: "shelf_empty", label: "A shelf is empty" },
-  { id: "shelf_below_25", label: "A shelf is less than a quarter full" },
-  { id: "shelf_below_50", label: "A shelf is less than half full" },
-  { id: "shelf_not_full", label: "A shelf isn't full" },
-  { id: "crate_on_pad", label: "A delivery crate is on the loading pad" },
-  { id: "mess", label: "There's a mess on the sales floor" },
-  { id: "battery_below_20", label: "My charge is below 20%" },
-  { id: "battery_below_50", label: "My charge is below 50%" },
-  { id: "battery_not_full", label: "My charge isn't full" },
+  { id: "my_charge", label: "My charge", unit: () => "%" },
+  { id: "emptiest_shelf", label: "The emptiest shelf", unit: () => "% full" },
+  { id: "longest_line", label: "The longest register line", unit: (n) => (n === 1 ? "customer long" : "customers long") },
+  { id: "customers_waiting", label: "The number of customers waiting at registers" },
+  { id: "pad_crates", label: "The number of crates on the loading pad" },
+  { id: "stored_crates", label: "The number of crates stored in the backroom" },
+  { id: "backroom_space", label: "The number of empty crate spaces in the backroom" },
+  { id: "messes", label: "The number of messes on the sales floor" },
+  { id: "free_stations", label: "The number of free charging stations" },
 ]);
+export const COMPARES = Object.freeze([
+  { id: "below", label: "is below", test: (a, b) => a < b },
+  { id: "at_most", label: "is at most", test: (a, b) => a <= b },
+  { id: "at_least", label: "is at least", test: (a, b) => a >= b },
+  { id: "above", label: "is above", test: (a, b) => a > b },
+]);
+const MEASURE_BY_ID = new Map(MEASURES.map((entry) => [entry.id, entry]));
+const COMPARE_BY_ID = new Map(COMPARES.map((entry) => [entry.id, entry]));
+
+export const CONDITIONS = Object.freeze([
+  { id: "always", measure: "always" },
+  { id: "customer_waiting", measure: "longest_line", compare: "at_least", value: 1 },
+  { id: "line_3", measure: "longest_line", compare: "at_least", value: 3 },
+  { id: "shelf_empty", measure: "emptiest_shelf", compare: "at_most", value: 0 },
+  { id: "shelf_below_25", measure: "emptiest_shelf", compare: "below", value: 25 },
+  { id: "shelf_below_50", measure: "emptiest_shelf", compare: "below", value: 50 },
+  { id: "shelf_not_full", measure: "emptiest_shelf", compare: "below", value: 100 },
+  { id: "crate_on_pad", measure: "pad_crates", compare: "at_least", value: 1 },
+  { id: "mess", measure: "messes", compare: "at_least", value: 1 },
+  { id: "battery_below_20", measure: "my_charge", compare: "below", value: 20 },
+  { id: "battery_below_50", measure: "my_charge", compare: "below", value: 50 },
+  { id: "battery_not_full", measure: "my_charge", compare: "below", value: 100 },
+].map(Object.freeze));
+
+/** A condition as a sentence, like "My charge is below 20%". */
+export function conditionLabel(condition) {
+  const measure = MEASURE_BY_ID.get(condition?.measure);
+  if (!measure) return "Unknown condition";
+  if (measure.id === "always") return measure.label;
+  const unit = measure.unit?.(condition.value) ?? "";
+  return `${measure.label} ${COMPARE_BY_ID.get(condition.compare)?.label ?? "?"} ${condition.value}${unit.startsWith("%") ? "" : " "}${unit}`.trim();
+}
+
+/** The number a measure reads from the store right now. */
+export function measureValue(measureId, world, robot) {
+  switch (measureId) {
+    case "my_charge": return robot.battery * 100;
+    case "emptiest_shelf": return (lowestShelf(world)?.fill ?? 1) * 100;
+    case "longest_line": return world.registers.reduce((most, register) => Math.max(most, register.line), 0);
+    case "customers_waiting": return world.registers.reduce((total, register) => total + register.line, 0);
+    case "pad_crates": return world.padCrates;
+    case "stored_crates": return world.backroomCrates;
+    case "backroom_space": return Math.max(0, world.backroomCapacity - world.backroomCrates);
+    case "messes": return world.messes;
+    case "free_stations": return world.stations.filter((station) => !station.usedBy || station.usedBy === robot.id).length;
+    default: throw new Error(`Unknown robot measure: ${measureId}`);
+  }
+}
 
 export const ACTIONS = Object.freeze([
-  { id: "work_register", label: "Work a register" },
-  { id: "restock", label: "Restock the emptiest shelf from the backroom" },
-  { id: "unload_pad", label: "Carry a crate from the loading pad into the backroom" },
-  { id: "clean", label: "Clean up a mess" },
-  { id: "charge", label: "Go to a charging station and charge fully" },
-  { id: "wait", label: "Wait" },
+  { id: "work_register", label: "Work a register", description: "Goes to a free register (the one with the longest line) and serves the customer at the front.", cantWhen: "Every register already has another robot on it." },
+  { id: "restock", label: "Restock the emptiest shelf from the backroom", description: "Takes one crate from the backroom and fills the emptiest shelf with it.", cantWhen: "The backroom has no crates, or every shelf is full." },
+  { id: "unload_pad", label: "Carry a crate from the loading pad into the backroom", description: "Carries one delivery crate off the loading pad into backroom storage.", cantWhen: "There's no crate on the pad, or the backroom is full." },
+  { id: "clean", label: "Clean up a mess", description: "Cleans up one mess on the sales floor.", cantWhen: "There are no messes, or other robots are already cleaning every one." },
+  { id: "charge", label: "Go to a charging station and charge fully", description: "Goes to a free charging station and stays until its charge is full.", cantWhen: "Its charge is already full, or every station is taken." },
+  { id: "wait", label: "Wait", description: "Stands still for a second. Waiting uses a quarter of the normal drain.", cantWhen: "Never: a robot can always wait." },
 ]);
 
 // Prefab logic boards don't hold commands. Each one is a fixed ability written here in code; a
@@ -66,29 +115,16 @@ export const PREFAB_ABILITIES = Object.freeze([
 const ABILITIES = new Map(PREFAB_ABILITIES.map((entry) => [entry.id, entry]));
 export const findAbility = (id) => ABILITIES.get(id) ?? null;
 
-const CONDITION_IDS = new Set(CONDITIONS.map((entry) => entry.id));
 const ACTION_IDS = new Set(ACTIONS.map((entry) => entry.id));
 
 const lowestShelf = (world) => world.shelves.reduce((low, shelf) => (!low || shelf.fill < low.fill ? shelf : low), null);
 
-/** Whether a rule's "if" part is true for this robot right now. */
-export function conditionMet(conditionId, world, robot) {
-  const low = lowestShelf(world)?.fill ?? 1;
-  switch (conditionId) {
-    case "always": return true;
-    case "customer_waiting": return world.registers.some((register) => register.line > 0);
-    case "line_3": return world.registers.some((register) => register.line >= 3);
-    case "shelf_empty": return low <= 0;
-    case "shelf_below_25": return low < 0.25;
-    case "shelf_below_50": return low < 0.5;
-    case "shelf_not_full": return low < 1;
-    case "crate_on_pad": return world.padCrates > 0;
-    case "mess": return world.messes > 0;
-    case "battery_below_20": return robot.battery < 0.2;
-    case "battery_below_50": return robot.battery < 0.5;
-    case "battery_not_full": return robot.battery < 1;
-    default: throw new Error(`Unknown robot condition: ${conditionId}`);
-  }
+/** Whether a condition (see MEASURES) is true for this robot right now. */
+export function conditionMet(condition, world, robot) {
+  if (condition?.measure === "always") return true;
+  const compare = COMPARE_BY_ID.get(condition?.compare);
+  if (!compare) throw new Error(`Unknown robot comparison: ${condition?.compare}`);
+  return compare.test(measureValue(condition.measure, world, robot), condition.value);
 }
 
 /** The register/shelf/station the action would use, or null when it can't be done right now. */
@@ -117,8 +153,10 @@ export function actionTarget(actionId, world, robot) {
  * (-1 when no rule fit and it waits), and why each rule was or wasn't used.
  * Entries are either commands or prefab boards ({ ability }), checked in order.
  * @param {({ condition: string, action: string, on?: boolean } | { ability: string })[]} program
+ * @param {object[]} [conditions] the conditions the program's commands name (see CONDITIONS)
  */
-export function chooseAction(program, world, robot) {
+export function chooseAction(program, world, robot, conditions = CONDITIONS) {
+  const byId = new Map(conditions.map((entry) => [entry.id, entry]));
   const checks = [];
   for (let index = 0; index < program.length; index += 1) {
     const rule = program[index];
@@ -135,7 +173,9 @@ export function chooseAction(program, world, robot) {
       checks.push({ index, result: "chosen" });
       return { ruleIndex: index, action: decision.action, target: decision.target, checks };
     }
-    if (!conditionMet(rule.condition, world, robot)) {
+    const condition = byId.get(rule.condition);
+    if (!condition) throw new Error(`Unknown robot condition: ${rule.condition}`);
+    if (!conditionMet(condition, world, robot)) {
       checks.push({ index, result: "condition false" });
       continue;
     }
@@ -151,13 +191,32 @@ export function chooseAction(program, world, robot) {
 }
 
 /** Readable reasons a program can't be used; empty when it's fine. */
-export function programProblems(program, slots) {
+export function programProblems(program, slots, conditions = CONDITIONS) {
+  const conditionIds = new Set(conditions.map((entry) => entry.id));
   const problems = [];
   if (!Array.isArray(program)) return ["The program is missing."];
   if (program.length > slots) problems.push(`Has ${program.length} commands but only ${slots} command spaces.`);
   program.forEach((rule, index) => {
-    if (!CONDITION_IDS.has(rule?.condition)) problems.push(`Command ${index + 1}: unknown condition "${rule?.condition}".`);
+    if (!conditionIds.has(rule?.condition)) problems.push(`Command ${index + 1}: unknown condition "${rule?.condition}".`);
     if (!ACTION_IDS.has(rule?.action)) problems.push(`Command ${index + 1}: unknown action "${rule?.action}".`);
+  });
+  return problems;
+}
+
+/** Readable reasons a condition list can't be used; empty when it's fine. */
+export function conditionProblems(conditions) {
+  if (!Array.isArray(conditions)) return ["The condition list is missing."];
+  const problems = [];
+  const seen = new Set();
+  conditions.forEach((condition, index) => {
+    const name = `Condition ${index + 1}`;
+    if (typeof condition?.id !== "string" || !condition.id) problems.push(`${name}: needs an id.`);
+    else if (seen.has(condition.id)) problems.push(`Two conditions share the id "${condition.id}".`);
+    seen.add(condition?.id);
+    if (!MEASURE_BY_ID.has(condition?.measure)) return problems.push(`${name}: unknown thing to check "${condition?.measure}".`);
+    if (condition.measure === "always") return;
+    if (!COMPARE_BY_ID.has(condition.compare)) problems.push(`${name}: unknown comparison "${condition.compare}".`);
+    if (!Number.isFinite(condition.value) || condition.value < 0) problems.push(`${name}: the number must be 0 or more.`);
   });
   return problems;
 }

@@ -18,7 +18,7 @@
         "name": "Basic frame",
         "power": 4,
         "boardSlots": 1,
-        "speed": 1
+        "speed": 0.8
       },
       {
         "id": "worker_frame",
@@ -31,7 +31,7 @@
         "id": "swift_frame",
         "name": "Swift frame",
         "power": 9,
-        "boardSlots": 2,
+        "boardSlots": 1,
         "speed": 1.5
       },
       {
@@ -39,7 +39,7 @@
         "name": "Hauler frame",
         "power": 10,
         "boardSlots": 3,
-        "speed": 1.2
+        "speed": 0.8
       }
     ],
     "cells": [
@@ -146,6 +146,78 @@
         "kind": "custom",
         "power": 3,
         "commands": 6
+      }
+    ],
+    "conditions": [
+      {
+        "id": "always",
+        "measure": "always"
+      },
+      {
+        "id": "customer_waiting",
+        "measure": "longest_line",
+        "compare": "at_least",
+        "value": 1
+      },
+      {
+        "id": "line_3",
+        "measure": "longest_line",
+        "compare": "at_least",
+        "value": 3
+      },
+      {
+        "id": "shelf_empty",
+        "measure": "emptiest_shelf",
+        "compare": "at_most",
+        "value": 0
+      },
+      {
+        "id": "shelf_below_25",
+        "measure": "emptiest_shelf",
+        "compare": "below",
+        "value": 25
+      },
+      {
+        "id": "shelf_below_50",
+        "measure": "emptiest_shelf",
+        "compare": "below",
+        "value": 50
+      },
+      {
+        "id": "shelf_not_full",
+        "measure": "emptiest_shelf",
+        "compare": "below",
+        "value": 100
+      },
+      {
+        "id": "crate_on_pad",
+        "measure": "pad_crates",
+        "compare": "at_least",
+        "value": 1
+      },
+      {
+        "id": "mess",
+        "measure": "messes",
+        "compare": "at_least",
+        "value": 1
+      },
+      {
+        "id": "battery_below_20",
+        "measure": "my_charge",
+        "compare": "below",
+        "value": 20
+      },
+      {
+        "id": "battery_below_50",
+        "measure": "my_charge",
+        "compare": "below",
+        "value": 50
+      },
+      {
+        "id": "battery_not_full",
+        "measure": "my_charge",
+        "compare": "below",
+        "value": 100
       }
     ],
     "commandPower": {

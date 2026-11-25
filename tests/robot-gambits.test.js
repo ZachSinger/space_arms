@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { chooseAction } from "../js/logic/RobotGambits.js";
+import { chooseAction, conditionLabel, conditionProblems } from "../js/logic/RobotGambits.js";
 import { hasEnoughPower, powerNeeded, robotProgram } from "../js/logic/RobotParts.js";
 import { runShift } from "../scripts/robot-lab/sim.js";
 import { setupProblems } from "../scripts/robot-lab/server.mjs";
@@ -113,4 +113,16 @@ test("the robot lab refuses builds that don't fit their parts", () => {
   assert.match(problems, /only has 2 board slots/);
   assert.match(problems, /only 2 command spaces/);
   assert.match(problems, /unknown condition "nope"/);
+});
+
+test("conditions are built from data, so a new one works without code changes", () => {
+  const custom = [{ id: "half_charge", measure: "my_charge", compare: "below", value: 50 }];
+  assert.equal(conditionLabel(custom[0]), "My charge is below 50%");
+  const program = [{ condition: "half_charge", action: "charge" }, { condition: "always", action: "wait" }];
+  assert.equal(chooseAction(program, world(), { id: "bot", battery: 0.4 }, [...custom, { id: "always", measure: "always" }]).ruleIndex, 0);
+  assert.equal(chooseAction(program, world(), { id: "bot", battery: 0.6 }, [...custom, { id: "always", measure: "always" }]).ruleIndex, 1);
+  assert.throws(() => chooseAction(program, world(), robot, []));
+  assert.ok(conditionProblems([{ id: "bad", measure: "nope", compare: "below", value: 1 }]).length > 0);
+  assert.ok(conditionProblems([{ id: "bad", measure: "my_charge", compare: "below", value: -1 }]).length > 0);
+  assert.deepEqual(conditionProblems(custom), []);
 });
