@@ -132,6 +132,14 @@ In the real shop, every Budget Shelf is drawn from this gray art and colored by 
 (`js/logic/ShelfPaint.js`). Each shelf remembers its paint in the save; Purple is the default
 and is the only paint so far, so shelves look the same as before.
 
+## Shop Style Planner
+
+Run `npm run style` to open a planning page for decorating the shop: paints and how you get
+them, the shelf's front strip, wall and floor colors, and lighting, all shown on a mock shop
+built from gray copies of the real art. Each topic has planning questions shown one at a time.
+**Save plan** (or Ctrl+S) writes `documentation/Modules/ShopStyle.plan.json`; new questions are
+added to that file's `questions` list. Nothing here changes the game.
+
 ## Delivery Crate Lab
 
 On the title screen, choose **DEV**, then **DELIVERY CRATE LAB**. It shows the remote-order

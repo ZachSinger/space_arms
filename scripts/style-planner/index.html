@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shop Style Planner</title>
+<link rel="icon" href="data:,">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0b1020; color: #e2e8f0; font: 15px/1.45 system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 10px 18px; background: #111a33; border-bottom: 1px solid #23315c; }
+  h1 { font-size: 18px; margin: 0; letter-spacing: 1px; color: #c4b5fd; }
+  #status { flex: 1; color: #94a3b8; }
+  #status.bad { color: #fca5a5; }
+  button { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; border-radius: 6px; padding: 6px 12px; font: inherit; cursor: pointer; }
+  button:hover { border-color: #7dd3fc; }
+  button.on { background: #164e63; border-color: #7dd3fc; }
+  button.primary { background: #4c1d95; border-color: #a78bfa; }
+  button:disabled { opacity: .4; cursor: default; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 440px; height: calc(100vh - 53px); }
+  #stage { padding: 14px; overflow: auto; }
+  #hint { color: #fde68a; margin-bottom: 8px; min-height: 22px; }
+  canvas { image-rendering: pixelated; display: block; }
+  #room { width: 100%; max-width: 1120px; border: 1px solid #23315c; cursor: pointer; }
+  #closeup-wrap { margin-top: 12px; }
+  #closeup-wrap h3 { margin: 0 0 6px; }
+  #closeup { width: 100%; max-width: 1120px; border: 1px solid #23315c; background: #1a2340; }
+  aside { border-left: 1px solid #23315c; overflow-y: auto; padding: 0 16px 24px; background: #0e152b; }
+  nav { display: flex; gap: 6px; position: sticky; top: 0; background: #0e152b; padding: 12px 0; z-index: 1; }
+  nav button { flex: 1; padding: 8px 4px; }
+  h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #fbbf24; margin: 18px 0 8px; }
+  .help { color: #94a3b8; margin: 4px 0 10px; }
+  .paint { border: 1px solid #23315c; border-radius: 8px; padding: 8px; margin-bottom: 8px; background: #111a33; }
+  .paint.open { border-color: #a78bfa; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0; }
+  .row label { display: flex; flex-direction: column; font-size: 12px; color: #94a3b8; gap: 2px; }
+  input, select, textarea { background: #0b1020; color: #e2e8f0; border: 1px solid #334155; border-radius: 5px; padding: 5px 7px; font: inherit; }
+  input[type=number] { width: 72px; }
+  input.name { flex: 1; font-weight: 600; }
+  input.note { width: 100%; font-size: 13px; }
+  .swatch { width: 34px; height: 34px; border-radius: 6px; border: 2px solid #0b1020; outline: 1px solid #475569; cursor: pointer; flex: none; padding: 0; }
+  .swatch.picked { outline: 3px solid #fde68a; }
+  .swatch.none { background: repeating-linear-gradient(45deg, #334155 0 6px, #1e293b 6px 12px); }
+  .swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+  .slider { display: grid; grid-template-columns: 90px 1fr 48px; align-items: center; gap: 8px; margin: 4px 0; }
+  .slider input[type=range] { width: 100%; }
+  .slider span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  .check { display: flex; gap: 8px; align-items: center; margin: 6px 0; cursor: pointer; }
+  .card { border: 1px solid #a78bfa; border-radius: 10px; background: #17122e; padding: 12px; margin-top: 20px; }
+  .card .count { color: #a78bfa; font-size: 13px; }
+  .card p { font-size: 16px; margin: 6px 0 10px; }
+  .card textarea, #notes textarea { width: 100%; min-height: 90px; resize: vertical; }
+  .card .row { justify-content: space-between; }
+  .empty { color: #94a3b8; font-style: italic; }
+</style>
+</head>
+<body>
+<header>
+  <h1>SHOP STYLE PLANNER</h1>
+  <span id="status">Loading…</span>
+  <button id="save" class="primary" disabled>Save plan</button>
+</header>
+<main>
+  <section id="stage">
+    <div id="hint"></div>
+    <canvas id="room"></canvas>
+    <div id="closeup-wrap" hidden>
+      <h3>The picked shelf, facing each way (the strip is always on its front)</h3>
+      <canvas id="closeup"></canvas>
+    </div>
+  </section>
+  <aside>
+    <nav id="tabs"></nav>
+    <div id="panel"></div>
+    <div id="questions"></div>
+    <div id="notes"></div>
+  </aside>
+</main>
+<script type="module">
+import { grayscalePixels } from "/js/logic/TintableArt.js";
+
+const CELL = 64;
+const COLS = 14;
+const ROWS = 9;
+const W = COLS * CELL;
+const H = ROWS * CELL;
+const SHOP = "/img/Icons_Extracted/Tileset/Shop/";
+const SHELF = "/img/Icons_Extracted/Tileset/Fixtures/shelf_budget_2x4_";
+const ART = {
+  floor: `${SHOP}shop_floor.png`, border: `${SHOP}shop_border.png`, backWall: `${SHOP}shop_back_wall.png`,
+  down: `${SHELF}down.png`, up: `${SHELF}up.png`, left: `${SHELF}left.png`, right: `${SHELF}right.png`,
+};
+const FACINGS = [["down", "Facing down"], ["left", "Facing left"], ["up", "Facing up"], ["right", "Facing right"]];
+// Where the strip sits on each shelf picture, in that picture's own pixels: along the top's front edge.
+const STRIP = { down: [8, 78, 368, 8], up: [8, 52, 368, 8], left: [68, 18, 8, 248], right: [116, 18, 8, 248] };
+const SOURCES = [
+  ["start", "Every player starts with it"],
+  ["level", "Free once you reach a shop level"],
+  ["buy", "Buy it once you reach a shop level"],
+  ["reward", "A reward (say what for in the note)"],
+  ["mixed", "Mixed by the player"],
+];
+const TABS = [["paints", "Paints"], ["shelves", "Shelves"], ["room", "Walls & floor"], ["lighting", "Lighting"]];
+const HINTS = {
+  paints: "Change a paint on the right and every shelf, wall, or floor using it changes too.",
+  shelves: "Click a shelf to pick it. Drag a shelf to move it.",
+  room: "Pick a paint for the floor and one for the walls on the right.",
+  lighting: "Click an empty spot to add a light there. Drag a light to move it. Click a light to pick it.",
+};
+
+const room = document.getElementById("room");
+const closeup = document.getElementById("closeup");
+room.width = W;
+room.height = H;
+closeup.width = 4 * 260;
+closeup.height = 260;
+const images = {};
+const grays = {};
+const tints = new Map();
+const lightsOnly = canvasOf(W, H);
+const litCanvas = canvasOf(W, H);
+let plan;
+let tab = "paints";
+let dirty = false;
+let openPaint = null;
+let pickedShelf = null;
+let pickedLight = null;
+let drag = null;
+const questionAt = {};
+
+function canvasOf(w, h) {
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  return canvas;
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error(`Missing game art: ${src}`));
+    image.src = src;
+  });
+}
+
+// The game's side views have the middle third cut out (js/logic/BudgetShelfArt.js).
+function narrow(image) {
+  const canvas = canvasOf(image.width, image.height);
+  const third = image.width / 3;
+  const pad = third / 2;
+  const g = canvas.getContext("2d");
+  g.drawImage(image, 0, 0, third, image.height, pad, 0, third, image.height);
+  g.drawImage(image, third * 2, 0, third, image.height, pad + third, 0, third, image.height);
+  return canvas;
+}
+
+function grayOf(source) {
+  const canvas = canvasOf(source.width, source.height);
+  const g = canvas.getContext("2d");
+  g.drawImage(source, 0, 0);
+  const data = g.getImageData(0, 0, canvas.width, canvas.height);
+  grayscalePixels(data.data);
+  g.putImageData(data, 0, 0);
+  return canvas;
+}
+
+// Same as the game: the gray art multiplied by the paint color.
+function painted(name, rgb) {
+  if (!rgb) return images[name];
+  const key = `${name}:${rgb.join(",")}`;
+  if (!tints.has(key)) {
+    const gray = grays[name];
+    const canvas = canvasOf(gray.width, gray.height);
+    const g = canvas.getContext("2d");
+    g.drawImage(gray, 0, 0);
+    g.globalCompositeOperation = "multiply";
+    g.fillStyle = css(rgb);
+    g.fillRect(0, 0, canvas.width, canvas.height);
+    g.globalCompositeOperation = "destination-in";
+    g.drawImage(gray, 0, 0);
+    tints.set(key, canvas);
+  }
+  return tints.get(key);
+}
+
+const css = (rgb, alpha = 1) => `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
+const hex = (rgb) => `#${rgb.map((value) => value.toString(16).padStart(2, "0")).join("").toUpperCase()}`;
+const paintById = (id) => plan.paints.find((paint) => paint.id === id);
+const paintRgb = (id) => (id === null ? null : (paintById(id) ?? plan.paints[0]).color);
+const esc = (text) => String(text ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const isSide = (facing) => facing === "left" || facing === "right";
+const footprint = (shelf) => (isSide(shelf.facing) ? { w: 1, h: 2 } : { w: 2, h: 1 });
+
+function markDirty() {
+  dirty = true;
+  const button = document.getElementById("save");
+  button.disabled = false;
+  button.textContent = "Save plan (unsaved changes)";
+  setStatus("");
+}
+
+function setStatus(text, bad = false) {
+  const status = document.getElementById("status");
+  status.textContent = text;
+  status.classList.toggle("bad", bad);
+}
+
+// ---------- Drawing the mock shop ----------
+
+function stripRect(shelf, x, y, w, h) {
+  const source = images[shelf.facing];
+  const scale = w / source.width;
+  const [sx, sy, sw, sh] = STRIP[shelf.facing];
+  return [x + sx * scale, y + sy * scale, sw * scale, sh * scale];
+}
+
+function pulse(time) {
+  return plan.strip.pulse ? 0.55 + 0.45 * Math.sin(time / 450) : 1;
+}
+
+function drawShelf(g, shelf, x, y, w, h) {
+  g.drawImage(painted(shelf.facing, paintRgb(shelf.body)), x, y, w, h);
+}
+
+function drawStrip(g, shelf, x, y, w, h, time) {
+  if (!plan.strip.show) return;
+  const rgb = paintRgb(shelf.strip);
+  const [sx, sy, sw, sh] = stripRect(shelf, x, y, w, h);
+  g.save();
+  if (plan.strip.glow) {
+    const strength = pulse(time);
+    g.shadowColor = css(rgb);
+    g.shadowBlur = 14 * strength;
+    g.globalAlpha = 0.55 + 0.45 * strength;
+  }
+  g.fillStyle = css(rgb);
+  g.fillRect(sx, sy, sw, sh);
+  g.restore();
+}
+
+// Lights shine where the shop would be dim; the strip can add a small light at each shelf's front.
+function allLights(time) {
+  const lights = plan.room.lights.map((light) => ({ ...light }));
+  if (plan.strip.show && plan.strip.glow && plan.strip.castsLight) {
+    for (const shelf of plan.room.shelves) {
+      const front = { down: [shelf.x + 1, shelf.y + 1.2], up: [shelf.x + 1, shelf.y + 0.1],
+        left: [shelf.x - 0.2, shelf.y + 1.1], right: [shelf.x + 1.2, shelf.y + 1.1] }[shelf.facing];
+      lights.push({ x: front[0], y: front[1], color: paintRgb(shelf.strip), radius: 1.6, strength: 0.55 * pulse(time) });
+    }
+  }
+  return lights;
+}
+
+function applyLighting(g, time) {
+  const lg = lightsOnly.getContext("2d");
+  lg.globalCompositeOperation = "source-over";
+  lg.fillStyle = "#000";
+  lg.fillRect(0, 0, W, H);
+  lg.globalCompositeOperation = "lighter";
+  for (const light of allLights(time)) {
+    const x = light.x * CELL;
+    const y = light.y * CELL;
+    const radius = light.radius * CELL;
+    const gradient = lg.createRadialGradient(x, y, 0, x, y, radius);
+    gradient.addColorStop(0, css(light.color, light.strength));
+    gradient.addColorStop(0.55, css(light.color, light.strength * 0.45));
+    gradient.addColorStop(1, css(light.color, 0));
+    lg.fillStyle = gradient;
+    lg.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+  }
+  const ambient = Math.round(plan.room.ambient * 255);
+  const lit = litCanvas.getContext("2d");
+  lit.globalCompositeOperation = "source-over";
+  lit.fillStyle = `rgb(${ambient}, ${ambient}, ${ambient})`;
+  lit.fillRect(0, 0, W, H);
+  lit.globalCompositeOperation = "lighter";
+  lit.drawImage(lightsOnly, 0, 0);
+  g.save();
+  g.globalCompositeOperation = "multiply";
+  g.drawImage(litCanvas, 0, 0);
+  // A little extra on top so a strong light can make things brighter than the plain art.
+  g.globalCompositeOperation = "screen";
+  g.globalAlpha = 0.22;
+  g.drawImage(lightsOnly, 0, 0);
+  g.restore();
+}
+
+function drawRoom(time) {
+  const g = room.getContext("2d");
+  g.imageSmoothingEnabled = false;
+  g.fillStyle = "#05070f";
+  g.fillRect(0, 0, W, H);
+  const floor = painted("floor", paintRgb(plan.room.floor));
+  const wall = painted("border", paintRgb(plan.room.walls));
+  const backWall = painted("backWall", paintRgb(plan.room.walls));
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      const edge = row === 0 || row === ROWS - 1 || col === 0 || col === COLS - 1;
+      g.drawImage(edge ? wall : row === 1 ? backWall : floor, col * CELL, row * CELL, CELL, CELL);
+    }
+  }
+  const shelves = [...plan.room.shelves].sort((a, b) => (a.y + footprint(a).h) - (b.y + footprint(b).h));
+  const placed = shelves.map((shelf) => {
+    const size = footprint(shelf);
+    return [shelf, shelf.x * CELL, shelf.y * CELL, size.w * CELL, size.h * CELL];
+  });
+  for (const [shelf, x, y, w, h] of placed) {
+    drawShelf(g, shelf, x, y, w, h);
+    if (!plan.strip.glow) drawStrip(g, shelf, x, y, w, h, time);
+  }
+  applyLighting(g, time);
+  // A glowing strip makes its own light, so the room's darkness doesn't dim it.
+  if (plan.strip.glow) for (const [shelf, x, y, w, h] of placed) drawStrip(g, shelf, x, y, w, h, time);
+
+  if (tab === "shelves" && pickedShelf) {
+    const size = footprint(pickedShelf);
+    g.save();
+    g.strokeStyle = "#fde68a";
+    g.lineWidth = 3;
+    g.setLineDash([8, 6]);
+    g.strokeRect(pickedShelf.x * CELL - 2, pickedShelf.y * CELL - 2, size.w * CELL + 4, size.h * CELL + 4);
+    g.restore();
+  }
+  if (tab === "lighting") {
+    for (const light of plan.room.lights) {
+      const x = light.x * CELL;
+      const y = light.y * CELL;
+      g.save();
+      g.fillStyle = css(light.color);
+      g.strokeStyle = light === pickedLight ? "#fde68a" : "#0b1020";
+      g.lineWidth = 3;
+      g.beginPath();
+      g.arc(x, y, 9, 0, Math.PI * 2);
+      g.fill();
+      g.stroke();
+      if (light === pickedLight) {
+        g.setLineDash([6, 6]);
+        g.strokeStyle = "rgba(253, 230, 138, 0.7)";
+        g.lineWidth = 2;
+        g.beginPath();
+        g.arc(x, y, light.radius * CELL, 0, Math.PI * 2);
+        g.stroke();
+      }
+      g.restore();
+    }
+  }
+}
+
+function drawCloseup(time) {
+  const wrap = document.getElementById("closeup-wrap");
+  wrap.hidden = !(tab === "shelves" && pickedShelf);
+  if (wrap.hidden) return;
+  const g = closeup.getContext("2d");
+  g.imageSmoothingEnabled = false;
+  g.fillStyle = "#1a2340";
+  g.fillRect(0, 0, closeup.width, closeup.height);
+  FACINGS.forEach(([facing, label], index) => {
+    const shelf = { ...pickedShelf, facing };
+    const side = isSide(facing);
+    const w = side ? 110 : 220;
+    const h = side ? 220 : 110;
+    const x = index * 260 + (260 - w) / 2;
+    const y = 30 + (220 - h) / 2;
+    drawShelf(g, shelf, x, y, w, h);
+    drawStrip(g, shelf, x, y, w, h, time);
+    g.fillStyle = "#94a3b8";
+    g.font = "15px system-ui";
+    g.textAlign = "center";
+    g.fillText(label, index * 260 + 130, 20);
+  });
+}
+
+function frame(time) {
+  if (plan) {
+    drawRoom(time);
+    drawCloseup(time);
+  }
+  requestAnimationFrame(frame);
+}
+
+// ---------- Clicking and dragging in the shop ----------
+
+function pointerCell(event) {
+  const box = room.getBoundingClientRect();
+  return { x: ((event.clientX - box.left) / box.width) * COLS, y: ((event.clientY - box.top) / box.height) * ROWS };
+}
+
+function shelfAt(point) {
+  return [...plan.room.shelves].reverse().find((shelf) => {
+    const size = footprint(shelf);
+    return point.x >= shelf.x && point.x < shelf.x + size.w && point.y >= shelf.y && point.y < shelf.y + size.h;
+  });
+}
+
+function clampShelf(shelf) {
+  const size = footprint(shelf);
+  shelf.x = Math.max(1, Math.min(COLS - 1 - size.w, shelf.x));
+  shelf.y = Math.max(2, Math.min(ROWS - 1 - size.h, shelf.y));
+}
+
+room.addEventListener("pointerdown", (event) => {
+  const point = pointerCell(event);
+  if (tab === "shelves" || tab === "paints" || tab === "room") {
+    const shelf = shelfAt(point);
+    if (shelf) {
+      pickedShelf = shelf;
+      drag = { kind: "shelf", target: shelf, dx: point.x - shelf.x, dy: point.y - shelf.y };
+      if (tab !== "shelves") tab = "shelves";
+      render();
+    }
+  } else if (tab === "lighting") {
+    let light = plan.room.lights.find((each) => Math.hypot(each.x - point.x, each.y - point.y) < 0.4);
+    if (!light) {
+      light = { x: round(point.x), y: round(point.y), color: [255, 236, 200], radius: 3, strength: 0.8 };
+      plan.room.lights.push(light);
+      markDirty();
+    }
+    pickedLight = light;
+    drag = { kind: "light", target: light, dx: point.x - light.x, dy: point.y - light.y };
+    render();
+  }
+  if (drag) room.setPointerCapture(event.pointerId);
+});
+
+room.addEventListener("pointermove", (event) => {
+  if (!drag) return;
+  const point = pointerCell(event);
+  const target = drag.target;
+  if (drag.kind === "shelf") {
+    const x = Math.round(point.x - drag.dx);
+    const y = Math.round(point.y - drag.dy);
+    if (x === target.x && y === target.y) return;
+    target.x = x;
+    target.y = y;
+    clampShelf(target);
+  } else {
+    target.x = Math.max(0, Math.min(COLS, round(point.x - drag.dx)));
+    target.y = Math.max(0, Math.min(ROWS, round(point.y - drag.dy)));
+  }
+  markDirty();
+});
+
+room.addEventListener("pointerup", () => { drag = null; });
+
+const round = (value) => Math.round(value * 4) / 4;
+
+// ---------- The panel on the right ----------
+
+function swatches(pickedId, group, noneLabel) {
+  const none = noneLabel
+    ? `<button class="swatch none ${pickedId === null ? "picked" : ""}" data-group="${group}" data-id="" title="${esc(noneLabel)}"></button>`
+    : "";
+  return `<div class="swatches">${none}${plan.paints.map((paint) => `<button class="swatch ${paint.id === pickedId ? "picked" : ""}"
+    style="background:${css(paint.color)}" data-group="${group}" data-id="${esc(paint.id)}" title="${esc(paint.name)}"></button>`).join("")}</div>`;
+}
+
+function slider(label, key, value, min, max, suffix = "") {
+  return `<div class="slider"><span>${label}</span><input type="range" data-key="${key}" min="${min}" max="${max}" value="${value}"><span data-show="${key}">${value}${suffix}</span></div>`;
+}
+
+function paintsPanel() {
+  const rows = plan.paints.map((paint, index) => `
+    <div class="paint ${openPaint === paint ? "open" : ""}" data-index="${index}">
+      <div class="row">
+        <button class="swatch" data-open="${index}" style="background:${css(paint.color)}" title="Click to change the color"></button>
+        <input class="name" data-field="name" value="${esc(paint.name)}">
+        <button data-delete="${index}" ${plan.paints.length < 2 ? "disabled" : ""}>Delete</button>
+      </div>
+      <div class="row">
+        <label>How you get it<select data-field="source">${SOURCES.map(([id, text]) => `<option value="${id}" ${paint.source === id ? "selected" : ""}>${text}</option>`).join("")}</select></label>
+        <label>Shop level<input type="number" min="1" data-field="level" value="${paint.level}"></label>
+        <label>Price<input type="number" min="0" data-field="price" value="${paint.price}"></label>
+      </div>
+      ${openPaint === paint ? `
+        ${slider("Red", "r", paint.color[0], 0, 255)}
+        ${slider("Green", "g", paint.color[1], 0, 255)}
+        ${slider("Blue", "b", paint.color[2], 0, 255)}
+        <div class="help">Color code ${hex(paint.color)}</div>` : ""}
+      <input class="note" data-field="note" placeholder="Note (optional)" value="${esc(paint.note)}">
+    </div>`).join("");
+  return `
+    <p class="help">Every paint a player could own. Click a color square to change that paint's color. The paints besides Purple are my suggestions to start from; change or delete any of them.</p>
+    ${rows}
+    <button id="add-paint">Add a paint</button>
+    <h3>Mixing your own paint</h3>
+    <p class="help">Later on, players can mix any color they like into a new paint.</p>
+    <div class="row">
+      <label>Unlocks at shop level<input type="number" min="1" id="mix-level" value="${plan.customPaint.level}"></label>
+      <label>Each new mix costs<input type="number" min="0" id="mix-price" value="${plan.customPaint.price}"></label>
+    </div>`;
+}
+
+function shelvesPanel() {
+  const strip = plan.strip;
+  const check = (key, text) => `<label class="check"><input type="checkbox" data-strip="${key}" ${strip[key] ? "checked" : ""}>${text}</label>`;
+  const picked = pickedShelf
+    ? `
+      <h3>Shelf body paint</h3>${swatches(pickedShelf.body, "body")}
+      <h3>Strip paint</h3>${swatches(pickedShelf.strip, "strip")}
+      <h3>Which way it faces</h3>
+      <div class="row">${FACINGS.map(([facing, label]) => `<button data-facing="${facing}" class="${pickedShelf.facing === facing ? "on" : ""}">${label.replace("Facing ", "")}</button>`).join("")}</div>
+      <div class="row"><button id="copy-paint">Paint every shelf like this one</button><button id="remove-shelf">Remove this shelf</button></div>`
+    : `<p class="empty">No shelf picked yet. Click one in the shop.</p>`;
+  return `
+    <p class="help">Each shelf has two paintable parts: its body, and a strip along the top edge of its front. The strip shows which way the shelf faces at a glance.</p>
+    ${picked}
+    <div class="row"><button id="add-shelf">Add a shelf</button></div>
+    <h3>The strip, on every shelf</h3>
+    ${check("show", "Show the strip")}
+    ${check("glow", "The strip glows")}
+    ${check("pulse", "The glow pulses slowly")}
+    ${check("castsLight", "The glow lights up the floor in front of the shelf")}`;
+}
+
+function roomPanel() {
+  return `
+    <p class="help">The floor and walls here are gray copies of the game's real tiles, colored with a paint, the same way shelves are. The striped square means the game's colors today.</p>
+    <h3>Floor</h3>${swatches(plan.room.floor, "floor", "The game's floor today")}
+    <h3>Walls</h3>${swatches(plan.room.walls, "walls", "The game's walls today")}`;
+}
+
+function lightingPanel() {
+  const ambient = Math.round(plan.room.ambient * 100);
+  const list = plan.room.lights.map((light, index) => `<button class="${light === pickedLight ? "on" : ""}" data-light="${index}">
+    <span class="swatch" style="display:inline-block;width:14px;height:14px;vertical-align:middle;background:${css(light.color)}"></span> Light ${index + 1}</button>`).join("");
+  const picked = pickedLight
+    ? `
+      <h3>The picked light</h3>
+      ${slider("Red", "lr", pickedLight.color[0], 0, 255)}
+      ${slider("Green", "lg", pickedLight.color[1], 0, 255)}
+      ${slider("Blue", "lb", pickedLight.color[2], 0, 255)}
+      ${slider("Reach", "radius", pickedLight.radius, 1, 8, " squares")}
+      ${slider("Strength", "strength", Math.round(pickedLight.strength * 100), 10, 100, "%")}
+      <div class="row"><button id="remove-light">Remove this light</button></div>`
+    : `<p class="empty">No light picked. Click one in the shop, or click an empty spot to add one.</p>`;
+  return `
+    <p class="help">Lights color and brighten the floor, walls, and shelves around them. The rest of the shop sits at the brightness below.</p>
+    ${slider("Shop brightness with no lights", "ambient", ambient, 20, 100, "%")}
+    <h3>Lights</h3><div class="row">${list || '<span class="empty">None yet.</span>'}</div>
+    ${picked}`;
+}
+
+function renderPanel() {
+  const panel = document.getElementById("panel");
+  panel.innerHTML = { paints: paintsPanel, shelves: shelvesPanel, room: roomPanel, lighting: lightingPanel }[tab]();
+}
+
+function questionCount(list, index) {
+  const answered = list.filter((each) => (plan.answers[each.id] ?? "").trim()).length;
+  return `Question ${index + 1} of ${list.length} · ${answered} answered`;
+}
+
+function renderQuestions() {
+  const list = plan.questions[tab] ?? [];
+  const box = document.getElementById("questions");
+  if (!list.length) {
+    box.innerHTML = "";
+    return;
+  }
+  const index = Math.min(questionAt[tab] ?? 0, list.length - 1);
+  const question = list[index];
+  box.innerHTML = `
+    <div class="card">
+      <div class="count">${questionCount(list, index)}</div>
+      <p>${esc(question.text)}</p>
+      <textarea data-answer="${esc(question.id)}" placeholder="Your answer, in your own words">${esc(plan.answers[question.id])}</textarea>
+      <div class="row">
+        <button data-step="-1" ${index === 0 ? "disabled" : ""}>Previous</button>
+        <button data-step="1" ${index === list.length - 1 ? "disabled" : ""}>Next</button>
+      </div>
+    </div>`;
+}
+
+function renderNotes() {
+  document.getElementById("notes").innerHTML = `<h3>Anything else about ${TABS.find(([id]) => id === tab)[1].toLowerCase()}</h3>
+    <textarea data-notes="${tab}" placeholder="Ideas, likes, dislikes…">${esc(plan.notes[tab])}</textarea>`;
+}
+
+function render() {
+  document.getElementById("tabs").innerHTML = TABS.map(([id, label]) => `<button data-tab="${id}" class="${tab === id ? "on" : ""}">${label}</button>`).join("");
+  document.getElementById("hint").textContent = HINTS[tab];
+  renderPanel();
+  renderQuestions();
+  renderNotes();
+}
+
+function uniquePaintId(name) {
+  const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "paint";
+  let id = base;
+  for (let n = 2; plan.paints.some((paint) => paint.id === id); n++) id = `${base}_${n}`;
+  return id;
+}
+
+document.addEventListener("click", (event) => {
+  const target = event.target.closest("button");
+  if (!target) return;
+  const data = target.dataset;
+  if (data.tab) {
+    tab = data.tab;
+    render();
+  } else if (data.open !== undefined) {
+    const paint = plan.paints[Number(data.open)];
+    openPaint = openPaint === paint ? null : paint;
+    renderPanel();
+  } else if (data.delete !== undefined) {
+    const [removed] = plan.paints.splice(Number(data.delete), 1);
+    const fallback = plan.paints[0].id;
+    for (const shelf of plan.room.shelves) {
+      if (shelf.body === removed.id) shelf.body = fallback;
+      if (shelf.strip === removed.id) shelf.strip = fallback;
+    }
+    if (plan.room.floor === removed.id) plan.room.floor = null;
+    if (plan.room.walls === removed.id) plan.room.walls = null;
+    markDirty();
+    renderPanel();
+  } else if (target.id === "add-paint") {
+    const paint = { id: uniquePaintId("New paint"), name: "New paint", color: [200, 200, 200], source: "buy", level: 1, price: 100, note: "" };
+    plan.paints.push(paint);
+    openPaint = paint;
+    markDirty();
+    renderPanel();
+  } else if (data.group) {
+    const id = data.id || null;
+    if (data.group === "body" || data.group === "strip") pickedShelf[data.group] = id;
+    else plan.room[data.group] = id;
+    markDirty();
+    renderPanel();
+  } else if (data.facing) {
+    pickedShelf.facing = data.facing;
+    clampShelf(pickedShelf);
+    markDirty();
+    renderPanel();
+  } else if (target.id === "copy-paint") {
+    for (const shelf of plan.room.shelves) Object.assign(shelf, { body: pickedShelf.body, strip: pickedShelf.strip });
+    markDirty();
+  } else if (target.id === "remove-shelf") {
+    plan.room.shelves.splice(plan.room.shelves.indexOf(pickedShelf), 1);
+    pickedShelf = null;
+    markDirty();
+    renderPanel();
+  } else if (target.id === "add-shelf") {
+    const shelf = { x: 6, y: 4, facing: "down", body: plan.paints[0].id, strip: plan.paints[0].id };
+    plan.room.shelves.push(shelf);
+    pickedShelf = shelf;
+    markDirty();
+    renderPanel();
+  } else if (data.light !== undefined) {
+    pickedLight = plan.room.lights[Number(data.light)];
+    renderPanel();
+  } else if (target.id === "remove-light") {
+    plan.room.lights.splice(plan.room.lights.indexOf(pickedLight), 1);
+    pickedLight = null;
+    markDirty();
+    renderPanel();
+  } else if (data.step) {
+    questionAt[tab] = Math.max(0, (questionAt[tab] ?? 0) + Number(data.step));
+    renderQuestions();
+  } else if (target.id === "save") {
+    save();
+  }
+});
+
+document.addEventListener("input", (event) => {
+  const input = event.target;
+  const data = input.dataset;
+  const paintBox = input.closest(".paint");
+  if (paintBox && (data.field || data.key)) {
+    const paint = plan.paints[Number(paintBox.dataset.index)];
+    if (data.field === "name") paint.name = input.value;
+    else if (data.field === "level" || data.field === "price") paint[data.field] = Math.max(0, Number(input.value) || 0);
+    else if (data.field) paint[data.field] = input.value;
+    else {
+      paint.color["rgb".indexOf(data.key)] = Number(input.value);
+      paintBox.querySelector(`[data-show="${data.key}"]`).textContent = input.value;
+      paintBox.querySelector("[data-open]").style.background = css(paint.color);
+      paintBox.querySelector(".help").textContent = `Color code ${hex(paint.color)}`;
+    }
+  } else if (input.id === "mix-level" || input.id === "mix-price") {
+    plan.customPaint[input.id === "mix-level" ? "level" : "price"] = Math.max(0, Number(input.value) || 0);
+  } else if (data.strip) {
+    plan.strip[data.strip] = input.checked;
+  } else if (data.key === "ambient") {
+    plan.room.ambient = Number(input.value) / 100;
+    document.querySelector('[data-show="ambient"]').textContent = `${input.value}%`;
+  } else if (data.key && pickedLight) {
+    const value = Number(input.value);
+    if (data.key === "radius") pickedLight.radius = value;
+    else if (data.key === "strength") pickedLight.strength = value / 100;
+    else pickedLight.color[["lr", "lg", "lb"].indexOf(data.key)] = value;
+    const suffix = { radius: " squares", strength: "%" }[data.key] ?? "";
+    document.querySelector(`[data-show="${data.key}"]`).textContent = `${value}${suffix}`;
+  } else if (data.answer) {
+    plan.answers[data.answer] = input.value;
+    const list = plan.questions[tab];
+    document.querySelector(".card .count").textContent = questionCount(list, list.findIndex((each) => each.id === data.answer));
+  } else if (data.notes) {
+    plan.notes[data.notes] = input.value;
+  } else {
+    return;
+  }
+  markDirty();
+});
+
+async function save() {
+  const response = await fetch("/api/plan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(plan) });
+  const result = await response.json();
+  if (!response.ok) {
+    setStatus(result.problems.join(" "), true);
+    return;
+  }
+  dirty = false;
+  const button = document.getElementById("save");
+  button.disabled = true;
+  button.textContent = "Save plan";
+  setStatus(`Saved at ${new Date().toLocaleTimeString()}.`);
+}
+
+window.addEventListener("beforeunload", (event) => {
+  if (dirty) event.preventDefault();
+});
+document.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+    event.preventDefault();
+    if (dirty) save();
+  }
+});
+
+try {
+  const [loaded] = await Promise.all([
+    fetch("/api/plan").then((response) => response.json()),
+    ...Object.entries(ART).map(async ([name, src]) => { images[name] = await loadImage(src); }),
+  ]);
+  plan = loaded;
+  images.left = narrow(images.left);
+  images.right = narrow(images.right);
+  for (const name of Object.keys(ART)) grays[name] = grayOf(images[name]);
+  setStatus("Everything you change here is a plan, not the game. Save when you're done.");
+  render();
+  requestAnimationFrame(frame);
+} catch (error) {
+  setStatus(String(error.message ?? error), true);
+}
+</script>
+</body>
+</html>

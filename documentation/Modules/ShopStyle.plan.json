@@ -1,0 +1,58 @@
+{
+  "about": "The shop decorating plan, edited with `npm run style`. Questions are added here; answers come back from the page.",
+  "paints": [
+    { "id": "purple", "name": "Purple", "color": [184, 159, 247], "source": "start", "level": 1, "price": 0, "note": "The paint every shelf has today." },
+    { "id": "steel", "name": "Steel Gray", "color": [178, 188, 204], "source": "buy", "level": 1, "price": 60, "note": "" },
+    { "id": "signal_blue", "name": "Signal Blue", "color": [96, 190, 255], "source": "buy", "level": 2, "price": 90, "note": "" },
+    { "id": "hazard_orange", "name": "Hazard Orange", "color": [255, 150, 60], "source": "buy", "level": 3, "price": 120, "note": "" },
+    { "id": "station_mint", "name": "Station Mint", "color": [120, 235, 185], "source": "level", "level": 4, "price": 0, "note": "" },
+    { "id": "crimson", "name": "Crimson", "color": [235, 80, 95], "source": "reward", "level": 5, "price": 0, "note": "For example: a reward for a 5-star review streak." },
+    { "id": "gold_trim", "name": "Gold Trim", "color": [255, 215, 100], "source": "buy", "level": 6, "price": 400, "note": "" }
+  ],
+  "customPaint": { "level": 8, "price": 250 },
+  "strip": { "show": true, "glow": true, "pulse": false, "castsLight": true },
+  "room": {
+    "floor": null,
+    "walls": null,
+    "ambient": 0.7,
+    "lights": [
+      { "x": 4, "y": 4.5, "color": [255, 236, 200], "radius": 4, "strength": 0.8 },
+      { "x": 10, "y": 4.5, "color": [255, 236, 200], "radius": 4, "strength": 0.8 }
+    ],
+    "shelves": [
+      { "x": 2, "y": 2, "facing": "down", "body": "purple", "strip": "signal_blue" },
+      { "x": 5, "y": 2, "facing": "down", "body": "purple", "strip": "signal_blue" },
+      { "x": 9, "y": 2, "facing": "down", "body": "steel", "strip": "hazard_orange" },
+      { "x": 1, "y": 4, "facing": "right", "body": "purple", "strip": "signal_blue" },
+      { "x": 12, "y": 4, "facing": "left", "body": "steel", "strip": "hazard_orange" },
+      { "x": 5, "y": 6, "facing": "up", "body": "station_mint", "strip": "gold_trim" }
+    ]
+  },
+  "questions": {
+    "paints": [
+      { "id": "paint-get", "text": "How should a player get a new paint? For example: buy it from a supplier, get it free at a shop level, or earn it as a reward. It can be a mix of these; say which paints come which way." },
+      { "id": "paint-uses", "text": "Once a player owns a paint, can they use it on as many shelves as they like, forever? Or does a can run out after a certain number of shelves, so they buy more?" },
+      { "id": "paint-cost", "text": "Should repainting a shelf cost money or take time (like stocking does), or be instant and free once you own the paint?" },
+      { "id": "paint-where", "text": "Where does the player go to paint something? For example: a choice in each shelf's menu, a paint mode on the manager tablet, or something else." },
+      { "id": "paint-mix", "text": "Mixing your own paint: when should it unlock, what should it cost, and should mixed paints have any limits besides never being pitch black?" }
+    ],
+    "shelves": [
+      { "id": "shelf-strip", "text": "The strip along the top front edge of each shelf shows which way it faces. When you're moving a shelf, should the strip replace the blue box that shows where customers stand, or should both show?" },
+      { "id": "shelf-glow", "text": "Should the strip glow? If so, steady, slowly pulsing, or the player's choice per shelf?" },
+      { "id": "shelf-parts", "text": "Besides the shelf body and the strip, is there any other part of a shelf you'd want to color separately (for example the boards the items sit on, or the feet)?" },
+      { "id": "shelf-others", "text": "Should other things in the shop be paintable too, like the register, the order terminal, the trash can, or decorations? Which ones?" }
+    ],
+    "room": [
+      { "id": "room-scope", "text": "Should a floor or wall color cover the whole shop at once, each room separately (sales floor, backroom), or single squares you paint one at a time?" },
+      { "id": "room-patterns", "text": "Besides colors, do you want different floor and wall patterns to unlock, like metal grates, riveted plates, or hazard stripes?" },
+      { "id": "room-effect", "text": "Should decorating change anything in the game, like the Presentation score or what customers think, or is it purely for looks?" }
+    ],
+    "lighting": [
+      { "id": "light-what", "text": "Should lights be things you buy and place like shelves, or built into the ceiling and walls so you only change their color and brightness?" },
+      { "id": "light-dark", "text": "Should the shop ever get dark enough that lights really matter (for example late shifts or a power cut), or is it always lit and lights are just for mood?" },
+      { "id": "light-effect", "text": "Should lighting affect customers or Presentation, for example dim corners selling less?" }
+    ]
+  },
+  "answers": {},
+  "notes": { "paints": "", "shelves": "", "room": "", "lighting": "" }
+}
