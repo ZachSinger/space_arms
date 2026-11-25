@@ -33,8 +33,12 @@
   td .sub { display: block; color: var(--dim); font-size: 12px; }
   tr.changed td { background: var(--changed); }
   tr.item:hover td { background: #16213a; }
-  tr.group td { background: #0f1a30; color: var(--accent); font-weight: 600; padding: 14px 12px 6px; border-bottom: 2px solid var(--line); }
+  tr.group td { background: #0f1a30; color: var(--accent); font-weight: 600; padding: 10px 12px 8px; border-bottom: 2px solid var(--line); cursor: pointer; user-select: none; }
+  tr.group:hover td { background: #16213a; }
   tr.group td span { color: var(--dim); font-weight: normal; margin-left: 10px; }
+  tr.group td .arrow { display: inline-block; width: 14px; margin: 0 6px 0 0; color: var(--accent); }
+  .bar.avg { position: relative; }
+  .bar.avg::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: #cbd5e1; opacity: .7; }
   td img { width: 36px; height: 36px; object-fit: contain; image-rendering: pixelated; display: block; }
   td.name { font-weight: 500; white-space: normal; min-width: 200px; max-width: 260px; }
   td input, td select { background: #0f172a; color: #fde68a; border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: inherit; }
@@ -59,6 +63,8 @@
   <select id="typeFilter"><option value="">All item types</option></select>
   <label><input type="checkbox" id="onlyPicked"> Only ticked items</label>
   <label><input type="checkbox" id="onlyChanged"> Only edited items</label>
+  <button id="openAll">Open all levels</button>
+  <button id="closeAll">Close all levels</button>
   <button id="save" class="primary" disabled>Save</button>
   <button id="revert" disabled>Undo all edits</button>
   <span id="status">Loading...</span>
@@ -66,7 +72,7 @@
 <div class="help" id="help"></div>
 <div class="wrap"><table><thead id="head"></thead><tbody id="body"></tbody></table></div>
 <script type="module">
-const state = { items: [], original: [], licenses: new Map(), rules: null, sort: { key: "level", desc: false }, picked: new Set(), maxProfit: 1 };
+const state = { items: [], original: [], licenses: new Map(), rules: null, sort: { key: "level", desc: false }, picked: new Set(), maxProfit: 1, open: new Set(), shown: [], avgPer20: 0 };
 
 const money = (value) => Math.round(value).toLocaleString("en-US");
 const levelOf = (item) => state.licenses.get(item.license)?.level ?? null;
@@ -80,6 +86,7 @@ const crateProfitPercent = (item) => (crateProfit(item) / crateValue(item)) * 10
 const profitPer20 = (item) => 20 * (item.baseCost - supplierPrice(item));
 const typeOf = (item) => item.tags?.[0] ?? "";
 const kindOf = (item) => item.tags?.[item.tags.length - 1] ?? "";
+const groupOf = (item) => String(levelOf(item) ?? "?");
 
 // Yellow headers are the ones you can change; the rest are worked out from them.
 const COLUMNS = [
@@ -112,7 +119,8 @@ async function load() {
     `A crate has room for ${state.rules.crateUnits}, so an item of size 4 fits 5 per crate. One shelf space holds the same as one crate. ` +
     `Profit is selling a full crate at base price, minus what the supplier charges for it. ` +
     `Crate profit % is the percentage of that sale left as profit. ` +
-    `Profit per 20 is the profit from selling 20 of the item at base price.`;
+    `Profit per 20 is the profit from selling 20 of the item at base price. Its bar is half full at the average for the items showing in the open shop levels, and full at double that average. ` +
+    `Click a shop level to open or close it. Sorting and filters only change the open levels.`;
   render();
   setStatus(`${state.items.length} items.`);
 }
@@ -133,24 +141,41 @@ function renderHead() {
   }).join("") + "</tr>";
 }
 
-function visibleRows() {
+// Every shop level is a group. Closed levels are left alone; filters and sorting only touch open ones.
+function visibleGroups() {
   const search = document.getElementById("search").value.trim().toLowerCase();
   const type = document.getElementById("typeFilter").value;
   const onlyPicked = document.getElementById("onlyPicked").checked;
   const onlyChanged = document.getElementById("onlyChanged").checked;
-  const rows = state.items.map((item, index) => ({ item, index })).filter(({ item, index }) =>
-    (!type || typeOf(item) === type) &&
-    (!onlyPicked || state.picked.has(item.id)) &&
-    (!onlyChanged || isChanged(index)) &&
-    (!search || item.name.toLowerCase().includes(search)));
   const column = COLUMNS.find((entry) => entry.key === state.sort.key);
-  rows.sort((a, b) => {
-    const left = column.sort(a.item);
-    const right = column.sort(b.item);
-    const order = typeof left === "number" ? left - right : String(left).localeCompare(String(right));
-    return (state.sort.desc ? -order : order) || a.item.baseCost - b.item.baseCost;
+  const byLevel = new Map();
+  state.items.forEach((item, index) => {
+    const key = groupOf(item);
+    if (!byLevel.has(key)) byLevel.set(key, { key, level: levelOf(item), total: 0, rows: [] });
+    const group = byLevel.get(key);
+    group.total += 1;
+    if (state.open.has(key) &&
+      (!type || typeOf(item) === type) &&
+      (!onlyPicked || state.picked.has(item.id)) &&
+      (!onlyChanged || isChanged(index)) &&
+      (!search || item.name.toLowerCase().includes(search))) group.rows.push({ item, index });
   });
-  return rows;
+  const groups = [...byLevel.values()].sort((a, b) => (a.level ?? 999) - (b.level ?? 999));
+  if (state.sort.key === "level" && state.sort.desc) groups.reverse();
+  for (const group of groups) {
+    group.rows.sort((a, b) => {
+      const left = column.sort(a.item);
+      const right = column.sort(b.item);
+      const order = typeof left === "number" ? left - right : String(left).localeCompare(String(right));
+      return (state.sort.desc ? -order : order) || a.item.baseCost - b.item.baseCost;
+    });
+  }
+  return groups;
+}
+
+function updateAverage() {
+  const values = state.shown.map((index) => profitPer20(state.items[index]));
+  state.avgPer20 = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
 }
 
 function cell(item, index, key) {
@@ -180,7 +205,12 @@ function outputHtml(item, key) {
   if (key === "perCrate") return `${perCrate(item)}`;
   if (key === "crateValue") return money(crateValue(item));
   if (key === "crateCost") return money(crateCost(item));
-  if (key === "profitPer20") return profitPer20(item).toLocaleString("en-US", { maximumFractionDigits: 2 });
+  if (key === "profitPer20") {
+    const value = profitPer20(item);
+    const width = state.avgPer20 > 0 ? Math.max(0, Math.min(100, (value / (state.avgPer20 * 2)) * 100)) : 0;
+    const average = money(state.avgPer20);
+    return `<div class="profit${value < 0 ? " loss" : ""}" title="Average for the items showing in open levels: ${average}">${value.toLocaleString("en-US", { maximumFractionDigits: 2 })}<div class="bar avg"><div style="width:${width}%"></div></div></div>`;
+  }
   const isPercent = key === "crateProfitPercent";
   const profit = isPercent ? crateProfitPercent(item) : crateProfit(item);
   const width = Math.max(0, Math.min(100, isPercent ? profit : (profit / state.maxProfit) * 100));
@@ -191,17 +221,17 @@ function outputHtml(item, key) {
 function render() {
   state.maxProfit = Math.max(1, ...state.items.map(crateProfit));
   renderHead();
-  const grouped = state.sort.key === "level";
-  let lastLevel;
+  const groups = visibleGroups();
+  state.shown = groups.flatMap((group) => group.rows.map((row) => row.index));
+  updateAverage();
   const html = [];
-  for (const { item, index } of visibleRows()) {
-    const level = levelOf(item);
-    if (grouped && level !== lastLevel) {
-      lastLevel = level;
-      const count = state.items.filter((other) => levelOf(other) === level).length;
-      html.push(`<tr class="group"><td colspan="${COLUMNS.length}">Shop level ${level ?? "?"}<span>${count} item${count === 1 ? "" : "s"} unlock here</span></td></tr>`);
+  for (const group of groups) {
+    const open = state.open.has(group.key);
+    const showing = open && group.rows.length !== group.total ? `, ${group.rows.length} showing` : "";
+    html.push(`<tr class="group" data-level="${escape(group.key)}"><td colspan="${COLUMNS.length}"><span class="arrow">${open ? "▼" : "▶"}</span>Shop level ${escape(group.key)}<span>${group.total} item${group.total === 1 ? "" : "s"} unlock here${showing}</span></td></tr>`);
+    for (const { item, index } of group.rows) {
+      html.push(`<tr class="item ${isChanged(index) ? "changed" : ""}" data-row="${index}">${COLUMNS.map((column) => cell(item, index, column.key)).join("")}</tr>`);
     }
-    html.push(`<tr class="item ${isChanged(index) ? "changed" : ""}" data-row="${index}">${COLUMNS.map((column) => cell(item, index, column.key)).join("")}</tr>`);
   }
   document.getElementById("body").innerHTML = html.join("");
   refreshButtons();
@@ -213,6 +243,12 @@ function refreshRow(index) {
   if (!row) return;
   row.classList.toggle("changed", isChanged(index));
   for (const output of row.querySelectorAll("[data-out]")) output.innerHTML = outputHtml(state.items[index], output.dataset.out);
+  // One item's profit moves the average, so every Profit per 20 bar can change.
+  updateAverage();
+  for (const output of document.querySelectorAll('[data-out="profitPer20"]')) {
+    const other = Number(output.closest("tr").dataset.row);
+    output.innerHTML = outputHtml(state.items[other], "profitPer20");
+  }
 }
 
 function refreshButtons() {
@@ -250,9 +286,27 @@ document.getElementById("body").addEventListener("change", (event) => {
     else state.picked.delete(id);
   } else if (target.dataset.edit !== undefined) {
     applyEdit(target);
-    // A new contract can move the item to another level group.
-    if (target.dataset.key === "license" && state.sort.key === "level") render();
+    // A new contract can move the item to another level group; open it so the item stays in view.
+    if (target.dataset.key === "license") {
+      state.open.add(groupOf(state.items[Number(target.dataset.edit)]));
+      render();
+    }
   }
+});
+document.getElementById("body").addEventListener("click", (event) => {
+  const key = event.target.closest("tr.group")?.dataset.level;
+  if (key === undefined) return;
+  if (state.open.has(key)) state.open.delete(key);
+  else state.open.add(key);
+  render();
+});
+document.getElementById("openAll").addEventListener("click", () => {
+  for (const item of state.items) state.open.add(groupOf(item));
+  render();
+});
+document.getElementById("closeAll").addEventListener("click", () => {
+  state.open.clear();
+  render();
 });
 document.getElementById("head").addEventListener("click", (event) => {
   const key = event.target.closest("th")?.dataset.key;

@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ship Painter - Space Arms Dealer</title>
+<style>
+  :root { color-scheme: dark; --bg: #0b1120; --panel: #111a2e; --line: #1f2b45; --text: #e2e8f5; --dim: #7d8cab; --accent: #38bdf8; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; padding: 14px 18px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2; }
+  header h1 { font-size: 17px; margin: 4px 10px 0 0; }
+  fieldset { border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px 10px; margin: 0; display: grid; grid-template-columns: auto 200px 44px; gap: 4px 10px; align-items: center; }
+  legend { color: var(--accent); padding: 0 6px; display: flex; align-items: center; gap: 8px; }
+  .swatch { width: 18px; height: 18px; border-radius: 4px; border: 1px solid #fff4; display: inline-block; }
+  fieldset label { color: var(--dim); }
+  input[type=range] { width: 100%; }
+  output { text-align: right; font-variant-numeric: tabular-nums; }
+  label.check { color: var(--dim); display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+  main { padding: 16px 18px; }
+  h2 { font-size: 15px; color: var(--accent); margin: 10px 0 8px; }
+  .row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+  .card { background: #070c18; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .card canvas { display: block; width: 100%; height: auto; }
+  .card div { padding: 6px 10px; color: var(--dim); border-top: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Mercenary Ship</h1>
+  <fieldset id="hull"><legend><span class="swatch"></span>Ship color</legend></fieldset>
+  <fieldset id="thrust"><legend><span class="swatch"></span>Engine flame color</legend></fieldset>
+  <div>
+    <label class="check"><input type="checkbox" id="engines" checked> Engines on</label>
+    <label class="check"><input type="checkbox" id="bob" checked> Gentle hover</label>
+  </div>
+</header>
+<main>
+  <h2>Seen from above</h2>
+  <div class="row" id="top"></div>
+  <h2>Seen straight on</h2>
+  <div class="row" id="side"></div>
+</main>
+<script type="module">
+// Flames point the way the exhaust travels. Positions are in the art's own pixels.
+// "flame" shoots out of a nozzle, "glow" is a nozzle facing us, "halo" is light leaking from behind.
+const VIEWS = [
+  { id: "top-down", row: "top", label: "Facing down", size: [460, 460], scale: 0.55, engines: [
+    { kind: "flame", x: 128, y: 0, dir: [0, -1], width: 50 }, { kind: "flame", x: 292, y: 0, dir: [0, -1], width: 50 }] },
+  { id: "top-up", row: "top", label: "Facing up", size: [460, 460], scale: 0.55, engines: [
+    { kind: "flame", x: 141, y: 560, dir: [0, 1], width: 40 }, { kind: "flame", x: 264, y: 560, dir: [0, 1], width: 40 }] },
+  { id: "top-left", row: "top", label: "Facing left", size: [460, 460], scale: 0.55, engines: [
+    { kind: "flame", x: 560, y: 91, dir: [1, 0], width: 44 }, { kind: "flame", x: 560, y: 245, dir: [1, 0], width: 44 }] },
+  { id: "top-right", row: "top", label: "Facing right", size: [460, 460], scale: 0.55, engines: [
+    { kind: "flame", x: 0, y: 120, dir: [-1, 0], width: 40 }, { kind: "flame", x: 0, y: 221, dir: [-1, 0], width: 40 }] },
+  { id: "side-front", row: "side", label: "Front", size: [460, 200], scale: 0.62, engines: [
+    { kind: "halo", x: 190, y: 40, radius: 40 }, { kind: "halo", x: 370, y: 40, radius: 40 }] },
+  { id: "side-back", row: "side", label: "Back", size: [460, 200], scale: 0.62, engines: [
+    { kind: "glow", x: 190, y: 36, radius: 30 }, { kind: "glow", x: 371, y: 36, radius: 30 }] },
+  { id: "side-left", row: "side", label: "Left side", size: [460, 200], scale: 0.62, engines: [
+    { kind: "flame", x: 560, y: 22, dir: [1, 0], width: 34 }, { kind: "flame", x: 560, y: 62, dir: [1, 0], width: 34 }] },
+  { id: "side-right", row: "side", label: "Right side", size: [460, 200], scale: 0.62, engines: [
+    { kind: "flame", x: 0, y: 24, dir: [-1, 0], width: 32 }, { kind: "flame", x: 0, y: 62, dir: [-1, 0], width: 34 }] },
+];
+
+const colors = { hull: [104, 112, 124], thrust: [90, 180, 255] };
+
+function buildSliders(id) {
+  const box = document.getElementById(id);
+  ["Red", "Green", "Blue"].forEach((name, channel) => {
+    box.insertAdjacentHTML("beforeend", `<label>${name}</label><input type="range" min="0" max="255" value="${colors[id][channel]}" data-channel="${channel}"><output>${colors[id][channel]}</output>`);
+  });
+  const paintSwatch = () => { box.querySelector(".swatch").style.background = `rgb(${colors[id].join(",")})`; };
+  box.addEventListener("input", (event) => {
+    const channel = Number(event.target.dataset.channel);
+    colors[id][channel] = Number(event.target.value);
+    event.target.nextElementSibling.value = event.target.value;
+    paintSwatch();
+    if (id === "hull") queueRecolor();
+  });
+  paintSwatch();
+}
+
+async function loadImage(src) {
+  const image = new Image();
+  image.src = src;
+  await image.decode();
+  return image;
+}
+
+// Reads the gray art once; recoloring then only needs the stored gray values.
+function readGray(image) {
+  const canvas = document.createElement("canvas");
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const context = canvas.getContext("2d");
+  context.drawImage(image, 0, 0);
+  const data = context.getImageData(0, 0, canvas.width, canvas.height);
+  let total = 0, count = 0;
+  for (let i = 0; i < data.data.length; i += 4) {
+    if (data.data[i + 3] > 0) { total += data.data[i]; count += 1; }
+  }
+  return { canvas, context, data, gray: Uint8Array.from({ length: data.data.length / 4 }, (_v, p) => data.data[p * 4]), average: total / Math.max(1, count) };
+}
+
+// The ship's average shade becomes the chosen color; darker parts get darker, highlights fade toward white.
+function recolor(art) {
+  const [r, g, b] = colors.hull;
+  const pixels = art.data.data;
+  const top = 255 / art.average - 1;
+  for (let p = 0; p < art.gray.length; p += 1) {
+    const k = art.gray[p] / art.average;
+    const i = p * 4;
+    if (k <= 1) {
+      pixels[i] = r * k; pixels[i + 1] = g * k; pixels[i + 2] = b * k;
+    } else {
+      const lift = (k - 1) / top;
+      pixels[i] = r + (255 - r) * lift; pixels[i + 1] = g + (255 - g) * lift; pixels[i + 2] = b + (255 - b) * lift;
+    }
+  }
+  art.context.putImageData(art.data, 0, 0);
+}
+
+let recolorQueued = false;
+function queueRecolor() {
+  if (recolorQueued) return;
+  recolorQueued = true;
+  requestAnimationFrame(() => {
+    recolorQueued = false;
+    for (const view of VIEWS) recolor(view.art);
+  });
+}
+
+const rgba = (alpha, [r, g, b] = colors.thrust) => `rgba(${r},${g},${b},${alpha})`;
+const hot = () => colors.thrust.map((value) => Math.round(value + (255 - value) * 0.75));
+
+function drawFlame(context, engine, scale, time, seed) {
+  const width = engine.width * scale;
+  const flicker = 0.85 + 0.12 * Math.sin(time * 31 + seed * 5) + 0.08 * Math.sin(time * 53 + seed * 11) + Math.random() * 0.06;
+  const length = width * 2.4 * flicker;
+  context.save();
+  context.rotate(Math.atan2(engine.dir[1], engine.dir[0]));
+  const cone = (len, half, inner, outer) => {
+    const gradient = context.createLinearGradient(0, 0, len, 0);
+    gradient.addColorStop(0, inner);
+    gradient.addColorStop(1, outer);
+    context.fillStyle = gradient;
+    context.beginPath();
+    context.moveTo(0, -half);
+    context.quadraticCurveTo(len * 0.55, -half * 0.95, len, 0);
+    context.quadraticCurveTo(len * 0.55, half * 0.95, 0, half);
+    context.closePath();
+    context.fill();
+  };
+  const glow = context.createRadialGradient(0, 0, 0, 0, 0, width * 1.3);
+  glow.addColorStop(0, rgba(0.55));
+  glow.addColorStop(1, rgba(0));
+  context.fillStyle = glow;
+  context.beginPath();
+  context.arc(0, 0, width * 1.3, 0, Math.PI * 2);
+  context.fill();
+  cone(length, width * 0.48, rgba(0.85), rgba(0));
+  cone(length * 0.55, width * 0.28, rgba(1, hot()), rgba(0.2));
+  // A few sparks drifting out of the exhaust.
+  for (let n = 0; n < 4; n += 1) {
+    const travel = ((time * 1.7 + n * 0.25 + seed * 0.13) % 1);
+    context.fillStyle = rgba(0.7 * (1 - travel), hot());
+    context.fillRect(length * (0.3 + travel * 0.9), Math.sin(n * 7 + seed + time * 3) * width * 0.25 * travel, 2, 2);
+  }
+  context.restore();
+}
+
+function drawGlow(context, engine, scale, time, seed, strength) {
+  const radius = engine.radius * scale * (1 + 0.08 * Math.sin(time * 27 + seed * 3) + Math.random() * 0.04);
+  const glow = context.createRadialGradient(0, 0, 0, 0, 0, radius * 1.8);
+  glow.addColorStop(0, rgba(strength, hot()));
+  glow.addColorStop(0.3, rgba(strength * 0.85));
+  glow.addColorStop(1, rgba(0));
+  context.fillStyle = glow;
+  context.beginPath();
+  context.arc(0, 0, radius * 1.8, 0, Math.PI * 2);
+  context.fill();
+}
+
+function drawView(view, time) {
+  const { context, canvas, art } = view;
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  const w = art.canvas.width * view.scale;
+  const h = art.canvas.height * view.scale;
+  const bob = document.getElementById("bob").checked ? Math.sin(time * 1.6 + view.scale * 9) * 3 : 0;
+  const left = (canvas.width - w) / 2;
+  const top = (canvas.height - h) / 2 + bob;
+  const enginesOn = document.getElementById("engines").checked;
+  const place = (engine) => [left + engine.x * view.scale, top + engine.y * view.scale];
+  context.globalCompositeOperation = "lighter";
+  if (enginesOn) {
+    view.engines.forEach((engine, seed) => {
+      if (engine.kind === "glow") return;
+      context.save();
+      context.translate(...place(engine));
+      if (engine.kind === "flame") drawFlame(context, engine, view.scale, time, seed);
+      else drawGlow(context, engine, view.scale, time, seed, 0.5);
+      context.restore();
+    });
+  }
+  context.globalCompositeOperation = "source-over";
+  context.drawImage(art.canvas, left, top, w, h);
+  if (enginesOn) {
+    context.globalCompositeOperation = "lighter";
+    view.engines.forEach((engine, seed) => {
+      if (engine.kind !== "glow") return;
+      context.save();
+      context.translate(...place(engine));
+      drawGlow(context, engine, view.scale, time, seed, 0.9);
+      context.restore();
+    });
+    context.globalCompositeOperation = "source-over";
+  }
+}
+
+async function start() {
+  buildSliders("hull");
+  buildSliders("thrust");
+  for (const view of VIEWS) {
+    view.art = readGray(await loadImage(`/art/${view.id}.png`));
+    view.canvas = document.createElement("canvas");
+    [view.canvas.width, view.canvas.height] = view.size;
+    view.context = view.canvas.getContext("2d");
+    const card = document.createElement("div");
+    card.className = "card";
+    card.append(view.canvas);
+    card.insertAdjacentHTML("beforeend", `<div>${view.label}</div>`);
+    document.getElementById(view.row).append(card);
+    recolor(view.art);
+  }
+  const frame = (now) => {
+    for (const view of VIEWS) drawView(view, now / 1000);
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+start();
+</script>
+</body>
+</html>
