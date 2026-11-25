@@ -3,10 +3,11 @@
 // ==========================================
 // A robot is built from three kinds of part:
 //   Frame       - the body. Needs some power, has ordered slots for logic boards, sets speed.
-//   Logic board - the program. A prefab board is one fixed ability built into the game (see
-//                 PREFAB_ABILITIES in RobotGambits.js) with a fixed power need; it has no commands.
+//   Logic board - the program. A prefab board has fixed commands or a legacy built-in ability,
+//                 with a fixed power need; its commands can't be edited on a robot.
 //                 A custom board holds up to N commands you write, and each command's condition
 //                 and action add to the board's power need.
+//   Modifier board - boosts skills by percentages, using the same slots and power limit.
 //   Power cell  - Capacity is the most power the robot's parts may need in total (a limit that
 //                 never runs down). Charge is the fuel tank that empties as the robot works:
 //                 each working second costs the game's standard drain times the cell's drain rate,
@@ -25,6 +26,44 @@ import { CONDITIONS, MEASURES, conditionProblems, findAbility, measureProblems, 
 
 const byId = (list, id) => list?.find((entry) => entry.id === id) ?? null;
 
+export const ROBOT_SKILLS = Object.freeze([
+  { id: "stocking", label: "Stocking", base: 2, unit: "units/second" },
+  { id: "carry", label: "Carry", base: 2, unit: "crates/trip", whole: true },
+  { id: "scanning", label: "Scanning", base: 1, unit: "items/second" },
+  { id: "counting", label: "Counting", base: 1, unit: "pieces of change/second" },
+  { id: "handleWaste", label: "Handle Waste", base: 2, unit: "garbage/trip", whole: true },
+  { id: "mopping", label: "Mopping", base: 0.25, unit: "spots/second" },
+]);
+
+/** Resolve each skill separately; every fitted board still consumes power, including beaten bonuses. */
+export function robotSkills(robot, parts) {
+  return ROBOT_SKILLS.map((skill) => {
+    const base = parts.baseSkills?.[skill.id] ?? skill.base;
+    const offers = robot.boards.flatMap((fitted, slot) => {
+      const board = findBoard(parts, fitted.board);
+      const bonus = board?.modifiers?.[skill.id] ?? 0;
+      return bonus > 0 ? [{ slot, board: board.name, bonus }] : [];
+    });
+    const best = offers.reduce((winner, offer) => (!winner || offer.bonus > winner.bonus ? offer : winner), null);
+    const boosted = base + base * (best?.bonus ?? 0) / 100;
+    return { ...skill, base, bonus: best?.bonus ?? 0, value: skill.whole ? Math.floor(boosted) : boosted,
+      source: best, ignored: offers.filter((offer) => offer !== best) };
+  });
+}
+
+export function buildWarnings(robot, parts) {
+  const skills = robotSkills(robot, parts);
+  const warnings = skills.flatMap((skill) => skill.ignored.map((offer) =>
+    `Slot ${offer.slot + 1}: ${offer.board}'s ${skill.label} +${offer.bonus}% does nothing. Slot ${skill.source.slot + 1} already gives +${skill.bonus}%. This board still uses power and a slot.`));
+  for (const skill of skills) {
+    if (skill.whole && skill.bonus > 0 && skill.value === skill.base) {
+      warnings.push(`${skill.label} +${skill.bonus}% still holds only ${skill.value}; capacity rounds down to whole objects.`);
+    }
+  }
+  if (!robotProgram(robot, parts).length) warnings.push("No logic board fitted: this robot will wait rather than do jobs.");
+  return warnings;
+}
+
 export const findFrame = (parts, id) => byId(parts.frames, id);
 export const findCell = (parts, id) => byId(parts.cells, id);
 export const findBoard = (parts, id) => byId(parts.boards, id);
@@ -37,7 +76,8 @@ export const partMeasures = (parts) => parts?.measures ?? MEASURES;
 export function boardProgram(fitted, parts) {
   const board = findBoard(parts, fitted.board);
   if (!board) return [];
-  return board.kind === "prefab" ? [{ ability: board.ability }] : (fitted.program ?? []);
+  if (board.kind === "modifier") return [];
+  return board.kind === "prefab" ? (board.program ?? [{ ability: board.ability }]) : (fitted.program ?? []);
 }
 
 /** How much one command adds to a custom board's power need. */
@@ -50,7 +90,7 @@ export function commandPower(rule, parts) {
 export function boardPower(fitted, parts) {
   const board = findBoard(parts, fitted.board);
   if (!board) return 0;
-  if (board.kind === "prefab") return board.power;
+  if (board.kind !== "custom") return board.power;
   return board.power + (fitted.program ?? []).reduce((total, rule) => total + commandPower(rule, parts), 0);
 }
 
@@ -114,6 +154,12 @@ export function partsProblems(parts) {
   if (problems.length) return problems;
   if (parts.measures !== undefined) problems.push(...measureProblems(parts.measures));
   if (parts.conditions !== undefined) problems.push(...conditionProblems(parts.conditions, partMeasures(parts)));
+  for (const skill of ROBOT_SKILLS) {
+    const base = parts.baseSkills?.[skill.id];
+    if (base !== undefined && (!Number.isFinite(base) || base <= 0 || (skill.whole && !Number.isInteger(base)))) {
+      problems.push(`Base ${skill.label} must be a positive ${skill.whole ? "whole " : ""}number.`);
+    }
+  }
   if (!parts.frames.length) problems.push("Needs at least one frame.");
   if (!parts.cells.length) problems.push("Needs at least one power cell.");
   const number = (part, key, what, minimum = 0) => {
@@ -133,10 +179,20 @@ export function partsProblems(parts) {
   for (const board of parts.boards) {
     number(board, "power", "power needed");
     if (board.kind === "prefab") {
-      if (!findAbility(board.ability)) problems.push(`${board.name}: unknown prefab ability "${board.ability}".`);
+      if (board.program !== undefined) problems.push(...programProblems(board.program, Array.isArray(board.program) ? board.program.length : 0, partConditions(parts)).map((problem) => `${board.name}: ${problem}`));
+      else if (!findAbility(board.ability)) problems.push(`${board.name}: unknown prefab ability "${board.ability}".`);
+    } else if (board.kind === "modifier") {
+      if (!board.modifiers || typeof board.modifiers !== "object" || Array.isArray(board.modifiers) || !Object.keys(board.modifiers).length) {
+        problems.push(`${board.name}: needs at least one skill bonus.`);
+      }
+      for (const [id, bonus] of Object.entries(board.modifiers ?? {})) {
+        if (!ROBOT_SKILLS.some((skill) => skill.id === id) || !Number.isFinite(bonus) || bonus <= 0) {
+          problems.push(`${board.name}: ${id} needs a known skill and a positive percentage.`);
+        }
+      }
     } else if (board.kind === "custom") {
       if (!Number.isInteger(board.commands) || board.commands < 1) problems.push(`${board.name}: needs room for at least 1 command.`);
-    } else problems.push(`${board.name}: must be a prefab or a custom board.`);
+    } else problems.push(`${board.name}: must be a prefab, modifier or custom board.`);
   }
   return problems;
 }

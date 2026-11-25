@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { chooseAction, conditionLabel, conditionProblems, measureProblems } from "../js/logic/RobotGambits.js";
-import { hasEnoughPower, powerNeeded, robotProgram } from "../js/logic/RobotParts.js";
-import { runShift } from "../scripts/robot-lab/sim.js";
+import { buildWarnings, hasEnoughPower, partsProblems, powerNeeded, robotProgram, robotSkills } from "../js/logic/RobotParts.js";
+import { createSim, diagnoseRobot, runShift, step } from "../scripts/robot-lab/sim.js";
 import { setupProblems } from "../scripts/robot-lab/server.mjs";
 
 const world = (overrides = {}) => ({
@@ -89,6 +89,7 @@ test("a robot whose parts need more power than its cell's capacity never switche
   assert.equal(sim.robots[0].noPower, true);
   assert.equal(sim.robots[0].busySeconds, 0);
   assert.equal(sim.stats.served, 0);
+  assert.match(diagnoseRobot(sim.robots[0].build, PARTS)[0].fitted.error, /cannot switch on/);
 });
 
 test("a cell's drain rate scales the standard drain, and a robot with no charging command shuts down", () => {
@@ -98,6 +99,7 @@ test("a cell's drain rate scales the standard drain, and a robot with no chargin
   const sim = runShift({ settings: SETTINGS, parts: PARTS, robots: [robot] });
   assert.equal(sim.robots[0].outOfPower, true);
   assert.equal(sim.registers[0].staffedBy, null);
+  assert.match(diagnoseRobot(robot, { ...PARTS, cells: PARTS.cells.map((cell) => ({ ...cell, charge: 1 })) })[0].fitted.error, /Ran out of charge/);
 });
 
 test("the robot lab refuses builds that don't fit their parts", () => {
@@ -147,4 +149,121 @@ test("a check written in plain words before the game can work it out is saved, b
   assert.deepEqual(measureProblems(measures), []);
   assert.deepEqual(conditionProblems(conditions, measures), []);
   assert.equal(chooseAction([{ condition: "waited", action: "wait" }], world(), robot, conditions, measures).checks[0].result, "condition false");
+});
+
+test("modifier boards share power and slots, and only the strongest bonus to each skill applies", () => {
+  const parts = structuredClone(PARTS);
+  parts.frames[0].boardSlots = 4;
+  parts.boards.push(
+    { id: "scan", name: "Scan", kind: "modifier", power: 2, modifiers: { scanning: 20 } },
+    { id: "mixed", name: "Mixed", kind: "modifier", power: 5, modifiers: { scanning: 50, carry: 50 } },
+    { id: "tie", name: "Tie", kind: "modifier", power: 2, modifiers: { carry: 50 } },
+  );
+  const robot = { name: "Bot", frame: "frame", cell: "big", boards: [{ board: "scan" }, { board: "mixed" }, { board: "tie" }] };
+  const stats = Object.fromEntries(robotSkills(robot, parts).map((skill) => [skill.id, skill]));
+  assert.equal(stats.scanning.value, 1.5);
+  assert.equal(stats.carry.value, 3);
+  assert.equal(stats.carry.source.slot, 1);
+  assert.equal(powerNeeded(robot, parts), 13);
+  assert.deepEqual(robotProgram(robot, parts), []);
+  assert.match(buildWarnings(robot, parts).join("\n"), /Scan's Scanning \+20% does nothing/);
+  assert.match(buildWarnings(robot, parts).join("\n"), /Tie's Carry \+50% does nothing/);
+  parts.boards[2].modifiers = { carry: 20 };
+  const roundedRobot = { ...robot, boards: [{ board: "scan" }] };
+  const rounded = robotSkills(roundedRobot, parts).find((skill) => skill.id === "carry");
+  assert.equal(rounded.value, 2);
+  assert.match(buildWarnings(roundedRobot, parts).join("\n"), /still holds only 2/);
+  assert.deepEqual(partsProblems(parts), []);
+  parts.boards[2].modifiers = { invented: 20, carry: -10 };
+  assert.equal(partsProblems(parts).length, 2);
+});
+
+test("diagnostics exercise all six skills through the live task engine, including batch carrying and trashcan trips", () => {
+  const parts = structuredClone(PARTS);
+  parts.cells[1].charge = 1000;
+  parts.boards.push({ id: "all", name: "All skills", kind: "modifier", power: 5,
+    modifiers: { stocking: 50, scanning: 50, counting: 50, carry: 50, handleWaste: 50, mopping: 50 } });
+  const robot = { name: "Diagnostic", frame: "frame", cell: "big", boards: [{ board: "all" }] };
+  const rows = diagnoseRobot(robot, parts, 1);
+  for (const row of rows) {
+    assert.equal(row.base.error, undefined, row.name);
+    assert.equal(row.fitted.error, undefined, row.name);
+    assert.ok(row.fitted.seconds < row.base.seconds, row.name);
+    assert.ok(row.fitted.chargeUsed < row.base.chargeUsed, row.name);
+  }
+  assert.equal(rows[0].base.seconds, 16);
+  assert.equal(rows[1].base.seconds, 16);
+  assert.deepEqual([rows[2].base.trips, rows[2].fitted.trips], [3, 2]);
+  assert.deepEqual([rows[4].base.trips, rows[4].fitted.trips], [3, 2]);
+});
+
+test("frame speed changes only walking, while scanning and counting speed up their own checkout phases", () => {
+  const parts = structuredClone(PARTS);
+  parts.cells[1].charge = 1000;
+  const robot = { name: "Bot", frame: "frame", cell: "big", boards: [{ board: "register" }] };
+  const trial = (bonuses, speed) => {
+    const copy = structuredClone(parts);
+    copy.frames[0].speed = speed;
+    copy.boards.push({ id: "mods", name: "Mods", kind: "modifier", power: 1, modifiers: bonuses });
+    const sim = createSim({ parts: copy, robots: [{ ...robot, boards: [...robot.boards, { board: "mods" }] }],
+      settings: { ...SETTINGS, customersPerMinute: 0, cratesPerDelivery: 0 } });
+    sim.registers[0].line.push({ items: 12, changeUnits: 2, arrived: 0 });
+    step(sim);
+    return sim.robots[0].task.phases;
+  };
+  const normal = trial({ scanning: 20 }, 1);
+  const swift = trial({ scanning: 20 }, 2);
+  assert.equal(normal[0].left, 1);
+  assert.equal(swift[0].left, 0);
+  assert.equal(normal[1].left, swift[1].left);
+  assert.equal(normal[2].left, swift[2].left);
+  const count = trial({ counting: 100 }, 1);
+  assert.equal(count[1].left, 12);
+  assert.equal(count[2].left, 1);
+});
+
+test("batch jobs reserve only available resources and return their entire batch when charge runs out", () => {
+  const parts = structuredClone(PARTS);
+  parts.cells[1].charge = 1;
+  const robot = { name: "Bot", frame: "frame", cell: "big", boards: [] };
+  const setup = { parts, robots: [robot], settings: { ...SETTINGS, customersPerMinute: 0, cratesPerDelivery: 0 } };
+  for (const action of ["unload_pad", "restock", "clean"]) {
+    const sim = createSim(setup);
+    sim.robots[0].program = [{ condition: "always", action, slot: 0, command: 0 }];
+    sim.padCrates = 6;
+    sim.backroomCrates = 2;
+    sim.shelves[0].stock = 0;
+    sim.garbage = 6;
+    step(sim);
+    assert.equal(sim.robots[0].outOfPower, true);
+    assert.equal(sim.padCrates, 6);
+    assert.equal(sim.backroomCrates, 2);
+    assert.equal(sim.shelves[0].incoming, 0);
+    assert.equal(sim.inboundCrates, 0);
+    assert.equal(sim.garbageClaimed, 0);
+    assert.equal(sim.garbage, 6);
+  }
+  parts.cells[1].charge = 1000;
+  const sim = createSim(setup);
+  sim.robots[0].program = [{ condition: "always", action: "unload_pad", slot: 0, command: 0 }];
+  sim.padCrates = 6;
+  sim.backroomCrates = sim.settings.backroomCapacity - 1;
+  step(sim);
+  assert.equal(sim.robots[0].task.crates, 1);
+  assert.equal(sim.inboundCrates, 1);
+});
+
+test("a customer arriving while a robot walks to an empty register still gets scanned and counted", () => {
+  const robot = { name: "Bot", frame: "frame", cell: "big", boards: [{ board: "register" }] };
+  const sim = createSim({ parts: PARTS, robots: [robot], settings: { ...SETTINGS, customersPerMinute: 0, cratesPerDelivery: 0 } });
+  step(sim);
+  sim.registers[0].line.push({ items: 4, changeUnits: 2, arrived: 1 });
+  step(sim);
+  step(sim);
+  assert.equal(sim.stats.served, 0);
+  step(sim);
+  assert.equal(sim.robots[0].task.phases[0].label, "Scanning items");
+  assert.equal(sim.stats.served, 0);
+  while (sim.time < 9) step(sim);
+  assert.equal(sim.stats.served, 1);
 });

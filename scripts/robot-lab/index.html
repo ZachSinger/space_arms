@@ -32,7 +32,30 @@
   main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 480px; }
   #store { overflow: auto; padding: 16px 20px 30px; }
   #side { overflow: auto; border-left: 1px solid var(--line); padding: 0 16px 30px; }
-  #workshop, #checks { display: none; }
+  #workshop, #checks, #builder { display: none; }
+  main.builder { grid-template-columns: 1fr; }
+  main.builder #store, main.builder #side { display: none; }
+  main.builder #builder { display: block; overflow: auto; padding: 20px; }
+  .assembly { display: grid; grid-template-columns: 210px minmax(300px, 1fr) minmax(360px, 1fr); gap: 22px; max-width: 1500px; margin: auto; }
+  .assembly h2 { font-size: 16px; margin: 0 0 10px; }
+  .assembly h3 { font-size: 14px; margin: 20px 0 8px; }
+  .assembly .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+  .assembly label.part { display: grid; gap: 5px; margin-bottom: 12px; color: var(--dim); }
+  .assembly label.part input, .assembly label.part select { width: 100%; }
+  .assembly .roster button { display: block; width: 100%; text-align: left; margin-bottom: 8px; }
+  .assembly .warning { color: var(--warn); font-size: 13px; margin: 8px 0; }
+  .assembly .error { color: var(--bad); }
+  .assembly .details { font-size: 13px; color: var(--dim); margin: 8px 0; }
+  .assembly .slot-head select { width: 100%; }
+  .assembly .stat-table td, .assembly .stat-table th { padding: 7px 4px; border-bottom: 1px solid var(--line); }
+  .assembly .stat-table td small { display: block; color: var(--dim); font-size: 11px; }
+  .assembly .diagnostics { grid-column: 2 / 4; }
+  .assembly .diagnostics button { margin-bottom: 10px; }
+  .assembly .tuning label { display: flex; justify-content: space-between; margin-top: 6px; }
+  @media (max-width: 1150px) {
+    .assembly { grid-template-columns: 180px minmax(300px, 1fr); }
+    .assembly .stats, .assembly .diagnostics { grid-column: 2; }
+  }
   main.commands, main.checks { grid-template-columns: 1fr; }
   main.commands #store, main.commands #side, main.checks #store, main.checks #side { display: none; }
   main.commands #workshop, main.checks #checks { display: block; overflow: auto; padding: 16px 20px 40px; }
@@ -182,7 +205,7 @@
 <body>
 <header>
   <h1>Robot Lab</h1>
-  <span class="views"><button class="view active" data-view="store">Store</button><button class="view" data-view="checks">Checks</button><button class="view" data-view="commands">Commands</button></span>
+  <span class="views"><button class="view active" data-view="store">Store</button><button class="view" data-view="builder">Build robots</button><button class="view" data-view="checks">Checks</button><button class="view" data-view="commands">Commands</button></span>
   <span id="simControls">
   <button id="play" class="primary">Play</button>
   <select id="speed" title="How fast time moves"></select>
@@ -201,11 +224,12 @@
   <div id="side"></div>
   <div id="workshop"></div>
   <div id="checks"></div>
+  <div id="builder"></div>
 </main>
 <script type="module">
 import { ACTIONS, ALWAYS, COMBINES, COMPARES, FACTS, PREFAB_ABILITIES, actionTarget, conditionLabel, conditionMet, findAbility, isHookedUp, measureValue, unitFor } from "/js/logic/RobotGambits.js";
-import { boardPower, commandPower, findBoard, findCell, findFrame, partConditions, partMeasures, powerNeeded } from "/js/logic/RobotParts.js";
-import { applyBuild, createSim, step, SIM_RULES } from "/scripts/robot-lab/sim.js";
+import { ROBOT_SKILLS, boardPower, buildProblems, buildWarnings, commandPower, findBoard, findCell, findFrame, hasEnoughPower, partConditions, partMeasures, powerNeeded, robotProgram, robotSkills } from "/js/logic/RobotParts.js";
+import { applyBuild, createSim, diagnoseRobot, step, SIM_RULES } from "/scripts/robot-lab/sim.js";
 
 const $ = (selector) => document.querySelector(selector);
 const escape = (text) => String(text ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -225,7 +249,7 @@ const SETTINGS = [
 const WHY = { "nothing to do": "Skipped: nothing for this board to do right now", off: "Switched off", "condition false": "Skipped: the \"if\" part isn't true", "can't do it right now": "Skipped: the \"if\" is true, but the job can't be done right now", chosen: "Doing this now" };
 // Each part list's columns: [field, heading, smallest allowed, whole numbers only, hover help].
 const PART_COLUMNS = {
-  frames: [["power", "Power", 0, false, "How much of the cell's capacity the frame itself uses."], ["boardSlots", "Slots", 1, true, "How many logic boards fit. Slot 1 is checked first."], ["speed", "Speed", 0.1, false, "1 is normal. 2 does every job in half the time."]],
+  frames: [["power", "Power", 0, false, "How much of the cell's capacity the frame itself uses."], ["boardSlots", "Slots", 1, true, "How many boards fit. Logic in slot 1 is checked first."], ["speed", "Walking", 0.1, false, "1 is normal walking speed. This does not change scanning, counting, stocking or mopping speed."]],
   cells: [["capacity", "Capacity", 0, false, "The most power the frame and boards may need in total. Never runs down."], ["charge", "Charge", 1, false, "The fuel tank. Runs down as the robot works."], ["drainRate", "Drain", 0, false, "Multiplies the standard drain. 1.5 runs down one and a half times as fast."], ["chargeRate", "Refill", 0.1, false, "Charge regained per second on a charging station."]],
   custom: [["power", "Power", 0, false, "Power the board needs before any commands are written on it."], ["commands", "Commands", 1, true, "How many commands you can write on it."]],
 };
@@ -244,6 +268,9 @@ let speed = 5;
 let tab = "robots";
 let openRobot = 0;
 let view = "store";
+let draft = null;
+let draftSource = null;
+let diagnosticResults = null;
 // The pretend moment on the Commands page, used to show which conditions are true and which actions could be done.
 let moment = { charge: 60, shelf: 40, line1: 1, line2: 0, registersTaken: false, pad: 2, stored: 3, capacity: 12, messes: 1, stations: 1 };
 
@@ -279,7 +306,8 @@ function activity(live) {
   if (sim.time >= sim.settings.shiftSeconds) return { text: "Shift over", bad: false };
   const action = live.task?.action ?? live.lastAction;
   if (!action) return { text: "Starting up", bad: false };
-  return { text: ACTION_WORDS[action], bad: false };
+  const phase = live.task?.phases?.[live.task.phase]?.label;
+  return { text: phase ?? ACTION_WORDS[action], bad: false };
 }
 
 // ---------- The store map ----------
@@ -323,6 +351,7 @@ function robotSpot(live, index, place, counters) {
   }
   if (task.action === "unload_pad") return seat("pad", { x: place.pad.x, y: place.pad.y + 13 });
   if (task.action === "clean") {
+    if (task.garbage && task.phase >= 2) return seat("trashcan", { x: 8, y: 80 });
     const n = counters.clean = (counters.clean ?? -1) + 1;
     const p = place.mess(n);
     return { x: p.x + 3, y: p.y - 5 };
@@ -347,7 +376,7 @@ function renderMap() {
     return `<div class="thing counter" style="${at(p)};width:${Math.min(16, 40 / sim.registers.length)}%">Register ${i + 1}</div>
       <div class="thing queue" style="${at({ x: p.x, y: p.y + 10 })}" title="${register.line.length} waiting">${register.line.map(() => '<span class="customer"></span>').join("")}</div>`;
   }).join("");
-  const messes = Array.from({ length: sim.messes }, (_unused, i) => `<div class="thing mess" style="${at(place.mess(i))}" title="A mess on the floor"></div>`).join("");
+  const messes = Array.from({ length: sim.messes + sim.garbage }, (_unused, i) => `<div class="thing mess" style="${at(place.mess(i))}" title="${i < sim.messes ? "Dirty spot" : "Garbage"}"></div>`).join("");
   const padCrates = Array.from({ length: sim.padCrates }, () => '<span class="crate"></span>').join("");
   const stored = Array.from({ length: sim.settings.backroomCapacity }, (_unused, i) => `<span class="crate ${i < sim.backroomCrates ? "" : "empty"}"></span>`).join("");
   const stations = sim.stations.map((_station, i) => `<div class="thing station" style="${at(place.station(i))}" title="Charging station ${i + 1}">⚡</div>`).join("");
@@ -365,7 +394,8 @@ function renderMap() {
   $("#mapThings").innerHTML = `
     <div class="room" style="left:${SALES.left}%;width:${SALES.width}%"><span class="room-name">Sales floor</span></div>
     <div class="room" style="left:${BACK.left}%;width:${BACK.width}%"><span class="room-name">Backroom</span></div>
-    ${shelves}${messes}${registers}${backroom}${stations}`;
+    ${shelves}${messes}${registers}${backroom}${stations}
+    <div class="thing counter" style="left:8%;top:86%" title="Garbage is emptied here">Trashcan</div>`;
 
   // Robots keep their element between redraws so they glide from job to job.
   const layer = $("#mapBots");
@@ -435,7 +465,7 @@ function boardOptions(selected, programLength) {
     const tooSmall = kind === "custom" && board.commands < programLength;
     return `<option value="${board.id}" ${board.id === selected ? "selected" : ""} ${tooSmall ? "disabled" : ""}>${escape(board.name)}${kind === "custom" ? "" : ` (${board.power} power)`}${tooSmall ? " - too small" : ""}</option>`;
   }).join("")}</optgroup>`;
-  return group("prefab", "Prefab: does one fixed job") + group("custom", "Custom: write your own commands");
+  return group("prefab", "Prefab logic boards") + group("modifier", "Modifier boards") + group("custom", "Custom: write your own commands");
 }
 
 function robotCard(robot, r) {
@@ -472,7 +502,7 @@ function robotCard(robot, r) {
     if (!custom) {
       const result = live ? results.get(`${s}:0`) : null;
       return `<div class="slot ${result === "chosen" ? "active" : ""}" title="${result ? escape(WHY[result]) : ""}">${head}
-        <div class="ability">${escape(findAbility(board.ability)?.description ?? "Unknown ability")}</div></div>`;
+        <div class="ability">${escape(boardDescription(board))}</div></div>`;
     }
     const rules = fitted.program.map((rule, i) => ruleRow(rule, i, fitted.program.length, where, live ? results.get(`${s}:${i}`) : null)).join("");
     const active = fitted.program.some((_rule, i) => results.get(`${s}:${i}`) === "chosen");
@@ -492,9 +522,15 @@ function robotCard(robot, r) {
       </div>
       <div class="power ${over ? "over" : ""}" title="${escape(breakdown)}"><span>Power ${needed} of ${cell.capacity}</span>
         <div class="meter"><div style="width:${Math.min(1, cell.capacity ? needed / cell.capacity : 1) * 100}%"></div></div></div>
-      <div class="facts">Speed ${frame.speed}. A full charge lasts about ${workSeconds === Infinity ? "forever" : `${workSeconds} seconds`} of work and refills in ${Math.round(cell.charge / cell.chargeRate)} seconds.</div>
+      <div class="facts">Walking speed ${frame.speed}. A full charge lasts about ${workSeconds === Infinity ? "forever" : `${workSeconds} seconds`} of work and refills in ${Math.round(cell.charge / cell.chargeRate)} seconds.</div>
+      ${buildWarnings(robot, parts).map((warning) => `<p style="color:var(--warn);font-size:12px">${escape(warning)}</p>`).join("")}
       <div class="section">Logic boards, checked from the top. The robot does the first one with something to do.</div>
       ${slots}${empty}
+      ${live ? `<details><summary>Work done this shift</summary><p class="facts">
+      Customers served: ${live.completed.customers}. Units stocked: ${live.completed.stocked}.
+      Delivery crates carried: ${live.completed.crates}. Crate trips: ${live.completed.crateTrips}.
+      Dirty spots mopped: ${live.completed.mopped}. Garbage removed: ${live.completed.garbage}. Trashcan trips: ${live.completed.trashTrips}.
+      </p></details>` : ""}
       <div class="robot-foot"><button class="small ghost" data-delete-robot="${r}">Remove robot</button></div>
     </div></div>`;
 }
@@ -520,14 +556,14 @@ function partsTab() {
     const where = `data-part="boards" data-id="${board.id}"`;
     return `<div class="prefab-card"><div class="row">
         <input class="name" ${where} data-field="name" value="${escape(board.name)}" title="Name">
-        <select ${where} data-field="ability" title="Which built-in job it does">${options(PREFAB_ABILITIES, board.ability)}</select>
+        ${board.program ? `<span>Fixed commands</span>` : `<select ${where} data-field="ability" title="Which built-in job it does">${options(PREFAB_ABILITIES, board.ability)}</select>`}
         <input type="number" min="0" step="any" ${where} data-field="power" value="${board.power}" title="Power needed">
         ${removeButton("boards", board, usedBy("boards", board.id), false)}</div>
-      <div class="desc">${escape(findAbility(board.ability)?.description ?? "Unknown ability")}</div></div>`;
+      <div class="desc">${escape(boardDescription(board))}</div></div>`;
   }).join("");
   return `
     <h3 class="part-title">Frames <button class="small" data-add-part="frames">Add</button></h3>
-    <p class="part-help">The body. Sets speed and how many logic boards fit. Hover a heading for what it means.</p>
+    <p class="part-help">The body. Sets walking speed and how many boards fit. Hover a heading for what it means.</p>
     ${table("frames", PART_COLUMNS.frames, parts.frames)}
     <h3 class="part-title">Power cells <button class="small" data-add-part="cells">Add</button></h3>
     <p class="part-help">Capacity is the most power a robot's frame and boards can need. Charge runs down as it works: each working second uses the standard drain times the drain rate, and waiting uses ${SIM_RULES.waitingDrain * 100}% of that.</p>
@@ -535,6 +571,9 @@ function partsTab() {
     <h3 class="part-title">Prefab boards <button class="small" data-add-part="prefab">Add</button></h3>
     <p class="part-help">Each does one fixed job built into the game. Players can't see inside or change it. Pick the job, name and power need.</p>
     ${prefabs}
+    <h3 class="part-title">Modifier boards</h3>
+    <p class="part-help">Each uses one of the same board slots. Only the strongest boost to each skill applies.</p>
+    ${parts.boards.filter((board) => board.kind === "modifier").map((board) => `<div class="prefab-card"><div>${escape(board.name)} (${board.power} power)</div><div class="desc">${escape(boardDescription(board))}</div></div>`).join("")}
     <h3 class="part-title">Custom boards <button class="small" data-add-part="custom">Add</button></h3>
     <p class="part-help">Blank boards players write commands on. Each command adds the power of its "if" and "then" parts, set on the Commands page.</p>
     ${table("boards", PART_COLUMNS.custom, parts.boards.filter((board) => board.kind === "custom"))}`;
@@ -701,12 +740,146 @@ function renderWorkshop() {
   updateTruth();
 }
 
+function boardDescription(board) {
+  if (board.kind === "modifier") return ROBOT_SKILLS.filter((skill) => board.modifiers[skill.id])
+    .map((skill) => `${skill.label} +${board.modifiers[skill.id]}%`).join(", ");
+  if (board.program) return board.program.map((rule) =>
+    `${conditionLabel(partConditions(setup.parts).find((condition) => condition.id === rule.condition), partMeasures(setup.parts))}: ${ACTIONS.find((action) => action.id === rule.action)?.label}`).join("; then ");
+  return findAbility(board.ability)?.description ?? "Unknown ability";
+}
+
+function newDraft() {
+  draftSource = null;
+  draft = { name: `Robot ${setup.robots.length + 1}`, frame: setup.parts.frames[0].id, cell: setup.parts.cells[0].id, boards: [] };
+  diagnosticResults = null;
+}
+
+function draftProblems() {
+  const problems = buildProblems(draft, setup.parts);
+  if (!hasEnoughPower(draft, setup.parts)) problems.push(`Needs ${powerNeeded(draft, setup.parts)} power, but this cell supports only ${findCell(setup.parts, draft.cell).capacity}. Choose a bigger cell or remove a board.`);
+  return problems;
+}
+
+const diagnosticKey = () => JSON.stringify([draft, setup.parts, setup.settings.standardDrain]);
+const statNumber = (value) => Number(value.toPrecision(8)).toString();
+
+function renderBuilder() {
+  if (!draft) newDraft();
+  const frame = findFrame(setup.parts, draft.frame);
+  const cell = findCell(setup.parts, draft.cell);
+  const problems = draftProblems();
+  const warnings = buildWarnings(draft, setup.parts);
+  const program = robotProgram(draft, setup.parts);
+  if (program.length && !program.some((rule) => rule.action === "charge" || rule.ability?.startsWith("self_charge"))) {
+    warnings.push("No charging instructions: this robot will eventually run out of charge. Fit a self-charge board above its work boards.");
+  }
+  const frameOptions = setup.parts.frames.map((part) => `<option value="${part.id}" ${part.id === draft.frame ? "selected" : ""} ${part.boardSlots < draft.boards.length ? "disabled" : ""}>${escape(part.name)} (${part.boardSlots} board slot${part.boardSlots === 1 ? "" : "s"})</option>`).join("");
+  const cellOptions = setup.parts.cells.map((part) => `<option value="${part.id}" ${part.id === draft.cell ? "selected" : ""}>${escape(part.name)} (${part.capacity} power capacity)</option>`).join("");
+  const catalog = (selected) => ["prefab", "modifier"].map((kind) => `<optgroup label="${kind === "prefab" ? "Logic boards" : "Modifier boards"}">${setup.parts.boards.filter((board) => board.kind === kind).map((board) => `<option value="${board.id}" ${board.id === selected ? "selected" : ""}>${escape(board.name)} (${board.power} power)</option>`).join("")}</optgroup>`).join("");
+  const slots = Array.from({ length: frame.boardSlots }, (_unused, slot) => {
+    const fitted = draft.boards[slot];
+    const board = fitted ? findBoard(setup.parts, fitted.board) : null;
+    return `<div class="slot ${board ? "" : "empty"}"><div class="slot-head"><span class="n">${slot + 1}</span>
+      <select data-draft-slot="${slot}" ${slot > draft.boards.length ? "disabled" : ""} aria-label="Board slot ${slot + 1}"><option value="">Empty board slot</option>${catalog(board?.id)}</select>
+      ${board ? `<button class="small" data-draft-up="${slot}" ${slot === 0 ? "disabled" : ""} title="Move this board up in priority">Up</button>` : ""}
+      </div>${board ? `<div class="ability">${escape(boardDescription(board))}</div>` : ""}</div>`;
+  }).join("");
+  const stats = robotSkills(draft, setup.parts).map((skill) => `<tr><td>${skill.label}<small>${skill.unit}</small></td><td>${statNumber(skill.base)}</td>
+    <td>${statNumber(skill.value)}<small>${skill.bonus ? `+${skill.bonus}% from slot ${skill.source.slot + 1}` : "No modifier"}</small></td></tr>`).join("");
+  const roster = setup.robots.map((robot, index) => {
+    const custom = robot.boards.some((fitted) => findBoard(setup.parts, fitted.board)?.kind === "custom");
+    return `<button data-load-build="${index}" ${custom ? 'disabled title="This robot has a custom board. Edit it on the Store screen."' : ""}>${escape(robot.name)}${custom ? " (custom)" : ""}</button>`;
+  }).join("");
+  const results = diagnosticResults?.key === diagnosticKey() ? diagnosticResults.rows : null;
+  const resultCell = (result) => result.error ? `<span class="error">${escape(result.error)}</span>` :
+    `${result.seconds}s${result.trips === null ? "" : ` / ${result.trips} trips`}<small>${round1(result.chargeUsed)} charge used</small>`;
+  $("#builder").innerHTML = `<div class="assembly">
+    <div class="roster"><h2>Robots in the store</h2>${roster || '<p class="hint">No robots yet.</p>'}<button id="newBuild">Build a new robot</button>
+      <p class="hint">Load a robot to edit a copy. Changes reach the store only when you press the button below its parts.</p></div>
+    <div class="card"><h2>${draftSource && setup.robots.includes(draftSource) ? "Edit robot" : "New robot"}</h2>
+      <label class="part">Name<input data-draft-field="name" value="${escape(draft.name)}"></label>
+      <label class="part">Frame<select data-draft-field="frame">${frameOptions}</select></label>
+      <label class="part">Power cell<select data-draft-field="cell">${cellOptions}</select></label>
+      <div class="power ${hasEnoughPower(draft, setup.parts) ? "" : "over"}">Power requirement: ${powerNeeded(draft, setup.parts)} / ${cell.capacity}</div>
+      <p class="details">${draft.boards.length} of ${frame.boardSlots} board slots used. Logic is checked from top to bottom; modifiers apply regardless of their slot order.</p>
+      ${slots}${problems.map((problem) => `<p class="error">${escape(problem)}</p>`).join("")}${warnings.map((warning) => `<p class="warning">${escape(warning)}</p>`).join("")}
+      <button class="primary" id="deployBuild" ${problems.length ? "disabled" : ""}>${draftSource && setup.robots.includes(draftSource) ? "Update robot in simulation" : "Add robot to simulation"}</button>
+      <p class="details">Starts a fresh shift with the assembled robot. Press Save at the top to keep it after reopening the lab.</p></div>
+    <div class="card stats"><h2>Robot stats</h2>
+      <p class="details">Walking speed: ${frame.speed}x. Skill speeds do not come from the frame.</p>
+      <table class="stat-table"><tr><th>Skill</th><th>Base</th><th>With boards</th></tr>${stats}</table>
+      <p class="details">Crate and garbage capacities round down to whole objects. Only the strongest percentage for each skill counts.</p>
+      <h3>Power cell</h3><p class="details">Charge tank: ${cell.charge}. Working drain: ${round1(setup.settings.standardDrain * cell.drainRate)} charge/second. Refills at ${cell.chargeRate} charge/second.</p>
+      <details class="tuning"><summary>Lab base skill values</summary><p class="details">These starting values are placeholders, not final balance. Changes affect every robot.</p>
+      ${ROBOT_SKILLS.map((skill) => `<label>${skill.label}<input type="number" min="${skill.whole ? 1 : 0.01}" step="${skill.whole ? 1 : "any"}" data-base-skill="${skill.id}" value="${setup.parts.baseSkills?.[skill.id] ?? skill.base}"></label>`).join("")}</details>
+    </div>
+    <div class="card diagnostics"><h2>Diagnostics</h2>
+      <p class="details">Test this robot against the same frame and cell without skill boosts. Tests run the real simulation's jobs directly, without its normal logic or random customers. Times include walking and use one-second simulation steps.</p>
+      <button id="runDiagnostics" ${problems.length ? "disabled" : ""}>Run diagnostic tests</button>
+      ${results ? `<table class="stat-table"><tr><th>Test</th><th>Without modifiers</th><th>With fitted boards</th></tr>${results.map((row) => `<tr><td>${row.name}</td><td>${resultCell(row.base)}</td><td>${resultCell(row.fitted)}</td></tr>`).join("")}</table>` : '<p class="hint">Run tests to measure time, charge use, and carrying trips. Changing the build clears old results.</p>'}
+    </div></div>`;
+}
+
+$("#builder").addEventListener("change", (event) => {
+  const field = event.target;
+  const data = field.dataset;
+  if (data.draftField) {
+    if (data.draftField === "name" && !field.value.trim()) return invalid(field, "Needs a name.");
+    draft[data.draftField] = field.value.trim();
+  } else if (data.draftSlot !== undefined) {
+    const slot = Number(data.draftSlot);
+    if (!field.value) draft.boards.splice(slot, 1);
+    else draft.boards[slot] = { board: field.value };
+  } else if (data.baseSkill) {
+    const skill = ROBOT_SKILLS.find((entry) => entry.id === data.baseSkill);
+    const value = Number(field.value);
+    if (!Number.isFinite(value) || value <= 0 || (skill.whole && !Number.isInteger(value))) return invalid(field, "Needs a positive number; carrying capacities must be whole numbers.");
+    setup.parts.baseSkills ??= {};
+    setup.parts.baseSkills[skill.id] = value;
+    diagnosticResults = null;
+    return changed();
+  } else return;
+  diagnosticResults = null;
+  renderBuilder();
+});
+
+$("#builder").addEventListener("click", (event) => {
+  const button = event.target.closest("button");
+  if (!button) return;
+  if (button.dataset.loadBuild !== undefined) {
+    draftSource = setup.robots[Number(button.dataset.loadBuild)];
+    draft = clone(draftSource);
+    diagnosticResults = null;
+  } else if (button.id === "newBuild") newDraft();
+  else if (button.dataset.draftUp !== undefined) {
+    const slot = Number(button.dataset.draftUp);
+    [draft.boards[slot - 1], draft.boards[slot]] = [draft.boards[slot], draft.boards[slot - 1]];
+    diagnosticResults = null;
+  } else if (button.id === "runDiagnostics") {
+    diagnosticResults = { key: diagnosticKey(), rows: diagnoseRobot(clone(draft), clone(setup.parts), setup.settings.standardDrain) };
+  } else if (button.id === "deployBuild") {
+    const problems = draftProblems();
+    if (problems.length) return status(problems.join("\n"), "bad");
+    const index = setup.robots.indexOf(draftSource);
+    const assembled = clone(draft);
+    if (index >= 0) setup.robots[index] = assembled;
+    else setup.robots.push(assembled);
+    draftSource = assembled;
+    restart();
+    status(index >= 0 ? "Robot updated in a fresh simulation. Save to keep it." : "Robot added to a fresh simulation. Save to keep it.", "good");
+    updateButtons();
+    return;
+  } else return;
+  renderBuilder();
+});
+
 function render() {
   renderSide();
   renderMap();
   renderControls();
   if (view === "commands") renderWorkshop();
   if (view === "checks") renderChecks();
+  if (view === "builder") renderBuilder();
 }
 
 function restart() {
@@ -882,9 +1055,15 @@ document.querySelector(".views").addEventListener("click", (event) => {
   for (const entry of document.querySelectorAll(".view")) entry.classList.toggle("active", entry === button);
   $("main").classList.toggle("commands", view === "commands");
   $("main").classList.toggle("checks", view === "checks");
-  $("#simControls").style.visibility = view === "store" ? "" : "hidden";
+  $("main").classList.toggle("builder", view === "builder");
+  $("#simControls").style.display = view === "store" ? "" : "none";
   if (view === "commands") renderWorkshop();
   if (view === "checks") renderChecks();
+  if (view === "builder") {
+    stop();
+    renderControls();
+    renderBuilder();
+  }
 });
 
 const momentInput = (event) => {
@@ -1000,6 +1179,9 @@ $("#restart").addEventListener("click", () => restart());
 
 $("#undo").addEventListener("click", () => {
   setup = clone(saved);
+  draft = null;
+  draftSource = null;
+  diagnosticResults = null;
   restart();
   status("");
 });

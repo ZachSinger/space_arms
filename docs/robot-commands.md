@@ -139,6 +139,20 @@ If a robot has two boards that raise the same skill, their percentages do not ad
 
 Prefab boards are made from the same pieces players use. We build a few basic logic boards and modifier boards ourselves and sell them ready-made. Players who don't want to program can just buy those, while players who do can build their own from the same parts.
 
+## Robot Lab: Build robots
+
+The Build robots screen assembles a robot from a frame, a power cell, prefab logic boards and modifier boards. Custom boards are not offered on this screen; existing custom robots remain editable on the Store screen.
+
+The screen shows each skill's base value, effective value and winning modifier, plus the total power requirement. Duplicate skill boosts show which board's bonus does nothing while still consuming power and a slot. Multi-skill boards are evaluated separately for each skill.
+
+For the lab's initial diagnostic values, Stocking starts at 2 units per second, Carry at 2 crates, Scanning at 1 item per second, Counting at 1 piece of change per second, Handle Waste at 2 pieces of garbage, and Mopping at 0.25 dirty spots per second. These are provisional tool values, not final balance. They can be changed under Lab base skill values. Crate and garbage capacities round down to whole objects after applying a percentage boost.
+
+Diagnostics compare the assembled robot with the same frame and cell at base skills. The tests run through the store simulation's task engine, temporarily supplying test instructions instead of the robot's normal logic. They measure checkout, stocking, delivery carrying, mopping and garbage disposal, reporting elapsed time, charge used and carrying trips. Failed tests explicitly report insufficient power, running out of charge or exceeding the time limit.
+
+The pretend store uses separate scanning and counting stages, stocking speed per unit, crate batches limited by Carry, and garbage batches taken to the trashcan limited by Handle Waste. Frame speed changes walking only. Its walking routes and pieces of change are simplified lab measurements, not a full recreation of the game's map or money denominations. Simulation time advances in one-second steps.
+
+Add robot to simulation or Update robot in simulation applies the assembled build and starts a fresh shift. Save keeps the robot and its parts after reopening the tool.
+
 ## Notes
 
 TODO: Need to reconsider backroom crate storage, maybe some cool sorter/animation is in order!

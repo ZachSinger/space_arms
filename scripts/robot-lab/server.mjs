@@ -49,20 +49,20 @@ async function readBody(request) {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-async function handle(request, response) {
+async function handle(request, response, dataPath) {
   const url = new URL(request.url, `http://localhost:${PORT}`);
   if (url.pathname === "/favicon.ico") return response.writeHead(204).end();
   if (request.method === "GET" && url.pathname === "/") {
     return send(response, 200, await readFile(path.join(HERE, "index.html"), "utf8"), "text/html; charset=utf-8");
   }
   if (request.method === "GET" && url.pathname === "/api/data") {
-    return send(response, 200, JSON.parse(await readFile(DATA_PATH, "utf8")));
+    return send(response, 200, JSON.parse(await readFile(dataPath, "utf8")));
   }
   if (request.method === "POST" && url.pathname === "/api/save") {
     const setup = JSON.parse(await readBody(request));
     const problems = setupProblems(setup);
     if (problems.length) return send(response, 400, { problems });
-    await writeFile(DATA_PATH, `${JSON.stringify(setup, null, 2)}\n`, "utf8");
+    await writeFile(dataPath, `${JSON.stringify(setup, null, 2)}\n`, "utf8");
     return send(response, 200, { saved: true });
   }
   if (request.method === "GET" && url.pathname.endsWith(".js")) {
@@ -78,14 +78,18 @@ async function handle(request, response) {
   return send(response, 404, { error: "Not found" });
 }
 
+export function createLabServer({ dataPath = DATA_PATH } = {}) {
+  return createServer((request, response) => {
+    handle(request, response, dataPath).catch((error) => send(response, 500, { problems: [String(error?.message ?? error)] }));
+  });
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const address = `http://localhost:${PORT}`;
   const openPage = () => {
     if (!process.argv.includes("--no-open")) exec(process.platform === "win32" ? `start "" ${address}` : `open ${address}`);
   };
-  createServer((request, response) => {
-    handle(request, response).catch((error) => send(response, 500, { problems: [String(error?.message ?? error)] }));
-  }).on("error", (error) => {
+  createLabServer().on("error", (error) => {
     if (error.code !== "EADDRINUSE") throw error;
     console.log(`The robot lab is already running at ${address}, so this opens that one instead.`);
     openPage();

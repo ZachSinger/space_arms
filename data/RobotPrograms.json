@@ -12,6 +12,14 @@
     "standardDrain": 1
   },
   "parts": {
+    "baseSkills": {
+      "stocking": 2,
+      "carry": 2,
+      "scanning": 1,
+      "counting": 1,
+      "handleWaste": 2,
+      "mopping": 0.25
+    },
     "frames": [
       {
         "id": "basic_frame",
@@ -40,6 +48,13 @@
         "power": 10,
         "boardSlots": 3,
         "speed": 0.8
+      },
+      {
+        "id": "lab_frame",
+        "name": "Versatile frame",
+        "power": 12,
+        "boardSlots": 5,
+        "speed": 1
       }
     ],
     "cells": [
@@ -74,6 +89,14 @@
         "charge": 180,
         "drainRate": 1,
         "chargeRate": 12
+      },
+      {
+        "id": "lab_cell",
+        "name": "Heavy-duty cell",
+        "capacity": 40,
+        "charge": 480,
+        "drainRate": 1,
+        "chargeRate": 8
       }
     ],
     "boards": [
@@ -133,6 +156,36 @@
         "power": 2,
         "ability": "clean_1"
       },
+      {
+        "id": "cashier_stocker",
+        "name": "Cashier and Stocker",
+        "kind": "prefab",
+        "power": 7,
+        "program": [
+          { "condition": "customer_waiting", "action": "work_register" },
+          { "condition": "shelf_below_50", "action": "restock" }
+        ]
+      },
+      {
+        "id": "stocker_cleaner",
+        "name": "Stocker and Cleaner",
+        "kind": "prefab",
+        "power": 6,
+        "program": [
+          { "condition": "shelf_empty", "action": "restock" },
+          { "condition": "mess", "action": "clean" }
+        ]
+      },
+      { "id": "mod_stocking", "name": "Stocking 1", "kind": "modifier", "power": 2, "modifiers": { "stocking": 20 } },
+      { "id": "mod_carry", "name": "Carry 1", "kind": "modifier", "power": 3, "modifiers": { "carry": 50 } },
+      { "id": "mod_scanning", "name": "Scanning 1", "kind": "modifier", "power": 2, "modifiers": { "scanning": 20 } },
+      { "id": "mod_counting", "name": "Counting 1", "kind": "modifier", "power": 2, "modifiers": { "counting": 20 } },
+      { "id": "mod_waste", "name": "Handle Waste 1", "kind": "modifier", "power": 3, "modifiers": { "handleWaste": 50 } },
+      { "id": "mod_mopping", "name": "Mopping 1", "kind": "modifier", "power": 2, "modifiers": { "mopping": 20 } },
+      { "id": "mod_register", "name": "Register 1", "kind": "modifier", "power": 6, "modifiers": { "scanning": 20, "counting": 20 } },
+      { "id": "mod_stockroom", "name": "Stockroom 1", "kind": "modifier", "power": 8, "modifiers": { "stocking": 20, "carry": 50 } },
+      { "id": "mod_cleaning", "name": "Cleaning 1", "kind": "modifier", "power": 8, "modifiers": { "handleWaste": 50, "mopping": 20 } },
+      { "id": "mod_allrounder", "name": "All-Rounder 1", "kind": "modifier", "power": 7, "modifiers": { "stocking": 10, "scanning": 10, "mopping": 10 } },
       {
         "id": "custom_small",
         "name": "Custom board (3 commands)",
@@ -323,19 +376,7 @@
           "board": "self_charge_1"
         },
         {
-          "board": "custom_small",
-          "program": [
-            {
-              "condition": "shelf_below_50",
-              "action": "restock",
-              "on": true
-            },
-            {
-              "condition": "crate_on_pad",
-              "action": "unload_pad",
-              "on": true
-            }
-          ]
+          "board": "stock_2"
         }
       ]
     }
