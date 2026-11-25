@@ -10,11 +10,13 @@ import { Crate } from "../js/logic/Crate.js";
 import { DroneDeliveries } from "../js/state/slices/DroneDeliveries.js";
 import { transferItems } from "../js/logic/InventoryTransfer.js";
 import { REMOTE_ORDER_CRATE_SPRITES } from "../js/modules/droneDeliveries/DroneTerminalArt.js";
+import { InteractableRegistry } from "../js/interaction/InteractableRegistry.js";
 
 let server;
 let cacheDirectory;
 let DroneDeliverySystem;
 let formatRemoteDeadline;
+let InteractionSystem;
 
 before(async () => {
   cacheDirectory = await mkdtemp(join(tmpdir(), "space-arms-remote-order-test-"));
@@ -28,6 +30,7 @@ before(async () => {
   });
   ({ DroneDeliverySystem, formatRemoteDeadline } =
     await server.ssrLoadModule("/js/modules/droneDeliveries/DroneDeliverySystem.js"));
+  ({ InteractionSystem } = await server.ssrLoadModule("/js/interaction/InteractionSystem.js"));
 });
 
 after(async () => {
@@ -63,7 +66,8 @@ function createScene() {
       add(sprite) {
         sprite.body = {
           velocity: { x: 0, y: 0 },
-          setSize() { return this; },
+          enable: true,
+          setSize(width, height) { this.width = width; this.height = height; return this; },
           setAllowGravity() { return this; },
           setAllowRotation() { return this; },
           setBounce() { return this; },
@@ -511,6 +515,114 @@ test("stock transfers into the order crate one item at a time and cannot be take
   const ammo = new Crate(scene, "amo_01", 1, 140, 100, { id: "crate-ammo" });
   assert.equal(transferItems(ammo, order, "amo_01", 1).moved, 1);
   assert.equal(order.isRemoteOrderComplete(), true);
+});
+
+function createPackingFixture(position) {
+  const scene = createScene();
+  const stock = new Crate(scene, "wpn_rif_01", 2, 100, 100, { id: "crate-stock" });
+  const order = new Crate(scene, null, 0, 160, 100, {
+    id: "crate-order", kind: "remote-order", orderId: "remote-order-1",
+    requiredItems: [{ itemId: "wpn_rif_01", quantity: 1 }],
+  });
+  order.setCarriedBy("player");
+  const stack = ["base", "middle", "top"].includes(position)
+    ? [
+      new Crate(scene, "amo_01", 2, 100, 100, { id: "crate-base" }),
+      new Crate(scene, "amo_01", 2, 100, 90, { id: "crate-middle" }),
+      new Crate(scene, "amo_01", 2, 100, 80, { id: "crate-top" }),
+    ] : [stock];
+  if (stack.length > 1) {
+    stack[["base", "middle", "top"].indexOf(position)] = stock;
+    stack.forEach((crate, index) => {
+      crate.sprite.y = 100 - index * 10;
+      if (index === 0) return;
+      crate.setStackedOn(stack[0].id);
+      crate.sprite.body.enable = false;
+    });
+  }
+  if (position === "loading-pad") stock.locationState = { kind: "loading-pad", padId: "loading-pad" };
+  const events = [];
+  const messages = [];
+  const shop = {
+    player: { sprite: { x: 100, y: 145 }, currentFacing: "up" },
+    carriedCrate: order,
+    fixtures: { shelves: () => [] },
+    crateSystem: {
+      floorStacks: new Map(stack.length > 1 ? [[stack[0], stack.slice(1)]] : []),
+      getFloorCrates: () => stack,
+      getCarriedCrates: () => [order],
+    },
+    interactables: new InteractableRegistry(),
+    controlMode: { allows: () => true },
+    checkoutSystem: { operatingRegister: null },
+    eventBus: { emit: (_type, event) => events.push(event) },
+    messages: { show: (message) => messages.push(message) },
+  };
+  shop.interactionSystem = new InteractionSystem(shop);
+  const system = Object.assign(Object.create(DroneDeliverySystem.prototype), {
+    shop,
+    orderState: { orders: [{ id: order.orderId, crateId: order.id }], changed() {} },
+    itemsById: new Map([["wpn_rif_01", { name: "Rifle" }]]),
+    refreshWindow() {},
+  });
+  system.registerInteractions();
+  return { shop, system, stock, order, stack, events, messages };
+}
+
+for (const position of ["floor", "loading-pad", "base", "middle", "top"]) {
+  test(`E packs one item from a ${position} crate without moving it or overfilling the order`, () => {
+    const { shop, stock, order, stack, events } = createPackingFixture(position);
+    const before = stack.map((crate) => ({
+      location: crate.getLocation(), x: crate.sprite.x, y: crate.sprite.y, enabled: crate.sprite.body.enable,
+    }));
+    shop.interactionSystem.handleInteract();
+    assert.equal(order.getAvailableUnitsFor("wpn_rif_01"), 1);
+    assert.equal(stock.quantity, 1);
+    assert.deepEqual(events.map((event) => [event.sourceId, event.destinationId, event.quantity]),
+      [[stock.id, order.id, 1]]);
+    assert.deepEqual(events[0].sourceLocation, stock.getLocation());
+    assert.deepEqual(stack.map((crate) => ({
+      location: crate.getLocation(), x: crate.sprite.x, y: crate.sprite.y, enabled: crate.sprite.body.enable,
+    })), before);
+    shop.interactionSystem.handleInteract();
+    assert.equal(stock.quantity, 1);
+    assert.equal(order.getAvailableUnitsFor("wpn_rif_01"), 1);
+    assert.equal(events.length, 1);
+    if (position === "loading-pad") {
+      assert.equal(stock.canTake(), false, "ordinary stocking must still require picking up the pad crate");
+      assert.equal(stock.remove("wpn_rif_01", 1), 0);
+    }
+  });
+}
+
+test("packing from a stack still requires facing its floor base within reach and waiting for it to stop", () => {
+  const { shop, order, stock, stack } = createPackingFixture("top");
+  shop.player.sprite.y = 200;
+  shop.interactionSystem.handleInteract();
+  assert.equal(stock.quantity, 2);
+  shop.player.sprite.y = 145;
+  shop.player.currentFacing = "down";
+  shop.interactionSystem.handleInteract();
+  assert.equal(stock.quantity, 2);
+  shop.player.currentFacing = "up";
+  stack[0].sprite.body.velocity.x = 10;
+  shop.interactionSystem.handleInteract();
+  assert.equal(stock.quantity, 2);
+  stack[0].sprite.body.velocity.x = 0;
+  shop.interactionSystem.handleInteract();
+  assert.equal(stock.quantity, 1);
+  assert.equal(order.getAvailableUnitsFor("wpn_rif_01"), 1);
+});
+
+test("packing the last item from a Loading Pad crate leaves the empty crate locked in its spot", () => {
+  const { shop, stock, order } = createPackingFixture("loading-pad");
+  stock.quantity = 1;
+  shop.interactionSystem.handleInteract();
+  assert.equal(order.getAvailableUnitsFor("wpn_rif_01"), 1);
+  assert.equal(stock.quantity, 0);
+  assert.equal(stock.itemId, null);
+  assert.equal(stock.lockedToPad, true);
+  assert.deepEqual(stock.getLocation(), { kind: "loading-pad", padId: "loading-pad" });
 });
 
 test("order item sources group shelves and crates by area and skip other items", async () => {

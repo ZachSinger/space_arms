@@ -340,13 +340,20 @@ export class DroneDeliverySystem {
   neededItemFromCrate(source, orderCrate) {
     return orderCrate.requiredItems.find((line) =>
       orderCrate.getRemainingUnitsFor(line.itemId) > 0 &&
-      source.getAvailableUnitsFor(line.itemId) > 0)?.itemId ?? null;
+      source.getAvailableUnitsFor(line.itemId, null, { orderId: orderCrate.orderId }) > 0)?.itemId ?? null;
   }
 
   floorCrateCandidates(orderCrate) {
+    const stackBases = new Map();
+    for (const [base, above] of this.shop.crateSystem.floorStacks) {
+      for (const crate of above) stackBases.set(crate, base);
+    }
     return this.shop.crateSystem.getFloorCrates()
-      .filter((crate) => crate.kind === "item" && crate.sprite.body?.enable &&
-        crate.isStationary() && crate.canTake())
+      .filter((crate) => {
+        const base = stackBases.get(crate) ?? crate;
+        return crate.kind === "item" && base.sprite.body?.enable && !base.isCarried &&
+          base.isStationary() && crate.canTake(null, { orderId: orderCrate.orderId });
+      })
       .map((crate) => ({
         id: `remote-order-crate-source:${crate.id}`,
         kind: "remote-order-stock",
@@ -355,7 +362,7 @@ export class DroneDeliverySystem {
         priority: 14,
         distanceFrom: (origin) => this.shop.interactionSystem.feetReachTo(
           origin,
-          crate.getFloorBounds(),
+          (stackBases.get(crate) ?? crate).getFloorBounds(),
         ),
         getActions: () => {
           const itemId = this.neededItemFromCrate(crate, orderCrate);

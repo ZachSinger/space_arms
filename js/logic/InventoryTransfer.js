@@ -114,12 +114,12 @@ export function sinkItems(source, itemId, quantity, {
   if (!source.canTake(itemId, context, sourceEntry)) {
     return { moved: 0, remaining: quantity, reason: "source-locked" };
   }
-  const available = source.getAvailableUnitsFor(itemId, sourceEntry);
+  const available = source.getAvailableUnitsFor(itemId, sourceEntry, context);
   if (!isValidUnits(available)) throw new Error("Source container returned an invalid available quantity.");
   const amount = Math.min(quantity, available);
   if (amount <= 0) return { moved: 0, remaining: quantity, reason: "source-empty" };
 
-  const removed = source.remove(itemId, amount, sourceEntry);
+  const removed = source.remove(itemId, amount, sourceEntry, context);
   if (!Number.isInteger(removed) || removed < 0 || removed > amount) {
     throw new Error("Source container returned an invalid sink quantity.");
   }
@@ -146,6 +146,7 @@ export function sinkItems(source, itemId, quantity, {
  * Transfers stock only when the source and destination permit it and have room.
  * Containers have unique IDs and locations, and implement getContainerId(entry), getLocation(entry),
  * canTake(itemId, context, entry), and canPut(itemId, context, entry).
+ * Source reads and removals receive the same context after their optional entry argument.
  * @param {object} from
  * @param {object} to
  * @param {string} itemId
@@ -205,7 +206,7 @@ export function transferItems(from, to, itemId, quantity, {
     return { moved: 0, remaining: quantity, reason: "destination-locked" };
   }
 
-  const available = from.getAvailableUnitsFor(itemId, sourceEntry);
+  const available = from.getAvailableUnitsFor(itemId, sourceEntry, context);
   const capacity = to.getRemainingUnitsFor(itemId, destinationEntry);
   if (!isValidUnits(available)) {
     throw new Error("Source container returned an invalid available quantity.");
@@ -223,7 +224,7 @@ export function transferItems(from, to, itemId, quantity, {
     };
   }
 
-  const removed = from.remove(itemId, amount, sourceEntry);
+  const removed = from.remove(itemId, amount, sourceEntry, context);
   if (removed !== amount) {
     if (removed > 0) restoreSource(from, itemId, removed, sourceEntry);
     return { moved: 0, remaining: quantity, reason: "source-changed" };

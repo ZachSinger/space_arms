@@ -158,8 +158,9 @@ export class Crate {
     return this.locationState?.kind === "loading-pad";
   }
 
-  canTake() {
-    return this.kind === "item" && !this.lockedToPad;
+  canTake(_itemId = null, context = null) {
+    const packingOrder = typeof context?.orderId === "string" && context.orderId.length > 0;
+    return this.kind === "item" && (!this.lockedToPad || packingOrder);
   }
 
   canPut(itemId) {
@@ -192,9 +193,9 @@ export class Crate {
     this.locationState = { kind: "carried", holderId };
   }
 
-  getAvailableUnitsFor(itemId) {
+  getAvailableUnitsFor(itemId, _entry = null, context = null) {
     if (this.kind === "remote-order") return this.contents.get(itemId) ?? 0;
-    return this.canTake() && this.itemId === itemId ? this.quantity : 0;
+    return this.canTake(itemId, context) && this.itemId === itemId ? this.quantity : 0;
   }
 
   add(itemId, quantity) {
@@ -225,9 +226,9 @@ export class Crate {
     return Math.max(0, getCrateItemLimit(ITEMS_BY_ID.get(itemId)?.boxSize) - this.quantity);
   }
 
-  remove(itemId, quantity) {
+  remove(itemId, quantity, _entry = null, context = null) {
     if (this.kind === "remote-order") return 0;
-    const removed = Math.min(this.getAvailableUnitsFor(itemId), quantity);
+    const removed = Math.min(this.getAvailableUnitsFor(itemId, null, context), quantity);
     this.quantity -= removed;
     // The last item out turns it back into a plain, uncolored empty crate.
     if (removed > 0 && this.quantity === 0) {

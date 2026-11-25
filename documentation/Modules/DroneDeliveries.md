@@ -14,7 +14,9 @@ The Drone Terminal lets you fill orders from remote customers from the start of 
   can wait inside the terminal, or stay wherever the player left them. Only one delivery crate
   can be carried at a time, alongside ordinary stock crates.
 - Carry the order crate and grab the required stock from shelves or from existing crates:
-  - **From crates:** each press of E pulls one needed item from a nearby crate, if any.
+  - **From crates:** face a nearby crate or stack with a teal diamond and press E to pull
+    one needed item. This also works on the Loading Pad and from any crate in a floor stack,
+    without picking up the source crate or taking the stack apart.
   - **From shelves:** press E next to the shelf. Without opening the shelf screen, it pulls one
     of the needed items into the crate, if the shelf has any.
 - Its light stays red while any items are missing and turns green when all items are packed.
