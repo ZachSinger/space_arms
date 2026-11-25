@@ -142,10 +142,13 @@ added to that file's `questions` list. Nothing here changes the game.
 
 ## Room Painter
 
-Run `npm run room` to open a page for choosing the shop's floor and wall patterns from every
-floor and wall tile in `img/Icons_Extracted/Tileset`, all shown gray, and coloring each one with
-red, green, and blue plus brightness, contrast, and saturation (the same limits as the Shelf
-Color Lab). **Save this look** (or Ctrl+S) writes `documentation/Modules/RoomColors.json`.
+Run `npm run room` to open a page for choosing the shop's floor, wall, and border patterns. The
+mock room is laid out like the sales floor: border on every outside edge and one row of wall
+under the top border. Each surface starts on the tile the game draws today
+(`js/world/RoomArt.js`) in a color matched to its in-game look, and can switch to any floor or
+wall tile in `img/Icons_Extracted/Tileset` (borders can use wall tiles too), all shown gray. Color
+each with red, green, and blue plus brightness, contrast, and saturation (the same limits as the
+Shelf Color Lab). **Save this look** (or Ctrl+S) writes `documentation/Modules/RoomColors.json`.
 Nothing here changes the game.
 
 ## Delivery Crate Lab

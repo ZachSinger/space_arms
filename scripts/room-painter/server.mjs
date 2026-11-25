@@ -1,8 +1,8 @@
 // ==========================================
 // FILE: scripts/room-painter/server.mjs
 // ==========================================
-// A developer tool, not part of the game: a page for picking a floor tile and a wall tile from
-// the game's tile art (shown gray) and coloring each one. Run with `npm run room`.
+// A developer tool, not part of the game: a page for picking the floor, wall and border tiles
+// from the game's tile art (shown gray) and coloring each one. Run with `npm run room`.
 // Saving writes documentation/Modules/RoomColors.json so the chosen look can be built in later.
 import { createServer } from "node:http";
 import { readFile, readdir, writeFile } from "node:fs/promises";
@@ -18,11 +18,9 @@ const TILESET = path.join(ROOT, "img", "Icons_Extracted", "Tileset");
 // The page may read game art and the game's own gray-art code, nothing else.
 const SHARED = { "/img/": path.join(ROOT, "img"), "/js/": path.join(ROOT, "js") };
 const TYPES = { ".png": "image/png", ".js": "text/javascript; charset=utf-8" };
-// The tiles the game draws today come first, so the current look is one click away.
-const CURRENT = {
-  floors: [["Shop/shop_floor.png", "Shop floor (in the game now)"], ["Backroom/backroom_floor.png", "Backroom floor (in the game now)"]],
-  walls: [["Shop/shop_back_wall.png", "Shop back wall (in the game now)"], ["Backroom/backroom_wall.png", "Backroom wall (in the game now)"]],
-};
+// The game draws its own floor, wall and border in code (js/world/RoomArt.js); the page adds
+// those first. Borders can also use any wall tile, plus the original border art.
+const BORDER_ART = [["Shop/shop_border.png", "Shop border (original art)"], ["Backroom/backroom_border.png", "Backroom border (original art)"]];
 
 function send(response, status, body, type = "application/json") {
   response.writeHead(status, { "Content-Type": type, "Cache-Control": "no-store" });
@@ -44,11 +42,9 @@ function label(file, prefix) {
 async function listTiles() {
   const files = (await readdir(TILESET)).filter((file) => file.endsWith(".png")).sort();
   const tile = (file, name) => ({ id: file, label: name, url: `/img/Icons_Extracted/Tileset/${file}` });
-  const pick = (kind, prefix) => [
-    ...CURRENT[kind].map(([file, name]) => tile(file, name)),
-    ...files.filter((file) => file.startsWith(prefix)).map((file) => tile(file, label(file, prefix))),
-  ];
-  return { floors: pick("floors", "floor_"), walls: pick("walls", "wall_") };
+  const pick = (prefix) => files.filter((file) => file.startsWith(prefix)).map((file) => tile(file, label(file, prefix)));
+  const walls = pick("wall_");
+  return { floors: pick("floor_"), walls, borders: [...BORDER_ART.map(([file, name]) => tile(file, name)), ...walls] };
 }
 
 async function readLook() {
@@ -69,8 +65,8 @@ async function handle(request, response) {
   }
   if (request.method === "POST" && url.pathname === "/api/look") {
     const look = JSON.parse(await readBody(request));
-    if (!look?.floor?.tile || !look?.wall?.tile || !look.floor.color || !look.wall.color) {
-      return send(response, 400, { problems: ["The floor or wall choice was missing, so nothing was saved."] });
+    if (["floor", "wall", "border"].some((part) => !look?.[part]?.tile || !look[part].color)) {
+      return send(response, 400, { problems: ["The floor, wall or border choice was missing, so nothing was saved."] });
     }
     await writeFile(LOOK_FILE, `${JSON.stringify(look, null, 2)}\n`, "utf8");
     return send(response, 200, { saved: true });

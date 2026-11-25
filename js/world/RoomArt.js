@@ -95,6 +95,9 @@ function border(ctx, backroom) {
   }
 }
 
+// The Room Painter tool (scripts/room-painter) draws these to show the game's current look.
+export { floor as drawRoomFloor, wall as drawRoomWall, border as drawRoomBorder };
+
 function sourcePixels(scene, key, cache) {
   if (cache.has(key)) return cache.get(key);
   if (!scene.textures.exists(key)) throw new Error(`Missing room artwork: ${key}`);
