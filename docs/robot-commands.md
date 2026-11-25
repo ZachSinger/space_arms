@@ -64,11 +64,11 @@ What's already written below is only what the Robot Lab has today. Change it, de
 -Has line of less than n customers
 
 #### Shelf
--Target Slot is empty
--Target Slot is not full
--Target Slot is below n% full
--Target Slot is above n% full
--Target Slot is at n% full
+-Slot is empty
+-Slot is not full
+-Slot is below n% full
+-Slot is above n% full
+-Slot is at n% full
 
 
 #### Time
@@ -111,6 +111,14 @@ What's already written below is only what the Robot Lab has today. Change it, de
 -Close Store
 -Clean up the sales floor
 -Clear Loading Pad
+
+## Modifiers
+
+Commands decide what a robot does. Modifiers decide how well it does it.
+
+Every robot starts with a base speed for each job: cleaning, checking out customers, and stocking. The robot's parts only set how fast it moves around the store. Modifier chips raise those base speeds.
+
+Most modifier chips raise one stat. Some raise more than one. For example, a Register 1 + Stock 2 chip would exist, but it costs much more and needs much more power than a Register 1 chip and a Stock 2 chip bought separately.
 
 ## Notes
 
