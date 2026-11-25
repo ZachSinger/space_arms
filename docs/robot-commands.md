@@ -126,6 +126,8 @@ Scanning: how fast the robot scans a customer's items at a register.
 Counting: how fast the robot counts out a customer's change at a register.
 
 Scanning and Counting together decide how long the robot takes to check out each customer.
+Handle Waste: how many pieces of garbage the robot can hold at once.
+Mopping: how fast the robot cleans up dirty spots.
 
 Most modifier boards raise one stat. Some raise more than one. For example, Register 1 and Stock 2 could be on the same board, but that board costs much more and needs much more power than a board with either one on its own.
 
