@@ -140,6 +140,14 @@ built from gray copies of the real art. Each topic has planning questions shown 
 **Save plan** (or Ctrl+S) writes `documentation/Modules/ShopStyle.plan.json`; new questions are
 added to that file's `questions` list. Nothing here changes the game.
 
+## Room Painter
+
+Run `npm run room` to open a page for choosing the shop's floor and wall patterns from every
+floor and wall tile in `img/Icons_Extracted/Tileset`, all shown gray, and coloring each one with
+red, green, and blue plus brightness, contrast, and saturation (the same limits as the Shelf
+Color Lab). **Save this look** (or Ctrl+S) writes `documentation/Modules/RoomColors.json`.
+Nothing here changes the game.
+
 ## Delivery Crate Lab
 
 On the title screen, choose **DEV**, then **DELIVERY CRATE LAB**. It shows the remote-order

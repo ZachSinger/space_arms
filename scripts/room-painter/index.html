@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Room Painter</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { color-scheme: dark; --bg: #0f1220; --panel: #171b2e; --line: #2a3050; --text: #e6e8f2; --dim: #9aa1bf; --accent: #8b7cf6; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 "Segoe UI", system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 12px 20px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 18px; margin: 0; }
+  header .status { color: var(--dim); flex: 1; }
+  button { background: #252b47; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  main { display: flex; gap: 20px; padding: 20px; align-items: flex-start; }
+  #room { border: 1px solid var(--line); border-radius: 8px; max-width: 100%; }
+  aside { width: 440px; flex-shrink: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+  .surfaces { display: flex; gap: 8px; margin-bottom: 14px; }
+  .surfaces button { flex: 1; padding: 10px; font-size: 15px; }
+  .surfaces button.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 14px 0 8px; }
+  .chosen { color: var(--text); text-transform: none; letter-spacing: 0; font-weight: 600; }
+  .tiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; max-height: 260px; overflow-y: auto; padding: 2px; }
+  .tiles canvas { width: 100%; aspect-ratio: 1; border: 2px solid transparent; border-radius: 4px; cursor: pointer; background: #000; }
+  .tiles canvas:hover { border-color: var(--dim); }
+  .tiles canvas.on { border-color: var(--accent); }
+  .swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+  .swatches button { width: 30px; height: 30px; padding: 0; border-radius: 50%; border: 2px solid var(--line); }
+  .slider { display: grid; grid-template-columns: 90px 1fr 52px; align-items: center; gap: 10px; margin: 6px 0; }
+  .slider input[type=range] { width: 100%; }
+  .slider input[type=number] { width: 52px; background: #0f1220; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; font: inherit; }
+  .preview { display: flex; align-items: center; gap: 10px; margin-top: 10px; color: var(--dim); }
+  .preview #colorChip { width: 40px; height: 24px; border-radius: 4px; border: 1px solid var(--line); }
+  .row { display: flex; gap: 8px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Room Painter</h1>
+  <span class="status" id="status">Loading tiles…</span>
+  <button class="primary" id="save">Save this look</button>
+</header>
+<main>
+  <canvas id="room"></canvas>
+  <aside>
+    <div class="surfaces">
+      <button data-surface="floor" class="on">Floor</button>
+      <button data-surface="wall">Walls</button>
+    </div>
+    <h2>Pattern: <span class="chosen" id="tileName"></span></h2>
+    <div class="tiles" id="tiles"></div>
+    <h2>Color</h2>
+    <div class="swatches" id="swatches"></div>
+    <div id="sliders"></div>
+    <div class="preview"><span id="colorChip"></span><span id="colorText"></span></div>
+    <div class="row">
+      <button id="reset">Back to plain gray</button>
+      <button id="copy">Use this color on the <span id="otherName">walls</span> too</button>
+    </div>
+  </aside>
+</main>
+<script type="module">
+import { grayscalePixels } from "/js/logic/TintableArt.js";
+
+const CELL = 72;
+const COLUMNS = 12;
+const WALL_ROWS = 2;
+const FLOOR_ROWS = 6;
+const PRESETS = [
+  ["Plain gray", [255, 255, 255]], ["Purple", [184, 159, 247]], ["Steel", [148, 163, 184]], ["Blue", [96, 165, 250]],
+  ["Teal", [45, 212, 191]], ["Mint", [134, 239, 172]], ["Sand", [234, 210, 160]], ["Orange", [251, 146, 60]],
+  ["Red", [248, 113, 113]], ["Pink", [244, 114, 182]], ["Navy", [71, 85, 140]], ["Charcoal", [110, 110, 120]],
+];
+// Same limits as the Shelf Color Lab, so no setting can turn a surface black.
+const SLIDERS = [
+  { key: "red", label: "Red", min: 0, max: 255 },
+  { key: "green", label: "Green", min: 0, max: 255 },
+  { key: "blue", label: "Blue", min: 0, max: 255 },
+  { key: "brightness", label: "Brightness", min: 75, max: 150 },
+  { key: "contrast", label: "Contrast", min: -50, max: 25 },
+  { key: "saturation", label: "Saturation", min: 0, max: 200 },
+];
+const PLAIN = { red: 255, green: 255, blue: 255, brightness: 100, contrast: 0, saturation: 100 };
+const NAMES = { floor: "floor", wall: "walls" };
+
+const room = document.getElementById("room");
+const roomContext = room.getContext("2d");
+room.width = CELL * COLUMNS;
+room.height = CELL * (WALL_ROWS + FLOOR_ROWS);
+
+let tiles = { floor: [], wall: [] };
+const grayArt = new Map();
+const look = {
+  floor: { tile: null, color: { ...PLAIN } },
+  wall: { tile: null, color: { ...PLAIN } },
+};
+let surface = "floor";
+let dirty = false;
+
+function setStatus(text) { document.getElementById("status").textContent = text; }
+function markDirty() { dirty = true; setStatus("Not saved yet."); }
+
+async function loadGray(tile) {
+  const image = new Image();
+  image.src = tile.url;
+  await image.decode();
+  const canvas = document.createElement("canvas");
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const context = canvas.getContext("2d");
+  context.drawImage(image, 0, 0);
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+  grayscalePixels(pixels.data);
+  context.putImageData(pixels, 0, 0);
+  grayArt.set(tile.id, canvas);
+}
+
+function filterText(color) {
+  return `brightness(${color.brightness}%) contrast(${1 + color.contrast / 100}) saturate(${color.saturation}%)`;
+}
+
+// Gray art times the color, the same way the game tints a shelf's gray art.
+function paintTile(tileId, color, size) {
+  const gray = grayArt.get(tileId);
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+  context.drawImage(gray, 0, 0, size, size);
+  context.globalCompositeOperation = "multiply";
+  context.fillStyle = `rgb(${color.red}, ${color.green}, ${color.blue})`;
+  context.fillRect(0, 0, size, size);
+  context.globalCompositeOperation = "destination-in";
+  context.drawImage(gray, 0, 0, size, size);
+  return canvas;
+}
+
+function drawRoom() {
+  roomContext.clearRect(0, 0, room.width, room.height);
+  const parts = [["wall", 0, WALL_ROWS], ["floor", WALL_ROWS, FLOOR_ROWS]];
+  for (const [kind, firstRow, rows] of parts) {
+    const choice = look[kind];
+    const painted = paintTile(choice.tile, choice.color, CELL);
+    roomContext.filter = filterText(choice.color);
+    for (let row = firstRow; row < firstRow + rows; row += 1) {
+      for (let column = 0; column < COLUMNS; column += 1) roomContext.drawImage(painted, column * CELL, row * CELL);
+    }
+  }
+  roomContext.filter = "none";
+  // A soft shadow where the wall meets the floor, so the two read as separate surfaces.
+  const shadow = roomContext.createLinearGradient(0, WALL_ROWS * CELL, 0, WALL_ROWS * CELL + 18);
+  shadow.addColorStop(0, "rgba(0,0,0,0.45)");
+  shadow.addColorStop(1, "rgba(0,0,0,0)");
+  roomContext.fillStyle = shadow;
+  roomContext.fillRect(0, WALL_ROWS * CELL, room.width, 18);
+}
+
+function drawTiles() {
+  const holder = document.getElementById("tiles");
+  holder.replaceChildren();
+  const choice = look[surface];
+  for (const tile of tiles[surface]) {
+    const thumb = paintTile(tile.id, choice.color, 96);
+    thumb.title = tile.label;
+    thumb.style.filter = filterText(choice.color);
+    if (tile.id === choice.tile) thumb.classList.add("on");
+    thumb.addEventListener("click", () => {
+      choice.tile = tile.id;
+      markDirty();
+      refresh();
+    });
+    holder.append(thumb);
+  }
+  document.getElementById("tileName").textContent = tiles[surface].find((tile) => tile.id === choice.tile)?.label ?? "";
+}
+
+function drawSwatches() {
+  const holder = document.getElementById("swatches");
+  holder.replaceChildren();
+  for (const [name, [red, green, blue]] of PRESETS) {
+    const button = document.createElement("button");
+    button.title = name;
+    button.style.background = `rgb(${red}, ${green}, ${blue})`;
+    button.addEventListener("click", () => {
+      Object.assign(look[surface].color, { red, green, blue });
+      markDirty();
+      refresh();
+    });
+    holder.append(button);
+  }
+}
+
+function drawSliders() {
+  const holder = document.getElementById("sliders");
+  holder.replaceChildren();
+  for (const slider of SLIDERS) {
+    const row = document.createElement("label");
+    row.className = "slider";
+    row.innerHTML = `<span>${slider.label}</span><input type="range" min="${slider.min}" max="${slider.max}"><input type="number" min="${slider.min}" max="${slider.max}">`;
+    const [range, number] = row.querySelectorAll("input");
+    range.dataset.key = slider.key;
+    number.dataset.key = slider.key;
+    const update = (value) => {
+      const clamped = Math.max(slider.min, Math.min(slider.max, Math.round(Number(value) || 0)));
+      look[surface].color[slider.key] = clamped;
+      markDirty();
+      refresh({ keepSliders: true });
+    };
+    range.addEventListener("input", () => update(range.value));
+    number.addEventListener("change", () => update(number.value));
+    holder.append(row);
+  }
+}
+
+function syncSliders() {
+  const color = look[surface].color;
+  for (const input of document.querySelectorAll("#sliders input")) input.value = color[input.dataset.key];
+}
+
+function refresh({ keepSliders = false } = {}) {
+  for (const button of document.querySelectorAll(".surfaces button")) button.classList.toggle("on", button.dataset.surface === surface);
+  if (!keepSliders) syncSliders();
+  else for (const input of document.querySelectorAll("#sliders input")) if (document.activeElement !== input) input.value = look[surface].color[input.dataset.key];
+  const color = look[surface].color;
+  document.getElementById("colorChip").style.background = `rgb(${color.red}, ${color.green}, ${color.blue})`;
+  document.getElementById("colorText").textContent = `Red ${color.red}, green ${color.green}, blue ${color.blue}`;
+  document.getElementById("otherName").textContent = surface === "floor" ? NAMES.wall : NAMES.floor;
+  drawTiles();
+  drawRoom();
+}
+
+document.querySelectorAll(".surfaces button").forEach((button) => button.addEventListener("click", () => {
+  surface = button.dataset.surface;
+  refresh();
+}));
+document.getElementById("reset").addEventListener("click", () => {
+  look[surface].color = { ...PLAIN };
+  markDirty();
+  refresh();
+});
+document.getElementById("copy").addEventListener("click", () => {
+  look[surface === "floor" ? "wall" : "floor"].color = { ...look[surface].color };
+  markDirty();
+  refresh();
+});
+
+async function save() {
+  const response = await fetch("/api/look", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(look) });
+  const result = await response.json();
+  if (!response.ok) return setStatus(result.problems?.join(" ") ?? "Could not save.");
+  dirty = false;
+  setStatus(`Saved at ${new Date().toLocaleTimeString()}.`);
+}
+document.getElementById("save").addEventListener("click", save);
+document.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+    event.preventDefault();
+    save();
+  }
+});
+window.addEventListener("beforeunload", (event) => { if (dirty) event.preventDefault(); });
+
+async function start() {
+  const data = await (await fetch("/api/tiles")).json();
+  tiles = { floor: data.floors, wall: data.walls };
+  await Promise.all([...tiles.floor, ...tiles.wall].map(loadGray));
+  for (const kind of ["floor", "wall"]) {
+    const saved = data.look?.[kind];
+    const known = tiles[kind].some((tile) => tile.id === saved?.tile);
+    look[kind].tile = known ? saved.tile : tiles[kind][0].id;
+    if (known) look[kind].color = { ...PLAIN, ...saved.color };
+  }
+  drawSwatches();
+  drawSliders();
+  refresh();
+  setStatus("Pick Floor or Walls, then a pattern and a color. Nothing here changes the game.");
+}
+start().catch((error) => setStatus(`Could not load the tiles: ${error.message}`));
+</script>
+</body>
+</html>

@@ -20,7 +20,8 @@
     "check:crash": "npm run build && node scripts/browser/crash-recovery.mjs",
     "items": "node --watch --watch-path=scripts/item-editor/server.mjs scripts/item-editor/server.mjs",
     "unlocks": "node --watch --watch-path=scripts/unlock-editor/server.mjs scripts/unlock-editor/server.mjs",
-    "style": "node --watch --watch-path=scripts/style-planner/server.mjs scripts/style-planner/server.mjs"
+    "style": "node --watch --watch-path=scripts/style-planner/server.mjs     scripts/style-planner/server.mjs",
+        "room": "node --watch --watch-path=scripts/room-painter/server.mjs scripts/room-painter/server.mjs"
   },
   "build": {
     "appId": "com.zachsinger.spacearmsdealer",
