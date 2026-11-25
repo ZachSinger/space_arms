@@ -22,7 +22,8 @@
     "unlocks": "node --watch --watch-path=scripts/unlock-editor/server.mjs scripts/unlock-editor/server.mjs",
     "style": "node --watch --watch-path=scripts/style-planner/server.mjs     scripts/style-planner/server.mjs",
         "room": "node --watch --watch-path=scripts/room-painter/server.mjs scripts/room-painter/server.mjs",
-    "ship": "node scripts/ship-painter/server.mjs"
+    "ship": "node scripts/ship-painter/server.mjs",
+    "arcade": "node scripts/arcade-tester/server.mjs"
   },
   "build": {
     "appId": "com.zachsinger.spacearmsdealer",
