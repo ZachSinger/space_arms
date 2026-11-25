@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { ChunkAssembler, FrameReader, chunkMessage, frameMessage } from "../js/platform/coop.js";
-import { MirrorReader, MirrorWriter } from "../js/coop/DisplayMirror.js";
+import { MirrorReader, MirrorWriter, VIEW_MODES } from "../js/coop/DisplayMirror.js";
 import { CoopHost } from "../js/coop/CoopHost.js";
 import { PartnerActions } from "../js/coop/PartnerActions.js";
 import { InteractableRegistry } from "../js/interaction/InteractableRegistry.js";
@@ -103,6 +103,33 @@ test("on an uneven connection, mirrored movement still glides at a steady speed"
   }
   assert.ok(steps.length > 50);
   for (const step of steps) assert.ok(step > 1.2 && step < 2, `moved ${step} pixels in one frame`);
+});
+
+test("in the you-first view, the friend's shopkeeper keeps up with the newest update while the rest waits", () => {
+  const scene = {
+    add: { image: () => ({ x: 0, y: 0, setPosition(x, y) { this.x = x; this.y = y; return this; } }) },
+    children: { add() {}, remove() {}, list: [] },
+  };
+  const reader = new MirrorReader(scene, () => {});
+  reader.applyChange = function (entry, change) {
+    Object.getPrototypeOf(this).applyChange.call(this, entry, { type: change.type, x: change.x, y: change.y });
+  };
+  reader.setMode(VIEW_MODES.find((mode) => mode.ownFirst));
+  // Both the friend's shopkeeper (1) and a customer (2) walk 2 pixels every 16 ms.
+  for (let step = 0, now = 1000; step <= 60; step += 1, now += 16) {
+    reader.apply({ ht: step * 16, own: [1], c: [
+      { id: 1, type: "Image", x: step * 2, y: 0 }, { id: 2, type: "Image", x: step * 2, y: 50 },
+    ] }, now);
+    reader.update(now);
+  }
+  const own = reader.objectFor(1).x;
+  const customer = reader.objectFor(2).x;
+  assert.ok(own > 118, `own shopkeeper at ${own}, newest is 120`);
+  assert.ok(customer < own - 1.5, `customer at ${customer} should be held back`);
+
+  reader.setMode(VIEW_MODES.find((mode) => mode.wait === "none"));
+  reader.apply({ ht: 61 * 16, c: [{ id: 2, x: 200 }] }, 2000);
+  assert.equal(reader.objectFor(2).x, 200, "with no wait, an update shows the moment it arrives");
 });
 
 function partnerShop() {

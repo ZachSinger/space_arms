@@ -14,11 +14,28 @@ export const MIRROR_INTERVAL_MS = 50;
 const GLIDE_MAX_DISTANCE = 160;
 // Something that starts moving after standing still glides over at most this long.
 const GLIDE_MAX_MS = 100;
-// The friend's screen shows the shop this far behind the host, so the next update is almost
-// always already here to glide toward. It grows when updates arrive unevenly.
-const MIN_DELAY_MS = 80;
+// The friend's screen can show the shop a little behind the host, so the next update is
+// almost always already here to glide toward. The wait covers the latest update in this window.
+const LATENESS_WINDOW_MS = 2000;
 const MAX_DELAY_MS = 350;
-const MAX_QUEUED = 40;
+const MAX_QUEUED = 120;
+// In "you first" views, how quickly the friend's own shopkeeper catches up to the newest spot.
+// Kept short: any longer and the smoothing itself adds as much delay as waiting would.
+const OWN_CATCH_UP_MS = 10;
+
+/**
+ * Ways the friend's screen can trade smoothness for delay, to compare in a playtest.
+ * wait: "smooth" covers the latest update in the last 2 seconds, "short" a fixed small margin,
+ * "none" shows each update as it arrives. ownFirst: the friend's shopkeeper (and what they
+ * carry) is shown from the newest update instead of waiting with everything else.
+ */
+export const VIEW_MODES = Object.freeze([
+  { id: "smooth", name: "Smooth", wait: "smooth", intervalMs: 50, ownFirst: false },
+  { id: "smooth-fast", name: "Smooth, 60 updates a second", wait: "smooth", intervalMs: 16, ownFirst: false },
+  { id: "short", name: "Short wait, 60 updates a second", wait: "short", intervalMs: 16, ownFirst: false },
+  { id: "none", name: "No wait, 60 updates a second", wait: "none", intervalMs: 16, ownFirst: false },
+  { id: "own-first", name: "You first, 60 updates a second", wait: "smooth", intervalMs: 16, ownFirst: true },
+]);
 
 const round = (value, places = 100) => Math.round(value * places) / places;
 const comparable = (value) => (value !== null && typeof value === "object" ? JSON.stringify(value) : value);
@@ -210,8 +227,29 @@ export class MirrorReader {
     this.requested = new Set();
     this.queue = [];
     this.offset = undefined;
-    this.lateness = 0;
+    this.lateSamples = [];
     this.appliedAt = undefined;
+    this.mode = VIEW_MODES[0];
+    // Newest known spot of everything, and the friend's own shopkeeper plus what they carry.
+    this.latest = new Map();
+    this.ownIds = [];
+    this.ownShown = new Map();
+    this.lastUpdateAt = undefined;
+  }
+
+  /** @param {typeof VIEW_MODES[number]} mode */
+  setMode(mode) {
+    this.mode = mode;
+    this.ownShown.clear();
+    if (mode.wait === "none") this.flush();
+  }
+
+  flush() {
+    while (this.queue.length) {
+      const snapshot = this.queue.shift();
+      this.applyNow(snapshot);
+      this.appliedAt = snapshot.ht;
+    }
   }
 
   create(type) {
@@ -232,9 +270,17 @@ export class MirrorReader {
    * @param {number} [receivedAt] - performance.now() when it arrived
    */
   apply(snapshot, receivedAt = performance.now()) {
+    for (const id of snapshot.r ?? []) this.latest.delete(id);
+    for (const change of snapshot.c ?? []) {
+      if (!("x" in change || "y" in change)) continue;
+      const known = this.latest.get(change.id);
+      this.latest.set(change.id, { x: change.x ?? known?.x ?? 0, y: change.y ?? known?.y ?? 0 });
+    }
+    if (Array.isArray(snapshot.own)) this.ownIds = snapshot.own;
     const sentAt = Number(snapshot.ht);
-    if (!Number.isFinite(sentAt)) {
+    if (!Number.isFinite(sentAt) || this.mode.wait === "none") {
       this.applyNow(snapshot);
+      if (Number.isFinite(sentAt)) this.appliedAt = sentAt;
       return;
     }
     // The gap between the two games' clocks, from the quickest update seen; how much later
@@ -242,15 +288,21 @@ export class MirrorReader {
     const gap = receivedAt - sentAt;
     if (this.offset === undefined || gap - this.offset > 5000) {
       this.offset = gap;
-      this.lateness = 0;
+      this.lateSamples = [];
     } else if (gap < this.offset) this.offset = gap;
     else this.offset += (gap - this.offset) * 0.002;
-    this.lateness = Math.max(gap - this.offset, this.lateness * 0.995);
+    this.lateSamples.push({ at: receivedAt, late: gap - this.offset });
+    while (this.lateSamples[0].at < receivedAt - LATENESS_WINDOW_MS) this.lateSamples.shift();
     this.queue.push(snapshot);
   }
 
+  /** How far behind the host the shop is shown, in ms. */
   get delayMs() {
-    return Math.min(MAX_DELAY_MS, Math.max(MIN_DELAY_MS, MIRROR_INTERVAL_MS * 1.4 + this.lateness + 10));
+    const { wait, intervalMs } = this.mode;
+    if (wait === "none") return 0;
+    if (wait === "short") return intervalMs + 15;
+    const lateness = Math.max(0, ...this.lateSamples.map((sample) => sample.late));
+    return Math.min(MAX_DELAY_MS, intervalMs * 1.2 + lateness + 10);
   }
 
   applyNow(snapshot) {
@@ -381,7 +433,14 @@ export class MirrorReader {
    * @param {number} [now] - performance.now()
    */
   update(now = performance.now()) {
-    if (this.offset === undefined) return;
+    const frameMs = this.lastUpdateAt === undefined ? 16 : now - this.lastUpdateAt;
+    this.lastUpdateAt = now;
+    const own = new Set(this.mode.ownFirst ? this.ownIds : []);
+    if (this.offset !== undefined && this.mode.wait !== "none") this.glide(now, own);
+    if (own.size) this.showOwnFirst(own, frameMs);
+  }
+
+  glide(now, own) {
     const showAt = now - this.offset - this.delayMs;
     while (this.queue.length && (this.queue[0].ht <= showAt || this.queue.length > MAX_QUEUED)) {
       const snapshot = this.queue.shift();
@@ -393,7 +452,7 @@ export class MirrorReader {
     const from = Math.max(this.appliedAt, next.ht - GLIDE_MAX_MS);
     const progress = next.ht > from ? Math.min(1, Math.max(0, (showAt - from) / (next.ht - from))) : 0;
     for (const change of next.c ?? []) {
-      if (!("x" in change || "y" in change) || "p" in change) continue;
+      if (!("x" in change || "y" in change) || "p" in change || own.has(change.id)) continue;
       const entry = this.entries.get(change.id);
       if (!entry || (change.type && change.type !== entry.state.type)) continue;
       const { x, y } = entry.state;
@@ -404,6 +463,23 @@ export class MirrorReader {
     }
   }
 
+  // The friend's own shopkeeper and what they carry catch up to the newest update quickly,
+  // all at the same rate so the crates stay in their hands.
+  showOwnFirst(own, frameMs) {
+    const pull = 1 - Math.exp(-Math.max(0, frameMs) / OWN_CATCH_UP_MS);
+    for (const id of own) {
+      const object = this.objectFor(id);
+      const target = this.latest.get(id);
+      if (!object || !target) continue;
+      let shown = this.ownShown.get(id);
+      if (!shown || Math.hypot(target.x - shown.x, target.y - shown.y) > GLIDE_MAX_DISTANCE) shown = { ...target };
+      else shown = { x: shown.x + (target.x - shown.x) * pull, y: shown.y + (target.y - shown.y) * pull };
+      this.ownShown.set(id, shown);
+      object.setPosition(shown.x, shown.y);
+    }
+    for (const id of this.ownShown.keys()) if (!own.has(id)) this.ownShown.delete(id);
+  }
+
   objectFor(id) {
     return this.entries.get(id)?.object ?? null;
   }
@@ -412,5 +488,7 @@ export class MirrorReader {
     for (const entry of this.entries.values()) entry.object.destroy();
     this.entries.clear();
     this.queue = [];
+    this.latest.clear();
+    this.ownShown.clear();
   }
 }

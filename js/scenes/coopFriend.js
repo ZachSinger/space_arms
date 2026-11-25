@@ -6,7 +6,7 @@
 // whatever the host sends back (the shop picture, messages, and the shelf window); the shop
 // itself only runs on the host's computer.
 import Phaser from "phaser";
-import { MirrorReader } from "../coop/DisplayMirror.js";
+import { MirrorReader, VIEW_MODES } from "../coop/DisplayMirror.js";
 import { GamepadInput } from "../input/GamepadInput.js";
 import { bindingForEvent, isBound } from "../input/KeyBindings.js";
 import { controllerButtonFor } from "../input/ControllerBindings.js";
@@ -28,6 +28,12 @@ const RETURN_TO_TITLE_MS = 3500;
 const HOST_AWAY_MS = 2500;
 // The buttons the partner uses with their hands; the host works out what each one does.
 const HAND_ACTIONS = ["interact", "crate", "putDown", "nextCrate"];
+// Test readout: which way the screen trades smoothness for delay, and how much delay there is.
+const VIEW_MODE_KEY = "coop-view-mode";
+const SWITCH_VIEW_KEY = "F2";
+const LAG_CHECK_MS = 1000;
+const STEP_GIVE_UP_MS = 3000;
+const STEP_AVERAGE_OF = 10;
 
 const END_MESSAGES = Object.freeze({
   left: "Your friend closed their shop.",
@@ -58,7 +64,15 @@ export class CoopFriendScene extends Phaser.Scene {
     this.viewZoom = null;
     this.pad = new GamepadInput();
     this.windowManager = new WindowManager();
+    this.roundTripMs = null;
+    this.lastLagCheckAt = 0;
+    this.snapTimes = [];
+    this.stepStart = null;
+    this.stepTimes = [];
+    this.lastReadoutAt = 0;
     this.buildScreen();
+    const savedMode = VIEW_MODES.find((mode) => mode.id === localStorage.getItem(VIEW_MODE_KEY));
+    this.setViewMode(savedMode ?? VIEW_MODES[0]);
     this.messages = new Messages(this, this.messageLine);
     this.layoutCamera();
 
@@ -85,10 +99,71 @@ export class CoopFriendScene extends Phaser.Scene {
       this.bar.remove();
       this.notice.remove();
       this.messageBar.remove();
+      this.readout.remove();
     });
     void this.api.status().then((status) => this.handleStatus(status));
     // Ask for the whole picture; anything sent before this screen opened was missed.
     this.send({ t: "sync" });
+  }
+
+  setViewMode(mode) {
+    this.viewMode = mode;
+    this.mirror.setMode(mode);
+    localStorage.setItem(VIEW_MODE_KEY, mode.id);
+    this.send({ t: "rate", ms: mode.intervalMs });
+    this.stepTimes = [];
+    this.stepStart = null;
+    this.showReadout(true);
+  }
+
+  nextViewMode() {
+    const index = VIEW_MODES.indexOf(this.viewMode);
+    this.setViewMode(VIEW_MODES[(index + 1) % VIEW_MODES.length]);
+  }
+
+  // Ask the host to answer right away, to time the trip there and back.
+  checkLag(now) {
+    if (now - this.lastLagCheckAt < LAG_CHECK_MS) return;
+    this.lastLagCheckAt = now;
+    this.send({ t: "lag?", at: now });
+  }
+
+  // Time from pressing a direction while standing still to seeing your shopkeeper move.
+  timeStep(input, now) {
+    const moving = input.x !== 0 || input.y !== 0;
+    const focus = this.mirror.objectFor(this.focusId);
+    if (moving && !this.wasMoving && focus) this.stepStart = { at: now, x: focus.x, y: focus.y };
+    this.wasMoving = moving;
+    if (!this.stepStart) return;
+    if (!focus || now - this.stepStart.at > STEP_GIVE_UP_MS) {
+      this.stepStart = null;
+      return;
+    }
+    if (Math.hypot(focus.x - this.stepStart.x, focus.y - this.stepStart.y) <= 1) return;
+    this.stepTimes.push(now - this.stepStart.at);
+    if (this.stepTimes.length > STEP_AVERAGE_OF) this.stepTimes.shift();
+    this.stepStart = null;
+  }
+
+  showReadout(force = false) {
+    const now = performance.now();
+    if (!force && now - this.lastReadoutAt < 250) return;
+    this.lastReadoutAt = now;
+    while (this.snapTimes.length && this.snapTimes[0] < now - 1000) this.snapTimes.shift();
+    const ms = (value) => (value === null || value === undefined ? "-" : `${Math.round(value)} ms`);
+    const last = this.stepTimes.at(-1);
+    const average = this.stepTimes.length
+      ? this.stepTimes.reduce((sum, value) => sum + value, 0) / this.stepTimes.length : null;
+    const step = this.stepTimes.length
+      ? `${ms(last)} (average of last ${this.stepTimes.length}: ${ms(average)})` : "- (walk to measure)";
+    const lines = [
+      `View: ${this.viewMode.name} (${SWITCH_VIEW_KEY} to switch)`,
+      `There and back to your friend's game: ${ms(this.roundTripMs)}`,
+      `Held back to smooth movement: ${ms(this.mirror.delayMs)}`,
+      `Updates from your friend's game: ${this.snapTimes.length} a second`,
+      `Your last step showed up after: ${step}`,
+    ];
+    this.readout.textContent = lines.join("\n");
   }
 
   buildScreen() {
@@ -113,6 +188,9 @@ export class CoopFriendScene extends Phaser.Scene {
     this.messageLine.setAttribute("role", "status");
     this.messageBar.appendChild(this.messageLine);
     layer.appendChild(this.messageBar);
+    this.readout = document.createElement("div");
+    this.readout.className = "coop-lag-readout";
+    layer.appendChild(this.readout);
     this.buildShelfWindow();
     this.leaveWindow = new UIWindow({
       id: "coop-leave", title: "LEAVE", width: "380px", height: "auto", x: 80, y: 120,
@@ -234,6 +312,11 @@ export class CoopFriendScene extends Phaser.Scene {
 
   handleKey(event, down) {
     if (event.repeat) return;
+    if (event.code === SWITCH_VIEW_KEY) {
+      if (down) this.nextViewMode();
+      event.preventDefault();
+      return;
+    }
     const binding = bindingForEvent(event);
     if (!binding) return;
     if (!down) {
@@ -280,7 +363,10 @@ export class CoopFriendScene extends Phaser.Scene {
     } catch {
       return;
     }
-    if (message.t === "snap") {
+    if (message.t === "lag!" && Number.isFinite(message.at)) {
+      this.roundTripMs = performance.now() - message.at;
+    } else if (message.t === "snap") {
+      this.snapTimes.push(performance.now());
       this.mirror.apply(message);
       if (message.f) this.focusId = message.f;
       if (message.bg) this.cameras.main.setBackgroundColor(message.bg);
@@ -365,8 +451,12 @@ export class CoopFriendScene extends Phaser.Scene {
       this.lastInputAt = time;
       this.send({ t: "input", ...input, device: getInputDevice() });
     }
-    this.mirror.update();
+    const now = performance.now();
+    this.mirror.update(now);
     this.followFocus();
+    this.timeStep(input, now);
+    if (this.joined) this.checkLag(now);
+    this.showReadout();
     if (this.joined && performance.now() - this.lastSnapAt > HOST_AWAY_MS) this.showAway(true);
   }
 

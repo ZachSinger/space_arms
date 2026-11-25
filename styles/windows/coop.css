@@ -30,6 +30,22 @@
   font-size: var(--font-size-18);
   z-index: 10;
 }
+
+/* Test readout on the friend's screen: which view is on and how much delay there is. */
+.coop-lag-readout {
+  position: absolute;
+  top: 46px;
+  right: 8px;
+  padding: 6px 10px;
+  color: var(--color-text);
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--color-border-subtle);
+  font-family: monospace;
+  font-size: 12px;
+  white-space: pre;
+  pointer-events: none;
+  z-index: 5;
+}
 .coop-notice.hidden,
 .coop-bar.hidden { display: none; }
 .coop-message-bar {

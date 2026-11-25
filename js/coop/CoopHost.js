@@ -79,6 +79,7 @@ export class CoopHost {
       this.actions = new PartnerActions(this, this.partner, { createShelfWindow: this.createShelfWindow });
     }
     this.writer.reset();
+    this.intervalMs = MIRROR_INTERVAL_MS;
     shop.messages.show(`${name} joined your shop.`);
   }
 
@@ -116,6 +117,10 @@ export class CoopHost {
       this.writer.reset();
       this.lastHud = "";
       this.lastHudAt = 0;
+    } else if (message.t === "rate" && Number.isFinite(message.ms)) {
+      this.intervalMs = Math.max(16, Math.min(100, message.ms));
+    } else if (message.t === "lag?") {
+      this.send({ t: "lag!", at: message.at });
     } else if (message.t === "texture?" && typeof message.key === "string") {
       const texture = describeTexture(this.shop.textures, message.key);
       if (texture) this.send({ t: "texture", ...texture });
@@ -199,9 +204,9 @@ export class CoopHost {
   sendUpdate() {
     if (!this.friendConnected) return;
     const now = performance.now();
-    if (now - this.lastSentAt < MIRROR_INTERVAL_MS) return;
+    if (now - this.lastSentAt < (this.intervalMs ?? MIRROR_INTERVAL_MS)) return;
     const snapshot = this.writer.snapshot(this.shop.children.list);
-    const message = { t: "snap", ...(snapshot ?? {}), f: this.writer.idOf(this.partner?.sprite) };
+    const message = { t: "snap", ...(snapshot ?? {}), f: this.writer.idOf(this.partner?.sprite), own: this.partnerOwnIds() };
     if (now - this.lastHudAt >= HUD_INTERVAL_MS) {
       this.lastHudAt = now;
       const hud = this.readHud();
@@ -220,6 +225,15 @@ export class CoopHost {
     const bounds = this.partnerRoomBounds();
     if (bounds) message.sb = [bounds.x, bounds.y, bounds.width, bounds.height];
     this.send(message);
+  }
+
+  // The partner and everything that moves with them, for the friend's "you first" view.
+  partnerOwnIds() {
+    const partner = this.partner;
+    if (!partner) return [];
+    const objects = [partner.sprite, partner.nameTag, ...partner.carriedCrates().map((crate) => crate.sprite),
+      this.actions?.heldTrash?.sprite];
+    return objects.filter(Boolean).map((object) => this.writer.idOf(object));
   }
 
   partnerRoomBounds() {
