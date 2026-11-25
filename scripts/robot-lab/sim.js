@@ -5,7 +5,7 @@
 // Time moves in 1-second steps. Customers take items off shelves and queue at registers,
 // deliveries land on the loading pad, and robots pick jobs with js/logic/RobotGambits.js.
 import { chooseAction } from "../../js/logic/RobotGambits.js";
-import { findCell, findFrame, hasEnoughPower, partConditions, robotProgram } from "../../js/logic/RobotParts.js";
+import { findCell, findFrame, hasEnoughPower, partConditions, partMeasures, robotProgram } from "../../js/logic/RobotParts.js";
 
 export const SIM_RULES = Object.freeze({
   shelfCapacity: 20,
@@ -46,6 +46,7 @@ export function applyBuild(live, robot, parts) {
     cell,
     program: robotProgram(robot, parts),
     conditions: partConditions(parts),
+    measures: partMeasures(parts),
     noPower: !hasEnoughPower(robot, parts),
   });
   return live;
@@ -109,7 +110,7 @@ function describe(task) {
 }
 
 function startTask(sim, robot) {
-  const choice = chooseAction(robot.program, worldOf(sim), robot, robot.conditions);
+  const choice = chooseAction(robot.program, worldOf(sim), robot, robot.conditions, robot.measures);
   robot.choice = choice;
   const action = choice.action;
   const task = { action, seconds: SIM_RULES.seconds[action] / robot.speed };

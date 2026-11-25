@@ -148,6 +148,61 @@
         "commands": 6
       }
     ],
+    "measures": [
+      {
+        "id": "my_charge",
+        "label": "My charge",
+        "fact": "my_charge",
+        "unit": "%"
+      },
+      {
+        "id": "emptiest_shelf",
+        "label": "The emptiest shelf",
+        "fact": "shelf_fill",
+        "combine": "lowest",
+        "unit": "% full"
+      },
+      {
+        "id": "longest_line",
+        "label": "The longest register line",
+        "fact": "register_lines",
+        "combine": "highest",
+        "unit": "customer/customers"
+      },
+      {
+        "id": "customers_waiting",
+        "label": "The number of customers waiting at registers",
+        "fact": "register_lines",
+        "combine": "total"
+      },
+      {
+        "id": "pad_crates",
+        "label": "The number of crates on the loading pad",
+        "fact": "pad_crates"
+      },
+      {
+        "id": "stored_crates",
+        "label": "The number of crates stored in the backroom",
+        "fact": "stored_crates"
+      },
+      {
+        "id": "backroom_space",
+        "label": "The number of empty crate spaces in the backroom",
+        "fact": "backroom_capacity",
+        "minus": "stored_crates"
+      },
+      {
+        "id": "messes",
+        "label": "The number of messes on the sales floor",
+        "fact": "messes"
+      },
+      {
+        "id": "free_stations",
+        "label": "The number of free charging stations",
+        "fact": "free_stations",
+        "combine": "count"
+      }
+    ],
     "conditions": [
       {
         "id": "always",

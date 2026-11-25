@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { chooseAction, conditionLabel, conditionProblems } from "../js/logic/RobotGambits.js";
+import { chooseAction, conditionLabel, conditionProblems, measureProblems } from "../js/logic/RobotGambits.js";
 import { hasEnoughPower, powerNeeded, robotProgram } from "../js/logic/RobotParts.js";
 import { runShift } from "../scripts/robot-lab/sim.js";
 import { setupProblems } from "../scripts/robot-lab/server.mjs";
@@ -125,4 +125,18 @@ test("conditions are built from data, so a new one works without code changes", 
   assert.ok(conditionProblems([{ id: "bad", measure: "nope", compare: "below", value: 1 }]).length > 0);
   assert.ok(conditionProblems([{ id: "bad", measure: "my_charge", compare: "below", value: -1 }]).length > 0);
   assert.deepEqual(conditionProblems(custom), []);
+});
+
+test("checks are built from data too, so a new thing to check works without code changes", () => {
+  const measures = [{ id: "fullest_shelf", label: "The fullest shelf", fact: "shelf_fill", combine: "highest", unit: "% full" },
+    { id: "spare_stock", label: "Crates stored minus messes", fact: "stored_crates", minus: "messes" }];
+  const conditions = [{ id: "a_shelf_full", measure: "fullest_shelf", compare: "at_least", value: 80 }, { id: "spare", measure: "spare_stock", compare: "above", value: 1 }];
+  assert.equal(conditionLabel(conditions[0], measures), "The fullest shelf is at least 80% full");
+  const program = [{ condition: "a_shelf_full", action: "clean" }, { condition: "spare", action: "restock" }];
+  assert.equal(chooseAction(program, world({ messes: 1 }), robot, conditions, measures).ruleIndex, 0);
+  assert.equal(chooseAction(program, world({ shelves: [{ id: "s1", fill: 0.5 }] }), robot, conditions, measures).ruleIndex, 1);
+  assert.equal(chooseAction(program, world({ shelves: [{ id: "s1", fill: 0.5 }], messes: 1 }), robot, conditions, measures).ruleIndex, -1);
+  assert.deepEqual(measureProblems(measures), []);
+  assert.ok(measureProblems([{ id: "x", label: "X", fact: "shelf_fill" }]).length > 0);
+  assert.ok(conditionProblems(conditions, []).length > 0);
 });

@@ -16,11 +16,12 @@
 //   { frames: [{ id, name, power, boardSlots, speed }],
 //     cells: [{ id, name, capacity, charge, drainRate, chargeRate }],
 //     boards: [{ id, name, kind: "prefab", power, ability } | { id, name, kind: "custom", power, commands }],
-//     conditions: [{ id, measure, compare, value }] (see MEASURES in RobotGambits.js),
+//     measures: [{ id, label, fact, combine?, minus?, minusCombine?, unit? }] (see MEASURES in RobotGambits.js),
+//     conditions: [{ id, measure, compare, value }] (see CONDITIONS in RobotGambits.js),
 //     commandPower: { conditions: { [conditionId]: number }, actions: { [actionId]: number } } }
 // and a robot looks like { name, frame, cell, boards: [{ board, program? }] } where `program`
 // is only stored for custom boards.
-import { CONDITIONS, conditionProblems, findAbility, programProblems } from "./RobotGambits.js";
+import { CONDITIONS, MEASURES, conditionProblems, findAbility, measureProblems, programProblems } from "./RobotGambits.js";
 
 const byId = (list, id) => list?.find((entry) => entry.id === id) ?? null;
 
@@ -29,6 +30,8 @@ export const findCell = (parts, id) => byId(parts.cells, id);
 export const findBoard = (parts, id) => byId(parts.boards, id);
 /** The conditions commands can use: the saved list, or the starting list when there isn't one. */
 export const partConditions = (parts) => parts?.conditions ?? CONDITIONS;
+/** The things conditions can check: the saved list, or the starting list when there isn't one. */
+export const partMeasures = (parts) => parts?.measures ?? MEASURES;
 
 /** What a fitted board adds to the robot's list: one fixed ability for a prefab, the robot's commands for a custom one. */
 export function boardProgram(fitted, parts) {
@@ -109,7 +112,8 @@ export function partsProblems(parts) {
     });
   }
   if (problems.length) return problems;
-  if (parts.conditions !== undefined) problems.push(...conditionProblems(parts.conditions));
+  if (parts.measures !== undefined) problems.push(...measureProblems(parts.measures));
+  if (parts.conditions !== undefined) problems.push(...conditionProblems(parts.conditions, partMeasures(parts)));
   if (!parts.frames.length) problems.push("Needs at least one frame.");
   if (!parts.cells.length) problems.push("Needs at least one power cell.");
   const number = (part, key, what, minimum = 0) => {

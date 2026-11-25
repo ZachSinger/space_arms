@@ -32,10 +32,15 @@
   main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 480px; }
   #store { overflow: auto; padding: 16px 20px 30px; }
   #side { overflow: auto; border-left: 1px solid var(--line); padding: 0 16px 30px; }
-  #workshop { display: none; }
-  main.commands { grid-template-columns: 1fr; }
-  main.commands #store, main.commands #side { display: none; }
-  main.commands #workshop { display: block; overflow: auto; padding: 16px 20px 40px; }
+  #workshop, #checks { display: none; }
+  main.commands, main.checks { grid-template-columns: 1fr; }
+  main.commands #store, main.commands #side, main.checks #store, main.checks #side { display: none; }
+  main.commands #workshop, main.checks #checks { display: block; overflow: auto; padding: 16px 20px 40px; }
+  .ws.two { grid-template-columns: 300px minmax(0, 900px); }
+  .check-name { flex: 1 1 260px; font-weight: 600; }
+  .check-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; font-size: 13px; color: var(--dim); }
+  .check-row select { max-width: 340px; }
+  .check-row input.unit-in { width: 130px; }
   .views { display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 2px; margin-right: 14px; }
   .view { background: none; border: none; color: var(--dim); padding: 3px 12px; border-radius: 5px; }
   .view.active { background: var(--panel2); color: var(--text); }
@@ -176,7 +181,7 @@
 <body>
 <header>
   <h1>Robot Lab</h1>
-  <span class="views"><button class="view active" data-view="store">Store</button><button class="view" data-view="commands">Commands</button></span>
+  <span class="views"><button class="view active" data-view="store">Store</button><button class="view" data-view="checks">Checks</button><button class="view" data-view="commands">Commands</button></span>
   <span id="simControls">
   <button id="play" class="primary">Play</button>
   <select id="speed" title="How fast time moves"></select>
@@ -194,10 +199,11 @@
   <div id="store"></div>
   <div id="side"></div>
   <div id="workshop"></div>
+  <div id="checks"></div>
 </main>
 <script type="module">
-import { ACTIONS, COMPARES, MEASURES, PREFAB_ABILITIES, actionTarget, conditionLabel, conditionMet, findAbility, measureValue } from "/js/logic/RobotGambits.js";
-import { boardPower, commandPower, findBoard, findCell, findFrame, partConditions, powerNeeded } from "/js/logic/RobotParts.js";
+import { ACTIONS, ALWAYS, COMBINES, COMPARES, FACTS, PREFAB_ABILITIES, actionTarget, conditionLabel, conditionMet, findAbility, measureValue, unitFor } from "/js/logic/RobotGambits.js";
+import { boardPower, commandPower, findBoard, findCell, findFrame, partConditions, partMeasures, powerNeeded } from "/js/logic/RobotParts.js";
 import { applyBuild, createSim, step, SIM_RULES } from "/scripts/robot-lab/sim.js";
 
 const $ = (selector) => document.querySelector(selector);
@@ -420,7 +426,7 @@ function ruleRow(rule, i, count, where, result) {
 }
 
 function conditionOptions(selected) {
-  return partConditions(setup.parts).map((entry) => `<option value="${entry.id}" ${entry.id === selected ? "selected" : ""}>${escape(conditionLabel(entry))}</option>`).join("");
+  return partConditions(setup.parts).map((entry) => `<option value="${entry.id}" ${entry.id === selected ? "selected" : ""}>${escape(conditionLabel(entry, partMeasures(setup.parts)))}</option>`).join("");
 }
 
 function boardOptions(selected, programLength) {
@@ -573,17 +579,28 @@ function momentWorld() {
 }
 const commandsUsing = (conditionId) => setup.robots.reduce((total, robot) => total + robot.boards.reduce((sum, fitted) => sum + (fitted.program ?? []).filter((rule) => rule.condition === conditionId).length, 0), 0);
 
+const round1 = (value) => Math.round(value * 10) / 10;
+
 /** Updates the true/false and can/can't tags without redrawing, so typing in the moment isn't interrupted. */
 function updateTruth() {
   const { world, robot } = momentWorld();
   for (const pill of document.querySelectorAll("[data-cond-pill]")) {
     const condition = partConditions(setup.parts).find((entry) => entry.id === pill.dataset.condPill);
     let yes = false;
-    try { yes = conditionMet(condition, world, robot); } catch { pill.textContent = "?"; continue; }
-    const now = condition.measure === "always" ? "" : ` (now ${Math.round(measureValue(condition.measure, world, robot) * 10) / 10})`;
+    const measure = partMeasures(setup.parts).find((entry) => entry.id === condition.measure);
+    try { yes = conditionMet(condition, world, robot, partMeasures(setup.parts)); } catch { pill.textContent = "?"; continue; }
+    const now = measure ? ` (now ${round1(measureValue(measure, world, robot))})` : "";
     pill.textContent = yes ? "True" : "False";
     pill.className = `pill ${yes ? "yes" : "no"}`;
     pill.title = `In the test moment this is ${yes ? "true" : "false"}${now}.`;
+  }
+  for (const pill of document.querySelectorAll("[data-check-pill]")) {
+    const measure = partMeasures(setup.parts).find((entry) => entry.id === pill.dataset.checkPill);
+    let value;
+    try { value = round1(measureValue(measure, world, robot)); } catch { pill.textContent = "?"; continue; }
+    const unit = unitFor(measure, value);
+    pill.textContent = `Now: ${value}${unit && !unit.startsWith("%") ? " " : ""}${unit}`;
+    pill.className = "pill yes";
   }
   for (const pill of document.querySelectorAll("[data-act-pill]")) {
     const yes = Boolean(actionTarget(pill.dataset.actPill, world, robot));
@@ -592,24 +609,62 @@ function updateTruth() {
   }
 }
 
+function momentPanel(hint) {
+  return `<div class="moment"><h2>Test moment</h2><p class="hint">${hint}</p>${MOMENT_FIELDS.map(([group, fields]) => `<div class="group">${group}</div>${fields.map(([key, label]) => (typeof moment[key] === "boolean"
+    ? `<label>${label} <input type="checkbox" data-moment="${key}" ${moment[key] ? "checked" : ""}></label>`
+    : `<label>${label} <input type="number" min="0" step="1" data-moment="${key}" value="${moment[key]}"></label>`)).join("")}`).join("")}</div>`;
+}
+
+const conditionsUsing = (measureId) => partConditions(setup.parts).filter((condition) => condition.measure === measureId).length;
+
+function factPicker(where, factField, combineField, factId, combineId, withNone) {
+  const fact = FACTS.find((entry) => entry.id === factId);
+  const factSelect = `<select ${where} data-field="${factField}">${withNone ? `<option value="" ${factId ? "" : "selected"}>nothing</option>` : ""}${options(FACTS, factId)}</select>`;
+  if (!fact?.list || fact.countOnly) return factSelect;
+  return `${factSelect} <span>taking</span> <select ${where} data-field="${combineField}">${options(COMBINES, combineId)}</select>`;
+}
+
+function renderChecks() {
+  const measures = partMeasures(setup.parts);
+  const rows = measures.map((measure) => {
+    const where = `data-check="${measure.id}"`;
+    const uses = conditionsUsing(measure.id);
+    return `<div class="cond">
+      <div class="cond-row"><input class="check-name" type="text" ${where} data-field="label" value="${escape(measure.label)}" title="The name conditions show, like &quot;My charge&quot; in &quot;My charge is below 20%&quot;"><span class="pill" data-check-pill="${measure.id}"></span></div>
+      <div class="check-row"><span>Reads</span> ${factPicker(where, "fact", "combine", measure.fact, measure.combine, false)}</div>
+      <div class="check-row"><span>Minus</span> ${factPicker(where, "minus", "minusCombine", measure.minus ?? "", measure.minusCombine, true)}</div>
+      <div class="meta">
+        <label title="Shown after the number in conditions. Write one/many, like customer/customers, to change it when the number is 1.">Unit <input class="unit-in" type="text" ${where} data-field="unit" value="${escape(measure.unit ?? "")}"></label>
+        <span>${uses ? `Used in ${uses} condition${uses === 1 ? "" : "s"}` : "Not used yet"}</span>
+        <span class="spacer"></span>
+        <button class="small ghost" data-remove-check="${measure.id}" ${uses ? 'disabled title="A condition uses this. Change those conditions first."' : 'title="Remove this check"'}>✕</button>
+      </div></div>`;
+  }).join("");
+  $("#checks").innerHTML = `<div class="ws two">
+    ${momentPanel("Set up a moment in the store. Each check shows the number it would read right now.")}
+    <div><h2>Checks (what a condition looks at) <button class="small" id="addCheck">Add check</button></h2>
+      <p class="hint">A check reads something the store reports and turns it into one number. Where there's one per shelf, register or station, pick how to boil them down. Conditions then compare that number, like "is below 20".</p>${rows}</div>
+  </div>`;
+  updateTruth();
+}
+
 function renderWorkshop() {
   const conditions = partConditions(setup.parts);
+  const measures = partMeasures(setup.parts);
   const costs = setup.parts.commandPower;
-  const momentHtml = MOMENT_FIELDS.map(([group, fields]) => `<div class="group">${group}</div>${fields.map(([key, label]) => (typeof moment[key] === "boolean"
-    ? `<label>${label} <input type="checkbox" data-moment="${key}" ${moment[key] ? "checked" : ""}></label>`
-    : `<label>${label} <input type="number" min="0" step="1" data-moment="${key}" value="${moment[key]}"></label>`)).join("")}`).join("");
+  const momentHtml = momentPanel("Set up a moment in the store. The tags on the right show which conditions are true and which actions could be done.");
   const conditionHtml = conditions.map((condition, index) => {
     const where = `data-cond="${condition.id}"`;
     const always = condition.measure === "always";
-    const measure = MEASURES.find((entry) => entry.id === condition.measure);
+    const measure = measures.find((entry) => entry.id === condition.measure);
     const same = conditions.findIndex((other) => other.measure === condition.measure && (always || (other.compare === condition.compare && other.value === condition.value)));
     const uses = commandsUsing(condition.id);
     return `<div class="cond"><div class="cond-row">
         <span class="pill" data-cond-pill="${condition.id}"></span>
-        <select class="measure" ${where} data-field="measure">${options(MEASURES, condition.measure)}</select>
+        <select class="measure" ${where} data-field="measure">${options([ALWAYS, ...measures], condition.measure)}</select>
         ${always ? "" : `<select ${where} data-field="compare">${options(COMPARES, condition.compare)}</select>
         <input type="number" min="0" step="any" ${where} data-field="value" value="${condition.value}">
-        <span class="unit">${escape(measure?.unit?.(condition.value) ?? "")}</span>`}
+        <span class="unit">${escape(unitFor(measure, condition.value))}</span>`}
       </div><div class="meta">
         <label title="How much power this adds to a custom board when a command uses it">Power <input type="number" min="0" step="any" data-cost="conditions" data-id="${condition.id}" value="${costs.conditions[condition.id] ?? 0}"></label>
         <span>${uses ? `Used in ${uses} command${uses === 1 ? "" : "s"}` : "Not used yet"}</span>
@@ -625,7 +680,7 @@ function renderWorkshop() {
       <div class="meta"><label title="How much power this adds to a custom board when a command uses it">Power <input type="number" min="0" step="any" data-cost="actions" data-id="${action.id}" value="${costs.actions[action.id] ?? 0}"></label></div>
     </div>`).join("");
   $("#workshop").innerHTML = `<div class="ws">
-    <div class="moment"><h2>Test moment</h2><p class="hint">Set up a moment in the store. The tags on the right show which conditions are true and which actions could be done.</p>${momentHtml}</div>
+    ${momentHtml}
     <div><h2>Conditions (the "if" part) <button class="small" id="addCondition">Add condition</button></h2>
       <p class="hint">Each is something to check, a comparison and a number. Changes apply to every command that uses it.</p>${conditionHtml}</div>
     <div><h2>Actions (the "then" part)</h2><p class="hint">The jobs a robot knows how to do. A command is skipped when its job can't be done.</p>${actionHtml}</div>
@@ -638,6 +693,7 @@ function render() {
   renderMap();
   renderControls();
   if (view === "commands") renderWorkshop();
+  if (view === "checks") renderChecks();
 }
 
 function restart() {
@@ -812,11 +868,13 @@ document.querySelector(".views").addEventListener("click", (event) => {
   view = button.dataset.view;
   for (const entry of document.querySelectorAll(".view")) entry.classList.toggle("active", entry === button);
   $("main").classList.toggle("commands", view === "commands");
+  $("main").classList.toggle("checks", view === "checks");
   $("#simControls").style.visibility = view === "store" ? "" : "hidden";
   if (view === "commands") renderWorkshop();
+  if (view === "checks") renderChecks();
 });
 
-$("#workshop").addEventListener("input", (event) => {
+const momentInput = (event) => {
   const key = event.target.dataset.moment;
   if (!key) return;
   if (typeof moment[key] === "boolean") moment[key] = event.target.checked;
@@ -826,6 +884,43 @@ $("#workshop").addEventListener("input", (event) => {
     moment[key] = value;
   }
   updateTruth();
+};
+$("#workshop").addEventListener("input", momentInput);
+$("#checks").addEventListener("input", momentInput);
+
+$("#checks").addEventListener("change", (event) => {
+  const field = event.target;
+  const data = field.dataset;
+  if (!data.check) return;
+  const measure = setup.parts.measures.find((entry) => entry.id === data.check);
+  const value = field.value;
+  if (data.field === "label" && !value.trim()) return invalid(field, "Needs a name.");
+  if (data.field === "minus" && !value) {
+    delete measure.minus;
+    delete measure.minusCombine;
+  } else if (data.field === "unit" && !value.trim()) delete measure.unit;
+  else measure[data.field] = data.field === "label" ? value.trim() : value;
+  // A fact that's one per shelf/register/station needs a way to combine; pick "the lowest" until told otherwise.
+  for (const [factKey, combineKey] of [["fact", "combine"], ["minus", "minusCombine"]]) {
+    const fact = FACTS.find((entry) => entry.id === measure[factKey]);
+    if (fact?.list && !fact.countOnly) measure[combineKey] ??= "lowest";
+    else delete measure[combineKey];
+  }
+  changed();
+});
+
+$("#checks").addEventListener("click", (event) => {
+  const target = event.target.closest("button");
+  if (!target) return;
+  const measures = setup.parts.measures;
+  if (target.id === "addCheck") {
+    let n = measures.length + 1;
+    while (measures.some((entry) => entry.id === `check_${n}`)) n += 1;
+    measures.push({ id: `check_${n}`, label: "New check", fact: "my_charge", unit: "%" });
+  } else if (target.dataset.removeCheck) {
+    measures.splice(measures.findIndex((entry) => entry.id === target.dataset.removeCheck), 1);
+  } else return;
+  changed();
 });
 
 $("#workshop").addEventListener("change", (event) => {
@@ -844,7 +939,7 @@ $("#workshop").addEventListener("change", (event) => {
       condition.value = value;
     } else if (data.field === "measure") {
       condition.measure = field.value;
-      if (field.value === "always") {
+      if (field.value === ALWAYS.id) {
         delete condition.compare;
         delete condition.value;
       } else {
@@ -914,6 +1009,7 @@ window.addEventListener("beforeunload", (event) => {
 fetch("/api/data").then((response) => response.json()).then((data) => {
   saved = data;
   setup = clone(data);
+  setup.parts.measures ??= clone(partMeasures(setup.parts));
   setup.parts.conditions ??= clone(partConditions(setup.parts));
   restart();
   status("");

@@ -9,28 +9,55 @@
 //     backroomCapacity, messes, stations: [{ id, usedBy }] }
 // where `fill` runs from 0 (empty) to 1 (full) and `staffedBy`/`usedBy` are robot ids or null.
 
-// A condition is built from three pieces: something to measure, a comparison and a number, like
+// Robots read the store through FACTS: the raw numbers the game can report. Some are one number
+// (my charge); others are one number per shelf, register or station, which a check boils down to one
+// number (the lowest, the highest, the total, the average, or how many there are).
+export const FACTS = Object.freeze([
+  { id: "my_charge", label: "My charge (%)", read: (world, robot) => robot.battery * 100 },
+  { id: "shelf_fill", label: "Each shelf: how full it is (%)", list: true, read: (world) => world.shelves.map((shelf) => shelf.fill * 100) },
+  { id: "register_lines", label: "Each register: customers in its line", list: true, read: (world) => world.registers.map((register) => register.line) },
+  { id: "open_register_lines", label: "Each register no other robot is on: customers in its line", list: true, read: (world, robot) => world.registers.filter((register) => !register.staffedBy || register.staffedBy === robot.id).map((register) => register.line) },
+  { id: "free_stations", label: "Each free charging station", list: true, countOnly: true, read: (world, robot) => world.stations.filter((station) => !station.usedBy || station.usedBy === robot.id).map(() => 1) },
+  { id: "pad_crates", label: "Crates on the loading pad", read: (world) => world.padCrates },
+  { id: "stored_crates", label: "Crates stored in the backroom", read: (world) => world.backroomCrates },
+  { id: "backroom_capacity", label: "Crates the backroom can hold", read: (world) => world.backroomCapacity },
+  { id: "messes", label: "Messes on the sales floor", read: (world) => world.messes },
+].map(Object.freeze));
+export const COMBINES = Object.freeze([
+  { id: "lowest", label: "the lowest", apply: (values) => (values.length ? Math.min(...values) : 0) },
+  { id: "highest", label: "the highest", apply: (values) => (values.length ? Math.max(...values) : 0) },
+  { id: "total", label: "added together", apply: (values) => values.reduce((sum, value) => sum + value, 0) },
+  { id: "average", label: "the average", apply: (values) => (values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0) },
+  { id: "count", label: "how many there are", apply: (values) => values.length },
+].map(Object.freeze));
+const FACT_BY_ID = new Map(FACTS.map((entry) => [entry.id, entry]));
+const COMBINE_BY_ID = new Map(COMBINES.map((entry) => [entry.id, entry]));
+
+// A check ("measure") turns facts into the one number a condition compares: a fact (boiled down
+// with a combine when it's a list), optionally minus a second fact. Its unit may be "singular/plural".
+// The lab saves the list in data/RobotPrograms.json (parts.measures); MEASURES is the starting list.
+export const MEASURES = Object.freeze([
+  { id: "my_charge", label: "My charge", fact: "my_charge", unit: "%" },
+  { id: "emptiest_shelf", label: "The emptiest shelf", fact: "shelf_fill", combine: "lowest", unit: "% full" },
+  { id: "longest_line", label: "The longest register line", fact: "register_lines", combine: "highest", unit: "customer/customers" },
+  { id: "customers_waiting", label: "The number of customers waiting at registers", fact: "register_lines", combine: "total" },
+  { id: "pad_crates", label: "The number of crates on the loading pad", fact: "pad_crates" },
+  { id: "stored_crates", label: "The number of crates stored in the backroom", fact: "stored_crates" },
+  { id: "backroom_space", label: "The number of empty crate spaces in the backroom", fact: "backroom_capacity", minus: "stored_crates" },
+  { id: "messes", label: "The number of messes on the sales floor", fact: "messes" },
+  { id: "free_stations", label: "The number of free charging stations", fact: "free_stations", combine: "count" },
+].map(Object.freeze));
+export const ALWAYS = Object.freeze({ id: "always", label: "Always" });
+
+// A condition is built from three pieces: a check, a comparison and a number, like
 // "My charge" "is below" 20 (%). The lab saves the list in data/RobotPrograms.json (parts.conditions);
 // CONDITIONS below is the starting list, used when none is given.
-export const MEASURES = Object.freeze([
-  { id: "always", label: "Always" },
-  { id: "my_charge", label: "My charge", unit: () => "%" },
-  { id: "emptiest_shelf", label: "The emptiest shelf", unit: () => "% full" },
-  { id: "longest_line", label: "The longest register line", unit: (n) => (n === 1 ? "customer long" : "customers long") },
-  { id: "customers_waiting", label: "The number of customers waiting at registers" },
-  { id: "pad_crates", label: "The number of crates on the loading pad" },
-  { id: "stored_crates", label: "The number of crates stored in the backroom" },
-  { id: "backroom_space", label: "The number of empty crate spaces in the backroom" },
-  { id: "messes", label: "The number of messes on the sales floor" },
-  { id: "free_stations", label: "The number of free charging stations" },
-]);
 export const COMPARES = Object.freeze([
   { id: "below", label: "is below", test: (a, b) => a < b },
   { id: "at_most", label: "is at most", test: (a, b) => a <= b },
   { id: "at_least", label: "is at least", test: (a, b) => a >= b },
   { id: "above", label: "is above", test: (a, b) => a > b },
 ]);
-const MEASURE_BY_ID = new Map(MEASURES.map((entry) => [entry.id, entry]));
 const COMPARE_BY_ID = new Map(COMPARES.map((entry) => [entry.id, entry]));
 
 export const CONDITIONS = Object.freeze([
@@ -48,29 +75,36 @@ export const CONDITIONS = Object.freeze([
   { id: "battery_not_full", measure: "my_charge", compare: "below", value: 100 },
 ].map(Object.freeze));
 
+/** A measure's unit for a number, picking "singular/plural" units by the number. */
+export function unitFor(measure, value) {
+  const [one, many = one] = String(measure?.unit ?? "").split("/");
+  return value === 1 ? one : many;
+}
+
 /** A condition as a sentence, like "My charge is below 20%". */
-export function conditionLabel(condition) {
-  const measure = MEASURE_BY_ID.get(condition?.measure);
+export function conditionLabel(condition, measures = MEASURES) {
+  if (condition?.measure === ALWAYS.id) return ALWAYS.label;
+  const measure = measures.find((entry) => entry.id === condition?.measure);
   if (!measure) return "Unknown condition";
-  if (measure.id === "always") return measure.label;
-  const unit = measure.unit?.(condition.value) ?? "";
+  const unit = unitFor(measure, condition.value);
   return `${measure.label} ${COMPARE_BY_ID.get(condition.compare)?.label ?? "?"} ${condition.value}${unit.startsWith("%") ? "" : " "}${unit}`.trim();
 }
 
-/** The number a measure reads from the store right now. */
-export function measureValue(measureId, world, robot) {
-  switch (measureId) {
-    case "my_charge": return robot.battery * 100;
-    case "emptiest_shelf": return (lowestShelf(world)?.fill ?? 1) * 100;
-    case "longest_line": return world.registers.reduce((most, register) => Math.max(most, register.line), 0);
-    case "customers_waiting": return world.registers.reduce((total, register) => total + register.line, 0);
-    case "pad_crates": return world.padCrates;
-    case "stored_crates": return world.backroomCrates;
-    case "backroom_space": return Math.max(0, world.backroomCapacity - world.backroomCrates);
-    case "messes": return world.messes;
-    case "free_stations": return world.stations.filter((station) => !station.usedBy || station.usedBy === robot.id).length;
-    default: throw new Error(`Unknown robot measure: ${measureId}`);
-  }
+function factValue(factId, combineId, world, robot) {
+  const fact = FACT_BY_ID.get(factId);
+  if (!fact) throw new Error(`Unknown robot fact: ${factId}`);
+  const value = fact.read(world, robot);
+  if (!fact.list) return value;
+  const combine = COMBINE_BY_ID.get(fact.countOnly ? "count" : combineId);
+  if (!combine) throw new Error(`Unknown way to combine: ${combineId}`);
+  return combine.apply(value);
+}
+
+/** The number a check (a measure object, see MEASURES) reads from the store right now. */
+export function measureValue(measure, world, robot) {
+  if (!measure?.fact) throw new Error(`Unknown robot check: ${measure?.id ?? measure}`);
+  const value = factValue(measure.fact, measure.combine, world, robot);
+  return measure.minus ? value - factValue(measure.minus, measure.minusCombine, world, robot) : value;
 }
 
 export const ACTIONS = Object.freeze([
@@ -120,11 +154,13 @@ const ACTION_IDS = new Set(ACTIONS.map((entry) => entry.id));
 const lowestShelf = (world) => world.shelves.reduce((low, shelf) => (!low || shelf.fill < low.fill ? shelf : low), null);
 
 /** Whether a condition (see MEASURES) is true for this robot right now. */
-export function conditionMet(condition, world, robot) {
-  if (condition?.measure === "always") return true;
+export function conditionMet(condition, world, robot, measures = MEASURES) {
+  if (condition?.measure === ALWAYS.id) return true;
   const compare = COMPARE_BY_ID.get(condition?.compare);
   if (!compare) throw new Error(`Unknown robot comparison: ${condition?.compare}`);
-  return compare.test(measureValue(condition.measure, world, robot), condition.value);
+  const measure = measures.find((entry) => entry.id === condition.measure);
+  if (!measure) throw new Error(`Unknown robot check: ${condition.measure}`);
+  return compare.test(measureValue(measure, world, robot), condition.value);
 }
 
 /** The register/shelf/station the action would use, or null when it can't be done right now. */
@@ -154,8 +190,9 @@ export function actionTarget(actionId, world, robot) {
  * Entries are either commands or prefab boards ({ ability }), checked in order.
  * @param {({ condition: string, action: string, on?: boolean } | { ability: string })[]} program
  * @param {object[]} [conditions] the conditions the program's commands name (see CONDITIONS)
+ * @param {object[]} [measures] the checks those conditions use (see MEASURES)
  */
-export function chooseAction(program, world, robot, conditions = CONDITIONS) {
+export function chooseAction(program, world, robot, conditions = CONDITIONS, measures = MEASURES) {
   const byId = new Map(conditions.map((entry) => [entry.id, entry]));
   const checks = [];
   for (let index = 0; index < program.length; index += 1) {
@@ -175,7 +212,7 @@ export function chooseAction(program, world, robot, conditions = CONDITIONS) {
     }
     const condition = byId.get(rule.condition);
     if (!condition) throw new Error(`Unknown robot condition: ${rule.condition}`);
-    if (!conditionMet(condition, world, robot)) {
+    if (!conditionMet(condition, world, robot, measures)) {
       checks.push({ index, result: "condition false" });
       continue;
     }
@@ -204,7 +241,8 @@ export function programProblems(program, slots, conditions = CONDITIONS) {
 }
 
 /** Readable reasons a condition list can't be used; empty when it's fine. */
-export function conditionProblems(conditions) {
+export function conditionProblems(conditions, measures = MEASURES) {
+  const measureIds = new Set([ALWAYS.id, ...(Array.isArray(measures) ? measures.map((entry) => entry.id) : [])]);
   if (!Array.isArray(conditions)) return ["The condition list is missing."];
   const problems = [];
   const seen = new Set();
@@ -213,10 +251,32 @@ export function conditionProblems(conditions) {
     if (typeof condition?.id !== "string" || !condition.id) problems.push(`${name}: needs an id.`);
     else if (seen.has(condition.id)) problems.push(`Two conditions share the id "${condition.id}".`);
     seen.add(condition?.id);
-    if (!MEASURE_BY_ID.has(condition?.measure)) return problems.push(`${name}: unknown thing to check "${condition?.measure}".`);
+    if (!measureIds.has(condition?.measure)) return problems.push(`${name}: unknown thing to check "${condition?.measure}".`);
     if (condition.measure === "always") return;
     if (!COMPARE_BY_ID.has(condition.compare)) problems.push(`${name}: unknown comparison "${condition.compare}".`);
     if (!Number.isFinite(condition.value) || condition.value < 0) problems.push(`${name}: the number must be 0 or more.`);
+  });
+  return problems;
+}
+
+/** Readable reasons a list of checks can't be used; empty when it's fine. */
+export function measureProblems(measures) {
+  if (!Array.isArray(measures)) return ["The list of things to check is missing."];
+  const problems = [];
+  const seen = new Set();
+  const term = (name, factId, combineId, what) => {
+    const fact = FACT_BY_ID.get(factId);
+    if (!fact) return problems.push(`${name}: unknown ${what} "${factId}".`);
+    if (fact.list && !fact.countOnly && !COMBINE_BY_ID.has(combineId)) problems.push(`${name}: pick how to combine "${fact.label}".`);
+  };
+  measures.forEach((measure, index) => {
+    const name = `Check ${index + 1}`;
+    if (typeof measure?.id !== "string" || !measure.id || measure.id === ALWAYS.id) problems.push(`${name}: needs an id.`);
+    else if (seen.has(measure.id)) problems.push(`Two checks share the id "${measure.id}".`);
+    seen.add(measure?.id);
+    if (typeof measure?.label !== "string" || !measure.label.trim()) problems.push(`${name}: needs a name.`);
+    term(name, measure?.fact, measure?.combine, "fact");
+    if (measure?.minus !== undefined) term(name, measure.minus, measure.minusCombine, "fact to subtract");
   });
   return problems;
 }
