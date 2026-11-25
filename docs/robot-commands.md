@@ -4,28 +4,114 @@ Write anything here. A command is "if (condition), then (action)." There are no 
 
 What's already written below is only what the Robot Lab has today. Change it, delete it, or add to it however you like.
 
-## Conditions (the "if" part)
+--## Conditions (the "if" part)
 
-Always
-My charge is below 20%
-My charge is below 50%
-My charge is not full
-A customer is waiting at a register
-A register line is 3 or more customers long
-A shelf is empty
-A shelf is below 25% full
-A shelf is below 50% full
-A shelf isn't full
-There's a crate on the loading pad
-There's a mess on the sales floor
+--Always
+--My charge is below 20%
+--My charge is below 50%
+--My charge is not full
+--A customer is waiting at a register
+--A register line is 3 or more customers long
+--A shelf is empty
+--A shelf is below 25% full
+--A shelf is below 50% full
+--A shelf isn't full
+--There's a crate on the loading pad
+--There's a mess on the sales floor
 
-## Actions (the "then" part)
+--## Actions (the "then" part)
 
-Work a register
-Restock the emptiest shelf from the backroom
-Carry a crate from the loading pad into the backroom
-Clean up a mess
-Go to a charging station and charge fully
-Wait
+## Condition Target
+-Me
+-Store
+-Customer
+-Player
+-Register
+-Shelf
+-Time
+-Crate
+
+
+### Condition Comparators
+#### Me
+-Charge below n
+-Charge above n
+-Charge is full
+-Charge is not full
+-Charge is at n
+
+#### Store
+-Has mess on sales floor
+-Is open
+-Is closed
+-Has cleanliness equal to n
+-Has cleanliness below n
+-Has cleanliness above n
+
+#### Customer
+-At Register
+-Is Waiting
+-Is losing patience
+-Is upset about cleanliness
+-Is upset about presentation
+
+#### Register
+-Is not open
+-Is open
+-Has no line
+-Has line of n or more customers
+-Has line of exactly n customers
+-Has line of less than n customers
+
+#### Shelf
+-Target Slot is empty
+-Target Slot is not full
+-Target Slot is below n% full
+-Target Slot is above n% full
+-Target Slot is at n% full
+
+
+#### Time
+-Is before n
+-Is after n
+-Is exactly n
+
+
+## Action Target
+-Me
+-Store
+-Customer
+-Player
+-Register
+-Shelf
+-Time
+-Crate
+
+
+## Actions
+
+### Me
+-Wait
+-Go to a charging station and charge fully
+-Go to a charging station and charge until n%
+
+### Shelf
+-Restock item
+-Remove
+-Restock to n% full
+-Restock fully
+
+### Register
+-Serve a customer
+-Serve n customers
+-Serve any customers
+
+### Store
+-Open Store
+-Close Store
+-Clean up the sales floor
+-Clear Loading Pad
 
 ## Notes
+
+TODO: Need to reconsider backroom crate storage, maybe some cool sorter/animation is in order!
