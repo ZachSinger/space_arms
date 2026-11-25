@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Robot Lab - Space Arms Dealer</title>
+<style>
+  :root { color-scheme: dark; --bg: #0b1120; --panel: #111a2e; --line: #1f2b45; --text: #e2e8f5; --dim: #7d8cab; --accent: #38bdf8; --good: #4ade80; --bad: #f87171; --warn: #fbbf24; }
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 17px; margin: 0 10px 0 0; }
+  button { background: #1e293b; color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 6px 12px; cursor: pointer; font: inherit; }
+  button.primary { background: #0c4a6e; border-color: var(--accent); }
+  button.small { padding: 2px 8px; font-size: 12px; }
+  button:disabled { opacity: .4; cursor: default; }
+  #status { color: var(--dim); margin-left: auto; white-space: pre-line; }
+  #status.bad { color: var(--bad); }
+  #status.good { color: var(--good); }
+  .help { padding: 8px 16px; color: var(--dim); border-bottom: 1px solid var(--line); }
+  main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(560px, 1fr) minmax(480px, 1fr); }
+  .column { overflow: auto; padding: 12px 16px 40px; }
+  .column + .column { border-left: 1px solid var(--line); }
+  h2 { font-size: 15px; color: var(--accent); margin: 6px 0 10px; display: flex; gap: 10px; align-items: center; }
+  input, select { background: #0f172a; color: #fde68a; border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: inherit; }
+  input:focus, select:focus { border-color: var(--accent); outline: none; }
+  input.invalid { border-color: var(--bad); }
+  input[type=number] { width: 70px; text-align: right; }
+  select option { background: var(--panel); color: var(--text); }
+  .robot { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; }
+  .robot.dead { border-color: var(--bad); }
+  .robot .top { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 8px; }
+  .robot .top label { color: var(--dim); display: flex; gap: 6px; align-items: center; }
+  .robot .top input.name { width: 160px; font-weight: 600; }
+  .doing { display: flex; gap: 10px; align-items: center; color: var(--dim); margin-bottom: 8px; }
+  .doing b { color: var(--text); font-weight: 500; }
+  .battery { width: 90px; height: 10px; background: #1e293b; border-radius: 5px; overflow: hidden; }
+  .battery div { height: 100%; background: var(--good); }
+  .battery.low div { background: var(--bad); }
+  .rule { display: grid; grid-template-columns: 26px 22px 18px 1fr 36px 1fr auto; gap: 6px; align-items: center; padding: 4px 6px; border-radius: 5px; border: 1px solid transparent; }
+  .rule .num { color: var(--dim); text-align: right; }
+  .rule .word { color: var(--dim); }
+  .rule select { width: 100%; }
+  .rule.off select { opacity: .45; }
+  .rule.chosen { background: #0f2e1f; border-color: var(--good); }
+  .rule .why { grid-column: 4 / 7; color: var(--dim); font-size: 12px; margin-top: -2px; }
+  .rule.chosen .why { color: var(--good); }
+  .empty-slot { color: var(--dim); font-style: italic; padding: 4px 6px 4px 60px; }
+  .robot .bottom { display: flex; gap: 8px; margin-top: 6px; }
+  .settings { display: grid; grid-template-columns: repeat(3, auto); gap: 6px 16px; justify-content: start; margin-bottom: 14px; }
+  .settings label { color: var(--dim); display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .clock { font-variant-numeric: tabular-nums; color: var(--text); margin-left: 6px; }
+  .store { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .box h3 { margin: 0 0 6px; font-size: 13px; color: var(--dim); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .line-row, .shelf-row { display: flex; gap: 8px; align-items: center; margin: 3px 0; }
+  .line-row .who { color: var(--dim); font-size: 12px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--warn); display: inline-block; margin-right: 3px; }
+  .shelf-row span:first-child { width: 60px; color: var(--dim); }
+  .fill { flex: 1; height: 10px; background: #1e293b; border-radius: 5px; overflow: hidden; }
+  .fill div { height: 100%; background: var(--accent); }
+  .fill.low div { background: var(--bad); }
+  .count { font-size: 18px; font-weight: 600; }
+  table { border-collapse: collapse; margin-bottom: 14px; }
+  td, th { padding: 4px 10px; border-bottom: 1px solid var(--line); text-align: left; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  th { color: var(--dim); font-weight: 600; }
+  .log { font-size: 13px; color: var(--dim); max-height: 280px; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+  .log div span { color: var(--text); font-variant-numeric: tabular-nums; margin-right: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Robot Lab</h1>
+  <button id="undo" disabled>Undo all</button>
+  <button id="save" class="primary" disabled>Save</button>
+  <span id="status">Loading...</span>
+</header>
+<div class="help">Each robot follows its program from the top down and does the <b>first rule that fits</b>: the "if" part is true and the job can be done right now. If no rule fits, it waits. Each rule uses up one chip slot. On the right is a pretend store: press Play and watch which rule each robot picks (the green row). You can change programs while it runs. Robots charge at charging stations in the backroom; a robot whose battery runs flat shuts down for the rest of the shift.</div>
+<main>
+  <div class="column" id="robots"></div>
+  <div class="column" id="lab"></div>
+</main>
+<script type="module">
+import { CONDITIONS, ACTIONS } from "/js/logic/RobotGambits.js";
+import { createSim, step, SIM_RULES } from "/scripts/robot-lab/sim.js";
+
+const $ = (selector) => document.querySelector(selector);
+const escape = (text) => String(text ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const clone = (value) => JSON.parse(JSON.stringify(value));
+const money = (value) => Math.round(value).toLocaleString("en-US");
+const clock = (seconds) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
+const ACTION_WORDS = { work_register: "Working a register", restock: "Restocking a shelf", unload_pad: "Carrying a crate in", clean: "Cleaning a mess", charge: "Charging", wait: "Waiting" };
+const SETTINGS = [
+  ["shiftSeconds", "Shift length (seconds)"], ["registers", "Registers"], ["shelves", "Shelves"],
+  ["stations", "Charging stations"], ["customersPerMinute", "Customers per minute"], ["backroomCapacity", "Backroom holds (crates)"],
+  ["deliveryEverySeconds", "Delivery every (seconds)"], ["cratesPerDelivery", "Crates per delivery"], ["startingBackroomCrates", "Crates in backroom at start"],
+];
+const WHY = { off: "Switched off", "condition false": "Skipped: the \"if\" part isn't true", "can't do it right now": "Skipped: the \"if\" is true, but the job can't be done right now", chosen: "Doing this now" };
+
+let saved = null;
+let setup = null;
+let sim = null;
+let timer = null;
+let speed = 5;
+
+const dirty = () => JSON.stringify(setup) !== JSON.stringify(saved);
+function status(text, kind = "") {
+  $("#status").textContent = text;
+  $("#status").className = kind;
+}
+function updateButtons() {
+  $("#save").disabled = !dirty() || document.querySelector("input.invalid") !== null;
+  $("#undo").disabled = !dirty();
+}
+
+function options(list, selected) {
+  return list.map((entry) => `<option value="${entry.id}" ${entry.id === selected ? "selected" : ""}>${escape(entry.label)}</option>`).join("");
+}
+
+function renderRobots() {
+  const cards = setup.robots.map((robot, r) => {
+    const live = sim?.robots[r];
+    const checks = new Map((live?.choice?.checks ?? []).map((check) => [check.index, check.result]));
+    const rules = robot.program.map((rule, i) => {
+      const result = live ? checks.get(i) : null;
+      const chosen = result === "chosen" && live?.task;
+      return `<div class="rule ${rule.on === false ? "off" : ""} ${chosen ? "chosen" : ""}">
+        <span class="num">${i + 1}</span>
+        <input type="checkbox" data-robot="${r}" data-rule="${i}" data-field="on" title="Switch this rule on or off" ${rule.on === false ? "" : "checked"}>
+        <span class="word">If</span>
+        <select data-robot="${r}" data-rule="${i}" data-field="condition">${options(CONDITIONS, rule.condition)}</select>
+        <span class="word">then</span>
+        <select data-robot="${r}" data-rule="${i}" data-field="action">${options(ACTIONS, rule.action)}</select>
+        <span><button class="small" data-move="-1" data-robot="${r}" data-rule="${i}" ${i === 0 ? "disabled" : ""} title="Move up (checked sooner)">▲</button>
+        <button class="small" data-move="1" data-robot="${r}" data-rule="${i}" ${i === robot.program.length - 1 ? "disabled" : ""} title="Move down (checked later)">▼</button>
+        <button class="small" data-delete-rule="${i}" data-robot="${r}" title="Remove this rule">✕</button></span>
+        ${result ? `<span class="why">${WHY[result]}</span>` : ""}
+      </div>`;
+    }).join("");
+    const freeSlots = robot.slots - robot.program.length;
+    const empties = freeSlots > 0 ? `<div class="empty-slot">${freeSlots} empty chip slot${freeSlots === 1 ? "" : "s"}</div>` : "";
+    const battery = live ? live.battery : 1;
+    const doing = live
+      ? live.outOfPower ? `<b style="color:var(--bad)">Out of battery, shut down</b>` : sim.time >= sim.settings.shiftSeconds ? "<b>Shift over</b>"
+        : `<b>${live.task ? ACTION_WORDS[live.task.action] : live.lastAction ? ACTION_WORDS[live.lastAction] : "Starting up"}</b>${live.choice?.ruleIndex === -1 && live.task ? " (no rule fit)" : ""}`
+      : "<b>Not started</b>";
+    return `<div class="robot ${live?.outOfPower ? "dead" : ""}">
+      <div class="top">
+        <input class="name" data-robot="${r}" data-field="name" value="${escape(robot.name)}" title="Robot name">
+        <label>Speed <input type="number" min="0.1" step="0.1" data-robot="${r}" data-field="speed" value="${robot.speed}" title="1 is normal. 2 does every job in half the time."></label>
+        <label>Battery (seconds of work) <input type="number" min="1" step="10" data-robot="${r}" data-field="batterySeconds" value="${robot.batterySeconds}"></label>
+        <label>Chip slots <input type="number" min="1" step="1" data-robot="${r}" data-field="slots" value="${robot.slots}"></label>
+      </div>
+      <div class="doing">Now: ${doing} <div class="battery ${battery < 0.2 ? "low" : ""}" title="Battery ${Math.round(battery * 100)}%"><div style="width:${battery * 100}%"></div></div>${Math.round(battery * 100)}%</div>
+      ${rules}${empties}
+      <div class="bottom">
+        <button class="small" data-add-rule="${r}" ${freeSlots <= 0 ? "disabled" : ""}>Add rule</button>
+        <button class="small" data-delete-robot="${r}">Remove robot</button>
+      </div>
+    </div>`;
+  }).join("");
+  $("#robots").innerHTML = `<h2>Robots <button class="small" id="addRobot">Add robot</button></h2>${cards}`;
+  updateButtons();
+}
+
+function renderLab() {
+  const s = setup.settings;
+  const settings = SETTINGS.map(([key, label]) => `<label>${label} <input type="number" min="0" step="1" data-setting="${key}" value="${s[key]}"></label>`).join("");
+  let store = "";
+  let results = "";
+  let log = "";
+  if (sim) {
+    const robotName = (id) => sim.robots.find((robot) => robot.id === id)?.name ?? "";
+    const registers = sim.registers.map((register) => `<div class="line-row"><span>${register.id}</span><span>${register.line.map(() => '<span class="dot"></span>').join("") || '<span class="who">no one waiting</span>'}</span><span class="who">${register.staffedBy ? `worked by ${escape(robotName(register.staffedBy))}` : "no robot here"}</span></div>`).join("");
+    const shelves = sim.shelves.map((shelf) => {
+      const fill = shelf.stock / SIM_RULES.shelfCapacity;
+      return `<div class="shelf-row"><span>${shelf.id}</span><div class="fill ${fill < 0.25 ? "low" : ""}"><div style="width:${fill * 100}%"></div></div><span>${shelf.stock} of ${SIM_RULES.shelfCapacity}</span></div>`;
+    }).join("");
+    const stations = sim.stations.map((station) => `<div>${station.id}: ${station.usedBy ? escape(robotName(station.usedBy)) : '<span class="who">free</span>'}</div>`).join("") || '<span class="who">None. Robots can\'t charge!</span>';
+    store = `<div class="store">
+      <div class="box"><h3>Sales floor: registers</h3>${registers}<div style="margin-top:6px">Messes on the floor: <span class="count">${sim.messes}</span></div></div>
+      <div class="box"><h3>Sales floor: shelves</h3>${shelves}</div>
+      <div class="box"><h3>Backroom</h3>Crates on the loading pad: <span class="count">${sim.padCrates}</span><br>Crates stored: <span class="count">${sim.backroomCrates}</span> of ${s.backroomCapacity}</div>
+      <div class="box"><h3>Backroom: charging</h3>${stations}</div>
+    </div>`;
+    const st = sim.stats;
+    const busy = sim.robots.map((robot) => `<tr><td>${escape(robot.name)} was busy</td><td class="num">${sim.time ? Math.round((robot.busySeconds / sim.time) * 100) : 0}% of the time</td></tr>`).join("");
+    results = `<table>
+      <tr><th>So far this shift</th><th></th></tr>
+      <tr><td>Money from sales</td><td class="num">${money(st.sales)}</td></tr>
+      <tr><td>Customers who came in</td><td class="num">${st.customers}</td></tr>
+      <tr><td>Customers served at a register</td><td class="num">${st.served}</td></tr>
+      <tr><td>Left because the shelf they wanted was empty</td><td class="num">${st.leftEmptyShelf}</td></tr>
+      <tr><td>Left because the register line was full</td><td class="num">${st.leftLongLine}</td></tr>
+      <tr><td>Gave up waiting in line</td><td class="num">${st.leftTooSlow}</td></tr>
+      ${busy}</table>`;
+    log = `<h2>What happened</h2><div class="log">${[...sim.log].reverse().map((entry) => `<div><span>${clock(entry.time)}</span>${escape(entry.text)}</div>`).join("") || "Nothing yet."}</div>`;
+  }
+  const done = sim && sim.time >= s.shiftSeconds;
+  $("#lab").innerHTML = `
+    <h2>Pretend store</h2>
+    <div class="settings">${settings}</div>
+    <div class="controls">
+      <button id="play" class="primary" ${done ? "disabled" : ""}>${timer ? "Pause" : "Play"}</button>
+      <select id="speed" title="How fast time moves">${[1, 5, 20].map((value) => `<option value="${value}" ${value === speed ? "selected" : ""}>${value}x speed</option>`).join("")}</select>
+      <button id="stepOne" ${done ? "disabled" : ""}>Step 1 second</button>
+      <button id="runAll" ${done ? "disabled" : ""}>Skip to end of shift</button>
+      <button id="restart">Restart shift</button>
+      <span class="clock">${sim ? `${clock(sim.time)} of ${clock(s.shiftSeconds)}${done ? " (shift over)" : ""}` : ""}</span>
+    </div>
+    ${store}${results}${log}`;
+}
+
+function render() {
+  renderRobots();
+  renderLab();
+}
+
+function restart() {
+  stop();
+  sim = createSim(clone(setup), 1);
+  render();
+}
+
+// Program and robot edits go straight into the running store, so you can tune while it runs.
+function syncRobots() {
+  if (!sim || sim.robots.length !== setup.robots.length) return restart();
+  setup.robots.forEach((robot, index) => Object.assign(sim.robots[index], clone(robot)));
+  render();
+}
+
+function tick() {
+  for (let n = 0; n < speed; n += 1) step(sim);
+  if (sim.time >= setup.settings.shiftSeconds) stop();
+  // Redrawing the robots would close a dropdown you're in the middle of picking from.
+  if (!$("#robots").contains(document.activeElement)) renderRobots();
+  renderLab();
+}
+function stop() {
+  clearInterval(timer);
+  timer = null;
+}
+
+function edited() {
+  status(dirty() ? "Unsaved changes" : "");
+}
+
+$("#robots").addEventListener("change", (event) => {
+  const field = event.target;
+  const r = Number(field.dataset.robot);
+  if (Number.isNaN(r)) return;
+  const robot = setup.robots[r];
+  const key = field.dataset.field;
+  if (field.dataset.rule !== undefined) {
+    const rule = robot.program[Number(field.dataset.rule)];
+    rule[key] = key === "on" ? field.checked : field.value;
+  } else if (key === "name") {
+    if (!field.value.trim()) return field.classList.add("invalid"), updateButtons();
+    robot.name = field.value.trim();
+  } else {
+    const value = Number(field.value);
+    const ok = key === "slots" ? Number.isInteger(value) && value >= robot.program.length && value >= 1 : value > 0;
+    if (!ok) {
+      field.classList.add("invalid");
+      field.title = key === "slots" ? "Can't have fewer slots than rules. Remove a rule first." : "Must be above 0.";
+      return updateButtons();
+    }
+    robot[key] = value;
+  }
+  syncRobots();
+  edited();
+});
+
+$("#robots").addEventListener("click", (event) => {
+  const target = event.target;
+  if (target.id === "addRobot") {
+    setup.robots.push({ name: `Robot ${setup.robots.length + 1}`, speed: 1, batterySeconds: 240, slots: 3, program: [{ condition: "battery_below_20", action: "charge", on: true }] });
+  } else if (target.dataset.addRule !== undefined) {
+    setup.robots[Number(target.dataset.addRule)].program.push({ condition: "always", action: "wait", on: true });
+  } else if (target.dataset.deleteRobot !== undefined) {
+    if (!confirm(`Remove ${setup.robots[Number(target.dataset.deleteRobot)].name}?`)) return;
+    setup.robots.splice(Number(target.dataset.deleteRobot), 1);
+  } else if (target.dataset.deleteRule !== undefined) {
+    setup.robots[Number(target.dataset.robot)].program.splice(Number(target.dataset.deleteRule), 1);
+  } else if (target.dataset.move !== undefined) {
+    const program = setup.robots[Number(target.dataset.robot)].program;
+    const from = Number(target.dataset.rule);
+    const to = from + Number(target.dataset.move);
+    [program[from], program[to]] = [program[to], program[from]];
+  } else return;
+  syncRobots();
+  edited();
+});
+
+$("#lab").addEventListener("change", (event) => {
+  const field = event.target;
+  if (field.id === "speed") {
+    speed = Number(field.value);
+    return;
+  }
+  const key = field.dataset.setting;
+  if (!key) return;
+  const value = Number(field.value);
+  const minimum = ["shiftSeconds", "registers", "shelves", "deliveryEverySeconds"].includes(key) ? 1 : 0;
+  if (!Number.isFinite(value) || value < minimum) {
+    field.classList.add("invalid");
+    return updateButtons();
+  }
+  setup.settings[key] = value;
+  restart();
+  edited();
+});
+
+$("#lab").addEventListener("click", (event) => {
+  const id = event.target.id;
+  if (id === "play") {
+    if (timer) stop();
+    else timer = setInterval(tick, 1000);
+    render();
+  } else if (id === "stepOne") {
+    step(sim);
+    render();
+  } else if (id === "runAll") {
+    stop();
+    while (sim.time < setup.settings.shiftSeconds) step(sim);
+    render();
+  } else if (id === "restart") restart();
+});
+
+$("#undo").addEventListener("click", () => {
+  setup = clone(saved);
+  restart();
+  status("");
+});
+
+$("#save").addEventListener("click", async () => {
+  status("Saving...");
+  const response = await fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(setup) });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) return status((body.problems ?? ["Couldn't save."]).join("\n"), "bad");
+  saved = clone(setup);
+  updateButtons();
+  status("Saved", "good");
+});
+
+window.addEventListener("beforeunload", (event) => {
+  if (dirty()) event.preventDefault();
+});
+
+fetch("/api/data").then((response) => response.json()).then((data) => {
+  saved = data;
+  setup = clone(data);
+  restart();
+  status("");
+}).catch(() => status("Couldn't load. Is npm run robots still running?", "bad"));
+</script>
+</body>
+</html>

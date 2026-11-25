@@ -23,7 +23,8 @@
     "style": "node --watch --watch-path=scripts/style-planner/server.mjs     scripts/style-planner/server.mjs",
         "room": "node --watch --watch-path=scripts/room-painter/server.mjs scripts/room-painter/server.mjs",
     "ship": "node scripts/ship-painter/server.mjs",
-    "arcade": "node scripts/arcade-tester/server.mjs"
+    "arcade": "node scripts/arcade-tester/server.mjs",
+    "robots": "node --watch --watch-path=scripts/robot-lab/server.mjs scripts/robot-lab/server.mjs"
   },
   "build": {
     "appId": "com.zachsinger.spacearmsdealer",

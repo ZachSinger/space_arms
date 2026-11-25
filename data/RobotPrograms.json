@@ -1,0 +1,36 @@
+{
+  "settings": {
+    "shiftSeconds": 600,
+    "registers": 1,
+    "shelves": 6,
+    "stations": 1,
+    "customersPerMinute": 6,
+    "deliveryEverySeconds": 120,
+    "cratesPerDelivery": 4,
+    "backroomCapacity": 12,
+    "startingBackroomCrates": 3
+  },
+  "robots": [
+    {
+      "name": "Register bot",
+      "speed": 1,
+      "batterySeconds": 240,
+      "slots": 3,
+      "program": [
+        { "condition": "battery_below_20", "action": "charge", "on": true },
+        { "condition": "always", "action": "work_register", "on": true }
+      ]
+    },
+    {
+      "name": "Stock bot",
+      "speed": 1,
+      "batterySeconds": 240,
+      "slots": 3,
+      "program": [
+        { "condition": "battery_below_20", "action": "charge", "on": true },
+        { "condition": "shelf_below_50", "action": "restock", "on": true },
+        { "condition": "crate_on_pad", "action": "unload_pad", "on": true }
+      ]
+    }
+  ]
+}
