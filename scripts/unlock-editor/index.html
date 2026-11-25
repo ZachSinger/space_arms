@@ -32,6 +32,7 @@
   td.unlocks span { color: var(--text); }
   tr.changed td, label.changed { background: var(--changed); }
   input { background: #0f172a; color: #fde68a; border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: inherit; width: 90px; text-align: right; }
+  select.faction { background: #0f172a; color: #fde68a; border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: inherit; width: 130px; }
   input.level { width: 60px; }
   button.small { padding: 2px 9px; font-size: 12px; margin-left: 8px; }
   input.text, textarea { text-align: left; width: 230px; }
@@ -75,11 +76,11 @@ function set(path, value) {
   keys.reduce((value, key) => value[key], state)[last] = value;
 }
 
-function input(path, kind = "money") {
+function input(path, kind = "money", disabled = false) {
   const value = get(path);
   const level = kind === "level";
   const tier = kind === "tier";
-  return `<input type="number" data-path="${path}" class="${level || tier ? "level" : ""}" ${level ? `min="1" max="${state.reputation.length}"` : `min="${tier ? 1 : 0}"`} step="1" value="${value ?? ""}">`;
+  return `<input type="number" data-path="${path}" class="${level || tier ? "level" : ""}" ${level ? `min="1" max="${state.reputation.length}"` : `min="${tier ? 1 : 0}"`} step="1" value="${value ?? ""}" ${disabled ? "disabled" : ""}>`;
 }
 
 function textInput(path, { long = false, required = true } = {}) {
@@ -133,8 +134,8 @@ function render() {
   const byUnlockLevel = state.licenses.map((license, index) => ({ license, index }))
     .sort((a, b) => (a.license.level ?? 0) - (b.license.level ?? 0) || a.index - b.index);
   const contracts = byUnlockLevel.map(({ license, index }) => row(
-    [`licenses.${index}.name`, `licenses.${index}.description`, `licenses.${index}.tier`, `licenses.${index}.level`, `licenses.${index}.cost`],
-    `<td>${textInput(`licenses.${index}.name`)}${license.isNew ? ` <button class="small" data-remove="${index}">Remove</button>` : ""}</td><td>${textInput(`licenses.${index}.description`, { long: true, required: false })}</td><td class="num">${input(`licenses.${index}.tier`, "tier")}</td><td class="num">${license.level === null ? "Start" : input(`licenses.${index}.level`, "level")}</td><td class="num">${input(`licenses.${index}.cost`)}</td><td class="num">${license.isNew ? '<span class="dim">new</span>' : itemList(license)}</td>`,
+    [`licenses.${index}.name`, `licenses.${index}.description`, `licenses.${index}.tier`, `licenses.${index}.level`, `licenses.${index}.cost`, `licenses.${index}.faction`, `licenses.${index}.factionRep`],
+    `<td>${textInput(`licenses.${index}.name`)}${license.isNew ? ` <button class="small" data-remove="${index}">Remove</button>` : ""}</td><td>${textInput(`licenses.${index}.description`, { long: true, required: false })}</td><td class="num">${input(`licenses.${index}.tier`, "tier")}</td><td class="num">${license.level === null ? "Start" : input(`licenses.${index}.level`, "level")}</td><td class="num">${input(`licenses.${index}.cost`)}</td><td><select class="faction" data-path="licenses.${index}.faction" data-select="faction"><option value="">None</option><option value="scavengers" ${license.faction === "scavengers" ? "selected" : ""}>Scavengers</option><option value="mercenaries" ${license.faction === "mercenaries" ? "selected" : ""}>Mercenaries</option><option value="explorers" ${license.faction === "explorers" ? "selected" : ""}>Explorers</option></select></td><td class="num">${input(`licenses.${index}.factionRep`, "factionRep", !license.faction)}</td><td class="num">${license.isNew ? '<span class="dim">new</span>' : itemList(license)}</td>`,
     license.isNew,
   )).join("");
 
@@ -165,7 +166,7 @@ function render() {
     <section id="levels"><h2>Shop levels</h2><table>
       <tr><th>Level</th><th class="edit">Reputation needed</th><th>More than last level</th><th class="left">Unlocks</th></tr>${levels}</table></section>
     <section id="contracts"><h2>Contracts <button class="small" id="addContract">Add contract</button></h2><table>
-      <tr><th class="left edit">Contract name</th><th class="left edit">Description</th><th class="edit" title="Shown to the player on the contract card">Tier</th><th class="edit">Unlocks at level</th><th class="edit">Cost</th><th>Items (click to list)</th></tr>${contracts}</table></section>
+      <tr><th class="left edit">Contract name</th><th class="left edit">Description</th><th class="edit" title="Shown to the player on the contract card">Tier</th><th class="edit">Unlocks at level</th><th class="edit">Cost</th><th class="left edit">Faction required</th><th class="edit">Faction reputation</th><th>Items (click to list)</th></tr>${contracts}</table></section>
     <section id="rooms"><h2>Shop expansions and backroom upgrades</h2><table>
       <tr><th class="left">Room</th><th class="edit">Unlocks at level</th><th class="edit">Cost</th></tr>${rooms}</table></section>
     <section id="staff"><h2>Staff</h2><div class="columns">
@@ -194,7 +195,9 @@ $("#main").addEventListener("change", (event) => {
   const field = event.target.closest("[data-path]");
   if (!field) return;
   let value;
-  if (field.dataset.text) {
+  if (field.dataset.select) {
+    value = field.value;
+  } else if (field.dataset.text) {
     value = field.value.trim();
     if (field.dataset.required && value === "") {
       field.classList.add("invalid");
@@ -211,6 +214,9 @@ $("#main").addEventListener("change", (event) => {
   }
   const scroll = $("#main").scrollTop;
   set(field.dataset.path, value);
+  if (field.dataset.select === "faction" && value === "") {
+    set(field.dataset.path.replace(/\.faction$/, ".factionRep"), 0);
+  }
   render();
   $("#main").scrollTop = scroll;
   status(dirty() ? "Unsaved changes" : "");

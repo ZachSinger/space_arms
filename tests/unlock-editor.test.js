@@ -64,7 +64,10 @@ test("unlock editor rejects blank and duplicate contract names", () => {
 
 test("unlock editor adds a new contract the game can load", () => {
   const state = buildState(texts);
-  state.licenses.push({ isNew: true, name: "Rifle Scopes", description: "Glass for long guns.", tier: 2, cost: 900, level: 9 });
+  state.licenses.push({
+    isNew: true, name: "Rifle Scopes", description: "Glass for long guns.", tier: 2, cost: 900, level: 9,
+    faction: "explorers", factionRep: 25,
+  });
   state.licenses.push({ isNew: true, name: "Rifle-Scopes!", description: "", tier: 1, cost: 0, level: 1 });
   assert.deepEqual(problemsIn(state), []);
   const next = applyState(texts, state);
@@ -77,7 +80,52 @@ test("unlock editor adds a new contract the game can load", () => {
   assert.equal(contract.name, "Rifle Scopes");
   assert.equal(contract.requiredShopLevel, 9);
   assert.equal(contract.baseCost, 900);
+  assert.equal(contract.reqFaction, "explorers");
+  assert.equal(contract.reqFactionRep, 25);
+  assert.equal(contract.isUnlocked({
+    reputation: { shopLevel: 9, global: 0, factions: { explorers: 24 } },
+  }), false);
+  assert.equal(contract.isUnlocked({
+    reputation: { shopLevel: 9, global: 0, factions: { explorers: 25 } },
+  }), true);
   assert.ok(next.licenses.startsWith(texts.licenses.slice(0, texts.licenses.lastIndexOf("}") + 1)));
+});
+
+test("unlock editor can change or remove an existing contract's faction requirement", () => {
+  const state = buildState(texts);
+  const license = state.licenses.find((entry) => entry.faction);
+  assert.ok(license);
+  const id = license.id;
+  license.faction = "explorers";
+  license.factionRep = 23;
+  const updated = JSON.parse(applyState(texts, state).licenses).find((entry) => entry.id === id);
+  assert.equal(updated.reqFaction, "explorers");
+  assert.equal(updated.reqFactionRep, 23);
+
+  license.faction = "";
+  license.factionRep = 0;
+  const cleared = JSON.parse(applyState(texts, state).licenses).find((entry) => entry.id === id);
+  assert.equal(cleared.reqFaction, null);
+  assert.equal(cleared.reqFactionRep, 0);
+});
+
+test("unlock editor can add a faction requirement to a contract without faction fields yet", () => {
+  const state = buildState(texts);
+  const license = state.licenses.find((entry) => !entry.faction);
+  license.faction = "mercenaries";
+  license.factionRep = 12;
+  const saved = JSON.parse(applyState(texts, state).licenses).find((entry) => entry.id === license.id);
+  assert.equal(saved.reqFaction, "mercenaries");
+  assert.equal(saved.reqFactionRep, 12);
+});
+
+test("unlock editor validates faction requirements", () => {
+  const state = buildState(texts);
+  state.licenses[0].faction = "unknown";
+  state.licenses[0].factionRep = 1.5;
+  const problems = problemsIn(state).join("\n");
+  assert.match(problems, /choose a valid faction/);
+  assert.match(problems, /faction reputation must be a whole number/);
 });
 
 test("unlock editor rejects shop levels that don't need more reputation", () => {

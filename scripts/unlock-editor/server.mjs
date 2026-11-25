@@ -24,6 +24,7 @@ const FILES = {
   items: path.join(ROOT, "data", "Items.json"),
 };
 const CHARGER_ID = "hovercart_charger";
+const FACTIONS = ["scavengers", "mercenaries", "explorers"];
 const ZONE_IDS = [...EXPANSION_ORDER, ...BACKROOM_UPGRADE_ORDER];
 const UPGRADE_PATHS = ["speed", "length", "battery"];
 
@@ -56,6 +57,8 @@ export function buildState(texts) {
       tier: license.tier,
       cost: license.baseCost,
       level: license.requiredShopLevel ?? null,
+      faction: license.reqFaction ?? "",
+      factionRep: license.reqFactionRep ?? 0,
       itemCount: items.filter((item) => item.license === license.id).length,
       itemNames: items.filter((item) => item.license === license.id).map((item) => item.name),
       fixtureCount: license.unlocksFixtures?.length ?? 0,
@@ -78,7 +81,8 @@ function editable(state) {
     hovercartPrice: state.hovercartPrice,
     upgrades: UPGRADE_PATHS.map((name) => state.upgrades[name].map(({ level, cost }) => [level, cost])),
     zones: state.zones.map(({ id, cost, level }) => [id, cost, level]),
-    licenses: state.licenses.map(({ id, name, description, tier, cost, level }) => [id, name, description, tier, cost, level]),
+    licenses: state.licenses.map(({ id, name, description, tier, cost, level, faction, factionRep }) =>
+      [id, name, description, tier, cost, level, faction, factionRep]),
     fixtures: state.fixtures.map(({ id, price }) => [id, price]),
   };
 }
@@ -132,6 +136,10 @@ export function problemsIn(state) {
     if (license.isNew && license.level === null) problems.push(`${license.name}: needs an unlock level.`);
     if (license.level !== null) checkLevel(license.name, license.level);
     checkCost(license.name, license.cost);
+    if (license.faction && !FACTIONS.includes(license.faction)) problems.push(`${license.name}: choose a valid faction.`);
+    if (license.faction && (!isWhole(license.factionRep) || license.factionRep < 0)) {
+      problems.push(`${license.name}: faction reputation must be a whole number, 0 or more.`);
+    }
   }
   for (const fixture of state.fixtures) checkCost(fixture.name, fixture.price);
   return problems;
@@ -151,6 +159,20 @@ function setText(text, [start, end], key, value, where) {
   if (!match) throw new Error(`Couldn't find ${key} for ${where}.`);
   const at = start + match.index + match[1].length;
   return text.slice(0, at) + JSON.stringify(value) + text.slice(at + match[2].length);
+}
+
+/** Replaces or inserts one JSON value inside a contract entry. */
+function setLicenseValue(text, id, key, value) {
+  const [start, end] = listEntry(text, id);
+  const entry = text.slice(start, end);
+  const match = new RegExp(`("${key}":\\s*)(?:"(?:[^"\\\\]|\\\\.)*"|-?\\d+(?:\\.\\d+)?|null)`).exec(entry);
+  if (match) {
+    const at = start + match.index + match[1].length;
+    return text.slice(0, at) + JSON.stringify(value) + text.slice(at + match[0].length - match[1].length);
+  }
+  const close = text.lastIndexOf("\n  }", end);
+  if (close < start) throw new Error(`Couldn't find the end of contract ${id}.`);
+  return `${text.slice(0, close)},\n    "${key}": ${JSON.stringify(value)}${text.slice(close)}`;
 }
 
 /** Start and end of the entry with this id in a list file like Licenses.json. */
@@ -192,7 +214,9 @@ function appendLicenses(text, added) {
     `    "tier": ${license.tier},`,
     `    "baseCost": ${license.cost},`,
     `    "requiredShopLevel": ${license.level},`,
-    `    "reqReputation": null`,
+    `    "reqReputation": null,`,
+    `    "reqFaction": ${JSON.stringify(license.faction || null)},`,
+    `    "reqFactionRep": ${license.faction ? license.factionRep : 0}`,
     "  }",
   ].join(newline));
   const end = text.lastIndexOf("}");
@@ -222,7 +246,12 @@ export function applyState(texts, state) {
   const takenIds = new Set(oldLicenses.keys());
   state = {
     ...state,
-    licenses: state.licenses.map(({ isNew, ...license }) => (isNew ? { ...license, id: newLicenseId(license.name, takenIds) } : license)),
+    licenses: state.licenses.map(({ isNew, ...license }) => (isNew ? {
+      ...license,
+      id: newLicenseId(license.name, takenIds),
+      faction: license.faction ?? "",
+      factionRep: license.faction ? license.factionRep : 0,
+    } : license)),
   };
   let licenses = texts.licenses;
   const added = [];
@@ -238,6 +267,13 @@ export function applyState(texts, state) {
     if (old.baseCost !== license.cost) licenses = setValue(licenses, listEntry(licenses, license.id), "baseCost", license.cost, license.name);
     if (license.level !== null && old.requiredShopLevel !== license.level) {
       licenses = setValue(licenses, listEntry(licenses, license.id), "requiredShopLevel", license.level, license.name);
+    }
+    if ((old.reqFaction ?? "") !== license.faction) {
+      licenses = setLicenseValue(licenses, license.id, "reqFaction", license.faction || null);
+    }
+    const factionRep = license.faction ? license.factionRep : 0;
+    if ((old.reqFactionRep ?? 0) !== factionRep) {
+      licenses = setLicenseValue(licenses, license.id, "reqFactionRep", factionRep);
     }
   }
   licenses = appendLicenses(licenses, added);
