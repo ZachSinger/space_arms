@@ -12,14 +12,17 @@ import { CONTROL_MODES, modeAllows } from "../input/ControlMode.js";
 import { controlLabel, withInputDevice } from "../input/InputDevice.js";
 import { HOLD_KEY_MS } from "../logic/CrateStack.js";
 import { WindowManager } from "../logic/WindowManager.js";
+import { RemoteCheckout } from "./RemoteCheckout.js";
 
-// The kinds of things the partner can use. The register, drone terminal, hovercart, and moving
-// or placing fixtures stay with the shop owner; doors are handled by CoopHost.
+// The kinds of things the partner can use. The drone terminal, hovercart, and moving or
+// placing fixtures stay with the shop owner; doors are handled by CoopHost.
 export const PARTNER_KINDS = Object.freeze(new Set([
-  "crate-control", "fixture", "trashcan", "trash", "dirt", "cleaning", "remote-order-stock",
+  "crate-control", "fixture", "trashcan", "trash", "dirt", "cleaning", "remote-order-stock", "register",
 ]));
 const CRATE_KEYS = ["carriedCrates", "carriedCrate", "markedStackBase", "markedFromTop"];
 const CLEANING_KEYS = ["heldTrash", "heldMop", "mopAnimation", "mopBar"];
+// Where each shopkeeper is working the counter (see CheckoutSystem.beginRegisterSession).
+const REGISTER_KEYS = ["operatingRegister", "operatingRegisterFixture", "playerPositionBeforeRegister", "registerDepthBeforeTuck"];
 const GREY = "#94a3b8";
 const SHELF_SEND_MS = 100;
 
@@ -69,11 +72,24 @@ export class PartnerActions {
       refresh: () => this.mode(),
       allows: (action) => modeAllows(this.mode(), action),
     };
-    // The partner never stands at the register, so the register's change keys never apply to them.
-    this.checkoutWindow = shop.checkoutWindow && Object.create(shop.checkoutWindow, {
-      usesSpaceKey: { value: () => false },
-      usesChitInput: { value: () => false },
+    // The partner's own register screen, which runs on the friend's computer. The friend's
+    // game hears where the counter is before the first customer's cart arrives.
+    this.checkoutWindow = new RemoteCheckout((message) => {
+      if (message.open) this.sendSeat();
+      host.send(message);
     });
+    this.registerSeat = { operatingRegister: false, operatingRegisterFixture: null,
+      playerPositionBeforeRegister: null, registerDepthBeforeTuck: null };
+    this.hostSeat = null;
+    this.acting = false;
+    this.sentSeat = false;
+    if (shop.checkoutSystem) {
+      shop.checkoutSystem.coOperator = {
+        otherRegister: () => this.otherRegister(),
+        serving: (register) => (!this.acting && this.registerSeat.operatingRegister &&
+          this.registerSeat.operatingRegisterFixture === register ? (fn) => this.withPartner(fn) : null),
+      };
+    }
     this.shelf = createShelfWindow ? this.buildShelfWindow(createShelfWindow) : null;
   }
 
@@ -83,12 +99,24 @@ export class PartnerActions {
     if (shop.saves?.loadFailed || shop.shift?.starting) return CONTROL_MODES.LOADING;
     if (shop.gamePaused || (shop.shiftClock?.started && shop.shiftClock.isPaused)) return CONTROL_MODES.PAUSED;
     if (this.shelf?.uiWindow.isOpen) return CONTROL_MODES.MODAL;
+    if (this.atRegister()) return CONTROL_MODES.REGISTER;
     if (this.carriedCrate) return CONTROL_MODES.CARRYING;
     return CONTROL_MODES.WALKING;
   }
 
   get shelfOpen() {
     return Boolean(this.shelf?.uiWindow.isOpen);
+  }
+
+  /** Whether the partner is behind a register's counter. */
+  atRegister() {
+    return Boolean(this.acting ? this.shop.checkoutSystem?.operatingRegister : this.registerSeat.operatingRegister);
+  }
+
+  // The register the other shopkeeper is working, from whoever the shop is acting for now.
+  otherRegister() {
+    const seat = this.acting ? this.hostSeat : this.registerSeat;
+    return seat?.operatingRegister ? seat.operatingRegisterFixture : null;
   }
 
   /**
@@ -99,9 +127,11 @@ export class PartnerActions {
    * @returns {T}
    */
   withPartner(fn, { anyKind = false } = {}) {
+    if (this.acting) return fn();
     const shop = this.shop;
     const crates = shop.crateSystem;
     const cleaning = shop.cleaningSystem;
+    const checkout = shop.checkoutSystem;
     const { x, y } = this.partner.sprite;
     const swaps = [
       [shop, {
@@ -109,15 +139,16 @@ export class PartnerActions {
         messages: this.messages,
         controlMode: this.controlMode,
         hovercart: null,
-        ...(this.checkoutWindow ? { checkoutWindow: this.checkoutWindow } : {}),
+        checkoutWindow: this.checkoutWindow,
         ...(this.shelf ? { shelfStockingWindow: this.shelf } : {}),
       }],
       [shop.interactables, { allowedKinds: anyKind ? null : PARTNER_KINDS }],
       [shop.areas, shop.areas ? { playerArea: shop.areas.areaAt(x, y) } : {}],
-      [shop.checkoutSystem, { operatingRegister: false }],
+      [checkout, { ...this.registerSeat }],
       [crates, { ...pick(this, CRATE_KEYS), pickupMarker: this.marker }],
       [cleaning, pick(this, CLEANING_KEYS)],
     ].filter(([target]) => target);
+    this.hostSeat = checkout ? pick(checkout, REGISTER_KEYS) : null;
     const previous = swaps.map(([target, values]) => {
       const old = {};
       for (const key of Object.keys(values)) {
@@ -126,12 +157,16 @@ export class PartnerActions {
       }
       return old;
     });
+    this.acting = true;
     try {
       return withInputDevice(this.device, fn);
     } finally {
+      this.acting = false;
       if (crates) Object.assign(this, pick(crates, CRATE_KEYS));
       if (cleaning) Object.assign(this, pick(cleaning, CLEANING_KEYS));
+      if (checkout) this.registerSeat = pick(checkout, REGISTER_KEYS);
       swaps.forEach(([target], index) => Object.assign(target, previous[index]));
+      this.hostSeat = null;
     }
   }
 
@@ -148,6 +183,8 @@ export class PartnerActions {
       else if (action === "putDown") this.shelf.chooseNextCrate();
       return;
     }
+    // At the register, the friend's own register screen takes every other button.
+    if (this.atRegister() && action !== "interact") return;
     if (action === "interact" && down) this.interact();
     else if (action === "nextCrate" && down) this.withPartner(() => this.shop.crateSystem.markNextCrateDown());
     else if (action === "crate" || action === "putDown") {
@@ -159,6 +196,11 @@ export class PartnerActions {
 
   // The friend's use button: doors first, then whatever the partner faces.
   interact() {
+    if (this.atRegister()) {
+      // Behind the counter, use means step away from it, as it does for the player.
+      this.withPartner(() => this.shop.interactionSystem.handleInteract());
+      return;
+    }
     if (this.host.partnerDoor()) {
       this.host.usePartnerDoor();
       return;
@@ -282,7 +324,39 @@ export class PartnerActions {
       this.sentHint = this.hint;
       this.host.send({ t: "hint", text: this.hint });
     }
+    this.sendSeat();
     this.sendShelf();
+  }
+
+  // --- The partner's register ---
+
+  // Tells the friend's game when the partner steps behind a register or away from it, with
+  // where the counter is, so their register screen can open beside it.
+  sendSeat() {
+    const seat = this.atRegister();
+    if (seat === this.sentSeat) return;
+    this.sentSeat = seat;
+    if (!seat) {
+      this.host.send({ t: "reg", seat: false });
+      return;
+    }
+    const fixture = (this.acting ? this.shop.checkoutSystem : this.registerSeat).operatingRegisterFixture;
+    const rects = [fixture?.sprite, this.partner.sprite]
+      .filter((sprite) => sprite?.getBounds)
+      .map((sprite) => sprite.getBounds());
+    const area = rects.length ? [
+      Math.min(...rects.map((rect) => rect.left)),
+      Math.min(...rects.map((rect) => rect.top)),
+      Math.max(...rects.map((rect) => rect.right)),
+      Math.max(...rects.map((rect) => rect.bottom)),
+    ] : null;
+    this.host.send({ t: "reg", seat: true, area });
+  }
+
+  /** A report from the friend's register screen (see RemoteCheckout.REGISTER_REPORTS). */
+  handleRegisterMessage(message) {
+    const callback = this.checkoutWindow.callbackFor(message);
+    if (callback) this.withPartner(callback);
   }
 
   // --- The partner's shelf window ---
@@ -366,6 +440,8 @@ export class PartnerActions {
   destroy() {
     const shop = this.shop;
     this.shelf?.uiWindow.close();
+    if (this.atRegister()) this.withPartner(() => shop.checkoutSystem.endRegisterSession());
+    if (shop.checkoutSystem) shop.checkoutSystem.coOperator = null;
     this.withPartner(() => {
       shop.cleaningSystem?.putAwayMop();
       if (this.heldTrash && !shop.cleaningSystem.dropHeldTrash()) {

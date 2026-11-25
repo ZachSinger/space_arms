@@ -6,6 +6,7 @@
 // shop picture and the top bar's money and clock go back to the friend's game.
 import { Partner } from "./Partner.js";
 import { PartnerActions } from "./PartnerActions.js";
+import { REGISTER_REPORTS } from "./RemoteCheckout.js";
 import { GAME_EVENTS } from "../core/Events.js";
 import { MIRROR_INTERVAL_MS, MirrorWriter, describeTexture } from "./DisplayMirror.js";
 
@@ -112,6 +113,7 @@ export class CoopHost {
     } else if (message.t === "shelfNext") {
       if (this.actions?.shelfOpen) this.actions.shelf.chooseNextCrate();
     } else if (SHELF_MESSAGES.has(message.t)) this.actions?.handleShelfMessage(message);
+    else if (Object.hasOwn(REGISTER_REPORTS, message.t)) this.actions?.handleRegisterMessage(message);
     else if (message.t === "sync") {
       this.writer.reset();
       this.lastHud = "";
@@ -132,7 +134,7 @@ export class CoopHost {
   update(delta, frozen) {
     this.frozen = frozen;
     if (!this.partner) return;
-    if (frozen || this.actions?.shelfOpen) this.partner.stand();
+    if (frozen || this.actions?.shelfOpen || this.actions?.atRegister()) this.partner.stand();
     else this.partner.update(delta);
     if (!frozen) this.actions?.update(delta);
   }

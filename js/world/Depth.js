@@ -44,4 +44,10 @@ export function sortPeopleByFeet(shop) {
   if (shop.checkoutSystem.registerDepthBeforeTuck != null && shop.player?.sprite) {
     shop.checkoutSystem.operatingRegisterFixture?.sprite?.setDepth(shop.player.sprite.depth + 0.5);
   }
+  // The same for the co-op friend's shopkeeper at their own register.
+  const partnerSeat = shop.coop?.actions?.registerSeat;
+  const partner = shop.coop?.partner?.sprite;
+  if (partnerSeat?.registerDepthBeforeTuck != null && partner && shop.player?.sprite !== partner) {
+    partnerSeat.operatingRegisterFixture?.sprite?.setDepth(partner.depth + 0.5);
+  }
 }

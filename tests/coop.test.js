@@ -1,10 +1,47 @@
-import test from "node:test";
+import { after, before, test } from "node:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { createServer } from "vite";
 import assert from "node:assert/strict";
 import { ChunkAssembler, FrameReader, chunkMessage, frameMessage } from "../js/platform/coop.js";
 import { MirrorWriter } from "../js/coop/DisplayMirror.js";
 import { CoopHost } from "../js/coop/CoopHost.js";
 import { PartnerActions } from "../js/coop/PartnerActions.js";
 import { InteractableRegistry } from "../js/interaction/InteractableRegistry.js";
+
+let server;
+let cacheDirectory;
+let CheckoutSystem;
+
+before(async () => {
+  cacheDirectory = await mkdtemp(join(tmpdir(), "space-arms-coop-test-"));
+  server = await createServer({
+    root: fileURLToPath(new URL("..", import.meta.url)),
+    configFile: false,
+    logLevel: "silent",
+    cacheDir: cacheDirectory,
+    optimizeDeps: { noDiscovery: true, include: [] },
+    server: { middlewareMode: true },
+    plugins: [{
+      name: "coop-test-stubs",
+      enforce: "pre",
+      resolveId(source) {
+        if (source === "../scenes/boot.js") return "\0coop-test-database";
+      },
+      load(id) {
+        if (id === "\0coop-test-database") return "export const database = { getItem: (id) => ({ id }) };";
+      },
+    }],
+  });
+  ({ CheckoutSystem } = await server.ssrLoadModule("/js/systems/CheckoutSystem.js"));
+});
+
+after(async () => {
+  await server?.close();
+  if (cacheDirectory) await rm(cacheDirectory, { recursive: true, force: true });
+});
 
 test("a long Steam message split into pieces comes back whole, including multi-byte text", () => {
   const text = `{"t":"texture","url":"${"é".repeat(40)}${"x".repeat(25)}"}`;
@@ -122,17 +159,57 @@ test("while the friend acts, the shop's hands are the partner's, and the host's 
     [{ id: "partner crate", onPad: false, x: 5, y: 5, velocityX: 0, velocityY: 0 }]);
 });
 
-test("the friend can use a shelf but is told the register is the shop owner's", () => {
+test("the friend can use a shelf but is told the drone terminal is the shop owner's", () => {
   const { host, partner, said, interactables } = partnerShop();
   const used = [];
   const near = { distanceFrom: () => 0, range: 10, actions: ["interact"] };
-  interactables.registerProvider("register", () => [{ ...near, id: "register", kind: "register", perform: () => used.push("register") }]);
+  interactables.registerProvider("drone", () => [{ ...near, id: "drone", kind: "drone-terminal", perform: () => used.push("drone") }]);
   const actions = new PartnerActions(host, partner);
   actions.press("interact", true);
   assert.deepEqual(used, []);
-  assert.deepEqual(said.map((message) => message.text), ["Only the shop owner can run the register."]);
+  assert.deepEqual(said.map((message) => message.text), ["Only the shop owner can check remote orders."]);
   interactables.registerProvider("shelf", () => [{ ...near, id: "shelf", kind: "fixture", perform: () => used.push("shelf") }]);
   actions.press("interact", true);
   assert.deepEqual(used, ["shelf"]);
   assert.equal(interactables.allowedKinds, null);
+});
+
+test("the friend rings up their own register's line, and the host settles each sale", () => {
+  const { shop, host, partner, said } = partnerShop();
+  const registry = shop.interactables;
+  shop.interactables = null;
+  const register = { id: "register-2", queuePoints: [{ x: 0, y: 0 }, { x: 0, y: 10 }] };
+  Object.assign(shop, {
+    fixtures: { registers: () => [register], get: () => register, register: () => register },
+    eventBus: { emit() {} },
+    employees: [],
+    checkoutWindow: { name: "host register screen" },
+  });
+  shop.checkoutSystem = new CheckoutSystem(shop);
+  shop.interactables = registry;
+  const sold = [];
+  const customer = (itemId) => ({
+    cart: [{ itemId, price: 5 }],
+    checkoutPayment: { type: "card" },
+    setQueuePosition() {},
+    setQueueTarget() {},
+    completeSale() { sold.push(itemId); return 5; },
+  });
+  const actions = new PartnerActions(host, partner);
+  actions.registerSeat = { ...actions.registerSeat, operatingRegister: true, operatingRegisterFixture: register };
+
+  shop.checkoutSystem.handleJoinQueue(customer("blaster"));
+  shop.checkoutSystem.handleJoinQueue(customer("shield"));
+  const opened = () => said.filter((message) => message.open).map((message) => message.open.cart[0].itemId);
+  assert.deepEqual(opened(), ["blaster"], "only the front customer's cart goes to the friend's register");
+  assert.equal(shop.checkoutSystem.isOperated(register), true, "employees and shoppers count it as staffed");
+  assert.equal(shop.checkoutSystem.isPlayerOperating(register), false);
+  assert.deepEqual(shop.checkoutSystem.registerActions(register).map((action) => action.hint),
+    ["Your friend is working this register"], "the host can't take the friend's register");
+
+  actions.handleRegisterMessage({ t: "regDone", sale: 1 });
+  actions.handleRegisterMessage({ t: "regDone", sale: 1 });
+  assert.deepEqual(sold, ["blaster"], "a repeated report can't sell twice");
+  assert.deepEqual(opened(), ["blaster", "shield"], "the next customer steps up");
+  assert.deepEqual(shop.checkoutWindow, { name: "host register screen" });
 });

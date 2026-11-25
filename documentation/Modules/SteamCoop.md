@@ -17,7 +17,12 @@ the same rules as the host's: it stops at the room's edges, and zooming out stop
 room fits (at the starting shop size, the room already fills the screen, so there's no zoom).
 The partner can carry, stack, throw, and push crates, stock shelves from the crates they carry,
 pick up trash and throw it away, mop, and fill remote orders, with the same buttons as the host
-(E, Space, Q, Ctrl, or the controller). Their own green arrow, button hints, and messages show on
+(E, Space, Q, Ctrl, or the controller). The partner can also work a register: pressing E at an
+open register sits them behind it, and the register screen opens on the friend's computer beside
+the counter. The friend scans, types the chit, and counts change there, and the host's game
+decides what each customer does, so sales land in the shared shop. Pressing E again steps away
+and the customer keeps waiting. While one of them works a register, the other is told it's taken.
+Their own green arrow, button hints, and messages show on
 the friend's screen only. The shelf window opens on the friend's screen; clicking a space stocks
 it and right-clicking takes items off, but price stickers there can't be changed. If the friend
 leaves while holding crates or trash, it's set down where they stood, and a save made while they
@@ -48,9 +53,9 @@ On one PC (for testing): run `npm start` for the host, then open a second termin
 `$env:SPACE_ARMS_PROFILE="b"; npm start` for the friend. The second copy opens in a window with
 its own saves and settings, and joins at the address `127.0.0.1`.
 
-Not done yet: the register, the drone terminal, the hovercart, placing or moving fixtures,
+Not done yet: the drone terminal, the hovercart, placing or moving fixtures,
 changing prices, and the Manager's Tablet stay with the host (the friend is told so when they
-try), the friend's shelf window can't be worked with a controller yet, the host's
+try), the friend's shelf window and register scanning can't be worked with a controller yet, the host's
 backroom side window isn't shown on the friend's screen, the glowing outlines behind shelves
 don't show for the friend, and the open questions below.
 

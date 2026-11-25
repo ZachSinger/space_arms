@@ -38,6 +38,9 @@ export class CheckoutSystem {
     this.operatingRegisterFixture = null;
     this.playerPositionBeforeRegister = null;
     this.registerDepthBeforeTuck = null;
+    // In co-op, the friend's shopkeeper can work a register too (see PartnerActions):
+    // { otherRegister(): fixture | null, serving(register): ((fn) => any) | null }.
+    this.coOperator = null;
     this.goBacksPackRetryAt = 0;
     this.goBacksStuckKey = null;
     if (shop.interactables) this.registerInteractions();
@@ -62,24 +65,35 @@ export class CheckoutSystem {
         target: fixture,
         range: REGISTER_INTERACT_RANGE,
         priority: 1,
-        getActions: () => [
-          ...(this.operatingRegister
-            ? [{
-              action: "interact",
-              hint: `${controlLabel("interact")}: Leave the register`,
-              perform: () => this.endRegisterSession(),
-            }]
-            : [
-              { action: "register", hint: `${controlLabel("interact")}: Activate Register` },
-              ...(shop.crateSystem.getCarriedCrates().length === 0 && !shop.heldTrash && !shop.cleaningSystem?.heldMop ? [{
-                action: "interact",
-                hint: `${controlLabel("interact")}: Activate Register`,
-                perform: () => this.tryOpenRegister(),
-              }] : []),
-            ]),
-        ],
+        getActions: () => this.registerActions(fixture),
         distanceFrom: (origin) => shop.interactionSystem.feetReachTo(origin, fixture.sprite.getBounds()),
       })));
+  }
+
+  registerActions(fixture) {
+    const shop = this.shop;
+    if (this.operatingRegister) {
+      return [{
+        action: "interact",
+        hint: `${controlLabel("interact")}: Leave the register`,
+        perform: () => this.endRegisterSession(),
+      }];
+    }
+    if (this.coOperator?.otherRegister() === fixture) {
+      return [{
+        action: "interact",
+        hint: "Your friend is working this register",
+        perform: () => shop.messages.show("Your friend is already working this register.", "#94a3b8"),
+      }];
+    }
+    return [
+      { action: "register", hint: `${controlLabel("interact")}: Activate Register` },
+      ...(shop.crateSystem.getCarriedCrates().length === 0 && !shop.heldTrash && !shop.cleaningSystem?.heldMop ? [{
+        action: "interact",
+        hint: `${controlLabel("interact")}: Activate Register`,
+        perform: () => this.tryOpenRegister(),
+      }] : []),
+    ];
   }
 
   openRegisterWindow() {
@@ -313,10 +327,12 @@ export class CheckoutSystem {
     spot.line.splice(spot.index, 1);
     this.layoutRegisterLine(spot.register);
     if (spot.index !== 0) return;
-    if (!this.isPlayerOperating(spot.register)) return;
-    // Also drops a sale the player stepped away from, so it can't be resumed later.
-    shop.checkoutWindow.close();
-    if (spot.line[0]) this.startCheckout(spot.line[0]);
+    this.asOperatorOf(spot.register, () => {
+      if (!this.isPlayerOperating(spot.register)) return;
+      // Also drops a sale the player stepped away from, so it can't be resumed later.
+      shop.checkoutWindow.close();
+      if (spot.line[0]) this.startCheckout(spot.line[0]);
+    });
   }
 
   // Screen area covering the operated register and the player behind it, plus the screen
@@ -373,6 +389,7 @@ export class CheckoutSystem {
     const shop = this.shop;
     if (this.operatingRegister) return;
     if (!register) return;
+    if (this.coOperator?.otherRegister() === register) return;
     // Working the counter needs empty hands; crates would lock the player in place.
     if (shop.crateSystem.getCarriedCrates().length > 0) {
       shop.messages.show("Put down what you're carrying before working the register.");
@@ -460,9 +477,26 @@ export class CheckoutSystem {
     return this.operatingRegister && this.operatingRegisterFixture === register;
   }
 
+  /** Whether anyone is working this register: the player, or in co-op, the friend's shopkeeper. */
+  isOperated(register) {
+    return this.isPlayerOperating(register) || this.coOperator?.otherRegister() === register;
+  }
+
+  /**
+   * Runs `fn` as whoever is working `register`, so the sale shows on their register screen.
+   * @template T
+   * @param {object} register
+   * @param {() => T} fn
+   * @returns {T}
+   */
+  asOperatorOf(register, fn) {
+    const serving = this.isPlayerOperating(register) ? null : this.coOperator?.serving(register);
+    return serving ? serving(fn) : fn();
+  }
+
   /** Whether the player or the employee assigned to it is working this register this shift. */
   isStaffed(register) {
-    return this.isPlayerOperating(register) ||
+    return this.isOperated(register) ||
       (this.shop.employees ?? []).some((employee) => employee.assignedRegister?.() === register);
   }
 
@@ -503,7 +537,7 @@ export class CheckoutSystem {
     this.layoutRegisterLine(register);
 
     if (line.length === 1) {
-      this.startCheckout(customer);
+      this.asOperatorOf(register, () => this.startCheckout(customer));
     }
   }
 
@@ -631,7 +665,7 @@ export class CheckoutSystem {
   completeEmployeeCheckout(employee, customer) {
     const shop = this.shop;
     const register = employee.currentJob?.register;
-    if (!register || this.isPlayerOperating(register) ||
+    if (!register || this.isOperated(register) ||
       employee.currentJob?.customer !== customer) return false;
     const line = this.lineFor(register);
     if (line[0] !== customer) return false;

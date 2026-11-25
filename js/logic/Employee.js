@@ -179,7 +179,7 @@ export class Employee {
   }
 
   isRegisterFree(register) {
-    return Boolean(register?.sprite) && !this.store.checkoutSystem.isPlayerOperating(register) &&
+    return Boolean(register?.sprite) && !this.store.checkoutSystem.isOperated(register) &&
       !this.store.employees.some((employee) =>
         employee !== this && employee.currentJob?.jobId === "register" &&
         employee.currentJob?.register === register);
@@ -836,7 +836,7 @@ export class Employee {
 
   beginRegisterService() {
     const register = this.currentJob?.register;
-    if (!register || !register.sprite || this.store.checkoutSystem.isPlayerOperating(register)) {
+    if (!register || !register.sprite || this.store.checkoutSystem.isOperated(register)) {
       this.finishTask();
       return;
     }
@@ -862,7 +862,7 @@ export class Employee {
 
   updateAtRegister() {
     const register = this.currentJob?.register;
-    if (!register || !register.sprite || this.store.checkoutSystem.isPlayerOperating(register)) {
+    if (!register || !register.sprite || this.store.checkoutSystem.isOperated(register)) {
       this.finishTask();
       return;
     }
@@ -876,7 +876,7 @@ export class Employee {
   updateRegisterService(delta) {
     const register = this.currentJob?.register;
     const customer = this.currentJob?.customer;
-    if (!register || this.store.checkoutSystem.isPlayerOperating(register)) {
+    if (!register || this.store.checkoutSystem.isOperated(register)) {
       this.finishTask();
       return;
     }

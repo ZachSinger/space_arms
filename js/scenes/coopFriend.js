@@ -7,11 +7,14 @@
 // itself only runs on the host's computer.
 import Phaser from "phaser";
 import { MirrorReader } from "../coop/DisplayMirror.js";
-import { GamepadInput } from "../input/GamepadInput.js";
+import { GamepadInput, PAD } from "../input/GamepadInput.js";
 import { bindingForEvent, isBound } from "../input/KeyBindings.js";
 import { controllerButtonFor } from "../input/ControllerBindings.js";
 import { getInputDevice, setInputDevice } from "../input/InputDevice.js";
 import { TILE_SIZE } from "../logic/RoomLayout.js";
+import { CheckoutWindow } from "../logic/CheckoutWindow.js";
+import { worldToClientRect } from "../logic/FixtureHighlight.js";
+import { getGameScale } from "../logic/GameViewport.js";
 import { UIWindow } from "../logic/UIWindow.js";
 import { WindowManager } from "../logic/WindowManager.js";
 import { Messages } from "../world/Messages.js";
@@ -32,6 +35,11 @@ const HAND_ACTIONS = ["interact", "crate", "putDown", "nextCrate"];
 const LAG_CHECK_MS = 1000;
 const STEP_GIVE_UP_MS = 3000;
 const STEP_AVERAGE_OF = 10;
+// Waits for the picture to catch up with the shopkeeper stepping behind the counter, so the
+// register screen opens beside the counter where it now shows.
+const REGISTER_PLACE_DELAY_MS = 150;
+const SCREEN_EDGE_PX = 8;
+const CHIT_PAD_DIRECTIONS = Object.freeze([[PAD.UP, "up"], [PAD.DOWN, "down"], [PAD.LEFT, "left"], [PAD.RIGHT, "right"]]);
 
 const END_MESSAGES = Object.freeze({
   left: "Your friend closed their shop.",
@@ -68,6 +76,10 @@ export class CoopFriendScene extends Phaser.Scene {
     this.stepStart = null;
     this.stepTimes = [];
     this.lastReadoutAt = 0;
+    this.checkout = null;
+    this.seated = false;
+    this.registerArea = null;
+    this.placeRegisterAt = null;
     this.buildScreen();
     this.messages = new Messages(this, this.messageLine);
     this.layoutCamera();
@@ -91,6 +103,8 @@ export class CoopFriendScene extends Phaser.Scene {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.layoutCamera, this);
       unsubscribe.forEach((stop) => stop());
       this.messages.destroy();
+      this.checkout?.close();
+      this.checkout?.destroy();
       this.windowManager.destroy();
       this.bar.remove();
       this.notice.remove();
@@ -237,7 +251,87 @@ export class CoopFriendScene extends Phaser.Scene {
       else if (action === "putDown") this.send({ t: "shelfNext" });
       return;
     }
+    // Behind the counter, only use (to step away) goes to the host; the register screen
+    // handles the rest itself.
+    if (this.seated && action !== "interact") return;
     this.send({ t: "btn", a: action, d: down });
+  }
+
+  // --- The register, when the partner is working one ---
+
+  // A real register screen, like the host's. The host picks each customer and how they pay;
+  // what happens here (a finished sale, wrong change) goes back to the host to settle.
+  checkoutWindow() {
+    if (!this.checkout) {
+      this.checkout = new CheckoutWindow(this.windowManager);
+      this.checkout.getRegisterScreenArea = () => this.registerScreenArea();
+    }
+    return this.checkout;
+  }
+
+  registerScreenArea() {
+    if (!this.registerArea) return null;
+    const [left, top, right, bottom] = this.registerArea;
+    const edge = SCREEN_EDGE_PX * getGameScale();
+    const screen = document.getElementById("game-container")?.getBoundingClientRect() ?? this.game.canvas.getBoundingClientRect();
+    return {
+      target: worldToClientRect(this, left, top, right - left, bottom - top),
+      viewport: {
+        left: screen.left + edge,
+        top: this.bar.getBoundingClientRect().bottom + edge,
+        right: screen.right - edge,
+        bottom: this.messageBar.getBoundingClientRect().top - edge,
+      },
+    };
+  }
+
+  /** @param {{ seat?: boolean, area?: number[], open?: object, resume?: number, suspend?: boolean, close?: boolean }} message */
+  handleRegister(message) {
+    if (typeof message.seat === "boolean") {
+      this.seated = message.seat;
+      if (Array.isArray(message.area) && message.area.length === 4) this.registerArea = message.area;
+      if (message.seat) this.placeRegisterAt = performance.now() + REGISTER_PLACE_DELAY_MS;
+      return;
+    }
+    const checkout = this.checkoutWindow();
+    if (message.open && Array.isArray(message.open.cart)) {
+      const { sale, cart, ...payment } = message.open;
+      const report = (t, extra = {}) => this.send({ t, sale, ...extra });
+      checkout.openForCustomer(cart, () => report("regDone"), {
+        ...payment,
+        onWrongChange: () => report("regWrongChange"),
+        onCashAttempt: (attempt) => report("regCash", { attempt }),
+        onChangeFailed: () => report("regChangeFailed"),
+        onChitFailed: () => report("regChitFailed"),
+      });
+      checkout.setPaused(this.hostPaused);
+    } else if (message.resume !== undefined) {
+      checkout.resume();
+    } else if (message.suspend) {
+      checkout.suspend();
+    } else if (message.close) {
+      checkout.close();
+    }
+  }
+
+  // Once the picture shows the shopkeeper behind the counter, move the register screen beside it.
+  placeRegister(now) {
+    if (this.placeRegisterAt === null || now < this.placeRegisterAt) return;
+    this.placeRegisterAt = null;
+    if (!this.checkout?.uiWindow.isOpen) return;
+    this.checkout.placeNearRegister();
+    this.checkout.placeTenderPanel();
+  }
+
+  // Controller: the d-pad enters Chit directions and the crate button hands over change.
+  pollPadRegister() {
+    const checkout = this.checkout;
+    if (!checkout || !this.seated || !this.pad.connected) return;
+    if (checkout.usesChitInput()) {
+      const pressed = CHIT_PAD_DIRECTIONS.find(([button]) => this.pad.justPressed(button));
+      if (pressed) checkout.enterChitDirection(pressed[1]);
+    }
+    if (checkout.usesSpaceKey() && this.pad.justPressedAction("crate")) checkout.handOverChange("button");
   }
 
   layoutCamera() {
@@ -321,7 +415,7 @@ export class CoopFriendScene extends Phaser.Scene {
   }
 
   readInput() {
-    if (this.leaveWindow.isOpen || this.shelfWindow.isOpen || this.ended) return { x: 0, y: 0, dash: false };
+    if (this.leaveWindow.isOpen || this.shelfWindow.isOpen || this.seated || this.ended) return { x: 0, y: 0, dash: false };
     let x = (this.actionDown("moveRight") ? 1 : 0) - (this.actionDown("moveLeft") ? 1 : 0);
     let y = (this.actionDown("moveDown") ? 1 : 0) - (this.actionDown("moveUp") ? 1 : 0);
     let dash = this.actionDown("dash");
@@ -363,6 +457,8 @@ export class CoopFriendScene extends Phaser.Scene {
       this.messages.setHint(message.text);
     } else if (message.t === "shelf") {
       this.showShelf(message);
+    } else if (message.t === "reg") {
+      this.handleRegister(message);
     } else if (message.t === "texture") {
       void this.mirror.addTexture(message).catch((error) => console.error("Could not load a picture from the host:", error));
     }
@@ -389,6 +485,7 @@ export class CoopFriendScene extends Phaser.Scene {
     this.bar.querySelector("[data-coop-time]").textContent = hud.time || "-";
     if (Boolean(hud.paused) !== this.hostPaused) {
       this.hostPaused = Boolean(hud.paused);
+      this.checkout?.setPaused(this.hostPaused);
       this.refreshNotice();
     }
   }
@@ -399,6 +496,8 @@ export class CoopFriendScene extends Phaser.Scene {
     this.leaveWindow.close();
     this.shelfClosedByHost = true;
     this.shelfWindow.close();
+    this.checkout?.close();
+    this.seated = false;
     this.notice.textContent = END_MESSAGES[status.error] ?? END_MESSAGES.left;
     this.notice.classList.remove("hidden");
     this.time.delayedCall(RETURN_TO_TITLE_MS, () => window.location.reload());
@@ -417,6 +516,7 @@ export class CoopFriendScene extends Phaser.Scene {
       if (this.leaveWindow.isOpen) this.leaveWindow.close();
       else this.leaveWindow.openWindow();
     }
+    this.pollPadRegister();
     this.pollPadHands();
     const input = this.readInput();
     const key = JSON.stringify(input);
@@ -427,6 +527,7 @@ export class CoopFriendScene extends Phaser.Scene {
     }
     const now = performance.now();
     this.followFocus();
+    this.placeRegister(now);
     this.timeStep(input, now);
     if (this.joined) this.checkLag(now);
     this.showReadout();

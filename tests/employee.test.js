@@ -288,7 +288,7 @@ function makeEmployee({
     operatingRegister: false,
     lineFor: () => registerLine,
     anyRegisterLineWaiting: () => registerLine.length > 0,
-    isPlayerOperating: () => scene.checkoutSystem.operatingRegister,
+    isOperated: () => scene.checkoutSystem.operatingRegister,
     goBacksReservedRectangles: () => [],
     findGoBacksSpot: (crate, reserved) => reserved.some((rect) =>
       rect.left < 96 && rect.right > 96 && rect.top < 6560 && rect.bottom > 6560)
