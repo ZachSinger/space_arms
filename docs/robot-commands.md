@@ -116,13 +116,15 @@ What's already written below is only what the Robot Lab has today. Change it, de
 
 Commands decide what a robot does. Modifiers decide how well it does it.
 
-Every robot starts with a base speed for each job: cleaning, checking out customers, and stocking. The robot's parts only set how fast it moves around the store. Modifier chips raise those base speeds.
+Every robot starts with a base speed for each job: cleaning, checking out customers, and stocking. The robot's parts only set how fast it moves around the store. Modifier boards raise those base speeds.
 
-Most modifier chips raise one stat. Some raise more than one. For example, Register 1 and Stock 2 could be on the same chip, but that chip costs much more and needs much more power than a chip with either one on its own.
+Most modifier boards raise one stat. Some raise more than one. For example, Register 1 and Stock 2 could be on the same board, but that board costs much more and needs much more power than a board with either one on its own.
 
-Modifier chips go in the same frame slots as logic boards, so every chip a robot carries is a slot it can't use for commands, and the reverse is true too.
+Modifier boards go in the same frame slots as logic boards, so every modifier board a robot carries is a slot it can't use for commands, and the reverse is true too.
 
-Prefab boards are made from the same pieces players use. We build a few basic custom boards and modifier chips ourselves and sell them ready-made. Players who don't want to program can just buy those, while players who do can build their own from the same parts.
+If a robot has two boards that raise the same stat, only the best one counts. The other one still uses its slot and power, so the game has to make that crystal clear when the player sets it up.
+
+Prefab boards are made from the same pieces players use. We build a few basic logic boards and modifier boards ourselves and sell them ready-made. Players who don't want to program can just buy those, while players who do can build their own from the same parts.
 
 ## Notes
 
