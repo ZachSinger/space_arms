@@ -149,7 +149,10 @@ under the top border. Each surface starts on the tile the game draws today
 so the starting room looks exactly like the game. Each can switch to any floor or
 wall tile in `img/Icons_Extracted/Tileset` (borders can use wall tiles too), all shown gray. Color
 each with red, green, and blue plus brightness, contrast, and saturation (the same limits as the
-Shelf Color Lab). **Save this look** (or Ctrl+S) writes `documentation/Modules/RoomColors.json`.
+Shelf Color Lab). On Floor and Wall, **Single tiles** lays individual tiles over the base pattern:
+pick a pattern and color, then click or drag on the room; right-click or Shift-click removes one.
+**Save this look** (or Ctrl+S) writes `documentation/Modules/RoomColors.json`, with the single
+tiles under `details` keyed by "column,row".
 Nothing here changes the game.
 
 ## Delivery Crate Lab

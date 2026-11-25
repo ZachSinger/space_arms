@@ -34,6 +34,9 @@
   .preview { display: flex; align-items: center; gap: 10px; margin-top: 10px; color: var(--dim); }
   .preview #colorChip { width: 40px; height: 24px; border-radius: 4px; border: 1px solid var(--line); }
   .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .layers button { padding: 7px; font-size: 14px; }
+  .hint { color: var(--dim); margin: -6px 0 4px; min-height: 1.4em; }
+  #room.placing { cursor: crosshair; }
 </style>
 </head>
 <body>
@@ -50,6 +53,11 @@
       <button data-surface="wall">Wall</button>
       <button data-surface="border">Border</button>
     </div>
+    <div class="surfaces layers" id="layers">
+      <button data-layer="base" class="on">Whole surface</button>
+      <button data-layer="details">Single tiles</button>
+    </div>
+    <p class="hint" id="layerHint"></p>
     <h2>Pattern: <span class="chosen" id="tileName"></span></h2>
     <div class="tiles" id="tiles"></div>
     <h2>Color</h2>
@@ -59,6 +67,7 @@
     <div class="row">
       <button id="gameColor">Back to the game's color</button>
       <button id="ownColor">Use this pattern's own color</button>
+      <button id="clearDetails">Remove all single tiles from the <span id="clearName">floor</span></button>
     </div>
   </aside>
 </main>
@@ -108,11 +117,24 @@ const grayArt = new Map();
 const ownColor = new Map();
 const originalArt = new Map();
 const look = {};
+// Single tiles laid over the base floor and wall, keyed by "column,row".
+const details = { floor: {}, wall: {} };
+// The pattern and color the next single tile will be placed with, per surface.
+const stamp = {};
+const LAYERED = ["floor", "wall"];
+const NAMES = { floor: "floor", wall: "wall" };
 let surface = "floor";
+let layer = "base";
+let hoverCell = null;
 let dirty = false;
+
+function placing() { return layer === "details" && LAYERED.includes(surface); }
+function editing() { return placing() ? stamp[surface] : look[surface]; }
 
 function setStatus(text) { document.getElementById("status").textContent = text; }
 function markDirty() { dirty = true; setStatus("Not saved yet."); }
+// Choosing the next single tile's pattern or color changes nothing in the room by itself.
+function changed() { if (!placing()) markDirty(); }
 
 // The color that, multiplied over this tile's gray copy, comes closest to the tile's real colors.
 function matchingColor(original, gray) {
@@ -212,13 +234,70 @@ function drawRoom() {
       }
     }
   }
+  for (const part of LAYERED) {
+    for (const [cell, detail] of Object.entries(details[part])) {
+      const [column, row] = cell.split(",").map(Number);
+      roomContext.filter = filterText(detail.color);
+      roomContext.drawImage(paintTile(detail.tile, detail.color, CELL), column * CELL, row * CELL);
+    }
+  }
   roomContext.filter = "none";
+  if (placing() && hoverCell && surfaceAt(...hoverCell) === surface) {
+    roomContext.strokeStyle = "#fff";
+    roomContext.lineWidth = 2;
+    roomContext.strokeRect(hoverCell[0] * CELL + 1, hoverCell[1] * CELL + 1, CELL - 2, CELL - 2);
+  }
 }
+
+function cellAt(event) {
+  const box = room.getBoundingClientRect();
+  const column = Math.floor(((event.clientX - box.left) / box.width) * COLUMNS);
+  const row = Math.floor(((event.clientY - box.top) / box.height) * ROWS);
+  return column >= 0 && column < COLUMNS && row >= 0 && row < ROWS ? [column, row] : null;
+}
+
+// Left button places the chosen single tile; right button (or Shift) takes one off.
+let brush = null;
+function brushAt(event) {
+  const cell = cellAt(event);
+  if (!cell || surfaceAt(...cell) !== surface) return;
+  const key = cell.join(",");
+  if (brush === "erase") {
+    if (!details[surface][key]) return;
+    delete details[surface][key];
+  } else {
+    const current = details[surface][key];
+    const next = { tile: stamp[surface].tile, color: { ...stamp[surface].color } };
+    if (current && JSON.stringify(current) === JSON.stringify(next)) return;
+    details[surface][key] = next;
+  }
+  markDirty();
+  drawRoom();
+}
+room.addEventListener("contextmenu", (event) => { if (placing()) event.preventDefault(); });
+room.addEventListener("mousedown", (event) => {
+  if (!placing()) return;
+  brush = event.button === 2 || event.shiftKey ? "erase" : "place";
+  brushAt(event);
+});
+window.addEventListener("mouseup", () => { brush = null; });
+room.addEventListener("mousemove", (event) => {
+  const cell = cellAt(event);
+  if (String(cell) !== String(hoverCell)) {
+    hoverCell = cell;
+    if (placing()) drawRoom();
+  }
+  if (brush) brushAt(event);
+});
+room.addEventListener("mouseleave", () => {
+  hoverCell = null;
+  if (placing()) drawRoom();
+});
 
 function drawTiles() {
   const holder = document.getElementById("tiles");
   holder.replaceChildren();
-  const choice = look[surface];
+  const choice = editing();
   for (const tile of tiles[surface]) {
     const thumb = paintTile(tile.id, choice.color, 96);
     thumb.title = tile.label;
@@ -226,7 +305,7 @@ function drawTiles() {
     if (tile.id === choice.tile) thumb.classList.add("on");
     thumb.addEventListener("click", () => {
       choice.tile = tile.id;
-      markDirty();
+      changed();
       refresh();
     });
     holder.append(thumb);
@@ -241,8 +320,8 @@ function drawSwatches() {
     button.title = name;
     button.style.background = `rgb(${red}, ${green}, ${blue})`;
     button.addEventListener("click", () => {
-      Object.assign(look[surface].color, { red, green, blue });
-      markDirty();
+      Object.assign(editing().color, { red, green, blue });
+      changed();
       refresh();
     });
     holder.append(button);
@@ -259,8 +338,8 @@ function drawSliders() {
     range.dataset.key = slider.key;
     number.dataset.key = slider.key;
     const update = (value) => {
-      look[surface].color[slider.key] = Math.max(slider.min, Math.min(slider.max, Math.round(Number(value) || 0)));
-      markDirty();
+      editing().color[slider.key] = Math.max(slider.min, Math.min(slider.max, Math.round(Number(value) || 0)));
+      changed();
       refresh();
     };
     range.addEventListener("input", () => update(range.value));
@@ -270,8 +349,19 @@ function drawSliders() {
 }
 
 function refresh() {
-  for (const button of document.querySelectorAll(".surfaces button")) button.classList.toggle("on", button.dataset.surface === surface);
-  const color = look[surface].color;
+  for (const button of document.querySelectorAll("[data-surface]")) button.classList.toggle("on", button.dataset.surface === surface);
+  const layers = LAYERED.includes(surface);
+  document.getElementById("layers").style.display = layers ? "" : "none";
+  for (const button of document.querySelectorAll("[data-layer]")) button.classList.toggle("on", button.dataset.layer === layer);
+  document.getElementById("layerHint").textContent = !layers
+    ? ""
+    : placing()
+      ? `Pick a pattern and color, then click or drag on the ${NAMES[surface]} to place tiles. Right-click or Shift-click takes one off.`
+      : `This pattern covers the whole ${NAMES[surface]}. Switch to Single tiles to place individual tiles on top.`;
+  document.getElementById("clearDetails").style.display = placing() ? "" : "none";
+  document.getElementById("clearName").textContent = NAMES[surface];
+  room.classList.toggle("placing", placing());
+  const color = editing().color;
   for (const input of document.querySelectorAll("#sliders input")) if (document.activeElement !== input) input.value = color[input.dataset.key];
   document.getElementById("colorChip").style.background = `rgb(${color.red}, ${color.green}, ${color.blue})`;
   document.getElementById("colorText").textContent = `Red ${color.red}, green ${color.green}, blue ${color.blue}`;
@@ -279,23 +369,33 @@ function refresh() {
   drawRoom();
 }
 
-document.querySelectorAll(".surfaces button").forEach((button) => button.addEventListener("click", () => {
+document.querySelectorAll("[data-surface]").forEach((button) => button.addEventListener("click", () => {
   surface = button.dataset.surface;
   refresh();
 }));
-document.getElementById("gameColor").addEventListener("click", () => {
-  look[surface].color = { ...ownColor.get(GAME_TILES[surface][0][0]) };
+document.querySelectorAll("[data-layer]").forEach((button) => button.addEventListener("click", () => {
+  layer = button.dataset.layer;
+  refresh();
+}));
+document.getElementById("clearDetails").addEventListener("click", () => {
+  if (!Object.keys(details[surface]).length) return;
+  details[surface] = {};
   markDirty();
   refresh();
 });
+document.getElementById("gameColor").addEventListener("click", () => {
+  editing().color = { ...ownColor.get(GAME_TILES[surface][0][0]) };
+  changed();
+  refresh();
+});
 document.getElementById("ownColor").addEventListener("click", () => {
-  look[surface].color = { ...ownColor.get(look[surface].tile) };
-  markDirty();
+  editing().color = { ...ownColor.get(editing().tile) };
+  changed();
   refresh();
 });
 
 async function save() {
-  const response = await fetch("/api/look", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(look) });
+  const response = await fetch("/api/look", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...look, details }) });
   const result = await response.json();
   if (!response.ok) return setStatus(result.problems?.join(" ") ?? "Could not save.");
   dirty = false;
@@ -322,6 +422,12 @@ async function start() {
     look[part] = known
       ? { tile: saved.tile, color: { ...ownColor.get(gameTile), ...saved.color } }
       : { tile: gameTile, color: { ...ownColor.get(gameTile) } };
+    if (!LAYERED.includes(part)) continue;
+    const firstPicture = pictures[part][0].id;
+    stamp[part] = { tile: firstPicture, color: { ...ownColor.get(firstPicture) } };
+    for (const [cell, detail] of Object.entries(data.look?.details?.[part] ?? {})) {
+      if (tiles[part].some((tile) => tile.id === detail.tile)) details[part][cell] = { tile: detail.tile, color: { ...ownColor.get(detail.tile), ...detail.color } };
+    }
   }
   drawSwatches();
   drawSliders();
