@@ -106,6 +106,7 @@ room.height = CELL * ROWS;
 const tiles = { floor: [], wall: [], border: [] };
 const grayArt = new Map();
 const ownColor = new Map();
+const originalArt = new Map();
 const look = {};
 let surface = "floor";
 let dirty = false;
@@ -128,6 +129,11 @@ function matchingColor(original, gray) {
 }
 
 function makeGray(id, source) {
+  const untouched = document.createElement("canvas");
+  untouched.width = source.width;
+  untouched.height = source.height;
+  untouched.getContext("2d").drawImage(source, 0, 0);
+  originalArt.set(id, untouched);
   const canvas = document.createElement("canvas");
   canvas.width = source.width;
   canvas.height = source.height;
@@ -162,7 +168,14 @@ function filterText(color) {
   return `brightness(${color.brightness}%) contrast(${1 + color.contrast / 100}) saturate(${color.saturation}%)`;
 }
 
-// Gray art times the color, the same way the game tints a shelf's gray art.
+function isOwnColor(tileId, color) {
+  const own = ownColor.get(tileId);
+  return Object.keys(own).every((key) => own[key] === color[key]);
+}
+
+// Gray art times the color, the same way the game tints a shelf's gray art. One color over gray
+// can't rebuild art with several hues exactly (the game's wall is like that), so a tile at its
+// own color shows its real art, and the starting room matches the game pixel for pixel.
 function paintTile(tileId, color, size) {
   const gray = grayArt.get(tileId);
   const canvas = document.createElement("canvas");
@@ -170,6 +183,10 @@ function paintTile(tileId, color, size) {
   canvas.height = size;
   const context = canvas.getContext("2d");
   context.imageSmoothingEnabled = false;
+  if (isOwnColor(tileId, color)) {
+    context.drawImage(originalArt.get(tileId), 0, 0, size, size);
+    return canvas;
+  }
   context.drawImage(gray, 0, 0, size, size);
   context.globalCompositeOperation = "multiply";
   context.fillStyle = `rgb(${color.red}, ${color.green}, ${color.blue})`;
