@@ -14,6 +14,7 @@ import { InteractableRegistry } from "../js/interaction/InteractableRegistry.js"
 let server;
 let cacheDirectory;
 let CheckoutSystem;
+let CustomerFlow;
 
 before(async () => {
   cacheDirectory = await mkdtemp(join(tmpdir(), "space-arms-coop-test-"));
@@ -36,6 +37,7 @@ before(async () => {
     }],
   });
   ({ CheckoutSystem } = await server.ssrLoadModule("/js/systems/CheckoutSystem.js"));
+  ({ CustomerFlow } = await server.ssrLoadModule("/js/systems/CustomerFlow.js"));
 });
 
 after(async () => {
@@ -212,4 +214,29 @@ test("the friend rings up their own register's line, and the host settles each s
   assert.deepEqual(sold, ["blaster"], "a repeated report can't sell twice");
   assert.deepEqual(opened(), ["blaster", "shield"], "the next customer steps up");
   assert.deepEqual(shop.checkoutWindow, { name: "host register screen" });
+});
+
+test("a co-op friend makes room for more customers, and leaving mid-shift sends the extras away", () => {
+  const shop = {
+    coop: { partner: {} },
+    customers: Array.from({ length: 8 }, () => ({})),
+    shiftClock: { started: true },
+    fixtures: { shelves: () => [] },
+    gameState: {
+      reputation: { global: 2, factions: {} },
+      catalog: { activeFactions: new Set() },
+      calendar: { day: 1 },
+    },
+  };
+  const flow = new CustomerFlow(shop);
+  assert.equal(flow.hasRoom(), true, "two shopkeepers fit half again as many customers inside");
+  flow.pool = flow.calculatePool();
+  flow.schedule = Array.from({ length: 12 }, (_, index) => ({ factionId: null, atMs: index * 1000 }));
+  flow.nextArrival = 3;
+
+  shop.coop.partner = null;
+  flow.friendLeft();
+  assert.equal(flow.hasRoom(), false);
+  assert.deepEqual(flow.schedule.slice(0, 3).map(({ atMs }) => atMs), [0, 1000, 2000], "arrivals so far stay");
+  assert.equal(flow.schedule.length, 3 + 6, "two of every three customers still to come keep coming");
 });

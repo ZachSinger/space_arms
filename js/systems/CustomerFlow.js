@@ -15,6 +15,7 @@ import {
 } from "../logic/CustomerPooling.js";
 import { SHIFT_DURATION_MS } from "../logic/ShiftClock.js";
 import { gameRandom } from "../core/Random.js";
+import { COOP_TUNING, friendInShop } from "../coop/CoopTuning.js";
 
 export const CUSTOMER_TUNING = loadTuning("customers", customerTuning);
 
@@ -58,7 +59,31 @@ export class CustomerFlow {
       shelfPlacements,
       getItem: (itemId) => database.getItem(itemId),
       tieBreakOffset: shop.gameState.calendar.day,
+      crowdScale: this.crowdScale(),
     });
+  }
+
+  // More customers while a co-op friend is in the shop (see CoopTuning.js).
+  crowdScale() {
+    return friendInShop(this.shop) ? COOP_TUNING.customerScale : 1;
+  }
+
+  // A friend joining mid-shift brings in their share of the rest of the day's customers soon.
+  friendJoined() {
+    this.poolRefreshCooldownMs = 0;
+  }
+
+  // A friend leaving mid-shift sends away the extra customers who haven't arrived yet, so the
+  // host isn't left facing a two-person crowd alone.
+  friendLeft() {
+    const { shiftClock } = this.shop;
+    if (!shiftClock.started || !this.pool) return;
+    const upcoming = this.schedule.slice(this.nextArrival);
+    const keep = Math.round(upcoming.length / COOP_TUNING.customerScale);
+    const kept = upcoming.filter((_, index) =>
+      Math.floor((index + 1) * keep / upcoming.length) > Math.floor(index * keep / upcoming.length));
+    this.schedule = [...this.schedule.slice(0, this.nextArrival), ...kept];
+    this.pool = this.calculatePool();
   }
 
   /**
@@ -103,7 +128,7 @@ export class CustomerFlow {
   }
 
   hasRoom() {
-    return this.shop.customers.length < CUSTOMER_TUNING.maxCustomersInStore;
+    return this.shop.customers.length < Math.round(CUSTOMER_TUNING.maxCustomersInStore * this.crowdScale());
   }
 
   /**

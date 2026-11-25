@@ -155,6 +155,19 @@ test("seven-minute shifts spread the same customer pool over the longer day", ()
   );
 });
 
+test("a co-op friend in the shop brings half again as many customers", () => {
+  const poolFor = (crowdScale) => createCustomerPool({
+    storeReputation: 2,
+    factionReputation: neutralReputation,
+    activeFactions: new Set(),
+    shelfPlacements: [{ itemId: "neutral_apparel", quantity: 80 }],
+    getItem,
+    crowdScale,
+  });
+  const alone = poolFor(1).totalCustomers;
+  assert.ok(Math.abs(poolFor(1.5).totalCustomers - alone * 1.5) <= 1);
+});
+
 test("stocking shelves mid-shift grows the pool over the remaining shift only", () => {
   const poolFor = (shelfPlacements) => createCustomerPool({
     storeReputation: 2,

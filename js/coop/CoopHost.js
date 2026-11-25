@@ -80,6 +80,7 @@ export class CoopHost {
       this.actions = new PartnerActions(this, this.partner, { createShelfWindow: this.createShelfWindow });
     }
     this.writer.reset();
+    shop.customerFlow?.friendJoined?.();
     shop.messages.show(`${name} joined your shop.`);
   }
 
@@ -91,6 +92,7 @@ export class CoopHost {
     this.partnerHitbox?.destroy();
     this.partner.destroy();
     this.partner = null;
+    this.shop.customerFlow?.friendLeft?.();
     this.shop.messages.show(`${name} left your shop.`);
   }
 

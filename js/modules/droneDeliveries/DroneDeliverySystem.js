@@ -21,6 +21,7 @@ import { controlLabel } from "../../input/InputDevice.js";
 import { matchesBinding } from "../../input/KeyBindings.js";
 import { describeOrderSources, findOrderItemSources } from "./OrderSources.js";
 import { OrderTracker } from "./OrderTracker.js";
+import { COOP_TUNING, friendInShop } from "../../coop/CoopTuning.js";
 
 // The terminal art reaches 15px left, 103px right and 28px up from this point, and the pad's
 // top edge is 12px below it. This puts the pad's top edge on the base of the backroom's top
@@ -568,7 +569,7 @@ export class DroneDeliverySystem {
   /** A buyer outside the store sends an order offer; it waits at the terminal until accepted. */
   receiveOrder() {
     const { gameState } = this.shop;
-    if (this.orderState.offers.length >= remoteOrderScaling(gameState.reputation.shopLevel).maxOffers) {
+    if (this.orderState.offers.length >= this.maxOffers()) {
       return false;
     }
     const details = createRemoteOrder({
@@ -627,17 +628,23 @@ export class DroneDeliverySystem {
     return true;
   }
 
-  // One roll per shift hour passed, independent of who is in the store.
+  // One roll per shift hour passed, independent of who is in the store. A co-op friend makes
+  // offers come more often, with room for more waiting (see js/coop/CoopTuning.js).
   updateOrderArrivals() {
     const { shiftClock } = this.shop;
     if (!shiftClock.started) return;
     const hoursPassed = Math.floor(shiftClock.elapsedHours);
     while (this.hoursRolled < hoursPassed) {
       this.hoursRolled += 1;
-      const { maxOffers } = remoteOrderScaling(this.shop.gameState.reputation.shopLevel);
-      if (this.orderState.offers.length >= maxOffers) continue;
-      if (gameRandom() < REMOTE_ORDER_TUNING.chancePerShiftHour) this.receiveOrder();
+      if (this.orderState.offers.length >= this.maxOffers()) continue;
+      const chanceScale = friendInShop(this.shop) ? COOP_TUNING.remoteOrderChanceScale : 1;
+      if (gameRandom() < REMOTE_ORDER_TUNING.chancePerShiftHour * chanceScale) this.receiveOrder();
     }
+  }
+
+  maxOffers() {
+    const { maxOffers } = remoteOrderScaling(this.shop.gameState.reputation.shopLevel);
+    return maxOffers + (friendInShop(this.shop) ? COOP_TUNING.extraRemoteOffers : 0);
   }
 
   update(time, delta) {

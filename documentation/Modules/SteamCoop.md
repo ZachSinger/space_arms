@@ -22,6 +22,11 @@ open register sits them behind it, and the register screen opens on the friend's
 the counter. The friend scans, types the chit, and counts change there, and the host's game
 decides what each customer does, so sales land in the shared shop. Pressing E again steps away
 and the customer keeps waiting. While one of them works a register, the other is told it's taken.
+While a friend is in the shop, the day is busier (numbers in js/coop/CoopTuning.js): half again
+as many customers come each shift, half again as many fit inside before more are turned away,
+remote order offers come twice as often, and one more offer can wait at the Drone Terminal. A
+friend joining mid-shift brings their share of the rest of the day's customers; a friend leaving
+sends away a third of the customers still to come, so the host isn't left with a two-person crowd.
 Their own green arrow, button hints, and messages show on
 the friend's screen only. The shelf window opens on the friend's screen; clicking a space stocks
 it and right-clicking takes items off, but price stickers there can't be changed. If the friend

@@ -209,6 +209,34 @@ test("remote order offers roll once per shift hour, without any customers, only 
   assert.ok(received > 0);
 });
 
+test("with a co-op friend in the shop, offers come about twice as often and one more can wait", () => {
+  const system = Object.create(DroneDeliverySystem.prototype);
+  const clock = { started: true, elapsedHours: 0 };
+  const shop = { shiftClock: clock, gameState: { reputation: { shopLevel: 1 } }, coop: null };
+  let received = 0;
+  Object.assign(system, {
+    shop,
+    orderState: { offers: [] },
+    hoursRolled: 0,
+    receiveOrder() { received += 1; },
+  });
+  const rollHours = (hours) => {
+    received = 0;
+    system.hoursRolled = 0;
+    clock.elapsedHours = hours;
+    system.updateOrderArrivals();
+    return received;
+  };
+  const alone = rollHours(4000);
+  shop.coop = { partner: {} };
+  const together = rollHours(4000);
+  assert.ok(together > alone * 1.7 && together < alone * 2.3, `${alone} alone vs ${together} together`);
+  system.orderState.offers = [{ id: "waiting" }];
+  assert.ok(rollHours(100) > 0, "a second offer can wait with a friend in the shop");
+  shop.coop = null;
+  assert.equal(rollHours(100), 0);
+});
+
 test("more offers can wait and orders hold more product types every 10 store levels", () => {
   assert.deepEqual(remoteOrderScaling(1), { maxOffers: 1, maxProductTypes: 3 });
   assert.deepEqual(remoteOrderScaling(10), { maxOffers: 1, maxProductTypes: 3 });

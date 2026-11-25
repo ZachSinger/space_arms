@@ -170,6 +170,7 @@ export function createCustomerPool({
   shelfPlacements,
   getItem,
   tieBreakOffset = 0,
+  crowdScale = 1,
 }) {
   const factions = CUSTOMER_FACTION_IDS.filter((id) => activeFactions.has(id));
   const baseCustomers = getStoreRepPool(storeReputation);
@@ -208,7 +209,8 @@ export function createCustomerPool({
     CUSTOMER_POOL_TUNING.stockScalerMinimum,
     Math.min(CUSTOMER_POOL_TUNING.stockScalerMaximum, coverage),
   );
-  const calculatedPool = Math.round(preStockPool * stockScaler);
+  // crowdScale > 1 while a co-op friend helps run the store (see js/coop/CoopTuning.js).
+  const calculatedPool = Math.round(preStockPool * stockScaler * crowdScale);
   const totalCustomers = Math.max(calculatedPool, factions.length);
   const factionCounts = new Map(factions.map((id) => [id, 1]));
   const remainder = apportionRemainder(
@@ -244,6 +246,7 @@ export function createCustomerPool({
       shelfStockUnits,
       coverage,
       calculatedPool,
+      crowdScale,
       tieBreakOffset,
       groups,
     },
