@@ -132,7 +132,8 @@ function startTask(sim, robot) {
   }
   robot.task = task;
   if (action !== robot.lastAction) {
-    const why = choice.ruleIndex < 0 ? "no rule fit" : `rule ${choice.ruleIndex + 1}`;
+    const entry = robot.program[choice.ruleIndex];
+    const why = !entry ? "nothing fit" : entry.ability ? entry.boardName : `slot ${entry.slot + 1}, command ${entry.command + 1}`;
     note(sim, `${robot.name} ${describe(task)} (${why})`);
   }
 }

@@ -51,6 +51,17 @@ test("the saved robot lab setup is valid and runs a shift without robots running
   assert.ok(sim.robots.every((entry) => !entry.outOfPower));
 });
 
+test("a prefab board does its built-in job, and is skipped when that job has nothing to do", () => {
+  const program = [{ ability: "clean_1" }, { ability: "stock_1" }, { ability: "register_1" }];
+  const busy = chooseAction(program, world({ shelves: [{ id: "s1", fill: 0 }] }), robot);
+  assert.equal(busy.ruleIndex, 1);
+  assert.equal(busy.action, "restock");
+  assert.deepEqual(busy.checks.map((check) => check.result), ["nothing to do", "chosen"]);
+  const quiet = chooseAction(program, world({ backroomCrates: 0 }), robot);
+  assert.equal(quiet.action, "wait");
+  assert.deepEqual(quiet.checks.map((check) => check.result), ["nothing to do", "nothing to do", "nothing to do"]);
+});
+
 const PARTS = {
   frames: [{ id: "frame", name: "Frame", power: 4, boardSlots: 2, speed: 1 }],
   cells: [
@@ -58,7 +69,7 @@ const PARTS = {
     { id: "big", name: "Big cell", capacity: 20, charge: 100, drainRate: 2, chargeRate: 5 },
   ],
   boards: [
-    { id: "register", name: "Register", kind: "prefab", power: 3, program: [{ condition: "always", action: "work_register" }] },
+    { id: "register", name: "Register", kind: "prefab", power: 3, ability: "register_2" },
     { id: "custom", name: "Custom", kind: "custom", power: 2, commands: 2 },
   ],
   commandPower: { conditions: { battery_below_20: 1, always: 0 }, actions: { charge: 1, work_register: 2 } },
@@ -70,7 +81,7 @@ test("a robot's power need is its frame plus its boards, and custom boards add e
   assert.equal(powerNeeded(robot, PARTS), 4 + (2 + 1 + 1) + 3);
   assert.equal(hasEnoughPower(robot, PARTS), false);
   assert.equal(hasEnoughPower({ ...robot, cell: "big" }, PARTS), true);
-  assert.deepEqual(robotProgram(robot, PARTS).map((rule) => [rule.slot, rule.action]), [[0, "charge"], [1, "work_register"]]);
+  assert.deepEqual(robotProgram(robot, PARTS).map((rule) => [rule.slot, rule.action ?? rule.ability]), [[0, "charge"], [1, "register_2"]]);
 });
 
 test("a robot whose parts need more power than its cell's capacity never switches on", () => {

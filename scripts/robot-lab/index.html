@@ -60,6 +60,8 @@
   .rule .fixed { color: var(--text); }
   .rule.off select, .rule.off .fixed { opacity: .45; }
   .rule.chosen { background: #0f2e1f; border-color: var(--good); }
+  .rule.prefab { display: block; padding: 4px 8px; }
+  .rule.prefab .why { display: block; margin-top: 2px; }
   .rule .why { grid-column: 4 / 8; color: var(--dim); font-size: 12px; margin-top: -2px; }
   .rule.chosen .why { color: var(--good); }
   .empty-slot { color: var(--dim); font-style: italic; padding: 2px 6px 2px 60px; }
@@ -97,13 +99,13 @@
   <button id="save" class="primary" disabled>Save</button>
   <span id="status">Loading...</span>
 </header>
-<div class="help">A robot is a <b>frame</b> (its body and speed), one <b>logic board</b> per board slot (its commands), and a <b>power cell</b>. The frame and boards together need some power; the cell's <b>capacity</b> must cover it or the robot won't switch on. The cell's <b>charge</b> runs down as the robot works and fills back up on a charging station. The robot checks every command from slot 1 down and does the <b>first one that fits</b>: the "if" part is true and the job can be done right now. If nothing fits, it waits. Press Play on the right and watch which command each robot picks (the green row). Changes apply while it runs.</div>
+<div class="help">A robot is a <b>frame</b> (its body and speed), one <b>logic board</b> per board slot, and a <b>power cell</b>. A <b>prefab</b> board does one fixed job you can't change; a <b>custom</b> board holds commands you write. The frame and boards together need some power; the cell's <b>capacity</b> must cover it or the robot won't switch on. The cell's <b>charge</b> runs down as the robot works and fills back up on a charging station. The robot checks its boards from slot 1 down and does the <b>first thing that fits</b>: a prefab board that has work to do, or a command whose "if" part is true and whose job can be done right now. If nothing fits, it waits. Press Play on the right and watch which command each robot picks (the green row). Changes apply while it runs.</div>
 <main>
   <div class="column" id="robots"></div>
   <div class="column" id="lab"></div>
 </main>
 <script type="module">
-import { CONDITIONS, ACTIONS } from "/js/logic/RobotGambits.js";
+import { CONDITIONS, ACTIONS, PREFAB_ABILITIES, findAbility } from "/js/logic/RobotGambits.js";
 import { boardPower, commandPower, findBoard, findCell, findFrame, powerNeeded } from "/js/logic/RobotParts.js";
 import { applyBuild, createSim, step, SIM_RULES } from "/scripts/robot-lab/sim.js";
 
@@ -122,7 +124,7 @@ const SETTINGS = [
   ["deliveryEverySeconds", "Delivery every (seconds)"], ["cratesPerDelivery", "Crates per delivery"], ["startingBackroomCrates", "Crates in backroom at start"],
   ["standardDrain", "Standard drain (charge per working second)"],
 ];
-const WHY = { off: "Switched off", "condition false": "Skipped: the \"if\" part isn't true", "can't do it right now": "Skipped: the \"if\" is true, but the job can't be done right now", chosen: "Doing this now" };
+const WHY = { "nothing to do": "Skipped: nothing for this board to do right now", off: "Switched off", "condition false": "Skipped: the \"if\" part isn't true", "can't do it right now": "Skipped: the \"if\" is true, but the job can't be done right now", chosen: "Doing this now" };
 // Each part list's columns: [field, heading, smallest allowed, whole numbers only, hover help].
 const PART_COLUMNS = {
   frames: [["power", "Power needed", 0, false, "How much of the cell's capacity the frame itself uses."], ["boardSlots", "Board slots", 1, true, "How many logic boards fit. Slot 1 is checked first."], ["speed", "Speed", 0.1, false, "1 is normal. 2 does every job in half the time."]],
@@ -132,7 +134,7 @@ const PART_COLUMNS = {
 const NEW_PART = {
   frames: () => ({ name: "New frame", power: 5, boardSlots: 1, speed: 1 }),
   cells: () => ({ name: "New power cell", capacity: 12, charge: 240, drainRate: 1, chargeRate: 4 }),
-  prefab: () => ({ name: "New prefab board", kind: "prefab", power: 2, program: [{ condition: "always", action: "wait", on: true }] }),
+  prefab: () => ({ name: "New prefab board", kind: "prefab", power: 2, ability: PREFAB_ABILITIES[0].id }),
   custom: () => ({ name: "New custom board", kind: "custom", power: 2, commands: 3 }),
 };
 
@@ -207,12 +209,17 @@ function robotCard(robot, r) {
   const boards = robot.boards.map((fitted, s) => {
     const board = findBoard(parts, fitted.board);
     const custom = board.kind === "custom";
-    const program = custom ? fitted.program : board.program;
+    const program = custom ? fitted.program : [];
     const where = `data-robot="${r}" data-slot="${s}"`;
-    const rows = program.map((rule, i) => {
+    let rows = program.map((rule, i) => {
       const result = live ? results.get(`${s}:${i}`) : null;
-      return ruleRow(rule, i, program.length, where, { editable: custom, result, chosen: result === "chosen" && live?.task, plus: custom ? commandPower(rule, parts) : null });
+      return ruleRow(rule, i, program.length, where, { editable: true, result, chosen: result === "chosen" && live?.task, plus: commandPower(rule, parts) });
     }).join("");
+    if (!custom) {
+      const result = live ? results.get(`${s}:0`) : null;
+      const chosen = result === "chosen" && live?.task;
+      rows = `<div class="rule prefab ${chosen ? "chosen" : ""}"><span class="fixed">${escape(findAbility(board.ability)?.description ?? "Unknown ability")}</span>${result ? `<span class="why">${WHY[result]}</span>` : ""}</div>`;
+    }
     const free = custom ? board.commands - program.length : 0;
     return `<div class="board">
       <div class="head"><span class="slot">Slot ${s + 1}</span>
@@ -222,7 +229,7 @@ function robotCard(robot, r) {
         <button class="small" data-board-remove ${where} title="Take this board out">✕</button>
         <span class="cost">Needs ${boardPower(fitted, parts)} power</span></div>
       ${rows || '<div class="empty-slot">No commands yet</div>'}
-      ${custom ? `${free > 0 ? `<div class="empty-slot">${free} empty command space${free === 1 ? "" : "s"}</div>` : ""}<div class="row-buttons"><button class="small" data-add-command ${where} ${free <= 0 ? "disabled" : ""}>Add command</button></div>` : '<div class="who" style="padding-left:6px">Prefab board: its commands are fixed.</div>'}
+      ${custom ? `${free > 0 ? `<div class="empty-slot">${free} empty command space${free === 1 ? "" : "s"}</div>` : ""}<div class="row-buttons"><button class="small" data-add-command ${where} ${free <= 0 ? "disabled" : ""}>Add command</button></div>` : '<div class="who" style="padding-left:6px">Prefab board: does this one job and can\'t be changed.</div>'}
     </div>`;
   }).join("");
   const emptySlots = frame.boardSlots - robot.boards.length;
@@ -269,13 +276,13 @@ function partsTab() {
   const prefabs = parts.boards.filter((board) => board.kind === "prefab").map((board) => {
     const users = usedBy("boards", board.id);
     const where = `data-part="boards" data-id="${board.id}"`;
-    const rows = board.program.map((rule, i) => ruleRow(rule, i, board.program.length, where, { editable: true, result: null, chosen: false, plus: null })).join("");
+    const abilities = PREFAB_ABILITIES.map((entry) => `<option value="${entry.id}" ${entry.id === board.ability ? "selected" : ""}>${escape(entry.label)}</option>`).join("");
     return `<div class="board"><div class="head">
         <input class="name" ${where} data-field="name" value="${escape(board.name)}" style="width:200px">
+        <label class="who">Ability <select ${where} data-field="ability">${abilities}</select></label>
         <label class="who">Power needed <input type="number" min="0" step="any" ${where} data-field="power" value="${board.power}"></label>
         <button class="small" data-remove-part="boards" data-id="${board.id}" ${users.length ? `disabled title="Used by ${escape(users.map((robot) => robot.name).join(", "))}"` : 'title="Remove this board"'}>✕</button></div>
-      ${rows || '<div class="empty-slot">No commands yet</div>'}
-      <div class="row-buttons"><button class="small" data-add-command ${where}>Add command</button></div></div>`;
+      <div class="rule prefab"><span class="fixed">${escape(findAbility(board.ability)?.description ?? "Unknown ability")}</span></div></div>`;
   }).join("");
   const costTable = (kind, list) => `<table class="parts-table"><tr><th>${kind === "conditions" ? "If..." : "Then..."}</th><th>Power</th></tr>${list.map((entry) => `<tr><td>${escape(entry.label)}</td><td><input type="number" min="0" step="any" data-cost="${kind}" data-id="${entry.id}" value="${parts.commandPower[kind][entry.id] ?? 0}"></td></tr>`).join("")}</table>`;
   return `
@@ -286,7 +293,7 @@ function partsTab() {
     <p class="part-help">Capacity is a limit: the frame and boards together can't need more. Charge is what runs down while working. Every working second uses the standard drain (${setup.settings.standardDrain}, set on the right) times the drain rate. A waiting robot uses ${SIM_RULES.waitingDrain * 100}% of that.</p>
     ${table("cells", PART_COLUMNS.cells, parts.cells)}
     <h3 class="part-title">Prefab logic boards <button class="small" data-add-part="prefab">Add prefab board</button></h3>
-    <p class="part-help">Ready-made boards. Players can't change their commands; you set them here, along with one fixed power need.</p>
+    <p class="part-help">Ready-made boards. Each does one fixed job that's built into the game, and players can't see inside or change it. A higher number is a smarter version of the same job. Here you pick which built-in job a board does, its name, and its power need.</p>
     ${prefabs}
     <h3 class="part-title">Custom logic boards <button class="small" data-add-part="custom">Add custom board</button></h3>
     <p class="part-help">Blank boards players write their own commands on. Power needed is the empty board's own need; every command written on it adds its "if" and "then" power from the tables below.</p>
@@ -394,9 +401,8 @@ function invalid(field, why) {
 
 const partList = (list) => (list === "prefab" || list === "custom" ? "boards" : list);
 const findPart = (list, id) => setup.parts[partList(list)].find((part) => part.id === id);
-// The program a command row belongs to: a custom board fitted in a robot, or a prefab board.
+// The commands of the custom board a command row belongs to.
 function programAt(data) {
-  if (data.part) return findPart(data.part, data.id).program;
   return setup.robots[Number(data.robot)].boards[Number(data.slot)].program;
 }
 
@@ -416,6 +422,8 @@ $("#robots").addEventListener("change", (event) => {
     if (key === "name") {
       if (!field.value.trim()) return invalid(field, "Needs a name.");
       part.name = field.value.trim();
+    } else if (key === "ability") {
+      part.ability = field.value;
     } else {
       const value = Number(field.value);
       const column = [...PART_COLUMNS.frames, ...PART_COLUMNS.cells, ...PART_COLUMNS.custom, ["power", "", 0, false]].find(([name]) => name === key);

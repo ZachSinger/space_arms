@@ -3,9 +3,10 @@
 // ==========================================
 // A robot is built from three kinds of part:
 //   Frame       - the body. Needs some power, has ordered slots for logic boards, sets speed.
-//   Logic board - the program. Prefab boards come with fixed commands and a fixed power need;
-//                 custom boards hold up to N commands you write, and each command's condition and
-//                 action add to the board's power need.
+//   Logic board - the program. A prefab board is one fixed ability built into the game (see
+//                 PREFAB_ABILITIES in RobotGambits.js) with a fixed power need; it has no commands.
+//                 A custom board holds up to N commands you write, and each command's condition
+//                 and action add to the board's power need.
 //   Power cell  - Capacity is the most power the robot's parts may need in total (a limit that
 //                 never runs down). Charge is the fuel tank that empties as the robot works:
 //                 each working second costs the game's standard drain times the cell's drain rate,
@@ -14,11 +15,11 @@
 // `parts` looks like data/RobotPrograms.json's "parts":
 //   { frames: [{ id, name, power, boardSlots, speed }],
 //     cells: [{ id, name, capacity, charge, drainRate, chargeRate }],
-//     boards: [{ id, name, kind: "prefab", power, program } | { id, name, kind: "custom", power, commands }],
+//     boards: [{ id, name, kind: "prefab", power, ability } | { id, name, kind: "custom", power, commands }],
 //     commandPower: { conditions: { [conditionId]: number }, actions: { [actionId]: number } } }
 // and a robot looks like { name, frame, cell, boards: [{ board, program? }] } where `program`
 // is only stored for custom boards.
-import { programProblems } from "./RobotGambits.js";
+import { findAbility, programProblems } from "./RobotGambits.js";
 
 const byId = (list, id) => list?.find((entry) => entry.id === id) ?? null;
 
@@ -26,11 +27,11 @@ export const findFrame = (parts, id) => byId(parts.frames, id);
 export const findCell = (parts, id) => byId(parts.cells, id);
 export const findBoard = (parts, id) => byId(parts.boards, id);
 
-/** The commands a fitted board runs: its own fixed ones for a prefab, the robot's for a custom one. */
+/** What a fitted board adds to the robot's list: one fixed ability for a prefab, the robot's commands for a custom one. */
 export function boardProgram(fitted, parts) {
   const board = findBoard(parts, fitted.board);
   if (!board) return [];
-  return board.kind === "prefab" ? board.program : (fitted.program ?? []);
+  return board.kind === "prefab" ? [{ ability: board.ability }] : (fitted.program ?? []);
 }
 
 /** How much one command adds to a custom board's power need. */
@@ -44,7 +45,7 @@ export function boardPower(fitted, parts) {
   const board = findBoard(parts, fitted.board);
   if (!board) return 0;
   if (board.kind === "prefab") return board.power;
-  return board.power + boardProgram(fitted, parts).reduce((total, rule) => total + commandPower(rule, parts), 0);
+  return board.power + (fitted.program ?? []).reduce((total, rule) => total + commandPower(rule, parts), 0);
 }
 
 /** The robot's Power Requirement: its frame plus every board in it. */
@@ -64,7 +65,10 @@ export function hasEnoughPower(robot, parts) {
  * them. Each entry also says which board and which of that board's commands it came from.
  */
 export function robotProgram(robot, parts) {
-  return robot.boards.flatMap((fitted, slot) => boardProgram(fitted, parts).map((rule, command) => ({ ...rule, slot, command })));
+  return robot.boards.flatMap((fitted, slot) => {
+    const boardName = findBoard(parts, fitted.board)?.name ?? "";
+    return boardProgram(fitted, parts).map((rule, command) => ({ ...rule, slot, command, boardName }));
+  });
 }
 
 /** Readable reasons a robot's build doesn't hold together; empty when it's fine. */
@@ -121,7 +125,7 @@ export function partsProblems(parts) {
   for (const board of parts.boards) {
     number(board, "power", "power needed");
     if (board.kind === "prefab") {
-      for (const problem of programProblems(board.program, board.program?.length ?? 0)) problems.push(`${board.name}: ${problem}`);
+      if (!findAbility(board.ability)) problems.push(`${board.name}: unknown prefab ability "${board.ability}".`);
     } else if (board.kind === "custom") {
       if (!Number.isInteger(board.commands) || board.commands < 1) problems.push(`${board.name}: needs room for at least 1 command.`);
     } else problems.push(`${board.name}: must be a prefab or a custom board.`);

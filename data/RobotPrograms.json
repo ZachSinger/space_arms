@@ -82,93 +82,56 @@
         "name": "Self-charge 1",
         "kind": "prefab",
         "power": 1,
-        "program": [
-          {
-            "condition": "battery_below_20",
-            "action": "charge",
-            "on": true
-          }
-        ]
+        "ability": "self_charge_1"
+      },
+      {
+        "id": "self_charge_2",
+        "name": "Self-charge 2",
+        "kind": "prefab",
+        "power": 2,
+        "ability": "self_charge_2"
       },
       {
         "id": "register_1",
         "name": "Register 1",
         "kind": "prefab",
         "power": 3,
-        "program": [
-          {
-            "condition": "customer_waiting",
-            "action": "work_register",
-            "on": true
-          }
-        ]
+        "ability": "register_1"
       },
       {
         "id": "register_2",
         "name": "Register 2",
         "kind": "prefab",
         "power": 4,
-        "program": [
-          {
-            "condition": "always",
-            "action": "work_register",
-            "on": true
-          }
-        ]
+        "ability": "register_2"
       },
       {
         "id": "stock_1",
         "name": "Stock 1",
         "kind": "prefab",
-        "power": 5,
-        "program": [
-          {
-            "condition": "shelf_below_25",
-            "action": "restock",
-            "on": true
-          },
-          {
-            "condition": "crate_on_pad",
-            "action": "unload_pad",
-            "on": true
-          }
-        ]
+        "power": 4,
+        "ability": "stock_1"
       },
       {
         "id": "stock_2",
         "name": "Stock 2",
         "kind": "prefab",
-        "power": 7,
-        "program": [
-          {
-            "condition": "shelf_below_50",
-            "action": "restock",
-            "on": true
-          },
-          {
-            "condition": "crate_on_pad",
-            "action": "unload_pad",
-            "on": true
-          },
-          {
-            "condition": "shelf_not_full",
-            "action": "restock",
-            "on": true
-          }
-        ]
+        "power": 6,
+        "ability": "stock_2"
+      },
+      {
+        "id": "stock_3",
+        "name": "Stock 3",
+        "kind": "prefab",
+        "power": 8,
+        "ability": "stock_3"
       },
       {
         "id": "clean_1",
         "name": "Clean 1",
         "kind": "prefab",
         "power": 2,
-        "program": [
-          {
-            "condition": "mess",
-            "action": "clean",
-            "on": true
-          }
-        ]
+        "ability": "clean_1"
       },
       {
         "id": "custom_small",

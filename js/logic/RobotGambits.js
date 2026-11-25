@@ -33,6 +33,39 @@ export const ACTIONS = Object.freeze([
   { id: "wait", label: "Wait" },
 ]);
 
+// Prefab logic boards don't hold commands. Each one is a fixed ability written here in code; a
+// higher number is a smarter version of the same job. `choose` returns { action, target } when the
+// board wants to do something right now, or null to let the next board try.
+function pick(actionId, world, robot) {
+  const target = actionTarget(actionId, world, robot);
+  return target ? { action: actionId, target } : null;
+}
+const lowFill = (world) => lowestShelf(world)?.fill ?? 1;
+export const PREFAB_ABILITIES = Object.freeze([
+  { id: "self_charge_1", label: "Self-charge 1", description: "Goes to charge when its charge drops below 20%.",
+    choose: (world, robot) => (robot.battery < 0.2 ? pick("charge", world, robot) : null) },
+  { id: "self_charge_2", label: "Self-charge 2", description: "Goes to charge below 20%, and also tops up below 60% while the store is quiet (no one waiting, no messes, no shelf under half full).",
+    choose: (world, robot) => {
+      if (robot.battery < 0.2) return pick("charge", world, robot);
+      const quiet = !world.registers.some((register) => register.line > 0) && world.messes <= 0 && lowFill(world) >= 0.5;
+      return quiet && robot.battery < 0.6 ? pick("charge", world, robot) : null;
+    } },
+  { id: "register_1", label: "Register 1", description: "Works a register while a customer is waiting.",
+    choose: (world, robot) => (world.registers.some((register) => register.line > 0) ? pick("work_register", world, robot) : null) },
+  { id: "register_2", label: "Register 2", description: "Stays at a register all the time, so customers never wait for it to walk over.",
+    choose: (world, robot) => pick("work_register", world, robot) },
+  { id: "stock_1", label: "Stock 1", description: "Refills a shelf once it's completely empty, and otherwise carries delivery crates into the backroom.",
+    choose: (world, robot) => (lowFill(world) <= 0 ? pick("restock", world, robot) : null) ?? pick("unload_pad", world, robot) },
+  { id: "stock_2", label: "Stock 2", description: "Refills the emptiest shelf once one drops below half full, and otherwise carries delivery crates into the backroom.",
+    choose: (world, robot) => (lowFill(world) < 0.5 ? pick("restock", world, robot) : null) ?? pick("unload_pad", world, robot) },
+  { id: "stock_3", label: "Stock 3", description: "Like Stock 2, but when there's nothing else to do it tops off any shelf that isn't full.",
+    choose: (world, robot) => (lowFill(world) < 0.5 ? pick("restock", world, robot) : null) ?? pick("unload_pad", world, robot) ?? pick("restock", world, robot) },
+  { id: "clean_1", label: "Clean 1", description: "Cleans up messes on the sales floor.",
+    choose: (world, robot) => pick("clean", world, robot) },
+]);
+const ABILITIES = new Map(PREFAB_ABILITIES.map((entry) => [entry.id, entry]));
+export const findAbility = (id) => ABILITIES.get(id) ?? null;
+
 const CONDITION_IDS = new Set(CONDITIONS.map((entry) => entry.id));
 const ACTION_IDS = new Set(ACTIONS.map((entry) => entry.id));
 
@@ -82,7 +115,8 @@ export function actionTarget(actionId, world, robot) {
 /**
  * Runs a robot's program against the store. Returns the action it picked, which rule picked it
  * (-1 when no rule fit and it waits), and why each rule was or wasn't used.
- * @param {{ condition: string, action: string, on?: boolean }[]} program
+ * Entries are either commands or prefab boards ({ ability }), checked in order.
+ * @param {({ condition: string, action: string, on?: boolean } | { ability: string })[]} program
  */
 export function chooseAction(program, world, robot) {
   const checks = [];
@@ -91,6 +125,15 @@ export function chooseAction(program, world, robot) {
     if (rule.on === false) {
       checks.push({ index, result: "off" });
       continue;
+    }
+    if (rule.ability) {
+      const decision = findAbility(rule.ability)?.choose(world, robot) ?? null;
+      if (!decision) {
+        checks.push({ index, result: "nothing to do" });
+        continue;
+      }
+      checks.push({ index, result: "chosen" });
+      return { ruleIndex: index, action: decision.action, target: decision.target, checks };
     }
     if (!conditionMet(rule.condition, world, robot)) {
       checks.push({ index, result: "condition false" });
