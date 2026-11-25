@@ -79,7 +79,6 @@ export class CoopHost {
       this.actions = new PartnerActions(this, this.partner, { createShelfWindow: this.createShelfWindow });
     }
     this.writer.reset();
-    this.intervalMs = MIRROR_INTERVAL_MS;
     shop.messages.show(`${name} joined your shop.`);
   }
 
@@ -117,8 +116,6 @@ export class CoopHost {
       this.writer.reset();
       this.lastHud = "";
       this.lastHudAt = 0;
-    } else if (message.t === "rate" && Number.isFinite(message.ms)) {
-      this.intervalMs = Math.max(16, Math.min(100, message.ms));
     } else if (message.t === "lag?") {
       this.send({ t: "lag!", at: message.at });
     } else if (message.t === "texture?" && typeof message.key === "string") {
@@ -204,9 +201,9 @@ export class CoopHost {
   sendUpdate() {
     if (!this.friendConnected) return;
     const now = performance.now();
-    if (now - this.lastSentAt < (this.intervalMs ?? MIRROR_INTERVAL_MS)) return;
+    if (now - this.lastSentAt < MIRROR_INTERVAL_MS) return;
     const snapshot = this.writer.snapshot(this.shop.children.list);
-    const message = { t: "snap", ...(snapshot ?? {}), f: this.writer.idOf(this.partner?.sprite), own: this.partnerOwnIds() };
+    const message = { t: "snap", ...(snapshot ?? {}), f: this.writer.idOf(this.partner?.sprite) };
     if (now - this.lastHudAt >= HUD_INTERVAL_MS) {
       this.lastHudAt = now;
       const hud = this.readHud();
@@ -217,23 +214,12 @@ export class CoopHost {
     }
     if (!snapshot && !message.hud && now - this.lastSentAt < KEEP_ALIVE_MS) return;
     this.lastSentAt = now;
-    // When the host drew this, so the friend's screen can space the updates out evenly.
-    message.ht = Math.round(now * 10) / 10;
     message.bg = this.shop.cameras.main.backgroundColor.rgba;
     // The outline of the room the partner is in, so the friend's camera can zoom and stop at
     // its edges like the host's.
     const bounds = this.partnerRoomBounds();
     if (bounds) message.sb = [bounds.x, bounds.y, bounds.width, bounds.height];
     this.send(message);
-  }
-
-  // The partner and everything that moves with them, for the friend's "you first" view.
-  partnerOwnIds() {
-    const partner = this.partner;
-    if (!partner) return [];
-    const objects = [partner.sprite, partner.nameTag, ...partner.carriedCrates().map((crate) => crate.sprite),
-      this.actions?.heldTrash?.sprite];
-    return objects.filter(Boolean).map((object) => this.writer.idOf(object));
   }
 
   partnerRoomBounds() {

@@ -6,7 +6,7 @@
 // whatever the host sends back (the shop picture, messages, and the shelf window); the shop
 // itself only runs on the host's computer.
 import Phaser from "phaser";
-import { MirrorReader, VIEW_MODES } from "../coop/DisplayMirror.js";
+import { MirrorReader } from "../coop/DisplayMirror.js";
 import { GamepadInput } from "../input/GamepadInput.js";
 import { bindingForEvent, isBound } from "../input/KeyBindings.js";
 import { controllerButtonFor } from "../input/ControllerBindings.js";
@@ -28,9 +28,7 @@ const RETURN_TO_TITLE_MS = 3500;
 const HOST_AWAY_MS = 2500;
 // The buttons the partner uses with their hands; the host works out what each one does.
 const HAND_ACTIONS = ["interact", "crate", "putDown", "nextCrate"];
-// Test readout: which way the screen trades smoothness for delay, and how much delay there is.
-const VIEW_MODE_KEY = "coop-view-mode";
-const SWITCH_VIEW_KEY = "F2";
+// Small readout of how much delay there is between the two games.
 const LAG_CHECK_MS = 1000;
 const STEP_GIVE_UP_MS = 3000;
 const STEP_AVERAGE_OF = 10;
@@ -71,8 +69,6 @@ export class CoopFriendScene extends Phaser.Scene {
     this.stepTimes = [];
     this.lastReadoutAt = 0;
     this.buildScreen();
-    const savedMode = VIEW_MODES.find((mode) => mode.id === localStorage.getItem(VIEW_MODE_KEY));
-    this.setViewMode(savedMode ?? VIEW_MODES[0]);
     this.messages = new Messages(this, this.messageLine);
     this.layoutCamera();
 
@@ -104,22 +100,6 @@ export class CoopFriendScene extends Phaser.Scene {
     void this.api.status().then((status) => this.handleStatus(status));
     // Ask for the whole picture; anything sent before this screen opened was missed.
     this.send({ t: "sync" });
-    this.send({ t: "rate", ms: this.viewMode.intervalMs });
-  }
-
-  setViewMode(mode) {
-    this.viewMode = mode;
-    this.mirror.setMode(mode);
-    localStorage.setItem(VIEW_MODE_KEY, mode.id);
-    this.send({ t: "rate", ms: mode.intervalMs });
-    this.stepTimes = [];
-    this.stepStart = null;
-    this.showReadout(true);
-  }
-
-  nextViewMode() {
-    const index = VIEW_MODES.indexOf(this.viewMode);
-    this.setViewMode(VIEW_MODES[(index + 1) % VIEW_MODES.length]);
   }
 
   // Ask the host to answer right away, to time the trip there and back.
@@ -158,9 +138,7 @@ export class CoopFriendScene extends Phaser.Scene {
     const step = this.stepTimes.length
       ? `${ms(last)} (average of last ${this.stepTimes.length}: ${ms(average)})` : "- (walk to measure)";
     const lines = [
-      `View: ${this.viewMode.name} (${SWITCH_VIEW_KEY} to switch)`,
       `There and back to your friend's game: ${ms(this.roundTripMs)}`,
-      `Held back to smooth movement: ${ms(this.mirror.delayMs)}`,
       `Updates from your friend's game: ${this.snapTimes.length} a second`,
       `Your last step showed up after: ${step}`,
     ];
@@ -313,11 +291,6 @@ export class CoopFriendScene extends Phaser.Scene {
 
   handleKey(event, down) {
     if (event.repeat) return;
-    if (event.code === SWITCH_VIEW_KEY) {
-      if (down) this.nextViewMode();
-      event.preventDefault();
-      return;
-    }
     const binding = bindingForEvent(event);
     if (!binding) return;
     if (!down) {
@@ -453,7 +426,6 @@ export class CoopFriendScene extends Phaser.Scene {
       this.send({ t: "input", ...input, device: getInputDevice() });
     }
     const now = performance.now();
-    this.mirror.update(now);
     this.followFocus();
     this.timeStep(input, now);
     if (this.joined) this.checkLag(now);
