@@ -26,10 +26,11 @@ pause menu (titled MENU) doesn't stop the shop: only the host's shopkeeper stand
 it's open. Alone, it pauses as before, and a friend leaving while it's open pauses it. The
 friend's screen can show the shop a little behind the host, using the time the host sent each
 update, so movement glides evenly even when updates arrive in bunches. How far behind is a
-playtest choice: F2 on the friend's screen switches between five views (Smooth, which waits
+playtest choice: F2 on the friend's screen switches between five views (No wait, the default,
+which shows each update the moment it arrives; "You first", where the friend's own shopkeeper
+and what they carry show the newest update while everything else waits; Smooth, which waits
 long enough to cover the slowest update of the last 2 seconds at 20 updates a second; the same
-at 60 updates a second; a short fixed wait; no wait; and "You first", where the friend's own
-shopkeeper and what they carry show the newest update while everything else waits). The choice
+at 60 updates a second; and a short fixed wait). The choice
 is remembered, and the friend's game tells the host how often to send updates. A small box in
 the top right shows the view, the time for a message to reach the host and come back, how long
 the screen holds updates back, updates per second, and how long after pressing a direction the

@@ -29,12 +29,13 @@ const OWN_CATCH_UP_MS = 10;
  * "none" shows each update as it arrives. ownFirst: the friend's shopkeeper (and what they
  * carry) is shown from the newest update instead of waiting with everything else.
  */
+// The first one is the default; playtests found "No wait" felt best.
 export const VIEW_MODES = Object.freeze([
+  { id: "none", name: "No wait, 60 updates a second", wait: "none", intervalMs: 16, ownFirst: false },
+  { id: "own-first", name: "You first, 60 updates a second", wait: "smooth", intervalMs: 16, ownFirst: true },
   { id: "smooth", name: "Smooth", wait: "smooth", intervalMs: 50, ownFirst: false },
   { id: "smooth-fast", name: "Smooth, 60 updates a second", wait: "smooth", intervalMs: 16, ownFirst: false },
   { id: "short", name: "Short wait, 60 updates a second", wait: "short", intervalMs: 16, ownFirst: false },
-  { id: "none", name: "No wait, 60 updates a second", wait: "none", intervalMs: 16, ownFirst: false },
-  { id: "own-first", name: "You first, 60 updates a second", wait: "smooth", intervalMs: 16, ownFirst: true },
 ]);
 
 const round = (value, places = 100) => Math.round(value * places) / places;

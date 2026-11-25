@@ -104,6 +104,7 @@ export class CoopFriendScene extends Phaser.Scene {
     void this.api.status().then((status) => this.handleStatus(status));
     // Ask for the whole picture; anything sent before this screen opened was missed.
     this.send({ t: "sync" });
+    this.send({ t: "rate", ms: this.viewMode.intervalMs });
   }
 
   setViewMode(mode) {

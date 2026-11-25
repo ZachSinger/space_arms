@@ -45,6 +45,8 @@ export class TitleScene extends Phaser.Scene {
       },
       // Developer test areas: the crate lab or the Shelf Test Room.
       { label: "DEV", action: () => this.openDevChooser() },
+      // Only the desktop app can close itself; a browser tab can't.
+      ...(window.desktopApi?.quitGame ? [{ label: "QUIT GAME", action: () => window.desktopApi.quitGame() }] : []),
     ];
 
     this.titleText = this.add

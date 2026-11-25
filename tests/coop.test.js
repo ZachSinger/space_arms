@@ -84,6 +84,7 @@ test("on an uneven connection, mirrored movement still glides at a steady speed"
     children: { add() {}, remove() {}, list: [] },
   };
   const reader = new MirrorReader(scene, () => {});
+  reader.setMode(VIEW_MODES.find((mode) => mode.id === "smooth"));
   reader.applyChange = function (entry, change) {
     Object.getPrototypeOf(this).applyChange.call(this, entry, { type: change.type, x: change.x, y: change.y });
   };
