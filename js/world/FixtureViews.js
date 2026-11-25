@@ -10,6 +10,7 @@ import { ShelfAttentionHighlight } from "../logic/ShelfAttentionHighlight.js";
 import { ShelfFacingLight } from "../logic/ShelfFacingLight.js";
 import { ShelfItemDisplay } from "../logic/ShelfItemDisplay.js";
 import { getFixtureTexture, hasFacingTextures } from "../logic/FixtureTexture.js";
+import { isPaintableFixture, shelfPaintTint } from "../logic/ShelfPaint.js";
 import {
   REGISTER_FRONT_OVERLAP, fixtureArtInset, fixtureBounds, fixtureFacingStep, fixtureFootprint, fixtureRotation,
   fixtureSolidBounds, getFixtureType,
@@ -140,6 +141,7 @@ export class FixtureViews {
     scene.obstacleGroup.add(image); // solid -- customers walk up to it, not through it
     fixture.sprite = image;
     image.setInteractive({ useHandCursor: true, pixelPerfect: getFixtureType(fixture.type)?.artLayout === "budget" });
+    if (isPaintableFixture(getFixtureType(fixture.type))) image.setTint(shelfPaintTint(fixture.paint));
     image.on("pointerdown", (pointer) => {
       if (pointer.event?.target === scene.game.canvas && !isWorldMouseBinding(pointer.event)) {
         scene.fixtureSystem.tryOpenFixtureWindow(fixture);

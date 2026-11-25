@@ -13,6 +13,7 @@ import {
   fixtureBounds, fixtureFootprint, fixtureSolidBounds, getFixtureType,
 } from "../logic/FixtureLayout.js";
 import { getFixtureTexture } from "../logic/FixtureTexture.js";
+import { DEFAULT_SHELF_PAINT, shelfPaintTint } from "../logic/ShelfPaint.js";
 import { Player } from "../logic/Player.js";
 import { PEOPLE_DEPTH_BASE, fixtureDepth } from "../world/Depth.js";
 
@@ -151,6 +152,7 @@ export class ShelfCollisionLabScene extends Phaser.Scene {
       (shelf.gx + footprint.w / 2) * TILE_SIZE, (shelf.gy + footprint.h / 2) * TILE_SIZE,
       getFixtureTexture(spec, shelf.rotation),
     ).setDisplaySize(footprint.w * TILE_SIZE, footprint.h * TILE_SIZE)
+      .setTint(shelfPaintTint(DEFAULT_SHELF_PAINT))
       .setDepth(fixtureDepth(bounds.bottom * TILE_SIZE)));
     const block = this.add.zone(
       (solid.left + solid.right) / 2 * TILE_SIZE, (solid.top + solid.bottom) / 2 * TILE_SIZE,

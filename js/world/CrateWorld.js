@@ -74,7 +74,7 @@ export class CrateWorld {
       .map((crate) => ({
         key: crate,
         rect: rectOf(crate.sprite.body),
-        weight: 1 + (shop.floorStacks.get(crate)?.length ?? 0),
+        weight: 1 + (shop.floorStacks?.get(crate)?.length ?? 0),
         locked: crate.lockedToPad,
       }));
     const { playerVelocity, crateVelocities } = solveCratePush({
@@ -116,7 +116,7 @@ export class CrateWorld {
       .map((crate) => ({
         key: crate,
         rect: rectOf(crate.sprite.body),
-        weight: 1 + (shop.floorStacks.get(crate)?.length ?? 0),
+        weight: 1 + (shop.floorStacks?.get(crate)?.length ?? 0),
         locked: false,
       }));
     if (!crates.length) {

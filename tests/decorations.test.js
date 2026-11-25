@@ -119,6 +119,21 @@ test("every decoration fits ordinary layout validation, creates a plain model, a
   }
 });
 
+test("budget shelves start with the default purple paint and keep their own paint through saves", () => {
+  const shop = new Shop();
+  const plain = createFixtureModel({ id: "plain", type: "shelf_budget_2x2", gx: 4, gy: 4 });
+  const painted = createFixtureModel({ id: "painted", type: "shelf_budget_2x2", gx: 8, gy: 4, paint: "custom" });
+  assert.equal(plain.paint, "purple");
+  assert.equal(createFixtureModel({ id: "decor", type: decorations[0].id, gx: 2, gy: 2 }).paint, undefined);
+  shop.fixtures.add(plain);
+  shop.fixtures.add(painted);
+  const saved = shop.toSave();
+  assert.equal(saved.fixtures.find(({ id }) => id === "plain").paint, undefined, "the default paint isn't written");
+  const restored = Shop.fromSave(saved);
+  assert.equal(restored.fixtures.get("plain").paint, "purple");
+  assert.equal(restored.fixtures.get("painted").paint, "custom");
+});
+
 function fixtureScene() {
   const delivered = [];
   const body = {};

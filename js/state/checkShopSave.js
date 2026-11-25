@@ -12,6 +12,7 @@ import { isValidLedgerData } from "../logic/DayLedger.js";
 import { isMoney, roundMoney } from "../logic/Money.js";
 import { REMOTE_ORDER_TUNING } from "../logic/RemoteOrders.js";
 import { isKnownShopLevel } from "../logic/ShopProgression.js";
+import { SHELF_PAINTS, isPaintableFixture } from "../logic/ShelfPaint.js";
 import { CUSTOMER_FACTION_IDS } from "../logic/CustomerBuyLists.js";
 import { isValidTrashList } from "../modules/cleaning/Litter.js";
 import { DIRT_KINDS } from "../modules/cleaning/CleaningArt.js";
@@ -248,6 +249,8 @@ export function checkShopSave(data, database) {
       isValidFixtureRotation(entry.rotation),
     "invalid fixture position.");
     fixtureIds.add(entry.id);
+    requireSave(entry.paint === undefined || (isPaintableFixture(spec) && Object.hasOwn(SHELF_PAINTS, entry.paint)),
+      "unknown shelf paint.");
     if (spec.kind === "shelf") {
       requireSave(entry.nextPlacementId === undefined || integer(entry.nextPlacementId, 1),
         "invalid shelf placement ID counter.");

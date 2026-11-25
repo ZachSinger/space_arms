@@ -3,6 +3,9 @@ import { UIWindow } from "./UIWindow.js";
 import { database } from "../scenes/boot.js";
 import { getFixtureType } from "./FixtureLayout.js";
 import { getBudgetShelfArtForType } from "./BudgetShelfArt.js";
+import { getFixtureTexture } from "./FixtureTexture.js";
+import { shelfPaintTint } from "./ShelfPaint.js";
+import { paintedArtUrl } from "./TintableArt.js";
 import { getShelfBoxes } from "./ShelfBoxLayout.js";
 import { getItemCrateCategory } from "./CrateCategory.js";
 import { moveShelfCrateItem } from "./LiveShelfStocking.js";
@@ -198,7 +201,7 @@ export class ShelfStockingWindow {
     this.stage.style.aspectRatio = `${art.width} / ${visibleHeight}`;
     this.stage.style.width = `min(100%, calc((${DESIGN_HEIGHT}px - 370px) * ${art.width / visibleHeight}))`;
     const shelf = document.createElement("img");
-    shelf.src = texturePath(getFixtureType(fixture.type).facingTextures.down);
+    shelf.src = paintedArtUrl(this.scene, getFixtureTexture(getFixtureType(fixture.type)), shelfPaintTint(fixture.paint));
     shelf.alt = "";
     shelf.className = "shelf-stocking-art";
     shelf.style.height = `${art.height / visibleHeight * 100}%`;

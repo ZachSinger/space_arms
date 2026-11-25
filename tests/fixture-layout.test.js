@@ -69,6 +69,7 @@ test("starting and cancelling placement keep the player and loose crates moving"
       const ghost = {
         setDisplaySize() { return this; },
         setAlpha() { return this; },
+        setTint() { return this; },
         setDepth() { return this; },
         destroy() { this.destroyed = true; },
       };

@@ -124,9 +124,13 @@ the brightness and contrast limits keep any setting from turning a shelf black.
 puts those three back to normal. **EVERY SHELF** changes all the gray shelves at once.
 Clicking a shelf (or **CLICKED SHELF**) outlines it in green and changes only that one; the
 sliders then show that shelf's settings. The starting-color squares set red, green, and blue
-in one click; **Purple** is close to the shelf's original paint. The gray copy
-is made from the shelf's own art when the room opens (`js/logic/TintableArt.js`), so new
-shelf art gets a gray copy the same way. Nothing in it is saved.
+in one click; **Purple** is the default paint every shop shelf starts with. The gray copies
+are made from the shelf art when the game starts (`js/logic/TintableArt.js`), so new shelf art
+gets a gray copy the same way. Nothing in the lab is saved.
+
+In the real shop, every Budget Shelf is drawn from this gray art and colored by its own paint
+(`js/logic/ShelfPaint.js`). Each shelf remembers its paint in the save; Purple is the default
+and is the only paint so far, so shelves look the same as before.
 
 ## Delivery Crate Lab
 

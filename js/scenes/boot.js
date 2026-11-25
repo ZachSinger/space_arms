@@ -16,6 +16,7 @@ import { PARTNER_CARRY_SPRITE, PARTNER_SPRITE, PLAYER_CARRY_SPRITE, PLAYER_SPRIT
 import { FIXTURE_CRATE_SPRITE, ITEM_CRATE_SPRITE } from "../logic/Crate.js";
 import { FIXTURE_TYPES } from "../logic/FixtureLayout.js";
 import { ensureBudgetShelfSideTextures } from "../logic/BudgetShelfArt.js";
+import { ensureShelfPaintTextures } from "../logic/FixtureTexture.js";
 import { ensureCleaningTextures } from "../modules/cleaning/CleaningArt.js";
 
 // The game-wide static data lookup, imported by logic modules as `database`.
@@ -53,6 +54,7 @@ export class BootScene extends Phaser.Scene {
     installSceneTextSize(this, Phaser);
     ensureCleaningTextures(this);
     ensureBudgetShelfSideTextures(this, FIXTURE_TYPES);
+    ensureShelfPaintTextures(this, FIXTURE_TYPES);
     // Pixel art drawn larger or smaller than its sheet stays crisp.
     for (const key of [PLAYER_SPRITE.key, PLAYER_CARRY_SPRITE.key, PARTNER_SPRITE.key, PARTNER_CARRY_SPRITE.key, STORE_DOOR_SPRITE.key, BACKROOM_DOOR_SPRITE.key,
       ITEM_CRATE_SPRITE.key, FIXTURE_CRATE_SPRITE.key,

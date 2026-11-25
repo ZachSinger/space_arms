@@ -1,7 +1,7 @@
 // ==========================================
 // FILE: shelfColorLab.js
 // ==========================================
-// Dev room for trying shelf colors. A gray copy of the Budget Shelf (js/logic/TintableArt.js)
+// Dev room for trying shelf colors. The shop's gray Budget Shelf art (js/logic/TintableArt.js)
 // stands in all four facings next to an untouched original. The panel on the right mixes a
 // color from red, green, and blue sliders (the shelf's tint), then adjusts brightness,
 // contrast, and saturation on top (a color filter on the shelf picture). It paints every gray
@@ -13,8 +13,8 @@ import { TILE_SIZE } from "../logic/RoomLayout.js";
 import {
   fixtureBounds, fixtureFootprint, fixtureSolidBounds, getFixtureType,
 } from "../logic/FixtureLayout.js";
-import { getFixtureTexture } from "../logic/FixtureTexture.js";
-import { ensureGrayTexture } from "../logic/TintableArt.js";
+import { getFixtureTexture, getUnpaintedFixtureTexture } from "../logic/FixtureTexture.js";
+import { DEFAULT_SHELF_PAINT, SHELF_PAINTS } from "../logic/ShelfPaint.js";
 import { Player } from "../logic/Player.js";
 import { PEOPLE_DEPTH_BASE, fixtureDepth } from "../world/Depth.js";
 
@@ -35,7 +35,7 @@ const SHELVES = Object.freeze([
 // Quick starting points for the red, green, and blue sliders. "Purple" brings the gray shelf
 // back to roughly its original paint.
 const PRESETS = Object.freeze([
-  { name: "Purple", tint: 0xb89ff7 },
+  { name: "Purple", tint: SHELF_PAINTS[DEFAULT_SHELF_PAINT].tint },
   { name: "Plain gray", tint: 0xffffff },
   { name: "Steel", tint: 0x94a3b8 },
   { name: "Black", tint: 0x4b5563 },
@@ -137,16 +137,15 @@ export class ShelfColorLabScene extends Phaser.Scene {
     this.addWorld(floor);
   }
 
-  // Drawn and made solid the way the shop does it; gray shelves use the tint-ready copy.
+  // Drawn and made solid the way the shop does it; the comparison shelf keeps its original art.
   placeShelf(shelf) {
     const spec = getFixtureType(shelf.type);
     const footprint = fixtureFootprint(shelf);
     const bounds = fixtureBounds(shelf);
     const solid = fixtureSolidBounds(shelf);
-    const texture = getFixtureTexture(spec, shelf.rotation);
     const image = this.addWorld(this.add.image(
       (shelf.gx + footprint.w / 2) * TILE_SIZE, (shelf.gy + footprint.h / 2) * TILE_SIZE,
-      shelf.original ? texture : ensureGrayTexture(this, texture),
+      shelf.original ? getUnpaintedFixtureTexture(spec, shelf.rotation) : getFixtureTexture(spec, shelf.rotation),
     ).setDisplaySize(footprint.w * TILE_SIZE, footprint.h * TILE_SIZE)
       .setDepth(fixtureDepth(bounds.bottom * TILE_SIZE)));
     const placed = { ...shelf, image, bounds, look: null };

@@ -11,6 +11,7 @@ import {
   getFixtureType, fixtureAtWorldPoint, fixtureBounds, fixtureFootprint, fixtureProjectionBoxes,
 } from "./FixtureLayout.js";
 import { getFixtureTexture, hasFacingTextures } from "./FixtureTexture.js";
+import { isPaintableFixture, shelfPaintTint } from "./ShelfPaint.js";
 import { getInputDevice } from "../input/InputDevice.js";
 import { fixturePlacementContext } from "./FixturePlacementContext.js";
 import { matchesBinding } from "../input/KeyBindings.js";
@@ -219,6 +220,7 @@ export class FixturePlacement {
     this.ghost = this.scene.add.image(x, y, getFixtureTexture(this.spec))
       .setDisplaySize(this.spec.w * TILE_SIZE, this.spec.h * TILE_SIZE)
       .setAlpha(0.5).setDepth(9996);
+    if (isPaintableFixture(this.spec)) this.ghost.setTint(shelfPaintTint(original?.paint));
     this.graphics.setVisible(true);
     this.drawPlacedFixtures();
     this.padPoint = null;

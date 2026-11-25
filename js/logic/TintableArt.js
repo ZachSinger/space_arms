@@ -49,3 +49,29 @@ export function ensureGrayTexture(scene, sourceKey) {
   texture.refresh().setFilter(1);
   return key;
 }
+
+const paintedUrls = new Map();
+
+/**
+ * A picture address for page elements (not the game map) showing gray art in a tint, the
+ * same way the map's tint multiplies it. Made once per art and color.
+ */
+export function paintedArtUrl(scene, grayKey, tint) {
+  const cacheKey = `${grayKey}:${tint}`;
+  if (paintedUrls.has(cacheKey)) return paintedUrls.get(cacheKey);
+  const source = scene.textures.get(grayKey).getSourceImage();
+  const canvas = document.createElement("canvas");
+  canvas.width = source.width;
+  canvas.height = source.height;
+  const context = canvas.getContext("2d");
+  context.drawImage(source, 0, 0);
+  context.globalCompositeOperation = "multiply";
+  context.fillStyle = `#${tint.toString(16).padStart(6, "0")}`;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  // Multiplying fills the see-through parts too; put the art's own outline back.
+  context.globalCompositeOperation = "destination-in";
+  context.drawImage(source, 0, 0);
+  const url = canvas.toDataURL();
+  paintedUrls.set(cacheKey, url);
+  return url;
+}

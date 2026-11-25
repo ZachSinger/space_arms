@@ -9,6 +9,7 @@ import { FixtureRegistry } from "../../logic/FixtureRegistry.js";
 import { ShelfFixture } from "../../logic/ShelfFixture.js";
 import { fixtureFootprint, fixtureRotation, getFixtureType, getShelfDisplayGrid } from "../../logic/FixtureLayout.js";
 import { startingFixtures } from "../../logic/StartingTemplate.js";
+import { DEFAULT_SHELF_PAINT, isPaintableFixture } from "../../logic/ShelfPaint.js";
 import { TILE_SIZE, ZONES } from "../../logic/RoomLayout.js";
 import { SHOP_LAYOUT_VERSION } from "../migrations/index.js";
 
@@ -17,7 +18,7 @@ import { SHOP_LAYOUT_VERSION } from "../migrations/index.js";
  * @param {{ id: string, type: string, gx: number, gy: number, rotation?: number }} entry - gx/gy is the top-left cell
  */
 export function createFixtureModel({
-  id, type, gx, gy, rotation = 0, placements = [], nextPlacementId,
+  id, type, gx, gy, rotation = 0, placements = [], nextPlacementId, paint,
 }) {
   const spec = getFixtureType(type);
   if (!spec) throw new Error(`Unknown fixture type: ${type}`);
@@ -39,7 +40,8 @@ export function createFixtureModel({
       nextPlacementId,
     })
     : { ...base };
-  return Object.assign(fixture, { type, gx, gy, rotation });
+  return Object.assign(fixture, { type, gx, gy, rotation },
+    isPaintableFixture(spec) ? { paint: paint ?? DEFAULT_SHELF_PAINT } : {});
 }
 
 export class Shop extends Slice {
@@ -94,6 +96,7 @@ export class Shop extends Slice {
             placements,
             nextPlacementId: fixture.nextPlacementId,
             ...(fixture.handsOn ? { stockingVersion: 1 } : {}),
+            ...(fixture.paint && fixture.paint !== DEFAULT_SHELF_PAINT ? { paint: fixture.paint } : {}),
           };
         }
         return entry;

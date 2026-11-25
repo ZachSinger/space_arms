@@ -687,6 +687,19 @@ test("fixture rotation is saved, and older saves without it still load", () => {
   }
 });
 
+test("each shelf saves its own known paint; unknown paints and paint on other fixtures are rejected", () => {
+  const data = snapshot();
+  const shelf = data.fixtures[0];
+  const other = data.fixtures.find(({ type }) => getFixtureType(type).artLayout !== "budget");
+  shelf.paint = "purple";
+  assert.deepEqual(validateShopSave(data, database), data);
+  shelf.paint = "glitter";
+  assert.throws(() => validateShopSave(data, database), /unknown shelf paint/);
+  delete shelf.paint;
+  other.paint = "purple";
+  assert.throws(() => validateShopSave(data, database), /unknown shelf paint/);
+});
+
 test("fixtures between floor squares save at valid positions", () => {
   const data = snapshot();
   data.fixtures[0].gx += 0.5;

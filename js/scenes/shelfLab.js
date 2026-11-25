@@ -13,6 +13,7 @@ import { TILE_SIZE } from "../logic/RoomLayout.js";
 import { getFixtureType, getShelfDisplayGrid } from "../logic/FixtureLayout.js";
 import { getBudgetShelfArtForType } from "../logic/BudgetShelfArt.js";
 import { getFixtureTexture } from "../logic/FixtureTexture.js";
+import { DEFAULT_SHELF_PAINT, shelfPaintTint } from "../logic/ShelfPaint.js";
 import { ITEM_CRATE_TINTS, getItemCrateCategory } from "../logic/CrateCategory.js";
 import { Crate, INTERACT_RANGE } from "../logic/Crate.js";
 import { MAX_CARRIED_CRATES } from "../logic/CrateStack.js";
@@ -233,7 +234,8 @@ export class ShelfLabScene extends Phaser.Scene {
     const x = (SHELF_CELL.gx + spec.w / 2) * TILE_SIZE;
     const y = (SHELF_CELL.gy + spec.h / 2) * TILE_SIZE;
     this.shelf = { spec, x, y, width, height, displayGrid: getShelfDisplayGrid(spec) };
-    const sprite = this.add.image(x, y, getFixtureTexture(spec)).setDisplaySize(width, height).setDepth(2);
+    const sprite = this.add.image(x, y, getFixtureTexture(spec)).setDisplaySize(width, height).setDepth(2)
+      .setTint(shelfPaintTint(DEFAULT_SHELF_PAINT));
     this.textures.get(sprite.texture.key).setFilter(Phaser.Textures.FilterMode.NEAREST);
     this.shelf.sprite = sprite;
     this.solids.add(sprite);

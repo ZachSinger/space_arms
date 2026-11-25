@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { FIXTURE_FACINGS, FIXTURE_TYPES, getShelfDisplayGrid } from "../js/logic/FixtureLayout.js";
-import { getFixtureTexture } from "../js/logic/FixtureTexture.js";
+import { getFixtureTexture, getUnpaintedFixtureTexture } from "../js/logic/FixtureTexture.js";
+import { grayTextureKey } from "../js/logic/TintableArt.js";
 import { budgetShelfSideTexture, ensureBudgetShelfSideTextures } from "../js/logic/BudgetShelfArt.js";
 
 const tilesetManifest = JSON.parse(await readFile(
@@ -31,7 +32,9 @@ test("the budget shelf uses a facing-specific image on a one-tile-deep footprint
   ]);
   for (let rotation = 0; rotation < FIXTURE_FACINGS.length; rotation++) {
     const key = spec.facingTextures[FIXTURE_FACINGS[rotation]];
-    assert.equal(getFixtureTexture(spec, rotation), rotation % 2 ? budgetShelfSideTexture(key) : key);
+    const unpainted = rotation % 2 ? budgetShelfSideTexture(key) : key;
+    assert.equal(getUnpaintedFixtureTexture(spec, rotation), unpainted);
+    assert.equal(getFixtureTexture(spec, rotation), grayTextureKey(unpainted));
   }
 });
 
@@ -47,7 +50,9 @@ test("each budget shelf size has four registered facings and the right display g
       const path = paths.get(key);
       assert.ok(path, `${key} is listed in the tileset manifest`);
       const rotation = FIXTURE_FACINGS.indexOf(facing);
-      assert.equal(getFixtureTexture(spec, rotation), rotation % 2 ? budgetShelfSideTexture(key) : key);
+      const unpainted = rotation % 2 ? budgetShelfSideTexture(key) : key;
+      assert.equal(getUnpaintedFixtureTexture(spec, rotation), unpainted);
+      assert.equal(getFixtureTexture(spec, rotation), grayTextureKey(unpainted));
     }
   }
 });
