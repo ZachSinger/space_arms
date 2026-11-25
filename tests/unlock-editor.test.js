@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { applyState, buildState, problemsIn } from "../scripts/unlock-editor/server.mjs";
+import { SupplierLicense } from "../js/logic/Licenses.js";
 
 const FILES = {
   progression: "data/Progression.json",
@@ -59,6 +60,24 @@ test("unlock editor rejects blank and duplicate contract names", () => {
   const problems = problemsIn(state).join("\n");
   assert.match(problems, /needs a name/);
   assert.match(problems, /Two contracts are both named/);
+});
+
+test("unlock editor adds a new contract the game can load", () => {
+  const state = buildState(texts);
+  state.licenses.push({ isNew: true, name: "Rifle Scopes", description: "Glass for long guns.", tier: 2, cost: 900, level: 9 });
+  state.licenses.push({ isNew: true, name: "Rifle-Scopes!", description: "", tier: 1, cost: 0, level: 1 });
+  assert.deepEqual(problemsIn(state), []);
+  const next = applyState(texts, state);
+  const saved = JSON.parse(next.licenses);
+  assert.equal(saved.length, JSON.parse(texts.licenses).length + 2);
+  const [first, second] = saved.slice(-2);
+  assert.equal(first.id, "lic_rifle_scopes");
+  assert.equal(second.id, "lic_rifle_scopes_2");
+  const contract = new SupplierLicense(first);
+  assert.equal(contract.name, "Rifle Scopes");
+  assert.equal(contract.requiredShopLevel, 9);
+  assert.equal(contract.baseCost, 900);
+  assert.ok(next.licenses.startsWith(texts.licenses.slice(0, texts.licenses.lastIndexOf("}") + 1)));
 });
 
 test("unlock editor rejects shop levels that don't need more reputation", () => {

@@ -3,8 +3,8 @@
 // ==========================================
 // A developer tool, not part of the game: a page for editing when things unlock and what they
 // cost (shop level reputation, contracts, expansions, staff, the hovercart, fixtures, and
-// starting money). Run with `npm run unlocks`, then use the page it opens.
-// Saving changes only the edited numbers in each data file and leaves their layout alone.
+// starting money), and for naming and adding contracts. Run with `npm run unlocks`.
+// Saving changes only the edited values in each data file and leaves their layout alone.
 import { createServer } from "node:http";
 import { readFile, writeFile } from "node:fs/promises";
 import { exec } from "node:child_process";
@@ -53,6 +53,7 @@ export function buildState(texts) {
       id: license.id,
       name: license.name,
       description: license.description ?? "",
+      tier: license.tier,
       cost: license.baseCost,
       level: license.requiredShopLevel ?? null,
       itemCount: items.filter((item) => item.license === license.id).length,
@@ -77,7 +78,7 @@ function editable(state) {
     hovercartPrice: state.hovercartPrice,
     upgrades: UPGRADE_PATHS.map((name) => state.upgrades[name].map(({ level, cost }) => [level, cost])),
     zones: state.zones.map(({ id, cost, level }) => [id, cost, level]),
-    licenses: state.licenses.map(({ id, name, description, cost, level }) => [id, name, description, cost, level]),
+    licenses: state.licenses.map(({ id, name, description, tier, cost, level }) => [id, name, description, tier, cost, level]),
     fixtures: state.fixtures.map(({ id, price }) => [id, price]),
   };
 }
@@ -127,6 +128,8 @@ export function problemsIn(state) {
     else if (namesSeen.has(license.name.trim().toLowerCase())) problems.push(`Two contracts are both named "${license.name}".`);
     else namesSeen.add(license.name.trim().toLowerCase());
     if (typeof license.description !== "string") problems.push(`${license.name}: description must be text.`);
+    if (!isWhole(license.tier) || license.tier < 1) problems.push(`${license.name}: tier must be a whole number, 1 or more.`);
+    if (license.isNew && license.level === null) problems.push(`${license.name}: needs an unlock level.`);
     if (license.level !== null) checkLevel(license.name, license.level);
     checkCost(license.name, license.cost);
   }
@@ -168,6 +171,34 @@ function keyedEntry(text, id) {
   return [start, next ? next.index : text.length];
 }
 
+/** A fresh contract id made from its name, like "lic_rifle_scopes", that no other contract uses. */
+function newLicenseId(name, taken) {
+  const base = `lic_${name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "contract"}`;
+  let id = base;
+  for (let n = 2; taken.has(id); n++) id = `${base}_${n}`;
+  taken.add(id);
+  return id;
+}
+
+/** Adds whole new contracts to the end of Licenses.json, laid out like the ones already there. */
+function appendLicenses(text, added) {
+  if (!added.length) return text;
+  const newline = text.includes("\r\n") ? "\r\n" : "\n";
+  const blocks = added.map((license) => [
+    "  {",
+    `    "id": ${JSON.stringify(license.id)},`,
+    `    "name": ${JSON.stringify(license.name)},`,
+    `    "description": ${JSON.stringify(license.description)},`,
+    `    "tier": ${license.tier},`,
+    `    "baseCost": ${license.cost},`,
+    `    "requiredShopLevel": ${license.level},`,
+    `    "reqReputation": null`,
+    "  }",
+  ].join(newline));
+  const end = text.lastIndexOf("}");
+  return `${text.slice(0, end + 1)},${newline}${blocks.join(`,${newline}`)}${text.slice(end + 1)}`;
+}
+
 /** New file texts with the state's numbers written in; files with no changes stay identical. */
 export function applyState(texts, state) {
   const progression = JSON.parse(texts.progression);
@@ -188,16 +219,28 @@ export function applyState(texts, state) {
   }
 
   const oldLicenses = new Map(JSON.parse(texts.licenses).map((license) => [license.id, license]));
+  const takenIds = new Set(oldLicenses.keys());
+  state = {
+    ...state,
+    licenses: state.licenses.map(({ isNew, ...license }) => (isNew ? { ...license, id: newLicenseId(license.name, takenIds) } : license)),
+  };
   let licenses = texts.licenses;
+  const added = [];
   for (const license of state.licenses) {
     const old = oldLicenses.get(license.id);
+    if (!old) {
+      added.push(license);
+      continue;
+    }
     if (old.name !== license.name) licenses = setText(licenses, listEntry(licenses, license.id), "name", license.name, license.id);
     if ((old.description ?? "") !== license.description) licenses = setText(licenses, listEntry(licenses, license.id), "description", license.description, license.id);
+    if (old.tier !== license.tier) licenses = setValue(licenses, listEntry(licenses, license.id), "tier", license.tier, license.name);
     if (old.baseCost !== license.cost) licenses = setValue(licenses, listEntry(licenses, license.id), "baseCost", license.cost, license.name);
     if (license.level !== null && old.requiredShopLevel !== license.level) {
       licenses = setValue(licenses, listEntry(licenses, license.id), "requiredShopLevel", license.level, license.name);
     }
   }
+  licenses = appendLicenses(licenses, added);
 
   const oldFixtures = JSON.parse(texts.fixtures);
   let fixtures = texts.fixtures;
