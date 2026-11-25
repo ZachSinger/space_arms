@@ -44,12 +44,14 @@ test("each facing lights only its shopping edge and stays one screen pixel thick
       if (rotation % 2) {
         const bounds = fixture.sprite.getBounds();
         const inset = fixtureArtInset(fixture);
-        const { w } = fixtureFootprint(fixture);
+        const { w, h } = fixtureFootprint(fixture);
         const edge = rotation === 1
           ? bounds.x + bounds.width * inset.left / w
           : bounds.right - bounds.width * inset.right / w;
         const lightEdge = r.x + (rotation === 3 ? 1 / zoom : 0);
         assert.ok(Math.abs(lightEdge - edge) <= 0.5 / zoom + 1e-10);
+        assert.ok(r.y >= bounds.y + bounds.height * inset.top / h);
+        assert.ok(r.y + r.height <= bounds.bottom - bounds.height * inset.bottom / h);
       }
     }
   }
@@ -61,8 +63,8 @@ test("the light follows moving and turning a shelf, and is destroyed with its di
   fixture.rotation = 3;
   fixture.sprite.getBounds = () => ({ x: 300, y: 400, width: 64, height: 72, right: 364, bottom: 472 });
   light.update(1500);
-  assert.equal(graphics.rect.y, 404);
-  assert.equal(graphics.rect.height, 64);
+  assert.equal(graphics.rect.y, 407);
+  assert.equal(graphics.rect.height, 60);
   assert.ok(Math.abs(graphics.rect.x + 1 - (364 - 64 / 3)) <= 0.5);
   light.destroy();
   assert.equal(graphics.destroyed, true);

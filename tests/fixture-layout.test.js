@@ -720,6 +720,29 @@ test("transparent margins on larger sideways shelves do not block a player or cr
   }
 });
 
+test("the smallest sideways shelf leaves the transparent pixels at both ends clear", () => {
+  const register = BASIC_FIXTURES.find((entry) => getFixtureType(entry.type).kind === "register");
+  for (const rotation of [1, 3]) {
+    const shelf = { id: "trimmed-shelf", type: "shelf_budget_2x2", gx: 17, gy: 5, rotation };
+    for (const end of ["top", "bottom"]) {
+      const options = createRoom({ expanded: true });
+      const occupied = {
+        left: 17.5 * TILE_SIZE - 10, right: 17.5 * TILE_SIZE + 10,
+        top: 5 * TILE_SIZE + (end === "top" ? -17 : 71.5),
+        bottom: 5 * TILE_SIZE + (end === "top" ? 3 : 91.5),
+      };
+      options.occupiedRectangles = [occupied];
+      const clear = validateFixtureLayout([register, shelf], options);
+      assert.equal(clear.valid, true, `${end}, rotation ${rotation}: ${clear.reason}`);
+      if (end === "top") occupied.bottom += 1;
+      else occupied.top -= 1;
+      const overlap = validateFixtureLayout([register, shelf], options);
+      assert.equal(overlap.valid, false, `${end}, rotation ${rotation}`);
+      assert.match(overlap.reason, /player or crate/);
+    }
+  }
+});
+
 test("a walkable projection can share the floor in front of a doorway", () => {
   const options = createRoom({ expanded: true });
   const { shop } = getBackroomLink();

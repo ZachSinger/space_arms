@@ -1267,7 +1267,7 @@ test("the budget shelf art fills its footprint in every direction; only its feet
     assert.equal(sprite.angle, 0);
     // Facing up/down only the bottom 24px (half the player's height) is solid; facing
     // left/right the art leaves empty bands at its sides.
-    const [solidWidth, solidHeight] = rotation % 2 === 0 ? [68, 24] : [64 / 3, 70];
+    const [solidWidth, solidHeight] = rotation % 2 === 0 ? [68, 24] : [64 / 3, 68];
     assert.ok(Math.abs(body.width - solidWidth) < 1e-10);
     assert.equal(body.height, solidHeight);
   }

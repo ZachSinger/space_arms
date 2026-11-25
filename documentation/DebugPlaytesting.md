@@ -105,6 +105,10 @@ part of each shelf that people bump into; press **G** to hide or show it. Shelve
 or down are solid only around their feet, so you, customers, and staff can walk behind their
 tops and be hidden by them. A pretend customer walks a loop behind the shelves.
 
+In the shop, sideways shelves' collision areas, placement boxes, standing space, highlights,
+and shopping-edge lights follow their visible artwork. Mouse clicks target visible shelf
+pixels, not the transparent padding, including after turning a shelf.
+
 **Every new shelf must be checked here before it ships.** Add it to the lab's shelf list in
 `js/scenes/shelfCollisionLab.js` in all four facings, then walk into it from every side and
 behind it: you should stop only at its feet, and it should hide you when you're behind it.

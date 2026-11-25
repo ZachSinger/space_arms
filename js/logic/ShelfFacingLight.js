@@ -30,11 +30,11 @@ export class ShelfFacingLight {
       height = pixel;
     } else {
       const inset = fixtureArtInset(fixture);
-      const { w } = fixtureFootprint(fixture);
+      const { w, h } = fixtureFootprint(fixture);
       x = rotation === 1 ? b.x + b.width * inset.left / w : b.right - b.width * inset.right / w - pixel;
-      y = b.y + 4;
+      y = b.y + b.height * inset.top / h + 4;
       width = pixel;
-      height = b.height - 8;
+      height = b.height * (1 - (inset.top + inset.bottom) / h) - 8;
     }
     x = Math.round((x - camera.scrollX) * camera.zoom) * pixel + camera.scrollX;
     y = Math.round((y - camera.scrollY) * camera.zoom) * pixel + camera.scrollY;
