@@ -45,13 +45,13 @@
 // "flame" shoots out of a nozzle, "glow" is a nozzle facing us, "halo" is light leaking from behind.
 const VIEWS = [
   { id: "top-down", row: "top", label: "Facing down", size: [460, 460], scale: 0.55, engines: [
-    { kind: "flame", x: 128, y: 0, dir: [0, -1], width: 50 }, { kind: "flame", x: 292, y: 0, dir: [0, -1], width: 50 }] },
+    { kind: "flame", x: 141, y: 0, dir: [0, -1], width: 40 }, { kind: "flame", x: 264, y: 0, dir: [0, -1], width: 40 }] },
   { id: "top-up", row: "top", label: "Facing up", size: [460, 460], scale: 0.55, engines: [
     { kind: "flame", x: 141, y: 560, dir: [0, 1], width: 40 }, { kind: "flame", x: 264, y: 560, dir: [0, 1], width: 40 }] },
   { id: "top-left", row: "top", label: "Facing left", size: [460, 460], scale: 0.55, engines: [
-    { kind: "flame", x: 560, y: 91, dir: [1, 0], width: 44 }, { kind: "flame", x: 560, y: 245, dir: [1, 0], width: 44 }] },
+    { kind: "flame", x: 560, y: 141, dir: [1, 0], width: 40 }, { kind: "flame", x: 560, y: 264, dir: [1, 0], width: 40 }] },
   { id: "top-right", row: "top", label: "Facing right", size: [460, 460], scale: 0.55, engines: [
-    { kind: "flame", x: 0, y: 120, dir: [-1, 0], width: 40 }, { kind: "flame", x: 0, y: 221, dir: [-1, 0], width: 40 }] },
+    { kind: "flame", x: 0, y: 141, dir: [-1, 0], width: 40 }, { kind: "flame", x: 0, y: 264, dir: [-1, 0], width: 40 }] },
   { id: "side-front", row: "side", label: "Front", size: [460, 200], scale: 0.62, engines: [
     { kind: "halo", x: 190, y: 40, radius: 40 }, { kind: "halo", x: 370, y: 40, radius: 40 }] },
   { id: "side-back", row: "side", label: "Back", size: [460, 200], scale: 0.62, engines: [
