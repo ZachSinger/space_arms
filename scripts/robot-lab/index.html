@@ -4,105 +4,159 @@
 <meta charset="utf-8">
 <title>Robot Lab - Space Arms Dealer</title>
 <style>
-  :root { color-scheme: dark; --bg: #0b1120; --panel: #111a2e; --line: #1f2b45; --text: #e2e8f5; --dim: #7d8cab; --accent: #38bdf8; --good: #4ade80; --bad: #f87171; --warn: #fbbf24; }
+  :root { color-scheme: dark; --bg: #0d1322; --panel: #141c2f; --panel2: #192238; --line: #232d45; --text: #d9dfeb; --dim: #7a86a0; --faint: #4d5872; --accent: #5aa9e6; --good: #5fcf8a; --bad: #ef7a85; --warn: #e8b85a; }
   * { box-sizing: border-box; }
-  body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
-  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
-  header h1 { font-size: 17px; margin: 0 10px 0 0; }
-  button { background: #1e293b; color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 6px 12px; cursor: pointer; font: inherit; }
-  button.primary { background: #0c4a6e; border-color: var(--accent); }
-  button.small { padding: 2px 8px; font-size: 12px; }
-  button:disabled { opacity: .4; cursor: default; }
-  button.tab { background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0; color: var(--dim); font-size: 15px; font-weight: 600; padding: 4px 2px; }
-  button.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-  #status { color: var(--dim); margin-left: auto; white-space: pre-line; }
-  #status.bad { color: var(--bad); }
-  #status.good { color: var(--good); }
-  .help { padding: 8px 16px; color: var(--dim); border-bottom: 1px solid var(--line); }
-  main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(600px, 1fr) minmax(480px, 1fr); }
-  .column { overflow: auto; padding: 12px 16px 40px; }
-  .column + .column { border-left: 1px solid var(--line); }
-  h2 { font-size: 15px; color: var(--accent); margin: 6px 0 10px; display: flex; gap: 14px; align-items: center; }
-  h3.part-title { font-size: 14px; color: var(--accent); margin: 18px 0 6px; display: flex; gap: 10px; align-items: center; }
-  .part-help { color: var(--dim); font-size: 13px; margin: 0 0 8px; }
-  input, select { background: #0f172a; color: #fde68a; border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: inherit; }
+  body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, sans-serif; }
+  button { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 12px; cursor: pointer; font: inherit; }
+  button:hover:not(:disabled) { border-color: var(--faint); }
+  button.primary { background: #1d4f78; border-color: #2c6a9c; }
+  button.small { padding: 1px 7px; font-size: 12px; }
+  button.ghost { background: none; border-color: transparent; color: var(--dim); }
+  button.ghost:hover:not(:disabled) { color: var(--text); border-color: var(--line); }
+  button:disabled { opacity: .35; cursor: default; }
+  input, select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px; font: inherit; }
   input:focus, select:focus { border-color: var(--accent); outline: none; }
   input.invalid { border-color: var(--bad); }
-  input[type=number] { width: 70px; text-align: right; }
+  input[type=number] { width: 72px; text-align: right; }
   select option { background: var(--panel); color: var(--text); }
-  .robot { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; }
-  .robot.dead { border-color: var(--bad); }
-  .robot .top { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 8px; }
-  .robot .top label { color: var(--dim); display: flex; gap: 6px; align-items: center; }
-  .robot .top input.name { width: 160px; font-weight: 600; }
-  .stats-line { color: var(--dim); font-size: 13px; margin-bottom: 6px; }
-  .stats-line b { color: var(--text); font-weight: 500; }
-  .power { display: flex; gap: 10px; align-items: center; margin-bottom: 4px; }
-  .power .meter { width: 140px; height: 10px; background: #1e293b; border-radius: 5px; overflow: hidden; }
+  .dim { color: var(--dim); }
+
+  header { display: flex; gap: 10px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 16px; margin: 0 18px 0 0; font-weight: 600; }
+  .clock { font-variant-numeric: tabular-nums; color: var(--dim); margin-left: 4px; min-width: 120px; }
+  .spacer { flex: 1; }
+  #status { color: var(--dim); white-space: pre-line; font-size: 13px; }
+  #status.bad { color: var(--bad); }
+  #status.good { color: var(--good); }
+
+  main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 480px; }
+  #store { overflow: auto; padding: 16px 20px 30px; }
+  #side { overflow: auto; border-left: 1px solid var(--line); padding: 0 16px 30px; }
+
+  /* The store map */
+  .map { position: relative; width: 100%; aspect-ratio: 16 / 9; max-height: calc(100vh - 230px); min-height: 360px; }
+  .room { position: absolute; top: 0; bottom: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  .room-name { position: absolute; top: 8px; left: 12px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+  .thing { position: absolute; transform: translate(-50%, -50%); }
+  .shelf { background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 5px 6px 4px; text-align: center; font-size: 11px; color: var(--dim); }
+  .shelf .bar { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; margin-bottom: 3px; }
+  .shelf .bar div { height: 100%; background: var(--accent); transition: width .4s; }
+  .shelf.low .bar div { background: var(--bad); }
+  .counter { background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; text-align: center; font-size: 11px; color: var(--dim); padding: 6px 4px; }
+  .queue { display: flex; gap: 4px; justify-content: center; }
+  .customer { width: 11px; height: 11px; border-radius: 50%; background: var(--warn); opacity: .8; }
+  .mess { width: 18px; height: 12px; border-radius: 50%; background: #6b5136; }
+  .area { position: absolute; border: 1px dashed var(--line); border-radius: 6px; }
+  .area-name { position: absolute; top: 3px; left: 7px; font-size: 11px; color: var(--faint); }
+  .crates { position: absolute; inset: 22px 8px 6px; display: flex; flex-wrap: wrap; gap: 4px; align-content: flex-start; }
+  .crate { width: 14px; height: 14px; border-radius: 2px; background: #a3845b; }
+  .crate.empty { background: none; border: 1px dashed var(--line); }
+  .station { width: 40px; height: 40px; border: 1px dashed var(--faint); border-radius: 8px; color: var(--faint); display: grid; place-items: center; font-size: 16px; }
+  .bot { position: absolute; transform: translate(-50%, -50%); transition: left .6s ease, top .6s ease, opacity .3s; text-align: center; pointer-events: auto; cursor: pointer; z-index: 2; }
+  .bot .body { width: 30px; height: 30px; border-radius: 50%; margin: 0 auto; display: grid; place-items: center; font-weight: 700; font-size: 13px; color: #0d1322; box-shadow: 0 0 0 3px var(--bg); }
+  .bot .charge { width: 30px; height: 4px; background: var(--bg); border-radius: 2px; margin: 4px auto 0; overflow: hidden; }
+  .bot .charge div { height: 100%; background: var(--good); }
+  .bot .charge.low div { background: var(--bad); }
+  .bot .label { font-size: 11px; color: var(--dim); white-space: nowrap; margin-top: 1px; }
+  .bot.off { opacity: .45; }
+  .bot.off .body { background: var(--faint) !important; }
+
+  .scores { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+  .score { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+  .score .n { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .score .what { font-size: 12px; color: var(--dim); }
+  details.log { margin-top: 14px; }
+  details.log summary { color: var(--dim); cursor: pointer; font-size: 13px; }
+  .log-lines { font-size: 13px; color: var(--dim); max-height: 240px; overflow: auto; margin-top: 6px; }
+  .log-lines span { color: var(--faint); font-variant-numeric: tabular-nums; margin-right: 10px; }
+
+  /* Side panel */
+  .tabs { display: flex; gap: 18px; position: sticky; top: 0; background: var(--bg); padding: 12px 0 10px; z-index: 3; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+  .tab { background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0; color: var(--dim); font-weight: 600; padding: 2px 0 4px; }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  .hint { color: var(--dim); font-size: 13px; margin: 0 0 12px; }
+  .robot { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; background: var(--panel); }
+  .robot.problem { border-color: #6b3a44; }
+  .robot-row { display: grid; grid-template-columns: 14px 1fr auto; gap: 10px; align-items: center; padding: 9px 12px; cursor: pointer; }
+  .swatch { width: 14px; height: 14px; border-radius: 50%; }
+  .robot-row .name { font-weight: 600; }
+  .robot-row .now { font-size: 13px; color: var(--dim); }
+  .robot-row .now.bad { color: var(--bad); }
+  .mini { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .mini .bar { width: 46px; height: 5px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+  .mini .bar div { height: 100%; background: var(--good); }
+  .mini .bar.low div { background: var(--bad); }
+  .editor { border-top: 1px solid var(--line); padding: 12px; }
+  .build { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .build label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--dim); }
+  .build input, .build select { width: 100%; }
+  .power { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--dim); }
+  .power .meter { flex: 1; height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
   .power .meter div { height: 100%; background: var(--accent); }
   .power.over { color: var(--bad); }
   .power.over .meter div { background: var(--bad); }
-  .doing { display: flex; gap: 10px; align-items: center; color: var(--dim); margin: 6px 0 8px; }
-  .doing b { color: var(--text); font-weight: 500; }
-  .battery { width: 90px; height: 10px; background: #1e293b; border-radius: 5px; overflow: hidden; }
-  .battery div { height: 100%; background: var(--good); }
-  .battery.low div { background: var(--bad); }
-  .board { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin-bottom: 8px; background: #0d1528; }
-  .board .head { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
-  .board .head .slot { color: var(--dim); width: 50px; }
-  .board .head .cost { color: var(--dim); font-size: 13px; margin-left: auto; }
-  .board.empty { border-style: dashed; background: none; }
-  .rule { display: grid; grid-template-columns: 26px 22px 18px 1fr 36px 1fr 60px auto; gap: 6px; align-items: center; padding: 4px 6px; border-radius: 5px; border: 1px solid transparent; }
-  .rule .num, .rule .word, .rule .plus { color: var(--dim); }
-  .rule .num { text-align: right; }
-  .rule .plus { font-size: 12px; text-align: right; }
-  .rule select { width: 100%; }
-  .rule .fixed { color: var(--text); }
-  .rule.off select, .rule.off .fixed { opacity: .45; }
-  .rule.chosen { background: #0f2e1f; border-color: var(--good); }
-  .rule.prefab { display: block; padding: 4px 8px; }
-  .rule.prefab .why { display: block; margin-top: 2px; }
-  .rule .why { grid-column: 4 / 8; color: var(--dim); font-size: 12px; margin-top: -2px; }
-  .rule.chosen .why { color: var(--good); }
-  .empty-slot { color: var(--dim); font-style: italic; padding: 2px 6px 2px 60px; }
-  .row-buttons { display: flex; gap: 8px; margin-top: 4px; }
-  .parts-table td, .parts-table th { padding: 3px 6px; }
-  .parts-table input.name { width: 190px; }
-  .costs { display: flex; gap: 24px; align-items: flex-start; }
-  .settings { display: grid; grid-template-columns: repeat(3, auto); gap: 6px 16px; justify-content: start; margin-bottom: 14px; }
-  .settings label { color: var(--dim); display: flex; justify-content: space-between; gap: 8px; align-items: center; }
-  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
-  .clock { font-variant-numeric: tabular-nums; color: var(--text); margin-left: 6px; }
-  .store { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
-  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
-  .box h3 { margin: 0 0 6px; font-size: 13px; color: var(--dim); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
-  .line-row, .shelf-row { display: flex; gap: 8px; align-items: center; margin: 3px 0; }
-  .who { color: var(--dim); font-size: 12px; }
-  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--warn); display: inline-block; margin-right: 3px; }
-  .shelf-row span:first-child { width: 60px; color: var(--dim); }
-  .fill { flex: 1; height: 10px; background: #1e293b; border-radius: 5px; overflow: hidden; }
-  .fill div { height: 100%; background: var(--accent); }
-  .fill.low div { background: var(--bad); }
-  .count { font-size: 18px; font-weight: 600; }
-  table { border-collapse: collapse; margin-bottom: 14px; }
-  td, th { padding: 4px 10px; border-bottom: 1px solid var(--line); text-align: left; }
-  td.num { text-align: right; font-variant-numeric: tabular-nums; }
-  th { color: var(--dim); font-weight: 600; }
-  .log { font-size: 13px; color: var(--dim); max-height: 280px; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
-  .log div span { color: var(--text); font-variant-numeric: tabular-nums; margin-right: 8px; }
+  .facts { font-size: 12px; color: var(--faint); margin: 4px 0 14px; }
+  .section { font-size: 12px; color: var(--dim); margin: 0 0 6px; }
+  .slot { border: 1px solid var(--line); border-radius: 6px; margin-bottom: 8px; background: var(--bg); }
+  .slot.active { border-color: #2f6b4a; }
+  .slot-head { display: flex; gap: 8px; align-items: center; padding: 6px 8px; }
+  .slot-head .n { color: var(--faint); font-size: 12px; width: 14px; text-align: right; }
+  .slot-head select { flex: 1; min-width: 0; }
+  .tools { display: flex; gap: 2px; }
+  .tools button { padding: 0 5px; font-size: 11px; background: none; border-color: transparent; color: var(--faint); }
+  .tools button:hover:not(:disabled) { color: var(--text); border-color: var(--line); }
+  .ability { padding: 0 10px 8px 30px; font-size: 13px; color: var(--dim); }
+  .slot.active .ability { color: var(--good); }
+  .rules { padding: 0 8px 6px; }
+  .rule { display: grid; grid-template-columns: 14px 16px 1fr auto; gap: 6px; align-items: start; padding: 4px 0; border-radius: 5px; }
+  .rule + .rule { border-top: 1px solid var(--line); }
+  .rule .n, .rule input[type=checkbox], .rule .tools { margin-top: 6px; }
+  .rule .n { color: var(--faint); font-size: 12px; text-align: right; }
+  .rule .what { display: grid; grid-template-columns: 34px 1fr; gap: 4px 6px; align-items: center; }
+  .rule .what .word { font-size: 12px; color: var(--faint); text-align: right; }
+  .rule .what select { width: 100%; font-size: 13px; padding: 3px 4px; }
+  .rule.off .what { opacity: .4; }
+  .rule.chosen .what select { border-color: var(--good); color: var(--good); }
+  .rule .tools { opacity: 0; }
+  .rule:hover .tools { opacity: 1; }
+  .add-row { display: flex; justify-content: space-between; align-items: center; padding: 2px 8px 8px 30px; font-size: 12px; color: var(--faint); }
+  .slot.empty { border-style: dashed; background: none; }
+  .robot-foot { display: flex; justify-content: flex-end; margin-top: 4px; }
+
+  h3.part-title { font-size: 14px; margin: 22px 0 4px; display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+  h3.part-title:first-of-type { margin-top: 4px; }
+  .part-help { color: var(--dim); font-size: 12px; margin: 0 0 8px; }
+  table { border-collapse: collapse; width: 100%; }
+  td, th { padding: 3px 4px; text-align: left; }
+  th { color: var(--dim); font-weight: 500; font-size: 12px; }
+  .parts-table input[type=number] { width: 58px; }
+  .parts-table input.name { width: 100%; }
+  .prefab-card { border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin-bottom: 6px; }
+  .prefab-card .row { display: grid; grid-template-columns: 1fr 1fr 64px auto; gap: 6px; align-items: center; }
+  .prefab-card .row input.name, .prefab-card .row select { width: 100%; }
+  .prefab-card .desc { font-size: 12px; color: var(--dim); margin-top: 5px; }
+  .costs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .settings { display: grid; gap: 6px; }
+  .settings label { display: flex; justify-content: space-between; align-items: center; gap: 10px; color: var(--dim); font-size: 13px; }
 </style>
 </head>
 <body>
 <header>
   <h1>Robot Lab</h1>
-  <button id="undo" disabled>Undo all</button>
-  <button id="save" class="primary" disabled>Save</button>
+  <button id="play" class="primary">Play</button>
+  <select id="speed" title="How fast time moves"></select>
+  <button id="stepOne" class="ghost" title="Move time forward one second">Step</button>
+  <button id="runAll" class="ghost" title="Run the rest of the shift instantly">Skip to end</button>
+  <button id="restart" class="ghost">Restart</button>
+  <span class="clock" id="clock"></span>
+  <span class="spacer"></span>
   <span id="status">Loading...</span>
+  <button id="undo" class="ghost" disabled>Undo all</button>
+  <button id="save" class="primary" disabled>Save</button>
 </header>
-<div class="help">A robot is a <b>frame</b> (its body and speed), one <b>logic board</b> per board slot, and a <b>power cell</b>. A <b>prefab</b> board does one fixed job you can't change; a <b>custom</b> board holds commands you write. The frame and boards together need some power; the cell's <b>capacity</b> must cover it or the robot won't switch on. The cell's <b>charge</b> runs down as the robot works and fills back up on a charging station. The robot checks its boards from slot 1 down and does the <b>first thing that fits</b>: a prefab board that has work to do, or a command whose "if" part is true and whose job can be done right now. If nothing fits, it waits. Press Play on the right and watch which command each robot picks (the green row). Changes apply while it runs.</div>
 <main>
-  <div class="column" id="robots"></div>
-  <div class="column" id="lab"></div>
+  <div id="store"></div>
+  <div id="side"></div>
 </main>
 <script type="module">
 import { CONDITIONS, ACTIONS, PREFAB_ABILITIES, findAbility } from "/js/logic/RobotGambits.js";
@@ -113,23 +167,23 @@ const $ = (selector) => document.querySelector(selector);
 const escape = (text) => String(text ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const money = (value) => Math.round(value).toLocaleString("en-US");
-const round = (value) => Math.round(value * 10) / 10;
 const clock = (seconds) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
-const CONDITION_LABEL = Object.fromEntries(CONDITIONS.map((entry) => [entry.id, entry.label]));
-const ACTION_LABEL = Object.fromEntries(ACTIONS.map((entry) => [entry.id, entry.label]));
 const ACTION_WORDS = { work_register: "Working a register", restock: "Restocking a shelf", unload_pad: "Carrying a crate in", clean: "Cleaning a mess", charge: "Charging", wait: "Waiting" };
+const COLORS = ["#5aa9e6", "#f2a65a", "#b48ef0", "#5fcf8a", "#ef7a85", "#e6d35a", "#6fd6d0", "#d98ad6"];
+const colorOf = (index) => COLORS[index % COLORS.length];
 const SETTINGS = [
-  ["shiftSeconds", "Shift length (seconds)"], ["registers", "Registers"], ["shelves", "Shelves"],
-  ["stations", "Charging stations"], ["customersPerMinute", "Customers per minute"], ["backroomCapacity", "Backroom holds (crates)"],
-  ["deliveryEverySeconds", "Delivery every (seconds)"], ["cratesPerDelivery", "Crates per delivery"], ["startingBackroomCrates", "Crates in backroom at start"],
-  ["standardDrain", "Standard drain (charge per working second)"],
+  ["shiftSeconds", "Shift length (seconds)"], ["customersPerMinute", "Customers per minute"],
+  ["registers", "Registers"], ["shelves", "Shelves"], ["stations", "Charging stations"],
+  ["backroomCapacity", "Backroom holds (crates)"], ["startingBackroomCrates", "Crates in backroom at start"],
+  ["deliveryEverySeconds", "Delivery every (seconds)"], ["cratesPerDelivery", "Crates per delivery"],
+  ["standardDrain", "Standard drain (charge used per working second)"],
 ];
 const WHY = { "nothing to do": "Skipped: nothing for this board to do right now", off: "Switched off", "condition false": "Skipped: the \"if\" part isn't true", "can't do it right now": "Skipped: the \"if\" is true, but the job can't be done right now", chosen: "Doing this now" };
 // Each part list's columns: [field, heading, smallest allowed, whole numbers only, hover help].
 const PART_COLUMNS = {
-  frames: [["power", "Power needed", 0, false, "How much of the cell's capacity the frame itself uses."], ["boardSlots", "Board slots", 1, true, "How many logic boards fit. Slot 1 is checked first."], ["speed", "Speed", 0.1, false, "1 is normal. 2 does every job in half the time."]],
-  cells: [["capacity", "Capacity", 0, false, "The most power the frame and boards may need in total. Never runs down."], ["charge", "Charge", 1, false, "The fuel tank. Runs down as the robot works."], ["drainRate", "Drain rate", 0, false, "Multiplies the standard drain. 1.5 runs down one and a half times as fast."], ["chargeRate", "Charge rate", 0.1, false, "Charge regained per second on a charging station."]],
-  custom: [["power", "Power needed (empty)", 0, false, "Power the board needs before any commands are written on it."], ["commands", "Command spaces", 1, true, "How many commands you can write on it."]],
+  frames: [["power", "Power", 0, false, "How much of the cell's capacity the frame itself uses."], ["boardSlots", "Slots", 1, true, "How many logic boards fit. Slot 1 is checked first."], ["speed", "Speed", 0.1, false, "1 is normal. 2 does every job in half the time."]],
+  cells: [["capacity", "Capacity", 0, false, "The most power the frame and boards may need in total. Never runs down."], ["charge", "Charge", 1, false, "The fuel tank. Runs down as the robot works."], ["drainRate", "Drain", 0, false, "Multiplies the standard drain. 1.5 runs down one and a half times as fast."], ["chargeRate", "Refill", 0.1, false, "Charge regained per second on a charging station."]],
+  custom: [["power", "Power", 0, false, "Power the board needs before any commands are written on it."], ["commands", "Commands", 1, true, "How many commands you can write on it."]],
 };
 const NEW_PART = {
   frames: () => ({ name: "New frame", power: 5, boardSlots: 1, speed: 1 }),
@@ -144,6 +198,7 @@ let sim = null;
 let timer = null;
 let speed = 5;
 let tab = "robots";
+let openRobot = 0;
 
 const dirty = () => JSON.stringify(setup) !== JSON.stringify(saved);
 function status(text, kind = "") {
@@ -169,202 +224,300 @@ function checksFor(live) {
   return results;
 }
 
-/** One command row. `where` holds the data attributes that say which command it is. */
-function ruleRow(rule, i, count, where, { editable, result, chosen, plus }) {
-  const what = editable
-    ? `<select ${where} data-rule="${i}" data-field="condition">${options(CONDITIONS, rule.condition)}</select><span class="word">then</span><select ${where} data-rule="${i}" data-field="action">${options(ACTIONS, rule.action)}</select>`
-    : `<span class="fixed">${escape(CONDITION_LABEL[rule.condition])}</span><span class="word">then</span><span class="fixed">${escape(ACTION_LABEL[rule.action])}</span>`;
-  const buttons = editable ? `<span><button class="small" data-move="-1" ${where} data-rule="${i}" ${i === 0 ? "disabled" : ""} title="Move up (checked sooner)">▲</button>
-    <button class="small" data-move="1" ${where} data-rule="${i}" ${i === count - 1 ? "disabled" : ""} title="Move down (checked later)">▼</button>
-    <button class="small" data-delete-rule="${i}" ${where} title="Remove this command">✕</button></span>` : "<span></span>";
-  return `<div class="rule ${rule.on === false ? "off" : ""} ${chosen ? "chosen" : ""}">
-    <span class="num">${i + 1}</span>
-    ${editable ? `<input type="checkbox" ${where} data-rule="${i}" data-field="on" title="Switch this command on or off" ${rule.on === false ? "" : "checked"}>` : `<span title="${rule.on === false ? "Switched off" : "On"}">${rule.on === false ? "–" : "✓"}</span>`}
-    <span class="word">If</span>${what}
-    <span class="plus">${plus === null ? "" : `+${plus} power`}</span>${buttons}
-    ${result ? `<span class="why">${WHY[result]}</span>` : ""}
+/** What a robot is up to, in a few words, and whether that's a problem. */
+function activity(live) {
+  if (!live) return { text: "Not started", bad: false };
+  if (live.noPower) return { text: "Won't switch on: not enough power", bad: true };
+  if (live.outOfPower) return { text: "Ran out of charge", bad: true };
+  if (sim.time >= sim.settings.shiftSeconds) return { text: "Shift over", bad: false };
+  const action = live.task?.action ?? live.lastAction;
+  if (!action) return { text: "Starting up", bad: false };
+  return { text: ACTION_WORDS[action], bad: false };
+}
+
+// ---------- The store map ----------
+
+// Where things sit on the map, as percentages of its width and height.
+const SALES = { left: 0, width: 63 };
+const BACK = { left: 65, width: 35 };
+function spread(count, from, to, index) {
+  const gap = (to - from) / count;
+  return from + gap * (index + 0.5);
+}
+function layout() {
+  const shelves = sim.shelves.length;
+  const columns = Math.min(shelves, 6);
+  const rows = Math.ceil(shelves / columns);
+  return {
+    shelf: (i) => ({ x: spread(columns, 4, 59, i % columns), y: 20 + Math.floor(i / columns) * (34 / rows) }),
+    register: (i) => ({ x: spread(sim.registers.length, 6, 57, i), y: 80 }),
+    mess: (i) => ({ x: 9 + ((i * 0.618034) % 1) * 48, y: 46 + ((i * 0.754878) % 1) * 20 }),
+    pad: { x: BACK.left + BACK.width / 2, y: 18 },
+    storage: { x: BACK.left + BACK.width / 2, y: 48 },
+    station: (i) => ({ x: spread(sim.stations.length, BACK.left + 3, 97, i), y: 86 }),
+    waiting: { x: BACK.left + 6, y: 70 },
+  };
+}
+
+function robotSpot(live, index, place, counters) {
+  const task = live.task;
+  const seat = (key, base, dx = 7) => {
+    const n = counters[key] = (counters[key] ?? -1) + 1;
+    return { x: base.x + n * dx, y: base.y };
+  };
+  if (!task || live.noPower || live.outOfPower) return seat("waiting", place.waiting);
+  if (task.action === "work_register") {
+    const p = place.register(sim.registers.indexOf(task.register));
+    return seat(`r${task.register.id}`, { x: p.x, y: p.y - 10 });
+  }
+  if (task.action === "restock") {
+    const p = place.shelf(sim.shelves.indexOf(task.shelf));
+    return seat(`s${task.shelf.id}`, { x: p.x, y: p.y + 11 });
+  }
+  if (task.action === "unload_pad") return seat("pad", { x: place.pad.x, y: place.pad.y + 13 });
+  if (task.action === "clean") {
+    const n = counters.clean = (counters.clean ?? -1) + 1;
+    const p = place.mess(n);
+    return { x: p.x + 3, y: p.y - 5 };
+  }
+  if (task.action === "charge") {
+    const p = place.station(sim.stations.indexOf(task.station));
+    return { x: p.x, y: p.y - 2 };
+  }
+  return seat("waiting", place.waiting);
+}
+
+function renderMap() {
+  const place = layout();
+  const at = ({ x, y }) => `left:${x}%;top:${y}%`;
+  const shelves = sim.shelves.map((shelf, i) => {
+    const fill = shelf.stock / SIM_RULES.shelfCapacity;
+    return `<div class="thing shelf ${fill < 0.25 ? "low" : ""}" style="${at(place.shelf(i))};width:${Math.min(13, 46 / Math.min(sim.shelves.length, 6))}%" title="${shelf.id}: ${shelf.stock} of ${SIM_RULES.shelfCapacity} items">
+      <div class="bar"><div style="width:${fill * 100}%"></div></div>Shelf ${i + 1}</div>`;
+  }).join("");
+  const registers = sim.registers.map((register, i) => {
+    const p = place.register(i);
+    return `<div class="thing counter" style="${at(p)};width:${Math.min(16, 40 / sim.registers.length)}%">Register ${i + 1}</div>
+      <div class="thing queue" style="${at({ x: p.x, y: p.y + 10 })}" title="${register.line.length} waiting">${register.line.map(() => '<span class="customer"></span>').join("")}</div>`;
+  }).join("");
+  const messes = Array.from({ length: sim.messes }, (_unused, i) => `<div class="thing mess" style="${at(place.mess(i))}" title="A mess on the floor"></div>`).join("");
+  const padCrates = Array.from({ length: sim.padCrates }, () => '<span class="crate"></span>').join("");
+  const stored = Array.from({ length: sim.settings.backroomCapacity }, (_unused, i) => `<span class="crate ${i < sim.backroomCrates ? "" : "empty"}"></span>`).join("");
+  const stations = sim.stations.map((_station, i) => `<div class="thing station" style="${at(place.station(i))}" title="Charging station ${i + 1}">⚡</div>`).join("");
+  const area = (left, top, width, height, name, inner, title) => `<div class="area" style="left:${left}%;top:${top}%;width:${width}%;height:${height}%" title="${escape(title)}"><span class="area-name">${name}</span><div class="crates">${inner}</div></div>`;
+  const backroom = area(BACK.left + 3, 7, BACK.width - 6, 20, "Loading pad", padCrates, `${sim.padCrates} crates delivered, waiting to be carried in`)
+    + area(BACK.left + 3, 34, BACK.width - 6, 26, `Stored crates (${sim.backroomCrates} of ${sim.settings.backroomCapacity})`, stored, "Crates ready to go onto shelves");
+
+  let map = $("#map");
+  if (!map) {
+    $("#store").innerHTML = `<div class="map" id="map"><div id="mapThings"></div><div id="mapBots"></div></div>
+      <div class="scores" id="scores"></div>
+      <details class="log" id="logBox"><summary>What happened, moment by moment</summary><div class="log-lines" id="log"></div></details>`;
+    map = $("#map");
+  }
+  $("#mapThings").innerHTML = `
+    <div class="room" style="left:${SALES.left}%;width:${SALES.width}%"><span class="room-name">Sales floor</span></div>
+    <div class="room" style="left:${BACK.left}%;width:${BACK.width}%"><span class="room-name">Backroom</span></div>
+    ${shelves}${messes}${registers}${backroom}${stations}`;
+
+  // Robots keep their element between redraws so they glide from job to job.
+  const layer = $("#mapBots");
+  const counters = {};
+  const ids = new Set();
+  sim.robots.forEach((live, index) => {
+    ids.add(live.id);
+    let bot = layer.querySelector(`[data-bot="${live.id}"]`);
+    if (!bot) {
+      bot = document.createElement("div");
+      bot.className = "bot";
+      bot.dataset.bot = live.id;
+      layer.append(bot);
+    }
+    const spot = robotSpot(live, index, place, counters);
+    const off = live.noPower || live.outOfPower;
+    bot.classList.toggle("off", off);
+    bot.style.left = `${spot.x}%`;
+    bot.style.top = `${spot.y}%`;
+    bot.dataset.index = index;
+    bot.title = `${live.name}: ${activity(live).text}`;
+    bot.innerHTML = `<div class="body" style="background:${colorOf(index)}">${escape(live.name.trim()[0] ?? "?")}</div>
+      <div class="charge ${live.battery < 0.2 ? "low" : ""}"><div style="width:${live.battery * 100}%"></div></div>
+      <div class="label">${escape(live.name)}</div>`;
+  });
+  for (const bot of [...layer.children]) if (!ids.has(bot.dataset.bot)) bot.remove();
+
+  const st = sim.stats;
+  const lost = st.leftEmptyShelf + st.leftLongLine + st.leftTooSlow;
+  $("#scores").innerHTML = `
+    <div class="score"><div class="n">${money(st.sales)}</div><div class="what">Money from sales</div></div>
+    <div class="score"><div class="n">${st.served}</div><div class="what">Customers served (of ${st.customers} who came in)</div></div>
+    <div class="score" title="Empty shelf: ${st.leftEmptyShelf}. Line too long: ${st.leftLongLine}. Waited too long: ${st.leftTooSlow}."><div class="n" style="color:${lost ? "var(--bad)" : "inherit"}">${lost}</div><div class="what">Customers who left unhappy (hover for why)</div></div>`;
+  $("#log").innerHTML = [...sim.log].reverse().map((entry) => `<div><span>${clock(entry.time)}</span>${escape(entry.text)}</div>`).join("") || "Nothing yet.";
+}
+
+function renderControls() {
+  const done = sim && sim.time >= setup.settings.shiftSeconds;
+  $("#play").textContent = timer ? "Pause" : "Play";
+  for (const id of ["play", "stepOne", "runAll"]) $(`#${id}`).disabled = !sim || done;
+  $("#speed").innerHTML = [1, 5, 20].map((value) => `<option value="${value}" ${value === speed ? "selected" : ""}>${value}x speed</option>`).join("");
+  $("#clock").textContent = sim ? `${clock(sim.time)} of ${clock(setup.settings.shiftSeconds)}${done ? ", shift over" : ""}` : "";
+}
+
+// ---------- Robots tab ----------
+
+/** One command row on a custom board. `where` holds the data attributes that say which command it is. */
+function ruleRow(rule, i, count, where, result) {
+  const tools = `<span class="tools">
+    <button data-move="-1" ${where} data-rule="${i}" ${i === 0 ? "disabled" : ""} title="Move up (checked sooner)">▲</button>
+    <button data-move="1" ${where} data-rule="${i}" ${i === count - 1 ? "disabled" : ""} title="Move down (checked later)">▼</button>
+    <button data-delete-rule="${i}" ${where} title="Remove this command">✕</button></span>`;
+  return `<div class="rule ${rule.on === false ? "off" : ""} ${result === "chosen" ? "chosen" : ""}" title="${result ? escape(WHY[result]) : ""}">
+    <span class="n">${i + 1}</span>
+    <input type="checkbox" ${where} data-rule="${i}" data-field="on" title="Switch this command on or off" ${rule.on === false ? "" : "checked"}>
+    <span class="what"><span class="word">If</span><select ${where} data-rule="${i}" data-field="condition">${options(CONDITIONS, rule.condition)}</select><span class="word">then</span><select ${where} data-rule="${i}" data-field="action">${options(ACTIONS, rule.action)}</select></span>
+    ${tools}
   </div>`;
 }
 
 function boardOptions(selected, programLength) {
-  return setup.parts.boards.map((board) => {
-    const tooSmall = board.kind === "custom" && board.commands < programLength;
-    const label = board.kind === "prefab" ? `${board.name} (prefab, ${board.power} power)` : `${board.name} (write your own)`;
-    return `<option value="${board.id}" ${board.id === selected ? "selected" : ""} ${tooSmall ? "disabled" : ""}>${escape(label)}${tooSmall ? " - too few command spaces" : ""}</option>`;
-  }).join("");
+  const group = (kind, heading) => `<optgroup label="${heading}">${setup.parts.boards.filter((board) => board.kind === kind).map((board) => {
+    const tooSmall = kind === "custom" && board.commands < programLength;
+    return `<option value="${board.id}" ${board.id === selected ? "selected" : ""} ${tooSmall ? "disabled" : ""}>${escape(board.name)}${kind === "custom" ? "" : ` (${board.power} power)`}${tooSmall ? " - too small" : ""}</option>`;
+  }).join("")}</optgroup>`;
+  return group("prefab", "Prefab: does one fixed job") + group("custom", "Custom: write your own commands");
 }
 
 function robotCard(robot, r) {
   const parts = setup.parts;
   const live = sim?.robots[r];
-  const results = checksFor(live);
   const frame = findFrame(parts, robot.frame);
   const cell = findCell(parts, robot.cell);
   const needed = powerNeeded(robot, parts);
   const over = needed > cell.capacity;
-  const frameOptions = parts.frames.map((entry) => `<option value="${entry.id}" ${entry.id === robot.frame ? "selected" : ""} ${entry.boardSlots < robot.boards.length ? "disabled" : ""}>${escape(entry.name)}${entry.boardSlots < robot.boards.length ? " - too few board slots" : ""}</option>`).join("");
+  const now = over ? { text: `Won't switch on: needs ${needed - cell.capacity} more power`, bad: true } : activity(live);
+  const battery = live ? live.battery : 1;
+  const row = `<div class="robot-row" data-open="${r}">
+    <span class="swatch" style="background:${colorOf(r)}"></span>
+    <span><div class="name">${escape(robot.name)}</div><div class="now ${now.bad ? "bad" : ""}">${escape(now.text)}</div></span>
+    <span class="mini" title="Charge left"><span class="bar ${battery < 0.2 ? "low" : ""}"><div style="width:${battery * 100}%"></div></span>${Math.round(battery * 100)}%</span>
+  </div>`;
+  if (openRobot !== r) return `<div class="robot ${now.bad ? "problem" : ""}">${row}</div>`;
+
+  const results = checksFor(live);
+  const frameOptions = parts.frames.map((entry) => `<option value="${entry.id}" ${entry.id === robot.frame ? "selected" : ""} ${entry.boardSlots < robot.boards.length ? "disabled" : ""}>${escape(entry.name)}${entry.boardSlots < robot.boards.length ? " - too few slots" : ""}</option>`).join("");
   const cellOptions = parts.cells.map((entry) => `<option value="${entry.id}" ${entry.id === robot.cell ? "selected" : ""}>${escape(entry.name)}</option>`).join("");
   const breakdown = [`${frame.name} ${frame.power}`, ...robot.boards.map((fitted) => `${findBoard(parts, fitted.board).name} ${boardPower(fitted, parts)}`)].join(" + ");
   const workSeconds = cell.drainRate > 0 && setup.settings.standardDrain > 0 ? Math.round(cell.charge / (setup.settings.standardDrain * cell.drainRate)) : Infinity;
-  const boards = robot.boards.map((fitted, s) => {
+  const slots = robot.boards.map((fitted, s) => {
     const board = findBoard(parts, fitted.board);
     const custom = board.kind === "custom";
-    const program = custom ? fitted.program : [];
     const where = `data-robot="${r}" data-slot="${s}"`;
-    let rows = program.map((rule, i) => {
-      const result = live ? results.get(`${s}:${i}`) : null;
-      return ruleRow(rule, i, program.length, where, { editable: true, result, chosen: result === "chosen" && live?.task, plus: commandPower(rule, parts) });
-    }).join("");
+    const head = `<div class="slot-head"><span class="n">${s + 1}</span>
+      <select ${where} data-field="board">${boardOptions(board.id, custom ? fitted.program.length : 0)}</select>
+      <span class="tools">
+        <button data-board-move="-1" ${where} ${s === 0 ? "disabled" : ""} title="Move this board up (checked sooner)">▲</button>
+        <button data-board-move="1" ${where} ${s === robot.boards.length - 1 ? "disabled" : ""} title="Move this board down (checked later)">▼</button>
+        <button data-board-remove ${where} title="Take this board out">✕</button></span></div>`;
     if (!custom) {
       const result = live ? results.get(`${s}:0`) : null;
-      const chosen = result === "chosen" && live?.task;
-      rows = `<div class="rule prefab ${chosen ? "chosen" : ""}"><span class="fixed">${escape(findAbility(board.ability)?.description ?? "Unknown ability")}</span>${result ? `<span class="why">${WHY[result]}</span>` : ""}</div>`;
+      return `<div class="slot ${result === "chosen" ? "active" : ""}" title="${result ? escape(WHY[result]) : ""}">${head}
+        <div class="ability">${escape(findAbility(board.ability)?.description ?? "Unknown ability")}</div></div>`;
     }
-    const free = custom ? board.commands - program.length : 0;
-    return `<div class="board">
-      <div class="head"><span class="slot">Slot ${s + 1}</span>
-        <select ${where} data-field="board">${boardOptions(board.id, custom ? program.length : 0)}</select>
-        <button class="small" data-board-move="-1" ${where} ${s === 0 ? "disabled" : ""} title="Move this board up (checked sooner)">▲</button>
-        <button class="small" data-board-move="1" ${where} ${s === robot.boards.length - 1 ? "disabled" : ""} title="Move this board down (checked later)">▼</button>
-        <button class="small" data-board-remove ${where} title="Take this board out">✕</button>
-        <span class="cost">Needs ${boardPower(fitted, parts)} power</span></div>
-      ${rows || '<div class="empty-slot">No commands yet</div>'}
-      ${custom ? `${free > 0 ? `<div class="empty-slot">${free} empty command space${free === 1 ? "" : "s"}</div>` : ""}<div class="row-buttons"><button class="small" data-add-command ${where} ${free <= 0 ? "disabled" : ""}>Add command</button></div>` : '<div class="who" style="padding-left:6px">Prefab board: does this one job and can\'t be changed.</div>'}
-    </div>`;
+    const rules = fitted.program.map((rule, i) => ruleRow(rule, i, fitted.program.length, where, live ? results.get(`${s}:${i}`) : null)).join("");
+    const active = fitted.program.some((_rule, i) => results.get(`${s}:${i}`) === "chosen");
+    const free = board.commands - fitted.program.length;
+    return `<div class="slot ${active ? "active" : ""}">${head}<div class="rules">${rules}</div>
+      <div class="add-row"><span>${free > 0 ? `${free} more command${free === 1 ? "" : "s"} fit` : "Board is full"}</span><button class="small" data-add-command ${where} ${free <= 0 ? "disabled" : ""}>Add command</button></div></div>`;
   }).join("");
   const emptySlots = frame.boardSlots - robot.boards.length;
-  const empty = emptySlots > 0 ? `<div class="board empty"><div class="head"><span class="slot">Slot ${robot.boards.length + 1}</span>
-    <select data-robot="${r}" data-slot="${robot.boards.length}" data-field="board"><option value="" selected>Empty. Pick a board to fit...</option>${boardOptions(null, 0)}</select>
-    ${emptySlots > 1 ? `<span class="who">and ${emptySlots - 1} more empty slot${emptySlots === 2 ? "" : "s"}</span>` : ""}</div></div>` : "";
-  const battery = live ? live.battery : 1;
-  let doing = "<b>Not started</b>";
-  if (live) {
-    if (live.noPower) doing = `<b style="color:var(--bad)">Won't switch on: not enough power</b>`;
-    else if (live.outOfPower) doing = `<b style="color:var(--bad)">Out of charge, shut down</b>`;
-    else if (sim.time >= sim.settings.shiftSeconds) doing = "<b>Shift over</b>";
-    else doing = `<b>${live.task ? ACTION_WORDS[live.task.action] : live.lastAction ? ACTION_WORDS[live.lastAction] : "Starting up"}</b>${live.choice?.ruleIndex === -1 && live.task ? " (no command fit)" : ""}`;
-  }
-  return `<div class="robot ${live?.outOfPower || over ? "dead" : ""}">
-    <div class="top">
-      <input class="name" data-robot="${r}" data-field="name" value="${escape(robot.name)}" title="Robot name">
-      <label>Frame <select data-robot="${r}" data-field="frame">${frameOptions}</select></label>
-      <label>Power cell <select data-robot="${r}" data-field="cell">${cellOptions}</select></label>
-    </div>
-    <div class="power ${over ? "over" : ""}" title="${escape(breakdown)}">Power: <b>${needed}</b> needed of <b>${cell.capacity}</b> capacity
-      <div class="meter"><div style="width:${Math.min(1, cell.capacity ? needed / cell.capacity : 1) * 100}%"></div></div>
-      ${over ? `Won't switch on. Needs ${needed - cell.capacity} more capacity.` : ""}</div>
-    <div class="stats-line">Speed <b>${frame.speed}</b>. A full charge lasts about <b>${workSeconds === Infinity ? "forever" : `${workSeconds} seconds`}</b> of work and refills in <b>${Math.round(cell.charge / cell.chargeRate)} seconds</b> on a station.</div>
-    <div class="doing">Now: ${doing} <div class="battery ${battery < 0.2 ? "low" : ""}" title="Charge ${Math.round(battery * 100)}%"><div style="width:${battery * 100}%"></div></div>Charge ${Math.round(battery * 100)}%</div>
-    ${boards}${empty}
-    <div class="row-buttons"><button class="small" data-delete-robot="${r}">Remove robot</button></div>
-  </div>`;
+  const empty = emptySlots > 0 ? `<div class="slot empty"><div class="slot-head"><span class="n">${robot.boards.length + 1}</span>
+    <select data-robot="${r}" data-slot="${robot.boards.length}" data-field="board"><option value="" selected>Empty slot: pick a board...</option>${boardOptions(null, 0)}</select></div></div>` : "";
+  return `<div class="robot ${now.bad ? "problem" : ""}">${row}
+    <div class="editor">
+      <div class="build">
+        <label>Name <input data-robot="${r}" data-field="name" value="${escape(robot.name)}"></label>
+        <label>Frame <select data-robot="${r}" data-field="frame">${frameOptions}</select></label>
+        <label>Power cell <select data-robot="${r}" data-field="cell">${cellOptions}</select></label>
+      </div>
+      <div class="power ${over ? "over" : ""}" title="${escape(breakdown)}"><span>Power ${needed} of ${cell.capacity}</span>
+        <div class="meter"><div style="width:${Math.min(1, cell.capacity ? needed / cell.capacity : 1) * 100}%"></div></div></div>
+      <div class="facts">Speed ${frame.speed}. A full charge lasts about ${workSeconds === Infinity ? "forever" : `${workSeconds} seconds`} of work and refills in ${Math.round(cell.charge / cell.chargeRate)} seconds.</div>
+      <div class="section">Logic boards, checked from the top. The robot does the first one with something to do.</div>
+      ${slots}${empty}
+      <div class="robot-foot"><button class="small ghost" data-delete-robot="${r}">Remove robot</button></div>
+    </div></div>`;
 }
 
+// ---------- Parts tab ----------
+
 const usedBy = (list, id) => setup.robots.filter((robot) => (list === "frames" ? robot.frame === id : list === "cells" ? robot.cell === id : robot.boards.some((fitted) => fitted.board === id)));
+function removeButton(list, part, users, last) {
+  return `<button class="small ghost" data-remove-part="${list}" data-id="${part.id}" ${users.length ? `disabled title="Used by ${escape(users.map((robot) => robot.name).join(", "))}"` : last ? 'disabled title="Keep at least one"' : 'title="Remove this part"'}>✕</button>`;
+}
 
 function partRow(list, part, columns) {
   const users = usedBy(list, part.id);
   const last = list !== "boards" && setup.parts[list].length <= 1;
   const cells = columns.map(([key, , minimum, whole, help]) => `<td><input type="number" min="${minimum}" step="${whole ? 1 : "any"}" data-part="${list}" data-id="${part.id}" data-field="${key}" value="${part[key]}" title="${escape(help)}"></td>`).join("");
-  return `<tr><td><input class="name" data-part="${list}" data-id="${part.id}" data-field="name" value="${escape(part.name)}"></td>${cells}
-    <td><button class="small" data-remove-part="${list}" data-id="${part.id}" ${users.length ? `disabled title="Used by ${escape(users.map((robot) => robot.name).join(", "))}"` : last ? 'disabled title="Keep at least one"' : 'title="Remove this part"'}>✕</button></td></tr>`;
+  return `<tr><td><input class="name" data-part="${list}" data-id="${part.id}" data-field="name" value="${escape(part.name)}"></td>${cells}<td>${removeButton(list, part, users, last)}</td></tr>`;
 }
 
 function partsTab() {
   const parts = setup.parts;
   const table = (list, columns, rows) => `<table class="parts-table"><tr><th>Name</th>${columns.map(([, heading, , , help]) => `<th title="${escape(help)}">${heading}</th>`).join("")}<th></th></tr>${rows.map((part) => partRow(list, part, columns)).join("")}</table>`;
   const prefabs = parts.boards.filter((board) => board.kind === "prefab").map((board) => {
-    const users = usedBy("boards", board.id);
     const where = `data-part="boards" data-id="${board.id}"`;
-    const abilities = PREFAB_ABILITIES.map((entry) => `<option value="${entry.id}" ${entry.id === board.ability ? "selected" : ""}>${escape(entry.label)}</option>`).join("");
-    return `<div class="board"><div class="head">
-        <input class="name" ${where} data-field="name" value="${escape(board.name)}" style="width:200px">
-        <label class="who">Ability <select ${where} data-field="ability">${abilities}</select></label>
-        <label class="who">Power needed <input type="number" min="0" step="any" ${where} data-field="power" value="${board.power}"></label>
-        <button class="small" data-remove-part="boards" data-id="${board.id}" ${users.length ? `disabled title="Used by ${escape(users.map((robot) => robot.name).join(", "))}"` : 'title="Remove this board"'}>✕</button></div>
-      <div class="rule prefab"><span class="fixed">${escape(findAbility(board.ability)?.description ?? "Unknown ability")}</span></div></div>`;
+    return `<div class="prefab-card"><div class="row">
+        <input class="name" ${where} data-field="name" value="${escape(board.name)}" title="Name">
+        <select ${where} data-field="ability" title="Which built-in job it does">${options(PREFAB_ABILITIES, board.ability)}</select>
+        <input type="number" min="0" step="any" ${where} data-field="power" value="${board.power}" title="Power needed">
+        ${removeButton("boards", board, usedBy("boards", board.id), false)}</div>
+      <div class="desc">${escape(findAbility(board.ability)?.description ?? "Unknown ability")}</div></div>`;
   }).join("");
   const costTable = (kind, list) => `<table class="parts-table"><tr><th>${kind === "conditions" ? "If..." : "Then..."}</th><th>Power</th></tr>${list.map((entry) => `<tr><td>${escape(entry.label)}</td><td><input type="number" min="0" step="any" data-cost="${kind}" data-id="${entry.id}" value="${parts.commandPower[kind][entry.id] ?? 0}"></td></tr>`).join("")}</table>`;
   return `
-    <h3 class="part-title">Frames <button class="small" data-add-part="frames">Add frame</button></h3>
-    <p class="part-help">The body. It sets speed and how many logic boards fit, and needs some power itself.</p>
+    <h3 class="part-title">Frames <button class="small" data-add-part="frames">Add</button></h3>
+    <p class="part-help">The body. Sets speed and how many logic boards fit. Hover a heading for what it means.</p>
     ${table("frames", PART_COLUMNS.frames, parts.frames)}
-    <h3 class="part-title">Power cells <button class="small" data-add-part="cells">Add power cell</button></h3>
-    <p class="part-help">Capacity is a limit: the frame and boards together can't need more. Charge is what runs down while working. Every working second uses the standard drain (${setup.settings.standardDrain}, set on the right) times the drain rate. A waiting robot uses ${SIM_RULES.waitingDrain * 100}% of that.</p>
+    <h3 class="part-title">Power cells <button class="small" data-add-part="cells">Add</button></h3>
+    <p class="part-help">Capacity is the most power a robot's frame and boards can need. Charge runs down as it works: each working second uses the standard drain times the drain rate, and waiting uses ${SIM_RULES.waitingDrain * 100}% of that.</p>
     ${table("cells", PART_COLUMNS.cells, parts.cells)}
-    <h3 class="part-title">Prefab logic boards <button class="small" data-add-part="prefab">Add prefab board</button></h3>
-    <p class="part-help">Ready-made boards. Each does one fixed job that's built into the game, and players can't see inside or change it. A higher number is a smarter version of the same job. Here you pick which built-in job a board does, its name, and its power need.</p>
+    <h3 class="part-title">Prefab boards <button class="small" data-add-part="prefab">Add</button></h3>
+    <p class="part-help">Each does one fixed job built into the game. Players can't see inside or change it. Pick the job, name and power need.</p>
     ${prefabs}
-    <h3 class="part-title">Custom logic boards <button class="small" data-add-part="custom">Add custom board</button></h3>
-    <p class="part-help">Blank boards players write their own commands on. Power needed is the empty board's own need; every command written on it adds its "if" and "then" power from the tables below.</p>
+    <h3 class="part-title">Custom boards <button class="small" data-add-part="custom">Add</button></h3>
+    <p class="part-help">Blank boards players write commands on. Each command adds its own power from the tables below.</p>
     ${table("boards", PART_COLUMNS.custom, parts.boards.filter((board) => board.kind === "custom"))}
-    <h3 class="part-title">Power each command adds to a custom board</h3>
+    <h3 class="part-title">Power each command adds</h3>
     <div class="costs">${costTable("conditions", CONDITIONS)}${costTable("actions", ACTIONS)}</div>`;
 }
 
-function renderRobots() {
-  const tabs = `<h2><button class="tab ${tab === "robots" ? "active" : ""}" data-tab="robots">Robots</button><button class="tab ${tab === "parts" ? "active" : ""}" data-tab="parts">Parts catalog</button>
-    ${tab === "robots" ? '<button class="small" id="addRobot">Add robot</button>' : ""}</h2>`;
-  $("#robots").innerHTML = tabs + (tab === "robots" ? setup.robots.map(robotCard).join("") : partsTab());
+function storeTab() {
+  const s = setup.settings;
+  return `<p class="hint">Changing any of these restarts the shift.</p>
+    <div class="settings">${SETTINGS.map(([key, label]) => `<label>${label} <input type="number" min="0" step="${key === "standardDrain" ? "any" : 1}" data-setting="${key}" value="${s[key]}"></label>`).join("")}</div>`;
+}
+
+function renderSide() {
+  const tabs = `<div class="tabs">${[["robots", "Robots"], ["parts", "Parts"], ["store", "Store setup"]].map(([id, label]) => `<button class="tab ${tab === id ? "active" : ""}" data-tab="${id}">${label}</button>`).join("")}</div>`;
+  let body = "";
+  if (tab === "robots") body = `<p class="hint">Click a robot to open it. Its dot on the map shows where it is.</p>${setup.robots.map(robotCard).join("")}<button class="small" id="addRobot">Add robot</button>`;
+  else if (tab === "parts") body = partsTab();
+  else body = storeTab();
+  $("#side").innerHTML = tabs + body;
   updateButtons();
 }
 
-function renderLab() {
-  const s = setup.settings;
-  const settings = SETTINGS.map(([key, label]) => `<label>${label} <input type="number" min="0" step="${key === "standardDrain" ? "any" : 1}" data-setting="${key}" value="${s[key]}"></label>`).join("");
-  let store = "";
-  let results = "";
-  let log = "";
-  if (sim) {
-    const robotName = (id) => sim.robots.find((robot) => robot.id === id)?.name ?? "";
-    const registers = sim.registers.map((register) => `<div class="line-row"><span>${register.id}</span><span>${register.line.map(() => '<span class="dot"></span>').join("") || '<span class="who">no one waiting</span>'}</span><span class="who">${register.staffedBy ? `worked by ${escape(robotName(register.staffedBy))}` : "no robot here"}</span></div>`).join("");
-    const shelves = sim.shelves.map((shelf) => {
-      const fill = shelf.stock / SIM_RULES.shelfCapacity;
-      return `<div class="shelf-row"><span>${shelf.id}</span><div class="fill ${fill < 0.25 ? "low" : ""}"><div style="width:${fill * 100}%"></div></div><span>${shelf.stock} of ${SIM_RULES.shelfCapacity}</span></div>`;
-    }).join("");
-    const stations = sim.stations.map((station) => `<div>${station.id}: ${station.usedBy ? escape(robotName(station.usedBy)) : '<span class="who">free</span>'}</div>`).join("") || '<span class="who">None. Robots can\'t charge!</span>';
-    store = `<div class="store">
-      <div class="box"><h3>Sales floor: registers</h3>${registers}<div style="margin-top:6px">Messes on the floor: <span class="count">${sim.messes}</span></div></div>
-      <div class="box"><h3>Sales floor: shelves</h3>${shelves}</div>
-      <div class="box"><h3>Backroom</h3>Crates on the loading pad: <span class="count">${sim.padCrates}</span><br>Crates stored: <span class="count">${sim.backroomCrates}</span> of ${s.backroomCapacity}</div>
-      <div class="box"><h3>Backroom: charging</h3>${stations}</div>
-    </div>`;
-    const st = sim.stats;
-    const busy = sim.robots.map((robot) => `<tr><td>${escape(robot.name)} was busy</td><td class="num">${sim.time ? Math.round((robot.busySeconds / sim.time) * 100) : 0}% of the time</td></tr>`).join("");
-    results = `<table>
-      <tr><th>So far this shift</th><th></th></tr>
-      <tr><td>Money from sales</td><td class="num">${money(st.sales)}</td></tr>
-      <tr><td>Customers who came in</td><td class="num">${st.customers}</td></tr>
-      <tr><td>Customers served at a register</td><td class="num">${st.served}</td></tr>
-      <tr><td>Left because the shelf they wanted was empty</td><td class="num">${st.leftEmptyShelf}</td></tr>
-      <tr><td>Left because the register line was full</td><td class="num">${st.leftLongLine}</td></tr>
-      <tr><td>Gave up waiting in line</td><td class="num">${st.leftTooSlow}</td></tr>
-      ${busy}</table>`;
-    log = `<h2>What happened</h2><div class="log">${[...sim.log].reverse().map((entry) => `<div><span>${clock(entry.time)}</span>${escape(entry.text)}</div>`).join("") || "Nothing yet."}</div>`;
-  }
-  const done = sim && sim.time >= s.shiftSeconds;
-  $("#lab").innerHTML = `
-    <h2>Pretend store</h2>
-    <div class="settings">${settings}</div>
-    <div class="controls">
-      <button id="play" class="primary" ${done ? "disabled" : ""}>${timer ? "Pause" : "Play"}</button>
-      <select id="speed" title="How fast time moves">${[1, 5, 20].map((value) => `<option value="${value}" ${value === speed ? "selected" : ""}>${value}x speed</option>`).join("")}</select>
-      <button id="stepOne" ${done ? "disabled" : ""}>Step 1 second</button>
-      <button id="runAll" ${done ? "disabled" : ""}>Skip to end of shift</button>
-      <button id="restart">Restart shift</button>
-      <span class="clock">${sim ? `${clock(sim.time)} of ${clock(s.shiftSeconds)}${done ? " (shift over)" : ""}` : ""}</span>
-    </div>
-    ${store}${results}${log}`;
-}
-
 function render() {
-  renderRobots();
-  renderLab();
+  renderSide();
+  renderMap();
+  renderControls();
 }
 
 function restart() {
   stop();
   sim = createSim(clone(setup), 1);
+  $("#mapBots")?.replaceChildren();
   render();
 }
 
@@ -379,9 +532,10 @@ function syncRobots() {
 function tick() {
   for (let n = 0; n < speed; n += 1) step(sim);
   if (sim.time >= setup.settings.shiftSeconds) stop();
-  // Redrawing the robots would close a dropdown you're in the middle of picking from.
-  if (!$("#robots").contains(document.activeElement)) renderRobots();
-  renderLab();
+  // Redrawing the side panel would close a dropdown you're in the middle of picking from.
+  if (!$("#side").contains(document.activeElement)) renderSide();
+  renderMap();
+  renderControls();
 }
 function stop() {
   clearInterval(timer);
@@ -406,10 +560,18 @@ function programAt(data) {
   return setup.robots[Number(data.robot)].boards[Number(data.slot)].program;
 }
 
-$("#robots").addEventListener("change", (event) => {
+$("#side").addEventListener("change", (event) => {
   const field = event.target;
   const data = field.dataset;
   const key = data.field;
+  if (data.setting) {
+    const value = Number(field.value);
+    const minimum = ["shiftSeconds", "registers", "shelves", "deliveryEverySeconds"].includes(data.setting) ? 1 : 0;
+    if (!Number.isFinite(value) || value < minimum) return invalid(field, `Must be ${minimum} or more.`);
+    setup.settings[data.setting] = value;
+    restart();
+    return status(dirty() ? "Unsaved changes" : "");
+  }
   if (data.cost) {
     const value = Number(field.value);
     if (!Number.isFinite(value) || value < 0) return invalid(field, "Must be 0 or more.");
@@ -464,20 +626,35 @@ function uniqueId(name) {
   return id;
 }
 
-$("#robots").addEventListener("click", (event) => {
+function openRobotCard(index) {
+  openRobot = openRobot === index ? null : index;
+  tab = "robots";
+  renderSide();
+}
+
+$("#store").addEventListener("click", (event) => {
+  const bot = event.target.closest(".bot");
+  if (bot) openRobotCard(Number(bot.dataset.index));
+});
+
+$("#side").addEventListener("click", (event) => {
+  const header = event.target.closest(".robot-row");
+  if (header) return openRobotCard(Number(header.dataset.open));
   const target = event.target.closest("button");
   if (!target) return;
   const data = target.dataset;
   if (data.tab) {
     tab = data.tab;
-    return renderRobots();
+    return renderSide();
   }
   const robot = data.robot !== undefined ? setup.robots[Number(data.robot)] : null;
   if (target.id === "addRobot") {
     setup.robots.push({ name: `Robot ${setup.robots.length + 1}`, frame: setup.parts.frames[0].id, cell: setup.parts.cells[0].id, boards: [] });
+    openRobot = setup.robots.length - 1;
   } else if (data.deleteRobot !== undefined) {
     if (!confirm(`Remove ${setup.robots[Number(data.deleteRobot)].name}?`)) return;
     setup.robots.splice(Number(data.deleteRobot), 1);
+    openRobot = null;
   } else if (data.addCommand !== undefined) {
     programAt(data).push({ condition: "always", action: "wait", on: true });
   } else if (data.deleteRule !== undefined) {
@@ -503,37 +680,24 @@ $("#robots").addEventListener("click", (event) => {
   changed();
 });
 
-$("#lab").addEventListener("change", (event) => {
-  const field = event.target;
-  if (field.id === "speed") {
-    speed = Number(field.value);
-    return;
-  }
-  const key = field.dataset.setting;
-  if (!key) return;
-  const value = Number(field.value);
-  const minimum = ["shiftSeconds", "registers", "shelves", "deliveryEverySeconds"].includes(key) ? 1 : 0;
-  if (!Number.isFinite(value) || value < minimum) return invalid(field, `Must be ${minimum} or more.`);
-  setup.settings[key] = value;
-  restart();
-  status(dirty() ? "Unsaved changes" : "");
+$("#speed").addEventListener("change", (event) => {
+  speed = Number(event.target.value);
 });
-
-$("#lab").addEventListener("click", (event) => {
-  const id = event.target.id;
-  if (id === "play") {
-    if (timer) stop();
-    else timer = setInterval(tick, 1000);
-    render();
-  } else if (id === "stepOne") {
-    step(sim);
-    render();
-  } else if (id === "runAll") {
-    stop();
-    while (sim.time < setup.settings.shiftSeconds) step(sim);
-    render();
-  } else if (id === "restart") restart();
+$("#play").addEventListener("click", () => {
+  if (timer) stop();
+  else timer = setInterval(tick, 1000);
+  renderControls();
 });
+$("#stepOne").addEventListener("click", () => {
+  step(sim);
+  render();
+});
+$("#runAll").addEventListener("click", () => {
+  stop();
+  while (sim.time < setup.settings.shiftSeconds) step(sim);
+  render();
+});
+$("#restart").addEventListener("click", () => restart());
 
 $("#undo").addEventListener("click", () => {
   setup = clone(saved);
