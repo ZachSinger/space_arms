@@ -1,0 +1,46 @@
+/* DEV Shelf Color Lab (js/scenes/shelfColorLab.js): the color controls down the right side. */
+.shelf-color-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 320px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  overflow-y: auto;
+  color: var(--color-text);
+  background: var(--color-panel);
+  border-left: 2px solid var(--color-border-subtle);
+  font-family: monospace;
+  font-size: var(--font-size-14);
+  pointer-events: auto;
+}
+.shelf-color-panel h3 { margin: 6px 0 0; font-size: var(--font-size-14); color: #facc15; }
+.shelf-color-panel p { margin: 0; color: var(--color-text-muted); }
+.shelf-color-modes { display: flex; gap: 6px; }
+.shelf-color-modes button { flex: 1; }
+.shelf-color-modes button,
+.shelf-color-reset {
+  padding: 6px;
+  color: var(--color-text);
+  background: #0f172a;
+  border: 1px solid var(--color-border-subtle);
+  font: inherit;
+  cursor: pointer;
+}
+.shelf-color-modes button.selected { color: #0f172a; background: #86efac; border-color: #86efac; }
+.shelf-color-preview { height: 28px; border: 1px solid var(--color-border-subtle); }
+.shelf-color-slider { display: grid; grid-template-columns: 92px 1fr 44px; align-items: center; gap: 8px; }
+.shelf-color-slider input { width: 100%; accent-color: var(--slider-color, #38bdf8); }
+.shelf-color-slider output { text-align: right; }
+.shelf-color-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.shelf-color-swatches button {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid #0f172a;
+  cursor: pointer;
+}

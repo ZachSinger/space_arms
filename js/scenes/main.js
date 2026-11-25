@@ -20,6 +20,7 @@ import "../../styles/windows/handbook.css";
 import "../../styles/windows/inventory.css";
 import "../../styles/windows/reviews.css";
 import "../../styles/windows/supply.css";
+import "../../styles/windows/shelf-color-lab.css";
 import Phaser from "phaser";
 import { TitleScene } from "./title.js";
 import { GameScene } from "./game.js";
