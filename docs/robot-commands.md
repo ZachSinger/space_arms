@@ -118,7 +118,7 @@ Commands decide what a robot does. Modifiers decide how well it does it.
 
 Every robot starts with a base speed for each job: cleaning, checking out customers, and stocking. The robot's parts only set how fast it moves around the store. Modifier chips raise those base speeds.
 
-Most modifier chips raise one stat. Some raise more than one. For example, a Register 1 + Stock 2 chip would exist, but it costs much more and needs much more power than a Register 1 chip and a Stock 2 chip bought separately.
+Most modifier chips raise one stat. Some raise more than one. For example, Register 1 and Stock 2 could be on the same chip, but that chip costs much more and needs much more power than a chip with either one on its own.
 
 ## Notes
 
