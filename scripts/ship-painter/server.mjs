@@ -1,8 +1,9 @@
 // ==========================================
 // FILE: scripts/ship-painter/server.mjs
 // ==========================================
-// A developer tool, not part of the game: a page showing the gray Mercenary ship concept from
-// eight angles, with sliders to color the hull and the engine flames. Run with `npm run ship`.
+// A developer tool, not part of the game: a page showing the gray faction ship concepts from
+// several angles, with sliders to color the hull and the engine flames. Run with `npm run ship`.
+// The art lives in art/<ship id>/ and is kept local (images are git-ignored).
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { exec } from "node:child_process";

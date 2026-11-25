@@ -16,6 +16,9 @@
   input[type=range] { width: 100%; }
   output { text-align: right; font-variant-numeric: tabular-nums; }
   label.check { color: var(--dim); display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+  #ships { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+  #ships button { background: #0b1120; color: var(--dim); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; text-align: left; cursor: pointer; font: inherit; }
+  #ships button.on { color: var(--text); border-color: var(--accent); }
   main { padding: 16px 18px; }
   h2 { font-size: 15px; color: var(--accent); margin: 10px 0 8px; }
   .row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
@@ -26,7 +29,10 @@
 </head>
 <body>
 <header>
-  <h1>Mercenary Ship</h1>
+  <div>
+    <h1>Mercenary Ship</h1>
+    <div id="ships"></div>
+  </div>
   <fieldset id="hull"><legend><span class="swatch"></span>Ship color</legend></fieldset>
   <fieldset id="thrust"><legend><span class="swatch"></span>Engine flame color</legend></fieldset>
   <div>
@@ -37,30 +43,37 @@
 <main>
   <h2>Seen from above</h2>
   <div class="row" id="top"></div>
-  <h2>Seen straight on</h2>
-  <div class="row" id="side"></div>
+  <section id="side-section">
+    <h2>Seen straight on</h2>
+    <div class="row" id="side"></div>
+  </section>
 </main>
 <script type="module">
 // Flames point the way the exhaust travels. Positions are in the art's own pixels.
 // "flame" shoots out of a nozzle, "glow" is a nozzle facing us, "halo" is light leaking from behind.
-const VIEWS = [
-  { id: "top-down", row: "top", label: "Facing down", size: [460, 460], scale: 0.55, engines: [
-    { kind: "flame", x: 141, y: 0, dir: [0, -1], width: 40 }, { kind: "flame", x: 264, y: 0, dir: [0, -1], width: 40 }] },
-  { id: "top-up", row: "top", label: "Facing up", size: [460, 460], scale: 0.55, engines: [
-    { kind: "flame", x: 141, y: 560, dir: [0, 1], width: 40 }, { kind: "flame", x: 264, y: 560, dir: [0, 1], width: 40 }] },
-  { id: "top-left", row: "top", label: "Facing left", size: [460, 460], scale: 0.55, engines: [
-    { kind: "flame", x: 560, y: 141, dir: [1, 0], width: 40 }, { kind: "flame", x: 560, y: 264, dir: [1, 0], width: 40 }] },
-  { id: "top-right", row: "top", label: "Facing right", size: [460, 460], scale: 0.55, engines: [
-    { kind: "flame", x: 0, y: 141, dir: [-1, 0], width: 40 }, { kind: "flame", x: 0, y: 264, dir: [-1, 0], width: 40 }] },
-  { id: "side-front", row: "side", label: "Front", size: [460, 200], scale: 0.62, engines: [
-    { kind: "halo", x: 190, y: 40, radius: 40 }, { kind: "halo", x: 370, y: 40, radius: 40 }] },
-  { id: "side-back", row: "side", label: "Back", size: [460, 200], scale: 0.62, engines: [
-    { kind: "glow", x: 190, y: 36, radius: 30 }, { kind: "glow", x: 371, y: 36, radius: 30 }] },
-  { id: "side-left", row: "side", label: "Left side", size: [460, 200], scale: 0.62, engines: [
-    { kind: "flame", x: 558, y: 48, dir: [1, 0], width: 44 }] },
-  { id: "side-right", row: "side", label: "Right side", size: [460, 200], scale: 0.62, engines: [
-    { kind: "flame", x: 2, y: 48, dir: [-1, 0], width: 44 }] },
+// Each ship lists only its "facing up" engines; the other three overhead views are that art turned.
+const SHIPS = [
+  { id: "mercenary", name: "Mercenary Ship", engines: [[141, 40], [264, 40]], side: [
+    { id: "side-front", label: "Front", engines: [{ kind: "halo", x: 190, y: 40, radius: 40 }, { kind: "halo", x: 370, y: 40, radius: 40 }] },
+    { id: "side-back", label: "Back", engines: [{ kind: "glow", x: 190, y: 36, radius: 30 }, { kind: "glow", x: 371, y: 36, radius: 30 }] },
+    { id: "side-left", label: "Left side", engines: [{ kind: "flame", x: 558, y: 48, dir: [1, 0], width: 44 }] },
+    { id: "side-right", label: "Right side", engines: [{ kind: "flame", x: 2, y: 48, dir: [-1, 0], width: 44 }] },
+  ] },
+  { id: "explorer", name: "Explorer Ship", engines: [[145, 40], [260, 40]] },
+  { id: "van", name: "Everyday Ship", engines: [[115, 36], [230, 36]] },
+  { id: "salvage", name: "Salvage Ship", engines: [[42, 44], [160, 44]] },
 ];
+
+// W and H are the "facing up" art's width and height; each turn moves the engines with the art.
+const TURNS = [
+  { id: "top-down", label: "Facing down", place: (x, W, H) => [W - x, 0], dir: [0, -1] },
+  { id: "top-up", label: "Facing up", place: (x, W, H) => [x, H], dir: [0, 1] },
+  { id: "top-left", label: "Facing left", place: (x, W, H) => [H, W - x], dir: [1, 0] },
+  { id: "top-right", label: "Facing right", place: (x, W, H) => [0, x], dir: [-1, 0] },
+];
+
+let VIEWS = [];
+let ship = SHIPS[0];
 
 const colors = { hull: [104, 112, 124], thrust: [90, 180, 255] };
 
@@ -217,21 +230,46 @@ function drawView(view, time) {
   }
 }
 
-async function start() {
-  buildSliders("hull");
-  buildSliders("thrust");
-  for (const view of VIEWS) {
-    view.art = readGray(await loadImage(`/art/${view.id}.png`));
+async function showShip(next) {
+  ship = next;
+  document.querySelector("h1").textContent = ship.name;
+  document.querySelectorAll("#ships button").forEach((button) => button.classList.toggle("on", button.dataset.id === ship.id));
+  const up = await loadImage(`/art/${ship.id}/top-up.png`);
+  const views = TURNS.map((turn) => ({ id: turn.id, row: "top", label: turn.label, size: [460, 460], scale: 0.55,
+    engines: ship.engines.map(([x, width]) => {
+      const [ex, ey] = turn.place(x, up.width, up.height);
+      return { kind: "flame", x: ex, y: ey, dir: turn.dir, width };
+    }) }));
+  for (const side of ship.side || []) views.push({ ...side, row: "side", size: [460, 200], scale: 0.62 });
+  for (const view of views) {
+    view.art = readGray(await loadImage(`/art/${ship.id}/${view.id}.png`));
     view.canvas = document.createElement("canvas");
     [view.canvas.width, view.canvas.height] = view.size;
     view.context = view.canvas.getContext("2d");
-    const card = document.createElement("div");
-    card.className = "card";
-    card.append(view.canvas);
-    card.insertAdjacentHTML("beforeend", `<div>${view.label}</div>`);
-    document.getElementById(view.row).append(card);
+    view.card = document.createElement("div");
+    view.card.className = "card";
+    view.card.append(view.canvas);
+    view.card.insertAdjacentHTML("beforeend", `<div>${view.label}</div>`);
     recolor(view.art);
   }
+  if (ship !== next) return;
+  for (const row of ["top", "side"]) document.getElementById(row).replaceChildren(...views.filter((view) => view.row === row).map((view) => view.card));
+  document.getElementById("side-section").hidden = !ship.side;
+  VIEWS = views;
+}
+
+async function start() {
+  buildSliders("hull");
+  buildSliders("thrust");
+  const picker = document.getElementById("ships");
+  for (const option of SHIPS) {
+    picker.insertAdjacentHTML("beforeend", `<button data-id="${option.id}">${option.name}</button>`);
+  }
+  picker.addEventListener("click", (event) => {
+    const choice = SHIPS.find((option) => option.id === event.target.dataset.id);
+    if (choice && choice !== ship) showShip(choice);
+  });
+  await showShip(ship);
   const frame = (now) => {
     for (const view of VIEWS) drawView(view, now / 1000);
     requestAnimationFrame(frame);
