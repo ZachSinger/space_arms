@@ -104,6 +104,25 @@ test("no bucket needed: facing dirt offers mopping, and the first press brings o
   assert.equal(mark.progress, 2 / CLEANING_TUNING.mopPressesPerSpot);
 });
 
+test("in co-op, the mop window shows only on the screen of whoever is mopping", () => {
+  for (const friendMopping of [false, true]) {
+    const { shop, cleaning } = harness();
+    const ignored = [];
+    shop.cameras = { main: { ignore: (object) => ignored.push(object) } };
+    shop.coop = { partner: friendMopping ? shop.player : { sprite: {} } };
+    const window = {};
+    cleaning.createMopAnimation = () => ({ window, motion: { active: true }, press() {}, update() {}, destroy() {} });
+    cleaning.mopDirt(cleaning.dirt.add("smudge", 160, 182));
+    if (friendMopping) {
+      assert.deepEqual(ignored, [window], "the friend's mop stays off the host's screen");
+      assert.equal(window.mirrorSkip, undefined);
+    } else {
+      assert.equal(window.mirrorSkip, true, "the host's mop isn't sent to the friend's screen");
+      assert.deepEqual(ignored, []);
+    }
+  }
+});
+
 test("the mop goes away when the player walks off or the last sweep on a clean mark ends", () => {
   const { shop, cleaning, mops } = harness();
   const mark = cleaning.dirt.add("smudge", 160, 182);

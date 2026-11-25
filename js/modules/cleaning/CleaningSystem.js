@@ -147,6 +147,15 @@ export class CleaningSystem {
     }, CLEANING_TUNING.trashPickupReachPx);
   }
 
+  // In co-op, the mop window and progress bar over a shopkeeper's head are just for whoever
+  // is mopping: the host's stay off the friend's screen, and the friend's off the host's.
+  showOnlyToMopper(object) {
+    if (!object) return;
+    const shop = this.shop;
+    if (shop.coop?.partner && shop.player === shop.coop.partner) shop.cameras.main.ignore(object);
+    else object.mirrorSkip = true;
+  }
+
   putAwayMop() {
     if (!this.heldMop) return false;
     this.mopAnimation?.destroy();
@@ -172,6 +181,7 @@ export class CleaningSystem {
     }
     if (!this.heldMop) {
       this.mopAnimation = this.createMopAnimation(shop.player);
+      this.showOnlyToMopper(this.mopAnimation.window);
       this.heldMop = true;
     }
     this.mopAnimation.press(shop.worldElapsedMs);
@@ -522,7 +532,10 @@ export class CleaningSystem {
       this.mopBar?.setVisible(false);
       return;
     }
-    this.mopBar ??= shop.add.graphics().setDepth(9999);
+    if (!this.mopBar) {
+      this.mopBar = shop.add.graphics().setDepth(9999);
+      this.showOnlyToMopper(this.mopBar);
+    }
     const player = shop.player.sprite;
     const scale = shop.cameraRig.popupScale(player.x, player.y);
     const x = player.x - 24 * scale;
