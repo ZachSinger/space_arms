@@ -18,10 +18,7 @@ import { PEOPLE_DEPTH_BASE, fixtureDepth } from "../world/Depth.js";
 
 const HEADER_HEIGHT = 100;
 const TEXT_STYLE = { fontFamily: "monospace", fontSize: "14px", color: "#e2e8f0" };
-const ROOM = Object.freeze({ columns: 14, rows: 11 });
-const SHELF_TYPE = "shelf_budget_2x4";
-// The three-row shelf: same footprint, but its picture reaches higher up the tile.
-const TALL_SHELF_TYPE = "shelf_budget_3x4";
+const ROOM = Object.freeze({ columns: 14, rows: 14 });
 // Rotation: 0 faces down, 1 left, 2 up, 3 right. The down/up pair at the right stands back to
 // back, the down-facing one in front.
 const SHELVES = Object.freeze([
@@ -31,10 +28,12 @@ const SHELVES = Object.freeze([
   { gx: 10, gy: 2.25, rotation: 0 },
   { label: "FACING LEFT", gx: 3, gy: 5, rotation: 1 },
   { label: "FACING RIGHT", gx: 9, gy: 5, rotation: 3 },
-  { label: "TALL FACING DOWN", gx: 1, gy: 8, rotation: 0, type: TALL_SHELF_TYPE },
-  { label: "TALL FACING UP", gx: 5, gy: 8, rotation: 2, type: TALL_SHELF_TYPE },
-  { label: "TALL BACK TO BACK", gx: 10, gy: 8, rotation: 2, type: TALL_SHELF_TYPE },
-  { gx: 10, gy: 8.25, rotation: 0, type: TALL_SHELF_TYPE },
+  { label: "TALL FACING DOWN", gx: 1, gy: 8, rotation: 0, levels: 3 },
+  { label: "TALL FACING UP", gx: 5, gy: 8, rotation: 2, levels: 3 },
+  { label: "TALL BACK TO BACK", gx: 10, gy: 8, rotation: 2, levels: 3 },
+  { gx: 10, gy: 8.25, rotation: 0, levels: 3 },
+  { label: "TALL FACING LEFT", gx: 3, gy: 11, rotation: 1, levels: 3 },
+  { label: "TALL FACING RIGHT", gx: 9, gy: 11, rotation: 3, levels: 3 },
 ]);
 const PLAYER_START = Object.freeze({ x: 7 * TILE_SIZE, y: 4.5 * TILE_SIZE });
 // The pretend customer walks these points in a loop: across just behind the top row's feet,
@@ -47,8 +46,8 @@ const PATROL = Object.freeze([
   { x: 0.5 * TILE_SIZE, y: 6 * TILE_SIZE },
   { x: 0.5 * TILE_SIZE, y: 8.45 * TILE_SIZE },
   { x: 13.5 * TILE_SIZE, y: 8.45 * TILE_SIZE },
-  { x: 13.5 * TILE_SIZE, y: 10.4 * TILE_SIZE },
-  { x: 0.5 * TILE_SIZE, y: 10.4 * TILE_SIZE },
+  { x: 13.5 * TILE_SIZE, y: 13.4 * TILE_SIZE },
+  { x: 0.5 * TILE_SIZE, y: 13.4 * TILE_SIZE },
   { x: 0.5 * TILE_SIZE, y: 7.4 * TILE_SIZE },
   { x: 11 * TILE_SIZE, y: 4.2 * TILE_SIZE },
   { x: 0.5 * TILE_SIZE, y: 4.2 * TILE_SIZE },
@@ -62,7 +61,7 @@ export class ShelfCollisionLabScene extends Phaser.Scene {
     super("scene-shelf-collision-lab");
   }
 
-  create() {
+  create({ sections = 4 } = {}) {
     installSceneTextSize(this, Phaser);
     this.carriedCrates = [];
     this.controlMode = { allows: () => true };
@@ -78,7 +77,8 @@ export class ShelfCollisionLabScene extends Phaser.Scene {
 
     this.drawFloor();
     this.solidOutlines = this.addWorld(this.add.graphics().setDepth(20000));
-    this.shelves = SHELVES.map((shelf) => this.placeShelf({ type: SHELF_TYPE, ...shelf }));
+    this.shelves = SHELVES.map((shelf) =>
+      this.placeShelf({ ...shelf, type: `shelf_budget_${shelf.levels ?? 2}x${sections}` }));
     this.drawSolidOutlines();
 
     this.player = new Player(this, PLAYER_START.x, PLAYER_START.y);
@@ -95,12 +95,17 @@ export class ShelfCollisionLabScene extends Phaser.Scene {
     this.addUi(this.add.text(16, 46,
       "The blue shopper is a pretend customer walking the same rules.", { ...TEXT_STYLE, color: "#86efac" }));
     let x = 16;
-    for (const [label, onClick] of [
+    for (const [label, onClick, selected] of [
       ["[ SOLID AREAS ]", () => this.toggleSolids()],
       ["[ CUSTOMER ON/OFF ]", () => this.toggleCustomer()],
+      ...[2, 3, 4].map((count) => [
+        `[ ${count} COLUMNS ]`, () => this.scene.restart({ sections: count }), sections === count,
+      ]),
       ["[ MENU ]", () => this.scene.start("scene-title")],
     ]) {
-      x += this.addButton(x, 72, label, onClick).width + 14;
+      const button = this.addButton(x, 72, label, onClick);
+      if (selected) button.setColor("#86efac");
+      x += button.width + 14;
     }
 
     this.fitRoom();

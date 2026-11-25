@@ -1,3 +1,5 @@
+import { fixtureArtInset, fixtureFootprint } from "../logic/FixtureLayout.js";
+
 const PEOPLE_VISIBILITY_DEPTH = 8998;
 
 // A person's picture frame is mostly empty space; use their feet for width so standing beside
@@ -9,13 +11,27 @@ function personBounds(sprite) {
   return { left: body.left, right: body.right, top: frame.top, bottom: body.bottom ?? frame.bottom };
 }
 
+function shelfBounds(shelf) {
+  const bounds = shelf.sprite.getBounds();
+  const inset = fixtureArtInset(shelf);
+  const { w, h } = fixtureFootprint(shelf);
+  const width = bounds.right - bounds.left;
+  const height = bounds.bottom - bounds.top;
+  return {
+    left: bounds.left + width * inset.left / w,
+    right: bounds.right - width * inset.right / w,
+    top: bounds.top + height * inset.top / h,
+    bottom: bounds.bottom - height * inset.bottom / h,
+  };
+}
+
 export function isOccludedByShelf(sprite, shelves) {
   if (!sprite?.active || !sprite.getBounds) return false;
   const person = personBounds(sprite);
   return shelves.some((shelf) => {
     const image = shelf?.sprite;
     if (!image?.active || image.depth <= sprite.depth || !image.getBounds) return false;
-    const bounds = image.getBounds();
+    const bounds = shelfBounds(shelf);
     return person.left < bounds.right && person.right > bounds.left &&
       person.top < bounds.bottom && person.bottom > bounds.top;
   });

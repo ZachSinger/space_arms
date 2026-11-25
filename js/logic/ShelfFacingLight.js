@@ -2,7 +2,7 @@
 // FILE: ShelfFacingLight.js
 // ==========================================
 // A one-screen-pixel light marks the shopping edge without adding a floor marker.
-import { getFixtureType, fixtureRotation } from "./FixtureLayout.js";
+import { getFixtureType, fixtureArtInset, fixtureFootprint, fixtureRotation } from "./FixtureLayout.js";
 import { pulseAmount } from "./ShelfAttentionHighlight.js";
 
 export class ShelfFacingLight {
@@ -29,7 +29,9 @@ export class ShelfFacingLight {
       width = b.width - 6;
       height = pixel;
     } else {
-      x = rotation === 1 ? b.x + b.width / 6 : b.right - b.width / 6 - pixel;
+      const inset = fixtureArtInset(fixture);
+      const { w } = fixtureFootprint(fixture);
+      x = rotation === 1 ? b.x + b.width * inset.left / w : b.right - b.width * inset.right / w - pixel;
       y = b.y + 4;
       width = pixel;
       height = b.height - 8;

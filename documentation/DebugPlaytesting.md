@@ -99,10 +99,11 @@ New decorations show up here on their own. Nothing in it is saved.
 ## Shelf Collision Lab
 
 On the title screen, choose **DEV**, then **SHELF COLLISION LAB**. It shows the short
-(two-row) and tall (three-row) shelves facing every direction, plus back-to-back pairs. Red
-marks the part of each shelf that people bump into; press **G** to hide or show it. Shelves
-facing up or down are solid only around their feet, so you, customers, and staff can walk
-behind their tops and be hidden by them. A pretend customer walks a loop behind the shelves.
+(two-row) and tall (three-row) shelves facing every direction, plus back-to-back pairs.
+Use **2 COLUMNS**, **3 COLUMNS**, or **4 COLUMNS** to check each shelf size. Red marks the
+part of each shelf that people bump into; press **G** to hide or show it. Shelves facing up
+or down are solid only around their feet, so you, customers, and staff can walk behind their
+tops and be hidden by them. A pretend customer walks a loop behind the shelves.
 
 **Every new shelf must be checked here before it ships.** Add it to the lab's shelf list in
 `js/scenes/shelfCollisionLab.js` in all four facings, then walk into it from every side and

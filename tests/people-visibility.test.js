@@ -7,7 +7,7 @@ const sprite = (depth, bounds) => ({
   depth,
   getBounds: () => bounds,
 });
-const shelf = (depth, bounds) => ({ sprite: sprite(depth, bounds) });
+const shelf = (depth, bounds) => ({ type: "shelf_budget_2x4", rotation: 0, sprite: sprite(depth, bounds) });
 
 test("people are outlined only when a shelf overlaps them and draws in front", () => {
   const person = sprite(100, { left: 20, right: 40, top: 20, bottom: 60 });
@@ -23,6 +23,20 @@ test("standing beside a shelf, with only the empty edge of the picture over it, 
   };
   assert.equal(isOccludedByShelf(person, [shelf(101, { left: 60, right: 120, top: 40, bottom: 100 })]), false);
   assert.equal(isOccludedByShelf(person, [shelf(101, { left: 50, right: 120, top: 40, bottom: 100 })]), true);
+});
+
+test("the larger transparent margins of a sideways shelf do not outline someone beside it", () => {
+  for (const rotation of [1, 3]) {
+    const sideways = { ...shelf(101, { left: 0, right: 64, top: 0, bottom: 128 }), rotation };
+    const person = {
+      ...sprite(100, { left: 0, right: 96, top: 10, bottom: 90 }),
+      body: { left: 0, right: 21, bottom: 90 },
+    };
+    assert.equal(isOccludedByShelf(person, [sideways]), false);
+    person.body.left = 22;
+    person.body.right = 44;
+    assert.equal(isOccludedByShelf(person, [sideways]), true);
+  }
 });
 
 test("inactive people and shelves do not trigger visibility outlines", () => {

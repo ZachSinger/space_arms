@@ -46,3 +46,32 @@ export function getBudgetShelfArtForType(fixtureType) {
   if (fixtureType?.artLayout !== "budget") return null;
   return getBudgetShelfArt(fixtureType.shelfRows, fixtureType.shelfColumns);
 }
+
+export function budgetShelfSideTexture(sourceKey) {
+  return `${sourceKey}_narrow`;
+}
+
+/**
+ * Cut the middle out of each side view, keeping its posts and pixel thickness unchanged.
+ * The original canvas width stays the same so the shelf remains centered on its footprint.
+ */
+export function ensureBudgetShelfSideTextures(scene, fixtureTypes) {
+  for (const spec of Object.values(fixtureTypes)) {
+    if (spec.artLayout !== "budget") continue;
+    for (const facing of ["left", "right"]) {
+      const sourceKey = spec.facingTextures[facing];
+      const key = budgetShelfSideTexture(sourceKey);
+      if (scene.textures.exists(key)) continue;
+      if (!scene.textures.exists(sourceKey)) throw new Error(`Missing shelf artwork: ${sourceKey}`);
+      const source = scene.textures.get(sourceKey).getSourceImage();
+      if (source.width !== HEIGHT) throw new Error(`Unexpected shelf artwork width: ${sourceKey}`);
+      const texture = scene.textures.createCanvas(key, source.width, source.height);
+      if (!texture) throw new Error(`Could not create shelf artwork: ${key}`);
+      const third = source.width / 3;
+      const pad = third / 2;
+      texture.context.drawImage(source, 0, 0, third, source.height, pad, 0, third, source.height);
+      texture.context.drawImage(source, third * 2, 0, third, source.height, pad + third, 0, third, source.height);
+      texture.refresh().setFilter(1);
+    }
+  }
+}

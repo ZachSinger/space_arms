@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { FIXTURE_TYPES, BASIC_FIXTURES, FIXTURE_POSITION_STEP, FIXTURE_SNAP_STEP, FIXTURE_FRONT_CLEARANCE, fixtureAccessCells, fixtureAtWorldPoint, fixtureBounds, fixtureCells, fixtureFacing, fixtureFacingStep, fixtureFootprint, fixtureFrontClearance, fixtureProjectionBoxes, fixtureSolidBounds, fixturesOverlap, fixtureStandingSpot, cellKey, getFixtureType, isFixturePosition, migrateFixtureEntry, planRegisterQueue, snapFixturePosition, validateFixtureLayout, fixtureInteractionDistance } from "../js/logic/FixtureLayout.js";
 import { FixturePlacement } from "../js/logic/FixturePlacement.js";
+import { getFixtureTexture } from "../js/logic/FixtureTexture.js";
 import { startingFixtures } from "../js/logic/StartingTemplate.js";
 import { PAD } from "../js/input/GamepadInput.js";
 import { controllerButtonFor } from "../js/input/ControllerBindings.js";
@@ -154,7 +155,7 @@ test("the fixture placement preview uses the size for its current facing", () =>
     for (let rotation = 0; rotation < 4; rotation++) {
       placement.rotation = rotation;
       placement.updatePreviewAt(5 * TILE_SIZE, 5 * TILE_SIZE);
-      assert.equal(placement.ghost.texture, spec.facingTextures[fixtureFacing({ rotation })]);
+      assert.equal(placement.ghost.texture, getFixtureTexture(spec, rotation));
       assert.equal(placement.ghost.angle, 0);
       assert.equal(placement.ghost.width, TILE_SIZE);
       assert.equal(placement.ghost.height, TILE_SIZE);
@@ -234,6 +235,27 @@ test("each budget shelf width fits its sections and stays on the placement grid 
       assert.deepEqual(fixtureFootprint({ type, rotation: 0 }), { w, h: 1 });
       assert.deepEqual(fixtureFootprint({ type, rotation: 1 }), { w: 1, h: w });
       assert.equal(w % FIXTURE_SNAP_STEP, 0);
+    }
+  }
+});
+
+test("every sideways shelf has a centered half-width solid area and can be used from its front", () => {
+  for (const levels of [2, 3]) {
+    for (const columns of [2, 3, 4]) {
+      for (const rotation of [1, 3]) {
+        const shelf = { type: `shelf_budget_${levels}x${columns}`, gx: 9, gy: 4, rotation };
+        const bounds = fixtureBounds(shelf);
+        assert.ok(Math.abs(bounds.right - bounds.left - 1 / 3) < 1e-10, shelf.type);
+        assert.ok(Math.abs((bounds.left + bounds.right) / 2 - 9.5) < 1e-10, shelf.type);
+        assert.deepEqual(fixtureSolidBounds(shelf), bounds);
+        const y = (bounds.top + bounds.bottom) * TILE_SIZE / 2;
+        const front = (rotation === 1 ? bounds.left : bounds.right) * TILE_SIZE;
+        const direction = rotation === 1 ? -1 : 1;
+        assert.ok(Math.abs(fixtureInteractionDistance(shelf, { x: front + direction * 8, y }) - 8) < 1e-10);
+        assert.equal(fixtureInteractionDistance(shelf, { x: front - direction * TILE_SIZE, y }), Infinity);
+        const spot = fixtureStandingSpot(shelf, fixtureAccessCells(shelf)[0]);
+        assert.ok(Math.abs(fixtureInteractionDistance(shelf, spot) - FIXTURE_FRONT_CLEARANCE * TILE_SIZE / 2) < 1e-10);
+      }
     }
   }
 });
@@ -667,11 +689,13 @@ test("a sideways shelf cannot cover part of the public doorway even if someone f
     rotation: 3,
   };
   const register = BASIC_FIXTURES.find((entry) => getFixtureType(entry.type).kind === "register");
-  for (const offset of [0.375, 0.5, 0.75]) {
+  for (const offset of [0.375, 0.5]) {
     const result = validateFixtureLayout([register, { ...shelf, gx: door.gx + offset }], options);
     assert.equal(result.valid, false, `offset ${offset}`);
     assert.match(result.reason, /entrances/);
   }
+  const besideDoor = validateFixtureLayout([register, { ...shelf, gx: door.gx + 0.75 }], options);
+  assert.equal(besideDoor.valid, true, besideDoor.reason);
 });
 
 test("transparent margins on larger sideways shelves do not block a player or crate beside them", () => {
@@ -687,7 +711,9 @@ test("transparent margins on larger sideways shelves do not block a player or cr
     const register = BASIC_FIXTURES.find((entry) => getFixtureType(entry.type).kind === "register");
     const result = validateFixtureLayout([register, shelf], options);
     assert.equal(result.valid, true, `${type}: ${result.reason}`);
-    options.occupiedRectangles[0].right += 8;
+    options.occupiedRectangles[0].right = fixtureBounds(shelf).left * TILE_SIZE;
+    assert.equal(validateFixtureLayout([register, shelf], options).valid, true, "touching the edge is clear");
+    options.occupiedRectangles[0].right += 1;
     const touchingBody = validateFixtureLayout([register, shelf], options);
     assert.equal(touchingBody.valid, false);
     assert.match(touchingBody.reason, /player or crate/);
