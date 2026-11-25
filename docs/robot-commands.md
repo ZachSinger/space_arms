@@ -118,6 +118,8 @@ Commands decide what a robot does. Modifiers decide how well it does it.
 
 Every robot starts with a base level in each skill. The robot's parts only set how fast it moves around the store. Modifier boards raise skills.
 
+Modifier boards increase a skill by a percentage, not a flat amount.
+
 ### Skills
 
 Stocking: how fast the robot puts units on a shelf.
