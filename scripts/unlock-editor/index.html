@@ -128,7 +128,9 @@ function render() {
     return row([`reputation.${index}`], `<td class="num">${index + 1}</td><td class="num">${index ? input(`reputation.${index}`) : "0"}</td><td class="num dim">${gain === "" ? "" : money(gain)}</td><td class="unlocks">${unlocks}</td>`);
   }).join("");
 
-  const contracts = state.licenses.map((license, index) => row(
+  const byUnlockLevel = state.licenses.map((license, index) => ({ license, index }))
+    .sort((a, b) => (a.license.level ?? 0) - (b.license.level ?? 0) || a.index - b.index);
+  const contracts = byUnlockLevel.map(({ license, index }) => row(
     [`licenses.${index}.name`, `licenses.${index}.description`, `licenses.${index}.level`, `licenses.${index}.cost`],
     `<td>${textInput(`licenses.${index}.name`)}</td><td>${textInput(`licenses.${index}.description`, { long: true, required: false })}</td><td class="num">${license.level === null ? "Start" : input(`licenses.${index}.level`, "level")}</td><td class="num">${input(`licenses.${index}.cost`)}</td><td class="num">${itemList(license)}</td>`,
   )).join("");
