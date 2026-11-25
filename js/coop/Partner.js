@@ -2,8 +2,7 @@
 // FILE: Partner.js
 // ==========================================
 // The co-op friend's shopkeeper in the host's shop: the red mechanic, walked by the controls
-// the friend's game sends over. For now the partner can walk and dash; handling crates,
-// customers, and fixtures comes later.
+// the friend's game sends over. What the partner does with their hands is in PartnerActions.js.
 import { PARTNER_LOOK, Player } from "../logic/Player.js";
 
 const NAME_TAG_OFFSET_Y = 44;
@@ -48,17 +47,24 @@ export class Partner extends Player {
     this.forceFacing(this.currentFacing);
   }
 
-  // Runs after physics each frame so the tag never trails the partner.
+  // Runs after physics each frame so the tag never trails the partner. It rides above any
+  // crates they're carrying.
   placeNameTag() {
-    this.nameTag.setPosition(Math.round(this.sprite.x), Math.round(this.sprite.y - NAME_TAG_OFFSET_Y));
+    let top = this.sprite.y - NAME_TAG_OFFSET_Y;
+    const highest = this.carriedCrates().at(-1)?.sprite;
+    if (highest?.getBounds) top = Math.min(top, highest.getBounds().top - 2);
+    this.nameTag.setPosition(Math.round(this.sprite.x), Math.round(top));
   }
 
+  // While the shop is acting for the partner (see PartnerActions.withPartner), the shop's own
+  // carried crates are the partner's; otherwise they're kept in the partner's hands object.
   carriedCrates() {
-    return [];
+    if (this.scene.player === this) return super.carriedCrates();
+    return this.carry?.carriedCrates ?? [];
   }
 
   isCarrying() {
-    return false;
+    return this.carriedCrates().length > 0;
   }
 
   destroy() {

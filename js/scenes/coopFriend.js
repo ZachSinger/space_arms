@@ -2,16 +2,19 @@
 // FILE: coopFriend.js
 // ==========================================
 // The friend's screen in co-op: a live copy of the host's shop (see DisplayMirror.js), with the
-// camera on the friend's red partner. This game sends its walking controls to the host and
-// draws whatever the host sends back; the shop itself only runs on the host's computer.
+// camera on the friend's red partner. This game sends its controls to the host and draws
+// whatever the host sends back (the shop picture, messages, and the shelf window); the shop
+// itself only runs on the host's computer.
 import Phaser from "phaser";
 import { MirrorReader } from "../coop/DisplayMirror.js";
 import { GamepadInput } from "../input/GamepadInput.js";
 import { bindingForEvent, isBound } from "../input/KeyBindings.js";
-import { setInputDevice } from "../input/InputDevice.js";
+import { controllerButtonFor } from "../input/ControllerBindings.js";
+import { getInputDevice, setInputDevice } from "../input/InputDevice.js";
 import { TILE_SIZE } from "../logic/RoomLayout.js";
 import { UIWindow } from "../logic/UIWindow.js";
 import { WindowManager } from "../logic/WindowManager.js";
+import { Messages } from "../world/Messages.js";
 import { hideLoadingScreen } from "./loadingScreen.js";
 
 const BAR_HEIGHT = 38;
@@ -23,6 +26,8 @@ const ZOOM_STEP = 1.15;
 const INPUT_KEEP_ALIVE_MS = 1000;
 const RETURN_TO_TITLE_MS = 3500;
 const HOST_AWAY_MS = 2500;
+// The buttons the partner uses with their hands; the host works out what each one does.
+const HAND_ACTIONS = ["interact", "crate", "putDown", "nextCrate"];
 
 const END_MESSAGES = Object.freeze({
   left: "Your friend closed their shop.",
@@ -44,6 +49,9 @@ export class CoopFriendScene extends Phaser.Scene {
     this.joined = false;
     this.ended = false;
     this.heldBindings = new Map();
+    this.padHeld = new Set();
+    this.away = false;
+    this.hostPaused = false;
     this.lastInput = "";
     this.lastInputAt = 0;
     this.shopBounds = null;
@@ -51,6 +59,7 @@ export class CoopFriendScene extends Phaser.Scene {
     this.pad = new GamepadInput();
     this.windowManager = new WindowManager();
     this.buildScreen();
+    this.messages = new Messages(this, this.messageLine);
     this.layoutCamera();
 
     const onKeyDown = (event) => this.handleKey(event, true);
@@ -71,9 +80,11 @@ export class CoopFriendScene extends Phaser.Scene {
       window.removeEventListener("blur", onBlur);
       this.scale.off(Phaser.Scale.Events.RESIZE, this.layoutCamera, this);
       unsubscribe.forEach((stop) => stop());
+      this.messages.destroy();
       this.windowManager.destroy();
       this.bar.remove();
       this.notice.remove();
+      this.messageBar.remove();
     });
     void this.api.status().then((status) => this.handleStatus(status));
     // Ask for the whole picture; anything sent before this screen opened was missed.
@@ -94,6 +105,15 @@ export class CoopFriendScene extends Phaser.Scene {
     this.notice.className = "coop-notice";
     this.notice.textContent = "Joining your friend's shop...";
     layer.appendChild(this.notice);
+    // Like the host's bottom bar: what the buttons do here, or a short message.
+    this.messageBar = document.createElement("div");
+    this.messageBar.className = "coop-message-bar";
+    this.messageLine = document.createElement("div");
+    this.messageLine.className = "game-message hidden";
+    this.messageLine.setAttribute("role", "status");
+    this.messageBar.appendChild(this.messageLine);
+    layer.appendChild(this.messageBar);
+    this.buildShelfWindow();
     this.leaveWindow = new UIWindow({
       id: "coop-leave", title: "LEAVE", width: "380px", height: "auto", x: 80, y: 120,
       contentHTML: `
@@ -103,6 +123,64 @@ export class CoopFriendScene extends Phaser.Scene {
     }, this.windowManager);
     this.leaveWindow.element.querySelector("[data-coop-leave]").addEventListener("click", () => void this.leave());
     this.leaveWindow.element.querySelector("[data-coop-stay]").addEventListener("click", () => this.leaveWindow.close());
+  }
+
+  // The shelf the partner is stocking. The host runs it and sends what it shows; presses on
+  // its shelf spaces go back to the host. Prices stay the shop owner's call.
+  buildShelfWindow() {
+    this.shelfWindow = new UIWindow({
+      id: "coop-shelf-window", title: "SHELF",
+      width: "min(900px, 94%)", height: "auto", x: 30, y: 60,
+    }, this.windowManager);
+    this.shelfWindow.onClose = () => {
+      if (!this.shelfClosedByHost) this.send({ t: "shelfClose" });
+    };
+    const body = this.shelfWindow.element.querySelector(".retro-window-body");
+    body.classList.add("shelf-stocking-body", "coop-shelf-body");
+    this.shelfBody = body;
+    this.shelfArt = "";
+    body.addEventListener("contextmenu", (event) => event.preventDefault());
+    body.addEventListener("pointerdown", (event) => {
+      const cell = event.target.closest("[data-shelf-cell]");
+      if (!cell || ![0, 2].includes(event.button)) return;
+      event.preventDefault();
+      this.send({ t: "shelfPress", index: Number(cell.dataset.shelfCell), pull: event.button === 2 });
+    });
+    const release = () => this.send({ t: "shelfRelease" });
+    body.addEventListener("pointerup", release);
+    body.addEventListener("pointerleave", release);
+  }
+
+  /** @param {{ close?: boolean, title?: string, html?: string, art?: string }} message */
+  showShelf(message) {
+    if (message.close) {
+      this.shelfClosedByHost = true;
+      this.shelfWindow.close();
+      this.shelfClosedByHost = false;
+      return;
+    }
+    if (typeof message.art === "string") this.shelfArt = message.art;
+    this.shelfWindow.element.querySelector(".retro-window-title").textContent = message.title ?? "SHELF";
+    this.shelfBody.innerHTML = message.html ?? "";
+    const art = this.shelfBody.querySelector(".shelf-stocking-art");
+    if (art && this.shelfArt) art.src = this.shelfArt;
+    for (const sticker of this.shelfBody.querySelectorAll(".shelf-price-sticker")) sticker.disabled = true;
+    if (!this.shelfWindow.isOpen) this.shelfWindow.openWindow();
+  }
+
+  /**
+   * A hand button went down or up, from the keyboard or the controller.
+   * @param {string} action
+   * @param {boolean} down
+   */
+  pressHand(action, down) {
+    if (this.shelfWindow.isOpen) {
+      if (!down) return;
+      if (action === "interact") this.shelfWindow.close();
+      else if (action === "putDown") this.send({ t: "shelfNext" });
+      return;
+    }
+    this.send({ t: "btn", a: action, d: down });
   }
 
   layoutCamera() {
@@ -160,9 +238,11 @@ export class CoopFriendScene extends Phaser.Scene {
     if (!binding) return;
     if (!down) {
       this.heldBindings.delete(event.code || binding);
+      for (const action of HAND_ACTIONS) if (isBound(action, binding)) this.pressHand(action, false);
       return;
     }
     if (event.target?.closest?.("input, textarea")) return;
+    setInputDevice("keyboard");
     if (isBound("pause", binding) || isBound("cancel", binding)) {
       if (this.windowManager.isConsumed(event)) return;
       if (this.leaveWindow.isOpen) this.leaveWindow.close();
@@ -172,7 +252,10 @@ export class CoopFriendScene extends Phaser.Scene {
     if (this.leaveWindow.isOpen) return;
     if (isBound("zoomIn", binding)) this.zoom(1);
     else if (isBound("zoomOut", binding)) this.zoom(-1);
-    else if (isBound("interact", binding)) this.send({ t: "use" });
+    else {
+      const action = HAND_ACTIONS.find((candidate) => isBound(candidate, binding));
+      if (action) this.pressHand(action, true);
+    }
     this.heldBindings.set(event.code || binding, binding);
   }
 
@@ -181,7 +264,7 @@ export class CoopFriendScene extends Phaser.Scene {
   }
 
   readInput() {
-    if (this.leaveWindow.isOpen || this.ended) return { x: 0, y: 0, dash: false };
+    if (this.leaveWindow.isOpen || this.shelfWindow.isOpen || this.ended) return { x: 0, y: 0, dash: false };
     let x = (this.actionDown("moveRight") ? 1 : 0) - (this.actionDown("moveLeft") ? 1 : 0);
     let y = (this.actionDown("moveDown") ? 1 : 0) - (this.actionDown("moveUp") ? 1 : 0);
     let dash = this.actionDown("dash");
@@ -214,6 +297,12 @@ export class CoopFriendScene extends Phaser.Scene {
         this.joined = true;
         this.notice.classList.add("hidden");
       }
+    } else if (message.t === "say" && typeof message.text === "string") {
+      this.messages.show(message.text, message.color);
+    } else if (message.t === "hint" && typeof message.text === "string") {
+      this.messages.setHint(message.text);
+    } else if (message.t === "shelf") {
+      this.showShelf(message);
     } else if (message.t === "texture") {
       void this.mirror.addTexture(message).catch((error) => console.error("Could not load a picture from the host:", error));
     }
@@ -224,20 +313,32 @@ export class CoopFriendScene extends Phaser.Scene {
   showAway(away) {
     if (this.ended || !this.joined || away === this.away) return;
     this.away = away;
-    this.notice.textContent = "Your friend switched away from the game. Their shop is on hold until they come back.";
-    this.notice.classList.toggle("hidden", !away);
+    this.refreshNotice();
+  }
+
+  refreshNotice() {
+    if (this.ended || !this.joined) return;
+    if (this.away) this.notice.textContent = "Your friend switched away from the game. Their shop is on hold until they come back.";
+    else if (this.hostPaused) this.notice.textContent = "Your friend paused the game.";
+    this.notice.classList.toggle("hidden", !this.away && !this.hostPaused);
   }
 
   showHud(hud) {
     this.bar.querySelector("[data-coop-host]").textContent = hud.host ? `${hud.host}'s shop` : "Your friend's shop";
     this.bar.querySelector("[data-coop-money]").textContent = hud.money || "-";
     this.bar.querySelector("[data-coop-time]").textContent = hud.time || "-";
+    if (Boolean(hud.paused) !== this.hostPaused) {
+      this.hostPaused = Boolean(hud.paused);
+      this.refreshNotice();
+    }
   }
 
   handleStatus(status) {
     if (this.ended || status.role === "friend") return;
     this.ended = true;
     this.leaveWindow.close();
+    this.shelfClosedByHost = true;
+    this.shelfWindow.close();
     this.notice.textContent = END_MESSAGES[status.error] ?? END_MESSAGES.left;
     this.notice.classList.remove("hidden");
     this.time.delayedCall(RETURN_TO_TITLE_MS, () => window.location.reload());
@@ -256,16 +357,33 @@ export class CoopFriendScene extends Phaser.Scene {
       if (this.leaveWindow.isOpen) this.leaveWindow.close();
       else this.leaveWindow.openWindow();
     }
-    if (!this.leaveWindow.isOpen && this.pad.justPressedAction("interact")) this.send({ t: "use" });
+    this.pollPadHands();
     const input = this.readInput();
     const key = JSON.stringify(input);
     if (key !== this.lastInput || time - this.lastInputAt >= INPUT_KEEP_ALIVE_MS) {
       this.lastInput = key;
       this.lastInputAt = time;
-      this.send({ t: "input", ...input });
+      this.send({ t: "input", ...input, device: getInputDevice() });
     }
     this.mirror.update(time);
     this.followFocus();
     if (this.joined && performance.now() - this.lastSnapAt > HOST_AWAY_MS) this.showAway(true);
+  }
+
+  // Controller hand buttons, sent when pressed and again when let go (holding a crate
+  // button stacks or throws, as for the host).
+  pollPadHands() {
+    if (!this.pad.connected) return;
+    for (const action of HAND_ACTIONS) {
+      if (this.padHeld.has(action) && !this.pad.isDown(controllerButtonFor(action))) {
+        this.padHeld.delete(action);
+        this.pressHand(action, false);
+      }
+      if (!this.leaveWindow.isOpen && this.pad.justPressedAction(action)) {
+        this.padHeld.add(action);
+        this.pressHand(action, true);
+      }
+    }
+    if (this.shelfWindow.isOpen && this.pad.justPressedAction("cancel")) this.shelfWindow.close();
   }
 }

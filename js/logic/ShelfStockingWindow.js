@@ -30,8 +30,14 @@ function formatStickerPrice(price) {
 }
 
 export class ShelfStockingWindow {
-  constructor(scene) {
+  /**
+   * @param {object} scene - the shop scene
+   * @param {{ listenGlobally?: boolean }} [options] - false for the co-op friend's copy, which
+   *   gets its presses from the friend's game instead of this screen's keyboard and mouse
+   */
+  constructor(scene, { listenGlobally = true } = {}) {
     this.scene = scene;
+    this.listenGlobally = listenGlobally;
     this.fixture = null;
     this.uiWindow = new UIWindow({
       id: "shelf-stocking-window", title: "SHELF",
@@ -80,10 +86,12 @@ export class ShelfStockingWindow {
       event.preventDefault();
       event.stopImmediatePropagation();
     };
-    document.addEventListener("pointerup", this.onRelease);
-    window.addEventListener("blur", this.onBlur);
-    window.addEventListener("keydown", this.onKey, true);
-    window.addEventListener("mousedown", this.onMouseAction);
+    if (listenGlobally) {
+      document.addEventListener("pointerup", this.onRelease);
+      window.addEventListener("blur", this.onBlur);
+      window.addEventListener("keydown", this.onKey, true);
+      window.addEventListener("mousedown", this.onMouseAction);
+    }
     // The controller's Y does what Q does here.
     this.uiWindow.element.addEventListener("pad-alt", (event) => {
       event.preventDefault();
@@ -99,19 +107,16 @@ export class ShelfStockingWindow {
       if (!cell || ![0, 2].includes(event.button)) return;
       this.uiWindow.manager.focusWindow(this.uiWindow);
       event.preventDefault();
-      this.stopHolding();
-      this.selected = Number(cell.dataset.shelfCell);
+      const index = Number(cell.dataset.shelfCell);
       if (this.scene.shelfBrush) {
+        this.stopHolding();
+        this.selected = index;
         this.notice = this.scene.shelfBrush.paint(this.fixture, this.selected % this.art.columns.length,
           Math.floor(this.selected / this.art.columns.length), event.button === 2);
         this.refresh();
         return;
       }
-      // Only a fresh right-click clears, so holding it to take the last item can't also clear.
-      if (event.button === 2 && this.clearIfSoldOut(this.selected)) return;
-      this.holding = { index: this.selected, pull: event.button === 2 };
-      this.moveOne();
-      if (this.holding) this.holdTimer = window.setInterval(() => this.moveOne(), 180);
+      this.pressCell(index, event.button === 2);
     });
     this.body.addEventListener("pointerleave", () => this.stopHolding());
     this.body.addEventListener("pointerover", (event) => {
@@ -476,6 +481,21 @@ export class ShelfStockingWindow {
     }
   }
 
+  /**
+   * Starts stocking (or, with `pull`, taking from) a shelf space, repeating until stopHolding().
+   * @param {number} index - the shelf space
+   * @param {boolean} pull - take items off instead of putting them on
+   */
+  pressCell(index, pull) {
+    this.stopHolding();
+    this.selected = index;
+    // Only a fresh press clears a sold-out space, so holding to take the last item can't also clear.
+    if (pull && this.clearIfSoldOut(index)) return;
+    this.holding = { index, pull };
+    this.moveOne();
+    if (this.holding) this.holdTimer = window.setInterval(() => this.moveOne(), 180);
+  }
+
   stopHolding() {
     window.clearInterval(this.holdTimer);
     this.holding = null;
@@ -484,6 +504,7 @@ export class ShelfStockingWindow {
   destroy() {
     this.stopHolding();
     window.clearInterval(this.refreshTimer);
+    if (!this.listenGlobally) return;
     document.removeEventListener("pointerup", this.onRelease);
     window.removeEventListener("blur", this.onBlur);
     window.removeEventListener("keydown", this.onKey, true);

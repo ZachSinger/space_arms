@@ -39,23 +39,28 @@ export class CrateWorld {
       shop.physics.add.collider(shop.crateGroup, padBarrier, null, (crateSprite) =>
         !shop.restockCrates.find((crate) => crate.sprite === crateSprite)?.lockedToPad);
     }
-    // Thrown crates bounce off people instead of passing through them; a customer hit still
-    // counts once per throw.
+    this.customerGroup = customerGroup;
+    this.onCustomerHit = onCustomerHit;
+    for (const group of peopleGroups) this.addPeople(group);
+  }
+
+  // Thrown crates bounce off people instead of passing through them; a customer hit still
+  // counts once per throw. `people` is a group or a single sprite (like the co-op partner).
+  addPeople(people) {
+    const shop = this.shop;
     const crateOf = (sprite) => shop.restockCrates.find((crate) => crate.sprite === sprite);
-    for (const people of peopleGroups) {
-      shop.physics.add.overlap(shop.crateGroup, people, (first, second) => {
-        // Phaser swaps the pair when one side is a single sprite rather than a group.
-        let crate = crateOf(first);
-        const personSprite = crate ? second : first;
-        crate ??= crateOf(second);
-        if (!crate?.canHitPerson(personSprite)) return;
-        if (people === customerGroup && onCustomerHit) {
-          const customer = shop.customers.find((candidate) => candidate.sprite === personSprite);
-          if (customer && crate.tryHitCustomer(customer)) onCustomerHit(customer, crate);
-        }
-        crate.bounceOffPerson(personSprite.body);
-      });
-    }
+    return shop.physics.add.overlap(shop.crateGroup, people, (first, second) => {
+      // Phaser swaps the pair when one side is a single sprite rather than a group.
+      let crate = crateOf(first);
+      const personSprite = crate ? second : first;
+      crate ??= crateOf(second);
+      if (!crate?.canHitPerson(personSprite)) return;
+      if (people === this.customerGroup && this.onCustomerHit) {
+        const customer = shop.customers.find((candidate) => candidate.sprite === personSprite);
+        if (customer && crate.tryHitCustomer(customer)) this.onCustomerHit(customer, crate);
+      }
+      crate.bounceOffPerson(personSprite.body);
+    });
   }
 
   update(delta) {
@@ -64,11 +69,18 @@ export class CrateWorld {
     this.separateStuckCrates();
   }
 
-  updateCratePushing(delta) {
+  /**
+   * Walking into floor crates pushes them.
+   * @param {number} delta - ms
+   * @param {{ walker?: object, holding?: number, stopOthers?: boolean }} [options] - who's walking
+   *   (the player by default), how many crates they carry, and whether crates they aren't
+   *   pushing stop (only the first pusher each frame stops them)
+   */
+  updateCratePushing(delta, { walker = null, holding = null, stopOthers = true } = {}) {
     const shop = this.shop;
-    const body = shop.player.sprite.body;
+    const body = (walker ?? shop.player).sprite.body;
     const rectOf = (b) => ({ left: b.x, top: b.y, width: b.width, height: b.height });
-    const holding = shop.crateSystem?.getCarriedCrates().length ?? shop.carriedCrates?.length ?? 0;
+    holding ??= shop.crateSystem?.getCarriedCrates().length ?? shop.carriedCrates?.length ?? 0;
     const crates = shop.restockCrates
       .filter((crate) => crate.lockedToPad || crate.isPushed || crate.isStationary() || crate.isSliding())
       .map((crate) => ({
@@ -89,7 +101,7 @@ export class CrateWorld {
     for (const crate of shop.restockCrates) {
       const velocity = crateVelocities.get(crate);
       if (velocity && (velocity.x || velocity.y)) crate.push(velocity);
-      else if (crate.isPushed) crate.stopPush();
+      else if (crate.isPushed && stopOthers) crate.stopPush();
     }
   }
 

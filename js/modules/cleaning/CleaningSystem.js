@@ -465,6 +465,8 @@ export class CleaningSystem {
     }
     // Trash an employee is carrying is saved back where they picked it up.
     for (const piece of this.staffHeldTrash.values()) trash.push({ kind: piece.kind, x: piece.x, y: piece.y });
+    // Trash the co-op friend is holding is saved at their feet.
+    trash.push(...(this.shop.coop?.savedPartnerTrash?.() ?? []));
     return trash;
   }
 
@@ -498,6 +500,11 @@ export class CleaningSystem {
   update(time, delta) {
     this.updateHighlight(time);
     this.syncStaffHeldTrash();
+    this.updateMop(delta);
+  }
+
+  // The shopkeeper's mop: it goes away when he walks off or turns away, and shows a bar for the mark.
+  updateMop(delta) {
     if (!this.heldMop) return;
     const shop = this.shop;
     if (shop.shiftClock.started && shop.shiftClock.isPaused) return;

@@ -15,7 +15,14 @@ screen shows everything happening there (customers, shelves, crates, money, the 
 host sees the Red partner with the friend's name over their head. The friend's camera follows
 the same rules as the host's: it stops at the room's edges, and zooming out stops when the whole
 room fits (at the starting shop size, the room already fills the screen, so there's no zoom).
-The partner can't do any shop jobs yet: no crates, register, stocking, or mopping. Only the host
+The partner can carry, stack, throw, and push crates, stock shelves from the crates they carry,
+pick up trash and throw it away, mop, and fill remote orders, with the same buttons as the host
+(E, Space, Q, Ctrl, or the controller). Their own green arrow, button hints, and messages show on
+the friend's screen only. The shelf window opens on the friend's screen; clicking a space stocks
+it and right-clicking takes items off, but price stickers there can't be changed. If the friend
+leaves while holding crates or trash, it's set down where they stood, and a save made while they
+hold something keeps it on the floor at their feet. The friend sees a notice when the host pauses
+and the day's results when the shop closes. Only the host
 can save or end the day. When either player leaves, the other is told, and the friend goes back
 to the title screen. If the host switches away from the game, their shop stops; the friend sees
 a message saying so and stays connected until the host comes back.
@@ -33,7 +40,9 @@ On one PC (for testing): run `npm start` for the host, then open a second termin
 `$env:SPACE_ARMS_PROFILE="b"; npm start` for the friend. The second copy opens in a window with
 its own saves and settings, and joins at the address `127.0.0.1`.
 
-Not done yet: partner jobs (crates, register, stocking, mopping), a co-op pause rule (right now the host's pause stops the partner too), the host's
+Not done yet: the register, the drone terminal, the hovercart, placing or moving fixtures,
+changing prices, and the Manager's Tablet stay with the host (the friend is told so when they
+try), the friend's shelf window can't be worked with a controller yet, a co-op pause rule (right now the host's pause stops the partner too), the host's
 backroom side window isn't shown on the friend's screen, the glowing outlines behind shelves
 don't show for the friend, and the open questions below.
 

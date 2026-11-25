@@ -20,6 +20,15 @@ const CONTROL_PROFILES = Object.freeze({
   [CONTROL_MODES.WALKING]: new Set(["move", "interact", "crate", "goBacks", "tablet", "debug", "pause", "cameraZoom"]),
 });
 
+/**
+ * Whether `mode` allows `action`, for modes worked out elsewhere (the co-op partner's).
+ * @param {string} mode - a CONTROL_MODES value
+ * @param {string} action
+ */
+export function modeAllows(mode, action) {
+  return CONTROL_PROFILES[mode]?.has(action) ?? false;
+}
+
 export class ControlMode {
   constructor(scene) {
     this.scene = scene;

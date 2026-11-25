@@ -1,6 +1,9 @@
 export class InteractableRegistry {
   constructor() {
     this.providers = new Map();
+    // When set, only actions of these kinds are offered (co-op limits what the friend can use).
+    /** @type {Set<string> | null} */
+    this.allowedKinds = null;
   }
 
   registerProvider(id, getCandidates) {
@@ -39,6 +42,7 @@ export class InteractableRegistry {
           if (!action || typeof action.action !== "string") {
             throw new TypeError(`Interactable "${candidate.id}" returned an invalid action.`);
           }
+          if (this.allowedKinds && !this.allowedKinds.has(action.kind ?? candidate.kind)) continue;
           const distanceFrom = action.distanceFrom ?? candidate.distanceFrom;
           const range = action.range ?? candidate.range;
           let distance = 0;

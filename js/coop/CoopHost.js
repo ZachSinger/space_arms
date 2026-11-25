@@ -5,11 +5,15 @@
 // appears next to the player and walks with the controls their game sends. Every update, the
 // shop picture and the top bar's money and clock go back to the friend's game.
 import { Partner } from "./Partner.js";
+import { PartnerActions } from "./PartnerActions.js";
+import { GAME_EVENTS } from "../core/Events.js";
 import { MIRROR_INTERVAL_MS, MirrorWriter, describeTexture } from "./DisplayMirror.js";
 
 // Phaser's event names, written out so this file doesn't load Phaser itself (shop tests run without it).
 const GAME_POST_RENDER = "postrender";
 const SCENE_POST_UPDATE = "postupdate";
+const PARTNER_BUTTONS = new Set(["interact", "crate", "putDown", "nextCrate"]);
+const SHELF_MESSAGES = new Set(["shelfPress", "shelfRelease", "shelfClose"]);
 const PARTNER_SPAWN_OFFSET_X = 48;
 const HUD_INTERVAL_MS = 250;
 // Even when nothing moves, the friend hears from the host this often, so the link stays alive.
@@ -20,9 +24,15 @@ const PARTNER_DOOR_REACH = 48;
 const PARTNER_DOOR_SIDE_REACH = 24;
 
 export class CoopHost {
-  /** @param {any} shop - the game scene */
-  constructor(shop) {
+  /**
+   * @param {any} shop - the game scene
+   * @param {{ createShelfWindow?: (scene: object) => object }} [options] - builds the partner's
+   *   shelf window (passed in so this file doesn't load the shop's windows itself)
+   */
+  constructor(shop, { createShelfWindow = null } = {}) {
     this.shop = shop;
+    this.createShelfWindow = createShelfWindow;
+    this.actions = null;
     this.api = globalThis.window?.desktopApi?.coop ?? null;
     this.partner = null;
     this.status = null;
@@ -38,6 +48,8 @@ export class CoopHost {
     void this.api.status().then((status) => this.handleStatus(status));
     shop.game.events.on(GAME_POST_RENDER, this.sendUpdate, this);
     shop.events.on(SCENE_POST_UPDATE, this.placeNameTag, this);
+    const stopShiftEnded = shop.eventBus?.on(GAME_EVENTS.SHIFT_ENDED, (payload) => this.handleShiftEnded(payload));
+    if (stopShiftEnded) this.unsubscribe.push(stopShiftEnded);
     shop.events.once("shutdown", () => this.destroy());
   }
 
@@ -62,6 +74,10 @@ export class CoopHost {
     shop.physics.add.collider(this.partner.sprite, shop.registerGroup);
     // Doors slide open while the partner stands at them, as they do for the player.
     this.stopHoldingDoors = shop.areas?.addDoorUser((portal) => portal === this.partnerDoor());
+    this.partnerHitbox = shop.crateWorld?.addPeople(this.partner.sprite);
+    if (shop.crateSystem) {
+      this.actions = new PartnerActions(this, this.partner, { createShelfWindow: this.createShelfWindow });
+    }
     this.writer.reset();
     shop.messages.show(`${name} joined your shop.`);
   }
@@ -69,6 +85,9 @@ export class CoopHost {
   removePartner() {
     const name = this.partner.nameTag.text;
     this.stopHoldingDoors?.();
+    this.actions?.destroy();
+    this.actions = null;
+    this.partnerHitbox?.destroy();
     this.partner.destroy();
     this.partner = null;
     this.shop.messages.show(`${name} left your shop.`);
@@ -81,8 +100,18 @@ export class CoopHost {
     } catch {
       return;
     }
-    if (message.t === "input") this.partner?.setRemoteInput(message);
-    else if (message.t === "use") this.usePartnerDoor();
+    if (message.t === "input") {
+      this.partner?.setRemoteInput(message);
+      if (this.actions && (message.device === "keyboard" || message.device === "gamepad")) {
+        this.actions.device = message.device;
+      }
+    } else if (message.t === "use") this.usePartnerDoor();
+    else if (message.t === "btn" && PARTNER_BUTTONS.has(message.a)) {
+      if (this.actions) this.actions.press(message.a, message.d !== false);
+      else if (message.a === "interact" && message.d !== false) this.usePartnerDoor();
+    } else if (message.t === "shelfNext") {
+      if (this.actions?.shelfOpen) this.actions.shelf.chooseNextCrate();
+    } else if (SHELF_MESSAGES.has(message.t)) this.actions?.handleShelfMessage(message);
     else if (message.t === "sync") {
       this.writer.reset();
       this.lastHud = "";
@@ -101,8 +130,33 @@ export class CoopHost {
   update(delta, frozen) {
     this.frozen = frozen;
     if (!this.partner) return;
-    if (frozen) this.partner.stand();
+    if (frozen || this.actions?.shelfOpen) this.partner.stand();
     else this.partner.update(delta);
+    if (!frozen) this.actions?.update(delta);
+  }
+
+  /** Called right after the player pushes crates: the partner pushes any they walk into. */
+  updatePartnerPushing(delta) {
+    if (this.partner && !this.frozen) this.actions?.pushCrates(delta);
+  }
+
+  /** Crates in the partner's hands, for the save (see CrateSystem.serialize). */
+  savedPartnerCrates(payload) {
+    return this.actions?.savedCrates(payload) ?? [];
+  }
+
+  /** Trash in the partner's hand, for the save (see CleaningSystem.serializeTrash). */
+  savedPartnerTrash() {
+    return this.actions?.savedTrash() ?? [];
+  }
+
+  handleShiftEnded({ served = 0, turnedAway = 0 } = {}) {
+    if (!this.friendConnected) return;
+    this.send({
+      t: "say",
+      text: `Shop closed for the day. Customers served: ${served} · Turned away: ${turnedAway}`,
+      color: "#facc15",
+    });
   }
 
   /** The door the partner is standing at, in whichever area they're in, or null. */
@@ -133,6 +187,7 @@ export class CoopHost {
   }
 
   placeNameTag() {
+    this.actions?.afterPhysics();
     this.partner?.placeNameTag();
   }
 
@@ -175,7 +230,9 @@ export class CoopHost {
   // The friend's top bar shows the same money and clock as the host's.
   readHud() {
     const text = (id) => document.getElementById(id)?.textContent?.trim() ?? "";
-    return { money: text("hud-credits"), time: text("hud-shift-time"), host: this.status?.localName ?? "" };
+    const { shop } = this;
+    const paused = Boolean(shop.gamePaused || (shop.shiftClock?.started && shop.shiftClock.isPaused));
+    return { money: text("hud-credits"), time: text("hud-shift-time"), host: this.status?.localName ?? "", paused };
   }
 
   destroy() {
@@ -186,5 +243,6 @@ export class CoopHost {
     this.shop.game.events.off(GAME_POST_RENDER, this.sendUpdate, this);
     this.shop.events.off(SCENE_POST_UPDATE, this.placeNameTag, this);
     this.partner = null;
+    this.actions = null;
   }
 }

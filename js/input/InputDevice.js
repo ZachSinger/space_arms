@@ -149,6 +149,24 @@ export function setInputDevice(device) {
 }
 
 /**
+ * Runs `fn` with hints naming `device`'s buttons, without changing this screen's own device.
+ * Co-op uses it to word the friend's hints for whatever they play with.
+ * @template T
+ * @param {"keyboard"|"gamepad"} device
+ * @param {() => T} fn
+ * @returns {T}
+ */
+export function withInputDevice(device, fn) {
+  const previous = currentDevice;
+  currentDevice = device === "gamepad" ? "gamepad" : "keyboard";
+  try {
+    return fn();
+  } finally {
+    currentDevice = previous;
+  }
+}
+
+/**
  * Button or key name for an action, e.g. "E" on keyboard or "A" on a controller.
  * @param {keyof typeof GAMEPAD_ACTIONS} action
  * @param {"keyboard"|"gamepad"} [device]

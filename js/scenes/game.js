@@ -394,7 +394,9 @@ export class GameScene extends Phaser.Scene {
     this.managerTablet = new ManagerTablet(this.windowManager, this.gameState, this);
     this.diagnostics = new RecentDiagnostics(this);
     this.pauseMenu = new PauseMenu(this);
-    this.coop = new CoopHost(this);
+    this.coop = new CoopHost(this, {
+      createShelfWindow: (scene) => new ShelfStockingWindow(scene, { listenGlobally: false }),
+    });
     // REAL games run without the debug recorder; every call site uses debugInfo?.
     this.debugInfo = this.realMode ? null : new DebugInfo(this);
     this.reputationPenalties = new ReputationPenalties(this);
@@ -495,6 +497,7 @@ export class GameScene extends Phaser.Scene {
       this.player.update(delta);
       this.coop?.update(delta, false);
       this.crateWorld.updateCratePushing(delta);
+      this.coop?.updatePartnerPushing(delta);
       this.crateSystem.syncCarriedCrate();
       this.crateSystem.syncFloorStacks();
     }

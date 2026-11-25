@@ -636,12 +636,16 @@ export class CrateSystem {
       return withPosition ? crate.serialize() : crate.serializePayload();
     };
     return {
-      crates: this.restockCrates.map((crate) => {
-        const above = this.floorStacks.get(crate) ?? [];
-        return above.length
-          ? { ...payload(crate, true), stack: above.map((stacked) => payload(stacked)) }
-          : payload(crate, true);
-      }),
+      crates: [
+        ...this.restockCrates.map((crate) => {
+          const above = this.floorStacks.get(crate) ?? [];
+          return above.length
+            ? { ...payload(crate, true), stack: above.map((stacked) => payload(stacked)) }
+            : payload(crate, true);
+        }),
+        // Crates the co-op friend is carrying are saved on the floor at their feet.
+        ...(this.shop.coop?.savedPartnerCrates?.(payload) ?? []),
+      ],
       carriedCrate: this.carriedCrate ? payload(this.carriedCrate) : null,
       carriedCrates: this.getCarriedCrates().map((crate) => payload(crate)),
     };

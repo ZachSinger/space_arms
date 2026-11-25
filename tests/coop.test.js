@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { ChunkAssembler, FrameReader, chunkMessage, frameMessage } from "../js/platform/coop.js";
 import { MirrorReader, MirrorWriter } from "../js/coop/DisplayMirror.js";
 import { CoopHost } from "../js/coop/CoopHost.js";
+import { PartnerActions } from "../js/coop/PartnerActions.js";
+import { InteractableRegistry } from "../js/interaction/InteractableRegistry.js";
 
 test("a long Steam message split into pieces comes back whole, including multi-byte text", () => {
   const text = `{"t":"texture","url":"${"é".repeat(40)}${"x".repeat(25)}"}`;
@@ -95,4 +97,63 @@ test("on a slow connection, mirrored movement keeps gliding between late updates
   const before = object.x;
   reader.update(scene.time.now + 80);
   assert.ok(object.x > before && object.x < 100, `still gliding toward the latest spot, at ${object.x}`);
+});
+
+function partnerShop() {
+  const chain = new Proxy({}, { get: (target, key) => (key in target ? target[key] : () => chain) });
+  const interactables = new InteractableRegistry();
+  const player = { sprite: { x: 0, y: 0 } };
+  const shop = {
+    player,
+    messages: { show() {}, setHint() {} },
+    controlMode: { allows: () => true },
+    add: { graphics: () => chain },
+    cameras: { main: { ignore() {} } },
+    interactables,
+    interactionSystem: { getInteractionOrigin: () => ({ x: 0, y: 0 }) },
+    checkoutSystem: { operatingRegister: true },
+    crateSystem: { carriedCrates: ["host crate"], carriedCrate: "host crate", markedStackBase: null, markedFromTop: 0 },
+    cleaningSystem: { heldTrash: null, heldMop: false, mopAnimation: null, mopBar: null },
+  };
+  const said = [];
+  const host = { shop, frozen: false, partnerDoor: () => null, send: (message) => said.push(message) };
+  const partner = { sprite: { x: 5, y: 5, body: { bottom: 12 } } };
+  return { shop, host, partner, said, interactables };
+}
+
+test("while the friend acts, the shop's hands are the partner's, and the host's come back after", () => {
+  const { shop, host, partner } = partnerShop();
+  const actions = new PartnerActions(host, partner);
+  const hostPlayer = shop.player;
+  actions.withPartner(() => {
+    assert.equal(shop.player, partner);
+    assert.deepEqual(shop.crateSystem.carriedCrates, []);
+    assert.equal(shop.checkoutSystem.operatingRegister, false);
+    shop.crateSystem.carriedCrates = ["partner crate"];
+    shop.crateSystem.carriedCrate = "partner crate";
+    shop.cleaningSystem.heldTrash = { kind: "can" };
+  });
+  assert.equal(shop.player, hostPlayer);
+  assert.deepEqual(shop.crateSystem.carriedCrates, ["host crate"]);
+  assert.equal(shop.cleaningSystem.heldTrash, null);
+  assert.equal(shop.checkoutSystem.operatingRegister, true);
+  assert.equal(actions.carriedCrate, "partner crate");
+  assert.deepEqual(actions.savedTrash(), [{ kind: "can", x: 5, y: 12 }]);
+  assert.deepEqual(actions.savedCrates((crate) => ({ id: crate })),
+    [{ id: "partner crate", onPad: false, x: 5, y: 5, velocityX: 0, velocityY: 0 }]);
+});
+
+test("the friend can use a shelf but is told the register is the shop owner's", () => {
+  const { host, partner, said, interactables } = partnerShop();
+  const used = [];
+  const near = { distanceFrom: () => 0, range: 10, actions: ["interact"] };
+  interactables.registerProvider("register", () => [{ ...near, id: "register", kind: "register", perform: () => used.push("register") }]);
+  const actions = new PartnerActions(host, partner);
+  actions.press("interact", true);
+  assert.deepEqual(used, []);
+  assert.deepEqual(said.map((message) => message.text), ["Only the shop owner can run the register."]);
+  interactables.registerProvider("shelf", () => [{ ...near, id: "shelf", kind: "fixture", perform: () => used.push("shelf") }]);
+  actions.press("interact", true);
+  assert.deepEqual(used, ["shelf"]);
+  assert.equal(interactables.allowedKinds, null);
 });
