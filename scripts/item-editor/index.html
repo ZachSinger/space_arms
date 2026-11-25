@@ -141,7 +141,8 @@ function renderHead() {
   }).join("") + "</tr>";
 }
 
-// Every shop level is a group. Closed levels are left alone; filters and sorting only touch open ones.
+// Every shop level is a group. While filtering, levels with no matching items are hidden entirely.
+// Closed levels stay closed; sorting only touches open ones.
 function visibleGroups() {
   const search = document.getElementById("search").value.trim().toLowerCase();
   const type = document.getElementById("typeFilter").value;
@@ -151,16 +152,22 @@ function visibleGroups() {
   const byLevel = new Map();
   state.items.forEach((item, index) => {
     const key = groupOf(item);
-    if (!byLevel.has(key)) byLevel.set(key, { key, level: levelOf(item), total: 0, rows: [] });
+    if (!byLevel.has(key)) byLevel.set(key, { key, level: levelOf(item), total: 0, matches: 0, rows: [] });
     const group = byLevel.get(key);
     group.total += 1;
-    if (state.open.has(key) &&
-      (!type || typeOf(item) === type) &&
+    const matches = (!type || typeOf(item) === type) &&
       (!onlyPicked || state.picked.has(item.id)) &&
       (!onlyChanged || isChanged(index)) &&
-      (!search || item.name.toLowerCase().includes(search))) group.rows.push({ item, index });
+      (!search || item.name.toLowerCase().includes(search));
+    if (!matches) return;
+    group.matches += 1;
+    if (state.open.has(key)) group.rows.push({ item, index });
   });
-  const groups = [...byLevel.values()].sort((a, b) => (a.level ?? 999) - (b.level ?? 999));
+  const filtering = Boolean(search || type || onlyPicked || onlyChanged);
+  const groups = [...byLevel.values()]
+    .filter((group) => !filtering || group.matches > 0)
+    .map((group) => ({ ...group, filtering }))
+    .sort((a, b) => (a.level ?? 999) - (b.level ?? 999));
   if (state.sort.key === "level" && state.sort.desc) groups.reverse();
   for (const group of groups) {
     group.rows.sort((a, b) => {
@@ -227,7 +234,7 @@ function render() {
   const html = [];
   for (const group of groups) {
     const open = state.open.has(group.key);
-    const showing = open && group.rows.length !== group.total ? `, ${group.rows.length} showing` : "";
+    const showing = group.filtering ? `, ${group.matches} of them ${group.matches === 1 ? "matches" : "match"} your filters` : "";
     html.push(`<tr class="group" data-level="${escape(group.key)}"><td colspan="${COLUMNS.length}"><span class="arrow">${open ? "▼" : "▶"}</span>Shop level ${escape(group.key)}<span>${group.total} item${group.total === 1 ? "" : "s"} unlock here${showing}</span></td></tr>`);
     for (const { item, index } of group.rows) {
       html.push(`<tr class="item ${isChanged(index) ? "changed" : ""}" data-row="${index}">${COLUMNS.map((column) => cell(item, index, column.key)).join("")}</tr>`);
