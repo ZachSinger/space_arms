@@ -212,6 +212,8 @@ export class CoopHost {
     }
     if (!snapshot && !message.hud && now - this.lastSentAt < KEEP_ALIVE_MS) return;
     this.lastSentAt = now;
+    // When the host drew this, so the friend's screen can space the updates out evenly.
+    message.ht = Math.round(now * 10) / 10;
     message.bg = this.shop.cameras.main.backgroundColor.rgba;
     // The outline of the room the partner is in, so the friend's camera can zoom and stop at
     // its edges like the host's.

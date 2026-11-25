@@ -365,7 +365,7 @@ export class CoopFriendScene extends Phaser.Scene {
       this.lastInputAt = time;
       this.send({ t: "input", ...input, device: getInputDevice() });
     }
-    this.mirror.update(time);
+    this.mirror.update();
     this.followFocus();
     if (this.joined && performance.now() - this.lastSnapAt > HOST_AWAY_MS) this.showAway(true);
   }

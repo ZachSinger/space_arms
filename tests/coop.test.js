@@ -78,25 +78,31 @@ test("a partner at a backroom door goes through when the friend presses use", ()
   assert.deepEqual(moves, [[300, 632], [100, 132]], "and back out through the exit");
 });
 
-test("on a slow connection, mirrored movement keeps gliding between late updates", () => {
+test("on an uneven connection, mirrored movement still glides at a steady speed", () => {
   const scene = {
-    time: { now: 0 },
     add: { image: () => ({ x: 0, y: 0, setPosition(x, y) { this.x = x; this.y = y; return this; } }) },
     children: { add() {}, remove() {}, list: [] },
   };
   const reader = new MirrorReader(scene, () => {});
-  reader.applyChange = function (entry, change, now) {
-    Object.getPrototypeOf(this).applyChange.call(this, entry, { type: change.type, x: change.x, y: change.y }, now);
+  reader.applyChange = function (entry, change) {
+    Object.getPrototypeOf(this).applyChange.call(this, entry, { type: change.type, x: change.x, y: change.y });
   };
-  for (let step = 0; step <= 10; step += 1) {
-    scene.time.now = step * 100;
-    reader.apply({ c: [{ id: 1, type: "Image", x: step * 10, y: 0 }] });
-    reader.update(scene.time.now);
+  // The host walks 5 pixels every 50 ms, but its updates arrive two at a time every 100 ms.
+  const updates = Array.from({ length: 30 }, (_, step) => ({
+    arrivesAt: 1000 + Math.ceil(step / 2) * 100,
+    snapshot: { ht: step * 50, c: [{ id: 1, type: "Image", x: step * 5, y: 0 }] },
+  }));
+  const steps = [];
+  let lastX = null;
+  for (let now = 1000; now <= 2400; now += 16) {
+    while (updates.length && updates[0].arrivesAt <= now) reader.apply(updates.shift().snapshot, now);
+    reader.update(now);
+    const x = reader.objectFor(1)?.x;
+    if (now > 1300 && lastX !== null) steps.push(x - lastX);
+    lastX = x ?? null;
   }
-  const object = reader.objectFor(1);
-  const before = object.x;
-  reader.update(scene.time.now + 80);
-  assert.ok(object.x > before && object.x < 100, `still gliding toward the latest spot, at ${object.x}`);
+  assert.ok(steps.length > 50);
+  for (const step of steps) assert.ok(step > 1.2 && step < 2, `moved ${step} pixels in one frame`);
 });
 
 function partnerShop() {

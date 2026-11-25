@@ -167,6 +167,8 @@ const createWindow = () => {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, "preload.cjs"),
+      // Keep the game running while another window is in front (a co-op friend is still playing).
+      backgroundThrottling: false,
     },
   });
 

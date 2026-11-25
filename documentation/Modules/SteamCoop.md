@@ -21,11 +21,16 @@ pick up trash and throw it away, mop, and fill remote orders, with the same butt
 the friend's screen only. The shelf window opens on the friend's screen; clicking a space stocks
 it and right-clicking takes items off, but price stickers there can't be changed. If the friend
 leaves while holding crates or trash, it's set down where they stood, and a save made while they
-hold something keeps it on the floor at their feet. The friend sees a notice when the host pauses
-and the day's results when the shop closes. Only the host
+hold something keeps it on the floor at their feet. While a friend is in the shop, the host's
+pause menu (titled MENU) doesn't stop the shop: only the host's shopkeeper stands still while
+it's open. Alone, it pauses as before, and a friend leaving while it's open pauses it. The
+friend's screen shows the shop about a tenth of a second behind the host, using the time the
+host sent each update, so movement glides evenly even when updates arrive in bunches. The friend
+sees the day's results when the shop closes. Only the host
 can save or end the day. When either player leaves, the other is told, and the friend goes back
-to the title screen. If the host switches away from the game, their shop stops; the friend sees
-a message saying so and stays connected until the host comes back.
+to the title screen. The game keeps running while it's in the background or minimized (Windows
+stops drawing a minimized window, so a timer in js/scenes/main.js steps the game instead). If
+the host's updates stop anyway, the friend sees a message and stays connected until they return.
 
 How to play it on two PCs: both PCs start Steam, then run `npm run start:steam` (on separate
 Steam accounts). The host starts or continues a shop, opens the pause menu, and picks Invite a
@@ -42,7 +47,7 @@ its own saves and settings, and joins at the address `127.0.0.1`.
 
 Not done yet: the register, the drone terminal, the hovercart, placing or moving fixtures,
 changing prices, and the Manager's Tablet stay with the host (the friend is told so when they
-try), the friend's shelf window can't be worked with a controller yet, a co-op pause rule (right now the host's pause stops the partner too), the host's
+try), the friend's shelf window can't be worked with a controller yet, the host's
 backroom side window isn't shown on the friend's screen, the glowing outlines behind shelves
 don't show for the friend, and the open questions below.
 
@@ -183,7 +188,7 @@ Your answer:
 Today, opening the pause menu during a shift stops the clock. In co-op, should the host's pause
 menu stop the shop for both of you, or should the shop never stop while a friend is in it?
 
-Your answer:
+Your answer: The shop shouldn't stop for both. Decided: the shop never stops while a friend is in it.
 
 ### What the partner keeps
 

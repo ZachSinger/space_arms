@@ -121,11 +121,14 @@ export class PauseMenu {
       element.inert = true;
       this.inertBackground.push(element);
     }
-    this.shop.setGamePaused(true);
-    if (this.shop.shiftClock.started) {
-      this.shop.shiftClock.isPaused = true;
-      this.shop.shiftClock.notifyListeners();
-    }
+    // With a friend in the shop, the menu doesn't stop the shop for them; only the host's
+    // shopkeeper stands still while it's open.
+    this.runningForFriend = Boolean(this.shop.coop?.friendConnected);
+    this.uiWindow.element.querySelector(".retro-window-title").textContent = this.runningForFriend ? "MENU" : "PAUSED";
+    if (this.runningForFriend) {
+      this.shop.controls.cancelPresses();
+      this.resumeShop();
+    } else this.pauseShop();
     const save = this.uiWindow.element.querySelector('[data-pause-action="save"]');
     save.disabled = !this.shop.saves.canWrite();
     const reason = this.shop.sandbox ? "Saving is unavailable in the test room."
@@ -144,11 +147,35 @@ export class PauseMenu {
     this.bugReport.close();
     this.shade.classList.add("hidden");
     this.restoreBackground();
+    this.runningForFriend = false;
+    this.resumeShop();
+  }
+
+  pauseShop() {
+    this.shop.setGamePaused(true);
+    if (this.shop.shiftClock.started && !this.shop.shiftClock.isPaused) {
+      this.shop.shiftClock.isPaused = true;
+      this.shop.shiftClock.notifyListeners();
+    }
+  }
+
+  resumeShop() {
     this.shop.setGamePaused(false);
-    if (this.shop.shiftClock.started) {
+    if (this.shop.shiftClock.started && this.shop.shiftClock.isPaused) {
       this.shop.shiftClock.isPaused = false;
       this.shop.shiftClock.notifyListeners();
     }
+  }
+
+  // A friend joining or leaving while the menu is open starts or stops the shop to match.
+  syncCoopPause() {
+    if (!this.isOpen) return;
+    const running = Boolean(this.shop.coop?.friendConnected);
+    if (running === this.runningForFriend) return;
+    this.runningForFriend = running;
+    this.uiWindow.element.querySelector(".retro-window-title").textContent = running ? "MENU" : "PAUSED";
+    if (running) this.resumeShop();
+    else this.pauseShop();
   }
 
   status(message) {
@@ -162,6 +189,7 @@ export class PauseMenu {
     invite.disabled = !window.desktopApi?.coop || Boolean(coop?.friendConnected);
     invite.title = !window.desktopApi?.coop ? "Playing with a friend needs the desktop game."
       : coop?.friendConnected ? `${coop.status.peerName} is already in your shop.` : "";
+    this.syncCoopPause();
   }
 
   async inviteFriend() {

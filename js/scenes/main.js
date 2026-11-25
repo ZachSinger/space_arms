@@ -84,6 +84,19 @@ const config = {
 // Exposed for devtools/debugging convenience (e.g. `window.__game.scene.getScene(...)`).
 window.__game = game = new Phaser.Game(config);
 game.events.once("ready", () => applyGameRenderResolution(game));
+// Windows stops drawing a minimized or covered game window, which would freeze the shop (and a
+// co-op friend with it). Whenever drawing stops, a timer keeps the game going instead.
+if (window.desktopApi) {
+  let lastDrawnAt = performance.now();
+  const watchDrawing = () => {
+    lastDrawnAt = performance.now();
+    requestAnimationFrame(watchDrawing);
+  };
+  requestAnimationFrame(watchDrawing);
+  setInterval(() => {
+    if (game.loop.running && performance.now() - lastDrawnAt > 100) game.loop.tick();
+  }, 16);
+}
 const coop = window.desktopApi?.coop;
 if (coop) {
   let coopRole = null;

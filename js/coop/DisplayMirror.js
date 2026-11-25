@@ -12,8 +12,13 @@ const SUPPORTED_TYPES = new Set(["Image", "Sprite", "Text", "Rectangle", "Arc", 
 export const MIRROR_INTERVAL_MS = 50;
 // Further than this between updates is a jump (a teleport), not a glide.
 const GLIDE_MAX_DISTANCE = 160;
-const GLIDE_SLACK = 1.3;
-const GLIDE_MAX_MS = 160;
+// Something that starts moving after standing still glides over at most this long.
+const GLIDE_MAX_MS = 100;
+// The friend's screen shows the shop this far behind the host, so the next update is almost
+// always already here to glide toward. It grows when updates arrive unevenly.
+const MIN_DELAY_MS = 80;
+const MAX_DELAY_MS = 350;
+const MAX_QUEUED = 40;
 
 const round = (value, places = 100) => Math.round(value * places) / places;
 const comparable = (value) => (value !== null && typeof value === "object" ? JSON.stringify(value) : value);
@@ -203,6 +208,10 @@ export class MirrorReader {
     this.requestTexture = requestTexture;
     this.entries = new Map();
     this.requested = new Set();
+    this.queue = [];
+    this.offset = undefined;
+    this.lateness = 0;
+    this.appliedAt = undefined;
   }
 
   create(type) {
@@ -216,16 +225,35 @@ export class MirrorReader {
     return add.image(0, 0, "__DEFAULT");
   }
 
-  apply(snapshot) {
-    const now = this.scene.time.now;
-    // Glides last a little longer than the usual gap between updates, so a late update over
-    // the internet doesn't leave things stopping and starting.
-    if (this.lastApplyAt !== undefined) {
-      const gap = Math.min(GLIDE_MAX_MS, Math.max(MIRROR_INTERVAL_MS, now - this.lastApplyAt));
-      this.averageGap = (this.averageGap ?? MIRROR_INTERVAL_MS) * 0.85 + gap * 0.15;
+  /**
+   * An update from the host. It's shown once the friend's slightly-behind clock reaches the
+   * moment the host sent it (see update).
+   * @param {any} snapshot
+   * @param {number} [receivedAt] - performance.now() when it arrived
+   */
+  apply(snapshot, receivedAt = performance.now()) {
+    const sentAt = Number(snapshot.ht);
+    if (!Number.isFinite(sentAt)) {
+      this.applyNow(snapshot);
+      return;
     }
-    this.lastApplyAt = now;
-    this.glideMs = Math.min(GLIDE_MAX_MS, (this.averageGap ?? MIRROR_INTERVAL_MS) * GLIDE_SLACK);
+    // The gap between the two games' clocks, from the quickest update seen; how much later
+    // than that the others arrive decides how far behind to show the shop.
+    const gap = receivedAt - sentAt;
+    if (this.offset === undefined || gap - this.offset > 5000) {
+      this.offset = gap;
+      this.lateness = 0;
+    } else if (gap < this.offset) this.offset = gap;
+    else this.offset += (gap - this.offset) * 0.002;
+    this.lateness = Math.max(gap - this.offset, this.lateness * 0.995);
+    this.queue.push(snapshot);
+  }
+
+  get delayMs() {
+    return Math.min(MAX_DELAY_MS, Math.max(MIN_DELAY_MS, MIRROR_INTERVAL_MS * 1.4 + this.lateness + 10));
+  }
+
+  applyNow(snapshot) {
     for (const id of snapshot.r ?? []) {
       this.entries.get(id)?.object.destroy();
       this.entries.delete(id);
@@ -234,15 +262,15 @@ export class MirrorReader {
       let entry = this.entries.get(change.id);
       if (!entry || (change.type && change.type !== entry.state.type)) {
         entry?.object.destroy();
-        entry = { object: this.create(change.type), state: {}, parent: 0, glide: null };
+        entry = { object: this.create(change.type), state: {}, parent: 0 };
         this.entries.set(change.id, entry);
       }
-      this.applyChange(entry, change, now);
+      this.applyChange(entry, change);
     }
     for (const [parentId, ids] of Object.entries(snapshot.o ?? {})) this.applyOrder(Number(parentId), ids);
   }
 
-  applyChange(entry, change, now) {
+  applyChange(entry, change) {
     const { object } = entry;
     const state = Object.assign(entry.state, change);
     if ("p" in change && change.p !== entry.parent) {
@@ -253,17 +281,7 @@ export class MirrorReader {
       else this.scene.children.add(object);
       entry.parent = parent ? change.p : 0;
     }
-    if ("x" in change || "y" in change) {
-      const fresh = !entry.placed;
-      entry.placed = true;
-      const distance = Math.hypot(state.x - object.x, state.y - object.y);
-      if (fresh || distance > GLIDE_MAX_DISTANCE) {
-        object.setPosition(state.x, state.y);
-        entry.glide = null;
-      } else {
-        entry.glide = { fromX: object.x, fromY: object.y, toX: state.x, toY: state.y, startedAt: now, ms: this.glideMs };
-      }
-    }
+    if ("x" in change || "y" in change) object.setPosition(state.x, state.y);
     if ("depth" in change) object.setDepth(state.depth);
     if ("alpha" in change) object.setAlpha(state.alpha);
     if ("sx" in change || "sy" in change) object.setScale(state.sx, state.sy);
@@ -358,17 +376,31 @@ export class MirrorReader {
     this.scene.children.queueDepthSort();
   }
 
-  /** Glide moving objects toward where the host last put them. */
-  update(now) {
-    for (const entry of this.entries.values()) {
-      const glide = entry.glide;
-      if (!glide) continue;
-      const progress = Math.min(1, (now - glide.startedAt) / (glide.ms || MIRROR_INTERVAL_MS));
-      entry.object.setPosition(
-        glide.fromX + (glide.toX - glide.fromX) * progress,
-        glide.fromY + (glide.toY - glide.fromY) * progress,
-      );
-      if (progress === 1) entry.glide = null;
+  /**
+   * Show every update whose moment has come, then glide what the next update moves.
+   * @param {number} [now] - performance.now()
+   */
+  update(now = performance.now()) {
+    if (this.offset === undefined) return;
+    const showAt = now - this.offset - this.delayMs;
+    while (this.queue.length && (this.queue[0].ht <= showAt || this.queue.length > MAX_QUEUED)) {
+      const snapshot = this.queue.shift();
+      this.applyNow(snapshot);
+      this.appliedAt = snapshot.ht;
+    }
+    const next = this.queue[0];
+    if (!next || this.appliedAt === undefined) return;
+    const from = Math.max(this.appliedAt, next.ht - GLIDE_MAX_MS);
+    const progress = next.ht > from ? Math.min(1, Math.max(0, (showAt - from) / (next.ht - from))) : 0;
+    for (const change of next.c ?? []) {
+      if (!("x" in change || "y" in change) || "p" in change) continue;
+      const entry = this.entries.get(change.id);
+      if (!entry || (change.type && change.type !== entry.state.type)) continue;
+      const { x, y } = entry.state;
+      const toX = change.x ?? x;
+      const toY = change.y ?? y;
+      if (Math.hypot(toX - x, toY - y) > GLIDE_MAX_DISTANCE) continue;
+      entry.object.setPosition(x + (toX - x) * progress, y + (toY - y) * progress);
     }
   }
 
@@ -379,5 +411,6 @@ export class MirrorReader {
   clear() {
     for (const entry of this.entries.values()) entry.object.destroy();
     this.entries.clear();
+    this.queue = [];
   }
 }

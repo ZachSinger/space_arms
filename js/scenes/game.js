@@ -320,7 +320,7 @@ export class GameScene extends Phaser.Scene {
   // Pausing a started shift freezes the register, held buttons, and crates.
   listenForPause() {
     this.shiftClock.subscribe(({ started, isPaused }) => {
-      const paused = (started && isPaused) || Boolean(this.pauseMenu?.isOpen);
+      const paused = (started && isPaused) || Boolean(this.pauseMenu?.isOpen && !this.pauseMenu.runningForFriend);
       this.setGamePaused(paused);
       if (started && isPaused) this.pauseMenu?.open();
     });
