@@ -38,6 +38,29 @@ test("unlock editor writes only the edited numbers", () => {
   assert.equal(next.items, texts.items);
 });
 
+test("unlock editor renames a contract and rewrites its description without touching anything else", () => {
+  const state = buildState(texts);
+  const license = state.licenses[3];
+  license.name = 'Rifles & "Ammo"';
+  license.description = "Long guns and the rounds\\that feed them.";
+  const next = applyState(texts, state);
+  assert.deepEqual(buildState(next), state);
+  const before = texts.licenses.split("\n");
+  assert.equal(next.licenses.split("\n").filter((line, index) => line !== before[index]).length, 2);
+  const saved = JSON.parse(next.licenses).find((entry) => entry.id === license.id);
+  assert.equal(saved.name, 'Rifles & "Ammo"');
+  assert.equal(saved.description, "Long guns and the rounds\\that feed them.");
+});
+
+test("unlock editor rejects blank and duplicate contract names", () => {
+  const state = buildState(texts);
+  state.licenses[1].name = " ";
+  state.licenses[3].name = state.licenses[2].name;
+  const problems = problemsIn(state).join("\n");
+  assert.match(problems, /needs a name/);
+  assert.match(problems, /Two contracts are both named/);
+});
+
 test("unlock editor rejects shop levels that don't need more reputation", () => {
   const state = buildState(texts);
   state.reputation[5] = state.reputation[4];

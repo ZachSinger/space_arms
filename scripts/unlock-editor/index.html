@@ -33,6 +33,13 @@
   tr.changed td, label.changed { background: var(--changed); }
   input { background: #0f172a; color: #fde68a; border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: inherit; width: 90px; text-align: right; }
   input.level { width: 60px; }
+  input.text, textarea { text-align: left; width: 230px; }
+  textarea { width: 380px; height: 44px; resize: vertical; background: #0f172a; color: #fde68a; border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: inherit; font-size: 13px; vertical-align: middle; }
+  textarea:focus { border-color: var(--accent); outline: none; }
+  textarea.invalid, input.text.invalid { border-color: var(--bad); }
+  details { color: var(--dim); white-space: normal; max-width: 300px; }
+  summary { cursor: pointer; text-align: right; }
+  details ul { margin: 4px 0; padding-left: 18px; font-size: 12px; }
   input:focus { border-color: var(--accent); outline: none; }
   input.invalid { border-color: var(--bad); }
   .fields { display: flex; flex-wrap: wrap; gap: 18px; }
@@ -73,6 +80,18 @@ function input(path, kind = "money") {
   return `<input type="number" data-path="${path}" class="${level ? "level" : ""}" ${level ? `min="1" max="${state.reputation.length}"` : `min="0"`} step="1" value="${value ?? ""}">`;
 }
 
+function textInput(path, { long = false, required = true } = {}) {
+  const value = escape(get(path) ?? "");
+  const flags = `data-path="${path}" data-text="1" ${required ? 'data-required="1"' : ""}`;
+  return long ? `<textarea ${flags}>${value}</textarea>` : `<input type="text" class="text" ${flags} value="${value}">`;
+}
+
+function itemList(license) {
+  if (!license.itemCount) return "";
+  const names = license.itemNames.map((name) => `<li>${escape(name)}</li>`).join("");
+  return `<details><summary>${license.itemCount}</summary><ul>${names}</ul></details>`;
+}
+
 function upgradeText(name, step) {
   if (name === "speed") return `Top speed ${step.speed}, loses ${step.perCrate} per crate carried`;
   if (name === "length") return `Carries ${step.capacity} crates`;
@@ -110,8 +129,8 @@ function render() {
   }).join("");
 
   const contracts = state.licenses.map((license, index) => row(
-    [`licenses.${index}.level`, `licenses.${index}.cost`],
-    `<td>${escape(license.name)}</td><td class="num">${license.level === null ? "Start" : input(`licenses.${index}.level`, "level")}</td><td class="num">${input(`licenses.${index}.cost`)}</td><td class="num dim">${license.itemCount || ""}</td>`,
+    [`licenses.${index}.name`, `licenses.${index}.description`, `licenses.${index}.level`, `licenses.${index}.cost`],
+    `<td>${textInput(`licenses.${index}.name`)}</td><td>${textInput(`licenses.${index}.description`, { long: true, required: false })}</td><td class="num">${license.level === null ? "Start" : input(`licenses.${index}.level`, "level")}</td><td class="num">${input(`licenses.${index}.cost`)}</td><td class="num">${itemList(license)}</td>`,
   )).join("");
 
   const rooms = state.zones.map((zone, index) => row(
@@ -141,7 +160,7 @@ function render() {
     <section id="levels"><h2>Shop levels</h2><table>
       <tr><th>Level</th><th class="edit">Reputation needed</th><th>More than last level</th><th class="left">Unlocks</th></tr>${levels}</table></section>
     <section id="contracts"><h2>Contracts</h2><table>
-      <tr><th class="left">Contract</th><th class="edit">Unlocks at level</th><th class="edit">Cost</th><th>Items</th></tr>${contracts}</table></section>
+      <tr><th class="left edit">Contract name</th><th class="left edit">Description</th><th class="edit">Unlocks at level</th><th class="edit">Cost</th><th>Items (click to list)</th></tr>${contracts}</table></section>
     <section id="rooms"><h2>Shop expansions and backroom upgrades</h2><table>
       <tr><th class="left">Room</th><th class="edit">Unlocks at level</th><th class="edit">Cost</th></tr>${rooms}</table></section>
     <section id="staff"><h2>Staff</h2><div class="columns">
@@ -158,7 +177,7 @@ function render() {
 const dirty = () => JSON.stringify(state) !== JSON.stringify(saved);
 function updateButtons() {
   const changed = dirty();
-  $("#save").disabled = !changed || document.querySelector("input.invalid") !== null;
+  $("#save").disabled = !changed || document.querySelector(".invalid") !== null;
   $("#undo").disabled = !changed;
 }
 function status(text, kind = "") {
@@ -167,13 +186,23 @@ function status(text, kind = "") {
 }
 
 $("#main").addEventListener("change", (event) => {
-  const field = event.target.closest("input[data-path]");
+  const field = event.target.closest("[data-path]");
   if (!field) return;
-  const value = field.value.trim() === "" ? NaN : Number(field.value);
-  if (!Number.isFinite(value) || value < 0) {
-    field.classList.add("invalid");
-    updateButtons();
-    return;
+  let value;
+  if (field.dataset.text) {
+    value = field.value.trim();
+    if (field.dataset.required && value === "") {
+      field.classList.add("invalid");
+      updateButtons();
+      return;
+    }
+  } else {
+    value = field.value.trim() === "" ? NaN : Number(field.value);
+    if (!Number.isFinite(value) || value < 0) {
+      field.classList.add("invalid");
+      updateButtons();
+      return;
+    }
   }
   const scroll = $("#main").scrollTop;
   set(field.dataset.path, value);

@@ -52,9 +52,11 @@ export function buildState(texts) {
     licenses: licenses.map((license) => ({
       id: license.id,
       name: license.name,
+      description: license.description ?? "",
       cost: license.baseCost,
       level: license.requiredShopLevel ?? null,
       itemCount: items.filter((item) => item.license === license.id).length,
+      itemNames: items.filter((item) => item.license === license.id).map((item) => item.name),
       fixtureCount: license.unlocksFixtures?.length ?? 0,
     })),
     fixtures: Object.values(fixtures)
@@ -75,7 +77,7 @@ function editable(state) {
     hovercartPrice: state.hovercartPrice,
     upgrades: UPGRADE_PATHS.map((name) => state.upgrades[name].map(({ level, cost }) => [level, cost])),
     zones: state.zones.map(({ id, cost, level }) => [id, cost, level]),
-    licenses: state.licenses.map(({ id, cost, level }) => [id, cost, level]),
+    licenses: state.licenses.map(({ id, name, description, cost, level }) => [id, name, description, cost, level]),
     fixtures: state.fixtures.map(({ id, price }) => [id, price]),
   };
 }
@@ -119,7 +121,12 @@ export function problemsIn(state) {
     checkLevel(zone.name, zone.level);
     checkCost(zone.name, zone.cost);
   }
+  const namesSeen = new Set();
   for (const license of state.licenses) {
+    if (typeof license.name !== "string" || license.name.trim() === "") problems.push(`Contract ${license.id}: needs a name.`);
+    else if (namesSeen.has(license.name.trim().toLowerCase())) problems.push(`Two contracts are both named "${license.name}".`);
+    else namesSeen.add(license.name.trim().toLowerCase());
+    if (typeof license.description !== "string") problems.push(`${license.name}: description must be text.`);
     if (license.level !== null) checkLevel(license.name, license.level);
     checkCost(license.name, license.cost);
   }
@@ -130,6 +137,14 @@ export function problemsIn(state) {
 /** Replaces the first `"key": number` inside text[start, end). */
 function setValue(text, [start, end], key, value, where) {
   const match = new RegExp(`("${key}":\\s*)(-?[\\d.]+)`).exec(text.slice(start, end));
+  if (!match) throw new Error(`Couldn't find ${key} for ${where}.`);
+  const at = start + match.index + match[1].length;
+  return text.slice(0, at) + JSON.stringify(value) + text.slice(at + match[2].length);
+}
+
+/** Replaces the first `"key": "text"` inside text[start, end). */
+function setText(text, [start, end], key, value, where) {
+  const match = new RegExp(`("${key}":\\s*)("(?:[^"\\\\]|\\\\.)*")`).exec(text.slice(start, end));
   if (!match) throw new Error(`Couldn't find ${key} for ${where}.`);
   const at = start + match.index + match[1].length;
   return text.slice(0, at) + JSON.stringify(value) + text.slice(at + match[2].length);
@@ -176,6 +191,8 @@ export function applyState(texts, state) {
   let licenses = texts.licenses;
   for (const license of state.licenses) {
     const old = oldLicenses.get(license.id);
+    if (old.name !== license.name) licenses = setText(licenses, listEntry(licenses, license.id), "name", license.name, license.id);
+    if ((old.description ?? "") !== license.description) licenses = setText(licenses, listEntry(licenses, license.id), "description", license.description, license.id);
     if (old.baseCost !== license.cost) licenses = setValue(licenses, listEntry(licenses, license.id), "baseCost", license.cost, license.name);
     if (license.level !== null && old.requiredShopLevel !== license.level) {
       licenses = setValue(licenses, listEntry(licenses, license.id), "requiredShopLevel", license.level, license.name);
