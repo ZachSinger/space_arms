@@ -135,7 +135,7 @@ Most modifier boards raise one stat. Some raise more than one. For example, Regi
 
 Modifier boards go in the same frame slots as logic boards, so every modifier board a robot carries is a slot it can't use for commands, and the reverse is true too.
 
-If a robot has two boards that raise the same stat, only the best one counts. The other one still uses its slot and power, so the game has to make that crystal clear when the player sets it up.
+If a robot has two boards that raise the same skill, their percentages do not add together; only the strongest percentage counts. The other board still uses its slot and power, so the game has to make that crystal clear when the player sets it up.
 
 Prefab boards are made from the same pieces players use. We build a few basic logic boards and modifier boards ourselves and sell them ready-made. Players who don't want to program can just buy those, while players who do can build their own from the same parts.
 
