@@ -120,6 +120,10 @@ Every robot starts with a base speed for each job: cleaning, checking out custom
 
 Most modifier chips raise one stat. Some raise more than one. For example, Register 1 and Stock 2 could be on the same chip, but that chip costs much more and needs much more power than a chip with either one on its own.
 
+Modifier chips go in the same frame slots as logic boards, so every chip a robot carries is a slot it can't use for commands, and the reverse is true too.
+
+Prefab boards are made from the same pieces players use. We build a few basic custom boards and modifier chips ourselves and sell them ready-made. Players who don't want to program can just buy those, while players who do can build their own from the same parts.
+
 ## Notes
 
 TODO: Need to reconsider backroom crate storage, maybe some cool sorter/animation is in order!
