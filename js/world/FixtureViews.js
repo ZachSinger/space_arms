@@ -139,7 +139,7 @@ export class FixtureViews {
     const image = scene.add.image(fixture.x, fixture.y, textureKey).setDisplaySize(width, height);
     scene.obstacleGroup.add(image); // solid -- customers walk up to it, not through it
     fixture.sprite = image;
-    image.setInteractive({ useHandCursor: true, pixelPerfect: getFixtureType(fixture.type).artLayout === "budget" });
+    image.setInteractive({ useHandCursor: true, pixelPerfect: getFixtureType(fixture.type)?.artLayout === "budget" });
     image.on("pointerdown", (pointer) => {
       if (pointer.event?.target === scene.game.canvas && !isWorldMouseBinding(pointer.event)) {
         scene.fixtureSystem.tryOpenFixtureWindow(fixture);

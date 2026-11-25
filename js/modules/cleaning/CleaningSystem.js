@@ -3,7 +3,7 @@
 // ==========================================
 // Store cleanliness, trash, and dirt. The state slice saves their locations and mopping
 // progress; the fields draw and relocate them in the Phaser world.
-import { fixtureFootprint } from "../../logic/FixtureLayout.js";
+import { fixtureBounds } from "../../logic/FixtureLayout.js";
 import { TILE_SIZE, EXPANSION_ORDER } from "../../logic/RoomLayout.js";
 import { AREA } from "../../world/Areas.js";
 import { controlLabel } from "../../input/InputDevice.js";
@@ -59,9 +59,9 @@ export class CleaningSystem {
     if (!zone?.salesFloor || zone.locked || !shop.room.isWalkable(gx, gy)) return false;
     const margin = 8;
     return !shop.fixtures.all().some((fixture) => {
-      const { w, h } = fixtureFootprint(fixture);
-      return x >= fixture.gx * TILE_SIZE - margin && x <= (fixture.gx + w) * TILE_SIZE + margin &&
-        y >= fixture.gy * TILE_SIZE - margin && y <= (fixture.gy + h) * TILE_SIZE + margin;
+      const bounds = fixtureBounds(fixture);
+      return x >= bounds.left * TILE_SIZE - margin && x <= bounds.right * TILE_SIZE + margin &&
+        y >= bounds.top * TILE_SIZE - margin && y <= bounds.bottom * TILE_SIZE + margin;
     });
   }
 
