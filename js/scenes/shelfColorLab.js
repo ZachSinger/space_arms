@@ -47,14 +47,14 @@ const PRESETS = Object.freeze([
   { name: "Blue", tint: 0x3b82f6 },
   { name: "Pink", tint: 0xec4899 },
 ]);
-// Brightness and saturation are percentages (100 = unchanged); contrast runs -100 to 100
-// (0 = unchanged).
+// Brightness and saturation are percentages (100 = unchanged); contrast 0 is unchanged.
+// Brightness and contrast are capped so no setting turns the shelf's body black.
 const SLIDERS = Object.freeze([
   { key: "red", label: "Red", min: 0, max: 255, color: "#ef4444" },
   { key: "green", label: "Green", min: 0, max: 255, color: "#22c55e" },
   { key: "blue", label: "Blue", min: 0, max: 255, color: "#3b82f6" },
-  { key: "brightness", label: "Brightness", min: 0, max: 200, unit: "%", filter: true },
-  { key: "contrast", label: "Contrast", min: -100, max: 100, filter: true },
+  { key: "brightness", label: "Brightness", min: 75, max: 150, unit: "%", filter: true },
+  { key: "contrast", label: "Contrast", min: -50, max: 25, filter: true },
   { key: "saturation", label: "Saturation", min: 0, max: 200, unit: "%", filter: true },
 ]);
 const UNCHANGED_FILTER = Object.freeze({ brightness: 100, contrast: 0, saturation: 100 });
@@ -172,7 +172,16 @@ export class ShelfColorLabScene extends Phaser.Scene {
     if (!shelf.filter) return;
     shelf.filter.reset();
     shelf.filter.saturate((look.saturation - 100) / 100, true);
-    shelf.filter.contrast(look.contrast / 100, true);
+    // Phaser's own contrast() divides its middle-gray offset by 255, so lowering contrast just
+    // darkens; this spreads or squeezes shades around middle gray instead (offsets are 0-255).
+    const spread = 1 + look.contrast / 100;
+    const offset = 127.5 * (1 - spread);
+    shelf.filter.multiply([
+      spread, 0, 0, 0, offset,
+      0, spread, 0, 0, offset,
+      0, 0, spread, 0, offset,
+      0, 0, 0, 1, 0,
+    ], true);
     shelf.filter.brightness(look.brightness / 100, true);
   }
 

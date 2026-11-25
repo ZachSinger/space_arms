@@ -118,7 +118,9 @@ behind it: you should stop only at its feet, and it should hide you when you're 
 On the title screen, choose **DEV**, then **SHELF COLOR LAB**. A gray copy of the short
 four-column shelf stands facing every direction, next to one in its original colors. The
 panel on the right mixes a color with **Red**, **Green**, and **Blue** sliders (0 to 255),
-then adjusts it with **Brightness**, **Contrast**, and **Saturation**; **RESET ADJUSTMENTS**
+then adjusts it with **Brightness** (75% to 150%), **Contrast** (-50 to 25), and **Saturation**;
+the brightness and contrast limits keep any setting from turning a shelf black.
+**RESET ADJUSTMENTS**
 puts those three back to normal. **EVERY SHELF** changes all the gray shelves at once.
 Clicking a shelf (or **CLICKED SHELF**) outlines it in green and changes only that one; the
 sliders then show that shelf's settings. The starting-color squares set red, green, and blue
