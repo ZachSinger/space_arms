@@ -284,6 +284,16 @@ test("remote orders use any contract the store level allows, owned or not, and p
   assert.equal("offerEndsDay" in accepted, false);
 });
 
+test("remote orders never ask for items deleted in the dev tools", () => {
+  const items = ["a", "b", "c", "d"].map((id) => ({ id, license: "weapons", hidden: id === "b" }));
+  for (const roll of [0, 0.3, 0.6, 0.99]) {
+    const order = createRemoteOrder({
+      items, day: 1, shopLevel: 1, random: () => roll, licenseLevel: () => 1, marketPrice: () => 10,
+    });
+    assert.ok(order.items.every(({ itemId }) => itemId !== "b"));
+  }
+});
+
 test("accepting an offer creates its crate; offers that run out or are declined cost no reputation", () => {
   const offer = (id, offerEndsDay) => ({
     id, receivedDay: 1, offerEndsDay, items: [{ itemId: "wpn_rif_01", quantity: 3 }], payout: 50, reputation: 2,

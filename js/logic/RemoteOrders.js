@@ -50,6 +50,7 @@ export function createRemoteOrder({
   marketPrice,
 }) {
   const available = items.filter((item) => {
+    if (item.hidden) return false;
     const level = item.license ? licenseLevel(item.license) : undefined;
     return level !== undefined && level <= shopLevel;
   });

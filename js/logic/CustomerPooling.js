@@ -56,7 +56,7 @@ export function getLicensedFactionIds(activeLicenses, items) {
     : new Set(activeLicenses);
   return CUSTOMER_FACTION_IDS.filter((factionId) =>
     items.some((item) =>
-      item.license && licenses.has(item.license) && factionMatches(item, factionId),
+      !item.hidden && item.license && licenses.has(item.license) && factionMatches(item, factionId),
     ),
   );
 }

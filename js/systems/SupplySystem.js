@@ -166,7 +166,7 @@ export class SupplySystem {
 
     return database
       .getAllItems()
-      .filter((item) => shop.gameState.catalog.owns(item.license))
+      .filter((item) => !item.hidden && shop.gameState.catalog.owns(item.license))
       .map((item) => ({
         item,
         ownedQuantity: ownedQuantityByItemId.get(item.id) || 0,
@@ -185,7 +185,7 @@ export class SupplySystem {
     const { gameState } = this.shop;
     for (const [itemId, count] of order) {
       const item = database.getItem(itemId);
-      if (count > 0 && (!item || !gameState.catalog.owns(item.license))) return false;
+      if (count > 0 && (!item || item.hidden || !gameState.catalog.owns(item.license))) return false;
     }
     const summary = this.orderSummary(order);
     if (!summary.canPlace) return false;

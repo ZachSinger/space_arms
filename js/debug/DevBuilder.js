@@ -26,7 +26,7 @@ export class ShelfBrush {
     this.select = document.createElement("select");
     this.select.style.cssText = "flex:1;font:inherit;min-width:0";
     const groups = new Map();
-    for (const item of [...database.getAllItems()].sort((a, b) => a.name.localeCompare(b.name))) {
+    for (const item of database.getAllItems().filter((entry) => !entry.hidden).sort((a, b) => a.name.localeCompare(b.name))) {
       const group = item.tags?.[0] ?? "Other";
       if (!groups.has(group)) groups.set(group, []);
       groups.get(group).push(item);

@@ -129,6 +129,7 @@ export class DebugTools {
     const shelves = scene.fixtures.shelves().filter((shelf) => shelf.type === shelfType).slice(0, shelfCount);
     const items = database.getAllItems()
       .filter((item) => {
+        if (item.hidden) return false;
         const license = database.getLicense(item.license);
         return gameState.catalog.owns(item.license) || license?.isUnlocked(gameState);
       })
@@ -250,7 +251,7 @@ export class DebugTools {
     const { gameState } = scene;
     const shelved = new Set(scene.fixtures.shelves().flatMap((shelf) => shelf.placements.map((placement) => placement.itemId)));
     const missing = database.getAllItems()
-      .filter((item) => gameState.catalog.owns(item.license) && !shelved.has(item.id))
+      .filter((item) => !item.hidden && gameState.catalog.owns(item.license) && !shelved.has(item.id))
       .sort((a, b) => a.baseCost - b.baseCost);
     const shelfTypes = SHELF_TYPES.map(getFixtureType)
       .sort((a, b) => b.shelfRows * b.shelfColumns - a.shelfRows * a.shelfColumns);

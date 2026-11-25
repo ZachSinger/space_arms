@@ -46,13 +46,21 @@
   input.invalid { border-color: var(--bad); }
   .fields { display: flex; flex-wrap: wrap; gap: 18px; }
   .fields label { display: flex; gap: 8px; align-items: center; color: #fde68a; padding: 4px 6px; border-radius: 4px; }
+  .category { margin: 6px 0; max-width: none; color: var(--text); }
+  .category > summary { text-align: left; color: var(--accent); font-weight: 600; padding: 6px 0; }
+  .category > summary span { color: var(--dim); font-weight: normal; margin-left: 8px; }
+  .category table { margin: 4px 0 10px 18px; }
+  td.shown { color: var(--good); }
+  td.hidden { color: var(--bad); }
+  tr.is-hidden td:first-child { color: var(--dim); text-decoration: line-through; }
+  .note { color: var(--dim); margin: 0 0 8px; }
 </style>
 </head>
 <body>
 <header>
   <h1>Unlocks</h1>
   <nav>
-    <a href="#levels">Shop levels</a><a href="#contracts">Contracts</a><a href="#rooms">Expansions</a><a href="#staff">Staff</a><a href="#hovercart">Hovercart</a><a href="#fixtures">Fixtures</a>
+    <a href="#levels">Shop levels</a><a href="#contracts">Contracts</a><a href="#items">Items</a><a href="#rooms">Expansions</a><a href="#staff">Staff</a><a href="#hovercart">Hovercart</a><a href="#fixtures">Fixtures</a>
   </nav>
   <button id="undo" disabled>Undo all</button>
   <button id="save" class="primary" disabled>Save</button>
@@ -66,6 +74,7 @@ const money = (value) => Number(value).toLocaleString("en-US");
 const PATH_NAMES = { speed: "Speed", length: "Length", battery: "Battery" };
 let saved = null;
 let state = null;
+const openCategories = new Set();
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const get = (path) => path.split(".").reduce((value, key) => value[key], state);
@@ -161,12 +170,32 @@ function render() {
 
   const field = (label, path, kind) => `<label class="${getFrom(saved, path) !== get(path) ? "changed" : ""}">${label} ${input(path, kind)}</label>`;
 
+  const contractNames = new Map(state.licenses.map((license) => [license.id, license.name]));
+  const categories = new Map();
+  state.items.forEach((item, index) => {
+    if (!categories.has(item.category)) categories.set(item.category, []);
+    categories.get(item.category).push({ item, index });
+  });
+  const items = [...categories].sort(([a], [b]) => a.localeCompare(b)).map(([category, entries]) => {
+    const hiddenCount = entries.filter(({ item }) => item.hidden).length;
+    const rows = entries
+      .sort((a, b) => a.item.name.localeCompare(b.item.name))
+      .map(({ item, index }) => row(
+        [`items.${index}.hidden`],
+        `<td>${escape(item.name)}</td><td class="dim">${escape(contractNames.get(item.license) ?? "")}</td><td class="${item.hidden ? "hidden" : "shown"}">${item.hidden ? "Hidden (deleted)" : "In the game"}</td><td><button class="small" data-hide="${index}">${item.hidden ? "Restore" : "Delete"}</button></td>`,
+      ).replace("<tr class=\"", `<tr class="${item.hidden ? "is-hidden " : ""}`))
+      .join("");
+    return `<details class="category" data-category="${escape(category)}" ${openCategories.has(category) ? "open" : ""}><summary>${escape(category)}<span>${entries.length} item${entries.length === 1 ? "" : "s"}${hiddenCount ? `, ${hiddenCount} hidden` : ""}</span></summary><table>
+      <tr><th class="left">Item</th><th class="left">Contract</th><th class="left edit">In the game?</th><th></th></tr>${rows}</table></details>`;
+  }).join("");
+
   $("#main").innerHTML = `
     <section><h2>Starting money</h2><div class="fields">${field("Money at the start of a new game", "money")}</div></section>
     <section id="levels"><h2>Shop levels</h2><table>
       <tr><th>Level</th><th class="edit">Reputation needed</th><th>More than last level</th><th class="left">Unlocks</th></tr>${levels}</table></section>
     <section id="contracts"><h2>Contracts <button class="small" id="addContract">Add contract</button></h2><table>
       <tr><th class="left edit">Contract name</th><th class="left edit">Description</th><th class="edit" title="Shown to the player on the contract card">Tier</th><th class="edit">Unlocks at level</th><th class="edit">Cost</th><th class="left edit">Faction required</th><th class="edit">Faction reputation</th><th>Items (click to list)</th></tr>${contracts}</table></section>
+    <section id="items"><h2>Items</h2><p class="note">Every item, by category. Hidden items stay in the files but never show up in the game: you can't order them, customers don't come for them, and remote orders never ask for them. Click a category to open it.</p>${items}</section>
     <section id="rooms"><h2>Shop expansions and backroom upgrades</h2><table>
       <tr><th class="left">Room</th><th class="edit">Unlocks at level</th><th class="edit">Cost</th></tr>${rooms}</table></section>
     <section id="staff"><h2>Staff</h2><div class="columns">
@@ -233,6 +262,12 @@ $("#main").addEventListener("click", (event) => {
     field.scrollIntoView({ block: "center" });
     field.select();
     status("Unsaved changes");
+  } else if (event.target.dataset.hide !== undefined) {
+    const item = state.items[Number(event.target.dataset.hide)];
+    item.hidden = !item.hidden;
+    render();
+    $("#main").scrollTop = scroll;
+    status(dirty() ? "Unsaved changes" : "");
   } else if (event.target.dataset.remove !== undefined) {
     state.licenses.splice(Number(event.target.dataset.remove), 1);
     render();
@@ -272,6 +307,13 @@ $("#save").addEventListener("click", async () => {
 window.addEventListener("beforeunload", (event) => {
   if (dirty()) event.preventDefault();
 });
+
+$("#main").addEventListener("toggle", (event) => {
+  const category = event.target.dataset?.category;
+  if (category === undefined) return;
+  if (event.target.open) openCategories.add(category);
+  else openCategories.delete(category);
+}, true);
 
 fetch("/api/data").then((response) => response.json()).then((data) => {
   saved = data;

@@ -57,6 +57,7 @@ export function problemsIn(items, licenseIds) {
     if (!BOX_SIZES.includes(item?.boxSize)) problems.push(`${label}: box size must be one of ${BOX_SIZES.join(", ")}.`);
     if (!licenseIds.has(item?.license)) problems.push(`${label}: unknown contract "${item?.license}".`);
     if (!Array.isArray(item?.tags) || !item.tags.length) problems.push(`${label}: needs at least one tag.`);
+    if (item?.hidden !== undefined && typeof item.hidden !== "boolean") problems.push(`${label}: hidden must be true or false.`);
   });
   return problems;
 }

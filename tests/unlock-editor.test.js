@@ -133,3 +133,18 @@ test("unlock editor rejects shop levels that don't need more reputation", () => 
   state.reputation[5] = state.reputation[4];
   assert.match(problemsIn(state).join("\n"), /Shop level 6: must need more reputation than level 5/);
 });
+
+test("unlock editor hides an item from the game and can bring it back", () => {
+  const state = buildState(texts);
+  const item = state.items.find((entry) => !entry.hidden);
+  item.hidden = true;
+  const hidden = applyState(texts, state);
+  const savedItems = JSON.parse(hidden.items);
+  assert.equal(savedItems.length, JSON.parse(texts.items).length);
+  assert.deepEqual(savedItems.filter((entry) => entry.hidden).map((entry) => entry.id), [item.id]);
+  assert.equal(buildState(hidden).licenses.find((entry) => entry.itemNames.includes(item.name)), undefined);
+
+  const restoredState = buildState(hidden);
+  restoredState.items.find((entry) => entry.id === item.id).hidden = false;
+  assert.equal(applyState(hidden, restoredState).items, texts.items);
+});

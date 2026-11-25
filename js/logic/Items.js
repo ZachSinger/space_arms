@@ -18,6 +18,8 @@ export class StoreItem {
     this.count = data.count || null; // rounds in an ammo box
     this.fits = data.fits || []; // tags/weapons an attachment can snap onto
     this.image = data.image || null; // detail-view art path (relative to project root)
+    // Deleted in the dev tools: kept in the data so old saves still load, but never offered in game.
+    this.hidden = data.hidden === true;
   }
 
   hasTag(tagString) {

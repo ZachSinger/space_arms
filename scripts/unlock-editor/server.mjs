@@ -59,13 +59,20 @@ export function buildState(texts) {
       level: license.requiredShopLevel ?? null,
       faction: license.reqFaction ?? "",
       factionRep: license.reqFactionRep ?? 0,
-      itemCount: items.filter((item) => item.license === license.id).length,
-      itemNames: items.filter((item) => item.license === license.id).map((item) => item.name),
+      itemCount: items.filter((item) => item.license === license.id && !item.hidden).length,
+      itemNames: items.filter((item) => item.license === license.id && !item.hidden).map((item) => item.name),
       fixtureCount: license.unlocksFixtures?.length ?? 0,
     })),
     fixtures: Object.values(fixtures)
       .filter((fixture) => fixture.id !== CHARGER_ID)
       .map((fixture) => ({ id: fixture.id, name: fixture.name, price: fixture.price, contract: licenseNames.get(fixture.licenseId) ?? "" })),
+    items: items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      category: item.tags?.[0] ?? "Other",
+      license: item.license ?? "",
+      hidden: item.hidden === true,
+    })),
   };
 }
 
@@ -84,6 +91,7 @@ function editable(state) {
     licenses: state.licenses.map(({ id, name, description, tier, cost, level, faction, factionRep }) =>
       [id, name, description, tier, cost, level, faction, factionRep]),
     fixtures: state.fixtures.map(({ id, price }) => [id, price]),
+    items: state.items.map(({ id, hidden }) => [id, hidden]),
   };
 }
 
@@ -142,6 +150,10 @@ export function problemsIn(state) {
     }
   }
   for (const fixture of state.fixtures) checkCost(fixture.name, fixture.price);
+  if (!Array.isArray(state.items)) problems.push("The item list is missing.");
+  else for (const item of state.items) {
+    if (typeof item?.hidden !== "boolean") problems.push(`${item?.name ?? "An item"}: hidden must be true or false.`);
+  }
   return problems;
 }
 
@@ -287,7 +299,22 @@ export function applyState(texts, state) {
   let start = texts.start;
   if (JSON.parse(start).money !== state.money) start = setValue(start, [0, start.length], "money", state.money, "starting money");
 
-  const next = { ...texts, progression: formatItems(progression), licenses, fixtures, start };
+  // Hidden items stay in Items.json with "hidden": true; showing one again removes the flag.
+  let items = texts.items;
+  const hiddenById = new Map(state.items.map((item) => [item.id, item.hidden]));
+  const parsedItems = JSON.parse(items);
+  let itemsChanged = false;
+  for (const item of parsedItems) {
+    if (!hiddenById.has(item.id)) throw new Error(`Item ${item.id} is missing from the edits, so nothing was saved.`);
+    const hidden = hiddenById.get(item.id);
+    if ((item.hidden === true) === hidden) continue;
+    itemsChanged = true;
+    if (hidden) item.hidden = true;
+    else delete item.hidden;
+  }
+  if (itemsChanged) items = formatItems(parsedItems);
+
+  const next = { ...texts, progression: formatItems(progression), licenses, fixtures, start, items };
   if (JSON.stringify(editable(buildState(next))) !== JSON.stringify(editable(state))) {
     throw new Error("The files didn't come out matching the edits, so nothing was saved.");
   }
@@ -324,7 +351,7 @@ async function handle(request, response) {
     if (problems.length) return send(response, 400, { problems });
     const texts = await readTexts();
     const next = applyState(texts, state);
-    for (const key of ["progression", "licenses", "fixtures", "start"]) {
+    for (const key of ["progression", "licenses", "fixtures", "start", "items"]) {
       if (next[key] !== texts[key]) await writeFile(FILES[key], next[key], "utf8");
     }
     return send(response, 200, { saved: true });

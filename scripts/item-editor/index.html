@@ -53,6 +53,8 @@
   .bar { width: 70px; height: 8px; background: #1e293b; border-radius: 4px; overflow: hidden; }
   .bar div { height: 100%; background: var(--good); }
   .help { padding: 8px 16px; color: var(--dim); border-bottom: 1px solid var(--line); }
+  button.delete { padding: 3px 10px; font-size: 12px; color: var(--bad); }
+  button.delete:hover { border-color: var(--bad); }
   .help b { color: #fde68a; font-weight: 600; }
 </style>
 </head>
@@ -104,6 +106,7 @@ const COLUMNS = [
   { key: "crateProfit", label: "Crate profit", sort: crateProfit },
   { key: "crateProfitPercent", label: "Crate profit %", sort: crateProfitPercent },
   { key: "profitPer20", label: "Profit per 20", sort: profitPer20 },
+  { key: "delete", label: "" },
 ];
 
 async function load() {
@@ -120,9 +123,16 @@ async function load() {
     `Profit is selling a full crate at base price, minus what the supplier charges for it. ` +
     `Crate profit % is the percentage of that sale left as profit. ` +
     `Profit per 20 is the profit from selling 20 of the item at base price. Its bar is half full at the average for the items showing in the open shop levels, and full at double that average. ` +
-    `Click a shop level to open or close it. Sorting and filters only change the open levels.`;
+    `Click a shop level to open or close it. Sorting and filters only change the open levels. ` +
+    `<b>Delete</b> takes an item out of the game once you save. It isn't erased from the files: the Unlocks editor's Items section lists deleted items and can bring them back.`;
   render();
-  setStatus(`${state.items.length} items.`);
+  setStatus(itemCountText());
+}
+
+function itemCountText() {
+  const deleted = state.items.filter((item) => item.hidden).length;
+  const listed = state.items.length - deleted;
+  return `${listed} items${deleted ? `, plus ${deleted} deleted (not listed)` : ""}.`;
 }
 
 function escape(text) {
@@ -151,6 +161,7 @@ function visibleGroups() {
   const column = COLUMNS.find((entry) => entry.key === state.sort.key);
   const byLevel = new Map();
   state.items.forEach((item, index) => {
+    if (item.hidden) return;
     const key = groupOf(item);
     if (!byLevel.has(key)) byLevel.set(key, { key, level: levelOf(item), total: 0, matches: 0, rows: [] });
     const group = byLevel.get(key);
@@ -203,6 +214,7 @@ function cell(item, index, key) {
       const options = state.rules.boxSizes.map((size) => `<option ${size === item.boxSize ? "selected" : ""}>${size}</option>`);
       return `<td class="num"><select data-edit="${index}" data-key="boxSize">${options.join("")}</select></td>`;
     }
+    case "delete": return `<td><button class="delete" data-delete="${index}" title="Takes this item out of the game once you save. It can be brought back in the Unlocks editor.">Delete</button></td>`;
     default: return `<td class="num" data-out="${key}">${outputHtml(item, key)}</td>`;
   }
 }
@@ -226,7 +238,7 @@ function outputHtml(item, key) {
 }
 
 function render() {
-  state.maxProfit = Math.max(1, ...state.items.map(crateProfit));
+  state.maxProfit = Math.max(1, ...state.items.filter((item) => !item.hidden).map(crateProfit));
   renderHead();
   const groups = visibleGroups();
   state.shown = groups.flatMap((group) => group.rows.map((row) => row.index));
@@ -301,6 +313,14 @@ document.getElementById("body").addEventListener("change", (event) => {
   }
 });
 document.getElementById("body").addEventListener("click", (event) => {
+  const deleteIndex = event.target.dataset.delete;
+  if (deleteIndex !== undefined) {
+    const item = state.items[Number(deleteIndex)];
+    item.hidden = true;
+    render();
+    setStatus(`Deleted "${item.name}". Save to take it out of the game, or "Undo all edits" to keep it.`);
+    return;
+  }
   const key = event.target.closest("tr.group")?.dataset.level;
   if (key === undefined) return;
   if (state.open.has(key)) state.open.delete(key);
@@ -317,7 +337,7 @@ document.getElementById("closeAll").addEventListener("click", () => {
 });
 document.getElementById("head").addEventListener("click", (event) => {
   const key = event.target.closest("th")?.dataset.key;
-  if (!key || key === "icon") return;
+  if (!key || !COLUMNS.find((column) => column.key === key)?.sort) return;
   state.sort = { key, desc: state.sort.key === key ? !state.sort.desc : false };
   render();
 });
