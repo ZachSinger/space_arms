@@ -291,15 +291,25 @@ export function step(sim) {
       note(sim, `${robot.name} ran out of battery and shut down.`);
       continue;
     }
+    // Time left over after finishing a job carries into the next one, so skill boosts
+    // that shave part of a second still add up instead of being lost to the 1-second step.
     let remaining = 1;
-    while (remaining > 1e-9 && task.phase < task.phases.length) {
-      const phase = task.phases[task.phase];
-      const elapsed = Math.min(remaining, phase.left);
-      phase.left -= elapsed;
-      remaining -= elapsed;
-      if (phase.left <= 1e-9) task.phase += 1;
+    let current = task;
+    for (let jobs = 0; jobs < 10; jobs += 1) {
+      while (remaining > 1e-9 && current.phase < current.phases.length) {
+        const phase = current.phases[current.phase];
+        const elapsed = Math.min(remaining, phase.left);
+        phase.left -= elapsed;
+        remaining -= elapsed;
+        if (phase.left <= 1e-9) current.phase += 1;
+      }
+      if (current.phase < current.phases.length || current.action === "charge") break;
+      finishTask(sim, robot);
+      if (remaining <= 1e-9) break;
+      startTask(sim, robot);
+      current = robot.task;
+      if (current.action === "charge" || current.action === "wait") break;
     }
-    if (task.phase >= task.phases.length && task.action !== "charge") finishTask(sim, robot);
   }
   sim.time += 1;
   return sim;

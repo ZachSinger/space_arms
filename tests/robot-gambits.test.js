@@ -222,6 +222,21 @@ test("frame speed changes only walking, while scanning and counting speed up the
   assert.equal(count[2].left, 1);
 });
 
+test("a skill boost too small to save a whole second per customer still adds up over a line of customers", () => {
+  const parts = structuredClone(PARTS);
+  parts.cells[1].charge = 100000;
+  parts.boards.push({ id: "mods", name: "Mods", kind: "modifier", power: 1, modifiers: { scanning: 20, counting: 20 } });
+  const secondsToServe = (boards) => {
+    const sim = createSim({ parts, robots: [{ name: "Bot", frame: "frame", cell: "big", boards }],
+      settings: { ...SETTINGS, customersPerMinute: 0, cratesPerDelivery: 0 } });
+    for (let index = 0; index < 6; index += 1) sim.registers[0].line.push({ items: 2, changeUnits: 2, arrived: 1000 });
+    while (sim.robots[0].completed.customers < 6) step(sim);
+    return sim.time;
+  };
+  // Each customer takes 4 seconds unboosted and 3.33 boosted, which rounded up to 4 before.
+  assert.ok(secondsToServe([{ board: "register" }, { board: "mods" }]) < secondsToServe([{ board: "register" }]) - 2);
+});
+
 test("batch jobs reserve only available resources and return their entire batch when charge runs out", () => {
   const parts = structuredClone(PARTS);
   parts.cells[1].charge = 1;
