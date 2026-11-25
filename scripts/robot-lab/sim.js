@@ -5,6 +5,7 @@
 // Time moves in 1-second steps. Customers take items off shelves and queue at registers,
 // deliveries land on the loading pad, and robots pick jobs with js/logic/RobotGambits.js.
 import { chooseAction } from "../../js/logic/RobotGambits.js";
+import { findCell, findFrame, hasEnoughPower, robotProgram } from "../../js/logic/RobotParts.js";
 
 export const SIM_RULES = Object.freeze({
   shelfCapacity: 20,
@@ -14,7 +15,7 @@ export const SIM_RULES = Object.freeze({
   patienceSeconds: 60,
   messChance: 0.15,
   padCapacity: 8,
-  chargeSeconds: 60,
+  // A waiting robot uses this share of the standard drain.
   waitingDrain: 0.25,
   // Seconds each job takes for a robot with speed 1. Faster robots divide these.
   seconds: { work_register: 4, restock: 8, unload_pad: 5, clean: 6, wait: 1 },
@@ -31,6 +32,24 @@ function randomFrom(seed) {
   };
 }
 
+/**
+ * Copies a robot's build onto its running copy in the pretend store: speed from the frame,
+ * charge from the power cell, and the commands from its boards. Battery level is kept.
+ */
+export function applyBuild(live, robot, parts) {
+  const frame = findFrame(parts, robot.frame);
+  const cell = findCell(parts, robot.cell);
+  Object.assign(live, {
+    name: robot.name,
+    build: robot,
+    speed: frame?.speed ?? 1,
+    cell,
+    program: robotProgram(robot, parts),
+    noPower: !hasEnoughPower(robot, parts),
+  });
+  return live;
+}
+
 export function createSim(setup, seed = 1) {
   const { settings } = setup;
   return {
@@ -45,8 +64,7 @@ export function createSim(setup, seed = 1) {
     inboundCrates: 0,
     messes: 0,
     messesClaimed: 0,
-    robots: setup.robots.map((robot, index) => ({
-      ...robot,
+    robots: setup.robots.map((robot, index) => applyBuild({
       id: `robot${index + 1}`,
       battery: 1,
       task: null,
@@ -54,7 +72,7 @@ export function createSim(setup, seed = 1) {
       choice: null,
       outOfPower: false,
       busySeconds: 0,
-    })),
+    }, robot, setup.parts)),
     stats: { sales: 0, served: 0, leftEmptyShelf: 0, leftLongLine: 0, leftTooSlow: 0, customers: 0 },
     log: [],
   };
@@ -156,6 +174,7 @@ function abandonTask(sim, robot) {
     sim.inboundCrates -= 1;
     sim.padCrates += 1;
   } else if (task.action === "clean") sim.messesClaimed -= 1;
+  else if (task.action === "charge") task.station.usedBy = null;
   robot.task = null;
 }
 
@@ -192,16 +211,19 @@ export function step(sim) {
     register.line = register.line.filter((customer) => !leaving.includes(customer));
   }
   for (const robot of sim.robots) {
-    if (robot.outOfPower) continue;
+    if (robot.outOfPower || robot.noPower) {
+      if (robot.task) abandonTask(sim, robot);
+      continue;
+    }
     if (!robot.task) startTask(sim, robot);
     const task = robot.task;
     if (task.action === "charge") {
-      robot.battery = Math.min(1, robot.battery + 1 / SIM_RULES.chargeSeconds);
+      robot.battery = Math.min(1, robot.battery + robot.cell.chargeRate / robot.cell.charge);
       if (robot.battery >= 1) finishTask(sim, robot);
       continue;
     }
-    const drain = task.action === "wait" ? SIM_RULES.waitingDrain : 1;
-    robot.battery = Math.max(0, robot.battery - drain / robot.batterySeconds);
+    const share = task.action === "wait" ? SIM_RULES.waitingDrain : 1;
+    robot.battery = Math.max(0, robot.battery - (share * sim.settings.standardDrain * robot.cell.drainRate) / robot.cell.charge);
     if (task.action !== "wait") robot.busySeconds += 1;
     if (robot.battery <= 0) {
       abandonTask(sim, robot);

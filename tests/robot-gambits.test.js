@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { chooseAction } from "../js/logic/RobotGambits.js";
+import { hasEnoughPower, powerNeeded, robotProgram } from "../js/logic/RobotParts.js";
 import { runShift } from "../scripts/robot-lab/sim.js";
 import { setupProblems } from "../scripts/robot-lab/server.mjs";
 
@@ -50,20 +51,55 @@ test("the saved robot lab setup is valid and runs a shift without robots running
   assert.ok(sim.robots.every((entry) => !entry.outOfPower));
 });
 
-test("a robot with no charging rule shuts down when its battery runs out", () => {
-  const sim = runShift({
-    settings: { shiftSeconds: 300, registers: 1, shelves: 2, stations: 1, customersPerMinute: 6, deliveryEverySeconds: 120, cratesPerDelivery: 2, backroomCapacity: 6, startingBackroomCrates: 1 },
-    robots: [{ name: "Forgetful", speed: 1, batterySeconds: 100, slots: 1, program: [{ condition: "always", action: "work_register" }] }],
-  });
+const PARTS = {
+  frames: [{ id: "frame", name: "Frame", power: 4, boardSlots: 2, speed: 1 }],
+  cells: [
+    { id: "small", name: "Small cell", capacity: 8, charge: 100, drainRate: 1, chargeRate: 5 },
+    { id: "big", name: "Big cell", capacity: 20, charge: 100, drainRate: 2, chargeRate: 5 },
+  ],
+  boards: [
+    { id: "register", name: "Register", kind: "prefab", power: 3, program: [{ condition: "always", action: "work_register" }] },
+    { id: "custom", name: "Custom", kind: "custom", power: 2, commands: 2 },
+  ],
+  commandPower: { conditions: { battery_below_20: 1, always: 0 }, actions: { charge: 1, work_register: 2 } },
+};
+const SETTINGS = { shiftSeconds: 300, registers: 1, shelves: 2, stations: 1, customersPerMinute: 6, deliveryEverySeconds: 120, cratesPerDelivery: 2, backroomCapacity: 6, startingBackroomCrates: 1, standardDrain: 1 };
+
+test("a robot's power need is its frame plus its boards, and custom boards add each command's cost", () => {
+  const robot = { name: "Bot", frame: "frame", cell: "small", boards: [{ board: "custom", program: [{ condition: "battery_below_20", action: "charge" }] }, { board: "register" }] };
+  assert.equal(powerNeeded(robot, PARTS), 4 + (2 + 1 + 1) + 3);
+  assert.equal(hasEnoughPower(robot, PARTS), false);
+  assert.equal(hasEnoughPower({ ...robot, cell: "big" }, PARTS), true);
+  assert.deepEqual(robotProgram(robot, PARTS).map((rule) => [rule.slot, rule.action]), [[0, "charge"], [1, "work_register"]]);
+});
+
+test("a robot whose parts need more power than its cell's capacity never switches on", () => {
+  const sim = runShift({ settings: SETTINGS, parts: PARTS, robots: [{ name: "Heavy", frame: "frame", cell: "small", boards: [{ board: "register" }, { board: "register" }] }] });
+  assert.equal(sim.robots[0].noPower, true);
+  assert.equal(sim.robots[0].busySeconds, 0);
+  assert.equal(sim.stats.served, 0);
+});
+
+test("a cell's drain rate scales the standard drain, and a robot with no charging command shuts down", () => {
+  const robot = { name: "Forgetful", frame: "frame", cell: "big", boards: [{ board: "register" }] };
+  const fast = runShift({ settings: { ...SETTINGS, shiftSeconds: 49 }, parts: PARTS, robots: [robot] });
+  assert.ok(Math.abs(fast.robots[0].battery - (1 - (49 * 2) / 100)) < 1e-9);
+  const sim = runShift({ settings: SETTINGS, parts: PARTS, robots: [robot] });
   assert.equal(sim.robots[0].outOfPower, true);
   assert.equal(sim.registers[0].staffedBy, null);
 });
 
-test("the robot lab refuses programs with more rules than chip slots", () => {
+test("the robot lab refuses builds that don't fit their parts", () => {
   const problems = setupProblems({
-    settings: { shiftSeconds: 60, registers: 1, shelves: 1, stations: 0, customersPerMinute: 1, deliveryEverySeconds: 60, cratesPerDelivery: 1, backroomCapacity: 1, startingBackroomCrates: 0 },
-    robots: [{ name: "Tiny", speed: 1, batterySeconds: 10, slots: 1, program: [{ condition: "always", action: "wait" }, { condition: "nope", action: "wait" }] }],
-  });
-  assert.match(problems.join("\n"), /only 1 chip slots/);
-  assert.match(problems.join("\n"), /unknown condition "nope"/);
+    settings: SETTINGS,
+    parts: PARTS,
+    robots: [{ name: "Tiny", frame: "frame", cell: "small", boards: [
+      { board: "custom", program: [{ condition: "always", action: "wait" }, { condition: "nope", action: "wait" }, { condition: "always", action: "wait" }] },
+      { board: "register" },
+      { board: "register" },
+    ] }],
+  }).join("\n");
+  assert.match(problems, /only has 2 board slots/);
+  assert.match(problems, /only 2 command spaces/);
+  assert.match(problems, /unknown condition "nope"/);
 });

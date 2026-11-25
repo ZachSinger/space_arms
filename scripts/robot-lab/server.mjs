@@ -9,13 +9,13 @@ import { readFile, writeFile } from "node:fs/promises";
 import { exec } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { programProblems } from "../../js/logic/RobotGambits.js";
+import { buildProblems, partsProblems } from "../../js/logic/RobotParts.js";
 
 const PORT = 5186;
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "../..");
 const DATA_PATH = path.join(ROOT, "data", "RobotPrograms.json");
-const SETTING_KEYS = ["shiftSeconds", "registers", "shelves", "stations", "customersPerMinute", "deliveryEverySeconds", "cratesPerDelivery", "backroomCapacity", "startingBackroomCrates"];
+const SETTING_KEYS = ["shiftSeconds", "registers", "shelves", "stations", "customersPerMinute", "deliveryEverySeconds", "cratesPerDelivery", "backroomCapacity", "startingBackroomCrates", "standardDrain"];
 
 /** Readable reasons the lab setup can't be saved; empty when it can. */
 export function setupProblems(setup) {
@@ -27,14 +27,13 @@ export function setupProblems(setup) {
   for (const key of ["shiftSeconds", "registers", "shelves", "deliveryEverySeconds"]) {
     if (!(setup?.settings?.[key] >= 1)) problems.push(`Store setting ${key} must be at least 1.`);
   }
+  const parts = partsProblems(setup?.parts);
+  if (parts.length) return [...problems, ...parts];
   if (!Array.isArray(setup?.robots)) return [...problems, "The robot list is missing."];
   setup.robots.forEach((robot, index) => {
     const label = robot?.name?.trim() || `Robot ${index + 1}`;
     if (typeof robot?.name !== "string" || !robot.name.trim()) problems.push(`Robot ${index + 1}: needs a name.`);
-    if (!(robot?.speed > 0)) problems.push(`${label}: speed must be above 0.`);
-    if (!(robot?.batterySeconds > 0)) problems.push(`${label}: battery must be above 0.`);
-    if (!Number.isInteger(robot?.slots) || robot.slots < 1) problems.push(`${label}: needs at least 1 chip slot.`);
-    for (const problem of programProblems(robot?.program, robot?.slots)) problems.push(`${label}: ${problem}`);
+    for (const problem of buildProblems(robot, setup.parts)) problems.push(`${label}: ${problem}`);
   });
   return problems;
 }

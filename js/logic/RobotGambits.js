@@ -19,9 +19,9 @@ export const CONDITIONS = Object.freeze([
   { id: "shelf_not_full", label: "A shelf isn't full" },
   { id: "crate_on_pad", label: "A delivery crate is on the loading pad" },
   { id: "mess", label: "There's a mess on the sales floor" },
-  { id: "battery_below_20", label: "My battery is below 20%" },
-  { id: "battery_below_50", label: "My battery is below 50%" },
-  { id: "battery_not_full", label: "My battery isn't full" },
+  { id: "battery_below_20", label: "My charge is below 20%" },
+  { id: "battery_below_50", label: "My charge is below 50%" },
+  { id: "battery_not_full", label: "My charge isn't full" },
 ]);
 
 export const ACTIONS = Object.freeze([
@@ -111,10 +111,10 @@ export function chooseAction(program, world, robot) {
 export function programProblems(program, slots) {
   const problems = [];
   if (!Array.isArray(program)) return ["The program is missing."];
-  if (program.length > slots) problems.push(`Has ${program.length} rules but only ${slots} chip slots.`);
+  if (program.length > slots) problems.push(`Has ${program.length} commands but only ${slots} command spaces.`);
   program.forEach((rule, index) => {
-    if (!CONDITION_IDS.has(rule?.condition)) problems.push(`Rule ${index + 1}: unknown condition "${rule?.condition}".`);
-    if (!ACTION_IDS.has(rule?.action)) problems.push(`Rule ${index + 1}: unknown action "${rule?.action}".`);
+    if (!CONDITION_IDS.has(rule?.condition)) problems.push(`Command ${index + 1}: unknown condition "${rule?.condition}".`);
+    if (!ACTION_IDS.has(rule?.action)) problems.push(`Command ${index + 1}: unknown action "${rule?.action}".`);
   });
   return problems;
 }

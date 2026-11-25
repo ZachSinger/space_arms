@@ -8,28 +8,245 @@
     "deliveryEverySeconds": 120,
     "cratesPerDelivery": 4,
     "backroomCapacity": 12,
-    "startingBackroomCrates": 3
+    "startingBackroomCrates": 3,
+    "standardDrain": 1
+  },
+  "parts": {
+    "frames": [
+      {
+        "id": "basic_frame",
+        "name": "Basic frame",
+        "power": 4,
+        "boardSlots": 1,
+        "speed": 1
+      },
+      {
+        "id": "worker_frame",
+        "name": "Worker frame",
+        "power": 6,
+        "boardSlots": 2,
+        "speed": 1
+      },
+      {
+        "id": "swift_frame",
+        "name": "Swift frame",
+        "power": 9,
+        "boardSlots": 2,
+        "speed": 1.5
+      },
+      {
+        "id": "hauler_frame",
+        "name": "Hauler frame",
+        "power": 10,
+        "boardSlots": 3,
+        "speed": 1.2
+      }
+    ],
+    "cells": [
+      {
+        "id": "basic_cell",
+        "name": "Basic cell",
+        "capacity": 12,
+        "charge": 240,
+        "drainRate": 1,
+        "chargeRate": 4
+      },
+      {
+        "id": "long_life_cell",
+        "name": "Long-life cell",
+        "capacity": 12,
+        "charge": 480,
+        "drainRate": 0.8,
+        "chargeRate": 3
+      },
+      {
+        "id": "high_capacity_cell",
+        "name": "High-capacity cell",
+        "capacity": 24,
+        "charge": 200,
+        "drainRate": 1.3,
+        "chargeRate": 5
+      },
+      {
+        "id": "quick_cell",
+        "name": "Quick-charge cell",
+        "capacity": 16,
+        "charge": 180,
+        "drainRate": 1,
+        "chargeRate": 12
+      }
+    ],
+    "boards": [
+      {
+        "id": "self_charge_1",
+        "name": "Self-charge 1",
+        "kind": "prefab",
+        "power": 1,
+        "program": [
+          {
+            "condition": "battery_below_20",
+            "action": "charge",
+            "on": true
+          }
+        ]
+      },
+      {
+        "id": "register_1",
+        "name": "Register 1",
+        "kind": "prefab",
+        "power": 3,
+        "program": [
+          {
+            "condition": "customer_waiting",
+            "action": "work_register",
+            "on": true
+          }
+        ]
+      },
+      {
+        "id": "register_2",
+        "name": "Register 2",
+        "kind": "prefab",
+        "power": 4,
+        "program": [
+          {
+            "condition": "always",
+            "action": "work_register",
+            "on": true
+          }
+        ]
+      },
+      {
+        "id": "stock_1",
+        "name": "Stock 1",
+        "kind": "prefab",
+        "power": 5,
+        "program": [
+          {
+            "condition": "shelf_below_25",
+            "action": "restock",
+            "on": true
+          },
+          {
+            "condition": "crate_on_pad",
+            "action": "unload_pad",
+            "on": true
+          }
+        ]
+      },
+      {
+        "id": "stock_2",
+        "name": "Stock 2",
+        "kind": "prefab",
+        "power": 7,
+        "program": [
+          {
+            "condition": "shelf_below_50",
+            "action": "restock",
+            "on": true
+          },
+          {
+            "condition": "crate_on_pad",
+            "action": "unload_pad",
+            "on": true
+          },
+          {
+            "condition": "shelf_not_full",
+            "action": "restock",
+            "on": true
+          }
+        ]
+      },
+      {
+        "id": "clean_1",
+        "name": "Clean 1",
+        "kind": "prefab",
+        "power": 2,
+        "program": [
+          {
+            "condition": "mess",
+            "action": "clean",
+            "on": true
+          }
+        ]
+      },
+      {
+        "id": "custom_small",
+        "name": "Custom board (3 commands)",
+        "kind": "custom",
+        "power": 2,
+        "commands": 3
+      },
+      {
+        "id": "custom_large",
+        "name": "Custom board (6 commands)",
+        "kind": "custom",
+        "power": 3,
+        "commands": 6
+      }
+    ],
+    "commandPower": {
+      "conditions": {
+        "always": 0,
+        "customer_waiting": 1,
+        "line_3": 2,
+        "shelf_empty": 1,
+        "shelf_below_25": 1,
+        "shelf_below_50": 1,
+        "shelf_not_full": 1,
+        "crate_on_pad": 1,
+        "mess": 1,
+        "battery_below_20": 1,
+        "battery_below_50": 1,
+        "battery_not_full": 1
+      },
+      "actions": {
+        "work_register": 2,
+        "restock": 3,
+        "unload_pad": 2,
+        "clean": 2,
+        "charge": 1,
+        "wait": 0
+      }
+    }
   },
   "robots": [
     {
       "name": "Register bot",
-      "speed": 1,
-      "batterySeconds": 240,
-      "slots": 3,
-      "program": [
-        { "condition": "battery_below_20", "action": "charge", "on": true },
-        { "condition": "always", "action": "work_register", "on": true }
+      "frame": "worker_frame",
+      "cell": "basic_cell",
+      "boards": [
+        {
+          "board": "self_charge_1"
+        },
+        {
+          "board": "register_2"
+        }
       ]
     },
     {
       "name": "Stock bot",
-      "speed": 1,
-      "batterySeconds": 240,
-      "slots": 3,
-      "program": [
-        { "condition": "battery_below_20", "action": "charge", "on": true },
-        { "condition": "shelf_below_50", "action": "restock", "on": true },
-        { "condition": "crate_on_pad", "action": "unload_pad", "on": true }
+      "frame": "worker_frame",
+      "cell": "high_capacity_cell",
+      "boards": [
+        {
+          "board": "self_charge_1"
+        },
+        {
+          "board": "custom_small",
+          "program": [
+            {
+              "condition": "shelf_below_50",
+              "action": "restock",
+              "on": true
+            },
+            {
+              "condition": "crate_on_pad",
+              "action": "unload_pad",
+              "on": true
+            }
+          ]
+        }
       ]
     }
   ]
