@@ -27,6 +27,7 @@ import { BootScene } from "./boot.js";
 import { ShelfLabScene } from "./shelfLab.js";
 import { CrateLabScene } from "./crateLab.js";
 import { ShelfCollisionLabScene } from "./shelfCollisionLab.js";
+import { ShelfColorLabScene } from "./shelfColorLab.js";
 import { DeliveryCrateLabScene } from "./deliveryCrateLab.js";
 import { CoopFriendScene } from "./coopFriend.js";
 import { watchKeyboardAndMouse } from "../input/InputDevice.js";
@@ -76,7 +77,7 @@ const config = {
       debug: false, // true only when tuning counter or wall hitboxes
     },
   },
-  scene: [BootScene, TitleScene, GameScene, ShelfLabScene, CrateLabScene, ShelfCollisionLabScene, DeliveryCrateLabScene, CoopFriendScene],
+  scene: [BootScene, TitleScene, GameScene, ShelfLabScene, CrateLabScene, ShelfCollisionLabScene, ShelfColorLabScene, DeliveryCrateLabScene, CoopFriendScene],
 };
 
 // Exposed for devtools/debugging convenience (e.g. `window.__game.scene.getScene(...)`).

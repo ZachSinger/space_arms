@@ -113,6 +113,15 @@ pixels, not the transparent padding, including after turning a shelf.
 `js/scenes/shelfCollisionLab.js` in all four facings, then walk into it from every side and
 behind it: you should stop only at its feet, and it should hide you when you're behind it.
 
+## Shelf Color Lab
+
+On the title screen, choose **DEV**, then **SHELF COLOR LAB**. A gray copy of the short
+four-column shelf stands facing every direction, next to one in its original colors. Click
+a color in the header to paint every gray shelf, or click a single shelf to paint just that
+one with the chosen color. **PURPLE** is close to the shelf's original paint. The gray copy
+is made from the shelf's own art when the room opens (`js/logic/TintableArt.js`), so new
+shelf art gets a gray copy the same way. Nothing in it is saved.
+
 ## Delivery Crate Lab
 
 On the title screen, choose **DEV**, then **DELIVERY CRATE LAB**. It shows the remote-order
