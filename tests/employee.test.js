@@ -18,6 +18,7 @@ import { formatMoneyAmount } from "../js/logic/Money.js";
 let server;
 let cacheDirectory;
 let Employee;
+let RobotWorker;
 let nextTestShelfSlotId = 1;
 let nextTestCrateId = 1;
 let REGISTER_SERVICE_MS_PER_ITEM;
@@ -30,6 +31,7 @@ let EmployeeTraining;
 let StaffSystem;
 let FixtureSystem;
 let ShiftSystem;
+let SupplySystem;
 
 before(async () => {
   cacheDirectory = await mkdtemp(join(fileURLToPath(new URL("..", import.meta.url)), ".employee-test-"));
@@ -72,12 +74,14 @@ before(async () => {
     }],
   });
   ({ Employee, TRASH_HANDLING_MS, MOP_STROKE_MS, STOCKING_MS_PER_ITEM } = await server.ssrLoadModule("/js/logic/Employee.js"));
+  ({ RobotWorker } = await server.ssrLoadModule("/js/logic/RobotWorker.js"));
   ({ EmployeeRenderer } = await server.ssrLoadModule("/js/logic/EmployeeRenderer.js"));
   EmployeeTraining = await server.ssrLoadModule("/js/logic/EmployeeTraining.js");
   ({ REGISTER_SERVICE_MS_PER_CUSTOMER, REGISTER_SERVICE_MS_PER_ITEM } = EmployeeTraining);
   ({ StaffSystem } = await server.ssrLoadModule("/js/systems/StaffSystem.js"));
   ({ FixtureSystem } = await server.ssrLoadModule("/js/systems/FixtureSystem.js"));
   ({ ShiftSystem } = await server.ssrLoadModule("/js/systems/ShiftSystem.js"));
+  ({ SupplySystem } = await server.ssrLoadModule("/js/systems/SupplySystem.js"));
 });
 
 after(async () => {
@@ -90,6 +94,280 @@ test("employees require an injected store route interface", () => {
     () => new Employee({ id: "tavi_stock_clerk" }, null),
     /Employee requires a store interface with findPath/,
   );
+});
+
+test("robot movement and working speeds use their separate fitted skills", () => {
+  const { employee } = makeEmployee();
+  const robot = new RobotWorker({
+    id: "robot-1", name: "Robot", frame: "lab_frame", cell: "lab_cell",
+    boards: ["mod_stocking", "mod_scanning", "mod_counting", "mod_waste", "mod_mopping"]
+      .map((board) => ({ board })),
+  }, employee.store);
+  assert.equal(robot.getWalkSpeed(), 120);
+  assert.equal(robot.wasteCapacity(), 3);
+  assert.equal(robot.stockingInterval(), 1000 / 2.4);
+  const customer = {
+    cart: [{ price: 0.99 }, { price: 1 }],
+    checkoutPayment: { type: "cash", exact: false },
+  };
+  assert.equal(robot.registerServiceDuration(customer), 1000 * (2 / 1.2 + 4 / 1.2));
+  customer.checkoutPayment.exact = true;
+  assert.equal(robot.registerServiceDuration(customer), 1000 * (2 / 1.2));
+  customer.checkoutPayment = { type: "card" };
+  assert.equal(robot.registerServiceDuration(customer), 1000 * (2 / 1.2));
+  customer.cart = [{ price: 0.99 }];
+  customer.checkoutPayment = { type: "m-scrips", exact: false };
+  assert.equal(robot.registerServiceDuration(customer), 1000 * (1 / 1.2 + 4 / 1.2));
+});
+
+function makeRobot(boards) {
+  const { employee, crate, shelf, completedSales } = makeEmployee({ hasRegister: true, assignedToRegister: false });
+  const robot = new RobotWorker({
+    id: "robot-1", name: "Robot", frame: "lab_frame", cell: "lab_cell",
+    boards: boards.map((board) => ({ board })),
+  }, employee.store, { exitPoint: { x: 200, y: 20 } });
+  employee.store.employees = [robot];
+  return { robot, store: employee.store, crate, shelf, completedSales };
+}
+
+test("robot board order sends a low-charge robot to an available charging station", () => {
+  const { robot, store } = makeRobot(["self_charge_1", "register_2"]);
+  const station = { id: "robot-charger-1", type: "robot_charger", gx: 2, gy: 101 };
+  const original = store.fixtures.ofKind;
+  store.fixtures.ofKind = (kind) => kind === "robot_charger" ? [station] : original(kind);
+  robot.battery = 0.1;
+  robot.startNextTask();
+  assert.equal(robot.state, "ROBOT_TO_CHARGER");
+  robot.arriveAtDestination();
+  assert.equal(robot.state, "ROBOT_CHARGING");
+  robot.update(60_000);
+  assert.equal(robot.battery, 1);
+  assert.equal(robot.state, "IDLE");
+  robot.startNextTask();
+  assert.equal(robot.state, "TO_REGISTER");
+});
+
+test("robot delivery work carries a batch of crates and puts each down once", () => {
+  const { robot, store, crate } = makeRobot(["stock_1", "mod_carry"]);
+  const second = makeDeliveryCrate(2);
+  const third = makeDeliveryCrate(2);
+  store.restockCrates.push(second, third);
+  store.checkoutSystem.findGoBacksSpot = (_crate, reserved) =>
+    ({ x: 96 + reserved.length * 64, y: 6560, inBackroom: true });
+  robot.startNextTask();
+  assert.equal(robot.state, "ROBOT_TO_PAD");
+  for (let index = 0; index < 3; index += 1) robot.arriveAtDestination();
+  assert.equal(robot.cargo.length, 3);
+  assert.equal(robot.state, "ROBOT_TO_DROP");
+  for (let index = 0; index < 3; index += 1) robot.arriveAtDestination();
+  assert.equal(robot.state, "IDLE");
+  assert.deepEqual(new Set(store.restockCrates), new Set([crate, second, third]));
+  assert.ok(store.restockCrates.every((item) => !item.isCarried && !item.lockedToPad));
+});
+
+test("robots reserve charging stations and try another when one cannot be reached", () => {
+  const { robot, store } = makeRobot(["self_charge_1", "register_2"]);
+  const stations = [
+    { id: "charger-1", type: "robot_charger", gx: 2, gy: 101 },
+    { id: "charger-2", type: "robot_charger", gx: 4, gy: 101 },
+  ];
+  const original = store.fixtures.ofKind;
+  store.fixtures.ofKind = (kind) => kind === "robot_charger" ? stations : original(kind);
+  const findClosest = robot.findClosestSpot.bind(robot);
+  robot.findClosestSpot = (spots) => findClosest(spots.filter((spot) => spot.fixture?.id !== "charger-1"));
+  robot.battery = 0.1;
+  robot.startNextTask();
+  assert.equal(robot.currentJob.station, stations[1]);
+
+  const other = new RobotWorker({
+    id: "robot-2", name: "Other", frame: "lab_frame", cell: "lab_cell",
+    boards: [{ board: "self_charge_1" }],
+  }, store);
+  store.employees.push(other);
+  other.battery = 0.1;
+  other.startNextTask();
+  assert.equal(other.currentJob.station, stations[0]);
+});
+
+test("only on-shift robots spawn with their saved charge", () => {
+  const { employee } = makeEmployee();
+  const shop = employee.scene;
+  shop.employeeStore = shop;
+  shop.customers = [];
+  shop.gameState.staff.working = () => [];
+  shop.gameState.robotService = { robots: [
+    { id: "robot-1", name: "Working", frame: "worker_frame", cell: "basic_cell",
+      boards: [{ board: "register_1" }], battery: 0.6 },
+    { id: "robot-2", name: "Resting", frame: "worker_frame", cell: "basic_cell",
+      boards: [{ board: "register_1" }], onShift: false },
+  ] };
+  new StaffSystem(shop).spawnWorking();
+  assert.equal(shop.employees.length, 1);
+  assert.equal(shop.employees[0].data.id, "robot-1");
+  assert.equal(shop.employees[0].battery, 0.6);
+});
+
+test("a cashier follows board priority without abandoning the register for an unreachable charger", () => {
+  const { robot, store } = makeRobot(["self_charge_1", "register_2"]);
+  const station = { id: "charger", type: "robot_charger", gx: 2, gy: 101 };
+  const original = store.fixtures.ofKind;
+  store.fixtures.ofKind = (kind) => kind === "robot_charger" ? [station] : original(kind);
+  robot.startNextTask();
+  robot.arriveAtDestination();
+  assert.equal(robot.state, "AT_REGISTER");
+  robot.battery = 0.1;
+  const findClosest = robot.findClosestSpot.bind(robot);
+  robot.findClosestSpot = () => null;
+  robot.updateAtRegister(1000);
+  assert.equal(robot.state, "AT_REGISTER");
+  robot.findClosestSpot = findClosest;
+  robot.updateAtRegister(1000);
+  assert.equal(robot.state, "ROBOT_TO_CHARGER");
+});
+
+test("a closing register robot waits for shoppers and serves them before going home", () => {
+  const { robot, store, completedSales } = makeRobot(["register_1"]);
+  const shopper = { state: "SHOPPING", cart: [{ price: 1 }], checkoutPayment: { type: "card" } };
+  const line = [];
+  store.checkoutSystem.lineFor = () => line;
+  store.checkoutSystem.completeEmployeeCheckout = (employee, customer) => {
+    completedSales.push({ employee, customer });
+    line.shift();
+    return true;
+  };
+  robot.getClosingCustomers = () => [shopper];
+  robot.requestClockOut();
+  assert.equal(robot.state, "WAITING_REGISTER");
+  line.push(shopper);
+  robot.update(1000);
+  assert.equal(robot.state, "TO_REGISTER");
+  robot.arriveAtDestination();
+  assert.equal(robot.state, "SERVING_REGISTER");
+  robot.updateRegisterService(1000);
+  assert.equal(completedSales.length, 1);
+  shopper.state = "LEAVING";
+  robot.updateAtRegister(1000);
+  assert.equal(robot.state, "ROBOT_TO_HOME");
+});
+
+test("a robot cannot stock a nonempty shelf just because another empty shelf is unstockable", () => {
+  const { robot, crate, shelf } = makeRobot(["stock_1"]);
+  shelf.placements.push({ id: "second-slot", itemId: "other", quantity: 1 });
+  crate.itemId = "other";
+  crate.lockedToPad = false;
+  crate.sprite.y = 6560;
+  robot.startNextTask();
+  assert.equal(robot.state, "IDLE");
+  assert.equal(robot.currentJob, null);
+});
+
+test("a robot tries another empty shelf if the first one has no matching stock", () => {
+  const { robot, crate, shelf } = makeRobot(["stock_1"]);
+  shelf.placements.push({ id: "second-slot", itemId: "other", quantity: 0 });
+  crate.itemId = "other";
+  crate.lockedToPad = false;
+  crate.sprite.y = 6560;
+  robot.startNextTask();
+  assert.equal(robot.state, "TO_CRATE");
+  assert.equal(robot.currentJob.placement.id, "second-slot");
+});
+
+test("a robot running out of charge recovers carried stock without overlapping crates", () => {
+  const { robot, store, crate } = makeRobot(["stock_1"]);
+  let recovered = 0;
+  store.gameState.goBacks = { takeFrom(source, itemId, quantity) {
+    recovered += source.remove(itemId, quantity);
+    return quantity;
+  } };
+  store.checkoutSystem.findGoBacksSpot = () => null;
+  store.restockCrates = [];
+  crate.pickUp(robot.sprite, { holderId: robot.data.id });
+  robot.cargo = [{ crate, returnPosition: { x: 96, y: 6560 } }];
+  robot.battery = 0;
+  robot.update(1);
+  robot.requestClockOut();
+  assert.equal(robot.isDestroyed, true);
+  assert.equal(recovered, 5);
+  assert.equal(crate.destroyed, true);
+  assert.equal(store.restockCrates.length, 0);
+});
+
+test("closing recovers a robot's stuck stocking crate rather than waiting forever", () => {
+  const { robot, store, crate } = makeRobot(["stock_1"]);
+  let recovered = 0;
+  store.gameState.goBacks = { takeFrom(source, itemId, quantity) {
+    recovered += source.remove(itemId, quantity);
+    return quantity;
+  } };
+  store.checkoutSystem.findGoBacksSpot = () => null;
+  store.restockCrates = [];
+  crate.pickUp(robot.sprite, { holderId: robot.data.id });
+  robot.currentJob = { jobId: "stock_shelves", crate };
+  robot.state = "WAITING_CRATE_RETURN";
+  robot.requestClockOut();
+  assert.equal(robot.isDestroyed, true);
+  assert.equal(recovered, 5);
+});
+
+test("a robot reaching its home can destroy its sprite during an update", () => {
+  const { robot } = makeRobot(["register_1"]);
+  robot.sprite.destroy = () => { delete robot.sprite.body; };
+  robot.state = "ROBOT_TO_HOME";
+  robot.path = [];
+  robot.destination = { x: robot.sprite.x, y: robot.sprite.y };
+  robot.onArriveAtDestination = () => robot.arriveAtDestination();
+  assert.doesNotThrow(() => robot.update(16));
+  assert.equal(robot.isDestroyed, true);
+});
+
+test("a robot holds a fixture crate safely until recovery space opens", () => {
+  const { robot, store, crate } = makeRobot(["stock_1"]);
+  crate.kind = "fixture";
+  crate.pickUp(robot.sprite, { holderId: robot.data.id });
+  robot.cargo = [{ crate, returnPosition: { x: 96, y: 6560 } }];
+  store.restockCrates = [];
+  store.checkoutSystem.findGoBacksSpot = () => null;
+  let open = false;
+  store.supply = {
+    takePadSpots: () => open ? [{ x: 40, y: 40 }] : [],
+    deliver: (item) => { item.lockToPad(); store.restockCrates.push(item); },
+    freePlayerFromPad() {},
+  };
+  robot.outOfCharge = true;
+  robot.requestClockOut();
+  assert.equal(robot.state, "ROBOT_WAIT_RECOVERY");
+  assert.equal(robot.isDestroyed, false);
+  assert.equal(crate.isCarried, true);
+  open = true;
+  robot.update(1000);
+  assert.equal(robot.isDestroyed, true);
+  assert.equal(crate.lockedToPad, true);
+  assert.deepEqual(store.restockCrates, [crate]);
+});
+
+test("a robot reserves the pad position for a carried fixture until it is safely put down", () => {
+  const { robot, store, crate } = makeRobot(["stock_1"]);
+  crate.kind = "fixture";
+  crate.sprite.displayWidth = 32;
+  const supply = new SupplySystem(store, { centerX: 40, centerY: 40 });
+  const original = supply.padSpots()[0];
+  crate.sprite.x = original.x;
+  crate.sprite.y = original.y;
+  store.checkoutSystem.findGoBacksSpot = () => ({ x: 96, y: 6560, inBackroom: true });
+  robot.startNextTask();
+  robot.arriveAtDestination();
+  assert.equal(supply.freePadSpots().some(({ x, y }) => x === original.x && y === original.y), false);
+  store.checkoutSystem.findGoBacksSpot = () => null;
+  store.supply = {
+    takePadSpots: () => { throw new Error("The fixture's reserved pad spot should be used"); },
+    deliver: (item) => { item.lockToPad(); store.restockCrates.push(item); },
+    freePlayerFromPad() {},
+  };
+  robot.outOfCharge = true;
+  robot.requestClockOut();
+  assert.equal(robot.isDestroyed, true);
+  assert.deepEqual({ x: crate.sprite.x, y: crate.sprite.y }, original);
+  assert.equal(crate.lockedToPad, true);
 });
 
 function makeShelf(quantity = 0, capacity = 3, placementCount = 1) {
@@ -1050,6 +1328,15 @@ test("an employee who cleans first carries floor trash to a trashcan, making the
   assert.ok(employee.cleaningActionRemainingMs < TRASH_HANDLING_MS, "skill speeds up picking up trash");
 });
 
+test("a failed worker pickup leaves the crate in the world", () => {
+  const { employee, crate } = makeEmployee({ jobPriorities: ["stock_shelves"] });
+  crate.pickUp = () => false;
+  employee.startNextTask();
+  employee.arriveAtDestination();
+  assert.ok(employee.store.restockCrates.includes(crate));
+  assert.equal(crate.lockedToPad, true);
+});
+
 test("cleaning has no work without trash or the cleaning module, so the next job starts", () => {
   const { employee } = makeEmployee({ jobPriorities: ["clean", "stock_shelves", "register"] });
   employee.startNextTask();
@@ -1091,6 +1378,62 @@ test("two employees and the player never collect the same piece of trash", () =>
   assert.equal(cleaning.isStaffHoldingTrash(coworker), true);
   assert.equal(cleaning.pickUpTrash(second), false, "the player can't take trash an employee is carrying");
   assert.equal(cleaning.getCleanliness().trashCount, 2, "one in the player's hands, one in the coworker's");
+});
+
+test("a worker carrying several pieces keeps each piece until it reaches the trashcan", () => {
+  const { employee } = makeEmployee({ jobPriorities: ["clean", "register", "stock_shelves"] });
+  const { cleaning } = addCleaning(employee.scene);
+  const first = cleaning.trash.add("can", 100, 20);
+  const second = cleaning.trash.add("paper", 120, 20);
+  const third = cleaning.trash.add("box", 140, 20);
+  for (const piece of [first, second]) {
+    assert.equal(cleaning.claimTrashForStaff(employee, piece), true);
+    assert.equal(cleaning.pickUpTrashForStaff(employee, piece, 2), true);
+  }
+  assert.equal(cleaning.claimTrashForStaff(employee, third), true);
+  assert.equal(cleaning.pickUpTrashForStaff(employee, third, 2), false);
+  assert.equal(cleaning.getCleanliness().trashCount, 3);
+  assert.equal(cleaning.serializeTrash().length, 3);
+  assert.equal(cleaning.throwAwayStaffTrash(employee), true);
+  assert.equal(first.sprite.destroyed, true);
+  assert.equal(second.sprite.destroyed, true);
+  assert.equal(cleaning.getCleanliness().trashCount, 1);
+  assert.equal(cleaning.serializeTrash().length, 1);
+});
+
+test("a worker with greater waste capacity collects multiple pieces before visiting the bin", () => {
+  const { employee } = makeEmployee({ jobPriorities: ["clean", "register", "stock_shelves"] });
+  const { cleaning } = addCleaning(employee.scene);
+  const pieces = [cleaning.trash.add("can", 100, 20), cleaning.trash.add("paper", 120, 20)];
+  employee.wasteCapacity = () => 2;
+  employee.startNextTask();
+  employee.arriveAtDestination();
+  employee.update(TRASH_HANDLING_MS);
+  assert.equal(employee.state, "TO_LITTER");
+  assert.equal(cleaning.serializeTrash().length, 2);
+  employee.arriveAtDestination();
+  employee.update(TRASH_HANDLING_MS);
+  assert.equal(employee.state, "TO_LITTER_BIN");
+  assert.equal(cleaning.getCleanliness().trashCount, 2);
+  employee.arriveAtDestination();
+  employee.update(TRASH_HANDLING_MS);
+  assert.equal(cleaning.getCleanliness().trashCount, 0);
+  assert.ok(pieces.every((piece) => piece.sprite.destroyed));
+});
+
+test("dropping a worker's batch returns every piece to the floor and saved trash", () => {
+  const { employee } = makeEmployee({ jobPriorities: ["clean", "register", "stock_shelves"] });
+  const { cleaning, savedTrash } = addCleaning(employee.scene);
+  const pieces = [cleaning.trash.add("can", 100, 20), cleaning.trash.add("paper", 120, 20)];
+  for (const piece of pieces) {
+    assert.equal(cleaning.claimTrashForStaff(employee, piece), true);
+    assert.equal(cleaning.pickUpTrashForStaff(employee, piece, 2), true);
+  }
+  assert.equal(cleaning.dropStaffTrash(employee), true);
+  assert.equal(cleaning.isStaffHoldingTrash(employee), false);
+  assert.equal(cleaning.trash.pieces.length, 2);
+  assert.equal(savedTrash().length, 2);
+  assert.equal(cleaning.getCleanliness().trashCount, 2);
 });
 
 test("closing never loses or duplicates trash an employee is after or carrying", () => {

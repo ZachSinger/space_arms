@@ -868,7 +868,8 @@ export class DroneDeliverySystem {
     if (complete && spot === "on the drone pad") status = "Everything is packed. The drone is picking it up.";
     else if (complete) status = "Everything is packed. Set the order crate on the drone pad in the backroom.";
     else if (carrying) {
-      status = `Face a shelf or crate with a teal diamond over it and press ${controlLabel("interact")} to pack one item.`;
+      status = `Face a shelf or crate with a teal diamond over it and press ${controlLabel("interact")} to pack one item. ` +
+        `Hold ${controlLabel("interact")} to keep packing.`;
     } else if (crate.inTerminal) status = "The terminal is bringing up this order's crate.";
     else status = `The order crate is ${spot}. Pick it up to start packing.`;
     const today = this.shop.gameState.calendar.day;

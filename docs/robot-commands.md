@@ -153,6 +153,14 @@ The pretend store uses separate scanning and counting stages, stocking speed per
 
 Add robot to simulation or Update robot in simulation applies the assembled build and starts a fresh shift. Save keeps the robot and its parts after reopening the tool.
 
+## Robot Service in the shop
+
+Robot Service in the manager's tablet sells unlocked frames, power cells and prefab boards. Assemble a robot from owned parts, put it on or off shift, or dismantle it to recover its parts. Logic boards are checked from top to bottom; only the strongest modifier for each skill counts.
+
+On-shift robots work in the live shop, using their fitted skills for movement, stocking, carrying, checkout and cleaning. They spend charge while working and use less while waiting. A self-charge board sends a robot to an available robot charging station during the shift; between shifts the tablet can recharge a robot when a station is placed in the backroom. Robots that run out of charge stop until closing, when they are recovered.
+
+The service's unlock levels and prices and the current base skill and battery values are provisional balance.
+
 ## Notes
 
 TODO: Need to reconsider backroom crate storage, maybe some cool sorter/animation is in order!

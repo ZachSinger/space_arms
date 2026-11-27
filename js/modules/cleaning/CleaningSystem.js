@@ -33,8 +33,8 @@ export class CleaningSystem {
     this.heldMop = false;
     this.mopAnimation = null;
     this.mopBar = null;
-    // Employee -> the piece of trash they're carrying to a trashcan.
-    /** @type {Map<object, object>} */
+    // Worker -> the pieces of trash being carried to a trashcan.
+    /** @type {Map<object, object[]>} */
     this.staffHeldTrash = new Map();
     // Employee -> { animation, clockMs } for the mop they have out while mopping a mark.
     /** @type {Map<object, { animation: MopAnimation, clockMs: number }>} */
@@ -292,10 +292,13 @@ export class CleaningSystem {
     for (const piece of this.trash.pieces) if (piece.claimedBy === holder) piece.claimedBy = null;
   }
 
-  pickUpTrashForStaff(holder, piece) {
-    if (this.staffHeldTrash.has(holder) || !this.isClaimedBy(piece, holder) || !this.trash.take(piece)) return false;
+  pickUpTrashForStaff(holder, piece, capacity = 1) {
+    if (!Number.isSafeInteger(capacity) || capacity < 1) throw new RangeError("Trash capacity must be a positive whole number.");
+    const held = this.staffHeldTrash.get(holder) ?? [];
+    if (held.length >= capacity || !this.isClaimedBy(piece, holder) || !this.trash.take(piece)) return false;
     piece.claimedBy = null;
-    this.staffHeldTrash.set(holder, piece);
+    held.push(piece);
+    this.staffHeldTrash.set(holder, held);
     this.syncStaffHeldTrash();
     this.syncSavedTrash();
     return true;
@@ -306,10 +309,10 @@ export class CleaningSystem {
   }
 
   throwAwayStaffTrash(holder) {
-    const piece = this.staffHeldTrash.get(holder);
-    if (!piece) return false;
+    const pieces = this.staffHeldTrash.get(holder);
+    if (!pieces) return false;
     this.staffHeldTrash.delete(holder);
-    piece.sprite.destroy();
+    for (const piece of pieces) piece.sprite.destroy();
     return true;
   }
 
@@ -320,15 +323,17 @@ export class CleaningSystem {
    */
   dropStaffTrash(holder) {
     this.releaseStaffClaims(holder);
-    const piece = this.staffHeldTrash.get(holder);
-    if (!piece) return false;
+    const pieces = this.staffHeldTrash.get(holder);
+    if (!pieces) return false;
     this.staffHeldTrash.delete(holder);
     const sprite = holder.sprite;
     const feet = sprite && { x: sprite.body?.center?.x ?? sprite.x, y: sprite.body?.bottom ?? sprite.y };
-    const spot = feet && Number.isFinite(feet.x) && Number.isFinite(feet.y) && this.isOpenTrashSpot(feet.x, feet.y)
-      ? feet
-      : { x: piece.x, y: piece.y };
-    this.trash.place(piece, spot.x, spot.y);
+    for (const piece of pieces) {
+      const spot = feet && Number.isFinite(feet.x) && Number.isFinite(feet.y) && this.isOpenTrashSpot(feet.x, feet.y)
+        ? feet
+        : { x: piece.x, y: piece.y };
+      this.trash.place(piece, spot.x, spot.y);
+    }
     this.trash.moveOffBlockedSpots();
     this.syncSavedTrash();
     return true;
@@ -336,17 +341,22 @@ export class CleaningSystem {
 
   // Carried trash rides beside the employee, like the player's.
   syncStaffHeldTrash() {
-    for (const [holder, piece] of this.staffHeldTrash) {
+    for (const [holder, pieces] of this.staffHeldTrash) {
       const sprite = holder.sprite;
-      if (!sprite || !piece.sprite) continue;
+      if (!sprite) continue;
       const side = { left: -14, right: 14, down: 12, up: -12 }[holder.currentFacing] ?? 12;
-      piece.sprite.setPosition(sprite.x + side, sprite.y - 4);
-      piece.sprite.setDepth((sprite.depth ?? 0) + (holder.currentFacing === "up" ? -0.5 : 0.5));
+      for (const [index, piece] of pieces.entries()) {
+        if (!piece.sprite) continue;
+        piece.sprite.setPosition(sprite.x + side, sprite.y - 4 - index * 6);
+        piece.sprite.setDepth((sprite.depth ?? 0) + (holder.currentFacing === "up" ? -0.5 : 0.5));
+      }
     }
   }
 
   clearStaffHeldTrash() {
-    for (const piece of this.staffHeldTrash.values()) piece.sprite.destroy();
+    for (const pieces of this.staffHeldTrash.values()) {
+      for (const piece of pieces) piece.sprite.destroy();
+    }
     this.staffHeldTrash.clear();
   }
 
@@ -428,7 +438,8 @@ export class CleaningSystem {
       salesExpansions,
       shopLevel: shop.gameState.reputation.shopLevel,
     });
-    const trashCount = this.trash.count + (this.heldTrash ? 1 : 0) + this.staffHeldTrash.size;
+    const trashCount = this.trash.count + (this.heldTrash ? 1 : 0) +
+      [...this.staffHeldTrash.values()].reduce((total, pieces) => total + pieces.length, 0);
     const dirtCount = this.dirt.count;
     return { score: getCleanlinessScore(max, trashCount, dirtCount), max, trashCount, dirtCount };
   }
@@ -474,7 +485,9 @@ export class CleaningSystem {
       trash.push({ kind: this.heldTrash.kind, x: spot.x, y: spot.y });
     }
     // Trash an employee is carrying is saved back where they picked it up.
-    for (const piece of this.staffHeldTrash.values()) trash.push({ kind: piece.kind, x: piece.x, y: piece.y });
+    for (const pieces of this.staffHeldTrash.values()) {
+      for (const piece of pieces) trash.push({ kind: piece.kind, x: piece.x, y: piece.y });
+    }
     // Trash the co-op friend is holding is saved at their feet.
     trash.push(...(this.shop.coop?.savedPartnerTrash?.() ?? []));
     return trash;

@@ -257,6 +257,157 @@ main {
   overflow-y: auto;
 }
 
+.robot-service-page {
+  flex: 1;
+}
+
+.robot-service-intro,
+.robot-service-notice,
+.robot-service-lock-note,
+.master-terminal-status {
+  color: var(--color-text-muted);
+}
+
+.robot-service-section-title,
+.robot-service-card h2,
+.master-terminal-app h2,
+.master-terminal-app h3 {
+  margin: 0 0 8px;
+}
+
+.robot-service-section-title {
+  margin-top: 20px;
+}
+
+.robot-service-card,
+.master-terminal-card,
+.master-terminal-part {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin: 10px 0;
+  padding: 14px;
+  border: 1px solid var(--color-border-subtle);
+  background: rgba(5, 10, 20, 0.55);
+}
+
+.robot-service-card p,
+.master-terminal-card p {
+  margin: 0 0 6px;
+}
+
+.robot-service-buy,
+.master-terminal-buy,
+.master-terminal-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.robot-service-owned {
+  color: #4ade80;
+  font-weight: bold;
+}
+
+.robot-service-lock-note {
+  font-size: 12px;
+}
+
+.master-terminal-app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.master-terminal-status {
+  padding: 10px 14px;
+  text-align: right;
+  font-weight: bold;
+}
+
+.master-terminal-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 0 12px 12px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.master-terminal-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px;
+}
+
+.master-terminal-content section > h2 {
+  margin-bottom: 14px;
+}
+
+.master-terminal-buy label,
+.master-terminal-build-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.master-terminal-buy input,
+.master-terminal-build-form input,
+.master-terminal-build-form select {
+  min-width: 150px;
+  padding: 6px;
+  border: 1px solid var(--color-border-subtle);
+  background: #080d17;
+  color: var(--color-text-main);
+  font: inherit;
+}
+
+.master-terminal-actions {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.master-terminal-parts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 8px;
+}
+
+.master-terminal-part {
+  margin: 0;
+  padding: 10px;
+}
+
+.master-terminal-part > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.master-terminal-build {
+  margin-top: 18px;
+  padding: 12px;
+  border: 1px solid var(--color-border-subtle);
+}
+
+.master-terminal-build summary {
+  cursor: pointer;
+  color: var(--color-text-main);
+}
+
+.master-terminal-build-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  padding-top: 12px;
+}
+
 .divider-thin,
 .divider-medium,
 .divider-thick {

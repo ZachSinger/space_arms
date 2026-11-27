@@ -22,6 +22,7 @@ import {
 import { html, raw } from "../core/html.js";
 import { HOVERCART_CAPACITY, HOVERCART_LEVEL, HOVERCART_PRICE } from "../modules/hovercart/HovercartRules.js";
 import { EXPERIENCE_TUNING, REVIEW_APP_NAME } from "../modules/customerExperience/ExperienceRules.js";
+import { ROBOT_PART_CATALOG, ROBOT_SERVICE_LEVEL } from "./RobotServiceCatalog.js";
 
 export const HANDBOOK_TOPICS = Object.freeze([
   { id: "store", label: "Running the Store" },
@@ -73,6 +74,11 @@ export function getLevelRewards(licenses) {
     add(zone.requiredShopLevel, `${zone.name} (${formatMoneyAmount(zone.cost)})`);
   }
   add(HOVERCART_LEVEL, `Hovercart, which follows you carrying up to ${HOVERCART_CAPACITY} crates (${formatMoneyAmount(HOVERCART_PRICE)})`);
+  add(ROBOT_SERVICE_LEVEL, "Robot Service opens");
+  for (const level of new Set(ROBOT_PART_CATALOG.map(({ level }) => level))) {
+    const names = ROBOT_PART_CATALOG.filter((part) => part.level === level).map(({ name }) => name);
+    add(level, `Robot parts: ${names.join(", ")}`);
+  }
   return rewards;
 }
 
@@ -198,7 +204,7 @@ function orderingTopic() {
       ${list([
         "Remote orders can arrive during a shift. Only one can be open at a time. A chime plays when one arrives.",
         "While an order is open, its card in the top-left corner lists each item, how many are packed, and how many your shelves and crates hold in each room. Click the card's heading to shrink or expand it.",
-        `Pick up the special order crate by the Drone Terminal in the backroom. Teal diamonds then mark the shelves and crates holding items the order still needs. Face one and press ${key("interact")} to add one item at a time.`,
+        `Pick up the special order crate by the Drone Terminal in the backroom. Teal diamonds then mark the shelves and crates holding items the order still needs. Face one and press ${key("interact")} to add one item at a time, or hold ${key("interact")} to keep adding items until you let go or the order needs nothing more from that spot.`,
         "You can take needed items straight from crates on the Loading Pad or from any crate in a floor stack. The source crates stay where they are; you don't need to pick them up or take the stack apart.",
         "The order crate's light stays red while it is missing items and turns green when every item is packed.",
         "The order crate can only hold the products and amounts shown at the terminal. To take packed items back out, reset or cancel the order at the terminal; the items go into the Go-Backs bin.",

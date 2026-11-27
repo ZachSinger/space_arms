@@ -1,0 +1,64 @@
+{
+  "serviceLevel": 5,
+  "terminal": {
+    "upgradePrices": [3000, 5000, 7000, 9000],
+    "robots": [
+      {
+        "id": "shop_robot",
+        "name": "SHOP ROBOT",
+        "description": "Refills empty shelves and cleans up messes.",
+        "price": 1850,
+        "frame": "worker_frame",
+        "cell": "basic_cell",
+        "boards": ["stock_1", "clean_1"]
+      },
+      {
+        "id": "register_robot",
+        "name": "REGISTER ROBOT",
+        "description": "Works a register while a customer is waiting.",
+        "price": 1500,
+        "frame": "worker_frame",
+        "cell": "basic_cell",
+        "boards": ["register_1"]
+      }
+    ]
+  },
+  "parts": {
+    "frames": {
+      "basic_frame": { "price": 450, "level": 5 },
+      "worker_frame": { "price": 900, "level": 5 },
+      "swift_frame": { "price": 1200, "level": 13 },
+      "hauler_frame": { "price": 1800, "level": 17 },
+      "lab_frame": { "price": 3000, "level": 22 }
+    },
+    "cells": {
+      "basic_cell": { "price": 300, "level": 5 },
+      "long_life_cell": { "price": 650, "level": 5 },
+      "high_capacity_cell": { "price": 850, "level": 14 },
+      "quick_cell": { "price": 900, "level": 17 },
+      "lab_cell": { "price": 1500, "level": 22 }
+    },
+    "boards": {
+      "self_charge_1": { "price": 180, "level": 5 },
+      "self_charge_2": { "price": 420, "level": 14 },
+      "register_1": { "price": 350, "level": 5 },
+      "register_2": { "price": 650, "level": 17 },
+      "stock_1": { "price": 350, "level": 5 },
+      "stock_2": { "price": 650, "level": 14 },
+      "stock_3": { "price": 1000, "level": 20 },
+      "clean_1": { "price": 300, "level": 5 },
+      "cashier_stocker": { "price": 1100, "level": 17 },
+      "stocker_cleaner": { "price": 1000, "level": 17 },
+      "mod_stocking": { "price": 450, "level": 10 },
+      "mod_carry": { "price": 550, "level": 13 },
+      "mod_scanning": { "price": 450, "level": 10 },
+      "mod_counting": { "price": 450, "level": 10 },
+      "mod_waste": { "price": 550, "level": 13 },
+      "mod_mopping": { "price": 450, "level": 10 },
+      "mod_register": { "price": 950, "level": 17 },
+      "mod_stockroom": { "price": 1150, "level": 20 },
+      "mod_cleaning": { "price": 1050, "level": 20 },
+      "mod_allrounder": { "price": 1000, "level": 20 }
+    }
+  }
+}

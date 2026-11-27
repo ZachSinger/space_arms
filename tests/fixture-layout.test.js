@@ -51,6 +51,26 @@ test("shelf crates can enter placement mode from the sales floor", () => {
   assert.equal(started, true);
 });
 
+test("robot charging stations can only be placed in the backroom", () => {
+  const messages = [];
+  const crate = { kind: "fixture", typeId: "robot_charger" };
+  const placement = Object.create(FixturePlacement.prototype);
+  placement.scene = {
+    fixtureSystem: { canRearrange: () => true },
+    carriedCrate: crate,
+    areas: { playerArea: "shop" },
+    messages: { show: (message) => messages.push(message) },
+  };
+  placement.start = () => true;
+  assert.equal(placement.beginFromCrate(crate), false);
+  assert.match(messages[0], /backroom/);
+  placement.scene.areas.playerArea = "backroom";
+  assert.equal(placement.beginFromCrate(crate), true);
+
+  const layout = [...initialLayout(), { id: "robot-charger", type: "robot_charger", gx: 18, gy: 5 }];
+  assert.match(validateFixtureLayout(layout, createRoom()).reason, /must go in the backroom/);
+});
+
 test("starting and cancelling placement keep the player and loose crates moving", () => {
   const previousDevice = getInputDevice();
   setInputDevice("keyboard");

@@ -31,6 +31,7 @@ const CLEANING_ACTION_STATES = Object.freeze(["PICKING_UP_LITTER", "BINNING_LITT
 export class Employee {
   constructor(employeeData, store, {
     exitPoint = null, exitDoor = null, getClosingCustomers = () => [],
+    texture = null, jobPriorities = null,
   } = {}) {
     if (!store || typeof store.findPath !== "function") {
       throw new Error("Employee requires a store interface with findPath.");
@@ -42,7 +43,7 @@ export class Employee {
     this.data = employeeData;
     this.state = "IDLE";
     this.currentJob = null;
-    this.jobPriorities = [...store.gameState.staff.jobPriorities[employeeData.id]];
+    this.jobPriorities = [...(jobPriorities ?? store.gameState.staff.jobPriorities[employeeData.id])];
     this.destination = null;
     this.registerServiceRemainingMs = 0;
     this.cleaningActionRemainingMs = 0;
@@ -59,7 +60,7 @@ export class Employee {
     this.currentFacing = "down";
     const spawn = store.areas.arrivalIn(AREA.BACKROOM);
     this.sprite = store.createEmployeeSprite(
-      spawn.x, spawn.y, employeeTextureFor(employeeData.id), PLAYER_BODY_WIDTH, PLAYER_BODY_HEIGHT,
+      spawn.x, spawn.y, texture ?? employeeTextureFor(employeeData.id), PLAYER_BODY_WIDTH, PLAYER_BODY_HEIGHT,
     );
     this.mover = this.createMover();
   }
@@ -105,7 +106,7 @@ export class Employee {
     if (this.state === "SERVING_REGISTER") {
       this.updateRegisterService(delta);
     } else if (this.state === "AT_REGISTER") {
-      this.updateAtRegister();
+      this.updateAtRegister(delta);
     } else if (this.state === "STOCKING_SHELF") {
       this.updateStocking(delta);
     } else if (CLEANING_ACTION_STATES.includes(this.state)) {
@@ -205,7 +206,7 @@ export class Employee {
     return this.walkTo(this.store.getBehindRegisterPoint(register), "TO_REGISTER");
   }
 
-  findStockingJob(candidates = this.store.restockCrates) {
+  findStockingJob(candidates = this.store.restockCrates, placementId = null) {
     const reserved = this.getReservedShelfPlacements();
     const reservedCrates = new Set(this.store.employees
       .filter((employee) => employee !== this)
@@ -230,6 +231,7 @@ export class Employee {
       const soldOut = onShelves(crate.itemId) === 0;
       for (const shelf of this.store.fixtures.shelves()) {
         for (const placement of shelf.placements) {
+          if (placementId !== null && placement.id !== placementId) continue;
           if (placement.itemId !== crate.itemId || reserved.has(placement)) continue;
           const room = shelf.getRemainingUnitsFor(crate.itemId, placement);
           if (room <= 0) continue;
@@ -272,6 +274,22 @@ export class Employee {
         return true;
       }
       if (above.includes(crate)) return false; // buried mid-stack
+    }
+    return false;
+  }
+
+  pickUpJobCrate(crate) {
+    const wasOnFloor = this.store.restockCrates.includes(crate);
+    const stackBase = wasOnFloor ? null : [...(this.store.floorStacks ?? [])]
+      .find(([_base, stack]) => stack.at(-1) === crate)?.[0];
+    if (!this.detachCrateForPickup(crate)) return false;
+    if (crate.pickUp(this.sprite, { holderId: this.data.id })) return true;
+    if (wasOnFloor) this.store.restockCrates.push(crate);
+    else if (stackBase) {
+      const stack = this.store.floorStacks.get(stackBase) ?? [];
+      stack.push(crate);
+      this.store.floorStacks.set(stackBase, stack);
+      this.store.syncFloorStacks();
     }
     return false;
   }
@@ -463,6 +481,37 @@ export class Employee {
     this.cleaningActionRemainingMs = TRASH_HANDLING_MS / getEmployeeJobSpeed(this.data.skillLevels, "clean");
   }
 
+  wasteCapacity() {
+    return 1;
+  }
+
+  moppingInterval() {
+    return MOP_STROKE_MS / getEmployeeJobSpeed(this.data.skillLevels, "clean");
+  }
+
+  stockingInterval() {
+    return STOCKING_MS_PER_ITEM / getEmployeeJobSpeed(this.data.skillLevels, "stock_shelves");
+  }
+
+  registerServiceDuration(customer) {
+    return (REGISTER_SERVICE_MS_PER_CUSTOMER + customer.cart.length * REGISTER_SERVICE_MS_PER_ITEM) /
+      getEmployeeJobSpeed(this.data.skillLevels, "register");
+  }
+
+  collectMoreTrash() {
+    const cleaning = this.store.cleaning;
+    if (this.clockOutRequested || (cleaning.staffHeldTrash.get(this)?.length ?? 0) >= this.wasteCapacity()) return false;
+    const nearest = this.findClosestSpot(cleaning.staffTrashTargets(this).flatMap((piece) =>
+      cleaning.trashStandSpots(piece).map((spot) => ({ ...spot, piece }))));
+    if (!nearest || !cleaning.claimTrashForStaff(this, nearest.spot.piece)) return false;
+    const job = this.currentJob;
+    job.trash = nearest.spot.piece;
+    if (this.startPath(nearest.spot, nearest.path, "TO_LITTER")) return true;
+    this.currentJob = job;
+    cleaning.releaseStaffClaims(this);
+    return false;
+  }
+
   updateCleaningAction(delta) {
     const cleaning = this.store.cleaning;
     if (this.state === "MOPPING") {
@@ -476,10 +525,11 @@ export class Employee {
     this.cleaningActionRemainingMs -= delta;
     if (this.cleaningActionRemainingMs > 0) return;
     if (this.state === "PICKING_UP_LITTER") {
-      if (!cleaning.pickUpTrashForStaff(this, this.currentJob.trash)) {
+      if (!cleaning.pickUpTrashForStaff(this, this.currentJob.trash, this.wasteCapacity())) {
         this.finishTask();
         return;
       }
+      if (this.collectMoreTrash()) return;
       const job = this.currentJob;
       if (!this.walkToTrashcan("TO_LITTER_BIN")) {
         this.currentJob = job;
@@ -508,7 +558,7 @@ export class Employee {
     }
     this.cleaningActionRemainingMs -= delta;
     if (this.cleaningActionRemainingMs > 0) return;
-    this.cleaningActionRemainingMs += MOP_STROKE_MS / getEmployeeJobSpeed(this.data.skillLevels, "clean");
+    this.cleaningActionRemainingMs += this.moppingInterval();
     if (this.store.cleaning.mopDirtForStaff(this, job.dirt)) job.finishingSweep = true;
   }
 
@@ -597,6 +647,7 @@ export class Employee {
       onReroute() {},
       onRerouteUnavailable: (previousPath) => {
         this.path = previousPath;
+        if (this.handleBlockedRoute?.()) return;
         if (this.currentJob?.hovercart) {
           this.store.hovercarts.returnToCharger(this);
         } else if (["TO_TRASHCAN", "TO_RETURN_CRATE"].includes(this.state)) this.returnCrate();
@@ -650,7 +701,7 @@ export class Employee {
       this.retryInMs = BREAK_CHECK_MS;
     } else if (this.state === "TO_CRATE") {
       const { crate, cratePosition } = this.currentJob;
-      if (!this.detachCrateForPickup(crate) || !crate.pickUp(this.sprite, { holderId: this.data.id })) {
+      if (!this.pickUpJobCrate(crate)) {
         this.finishTask();
         return;
       }
@@ -694,8 +745,7 @@ export class Employee {
     this.destination = null;
     this.state = "STOCKING_SHELF";
     this.stockingUnitsRemaining = quantity;
-    this.stockingRemainingMs = STOCKING_MS_PER_ITEM /
-      getEmployeeJobSpeed(this.data.skillLevels, "stock_shelves");
+    this.stockingRemainingMs = this.stockingInterval();
   }
 
   updateStocking(delta) {
@@ -712,8 +762,7 @@ export class Employee {
       this.stockingUnitsRemaining -= moved;
       this.store.refreshShelfStockDisplay(shelf);
       this.store.gameState.shop.changed();
-      this.stockingRemainingMs += STOCKING_MS_PER_ITEM /
-        getEmployeeJobSpeed(this.data.skillLevels, "stock_shelves");
+      this.stockingRemainingMs += this.stockingInterval();
     }
     if (this.stockingUnitsRemaining > 0 && this.stockingRemainingMs > 0) return;
     if (this.currentJob.hovercart) {
@@ -758,8 +807,10 @@ export class Employee {
     this.currentJob.returnBase = null;
     const reserved = [
       ...store.checkoutSystem.goBacksReservedRectangles(),
-      ...others.flatMap((employee) => employee.currentJob?.returnPosition
-        ? [this.returnSpace(employee.currentJob.returnPosition)] : []),
+      ...others.flatMap((employee) => [
+        ...(employee.currentJob?.returnPosition ? [this.returnSpace(employee.currentJob.returnPosition)] : []),
+        ...(employee.cargo ?? []).map(({ returnPosition }) => this.returnSpace(returnPosition)),
+      ]),
     ];
     const overlapsReserved = (position) => reserved.some((rect) => {
       const bounds = crate.getFloorBounds(position.x, position.y);
@@ -854,9 +905,7 @@ export class Employee {
       return;
     }
     this.currentJob.customer = customer;
-    this.registerServiceRemainingMs = (REGISTER_SERVICE_MS_PER_CUSTOMER +
-      customer.cart.length * REGISTER_SERVICE_MS_PER_ITEM) /
-      getEmployeeJobSpeed(this.data.skillLevels, "register");
+    this.registerServiceRemainingMs = this.registerServiceDuration(customer);
     this.state = "SERVING_REGISTER";
   }
 

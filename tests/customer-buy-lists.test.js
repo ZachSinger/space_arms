@@ -32,6 +32,13 @@ test("customers can want one, two, or three of each item without rerolling dupli
   }
 });
 
+test("customers buy only one of an item when a shelf space holds fewer than ten", () => {
+  const sizes = { ammo: 2, rifle: 4, cannon: 20 };
+  const quantities = createCustomerItemQuantities(["ammo", "rifle", "cannon"], () => 0.9,
+    (itemId) => ({ boxSize: sizes[itemId] }));
+  assert.deepEqual(quantities, { ammo: 3, rifle: 1, cannon: 1 });
+});
+
 test("primary shopping lists grow at reputation milestones", () => {
   const extraItems = Array.from({ length: 6 }, (_, index) => ({
     id: `extra_${index}`,

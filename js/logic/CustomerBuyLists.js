@@ -1,4 +1,5 @@
 import { gameRandom } from "../core/Random.js";
+import { SLOT_CAPACITY } from "./ShelfSlotStocking.js";
 // ==========================================
 // FILE: CustomerBuyLists.js
 // ==========================================
@@ -26,8 +27,13 @@ export const DISCOUNT_BONUS_CHANCE = 0.5;
 export const MAX_DISCOUNT_BONUS_ITEMS = 2;
 
 // Most wants are one unit; larger purchases give identical stock a reason to be stacked.
-export function createCustomerItemQuantities(itemIds, random = gameRandom) {
+// Items that fit fewer than this many to a shelf space are bought one at a time.
+export const MULTI_BUY_MIN_SHELF_COUNT = 10;
+
+export function createCustomerItemQuantities(itemIds, random = gameRandom, getItem = () => null) {
   return Object.fromEntries([...new Set(itemIds)].map((itemId) => {
+    const boxSize = getItem(itemId)?.boxSize;
+    if (boxSize > 0 && Math.floor(SLOT_CAPACITY / boxSize) < MULTI_BUY_MIN_SHELF_COUNT) return [itemId, 1];
     const roll = random();
     return [itemId, roll < 0.5 ? 1 : roll < 0.85 ? 2 : 3];
   }));

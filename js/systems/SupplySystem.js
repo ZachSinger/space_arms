@@ -53,9 +53,15 @@ export class SupplySystem {
   // A crate only blocks a spot it really sits on: fixture crates are drawn larger than a spot
   // and slightly overhang their neighbors, which shouldn't count.
   freePadSpots() {
-    return this.padSpots().filter((position) => !this.shop.restockCrates.some((crate) => {
+    const fixturesInTransit = (this.shop.employees ?? []).flatMap((worker) =>
+      (worker.cargo ?? []).filter((load) => load.crate.kind === "fixture" && load.padPosition));
+    const occupied = [
+      ...this.shop.restockCrates.map((crate) => ({ crate, position: crate.sprite })),
+      ...fixturesInTransit.map(({ crate, padPosition }) => ({ crate, position: padPosition })),
+    ];
+    return this.padSpots().filter((position) => !occupied.some(({ crate, position: at }) => {
       const reach = crate.sprite.displayWidth / 2 + LOADING_PAD_SPOT_SIZE / 2 - LOADING_PAD_OVERHANG_ALLOWANCE;
-      return Math.abs(crate.sprite.x - position.x) < reach && Math.abs(crate.sprite.y - position.y) < reach;
+      return Math.abs(at.x - position.x) < reach && Math.abs(at.y - position.y) < reach;
     }));
   }
 

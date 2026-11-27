@@ -201,6 +201,7 @@ export class CheckoutWindow {
   }
 
   close() {
+    this.beltSnapshot = null;
     this.mode = null;
     this.cart = null;
     this.onComplete = null;
@@ -215,6 +216,12 @@ export class CheckoutWindow {
   }
 
   suspend() {
+    // Hiding the window snaps moving cards to their end spots, so remember where they really were.
+    this.beltSnapshot = this.mode === "checkout" ? {
+      at: this.timers.now(),
+      cards: [...this.bodyElement.querySelectorAll('.checkout-item-card[data-scanned="false"]')]
+        .map((card) => ({ card, x: card.offsetLeft })),
+    } : null;
     this.isScanning = false;
     this.tenderOverlay?.classList.add("hidden");
     this.uiWindow.close();
@@ -270,6 +277,21 @@ export class CheckoutWindow {
     this.placeNearRegister();
     this.tenderOverlay?.classList.remove("hidden");
     this.placeTenderPanel();
+    this.restoreBeltAfterAway();
+  }
+
+  // The belt kept running while the player was away: each card moved as far as it would have.
+  restoreBeltAfterAway() {
+    const snapshot = this.beltSnapshot;
+    this.beltSnapshot = null;
+    if (!snapshot?.cards.length) return;
+    const travelled = (this.timers.now() - snapshot.at) / 1000 * BELT_SPEED_PX_PER_S;
+    for (const { card, x } of snapshot.cards) {
+      if (card.dataset.scanned !== "false") continue;
+      card.style.transition = "none";
+      card.style.left = `${Math.min(card.offsetLeft, x + travelled)}px`;
+    }
+    this.advanceBelt();
   }
 
   /**
@@ -296,6 +318,7 @@ export class CheckoutWindow {
     onChangeFailed = null, onChitFailed = null, onCashAttempt = null,
   } = {}) {
     this.mode = "checkout";
+    this.beltSnapshot = null;
     this.stopChitTimer();
     this.cart = cart;
     this.onComplete = onComplete;

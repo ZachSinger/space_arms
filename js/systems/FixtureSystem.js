@@ -192,7 +192,7 @@ export class FixtureSystem {
   // A hovercart charger the player faces from right in front of it.
   chargerInReach(origin) {
     const { interactionSystem } = this.shop;
-    return this.fixtures.ofKind("charger").find((charger) => {
+    return [...this.fixtures.ofKind("charger"), ...this.fixtures.ofKind("robot_charger")].find((charger) => {
       const bounds = fixtureBounds(charger);
       const rect = {
         left: bounds.left * TILE_SIZE, right: bounds.right * TILE_SIZE,

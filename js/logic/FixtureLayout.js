@@ -424,6 +424,9 @@ export function validateFixtureLayout(placements, {
     }
     // Art drawn for one facing only (the hovercart charger) can't be turned.
     if (spec.fixedFacing && fixtureRotation(placement) !== 0) return invalid("The fixture layout is invalid.");
+    if (spec.backroomOnly && placement.gy < BACKROOM_GRID_Y) {
+      return invalid(`The ${spec.name} must go in the backroom.`);
+    }
     ids.add(placement.id);
     const bounds = fixtureBounds(placement);
     const projections = fixtureProjectionBoxes(placement);

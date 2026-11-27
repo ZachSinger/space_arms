@@ -181,6 +181,10 @@ export class FixturePlacement {
     }
     if (crate !== this.scene.carriedCrate || crate?.kind !== "fixture") return false;
     const spec = getFixtureType(crate.typeId);
+    if (this.scene.areas.playerArea !== AREA.BACKROOM && spec?.backroomOnly) {
+      this.scene.messages.show("This fixture can only be placed in the backroom.");
+      return false;
+    }
     if (this.scene.areas.playerArea === AREA.BACKROOM && spec && !spec.anyRoom) {
       this.scene.messages.show("Fixtures can only be placed on the sales floor.");
       return false;

@@ -89,7 +89,7 @@ export class Mover {
       this.onReroute();
       if (character.path === null) {
         this.onRerouteUnavailable(previousPath);
-        character.sprite.body.setVelocity(0, 0);
+        character.sprite.body?.setVelocity(0, 0);
         return;
       }
     }

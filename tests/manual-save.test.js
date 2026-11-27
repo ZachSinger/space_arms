@@ -267,6 +267,18 @@ const loadPlayer = (player) =>
   GameState.fromSave({ playerState: player, market: { day: 1, ...newGame().market.serialize() } }, { items: ITEMS });
 const FIRST_STAFF_LEVEL = STAFF_LIMIT_LEVELS[0];
 
+test("Robot Service inventory and assembled robots survive a GameState save and reload", () => {
+  const state = newGame();
+  for (const id of ["worker_frame", "basic_cell", "self_charge_1", "register_1"]) state.robotService.addPart(id);
+  state.robotService.addRobot({
+    name: "Register Bot", frame: "worker_frame", cell: "basic_cell",
+    boards: [{ board: "self_charge_1" }, { board: "register_1" }],
+  });
+  const restored = reload(state);
+  assert.deepEqual(restored.robotService.toSave(), state.robotService.toSave());
+  assert.deepEqual(restored.toSave().playerState.robotService, state.toSave().playerState.robotService);
+});
+
 // Every contract a level-up from `from` to `to` should name: reached, still unsigned, and unlocked.
 function assertNamesNewContracts(message, state, from, to) {
   for (const license of globalThis.__progressionTestLicenses) {
@@ -497,6 +509,8 @@ function createRegisterHarness() {
     close() { this.isOpen = false; },
   };
   checkout.mode = null;
+  checkout.timers = { now: () => 0 };
+  checkout.bodyElement = { querySelectorAll: () => [] };
   checkout.openedCarts = [];
   checkout.openForCustomer = (cart, onComplete) => {
     checkout.mode = "checkout";
@@ -663,6 +677,17 @@ test("a shift from the first expansion's Shop Level to a much later one announce
   assert.match(messages[0], /Sales-floor expansions? available to buy/);
   assert.match(messages[0], /Backroom expansions? available to buy/);
   assert.doesNotMatch(messages[0], /Some later level rewards are not in the game yet/);
+});
+
+test("level-up news announces Robot Service and later robot parts", () => {
+  const state = newGame();
+  const scene = { gameState: state, room: { zones: [] } };
+  const shift = new ShiftSystem(scene);
+  state.reputation.shopLevel = 5;
+  assert.match(shift.levelUpMessage(4), /Robot Service is available in the manager's tablet/);
+  state.reputation.shopLevel = 10;
+  assert.match(shift.levelUpMessage(9), /New robot parts are available/);
+  assert.doesNotMatch(shift.levelUpMessage(5), /Robot Service is available/);
 });
 
 test("level-up messages do not reannounce contracts or staff already owned in older saves", () => {
@@ -1159,7 +1184,7 @@ test("all placeable fixture physics bodies match the solid part of their placeme
   const sprite = { displayWidth: 0, displayHeight: 0, body,
     setTexture() { return this; },
     setDisplaySize(width, height) { this.displayWidth = width; this.displayHeight = height; return this; },
-    setPosition() { return this; }, setAngle(angle) { this.angle = angle; return this; },
+    setPosition() { return this; }, setAngle(angle) { this.angle = angle; return this; }, play() { return this; },
     setDepth(depth) { this.depth = depth; return this; } };
   for (const type of Object.keys(FIXTURE_TYPES)) {
     for (let rotation = 0; rotation < 4; rotation++) {

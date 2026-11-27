@@ -17,6 +17,8 @@ import { InteractableRegistry } from "../interaction/InteractableRegistry.js";
 import { InteractionSystem } from "../interaction/InteractionSystem.js";
 import { ModuleHost } from "../modules/GameModules.js";
 import { createHovercartTextures } from "../modules/hovercart/HovercartArt.js";
+import { MASTER_COMPUTER_SPRITE, createMasterComputerAnimations } from "../logic/MasterComputerArt.js";
+import { createRobotTextures } from "../logic/RobotArt.js";
 import { animateDecorations, createDecorationTextures } from "../world/DecorationArt.js";
 import { ensureRoomArtTextures } from "../world/RoomArt.js";
 import {
@@ -41,6 +43,7 @@ import { ShiftClock } from "../logic/ShiftClock.js";
 import { FixturePlacement } from "../logic/FixturePlacement.js";
 import { setupSandboxRoom } from "../debug/SandboxRoom.js";
 import { setupUiLab } from "../debug/UiLab.js";
+import { setupRobotLab } from "../debug/RobotLab.js";
 import { setupStartingTemplateLab } from "../debug/StartingTemplateLab.js";
 import { setupDecoratorMode } from "../debug/DecoratorMode.js";
 import { setupDecorationGallery } from "../debug/DecorationGalleryLab.js";
@@ -92,6 +95,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload() {
+    this.load.spritesheet(MASTER_COMPUTER_SPRITE.key, MASTER_COMPUTER_SPRITE.path, {
+      frameWidth: MASTER_COMPUTER_SPRITE.frameWidth,
+      frameHeight: MASTER_COMPUTER_SPRITE.frameHeight,
+    });
     for (const sprite of [DRONE_TERMINAL_PLATFORM_SPRITE, DRONE_TERMINAL_SCREEN_SPRITE, DRONE_TERMINAL_SENT_SCREEN_SPRITE]) {
       this.load.spritesheet(sprite.key, sprite.path, {
         frameWidth: sprite.frameWidth,
@@ -115,7 +122,7 @@ export class GameScene extends Phaser.Scene {
   init(data = {}) {
     this.savedShopData = data.savedShopData ?? null;
     this.sandbox = data.sandbox === true;
-    this.lab = this.sandbox && ["ui", "template", "decorator", "decorations", "tutorial", "crates"].includes(data.lab) ? data.lab : null;
+    this.lab = this.sandbox && ["ui", "robots", "template", "decorator", "decorations", "tutorial", "crates"].includes(data.lab) ? data.lab : null;
     this.realMode = data.real === true;
     this.seed = Number.isInteger(data.seed) ? data.seed : randomSeed();
   }
@@ -230,6 +237,8 @@ export class GameScene extends Phaser.Scene {
     });
     // The hovercart charger is a fixture, so its art must exist before any fixture is drawn.
     createHovercartTextures(this);
+    createMasterComputerAnimations(this);
+    createRobotTextures(this);
     createDecorationTextures(this);
     for (const fixture of this.fixtures.all()) this.fixtureViews.show(fixture);
 
@@ -422,6 +431,7 @@ export class GameScene extends Phaser.Scene {
       this.fixturePlacement.destroy();
       this.managerTablet.uiWindow.onClose = null;
       this.managerTablet.inventoryTab.destroy();
+      this.managerTablet.robotServiceTab.destroy();
       this.managerTablet.fixtureHighlight.destroy();
       this.autosaveTimer.remove();
       this.storeDoorAnimation.destroy();
@@ -438,6 +448,7 @@ export class GameScene extends Phaser.Scene {
     if (this.savedShopData) this.saves.loadAtStart(this.savedShopData);
     this.sandboxRoom = !this.sandbox ? null
       : this.lab === "ui" ? setupUiLab(this)
+        : this.lab === "robots" ? setupRobotLab(this)
         : this.lab === "template" ? setupStartingTemplateLab(this)
           : this.lab === "decorator" ? setupDecoratorMode(this)
             : this.lab === "decorations" ? setupDecorationGallery(this)

@@ -246,7 +246,7 @@ export class CustomerFlow {
       .map((fixture) => ({ fixture, standPoint: fixture.standPoint }));
     return {
       ...buyList,
-      itemQuantities: createCustomerItemQuantities([...targetIds]),
+      itemQuantities: createCustomerItemQuantities([...targetIds], undefined, (itemId) => database.getItem(itemId)),
       shelfStops,
       allShelfStops,
     };

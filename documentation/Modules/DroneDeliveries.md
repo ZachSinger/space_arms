@@ -19,6 +19,8 @@ The Drone Terminal lets you fill orders from remote customers from the start of 
     without picking up the source crate or taking the stack apart.
   - **From shelves:** press E next to the shelf. Without opening the shelf screen, it pulls one
     of the needed items into the crate, if the shelf has any.
+  - **Holding E** (or A on a controller) keeps packing one item every 0.15 seconds after a
+    short pause, until it's released or nothing in reach has an item the order still needs.
 - Its light stays red while any items are missing and turns green when all items are packed.
 - The crate's lid opens when it first rises and stays open while carried or put down elsewhere.
   It closes only when the completed crate is back on the terminal and accepted for shipping.

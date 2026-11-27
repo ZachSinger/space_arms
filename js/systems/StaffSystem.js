@@ -6,6 +6,7 @@
 import { getStaffLimitReason } from "../logic/ShopProgression.js";
 import { getEmployeeTrainingBlockReason, getEmployeeTrainingOffer } from "../logic/EmployeeTraining.js";
 import { Employee } from "../logic/Employee.js";
+import { RobotWorker } from "../logic/RobotWorker.js";
 
 const STAFF_MESSAGE_COLOR = "#10b981";
 
@@ -210,6 +211,14 @@ export class StaffSystem {
         exitDoor: this.shop.storeDoorAnimation,
         getClosingCustomers: () => this.shop.customers,
       }));
+    for (const robot of this.shop.gameState.robotService?.robots ?? []) {
+      if (robot.onShift === false) continue;
+      this.shop.employees.push(new RobotWorker(robot, this.shop.employeeStore, {
+        exitPoint: this.shop.exitPoint,
+        exitDoor: this.shop.storeDoorAnimation,
+        getClosingCustomers: () => this.shop.customers,
+      }));
+    }
   }
 
   clear() {

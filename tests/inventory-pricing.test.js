@@ -153,6 +153,11 @@ function createHarness() {
     contains: (element) => element !== null,
     set innerHTML(markup) { this.markup = markup; },
   };
+  const robotServicePanel = {
+    contains: (element) => element !== null,
+    querySelector: () => null,
+    set innerHTML(markup) { this.markup = markup; },
+  };
   const document = { activeElement: null };
   globalThis.document = document;
 
@@ -247,6 +252,7 @@ function createHarness() {
     if (selector === '[data-tab-panel="layout"]') return layoutPanel;
     if (selector === '[data-tab-panel="finances"]') return financesPanel;
     if (selector === '[data-tab-panel="handbook"]') return handbookPanel;
+    if (selector === '[data-tab-panel="robots"]') return robotServicePanel;
     return null;
   };
   body.querySelectorAll = () => [];

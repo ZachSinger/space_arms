@@ -14,15 +14,18 @@ import { LayoutTab } from "./LayoutTab.js";
 import { FinancesTab } from "./FinancesTab.js";
 import { HandbookTab } from "./HandbookTab.js";
 import { ReviewsTab } from "./ReviewsTab.js";
+import { RobotServiceTab } from "./RobotServiceTab.js";
 import { FixtureHighlight } from "./FixtureHighlight.js";
 import { GAME_EVENTS } from "../core/Events.js";
 import { getFixtureResaleValue, getFixtureType } from "./FixtureLayout.js";
 import { database } from "../scenes/boot.js"; // the exported DatabaseManager singleton
+import { RobotServiceSystem } from "../systems/RobotServiceSystem.js";
 
 // The bible's full Step 40 tab list (Part 8).
 export const TAB_DEFS = [
   { id: "inventory", label: "Inventory" },
   { id: "employee", label: "Employee" },
+  { id: "robots", label: "Robots" },
   { id: "contracts", label: "Contracts" },
   { id: "supply", label: "Supply" },
   { id: "fixtures", label: "Fixtures" },
@@ -85,6 +88,8 @@ export class ManagerTablet {
     this.financesTab = new FinancesTab(scene);
     this.handbookTab = new HandbookTab(gameState, () => database.getAllLicenses());
     this.reviewsTab = new ReviewsTab(gameState);
+    this.robotServiceSystem = new RobotServiceSystem(scene);
+    this.robotServiceTab = new RobotServiceTab(scene, gameState, this.robotServiceSystem);
 
     const tabDefs = getTabDefs(scene);
     const tabBarHTML = tabDefs.map(
@@ -195,6 +200,11 @@ export class ManagerTablet {
     );
     const reviewsPanel = this.bodyElement.querySelector('[data-tab-panel="reviews"]');
     if (reviewsPanel) this.reviewsTab.bind(reviewsPanel, this.bodyElement, () => this.renderPanelContent("reviews"));
+    this.robotServiceTab.bind(
+      this.bodyElement.querySelector('[data-tab-panel="robots"]'),
+      this.bodyElement,
+      () => this.renderPanelContent("robots"),
+    );
     this.fixtureHighlight = new FixtureHighlight(scene, this.uiWindow);
     this.uiWindow.onClose = () => {
       this.fixturesTab.purchaseNotice = "";
@@ -232,6 +242,7 @@ export class ManagerTablet {
       this.refreshSupplyPanel();
       this.refreshLayoutPanels();
       this.refreshFinancesPanel();
+      this.robotServiceTab.redraw();
       // The review list can be long, so it only redraws while it's on screen.
       if (this.reviewsTab.panel && !this.reviewsTab.panel.classList.contains("hidden")) this.reviewsTab.redraw();
     });
@@ -268,6 +279,7 @@ export class ManagerTablet {
     if (tabId === "finances") return this.financesTab.draw();
     if (tabId === "handbook") return this.handbookTab.draw();
     if (tabId === "reviews") return this.reviewsTab.draw();
+    if (tabId === "robots") return this.robotServiceTab.draw();
     if (tabId === "textStyles") return renderTextStylesPage();
     throw new Error(`Unknown tablet tab: ${tabId}`);
   }
@@ -285,6 +297,7 @@ export class ManagerTablet {
     if (tabId === "finances") this.refreshFinancesPanel();
     if (tabId === "handbook") this.refreshHandbookPanel();
     if (tabId === "reviews") this.reviewsTab.redraw();
+    if (tabId === "robots") this.robotServiceTab.redraw();
     this.bodyElement.querySelectorAll(".tablet-tab-btn").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.tab === tabId);
     });
@@ -412,6 +425,7 @@ export class ManagerTablet {
     this.refreshSupplyPanel(); // loading pad spots free up without any game state change
     this.refreshLayoutPanels();
     this.refreshFinancesPanel();
+    this.robotServiceTab.redraw();
     this.uiWindow.openWindow();
     this.scene.checkoutWindow.suspend();
   }

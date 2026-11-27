@@ -380,6 +380,16 @@ test("receipts describe fixture resale and fixture purchases separately", () => 
   assert.equal(receipt.totalSpent, 150);
 });
 
+test("robot part purchases appear on the receipt", () => {
+  const state = newGame();
+  state.economy.spend(300, { category: "robot_parts", label: "Basic cell" });
+  state.economy.spend(300, { category: "robot_parts", label: "Basic cell" });
+  const receipt = summarizeReceipt(state.economy.dayLedger.serialize(), state.economy.credits, state.reputation.global);
+  const markup = FinancesRenderer.generateHTML({ ...financesView(), today: receipt });
+  assert.match(markup, /Robot part: Basic cell \(2\)/);
+  assert.equal(receipt.totalSpent, 600);
+});
+
 test("cent-priced sales, spending and receipts survive ending the day and saving", () => {
   const state = newGame();
   unlockStaff(state);

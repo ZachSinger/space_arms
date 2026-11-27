@@ -13,6 +13,7 @@ import { summarizeReceipt } from "../logic/DayLedger.js";
 import { formatMoneyAmount, sumMoney } from "../logic/Money.js";
 import { sinkItems } from "../logic/InventoryTransfer.js";
 import { HOVERCART_LEVEL } from "../modules/hovercart/HovercartRules.js";
+import { ROBOT_PART_CATALOG, ROBOT_SERVICE_LEVEL } from "../logic/RobotServiceCatalog.js";
 
 const PRICE_REACTION_TYPES = Object.freeze(["bargain", "skipped", "disgusted"]);
 
@@ -186,6 +187,11 @@ export class ShiftSystem {
     }
     if (reachedNow(HOVERCART_LEVEL) && !this.shop.gameModules?.get("hovercart")?.owned) {
       message += " The hovercart is available to buy in the Layout tab.";
+    }
+    if (reachedNow(ROBOT_SERVICE_LEVEL)) {
+      message += " Robot Service is available in the manager's tablet.";
+    } else if (ROBOT_PART_CATALOG.some(({ level: partLevel }) => reachedNow(partLevel))) {
+      message += " New robot parts are available in Robot Service.";
     }
     if (hasUnimplementedShopRewardBetween(previousLevel, level)) {
       message += " Some later level rewards are not in the game yet.";

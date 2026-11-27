@@ -17,6 +17,8 @@ import { CUSTOMER_FACTION_IDS } from "../logic/CustomerBuyLists.js";
 import { isValidTrashList } from "../modules/cleaning/Litter.js";
 import { DIRT_KINDS } from "../modules/cleaning/CleaningArt.js";
 import { isValidHovercartSave } from "../modules/hovercart/HovercartRules.js";
+import { buildProblems, hasEnoughPower } from "../logic/RobotParts.js";
+import { getRobotPart, ROBOT_PART_CATALOG, ROBOT_PARTS } from "../logic/RobotServiceCatalog.js";
 import { integer, isRecord, requireSave } from "./saveHelpers.js";
 import { SHOP_LAYOUT_VERSION } from "./migrations/index.js";
 
@@ -117,6 +119,39 @@ export function checkShopSave(data, database) {
       assigned.every((id) => (player.hiredEmployees ?? []).includes(id)) &&
       new Set(assigned).size === assigned.length,
     "invalid hovercart assignments.");
+  }
+  if (player.robotService !== undefined) {
+    const robotService = player.robotService;
+    requireSave(isRecord(robotService) && isRecord(robotService.ownedParts) &&
+      Array.isArray(robotService.robots) && integer(robotService.nextRobotId, 1),
+    "invalid Robot Service state.");
+    const masterComputerLevel = robotService.masterComputerLevel ??
+      Math.min(5, robotService.robots.length);
+    requireSave(integer(masterComputerLevel, 0) && masterComputerLevel <= 5 &&
+      robotService.robots.length <= masterComputerLevel,
+    "robot count exceeds Master Computer capacity.");
+    const catalogIds = new Set(ROBOT_PART_CATALOG.map(({ id }) => id));
+    requireSave(Object.entries(robotService.ownedParts).every(([id, count]) =>
+      catalogIds.has(id) && integer(count, 1)), "invalid owned robot parts.");
+    const robotIds = new Set();
+    for (const robot of robotService.robots) {
+      requireSave(isRecord(robot) && typeof robot.id === "string" && /^robot-\d+$/.test(robot.id) &&
+        !robotIds.has(robot.id) && typeof robot.name === "string" && robot.name.trim() &&
+        (robot.battery === undefined || (Number.isFinite(robot.battery) && robot.battery >= 0 && robot.battery <= 1)) &&
+        (robot.onShift === undefined || typeof robot.onShift === "boolean") &&
+        Array.isArray(robot.boards) && robot.boards.every((fitted) =>
+          isRecord(fitted) && typeof fitted.board === "string"), "invalid assembled robot.");
+      robotIds.add(robot.id);
+      const fittedIds = [robot.frame, robot.cell, ...robot.boards.map(({ board }) => board)];
+      requireSave(fittedIds.every((id) => catalogIds.has(id) && getRobotPart(id)) &&
+        robot.boards.every(({ board }) => ROBOT_PARTS.boards.find(({ id }) => id === board)?.kind !== "custom") &&
+        robot.boards.some(({ board }) => ROBOT_PARTS.boards.find(({ id }) => id === board)?.kind === "prefab") &&
+        buildProblems(robot, ROBOT_PARTS).length === 0 && hasEnoughPower(robot, ROBOT_PARTS),
+      `invalid parts or power requirement for ${robot.name}.`);
+    }
+    requireSave(robotIds.size === robotService.robots.length &&
+      robotService.robots.every(({ id }) => Number(id.slice("robot-".length)) < robotService.nextRobotId),
+    "invalid robot sequence.");
   }
   requireSave(isRecord(player.factionReputation) &&
     CUSTOMER_FACTION_IDS.every((id) => integer(player.factionReputation[id])),

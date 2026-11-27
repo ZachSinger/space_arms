@@ -64,6 +64,8 @@ test("level rewards come from the game's own unlock data", () => {
     assert.ok(rewards.get(zone.requiredShopLevel).some((text) => text.includes(zone.name)), id);
   }
   assert.ok(rewards.get(HOVERCART_LEVEL).some((text) => text.startsWith("Hovercart")));
+  assert.ok(rewards.get(5).includes("Robot Service opens"));
+  assert.ok(rewards.get(5).some((text) => text.startsWith("Robot parts:")));
   assert.ok(![...rewards.values()].flat().some((text) => /spaces/i.test(text)));
 });
 

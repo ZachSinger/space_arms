@@ -16,6 +16,10 @@ import { setInputDevice } from "./InputDevice.js";
 import { UINavigator } from "../logic/UINavigator.js";
 import { HOLD_KEY_MS } from "../logic/CrateStack.js";
 import { bindingForEvent, isBound, isBoundAnywhere, matchesBinding } from "./KeyBindings.js";
+import { ORDER_PACKING_KIND } from "../interaction/InteractionSystem.js";
+
+// After the first item, how often holding E/A packs another item into the remote order.
+const PACK_REPEAT_MS = 150;
 
 const PAUSE_GUARDED_EVENTS = [
   "keydown", "mousedown", "pointerdown", "click", "dblclick",
@@ -32,6 +36,8 @@ export class PlayerControls {
     this.fixtureMovePress = null;
     // The pick-up or put-down button being held, until it's released (tap) or held long enough (hold).
     this.cratePress = null;
+    // E/A still held after packing an item into the remote order, so it keeps packing.
+    this.packRepeat = null;
     this.padInput = null;
     this.uiNavigator = null;
     this.highlightTrashKey = null;
@@ -110,6 +116,7 @@ export class PlayerControls {
     this.cratePress = null;
     this.interactPress = null;
     this.fixtureMovePress = null;
+    this.packRepeat = null;
   }
 
   /**
@@ -257,7 +264,34 @@ export class PlayerControls {
   updatePresses() {
     this.updateCratePress();
     this.updateInteractPress();
+    this.updatePackRepeat();
     this.updateFixtureMovePress();
+  }
+
+  // E/A acted right away; if it packed the remote order, keeping it held packs more.
+  interactNow(button = null) {
+    const action = this.shop.interactionSystem.handleInteract();
+    this.packRepeat = action?.kind === ORDER_PACKING_KIND
+      ? { button, nextAt: this.shop.time.now + HOLD_KEY_MS }
+      : null;
+  }
+
+  updatePackRepeat() {
+    const repeat = this.packRepeat;
+    if (!repeat) return;
+    const held = repeat.button === null
+      ? this.isActionDown("interact")
+      : Boolean(this.padInput?.isDown(repeat.button));
+    if (!held) {
+      this.packRepeat = null;
+      return;
+    }
+    if (this.shop.time.now < repeat.nextAt) return;
+    if (!this.shop.interactionSystem.packHeldOrderItem()) {
+      this.packRepeat = null;
+      return;
+    }
+    repeat.nextAt = this.shop.time.now + PACK_REPEAT_MS;
   }
 
   /**
@@ -271,7 +305,7 @@ export class PlayerControls {
     const action = shop.interactionSystem.getFixtureMoveAction();
     if (!action) {
       this.interactPress = null;
-      shop.interactionSystem.handleInteract();
+      this.interactNow(button);
       return;
     }
     this.interactPress = { fixture: action.target, action, button, startedAt: shop.time.now };
@@ -348,7 +382,7 @@ export class PlayerControls {
       if (matchesBinding("zoomOut", event)) shop.cameraRig.zoomBy(-1);
     }
     if (shop.controlMode.getMode?.() === CONTROL_MODES.PLACING) return;
-    if (!interactDown && matchesBinding("interact", event)) shop.interactionSystem.handleInteract();
+    if (!interactDown && matchesBinding("interact", event)) this.interactNow();
     if (!crateDown && matchesBinding("crate", event) && !shop.checkoutWindow?.usesSpaceKey()) {
       event.preventDefault();
       this.startCratePress("pickUp");

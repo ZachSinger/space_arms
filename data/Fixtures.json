@@ -287,6 +287,33 @@
     "artInsets": { "down": { "left": 0.0625, "top": 0.03125, "right": 0.0625, "bottom": 0.0625 } },
     "price": 400, "presentationPoints": 3, "licenseId": "lic_fixture_basics"
   },
+  "robot_charger": {
+    "id": "robot_charger",
+    "name": "ROBOT CHARGING STATION",
+    "kind": "robot_charger",
+    "equipment": true,
+    "fixedFacing": true,
+    "anyRoom": true,
+    "backroomOnly": true,
+    "w": 1,
+    "h": 1,
+    "texture": "robot-charging-station",
+    "price": 1000,
+    "licenseId": "lic_fixture_basics"
+  },
+  "master_computer": {
+    "id": "master_computer",
+    "name": "MASTER COMPUTER",
+    "kind": "master_computer",
+    "equipment": true,
+    "fixedFacing": true,
+    "anyRoom": true,
+    "w": 1,
+    "h": 2,
+    "texture": "master-computer",
+    "price": 2500,
+    "licenseId": "lic_fixture_basics"
+  },
   "hovercart_charger": {
     "id": "hovercart_charger",
     "name": "HOVERCART CHARGER",

@@ -130,6 +130,10 @@ function pick(actionId, world, robot) {
   return target ? { action: actionId, target } : null;
 }
 const lowFill = (world) => lowestShelf(world)?.fill ?? 1;
+const restockBelow = (world, robot, limit, inclusive = false) => {
+  const choice = pick("restock", world, robot);
+  return choice && (inclusive ? choice.target.fill <= limit : choice.target.fill < limit) ? choice : null;
+};
 export const PREFAB_ABILITIES = Object.freeze([
   { id: "self_charge_1", label: "Self-charge 1", description: "Goes to charge when its charge drops below 20%.",
     choose: (world, robot) => (robot.battery < 0.2 ? pick("charge", world, robot) : null) },
@@ -144,11 +148,11 @@ export const PREFAB_ABILITIES = Object.freeze([
   { id: "register_2", label: "Register 2", description: "Stays at a register all the time, so customers never wait for it to walk over.",
     choose: (world, robot) => pick("work_register", world, robot) },
   { id: "stock_1", label: "Stock 1", description: "Refills a shelf once it's completely empty, and otherwise carries delivery crates into the backroom.",
-    choose: (world, robot) => (lowFill(world) <= 0 ? pick("restock", world, robot) : null) ?? pick("unload_pad", world, robot) },
+    choose: (world, robot) => restockBelow(world, robot, 0, true) ?? pick("unload_pad", world, robot) },
   { id: "stock_2", label: "Stock 2", description: "Refills the emptiest shelf once one drops below half full, and otherwise carries delivery crates into the backroom.",
-    choose: (world, robot) => (lowFill(world) < 0.5 ? pick("restock", world, robot) : null) ?? pick("unload_pad", world, robot) },
+    choose: (world, robot) => restockBelow(world, robot, 0.5) ?? pick("unload_pad", world, robot) },
   { id: "stock_3", label: "Stock 3", description: "Like Stock 2, but when there's nothing else to do it tops off any shelf that isn't full.",
-    choose: (world, robot) => (lowFill(world) < 0.5 ? pick("restock", world, robot) : null) ?? pick("unload_pad", world, robot) ?? pick("restock", world, robot) },
+    choose: (world, robot) => restockBelow(world, robot, 0.5) ?? pick("unload_pad", world, robot) ?? pick("restock", world, robot) },
   { id: "clean_1", label: "Clean 1", description: "Cleans up messes on the sales floor.",
     choose: (world, robot) => pick("clean", world, robot) },
 ]);
@@ -172,20 +176,25 @@ export function conditionMet(condition, world, robot, measures = MEASURES) {
 
 /** The register/shelf/station the action would use, or null when it can't be done right now. */
 export function actionTarget(actionId, world, robot) {
+  if (world.unavailableActions?.includes(actionId)) return null;
+  const available = (target) => !world.unavailableTargets?.some((entry) =>
+    entry.action === actionId && entry.id === target.id);
   switch (actionId) {
     case "work_register": {
-      const free = world.registers.filter((register) => !register.staffedBy || register.staffedBy === robot.id);
+      const free = world.registers.filter((register) =>
+        (!register.staffedBy || register.staffedBy === robot.id) && available(register));
       return free.reduce((best, register) => (!best || register.line > best.line ? register : best), null);
     }
     case "restock": {
-      const low = lowestShelf(world);
+      const low = lowestShelf({ shelves: world.shelves.filter(available) });
       return world.backroomCrates > 0 && low && low.fill < 1 ? low : null;
     }
     case "unload_pad": return world.padCrates > 0 && world.backroomCrates < world.backroomCapacity ? { id: "pad" } : null;
     case "clean": return world.messes > 0 ? { id: "mess" } : null;
     case "charge":
       if (robot.battery >= 1) return null;
-      return world.stations.find((station) => !station.usedBy || station.usedBy === robot.id) ?? null;
+      return world.stations.find((station) =>
+        (!station.usedBy || station.usedBy === robot.id) && available(station)) ?? null;
     case "wait": return { id: "wait" };
     default: throw new Error(`Unknown robot action: ${actionId}`);
   }

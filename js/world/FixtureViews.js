@@ -10,6 +10,7 @@ import { ShelfAttentionHighlight } from "../logic/ShelfAttentionHighlight.js";
 import { ShelfFacingLight } from "../logic/ShelfFacingLight.js";
 import { ShelfItemDisplay } from "../logic/ShelfItemDisplay.js";
 import { getFixtureTexture, hasFacingTextures } from "../logic/FixtureTexture.js";
+import { MASTER_COMPUTER_SPRITE, masterComputerAnimationKey } from "../logic/MasterComputerArt.js";
 import { isPaintableFixture, shelfPaintTint } from "../logic/ShelfPaint.js";
 import {
   REGISTER_FRONT_OVERLAP, fixtureArtInset, fixtureBounds, fixtureFacingStep, fixtureFootprint, fixtureRotation,
@@ -79,6 +80,7 @@ export class FixtureViews {
       sprite.setTexture(getFixtureTexture(spec, rotation));
       this.sizeFacingArt(sprite, spec, rotation);
     }
+    if (spec.kind === "master_computer") this.updateMasterComputerAnimation(fixture);
     sprite.setPosition(x, y).setAngle(facingArt ? 0 : rotation * 90);
     const footprint = fixtureFootprint(fixture);
     const inset = fixtureArtInset(fixture);
@@ -137,16 +139,29 @@ export class FixtureViews {
     const scene = this.shop;
     const width = fixture.gridDimensions.w * TILE_SIZE;
     const height = fixture.gridDimensions.h * TILE_SIZE;
-    const image = scene.add.image(fixture.x, fixture.y, textureKey).setDisplaySize(width, height);
+    const spec = fixture.type ? getFixtureType(fixture.type) : null;
+    const image = spec?.kind === "master_computer"
+      ? scene.add.sprite(fixture.x, fixture.y, MASTER_COMPUTER_SPRITE.key, 0).setDisplaySize(width, height)
+      : scene.add.image(fixture.x, fixture.y, textureKey).setDisplaySize(width, height);
     scene.obstacleGroup.add(image); // solid -- customers walk up to it, not through it
     fixture.sprite = image;
-    image.setInteractive({ useHandCursor: true, pixelPerfect: getFixtureType(fixture.type)?.artLayout === "budget" });
-    if (isPaintableFixture(getFixtureType(fixture.type))) image.setTint(shelfPaintTint(fixture.paint));
+    image.setInteractive({ useHandCursor: true, pixelPerfect: spec?.artLayout === "budget" });
+    if (spec && isPaintableFixture(spec)) image.setTint(shelfPaintTint(fixture.paint));
     image.on("pointerdown", (pointer) => {
       if (pointer.event?.target === scene.game.canvas && !isWorldMouseBinding(pointer.event)) {
-        scene.fixtureSystem.tryOpenFixtureWindow(fixture);
+        if (spec?.kind === "master_computer") scene.managerTablet.robotServiceTab.openTerminal();
+        else scene.fixtureSystem.tryOpenFixtureWindow(fixture);
       }
     });
+    if (spec?.kind === "master_computer") this.updateMasterComputerAnimation(fixture);
+  }
+
+  updateMasterComputerAnimation(fixture) {
+    const level = Math.max(1, this.shop.gameState?.robotService?.masterComputerLevel ?? 1);
+    const key = masterComputerAnimationKey(level);
+    if (fixture.sprite.masterComputerAnimation === key) return;
+    fixture.sprite.masterComputerAnimation = key;
+    fixture.sprite.play(key);
   }
 
   /**

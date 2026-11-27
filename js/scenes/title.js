@@ -127,6 +127,7 @@ export class TitleScene extends Phaser.Scene {
         <button class="action-btn" data-dev-shelf-color-lab>SHELF COLOR LAB</button>
         <button class="action-btn" data-dev-shelf-room>SHELF TEST ROOM</button>
         <button class="action-btn" data-dev-ui-lab>UI LAB</button>
+        <button class="action-btn" data-dev-robot-lab>ROBOT LAB</button>
         <button class="action-btn" data-dev-starting-template>STARTING TEMPLATE</button>
         <button class="action-btn" data-dev-decorator>DECORATOR MODE</button>
         <button class="action-btn" data-dev-decoration-gallery>DECORATION GALLERY</button>
@@ -160,6 +161,10 @@ export class TitleScene extends Phaser.Scene {
     devButton("[data-dev-ui-lab]", () => {
       this.devWindow.close();
       this.startGameScene({ sandbox: true, lab: "ui" });
+    });
+    devButton("[data-dev-robot-lab]", () => {
+      this.devWindow.close();
+      this.startGameScene({ sandbox: true, lab: "robots" });
     });
     devButton("[data-dev-starting-template]", () => {
       this.devWindow.close();

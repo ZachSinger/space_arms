@@ -614,6 +614,43 @@ test("packing from a stack still requires facing its floor base within reach and
   assert.equal(order.getAvailableUnitsFor("wpn_rif_01"), 1);
 });
 
+test("holding E keeps packing after a short pause and stops when released or the order is full", async () => {
+  const { PlayerControls } = await server.ssrLoadModule("/js/input/PlayerControls.js");
+  const { shop, stock, order } = createPackingFixture("top");
+  order.requiredItems = [{ itemId: "wpn_rif_01", quantity: 3 }];
+  stock.quantity = 5;
+  shop.time = { now: 0 };
+  const controls = new PlayerControls(shop);
+  let held = true;
+  controls.isActionDown = (action) => action === "interact" && held;
+  const packed = () => order.getAvailableUnitsFor("wpn_rif_01");
+
+  controls.interactNow();
+  assert.equal(packed(), 1);
+  shop.time.now = 200;
+  controls.updatePackRepeat();
+  assert.equal(packed(), 1, "a quick tap packs only one item");
+  shop.time.now = 300;
+  controls.updatePackRepeat();
+  assert.equal(packed(), 2);
+  shop.time.now = 450;
+  controls.updatePackRepeat();
+  assert.equal(packed(), 3);
+  shop.time.now = 600;
+  controls.updatePackRepeat();
+  assert.equal(packed(), 3);
+  assert.equal(stock.quantity, 2);
+  assert.equal(controls.packRepeat, null, "holding stops once the order needs nothing more");
+
+  order.requiredItems = [{ itemId: "wpn_rif_01", quantity: 5 }];
+  controls.interactNow();
+  assert.equal(packed(), 4);
+  held = false;
+  shop.time.now = 2000;
+  controls.updatePackRepeat();
+  assert.equal(packed(), 4, "letting go stops packing");
+});
+
 test("packing the last item from a Loading Pad crate leaves the empty crate locked in its spot", () => {
   const { shop, stock, order } = createPackingFixture("loading-pad");
   stock.quantity = 1;

@@ -3,6 +3,9 @@ import { controlLabel } from "../input/InputDevice.js";
 import { fixtureFacing } from "../logic/FixtureLayout.js";
 import { TILE_SIZE } from "../logic/RoomLayout.js";
 
+// What packing an item into the carried remote order counts as; holding E repeats only this.
+export const ORDER_PACKING_KIND = "remote-order-stock";
+
 export class InteractionSystem {
   constructor(shop) {
     this.shop = shop;
@@ -102,7 +105,7 @@ export class InteractionSystem {
     const action = shop.interactables.findTarget("interact", this.getInteractionOrigin());
     if (action?.perform) {
       action.perform();
-      return;
+      return action;
     }
     if (shop.heldTrash) {
       shop.messages.show(`Face a trashcan and press ${controlLabel("interact")} to throw the trash away, ` +
@@ -122,6 +125,15 @@ export class InteractionSystem {
     }
 
     shop.messages.show("Nothing nearby to interact with", "#94a3b8");
+  }
+
+  /** Holding E keeps packing the carried remote order; returns false once there's nothing to pack. */
+  packHeldOrderItem() {
+    const shop = this.shop;
+    if (!shop.controlMode.allows("interact") || shop.checkoutSystem.operatingRegister) return false;
+    const action = shop.interactables.findTarget("interact", this.getInteractionOrigin());
+    if (action?.kind !== ORDER_PACKING_KIND || !action.perform) return false;
+    return action.perform() !== false;
   }
 
   updateHint() {

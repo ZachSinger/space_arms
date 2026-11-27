@@ -52,6 +52,41 @@ function snapshot() {
   };
 }
 
+test("Robot Service saves reject invalid or unpowered builds", () => {
+  const saved = snapshot();
+  saved.playerState.robotService = {
+    ownedParts: { basic_cell: 1 },
+    robots: [{
+      id: "robot-1", name: "Register Bot", frame: "worker_frame", cell: "basic_cell",
+      boards: [{ board: "self_charge_1" }, { board: "register_1" }],
+    }],
+    nextRobotId: 2,
+  };
+  assert.deepEqual(validateShopSave(saved, database), saved);
+  const overCapacity = structuredClone(saved);
+  overCapacity.playerState.robotService.masterComputerLevel = 0;
+  assert.throws(() => validateShopSave(overCapacity, database), /robot count exceeds Master Computer capacity/);
+  const invalidLevel = structuredClone(saved);
+  invalidLevel.playerState.robotService.masterComputerLevel = 6;
+  assert.throws(() => validateShopSave(invalidLevel, database), /robot count exceeds Master Computer capacity/);
+  for (const boards of [
+    [null],
+    [],
+    [{ board: "mod_stocking" }],
+    [{ board: "custom_small" }],
+    [{ board: "self_charge_1" }, { board: "stock_3" }],
+  ]) {
+    const broken = structuredClone(saved);
+    broken.playerState.robotService.robots[0].boards = boards;
+    assert.throws(() => validateShopSave(broken, database), /invalid assembled robot|invalid parts or power requirement/);
+  }
+  for (const field of [{ battery: -0.1 }, { battery: 1.1 }, { battery: "full" }, { onShift: "yes" }]) {
+    const broken = structuredClone(saved);
+    Object.assign(broken.playerState.robotService.robots[0], field);
+    assert.throws(() => validateShopSave(broken, database), /invalid assembled robot/);
+  }
+});
+
 test("customer reviews survive saves; malformed reviews are rejected", () => {
   const saved = snapshot();
   saved.market.day = 4;
