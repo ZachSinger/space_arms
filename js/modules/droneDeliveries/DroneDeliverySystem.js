@@ -21,6 +21,7 @@ import { controlLabel } from "../../input/InputDevice.js";
 import { matchesBinding } from "../../input/KeyBindings.js";
 import { describeOrderSources, findOrderItemSources } from "./OrderSources.js";
 import { OrderTracker } from "./OrderTracker.js";
+import { OutgoingDeliveryAnimation } from "./OutgoingDeliveryAnimation.js";
 import { COOP_TUNING, friendInShop } from "../../coop/CoopTuning.js";
 
 // The terminal art reaches 15px left, 103px right and 28px up from this point, and the pad's
@@ -105,6 +106,7 @@ export class DroneDeliverySystem {
     this.registerInteractions();
     this.buildWindow();
     this.tracker = new OrderTracker();
+    this.departure = new OutgoingDeliveryAnimation(shop);
     this.unsubscribeShiftStarted = shop.eventBus.on(GAME_EVENTS.SHIFT_STARTED, () => {
       this.hoursRolled = 0;
     });
@@ -659,6 +661,7 @@ export class DroneDeliverySystem {
     this.syncTerminalState();
     this.updateTerminalAnimation(delta);
     this.updateShipFeedback(delta);
+    this.departure?.update(delta);
     this.updateDeliveryPad(delta);
     this.updateGuidance(time, delta);
   }
@@ -998,6 +1001,7 @@ export class DroneDeliverySystem {
     this.activeTab = this.orderState.activeOrder ? "order" : this.orderState.offers.length ? "offers" : "order";
     this.pendingShipId = null;
     this.startShipFeedback();
+    this.departure?.enqueue(order.id.slice("remote-order-".length));
     this.shop.messages.show(
       `Remote order shipped for ${formatMoneyAmount(order.payout)}. Store reputation +${order.reputation}.`,
       "#10b981",
@@ -1091,5 +1095,6 @@ export class DroneDeliverySystem {
     for (const marker of this.sourceMarkers ?? []) marker.destroy();
     this.sourceMarkers = [];
     this.tracker?.destroy();
+    this.departure?.destroy();
   }
 }

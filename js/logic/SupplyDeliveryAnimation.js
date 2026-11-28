@@ -30,6 +30,35 @@ export function deliveryCratePosition(index, count, age) {
   };
 }
 
+export function makeStars() {
+  return Array.from({ length: 90 }, (_, i) => ({
+    x: (i * 97 + i * i * 13) % W, y: (i * 59 + i * i * 7) % H,
+    size: i % 11 === 0 ? 2 : 1, depth: 0.3 + i % 5 * 0.15,
+  }));
+}
+
+// The drifting starfield and planet edge shared by the incoming and outgoing delivery windows.
+export function drawSpaceBackdrop(ctx, stars, time) {
+  const backdrop = ctx.createLinearGradient(0, 0, W, H);
+  backdrop.addColorStop(0, "#050917");
+  backdrop.addColorStop(0.55, "#121f37");
+  backdrop.addColorStop(1, "#0a1022");
+  ctx.fillStyle = backdrop;
+  ctx.fillRect(0, 0, W, H);
+  stars.forEach((star, i) => {
+    ctx.fillStyle = `rgba(200,222,255,${0.35 + 0.25 * star.depth + 0.15 * Math.sin(time * 1.3 + i)})`;
+    ctx.fillRect((star.x - time * 6 * star.depth + W * 10) % W, star.y, star.size, star.size);
+  });
+  const planet = ctx.createRadialGradient(W / 2, H + 330, 300, W / 2, H + 330, 360);
+  planet.addColorStop(0, "#2a5470");
+  planet.addColorStop(0.85, "#1b3a55");
+  planet.addColorStop(1, "#6fb8d0");
+  ctx.fillStyle = planet;
+  ctx.beginPath();
+  ctx.arc(W / 2, H + 330, 360, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 export function deliveryDropTime(index, count) {
   let age = DIVE_AFTER;
   while (deliveryCratePosition(index, count, age).y <= H + 30) age += 0.01;
@@ -56,10 +85,7 @@ export class SupplyDeliveryAnimation {
     this.status = document.createElement("span");
     this.status.className = "supply-delivery-status";
     this.uiWindow.element.querySelector(".retro-window-header").append(this.status);
-    this.stars = Array.from({ length: 90 }, (_, i) => ({
-      x: (i * 97 + i * i * 13) % W, y: (i * 59 + i * i * 7) % H,
-      size: i % 11 === 0 ? 2 : 1, depth: 0.3 + i % 5 * 0.15,
-    }));
+    this.stars = makeStars();
   }
 
   enqueue(crates) {
@@ -127,33 +153,40 @@ export class SupplyDeliveryAnimation {
     }
   }
 
+  // The crate's own frame in its pad color, so each crate in space matches the one that lands.
+  crateImage(sprite) {
+    const tint = sprite.isTinted ? sprite.tintTopLeft : 0xffffff;
+    const key = `${sprite.texture.key}:${sprite.frame.name}:${tint}`;
+    this.crateImages ??= new Map();
+    if (this.crateImages.has(key)) return this.crateImages.get(key);
+    const { cutX, cutY, cutWidth, cutHeight } = sprite.frame;
+    const canvas = document.createElement("canvas");
+    canvas.width = cutWidth;
+    canvas.height = cutHeight;
+    const ctx = canvas.getContext("2d");
+    const source = sprite.texture.getSourceImage();
+    ctx.drawImage(source, cutX, cutY, cutWidth, cutHeight, 0, 0, cutWidth, cutHeight);
+    if (tint !== 0xffffff) {
+      ctx.globalCompositeOperation = "multiply";
+      ctx.fillStyle = `#${tint.toString(16).padStart(6, "0")}`;
+      ctx.fillRect(0, 0, cutWidth, cutHeight);
+      ctx.globalCompositeOperation = "destination-in";
+      ctx.drawImage(source, cutX, cutY, cutWidth, cutHeight, 0, 0, cutWidth, cutHeight);
+    }
+    this.crateImages.set(key, canvas);
+    return canvas;
+  }
+
   drawSpace(time, entries) {
     const ctx = this.context, count = entries.length;
     const lastDrop = entries.at(-1).start;
     const leave = lastDrop + 0.3;
-    const backdrop = ctx.createLinearGradient(0, 0, W, H);
-    backdrop.addColorStop(0, "#050917");
-    backdrop.addColorStop(0.55, "#121f37");
-    backdrop.addColorStop(1, "#0a1022");
-    ctx.fillStyle = backdrop;
-    ctx.fillRect(0, 0, W, H);
-    this.stars.forEach((star, i) => {
-      ctx.fillStyle = `rgba(200,222,255,${0.35 + 0.25 * star.depth + 0.15 * Math.sin(time * 1.3 + i)})`;
-      ctx.fillRect((star.x - time * 6 * star.depth + W * 10) % W, star.y, star.size, star.size);
-    });
-    const planet = ctx.createRadialGradient(W / 2, H + 330, 300, W / 2, H + 330, 360);
-    planet.addColorStop(0, "#2a5470");
-    planet.addColorStop(0.85, "#1b3a55");
-    planet.addColorStop(1, "#6fb8d0");
-    ctx.fillStyle = planet;
-    ctx.beginPath();
-    ctx.arc(W / 2, H + 330, 360, 0, Math.PI * 2);
-    ctx.fill();
+    drawSpaceBackdrop(ctx, this.stars, time);
     for (let index = 0; index < count; index++) {
       const age = time - FIRST_LAUNCH - index * GAP;
       if (age < 0 || time >= entries[index].start) continue;
       const at = deliveryCratePosition(index, count, age);
-      const sprite = entries[index].crate.sprite;
+      const image = this.crateImage(entries[index].crate.sprite);
       if (age >= DIVE_AFTER) {
         const back = deliveryCratePosition(index, count, Math.max(DIVE_AFTER, age - 0.08));
         const trail = ctx.createLinearGradient(at.x, back.y - 10, at.x, at.y);
@@ -165,7 +198,7 @@ export class SupplyDeliveryAnimation {
       ctx.save();
       ctx.translate(at.x, at.y);
       ctx.rotate(age >= DIVE_AFTER ? 0 : Math.sin(age * 9 + index) * 0.25);
-      ctx.drawImage(sprite.texture.getSourceImage(), -13, -11.5, 26, 23);
+      ctx.drawImage(image, -13, -11.5, 26, 23);
       ctx.restore();
     }
     let x = SHIP_X;

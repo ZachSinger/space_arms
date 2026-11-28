@@ -199,6 +199,10 @@
   pointer-events: none;
 }
 
+.supply-delivery-window.stacked {
+  bottom: 400px;
+}
+
 .supply-delivery-window .retro-window-body {
   padding: 0;
 }
