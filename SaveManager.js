@@ -182,12 +182,15 @@ export class SaveManager {
   }
 
   async delete(slotId) {
-    if (this.slotId === slotId) throw new Error("You cannot delete the shop you are playing. Return to the title screen first.");
     await changeLibrary(this.storage, (library) => {
       const index = library.slots.findIndex((entry) => entry.slotId === slotId);
       if (index === -1) throw new Error("That save no longer exists.");
       library.slots.splice(index, 1);
     });
+    if (this.slotId === slotId) {
+      this.slotId = null;
+      this.name = null;
+    }
   }
 
   // Apply the stored save to every subsystem. False if there is no save.

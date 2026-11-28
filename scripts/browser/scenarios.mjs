@@ -63,6 +63,87 @@ const openFloor = (h) => h.game((scene) => {
 // --- Scenarios ---
 
 export const scenarios = {
+  async "right-click deletes saves after confirmation"(h) {
+    const failures = [];
+    const check = (condition, message) => { if (!condition) failures.push(message); };
+    const pauseList = "#pause-save-slots";
+    const pauseConfirm = "#pause-save-slots-confirmation";
+    const titleList = "#title-save-slots";
+    const titleConfirm = "#title-save-slots-confirmation";
+    await h.newGame({ real: true, saveName: "First shop" });
+    const ids = await h.game(async (scene) => {
+      await scene.saves.saveOffShift();
+      const first = scene.saves.manager.slotId;
+      await scene.saves.saveManually({ slotId: null, name: "Second shop" });
+      const second = scene.saves.manager.slotId;
+      await scene.saves.saveManually({ slotId: null, name: "Active shop" });
+      const active = scene.saves.manager.slotId;
+      scene.pauseMenu.open();
+      return { first, second, active };
+    });
+    await h.page.locator('[data-pause-action="save"]').click();
+    const firstCard = `${pauseList} [data-save-slot="${ids.first}"]`;
+    await h.page.locator(firstCard).click({ button: "right" });
+    check((await h.page.locator(`${pauseConfirm} [data-save-warning]`).innerText()).includes("First shop"),
+      "Right-click did not identify the save to delete");
+    await h.page.locator(`${pauseConfirm} [data-save-cancel]`).click();
+    check(await h.page.locator(firstCard).count() === 1, "Cancel deleted a save");
+
+    await h.game((scene, id) => {
+      const navigator = scene.controls.uiNavigator;
+      navigator.focus(document.querySelector(`#pause-save-slots [data-save-slot="${id}"]`));
+      navigator.secondary();
+      const storage = scene.saves.manager.storage;
+      window.__saveWrite = storage.write;
+      storage.write = async () => { throw new Error("Deletion test: disk full"); };
+    }, ids.first);
+    await h.page.locator(`${pauseConfirm} [data-save-confirm]`).click();
+    await h.page.waitForFunction(() => document.querySelector("#pause-save-slots-confirmation [data-save-confirm-status]")
+      .textContent.includes("Deletion test: disk full"));
+    check(await h.page.locator(firstCard).count() === 1, "A failed deletion removed the save");
+    check(await h.game(async (scene, id) => Boolean(await scene.saves.manager.read(id)), ids.first),
+      "A failed deletion removed the stored save");
+    await h.game((scene) => { scene.saves.manager.storage.write = window.__saveWrite; });
+    for (let index = h.problems.length - 1; index >= 0; index -= 1) {
+      if (h.problems[index].text.includes("Deletion test: disk full")) h.problems.splice(index, 1);
+    }
+    await h.page.locator(`${pauseConfirm} [data-save-confirm]`).click();
+    await h.page.locator(firstCard).waitFor({ state: "detached" });
+    check(await h.game((scene) => scene.saves.manager.slotId) === ids.active,
+      "Deleting another save changed the active save");
+    check(await h.page.locator(`${pauseList} [data-save-slot]`).count() === 2, "Deleting one save removed another");
+
+    await h.game((scene) => { scene.scene.start("scene-title"); });
+    await h.page.waitForFunction(() => window.__game.scene.getScene("scene-title")?.sys.isActive());
+    await h.page.evaluate(() => window.__game.scene.getScene("scene-title").continueGame());
+    const secondCard = `${titleList} [data-save-slot="${ids.second}"]`;
+    await h.page.locator(secondCard).click({ button: "right" });
+    await h.page.locator(`${titleConfirm} [data-save-confirm]`).click();
+    await h.page.locator(secondCard).waitFor({ state: "detached" });
+    check(await h.page.locator(`${titleList} [data-save-slot]`).count() === 1, "Title deletion removed another save");
+    await h.page.locator(`${titleList} [data-save-slot="${ids.active}"]`).click();
+    await h.page.waitForFunction((id) => {
+      const scene = window.__game.scene.getScene("scene-game");
+      return scene?.sys.isActive() && scene.saves?.manager.slotId === id;
+    }, ids.active, { timeout: 60000 });
+
+    await h.game((scene) => scene.pauseMenu.open());
+    await h.page.locator('[data-pause-action="load"]').click();
+    const activeCard = `${pauseList} [data-save-slot="${ids.active}"]`;
+    await h.page.locator(activeCard).click({ button: "right" });
+    const warning = await h.page.locator(`${pauseConfirm} [data-save-warning]`).innerText();
+    check(warning.includes("title screen") && warning.includes("unsaved progress"),
+      "Active-save deletion did not warn about leaving the shop");
+    await h.page.locator(`${pauseConfirm} [data-save-cancel]`).click();
+    check(await h.page.locator(activeCard).count() === 1, "Cancel deleted the active save");
+    await h.page.locator(activeCard).click({ button: "right" });
+    await h.page.locator(`${pauseConfirm} [data-save-confirm]`).click();
+    await h.page.waitForFunction(() => window.__game.scene.getScene("scene-title")?.sys.isActive());
+    await h.wait(300);
+    const remaining = await h.page.evaluate(() => JSON.parse(localStorage.getItem("space-arms-saves-v2")).slots);
+    check(remaining.length === 0, "The deleted active save was recreated or another save remained");
+    return failures;
+  },
   async "multiple save slots keep separate shops and show play time"(h) {
     const failures = [];
     const check = (condition, message) => { if (!condition) failures.push(message); };

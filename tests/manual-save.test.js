@@ -1096,6 +1096,50 @@ test("play time is saved during shifts without overwriting the last closed-shop 
   assert.equal(scene.saves.canWrite(), false);
 });
 
+test("deleting the active save waits for a pending save and prevents autosave from recreating it", async () => {
+  let finishWrite;
+  let delayWrite = false;
+  const { scene, errors } = createHarness(() => delayWrite
+    ? new Promise((resolve) => { finishWrite = resolve; })
+    : Promise.resolve(true));
+  scene.scene = { isActive: () => true };
+  await scene.saves.saveOffShift();
+  const slotId = scene.saves.manager.slotId;
+  scene.credits = 500;
+  delayWrite = true;
+  const saving = scene.saves.saveOffShift();
+  await new Promise((resolve) => setImmediate(resolve));
+  scene.saves.requestAutosave();
+  const deleting = scene.saves.deleteSave(slotId);
+  delayWrite = false;
+  finishWrite(true);
+  await saving;
+  await deleting;
+  scene.saves.requestAutosave();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(await scene.saves.manager.list(), []);
+  assert.equal(scene.saves.manager.slotId, null);
+  assert.equal(scene.saves.autosaveBlocked, true);
+  assert.deepEqual(errors, []);
+});
+
+test("a failed active-save deletion keeps the save and restores autosaving", async () => {
+  let fail = false;
+  const { scene } = createHarness(async () => {
+    if (fail) throw new Error("Disk full");
+    return true;
+  });
+  scene.scene = { isActive: () => true };
+  await scene.saves.saveOffShift();
+  const slotId = scene.saves.manager.slotId;
+  fail = true;
+  await assert.rejects(scene.saves.deleteSave(slotId), /Disk full/);
+  assert.equal(scene.saves.manager.slotId, slotId);
+  assert.equal((await scene.saves.manager.read(slotId)).data.shop.credits, 436);
+  assert.equal(scene.saves.autosaveBlocked, false);
+  assert.equal(scene.saves.deletingActiveSave, false);
+});
+
 test("manual save failures use the save error path and never confirm success", async () => {
   const failure = new Error("Disk full");
   const { scene, errors, messages, controls } = createHarness(async () => { throw failure; });

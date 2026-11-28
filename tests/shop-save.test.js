@@ -563,11 +563,11 @@ test("last-played time updates without changing a shop checkpoint; saves can be 
   await manager.rename(slotId, "  Renamed shop  ");
   assert.equal((await manager.list())[0].name, "Renamed shop");
   await assert.rejects(manager.rename(slotId, " "), /Enter a save name/);
-  await assert.rejects(manager.delete(slotId), /cannot delete the shop you are playing/);
-  const title = new SaveManager({}, storage);
-  await title.delete(slotId);
-  assert.deepEqual(await title.list(), []);
-  await assert.rejects(title.read(slotId), /no longer exists/);
+  await manager.delete(slotId);
+  assert.equal(manager.slotId, null);
+  assert.equal(manager.name, null);
+  assert.deepEqual(await manager.list(), []);
+  await assert.rejects(manager.read(slotId), /no longer exists/);
 });
 
 test("failed replacement leaves both saves and the active save unchanged", async () => {

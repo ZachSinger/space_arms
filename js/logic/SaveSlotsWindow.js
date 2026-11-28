@@ -13,10 +13,11 @@ export function formatPlayTime(milliseconds) {
 }
 
 export class SaveSlotsWindow {
-  constructor(manager, { id, saves, onLoad, onSave, onClose }) {
+  constructor(manager, { id, saves, onLoad, onSave, onDelete, onClose }) {
     this.saves = saves;
     this.onLoad = onLoad;
     this.onSave = onSave;
+    this.onDelete = onDelete ?? ((slotId) => saves.delete(slotId));
     this.mode = "load";
     this.busy = false;
     this.uiWindow = new UIWindow({
@@ -50,6 +51,12 @@ export class SaveSlotsWindow {
     this.uiWindow.element.addEventListener("click", (event) => {
       const card = event.target.closest("button[data-save-slot]");
       if (card) void this.run(() => this.select(card.dataset.saveSlot));
+    });
+    this.uiWindow.element.addEventListener("contextmenu", (event) => {
+      const card = event.target.closest("button[data-save-slot]");
+      if (!card) return;
+      event.preventDefault();
+      void this.run(() => this.delete(card.dataset.saveSlot));
     });
     this.uiWindow.element.querySelector("[data-save-new]").addEventListener("click", () => {
       this.confirm("Enter a name for your new save.", async () => {
@@ -128,7 +135,7 @@ export class SaveSlotsWindow {
           hour: "numeric", minute: "2-digit",
         })}`;
         return String(html`
-          <button type="button" class="save-slot" data-save-slot="${slot.slotId}" data-pad-autofocus>
+          <button type="button" class="save-slot" data-save-slot="${slot.slotId}" data-pad-autofocus title="Right-click to delete this save.">
             <strong>${slot.name}</strong>
             <span>Last played: <time datetime="${date.toISOString()}">${dateText}</time></span>
             <span>Total play time: ${formatPlayTime(slot.playTimeMs)}</span>
@@ -176,6 +183,20 @@ export class SaveSlotsWindow {
       this.confirmation.close();
       this.uiWindow.close();
     }, { title: "OVERWRITE SAVE", button: "OVERWRITE" });
+  }
+
+  async delete(slotId) {
+    const slot = this.slots.find((entry) => entry.slotId === slotId);
+    if (!slot) throw new Error("That save no longer exists.");
+    const active = Boolean(this.onSave) && slotId === this.saves.slotId;
+    const warning = active
+      ? `Delete "${slot.name}"? You will return to the title screen and lose unsaved progress. This cannot be undone.`
+      : `Delete "${slot.name}"? This cannot be undone.`;
+    this.confirm(warning, async () => {
+      await this.onDelete(slotId);
+      this.confirmation.close();
+      if (!active) await this.refresh();
+    }, { title: "DELETE SAVE", button: "DELETE" });
   }
 
   destroy() {

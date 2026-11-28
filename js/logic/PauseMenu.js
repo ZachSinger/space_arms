@@ -61,6 +61,11 @@ export class PauseMenu {
         }
       },
       onSave: (options) => shop.saves.saveManually(options),
+      onDelete: async (slotId) => {
+        const deletingActive = slotId === shop.saves.manager.slotId;
+        await shop.saves.deleteSave(slotId);
+        if (deletingActive) shop.scene.start("scene-title");
+      },
       onLoad: async (payload) => {
         const savedShopData = validateShopSave(payload.data.shop, database);
         await shop.saves.flushMetadata();

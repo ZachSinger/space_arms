@@ -23,6 +23,7 @@ export class SaveSystem {
     this.shop = shop;
     this.loadFailed = false;
     this.autosaveBlocked = false;
+    this.deletingActiveSave = false;
     this.autosaveQueued = false;
     this.inProgress = null;
     this.showingSave = false;
@@ -136,11 +137,11 @@ export class SaveSystem {
 
   // Coalesces any number of requests in one tick into a single save attempt.
   requestAutosave() {
-    if (!this.canWrite() || this.autosaveBlocked || this.autosaveQueued) return;
+    if (!this.canWrite() || this.autosaveBlocked || this.deletingActiveSave || this.autosaveQueued) return;
     this.autosaveQueued = true;
     queueMicrotask(() => {
       this.autosaveQueued = false;
-      if (!this.shop.scene.isActive() || !this.canWrite()) return;
+      if (!this.shop.scene.isActive() || !this.canWrite() || this.autosaveBlocked || this.deletingActiveSave) return;
       this.saveOffShift().catch((error) => this.handleError(error));
     });
   }
@@ -161,7 +162,7 @@ export class SaveSystem {
       this.showingSave = true;
       await this.saveOffShift({ ...options, force: Object.hasOwn(options, "slotId") });
       await this.flushMetadata();
-      this.autosaveBlocked = false;
+      if (!this.deletingActiveSave) this.autosaveBlocked = false;
       shop.messages.closeSaveError();
       this.setStatus(SAVED_STATUS);
       shop.messages.show("Game saved.");
@@ -178,6 +179,7 @@ export class SaveSystem {
   // Waits out any save already running, then skips writing if nothing changed since the
   // last successful save.
   async saveOffShift({ force = false, ...options } = {}) {
+    if (this.deletingActiveSave) throw new Error("The current save is being deleted.");
     if (!this.canWrite()) return;
     if (this.inProgress) {
       await this.inProgress;
@@ -193,7 +195,7 @@ export class SaveSystem {
       await this.inProgress;
       this.lastSavedSnapshot = snapshot;
       this.lastMetadataPlayTimeMs = playTimeMs;
-      this.autosaveBlocked = false;
+      if (!this.deletingActiveSave) this.autosaveBlocked = false;
       this.setStatus(SAVED_STATUS);
       this.shop.messages.closeSaveError();
     } finally {
@@ -213,12 +215,28 @@ export class SaveSystem {
 
   // Play-time updates never replace the last off-shift checkpoint with a running shift.
   async flushMetadata() {
-    if (this.shop.sandbox || this.loadFailed) return;
+    if (this.shop.sandbox || this.loadFailed || this.deletingActiveSave) return;
     if (this.inProgress) await this.inProgress;
+    if (this.deletingActiveSave) return;
     if (this.manager.slotId === null || this.lastMetadataPlayTimeMs === this.playTimeMs) return;
     const playTimeMs = this.playTimeMs;
     await this.manager.touch(playTimeMs);
     this.lastMetadataPlayTimeMs = playTimeMs;
+  }
+
+  async deleteSave(slotId) {
+    if (slotId !== this.manager.slotId) return this.manager.delete(slotId);
+    const wasBlocked = this.autosaveBlocked;
+    this.autosaveBlocked = true;
+    this.deletingActiveSave = true;
+    try {
+      if (this.inProgress) await this.inProgress;
+      await this.manager.delete(slotId);
+    } catch (error) {
+      this.autosaveBlocked = wasBlocked;
+      this.deletingActiveSave = false;
+      throw error;
+    }
   }
 
   destroy() {

@@ -183,7 +183,9 @@ function storeTopic({ shopLevel, reputation }) {
         choose <strong>CREATE NEW SAVE</strong> and enter a save file name. Future autosaves
         go to the save you choose.
         <strong>Load Game</strong> and <strong>Continue</strong> on the title screen show
-        each save's last-played date and time and total play time. Play time includes shop
+        each save's last-played date and time and total play time. Right-click a save to
+        delete it after confirmation. Deleting the shop you are playing returns you to the
+        title screen. Play time includes shop
         preparation and management, but not the pause menu. Loading during a shift returns
         to the last between-shift checkpoint.</p>`),
     section("Ending a Shift", `
