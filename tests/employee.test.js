@@ -130,21 +130,46 @@ function makeRobot(boards) {
   return { robot, store: employee.store, crate, shelf, completedSales };
 }
 
-test("robot board order sends a low-charge robot to an available charging station", () => {
-  const { robot, store } = makeRobot(["self_charge_1", "register_2"]);
-  const station = { id: "robot-charger-1", type: "robot_charger", gx: 2, gy: 101 };
+test("a depleted robot without a charging board returns and stays until fully charged", () => {
+  const { robot, store } = makeRobot(["register_2"]);
+  const station = {
+    id: "robot-charger-1", type: "robot_charger", gx: 2, gy: 101, x: 192, y: 6560,
+    sprite: {
+      texture: { key: "robot-charging-station" },
+      depth: 100,
+      setTexture(key) { this.texture.key = key; },
+    },
+  };
   const original = store.fixtures.ofKind;
   store.fixtures.ofKind = (kind) => kind === "robot_charger" ? [station] : original(kind);
-  robot.battery = 0.1;
+  robot.battery = 0;
   robot.startNextTask();
+  assert.equal(robot.state, "ROBOT_TO_CHARGER");
+  robot.update(16);
   assert.equal(robot.state, "ROBOT_TO_CHARGER");
   robot.arriveAtDestination();
   assert.equal(robot.state, "ROBOT_CHARGING");
+  assert.equal(robot.sprite.visible, false);
+  assert.equal(station.sprite.texture.key, "robot-charging-station_charging");
+  assert.equal(robot.dockedVisual.sprite.x, station.x + 0.5);
+  assert.equal(robot.dockedVisual.sprite.y, station.y - 1.5);
+  const nextBatteryLevel = robot.dockedVisual.batteryLevel + 1;
+  const nextBattery = nextBatteryLevel / 7 + 0.01;
+  robot.update((nextBattery - robot.battery) * 1000 * robot.cell.charge / robot.cell.chargeRate);
+  assert.equal(robot.dockedVisual.batteryLevel, nextBatteryLevel);
+  assert.equal(robot.dockedVisual.sprite.texture.key, `robot_hover_bot_docked_${nextBatteryLevel}`);
+  assert.equal(robot.state, "ROBOT_CHARGING");
+  assert.equal(robot.outOfCharge, true);
   robot.update(60_000);
   assert.equal(robot.battery, 1);
+  assert.equal(robot.outOfCharge, false);
   assert.equal(robot.state, "IDLE");
+  assert.equal(station.sprite.texture.key, "robot-charging-station");
+  assert.equal(robot.dockedVisual.sprite.texture.key, "robot_hover_bot_docked_idle");
   robot.startNextTask();
   assert.equal(robot.state, "TO_REGISTER");
+  assert.equal(robot.dockedVisual, null);
+  assert.equal(robot.sprite.visible, true);
 });
 
 test("robot delivery work carries a batch of crates and puts each down once", () => {
@@ -166,7 +191,7 @@ test("robot delivery work carries a batch of crates and puts each down once", ()
 });
 
 test("robots reserve charging stations and try another when one cannot be reached", () => {
-  const { robot, store } = makeRobot(["self_charge_1", "register_2"]);
+  const { robot, store } = makeRobot(["register_2"]);
   const stations = [
     { id: "charger-1", type: "robot_charger", gx: 2, gy: 101 },
     { id: "charger-2", type: "robot_charger", gx: 4, gy: 101 },
@@ -175,16 +200,16 @@ test("robots reserve charging stations and try another when one cannot be reache
   store.fixtures.ofKind = (kind) => kind === "robot_charger" ? stations : original(kind);
   const findClosest = robot.findClosestSpot.bind(robot);
   robot.findClosestSpot = (spots) => findClosest(spots.filter((spot) => spot.fixture?.id !== "charger-1"));
-  robot.battery = 0.1;
+  robot.battery = 0;
   robot.startNextTask();
   assert.equal(robot.currentJob.station, stations[1]);
 
   const other = new RobotWorker({
     id: "robot-2", name: "Other", frame: "lab_frame", cell: "lab_cell",
-    boards: [{ board: "self_charge_1" }],
+    boards: [{ board: "register_2" }],
   }, store);
   store.employees.push(other);
-  other.battery = 0.1;
+  other.battery = 0;
   other.startNextTask();
   assert.equal(other.currentJob.station, stations[0]);
 });
@@ -207,7 +232,7 @@ test("only on-shift robots spawn with their saved charge", () => {
   assert.equal(shop.employees[0].battery, 0.6);
 });
 
-test("a cashier follows board priority without abandoning the register for an unreachable charger", () => {
+test("a cashier keeps working at low battery but automatically returns when depleted", () => {
   const { robot, store } = makeRobot(["self_charge_1", "register_2"]);
   const station = { id: "charger", type: "robot_charger", gx: 2, gy: 101 };
   const original = store.fixtures.ofKind;
@@ -222,7 +247,140 @@ test("a cashier follows board priority without abandoning the register for an un
   assert.equal(robot.state, "AT_REGISTER");
   robot.findClosestSpot = findClosest;
   robot.updateAtRegister(1000);
+  assert.equal(robot.state, "AT_REGISTER");
+  robot.battery = 0;
+  robot.update(1);
   assert.equal(robot.state, "ROBOT_TO_CHARGER");
+});
+
+function addRobotStation(store) {
+  const station = {
+    id: "charger", type: "robot_charger", gx: 2, gy: 101, x: 192, y: 6560,
+    sprite: {
+      texture: { key: "robot-charging-station" }, depth: 100,
+      setTexture(key) { this.texture.key = key; },
+    },
+  };
+  const original = store.fixtures.ofKind;
+  store.fixtures.ofKind = (kind) => kind === "robot_charger" ? [station] : original(kind);
+  return station;
+}
+
+test("station rest leaves for work even with a partial battery, but stays when fully charged and idle", () => {
+  for (const battery of [0.2, 1]) {
+    const { robot, store } = makeRobot(["self_charge_1", "register_1"]);
+    const station = addRobotStation(store);
+    const line = [];
+    store.checkoutSystem.lineFor = () => line;
+    robot.battery = battery;
+    robot.startNextTask();
+    assert.equal(robot.state, "ROBOT_TO_CHARGER");
+    robot.arriveAtDestination();
+    robot.update(1000);
+    assert.equal(robot.state, "ROBOT_STANDBY");
+    assert.equal(robot.sprite.visible, false);
+    assert.equal(station.sprite.texture.key, battery < 1 ?
+      "robot-charging-station_charging" : "robot-charging-station");
+    line.push({ cart: [{}], checkoutPayment: { type: "card" } });
+    const findPath = store.findPath;
+    store.findPath = () => null;
+    robot.update(1000);
+    assert.equal(robot.state, "ROBOT_STANDBY");
+    assert.equal(robot.currentJob.station, station);
+    store.findPath = findPath;
+    robot.update(1000);
+    assert.equal(robot.state, "TO_REGISTER");
+    assert.equal(robot.dockedVisual, null);
+    assert.equal(robot.sprite.visible, true);
+    if (battery < 1) assert.ok(robot.battery < 1);
+  }
+});
+
+test("station rest turns back for new work before arriving at the station", () => {
+  const { robot, store } = makeRobot(["self_charge_2", "register_1"]);
+  addRobotStation(store);
+  const line = [];
+  store.checkoutSystem.lineFor = () => line;
+  robot.startNextTask();
+  assert.equal(robot.currentJob.standby, true);
+  line.push({ cart: [{}], checkoutPayment: { type: "card" } });
+  robot.update(1000);
+  assert.equal(robot.currentJob.jobId, "register");
+  assert.equal(robot.dockedVisual, null);
+});
+
+test("depleted robots wait for a free reachable station and retry a blocked route", () => {
+  const { robot, store } = makeRobot(["register_2"]);
+  const station = addRobotStation(store);
+  const other = { data: { id: "other" }, currentJob: { jobId: "charge", station } };
+  store.employees.push(other);
+  const messages = [];
+  store.showShopMessage = (message) => messages.push(message);
+  robot.battery = 0;
+  robot.update(1);
+  robot.update(2000);
+  assert.equal(robot.state, "ROBOT_WAIT_CHARGER");
+  assert.equal(robot.battery, 0);
+  assert.ok(messages.some((message) => message.includes("reachable charging station")));
+  other.currentJob = null;
+  robot.update(1000);
+  assert.equal(robot.state, "ROBOT_TO_CHARGER");
+  const findClosest = robot.findClosestSpot;
+  robot.findClosestSpot = () => null;
+  robot.handleBlockedRoute();
+  robot.update(1000);
+  assert.equal(robot.state, "ROBOT_WAIT_CHARGER");
+  robot.findClosestSpot = findClosest;
+  robot.update(1000);
+  assert.equal(robot.state, "ROBOT_TO_CHARGER");
+  robot.arriveAtDestination();
+  robot.requestClockOut();
+  robot.update(1000);
+  assert.equal(robot.state, "ROBOT_CHARGING");
+  assert.equal(robot.clockOutRequested, true);
+});
+
+test("a depleted stocking robot keeps its crate and puts it down once after fully recharging", () => {
+  const { robot, store, crate } = makeRobot(["stock_1"]);
+  addRobotStation(store);
+  crate.lockedToPad = false;
+  crate.sprite.y = 6560;
+  robot.startNextTask();
+  assert.equal(robot.state, "TO_CRATE");
+  robot.arriveAtDestination();
+  assert.equal(robot.state, "TO_SHELF");
+  assert.equal(crate.isCarried, true);
+  robot.battery = 0;
+  robot.update(1);
+  assert.equal(robot.state, "ROBOT_TO_CHARGER");
+  assert.equal(robot.cargo[0].crate, crate);
+  robot.arriveAtDestination();
+  robot.update(60_000);
+  assert.equal(robot.state, "ROBOT_TO_DROP");
+  robot.arriveAtDestination();
+  assert.equal(crate.isCarried, false);
+  assert.equal(crate.quantity, 5);
+  assert.equal(store.restockCrates.filter((entry) => entry === crate).length, 1);
+  assert.equal(robot.cargo.length, 0);
+});
+
+test("a robot depleted while carrying an empty crate disposes of it after recharging", () => {
+  const { robot, store, crate } = makeRobot(["stock_1"]);
+  addRobotStation(store);
+  crate.lockedToPad = false;
+  crate.sprite.y = 6560;
+  robot.startNextTask();
+  robot.arriveAtDestination();
+  crate.quantity = 0;
+  robot.battery = 0;
+  robot.update(1);
+  robot.arriveAtDestination();
+  robot.update(60_000);
+  assert.equal(robot.state, "TO_TRASHCAN");
+  robot.arriveAtDestination();
+  assert.equal(crate.destroyed, true);
+  assert.equal(robot.cargo.length, 0);
+  assert.equal(store.restockCrates.includes(crate), false);
 });
 
 test("a closing register robot waits for shoppers and serves them before going home", () => {
@@ -531,15 +689,29 @@ function makeEmployee({
       sprite: (x, y, textureKey) => ({
         x,
         y,
+        scene,
         texture: { key: textureKey },
         anims: { stop() {} },
+        originY: 0.5,
+        play() { return this; },
+        setDisplaySize() { return this; },
         setTexture(key, frame) { this.texture.key = key; this.frame = frame; return this; },
         setTint() { return this; },
         setDepth() { return this; },
         setVisible(visible) { this.visible = visible; return this; },
         destroy() {},
       }),
+      image: (x, y, textureKey) => ({
+        x,
+        y,
+        texture: { key: textureKey },
+        setDisplaySize() { return this; },
+        setDepth() { return this; },
+        setTexture(key) { this.texture.key = key; return this; },
+        destroy() {},
+      }),
     },
+    textures: { exists: () => true },
     physics: {
       add: {
         existing(sprite) {
@@ -547,6 +719,9 @@ function makeEmployee({
             velocity: { x: 0, y: 0 },
             setVelocity(x, y) { this.velocity = { x, y }; },
             reset(x, y) { sprite.x = x; sprite.y = y; this.setVelocity(0, 0); },
+            setSize() {},
+            setOffset() {},
+            updateFromGameObject() {},
           };
         },
       },

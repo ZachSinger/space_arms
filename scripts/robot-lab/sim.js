@@ -110,6 +110,7 @@ function describe(task) {
     case "unload_pad": return `carries ${task.crates} crates into the backroom`;
     case "clean": return task.garbage ? `takes ${task.garbage} pieces of garbage to the trashcan` : "mops a dirty spot";
     case "charge": return `charges at ${task.station.id}`;
+    case "dock": return `rests at ${task.station.id}`;
     default: return "waits";
   }
 }
@@ -163,7 +164,7 @@ function startTask(sim, robot) {
       phase("Mopping", 1 / robot.skills.mopping);
       task.destination = "floor";
     }
-  } else if (action === "charge") {
+  } else if (action === "charge" || action === "dock") {
     task.station = sim.stations.find((station) => station.id === choice.target.id);
     task.station.usedBy = robot.id;
     task.destination = task.station.id;
@@ -172,7 +173,8 @@ function startTask(sim, robot) {
   robot.task = task;
   if (action !== robot.lastAction) {
     const entry = robot.program[choice.ruleIndex];
-    const why = !entry ? "nothing fit" : entry.ability ? entry.boardName : `slot ${entry.slot + 1}, command ${entry.command + 1}`;
+    const why = !entry ? (robot.outOfPower ? "battery empty" : "nothing fit") :
+      entry.ability ? entry.boardName : `slot ${entry.slot + 1}, command ${entry.command + 1}`;
     note(sim, `${robot.name} ${describe(task)} (${why})`);
   }
 }
@@ -208,15 +210,16 @@ function finishTask(sim, robot) {
       sim.messes -= 1;
       robot.completed.mopped += 1;
     }
-  } else if (task.action === "charge") {
+  } else if (task.action === "charge" || task.action === "dock") {
     task.station.usedBy = null;
+    if (task.action === "charge") robot.outOfPower = false;
   }
   robot.lastAction = task.action;
   robot.location = task.destination ?? robot.location;
   robot.task = null;
 }
 
-/** Drops a half-done job when a robot runs flat, putting back anything it had claimed. */
+/** Returns anything claimed by a job that is interrupted. */
 function abandonTask(sim, robot) {
   const task = robot.task;
   if (!task) return;
@@ -231,7 +234,7 @@ function abandonTask(sim, robot) {
     if (task.garbage) sim.garbageClaimed -= task.garbage;
     else sim.messesClaimed -= 1;
   }
-  else if (task.action === "charge") task.station.usedBy = null;
+  else if (task.action === "charge" || task.action === "dock") task.station.usedBy = null;
   robot.task = null;
 }
 
@@ -271,24 +274,31 @@ export function step(sim) {
     register.line = register.line.filter((customer) => !leaving.includes(customer));
   }
   for (const robot of sim.robots) {
-    if (robot.outOfPower || robot.noPower) {
+    if (robot.noPower) {
       if (robot.task) abandonTask(sim, robot);
       continue;
     }
+    if (robot.task?.action === "dock") {
+      const work = chooseAction(robot.program, { ...worldOf(sim), unavailableActions: ["dock"] },
+        robot, robot.conditions, robot.measures);
+      if (work.action !== "wait") abandonTask(sim, robot);
+    }
     if (!robot.task) startTask(sim, robot);
     const task = robot.task;
-    if (task.action === "charge" && task.phase >= task.phases.length) {
+    if (["charge", "dock"].includes(task.action) && task.phase >= task.phases.length) {
       robot.battery = Math.min(1, robot.battery + robot.cell.chargeRate / robot.cell.charge);
-      if (robot.battery >= 1) finishTask(sim, robot);
+      if (task.action === "charge" && robot.battery >= 1) finishTask(sim, robot);
       continue;
     }
     const share = task.action === "wait" ? SIM_RULES.waitingDrain : 1;
-    robot.battery = Math.max(0, robot.battery - (share * sim.settings.standardDrain * robot.cell.drainRate) / robot.cell.charge);
+    if (!robot.outOfPower) {
+      robot.battery = Math.max(0, robot.battery - (share * sim.settings.standardDrain * robot.cell.drainRate) / robot.cell.charge);
+    }
     if (task.action !== "wait") robot.busySeconds += 1;
-    if (robot.battery <= 0) {
+    if (robot.battery <= 0 && !robot.outOfPower) {
       abandonTask(sim, robot);
       robot.outOfPower = true;
-      note(sim, `${robot.name} ran out of battery and shut down.`);
+      note(sim, `${robot.name} ran out of battery and is returning to charge fully.`);
       continue;
     }
     // Time left over after finishing a job carries into the next one, so skill boosts
@@ -303,12 +313,12 @@ export function step(sim) {
         remaining -= elapsed;
         if (phase.left <= 1e-9) current.phase += 1;
       }
-      if (current.phase < current.phases.length || current.action === "charge") break;
+      if (current.phase < current.phases.length || ["charge", "dock"].includes(current.action)) break;
       finishTask(sim, robot);
       if (remaining <= 1e-9) break;
       startTask(sim, robot);
       current = robot.task;
-      if (current.action === "charge" || current.action === "wait") break;
+      if (["charge", "dock", "wait"].includes(current.action)) break;
     }
   }
   sim.time += 1;

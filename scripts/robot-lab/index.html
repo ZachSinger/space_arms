@@ -236,7 +236,7 @@ const escape = (text) => String(text ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const money = (value) => Math.round(value).toLocaleString("en-US");
 const clock = (seconds) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
-const ACTION_WORDS = { work_register: "Working a register", restock: "Restocking a shelf", unload_pad: "Carrying a crate in", clean: "Cleaning a mess", charge: "Charging", wait: "Waiting" };
+const ACTION_WORDS = { work_register: "Working a register", restock: "Restocking a shelf", unload_pad: "Carrying a crate in", clean: "Cleaning a mess", charge: "Charging", dock: "Resting at station", wait: "Waiting" };
 const COLORS = ["#5aa9e6", "#f2a65a", "#b48ef0", "#5fcf8a", "#ef7a85", "#e6d35a", "#6fd6d0", "#d98ad6"];
 const colorOf = (index) => COLORS[index % COLORS.length];
 const SETTINGS = [
@@ -302,7 +302,9 @@ function checksFor(live) {
 function activity(live) {
   if (!live) return { text: "Not started", bad: false };
   if (live.noPower) return { text: "Won't switch on: not enough power", bad: true };
-  if (live.outOfPower) return { text: "Ran out of charge", bad: true };
+  if (live.outOfPower) return { text: live.task?.action === "charge" ?
+    (live.task.phase < live.task.phases.length ? "Returning to charge fully" : "Charging fully") :
+    "Waiting for a free charging station", bad: false };
   if (sim.time >= sim.settings.shiftSeconds) return { text: "Shift over", bad: false };
   const action = live.task?.action ?? live.lastAction;
   if (!action) return { text: "Starting up", bad: false };
@@ -340,7 +342,7 @@ function robotSpot(live, index, place, counters) {
     const n = counters[key] = (counters[key] ?? -1) + 1;
     return { x: base.x + n * dx, y: base.y };
   };
-  if (!task || live.noPower || live.outOfPower) return seat("waiting", place.waiting);
+  if (!task || live.noPower) return seat("waiting", place.waiting);
   if (task.action === "work_register") {
     const p = place.register(sim.registers.indexOf(task.register));
     return seat(`r${task.register.id}`, { x: p.x, y: p.y - 10 });
@@ -356,7 +358,7 @@ function robotSpot(live, index, place, counters) {
     const p = place.mess(n);
     return { x: p.x + 3, y: p.y - 5 };
   }
-  if (task.action === "charge") {
+  if (task.action === "charge" || task.action === "dock") {
     const p = place.station(sim.stations.indexOf(task.station));
     return { x: p.x, y: p.y - 2 };
   }
@@ -411,7 +413,7 @@ function renderMap() {
       layer.append(bot);
     }
     const spot = robotSpot(live, index, place, counters);
-    const off = live.noPower || live.outOfPower;
+    const off = live.noPower;
     bot.classList.toggle("off", off);
     bot.style.left = `${spot.x}%`;
     bot.style.top = `${spot.y}%`;
@@ -769,10 +771,6 @@ function renderBuilder() {
   const cell = findCell(setup.parts, draft.cell);
   const problems = draftProblems();
   const warnings = buildWarnings(draft, setup.parts);
-  const program = robotProgram(draft, setup.parts);
-  if (program.length && !program.some((rule) => rule.action === "charge" || rule.ability?.startsWith("self_charge"))) {
-    warnings.push("No charging instructions: this robot will eventually run out of charge. Fit a self-charge board above its work boards.");
-  }
   const frameOptions = setup.parts.frames.map((part) => `<option value="${part.id}" ${part.id === draft.frame ? "selected" : ""} ${part.boardSlots < draft.boards.length ? "disabled" : ""}>${escape(part.name)} (${part.boardSlots} board slot${part.boardSlots === 1 ? "" : "s"})</option>`).join("");
   const cellOptions = setup.parts.cells.map((part) => `<option value="${part.id}" ${part.id === draft.cell ? "selected" : ""}>${escape(part.name)} (${part.capacity} power capacity)</option>`).join("");
   const catalog = (selected) => ["prefab", "modifier"].map((kind) => `<optgroup label="${kind === "prefab" ? "Logic boards" : "Modifier boards"}">${setup.parts.boards.filter((board) => board.kind === kind).map((board) => `<option value="${board.id}" ${board.id === selected ? "selected" : ""}>${escape(board.name)} (${board.power} power)</option>`).join("")}</optgroup>`).join("");

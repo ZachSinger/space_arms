@@ -119,6 +119,7 @@ export const ACTIONS = Object.freeze([
   { id: "unload_pad", label: "Carry a crate from the loading pad into the backroom", description: "Carries one delivery crate off the loading pad into backroom storage.", cantWhen: "There's no crate on the pad, or the backroom is full." },
   { id: "clean", label: "Clean up a mess", description: "Cleans up one mess on the sales floor.", cantWhen: "There are no messes, or other robots are already cleaning every one." },
   { id: "charge", label: "Go to a charging station and charge fully", description: "Goes to a free charging station and stays until its charge is full.", cantWhen: "Its charge is already full, or every station is taken." },
+  { id: "dock", label: "Rest at a charging station", description: "Rests and charges at a free station until another fitted job has work.", cantWhen: "Every station is taken." },
   { id: "wait", label: "Wait", description: "Stands still for a second. Waiting uses a quarter of the normal drain.", cantWhen: "Never: a robot can always wait." },
 ]);
 
@@ -129,20 +130,15 @@ function pick(actionId, world, robot) {
   const target = actionTarget(actionId, world, robot);
   return target ? { action: actionId, target } : null;
 }
-const lowFill = (world) => lowestShelf(world)?.fill ?? 1;
 const restockBelow = (world, robot, limit, inclusive = false) => {
   const choice = pick("restock", world, robot);
   return choice && (inclusive ? choice.target.fill <= limit : choice.target.fill < limit) ? choice : null;
 };
 export const PREFAB_ABILITIES = Object.freeze([
-  { id: "self_charge_1", label: "Self-charge 1", description: "Goes to charge when its charge drops below 20%.",
-    choose: (world, robot) => (robot.battery < 0.2 ? pick("charge", world, robot) : null) },
-  { id: "self_charge_2", label: "Self-charge 2", description: "Goes to charge below 20%, and also tops up below 60% while the store is quiet (no one waiting, no messes, no shelf under half full).",
-    choose: (world, robot) => {
-      if (robot.battery < 0.2) return pick("charge", world, robot);
-      const quiet = !world.registers.some((register) => register.line > 0) && world.messes <= 0 && lowFill(world) >= 0.5;
-      return quiet && robot.battery < 0.6 ? pick("charge", world, robot) : null;
-    } },
+  { id: "self_charge_1", label: "Rest at Station 1", description: "When none of its fitted jobs have work, rests and charges at a station. Leaves as soon as work is available. Every robot automatically charges fully after running out of battery, without this board.",
+    choose: (world, robot) => pick("dock", world, robot) },
+  { id: "self_charge_2", label: "Rest at Station 2", description: "When none of its fitted jobs have work, rests and charges at a station. Leaves as soon as work is available. Every robot automatically charges fully after running out of battery, without this board.",
+    choose: (world, robot) => pick("dock", world, robot) },
   { id: "register_1", label: "Register 1", description: "Works a register while a customer is waiting.",
     choose: (world, robot) => (world.registers.some((register) => register.line > 0) ? pick("work_register", world, robot) : null) },
   { id: "register_2", label: "Register 2", description: "Stays at a register all the time, so customers never wait for it to walk over.",
@@ -195,6 +191,9 @@ export function actionTarget(actionId, world, robot) {
       if (robot.battery >= 1) return null;
       return world.stations.find((station) =>
         (!station.usedBy || station.usedBy === robot.id) && available(station)) ?? null;
+    case "dock":
+      return world.stations.find((station) =>
+        (!station.usedBy || station.usedBy === robot.id) && available(station)) ?? null;
     case "wait": return { id: "wait" };
     default: throw new Error(`Unknown robot action: ${actionId}`);
   }
@@ -204,6 +203,7 @@ export function actionTarget(actionId, world, robot) {
  * Runs a robot's program against the store. Returns the action it picked, which rule picked it
  * (-1 when no rule fit and it waits), and why each rule was or wasn't used.
  * Entries are either commands or prefab boards ({ ability }), checked in order.
+ * An empty battery overrides the program. Station-rest boards run only after other jobs.
  * @param {({ condition: string, action: string, on?: boolean } | { ability: string })[]} program
  * @param {object[]} [conditions] the conditions the program's commands name (see CONDITIONS)
  * @param {object[]} [measures] the checks those conditions use (see MEASURES)
@@ -211,6 +211,11 @@ export function actionTarget(actionId, world, robot) {
 export function chooseAction(program, world, robot, conditions = CONDITIONS, measures = MEASURES) {
   const byId = new Map(conditions.map((entry) => [entry.id, entry]));
   const checks = [];
+  if (robot.battery <= 0) {
+    const target = actionTarget("charge", world, robot);
+    return { ruleIndex: -1, action: target ? "charge" : "wait", target: target ?? { id: "wait" }, checks };
+  }
+  let rest = null;
   for (let index = 0; index < program.length; index += 1) {
     const rule = program[index];
     if (rule.on === false) {
@@ -218,6 +223,12 @@ export function chooseAction(program, world, robot, conditions = CONDITIONS, mea
       continue;
     }
     if (rule.ability) {
+      if (["self_charge_1", "self_charge_2"].includes(rule.ability)) {
+        const decision = findAbility(rule.ability).choose(world, robot);
+        checks.push({ index, result: decision ? "waiting for other jobs" : "nothing to do" });
+        if (decision && !rest) rest = { ruleIndex: index, ...decision };
+        continue;
+      }
       const decision = findAbility(rule.ability)?.choose(world, robot) ?? null;
       if (!decision) {
         checks.push({ index, result: "nothing to do" });
@@ -237,8 +248,13 @@ export function chooseAction(program, world, robot, conditions = CONDITIONS, mea
       checks.push({ index, result: "can't do it right now" });
       continue;
     }
+    if (rule.action === "wait" && rest) break;
     checks.push({ index, result: "chosen" });
     return { ruleIndex: index, action: rule.action, target, checks };
+  }
+  if (rest) {
+    checks.find((check) => check.index === rest.ruleIndex).result = "chosen";
+    return { ...rest, checks };
   }
   return { ruleIndex: -1, action: "wait", target: { id: "wait" }, checks };
 }

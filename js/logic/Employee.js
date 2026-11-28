@@ -283,7 +283,7 @@ export class Employee {
     const stackBase = wasOnFloor ? null : [...(this.store.floorStacks ?? [])]
       .find(([_base, stack]) => stack.at(-1) === crate)?.[0];
     if (!this.detachCrateForPickup(crate)) return false;
-    if (crate.pickUp(this.sprite, { holderId: this.data.id })) return true;
+    if (crate.pickUp(this.sprite, { holderId: this.data.id, hidden: this.hidesCarriedCrates })) return true;
     if (wasOnFloor) this.store.restockCrates.push(crate);
     else if (stackBase) {
       const stack = this.store.floorStacks.get(stackBase) ?? [];

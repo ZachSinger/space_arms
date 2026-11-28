@@ -1,5 +1,7 @@
 import { Employee } from "./Employee.js";
-import { showCharacterFacing } from "./CustomerSprites.js";
+import {
+  HOVER_BOT_SPRITE, robotChargingStationTexture, robotDockedTexture, showRobotFacing, sizeRobotSprite,
+} from "./RobotSprites.js";
 import { CashPayment, creditCentsToScrips, splitCash } from "./CashPayment.js";
 import { chooseCustomerPayment } from "./CustomerPayment.js";
 import { sumMoney, toCents } from "./Money.js";
@@ -10,12 +12,13 @@ import { chooseAction } from "./RobotGambits.js";
 import { AREA, areaAt } from "../world/Areas.js";
 import { EMPLOYEE_CRATE_HOLD_OFFSET } from "./EmployeeSprites.js";
 
-const ROBOT_TEXTURE = "customer_android_mascandroid1";
+const ROBOT_TEXTURE = HOVER_BOT_SPRITE.key;
 const WALK_SPEED = 120;
 
 export class RobotWorker extends Employee {
   constructor(build, store, options = {}) {
     super(build, store, { ...options, texture: ROBOT_TEXTURE, jobPriorities: [] });
+    sizeRobotSprite(this.sprite);
     this.build = build;
     this.id = build.id;
     this.frame = findFrame(ROBOT_PARTS, build.frame);
@@ -27,6 +30,7 @@ export class RobotWorker extends Employee {
     this.outOfCharge = false;
     this.cargo = [];
     this.programCheckMs = 0;
+    this.dockedVisual = null;
   }
 
   update(delta = 0) {
@@ -37,30 +41,39 @@ export class RobotWorker extends Employee {
       this.updateFacing();
       return;
     }
-    if (this.outOfCharge) {
-      this.sprite.body.setVelocity(0, 0);
+    if (this.state === "ROBOT_WAIT_CHARGER") {
+      this.retryInMs -= delta;
+      if (this.retryInMs <= 0) this.returnForCharge();
       this.updateFacing();
+      return;
+    }
+    if (this.state === "ROBOT_STANDBY") {
+      this.battery = Math.min(1, this.battery + delta / 1000 * this.cell.chargeRate / this.cell.charge);
+      this.updateDockedVisual(this.battery < 1);
+      this.checkStandbyWork(delta);
       return;
     }
     if (this.state === "ROBOT_CHARGING") {
       this.battery = Math.min(1, this.battery + delta / 1000 * this.cell.chargeRate / this.cell.charge);
-      if (this.battery >= 1) this.finishTask();
+      this.updateDockedVisual(true);
+      if (this.battery >= 1) {
+        this.outOfCharge = false;
+        this.finishTask();
+        if (!this.isDestroyed && this.cargo.length && this.state === "IDLE") this.returnCargo();
+      }
       this.updateFacing();
       return;
     }
-    const share = this.state === "IDLE" || this.state === "ON_BREAK" ? 0.25 : 1;
-    this.battery = Math.max(0, this.battery - delta / 1000 * share * ROBOT_STANDARD_DRAIN *
-      this.cell.drainRate / this.cell.charge);
-    if (this.battery <= 0) {
-      this.outOfCharge = true;
-      this.sprite.body.setVelocity(0, 0);
-      this.store.cleaning?.dropStaffTrash(this);
-      this.store.cleaning?.releaseStaffMoppingClaims(this);
-      this.store.cleaning?.putAwayStaffMop(this);
-      if (!this.currentJob?.crate?.isCarried) this.currentJob = null;
-      this.store.showShopMessage(`${this.data.name} ran out of charge and will be recovered when the shop closes.`);
+    if (!this.outOfCharge) {
+      const share = this.state === "IDLE" || this.state === "ON_BREAK" ? 0.25 : 1;
+      this.battery = Math.max(0, this.battery - delta / 1000 * share * ROBOT_STANDARD_DRAIN *
+        this.cell.drainRate / this.cell.charge);
+    }
+    if (this.battery <= 0 && !this.outOfCharge) {
+      this.beginRequiredCharge();
       return;
     }
+    if (this.state === "ROBOT_TO_CHARGER" && this.currentJob.standby) this.checkStandbyWork(delta);
     if (this.state === "ROBOT_WAIT_DROP") {
       this.retryInMs -= delta;
       if (this.retryInMs <= 0) this.returnCargo();
@@ -77,13 +90,81 @@ export class RobotWorker extends Employee {
     super.update(delta);
   }
 
-  startCharging(target) {
+  startCharging(target, standby = false) {
     const station = this.store.fixtures.ofKind("robot_charger").find((entry) => entry.id === target.id);
     if (!station) return false;
+    if (this.store.employees.some((worker) => worker !== this &&
+      (worker.currentJob?.station === station || worker.dockedVisual?.station === station))) return false;
+    if (this.dockedVisual?.station === station) {
+      this.currentJob = { jobId: "charge", station, standby };
+      this.state = standby ? "ROBOT_STANDBY" : "ROBOT_CHARGING";
+      this.updateDockedVisual(this.battery < 1);
+      return true;
+    }
     const closest = this.findClosestSpot(this.fixtureSpots([station]));
     if (!closest) return false;
-    this.currentJob = { jobId: "charge", station };
+    this.currentJob = { jobId: "charge", station, standby };
     return this.startPath(closest.spot, closest.path, "ROBOT_TO_CHARGER");
+  }
+
+  beginRequiredCharge() {
+    this.outOfCharge = true;
+    this.sprite.body.setVelocity(0, 0);
+    this.dropCleaningThings();
+    const job = this.currentJob;
+    if (job?.crate?.isCarried && !this.cargo.some(({ crate }) => crate === job.crate)) {
+      this.cargo.push({
+        crate: job.crate,
+        returnPosition: job.returnPosition ?? job.cratePosition ?? { x: this.sprite.x, y: this.sprite.y },
+        padPosition: job.fromPad ? job.cratePosition : undefined,
+      });
+    }
+    if (this.state === "ROBOT_TO_CHARGER") {
+      this.currentJob.standby = false;
+      return;
+    }
+    this.currentJob = null;
+    this.store.showShopMessage(`${this.data.name} is returning to a charging station and will charge fully.`);
+    this.returnForCharge();
+  }
+
+  returnForCharge() {
+    for (const station of this.world().stations) {
+      if (!station.usedBy && this.startCharging(station)) return;
+    }
+    if (this.clockOutRequested) {
+      this.recover();
+      return;
+    }
+    if (this.state !== "ROBOT_WAIT_CHARGER") {
+      this.store.showShopMessage(`${this.data.name} needs a free, reachable charging station. Clear its path.`);
+    }
+    this.currentJob = null;
+    this.state = "ROBOT_WAIT_CHARGER";
+    this.retryInMs = 1000;
+    this.sprite.body.setVelocity(0, 0);
+  }
+
+  checkStandbyWork(delta) {
+    this.programCheckMs -= delta;
+    if (this.programCheckMs > 0) return;
+    this.programCheckMs = 1000;
+    const previousJob = this.currentJob;
+    const previousState = this.state;
+    const world = this.world();
+    world.unavailableActions = ["dock"];
+    for (;;) {
+      const choice = chooseAction(this.program, world, this, ROBOT_PARTS.conditions, ROBOT_PARTS.measures);
+      if (choice.action === "wait") {
+        this.currentJob = previousJob;
+        this.state = previousState;
+        return;
+      }
+      if (this.startRobotAction(choice.action, choice.target)) return;
+      this.currentJob = previousJob;
+      this.state = previousState;
+      this.rejectDecision(world, choice);
+    }
   }
 
   arriveAtDestination() {
@@ -91,7 +172,9 @@ export class RobotWorker extends Employee {
       this.sprite.body.setVelocity(0, 0);
       this.path = [];
       this.destination = null;
-      this.state = "ROBOT_CHARGING";
+      this.state = this.currentJob.standby ? "ROBOT_STANDBY" : "ROBOT_CHARGING";
+      this.showDockedVisual();
+      this.updateDockedVisual(this.battery < 1);
       return;
     }
     if (this.state === "ROBOT_TO_HOME") {
@@ -121,6 +204,11 @@ export class RobotWorker extends Employee {
       return;
     }
     super.arriveAtDestination();
+  }
+
+  // Robots carry crates inside themselves, so a crate a robot holds isn't drawn.
+  get hidesCarriedCrates() {
+    return true;
   }
 
   syncCargo() {
@@ -159,6 +247,10 @@ export class RobotWorker extends Employee {
       this.finishTask();
       return;
     }
+    if (load.crate.kind === "item" && load.crate.quantity === 0) {
+      this.currentJob = { jobId: "unload_pad", crate: load.crate, returnPosition: load.returnPosition };
+      if (this.walkToTrashcan()) return;
+    }
     const reserved = this.cargoReservations(load);
     let spot = load.returnPosition;
     while (spot) {
@@ -182,17 +274,37 @@ export class RobotWorker extends Employee {
     this.store.showShopMessage(`${this.data.name} needs a clear place to put down its crates.`);
   }
 
+  discardEmptyCrate() {
+    if (this.cargo[0]?.crate !== this.currentJob.crate) {
+      super.discardEmptyCrate();
+      return;
+    }
+    if (!this.store.fixtures.ofKind("trash").includes(this.currentJob.trashcan)) {
+      this.returnCargo();
+      return;
+    }
+    this.cargo.shift().crate.destroy();
+    if (this.cargo.length) this.returnCargo();
+    else this.finishTask();
+  }
+
   requestClockOut() {
     if (this.isDestroyed || this.state === "ROBOT_WAIT_RECOVERY") return;
+    if (this.outOfCharge &&
+      ["ROBOT_TO_CHARGER", "ROBOT_CHARGING"].includes(this.state)) {
+      this.clockOutRequested = true;
+      return;
+    }
     if (!this.outOfCharge) {
       if (this.state === "ROBOT_WAIT_DROP" || this.state === "WAITING_CRATE_RETURN") {
         this.clockOutRequested = true;
         this.recover();
         return;
       }
-      if (this.state === "ROBOT_TO_CHARGER" || this.state === "ROBOT_CHARGING") {
+      if (["ROBOT_TO_CHARGER", "ROBOT_CHARGING", "ROBOT_STANDBY"].includes(this.state)) {
         this.clockOutRequested = true;
         this.currentJob = null;
+        this.clearDockedVisual();
         this.finishClosingRegisterWork();
         return;
       }
@@ -252,6 +364,7 @@ export class RobotWorker extends Employee {
 
   destroy() {
     if (this.isDestroyed) return;
+    this.clearDockedVisual();
     this.store.gameState.robotService?.setBattery(this.data.id, this.battery);
     super.destroy();
   }
@@ -293,7 +406,16 @@ export class RobotWorker extends Employee {
       this.destroy();
       return true;
     }
-    if (this.state === "ROBOT_TO_DROP" || (this.state === "ROBOT_TO_PAD" && this.cargo.length)) {
+    if (this.state === "ROBOT_TO_CHARGER" && this.outOfCharge) {
+      this.currentJob = null;
+      this.state = "ROBOT_WAIT_CHARGER";
+      this.retryInMs = 1000;
+      this.sprite.body.setVelocity(0, 0);
+      this.store.showShopMessage(`${this.data.name}'s path to its charging station is blocked. Clear its path.`);
+      return true;
+    }
+    if (this.state === "ROBOT_TO_DROP" ||
+      (["ROBOT_TO_PAD", "TO_TRASHCAN"].includes(this.state) && this.cargo.length)) {
       this.returnCargo();
       return true;
     }
@@ -345,8 +467,8 @@ export class RobotWorker extends Employee {
       ? cleaning.staffTrashTargets(this).length + cleaning.staffDirtTargets(this).length : 0;
     const stations = this.store.fixtures.ofKind("robot_charger").map((station) => ({
       id: station.id,
-      usedBy: workers.find((worker) => worker.currentJob?.jobId === "charge" &&
-        worker.currentJob.station === station)?.data.id ?? null,
+      usedBy: workers.find((worker) => worker.currentJob?.station === station ||
+        worker.dockedVisual?.station === station)?.data.id ?? null,
     }));
     const padCrates = this.padCrates();
     const backroomCrates = this.backroomCrates();
@@ -360,12 +482,17 @@ export class RobotWorker extends Employee {
   }
 
   rejectDecision(world, decision) {
-    if (["work_register", "restock", "charge"].includes(decision.action)) {
+    if (["work_register", "restock", "charge", "dock"].includes(decision.action)) {
       world.unavailableTargets.push({ action: decision.action, id: decision.target.id });
     } else world.unavailableActions.push(decision.action);
   }
 
   startNextTask() {
+    if (this.battery <= 0 || this.outOfCharge) {
+      if (!this.outOfCharge) this.beginRequiredCharge();
+      else this.returnForCharge();
+      return;
+    }
     if (this.clockOutRequested) {
       this.finishClosingRegisterWork();
       return;
@@ -399,6 +526,7 @@ export class RobotWorker extends Employee {
     }
     if (action === "clean") return this.startCleaningJob();
     if (action === "charge") return this.startCharging(target);
+    if (action === "dock") return this.startCharging(target, true);
     if (action === "unload_pad") return this.startUnloading();
     throw new Error(`Unknown robot action: ${action}`);
   }
@@ -475,20 +603,74 @@ export class RobotWorker extends Employee {
 
   updateFacing() {
     if (this.isDestroyed) return;
+    if (this.state === "ROBOT_CHARGING") return;
     const { x, y } = this.sprite.body.velocity;
-    const moving = Math.abs(x) >= 1 || Math.abs(y) >= 1;
-    if (moving) {
+    if (Math.abs(x) >= 1 || Math.abs(y) >= 1) {
       this.currentFacing = Math.abs(x) > Math.abs(y)
         ? (x < 0 ? "left" : "right")
         : (y < 0 ? "up" : "down");
-      this.sprite.anims.timeScale = Math.hypot(x, y) / WALK_SPEED;
     }
-    showCharacterFacing(this.sprite, this.currentFacing, moving);
+    showRobotFacing(this.sprite, this.currentFacing);
   }
 
   standStill() {
     if (this.isDestroyed) return;
     this.sprite.body.setVelocity(0, 0);
-    showCharacterFacing(this.sprite, this.currentFacing, false);
+    showRobotFacing(this.sprite, this.currentFacing);
+  }
+
+  startPath(point, path, nextState) {
+    const started = super.startPath(point, path, nextState);
+    if (started) this.clearDockedVisual();
+    return started;
+  }
+
+  finishTask() {
+    const wasCharging = this.state === "ROBOT_CHARGING";
+    super.finishTask();
+    if (!wasCharging) return;
+    if (!this.clockOutRequested && this.state === "IDLE") this.updateDockedVisual(false);
+    else this.clearDockedVisual();
+  }
+
+  showDockedVisual() {
+    const station = this.currentJob.station;
+    const scene = this.sprite.scene;
+    const sourceTexture = station.sprite.texture.key;
+    const stationTexture = robotChargingStationTexture(scene, sourceTexture);
+    const depth = station.sprite.depth + 0.2;
+    station.sprite.setTexture(stationTexture);
+    const sprite = scene.add.image(station.x + 0.5, station.y - 1.5,
+      robotDockedTexture(scene, this.battery))
+      .setDisplaySize(84, 84)
+      .setDepth(depth);
+    this.dockedVisual = {
+      station, sourceTexture, sprite, batteryLevel: Math.round(this.battery * 7), charging: true,
+    };
+    this.sprite.setVisible(false);
+  }
+
+  updateDockedVisual(charging) {
+    if (!this.dockedVisual) return;
+    const { station, sourceTexture, sprite } = this.dockedVisual;
+    const batteryLevel = charging ? Math.round(this.battery * 7) : null;
+    if (batteryLevel !== this.dockedVisual.batteryLevel) {
+      sprite.setTexture(robotDockedTexture(this.sprite.scene, charging ? this.battery : null));
+      this.dockedVisual.batteryLevel = batteryLevel;
+    }
+    if (charging !== this.dockedVisual.charging) {
+      station.sprite.setTexture(charging
+        ? robotChargingStationTexture(this.sprite.scene, sourceTexture)
+        : sourceTexture);
+      this.dockedVisual.charging = charging;
+    }
+  }
+
+  clearDockedVisual() {
+    if (!this.dockedVisual) return;
+    this.dockedVisual.station.sprite.setTexture(this.dockedVisual.sourceTexture);
+    this.dockedVisual.sprite.destroy();
+    this.dockedVisual = null;
+    if (!this.isDestroyed) this.sprite.setVisible(true);
   }
 }

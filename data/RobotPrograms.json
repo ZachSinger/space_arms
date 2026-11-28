@@ -102,14 +102,14 @@
     "boards": [
       {
         "id": "self_charge_1",
-        "name": "Self-charge 1",
+        "name": "Rest at Station 1",
         "kind": "prefab",
         "power": 1,
         "ability": "self_charge_1"
       },
       {
         "id": "self_charge_2",
-        "name": "Self-charge 2",
+        "name": "Rest at Station 2",
         "kind": "prefab",
         "power": 2,
         "ability": "self_charge_2"
@@ -349,6 +349,7 @@
         "unload_pad": 2,
         "clean": 2,
         "charge": 1,
+        "dock": 1,
         "wait": 0
       }
     }

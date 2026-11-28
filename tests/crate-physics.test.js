@@ -122,6 +122,10 @@ function createScene(obstacles = []) {
             this.angle = angle;
             return this;
           },
+          setVisible(visible) {
+            this.visible = visible;
+            return this;
+          },
           getBounds() {
             return {
               left: this.x - this.width / 2, right: this.x + this.width / 2,
@@ -256,6 +260,14 @@ test("picking up a stationary crate and dropping it preserves contents", () => {
   assert.deepEqual(body.velocity, { x: 240, y: 0 });
   crate.setPaused(false);
   assert.equal(body.moves, true);
+});
+
+test("a crate held out of sight is hidden until it is put down", () => {
+  const crate = new Crate(createScene(), "item", 5, 100, 100);
+  assert.equal(crate.pickUp({ x: 200, y: 160, depth: 8 }, { holderId: "robot-1", hidden: true }), true);
+  assert.equal(crate.sprite.visible, false);
+  crate.drop(200, 160, 0, 0, false);
+  assert.equal(crate.sprite.visible, true);
 });
 
 function thrower(x = 100, y = 100) {

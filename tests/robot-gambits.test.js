@@ -43,12 +43,13 @@ test("a robot skips rules that are off or whose job is impossible, and waits whe
   assert.deepEqual(choice.checks.map((check) => check.result), ["can't do it right now", "off", "can't do it right now"]);
 });
 
-test("the saved robot lab setup is valid and runs a shift without robots running flat", async () => {
+test("the saved robot lab setup is valid and serves customers with automatic charging", async () => {
   const setup = JSON.parse(await readFile(new URL("../data/RobotPrograms.json", import.meta.url), "utf8"));
   assert.deepEqual(setupProblems(setup), []);
   const sim = runShift(setup, 7);
   assert.ok(sim.stats.served > 0);
-  assert.ok(sim.robots.every((entry) => !entry.outOfPower));
+  assert.ok(sim.robots.every((entry) => !entry.noPower && entry.busySeconds > 0));
+  assert.ok(sim.log.some((entry) => entry.text.includes("battery empty")));
 });
 
 test("a prefab board does its built-in job, and is skipped when that job has nothing to do", () => {
@@ -92,14 +93,67 @@ test("a robot whose parts need more power than its cell's capacity never switche
   assert.match(diagnoseRobot(sim.robots[0].build, PARTS)[0].fitted.error, /cannot switch on/);
 });
 
-test("a cell's drain rate scales the standard drain, and a robot with no charging command shuts down", () => {
+test("a cell's drain scales use and a robot without a charge command automatically recharges fully", () => {
   const robot = { name: "Forgetful", frame: "frame", cell: "big", boards: [{ board: "register" }] };
   const fast = runShift({ settings: { ...SETTINGS, shiftSeconds: 49 }, parts: PARTS, robots: [robot] });
   assert.ok(Math.abs(fast.robots[0].battery - (1 - (49 * 2) / 100)) < 1e-9);
-  const sim = runShift({ settings: SETTINGS, parts: PARTS, robots: [robot] });
-  assert.equal(sim.robots[0].outOfPower, true);
+  const sim = createSim({ settings: { ...SETTINGS, customersPerMinute: 0 }, parts: PARTS, robots: [robot] });
+  const live = sim.robots[0];
+  while (!live.outOfPower && sim.time < 60) step(sim);
+  assert.equal(live.outOfPower, true);
   assert.equal(sim.registers[0].staffedBy, null);
+  step(sim);
+  assert.equal(live.task.action, "charge");
+  while (live.outOfPower && sim.time < 100) {
+    assert.equal(live.task.action, "charge");
+    step(sim);
+  }
+  assert.equal(live.battery, 1);
+  assert.equal(live.outOfPower, false);
+  step(sim);
+  assert.equal(live.task.action, "work_register");
   assert.match(diagnoseRobot(robot, { ...PARTS, cells: PARTS.cells.map((cell) => ({ ...cell, charge: 1 })) })[0].fitted.error, /Ran out of charge/);
+});
+
+test("empty battery overrides every board and waits if no station is free", () => {
+  const program = [{ ability: "register_2" }];
+  assert.equal(chooseAction(program, world(), { ...robot, battery: 0 }).action, "charge");
+  assert.equal(chooseAction(program, world({ stations: [{ id: "c1", usedBy: "other" }] }),
+    { ...robot, battery: 0 }).action, "wait");
+});
+
+test("both former self-charge boards defer to work in every board order, and rest even at full battery", () => {
+  for (const ability of ["self_charge_1", "self_charge_2"]) {
+    for (const program of [[{ ability }, { ability: "register_1" }], [{ ability: "register_1" }, { ability }]]) {
+      const charged = { ...robot, battery: 1 };
+      assert.equal(chooseAction(program, world(), charged).action, "dock");
+      assert.equal(chooseAction(program, world({ registers: [{ id: "r1", line: 1, staffedBy: null }] }),
+        { ...robot, battery: 0.1 }).action, "work_register");
+      assert.equal(chooseAction(program, world({ stations: [] }), charged).action, "wait");
+    }
+  }
+});
+
+test("simulated station rest remains docked when full and leaves for work before a partial charge is full", () => {
+  const parts = structuredClone(PARTS);
+  parts.boards.push(
+    { id: "rest", name: "Rest", kind: "prefab", power: 1, ability: "self_charge_1" },
+    { id: "serve", name: "Serve", kind: "prefab", power: 1, ability: "register_1" },
+  );
+  const sim = createSim({ parts, robots: [{ name: "Bot", frame: "frame", cell: "big",
+    boards: [{ board: "rest" }, { board: "serve" }] }],
+  settings: { ...SETTINGS, customersPerMinute: 0 } });
+  const live = sim.robots[0];
+  for (let second = 0; second < 30; second += 1) step(sim);
+  assert.equal(live.task.action, "dock");
+  assert.equal(live.battery, 1);
+  assert.equal(sim.stations[0].usedBy, live.id);
+  live.battery = 0.2;
+  sim.registers[0].line.push({ items: 2, arrived: sim.time });
+  step(sim);
+  assert.equal(live.task.action, "work_register");
+  assert.ok(live.battery < 1);
+  assert.equal(sim.stations[0].usedBy, null);
 });
 
 test("the robot lab refuses builds that don't fit their parts", () => {

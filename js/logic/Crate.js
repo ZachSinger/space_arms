@@ -285,8 +285,10 @@ export class Crate {
   /**
    * Resting, pushed, and sliding crates can be picked up; a crate still being launched cannot.
    * @param {Phaser.GameObjects.Sprite} carrierSprite
+   * @param {{ holderId?: string, stackedOnId?: string | null, hidden?: boolean }} [options] -
+   *   hidden: the carrier holds it out of sight (robots store crates inside themselves)
    */
-  pickUp(carrierSprite, { holderId = "player", stackedOnId = null } = {}) {
+  pickUp(carrierSprite, { holderId = "player", stackedOnId = null, hidden = false } = {}) {
     if (!this.canPickUp()) return false;
 
     if (stackedOnId !== null) this.setStackedOn(stackedOnId);
@@ -301,6 +303,7 @@ export class Crate {
     this.sprite.body.setImmovable(false);
     this.sprite.body.stop();
     this.sprite.body.enable = false;
+    this.sprite.setVisible?.(!hidden);
     this.followCarrier(carrierSprite);
     return true;
   }
@@ -568,6 +571,7 @@ export class Crate {
     this.setThrowHeight(0);
     this.sprite.setAngle?.(0);
     this.sprite.setDepth(2);
+    this.sprite.setVisible?.(true);
     const body = this.sprite.body;
     body.reset(x, y);
     body.updateFromGameObject();
