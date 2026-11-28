@@ -14,6 +14,7 @@ import { formatMoneyAmount, sumMoney } from "../logic/Money.js";
 import { sinkItems } from "../logic/InventoryTransfer.js";
 import { HOVERCART_LEVEL } from "../modules/hovercart/HovercartRules.js";
 import { ROBOT_PART_CATALOG, ROBOT_SERVICE_LEVEL } from "../logic/RobotServiceCatalog.js";
+import { ShiftReceiptWindow } from "../logic/ShiftReceiptWindow.js";
 
 const PRICE_REACTION_TYPES = Object.freeze(["bargain", "skipped", "disgusted"]);
 
@@ -36,7 +37,6 @@ export class ShiftSystem {
     this.priceReactionCustomers = emptyPriceReactionCustomers();
     this.creditsAtStart = shop.gameState.economy.credits;
     this.reputationAtStart = shop.gameState.reputation.global;
-    this.closingOverlay = null;
   }
 
   // Every completed sale goes on today's receipt and counts toward the shift's summary.
@@ -201,33 +201,8 @@ export class ShiftSystem {
 
   showClosingSequence() {
     if (typeof document === "undefined") return;
-    this.closingOverlay?.remove();
-    const overlay = document.createElement("div");
-    overlay.className = "shift-closing-overlay";
-    overlay.setAttribute("role", "status");
-    overlay.setAttribute("aria-live", "polite");
-
-    const panel = document.createElement("div");
-    panel.className = "shift-closing-panel";
-    const title = document.createElement("div");
-    title.className = "shift-closing-title";
-    title.textContent = "SHOP CLOSED";
-    const summary = document.createElement("div");
-    summary.className = "shift-closing-summary";
-    summary.textContent = `Customers served: ${this.customersServed} · Turned away: ${this.shop.gameState.reputation.customersTurnedAway}`;
-    const hint = document.createElement("div");
-    hint.className = "shift-closing-hint";
-    hint.textContent = "Select END DAY to start the next day. Today's receipt is in Finances.";
-
-    panel.append(title, summary, hint);
-    overlay.append(panel);
-    overlay.addEventListener("animationend", (event) => {
-      if (event.target !== overlay) return;
-      overlay.remove();
-      if (this.closingOverlay === overlay) this.closingOverlay = null;
-    }, { once: true });
-    document.getElementById("game-container").append(overlay);
-    this.closingOverlay = overlay;
+    this.receiptWindow ??= new ShiftReceiptWindow(this.shop);
+    this.receiptWindow.open();
   }
 
   /**
@@ -358,7 +333,6 @@ export class ShiftSystem {
   }
 
   destroy() {
-    this.closingOverlay?.remove();
-    this.closingOverlay = null;
+    this.receiptWindow?.destroy();
   }
 }

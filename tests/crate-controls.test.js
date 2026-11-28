@@ -1791,6 +1791,7 @@ test("three carried crates stay straight while the player moves and reverses dir
     employees: [],
   });
   h.scene.crateSystem.updateCrateMarker = () => {};
+  h.scene.supply.animation = { update() {} };
 
   for (const velocity of [{ x: 160, y: 0 }, { x: -160, y: 0 }, { x: 0, y: -160 }, { x: 0, y: 160 }]) {
     playerSprite.body.velocity = velocity;
@@ -1833,6 +1834,7 @@ test("the game updates player and crate movement during placement without unfree
     employees: [],
   });
   scene.crateSystem.updateCrateMarker = () => {};
+  scene.supply.animation = { update() {} };
 
   scene.update(0, 16);
   assert.equal(playerUpdates, 1);

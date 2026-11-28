@@ -143,7 +143,7 @@ export class PlayerControls {
     const shop = this.shop;
     if (shop.controlMode.getMode() !== CONTROL_MODES.PAUSED) return;
     if (shop.pauseMenu?.settings?.isCapturing) return;
-    if (event.target?.closest?.("#pause-menu, #pause-confirmation, #bug-report-window, .settings-window")) return;
+    if (event.target?.closest?.("#pause-menu, #pause-confirmation, #bug-report-window, .settings-window, #shift-receipt")) return;
     if (shop.pauseMenu?.settingsOpen && event.type === "keydown" && event.key === "Escape") return;
     if (event.type !== "keydown" && event.target?.closest?.("#hud-pause-btn")) return;
     event.preventDefault();
@@ -156,6 +156,7 @@ export class PlayerControls {
   }
 
   togglePause() {
+    if (this.shop.shift?.receiptWindow?.isOpen) return;
     if (this.shop.pauseMenu) this.shop.pauseMenu.toggle();
     else this.shop.shiftClock.togglePause();
   }

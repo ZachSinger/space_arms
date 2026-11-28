@@ -181,9 +181,9 @@ function storeTopic({ shopLevel, reputation }) {
     section("Ending a Shift", `
       ${list([
         "At 20:00 the doors close to new customers. Everyone already inside can still finish shopping and pay.",
-        "The shift ends when the last customer leaves. A <strong>SHOP CLOSED</strong> message shows how many customers you served and turned away.",
+        "The shift ends when the last customer leaves. The shop pauses while a <strong>SHOP CLOSED</strong> receipt shows the day's sales, spending, and customer results.",
         "Your reputation change counts now. If you reached a new Store Level, a message lists what it unlocked.",
-        "Press <strong>END DAY</strong> on the top bar to start the next day immediately. You can review past receipts in Finances.",
+        "Press <strong>END DAY</strong> on the receipt to start the next day and resume the shop. You can review past receipts in Finances.",
         "A new day brings new market prices. Then <strong>START SHIFT</strong> appears again.",
       ])}`),
   ].join("");

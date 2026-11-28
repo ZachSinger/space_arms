@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ControlMode, CONTROL_MODES } from "../js/input/ControlMode.js";
+import { PlayerControls } from "../js/input/PlayerControls.js";
 
 function createScene() {
   return {
@@ -12,6 +13,35 @@ function createScene() {
     windowManager: { windows: new Map() },
   };
 }
+
+test("the delivery animation window does not interrupt walking or crate controls", () => {
+  const scene = createScene();
+  scene.windowManager.windows.set("delivery", { id: "delivery", isOpen: true, passive: true });
+  const controls = new ControlMode(scene);
+  assert.equal(controls.getMode(), CONTROL_MODES.WALKING);
+  assert.equal(controls.allows("crate"), true);
+  scene.carriedCrate = {};
+  assert.equal(controls.getMode(), CONTROL_MODES.CARRYING);
+});
+
+test("the paused receipt accepts its buttons without allowing Escape to open the pause menu", () => {
+  let blocked = false;
+  let pauseOpened = false;
+  const controls = new PlayerControls({
+    shift: { receiptWindow: { isOpen: true } },
+    controlMode: { getMode: () => CONTROL_MODES.PAUSED },
+    pauseMenu: { toggle: () => { pauseOpened = true; } },
+  });
+  controls.handlePausedInput({
+    type: "click",
+    target: { closest: (selector) => selector.includes("#shift-receipt") },
+    preventDefault: () => { blocked = true; },
+    stopImmediatePropagation: () => { blocked = true; },
+  });
+  assert.equal(blocked, false);
+  controls.togglePause();
+  assert.equal(pauseOpened, false);
+});
 
 test("selects the active control mode by state priority", () => {
   const scene = createScene();

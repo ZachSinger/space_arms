@@ -538,7 +538,9 @@ export class FixtureSystem {
     if (!spawn) return false;
 
     economy.spend(spec.price, { category: "fixtures", label: spec.name });
-    scene.supply.deliver(new Crate(scene, null, 1, spawn.x, spawn.y, { kind: "fixture", typeId }));
+    const crate = new Crate(scene, null, 1, spawn.x, spawn.y, { kind: "fixture", typeId });
+    scene.supply.deliver(crate);
+    scene.supply.animation?.enqueue([crate]);
     scene.supply.freePlayerFromPad();
     scene.gameState.shop.changed();
     return true;

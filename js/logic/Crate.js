@@ -80,6 +80,7 @@ export class Crate {
       : kind === "remote-order" ? [...this.contents.values()].reduce((sum, amount) => sum + amount, 0)
         : 1;
     this.locationState = { kind: "world" };
+    this.incomingDelivery = false;
     this.isThrown = false;
     this.isPushed = false;
     this.launch = null;
@@ -146,7 +147,7 @@ export class Crate {
   }
 
   canPickUp() {
-    if (this.inTerminal || this.remoteOrderShipping) return false;
+    if (this.inTerminal || this.remoteOrderShipping || this.incomingDelivery) return false;
     return this.isPushed || this.isStationary() || this.isSliding();
   }
 
@@ -160,7 +161,7 @@ export class Crate {
 
   canTake(_itemId = null, context = null) {
     const packingOrder = typeof context?.orderId === "string" && context.orderId.length > 0;
-    return this.kind === "item" && (!this.lockedToPad || packingOrder);
+    return !this.incomingDelivery && this.kind === "item" && (!this.lockedToPad || packingOrder);
   }
 
   canPut(itemId) {

@@ -31,10 +31,10 @@ completed or no longer relevant.
       showing only the walls, floors, and doors, so changes to them are easy to see.
 - [ ] When a crate ships out, add a short delay and a small window with an animation of the
       crate flying through space away from the space station.
-- [ ] Redo the end of day. Right now it has no real effect, feels pointless, and interrupts play.
+- [x] Replace the closing overlay with a paused, itemized receipt popup and an End Day button.
 - [ ] Make each day 5 minutes long again.
-- [ ] When the player orders crates, add a wait and a delivery the player can see, instead of
-      the crates just appearing.
+- [x] Show incoming orders in a small space window, then glide crates onto the loading pad
+      with blue thrusters, left to right and top to bottom.
 - [ ] Show a small visual cue every time the player makes money, such as a little popup
       showing the amount earned.
 - [ ] Replace or get rid of the top HUD bar, which looks bad. Before removing it, make sure

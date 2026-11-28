@@ -68,7 +68,7 @@ function renderEmergencyLoan(loan) {
   `;
 }
 
-function renderReceipt(receipt, { final, pendingReputationChange = null }) {
+export function renderReceipt(receipt, { final, pendingReputationChange = null }) {
   const lines = (entries) => entries.map((line) =>
     row(describeLine(line), signed(line.amount), line.amount >= 0 ? "earned" : "spent"));
   const shift = receipt.shift;
@@ -114,7 +114,7 @@ export const FinancesRenderer = {
     if (view.shiftRunning) {
       status = "The shift is running. Money updates now; reputation changes are applied at the end of the shift.";
     } else if (view.awaitingEndDay) {
-      status = `The shift is over. Restock and change prices now if you like, then end the day. Ending the day moves to Day ${view.day + 1} and changes market prices.`;
+      status = `The shift is over. End the day on the receipt to resume the shop. Ending the day moves to Day ${view.day + 1} and changes market prices.`;
       action = html`<button type="button" class="action-btn finances-end-day-btn" data-end-day
         ${view.canEndDay ? "" : html`disabled title="Finish placing the fixture first."`}>END DAY ${view.day}</button>`;
     } else {

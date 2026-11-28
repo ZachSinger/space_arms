@@ -226,7 +226,7 @@ export class Employee {
       const top = this.store.floorStacks?.get(base)?.at(-1);
       const crate = top ?? base;
       const fromPad = Boolean(base.lockedToPad);
-      if (crate.kind !== "item" || crate.quantity <= 0 || (!top && crate.isCarried && !cartCargo.includes(crate)) ||
+      if (crate.incomingDelivery || crate.kind !== "item" || crate.quantity <= 0 || (!top && crate.isCarried && !cartCargo.includes(crate)) ||
         reservedCrates.has(crate)) continue;
       const soldOut = onShelves(crate.itemId) === 0;
       for (const shelf of this.store.fixtures.shelves()) {

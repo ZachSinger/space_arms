@@ -22,6 +22,7 @@ export class UIWindow {
     this.shouldCloseOtherWindows = config.shouldCloseOtherWindows || false;
     // false hides the X and ignores Escape; code can still call close().
     this.closable = config.closable !== false;
+    this.passive = config.passive === true;
     // Windows stay where they open unless created with draggable: true.
     this.draggable = config.draggable === true;
     // Fired only on an actual close (X, Escape, or close()), not on content refresh.
@@ -66,7 +67,7 @@ export class UIWindow {
     closeBtn?.addEventListener("click", () => this.close());
 
     this.element.addEventListener("mousedown", () =>
-      this.manager.focusWindow(this),
+      this.passive ? null : this.manager.focusWindow(this),
     );
 
     header.addEventListener("mousedown", (e) => {
@@ -116,7 +117,7 @@ export class UIWindow {
   // Show at the remembered position, or just focus if already open.
   openWindow() {
     if (this.isOpen) {
-      this.manager.focusWindow(this);
+      if (!this.passive) this.manager.focusWindow(this);
       return;
     }
 
@@ -129,7 +130,7 @@ export class UIWindow {
 
     this.element.classList.remove("hidden");
     this.isOpen = true;
-    this.manager.focusWindow(this);
+    if (!this.passive) this.manager.focusWindow(this);
   }
 
   close() {
@@ -139,7 +140,7 @@ export class UIWindow {
     this.element.classList.add("hidden");
     this.element.classList.remove("active");
     this.isOpen = false;
-    this.manager.passFocusToNextHighest();
+    if (!this.passive) this.manager.passFocusToNextHighest();
     this.onClose?.();
   }
 }

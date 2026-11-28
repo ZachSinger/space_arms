@@ -23,7 +23,7 @@ export class WindowManager {
   }
 
   hasOpenWindow() {
-    for (const win of this.windows.values()) if (win.isOpen) return true;
+    for (const win of this.windows.values()) if (win.isOpen && !win.passive) return true;
     return false;
   }
 
@@ -96,7 +96,7 @@ export class WindowManager {
     let highest = null;
     let maxZ = 0;
     this.windows.forEach((w) => {
-      if (w.isOpen) {
+      if (w.isOpen && !w.passive) {
         const z = parseInt(w.element.style.zIndex || 0);
         if (z > maxZ) {
           maxZ = z;
@@ -109,7 +109,7 @@ export class WindowManager {
 
   closeAllExcept(ignoreId = null) {
     this.windows.forEach((w) => {
-      if (w.id !== ignoreId) w.close();
+      if (w.id !== ignoreId && !w.passive) w.close();
     });
   }
 }

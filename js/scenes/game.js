@@ -60,6 +60,7 @@ import { CameraRig } from "../world/CameraRig.js";
 import { FixtureViews } from "../world/FixtureViews.js";
 import { FixtureSystem } from "../systems/FixtureSystem.js";
 import { LOADING_PAD_ART, SupplySystem } from "../systems/SupplySystem.js";
+import { DELIVERY_SHIP_ART, SupplyDeliveryAnimation } from "../logic/SupplyDeliveryAnimation.js";
 import { CustomerFlow } from "../systems/CustomerFlow.js";
 import { createCustomerStore, createEmployeeStore } from "../systems/CharacterStore.js";
 import { CheckoutSystem } from "../systems/CheckoutSystem.js";
@@ -106,6 +107,7 @@ export class GameScene extends Phaser.Scene {
       });
     }
     this.load.image(LOADING_PAD_ART.key, LOADING_PAD_ART.path);
+    this.load.image(DELIVERY_SHIP_ART.key, DELIVERY_SHIP_ART.path);
     for (const sprite of Object.values(REMOTE_ORDER_CRATE_SPRITES)) {
       this.load.spritesheet(sprite.key, sprite.path, {
         frameWidth: sprite.frameWidth,
@@ -305,6 +307,8 @@ export class GameScene extends Phaser.Scene {
       LOADING_PAD_HEIGHT,
     ));
     this.supply.drawPad();
+    this.supply.animation = new SupplyDeliveryAnimation(this);
+    this.events.once("shutdown", () => this.supply.animation.destroy());
     this.restockCrates = []; // uncarried crates, at the Loading Pad or dropped on the floor
     this.crateWorld = new CrateWorld(this, {
       colliders: [this.room.wallGroup, this.obstacleGroup, this.registerGroup],
@@ -329,7 +333,8 @@ export class GameScene extends Phaser.Scene {
   // Pausing a started shift freezes the register, held buttons, and crates.
   listenForPause() {
     this.shiftClock.subscribe(({ started, isPaused }) => {
-      const paused = (started && isPaused) || Boolean(this.pauseMenu?.isOpen && !this.pauseMenu.runningForFriend);
+      const paused = (started && isPaused) || Boolean(this.pauseMenu?.isOpen && !this.pauseMenu.runningForFriend) ||
+        Boolean(this.shift.receiptWindow?.isOpen);
       this.setGamePaused(paused);
       if (started && isPaused) this.pauseMenu?.open();
     });
@@ -480,6 +485,7 @@ export class GameScene extends Phaser.Scene {
     this.controls.handleGamepad(time, delta);
     if (this.gamePaused) return;
     this.worldElapsedMs += delta;
+    this.supply.animation.update(delta);
     if (this.controlMode.getMode() !== CONTROL_MODES.PAUSED) this.fixturePlacement.update();
     this.crateWorld.update(delta);
     // Customers and employees hold the public door open on their way out.

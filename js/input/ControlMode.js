@@ -39,7 +39,7 @@ export class ControlMode {
   refresh() {
     const scene = this.scene;
     const openWindows = [...(scene.windowManager?.windows?.values() ?? [])]
-      .filter((window) => window.isOpen);
+      .filter((window) => window.isOpen && !window.passive);
     const hasBlockingModal = openWindows.some((window) =>
       !scene.checkoutSystem?.operatingRegister || !REGISTER_WINDOWS.has(window.id));
     const placementBlocked = scene.fixturePlacement?.active && (

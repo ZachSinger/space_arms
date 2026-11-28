@@ -183,7 +183,7 @@ export class SupplySystem {
 
   /**
    * Places a whole supply order: charges the stock plus one flat delivery fee, then drops
-   * every crate onto the Loading Pad at once. Each crate is hauled to a fixture by hand.
+   * reserves its Loading Pad spots and animates the crates landing in order.
    * @param {Map<string, number>} order - item id -> number of crates
    * @returns {boolean} false if unlicensed, unaffordable, or the pad lacks room
    */
@@ -213,6 +213,7 @@ export class SupplySystem {
       category: "delivery_fees",
       label: "Delivery fee",
     });
+    const delivered = [];
     for (const [itemId, count] of order) {
       // A first-time item starts at today's market price, then stays put until repriced.
       if (count > 0) gameState.catalog.priceIfUnset(itemId, gameState.market.getPrice(itemId));
@@ -231,9 +232,11 @@ export class SupplySystem {
           throw new Error(`Supply delivery could not fill its ${itemId} crate: ${result.reason}.`);
         }
         this.deliver(crate);
+        delivered.push(crate);
       }
     }
     this.freePlayerFromPad();
+    this.animation?.enqueue(delivered);
     gameState.shop.changed();
     return true;
   }
