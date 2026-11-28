@@ -661,7 +661,7 @@ export class CrateSystem {
     this.restockCrates = data.crates.map((entry) => {
       const crate = entry.kind === "fixture"
         ? new Crate(shop, entry.itemId, entry.quantity, entry.x, entry.y,
-          { id: entry.id, kind: "fixture", typeId: entry.typeId })
+          { id: entry.id, kind: "fixture", typeId: entry.typeId, paint: entry.paint ?? null })
         : entry.kind === "remote-order"
           ? new Crate(shop, null, 0, entry.x, entry.y, {
             id: entry.id,
@@ -691,7 +691,7 @@ export class CrateSystem {
     this.carriedCrates = carriedEntries.map((entry) => {
       const crate = entry.kind === "fixture"
         ? new Crate(shop, entry.itemId, entry.quantity, shop.player.sprite.x, shop.player.sprite.y,
-          { id: entry.id, kind: "fixture", typeId: entry.typeId })
+          { id: entry.id, kind: "fixture", typeId: entry.typeId, paint: entry.paint ?? null })
         : entry.kind === "remote-order"
           ? new Crate(shop, null, 0, shop.player.sprite.x, shop.player.sprite.y, {
             id: entry.id,

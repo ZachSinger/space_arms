@@ -9,9 +9,9 @@ import { ShelfFixture } from "../logic/ShelfFixture.js";
 import { ShelfAttentionHighlight } from "../logic/ShelfAttentionHighlight.js";
 import { ShelfFacingLight } from "../logic/ShelfFacingLight.js";
 import { ShelfItemDisplay } from "../logic/ShelfItemDisplay.js";
-import { getFixtureTexture, hasFacingTextures } from "../logic/FixtureTexture.js";
+import { getFixtureTexture, hasFacingTextures, showFixturePaint } from "../logic/FixtureTexture.js";
 import { MASTER_COMPUTER_SPRITE, masterComputerAnimationKey } from "../logic/MasterComputerArt.js";
-import { isPaintableFixture, shelfPaintTint } from "../logic/ShelfPaint.js";
+import { isPaintableFixture, paintsWithTint } from "../logic/ShelfPaint.js";
 import {
   REGISTER_FRONT_OVERLAP, fixtureArtInset, fixtureBounds, fixtureFacingStep, fixtureFootprint, fixtureRotation,
   fixtureSolidBounds, getFixtureType,
@@ -78,6 +78,8 @@ export class FixtureViews {
     const facingArt = hasFacingTextures(spec);
     if (facingArt) {
       sprite.setTexture(getFixtureTexture(spec, rotation));
+      // Shelf tints survive the swap; a register needs its recolored art for the new facing.
+      if (!paintsWithTint(spec)) showFixturePaint(this.shop, sprite, spec, rotation, fixture.paint);
       this.sizeFacingArt(sprite, spec, rotation);
     }
     if (spec.kind === "master_computer") this.updateMasterComputerAnimation(fixture);
@@ -130,6 +132,14 @@ export class FixtureViews {
     sprite.setDisplaySize(footprint.w * TILE_SIZE, footprint.h * TILE_SIZE);
   }
 
+  /** Redraws a fixture in its current paint. */
+  showPaint(fixture) {
+    const spec = getFixtureType(fixture.type);
+    const rotation = fixtureRotation(fixture);
+    showFixturePaint(this.shop, fixture.sprite, spec, rotation, fixture.paint);
+    if (hasFacingTextures(spec)) this.sizeFacingArt(fixture.sprite, spec, rotation);
+  }
+
   /**
    * Creates a solid, clickable fixture sprite.
    * @param {object} fixture
@@ -146,7 +156,7 @@ export class FixtureViews {
     scene.obstacleGroup.add(image); // solid -- customers walk up to it, not through it
     fixture.sprite = image;
     image.setInteractive({ useHandCursor: true, pixelPerfect: spec?.artLayout === "budget" });
-    if (spec && isPaintableFixture(spec)) image.setTint(shelfPaintTint(fixture.paint));
+    if (spec && isPaintableFixture(spec)) showFixturePaint(scene, image, spec, 0, fixture.paint);
     image.on("pointerdown", (pointer) => {
       if (pointer.event?.target === scene.game.canvas && !isWorldMouseBinding(pointer.event)) {
         if (spec?.kind === "master_computer") scene.managerTablet.robotServiceTab.openTerminal();

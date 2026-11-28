@@ -50,6 +50,7 @@ import { setupDecorationGallery } from "../debug/DecorationGalleryLab.js";
 import { setupTutorialLab } from "../debug/TutorialLab.js";
 import { setupCrateTestLab } from "../debug/CrateTestLab.js";
 import { ShelfStockingWindow } from "../logic/ShelfStockingWindow.js";
+import { FixturePaintWindow } from "../logic/FixturePaintWindow.js";
 import { REGISTER_FRONT_OVERLAP, fixtureFacing } from "../logic/FixtureLayout.js";
 import { Messages } from "../world/Messages.js";
 import { ShiftSystem } from "../systems/ShiftSystem.js";
@@ -265,6 +266,7 @@ export class GameScene extends Phaser.Scene {
     this.checkoutWindow = new CheckoutWindow(this.windowManager);
     this.checkoutWindow.getRegisterScreenArea = () => this.checkoutSystem.getRegisterScreenArea();
     this.shelfStockingWindow = new ShelfStockingWindow(this);
+    this.fixturePaintWindow = new FixturePaintWindow(this);
   }
 
   // Physics groups for customers and staff, and the player.
@@ -444,6 +446,7 @@ export class GameScene extends Phaser.Scene {
       this.areas.destroy();
       this.hud.destroy();
       this.shelfStockingWindow.destroy();
+      this.fixturePaintWindow.destroy();
       this.checkoutWindow.destroy();
       this.windowManager.destroy();
     });

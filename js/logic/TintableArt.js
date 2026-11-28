@@ -75,3 +75,55 @@ export function paintedArtUrl(scene, grayKey, tint) {
   paintedUrls.set(cacheKey, url);
   return url;
 }
+
+// The purple body color of art that has other colors too (a register's lights and screen).
+function isPurplePaint(data, index) {
+  const r = data[index], g = data[index + 1], b = data[index + 2];
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  if (!max || (max - min) / max < 0.2) return false;
+  let hue;
+  if (max === r) hue = ((g - b) / (max - min)) * 60;
+  else if (max === g) hue = (2 + (b - r) / (max - min)) * 60;
+  else hue = (4 + (r - g) / (max - min)) * 60;
+  hue = (hue + 360) % 360;
+  return hue >= 245 && hue <= 285;
+}
+
+/**
+ * Rewrites RGBA pixels in place: only the purple body turns the paint color, shaded the way
+ * tinted gray art is; every other color stays as drawn.
+ */
+export function repaintPurplePixels(data, tint) {
+  let brightest = 0;
+  for (let index = 0; index < data.length; index += 4) {
+    if (data[index + 3] && isPurplePaint(data, index)) brightest = Math.max(brightest, luminance(data, index));
+  }
+  if (!brightest) return data;
+  const scale = BRIGHTEST_GRAY / brightest;
+  const channels = [(tint >> 16) & 0xff, (tint >> 8) & 0xff, tint & 0xff];
+  for (let index = 0; index < data.length; index += 4) {
+    if (!data[index + 3] || !isPurplePaint(data, index)) continue;
+    const gray = Math.min(255, luminance(data, index) * scale);
+    for (let channel = 0; channel < 3; channel += 1) {
+      data[index + channel] = Math.round(gray * channels[channel] / 255);
+    }
+  }
+  return data;
+}
+
+/** Makes (once) and returns a copy of an already-loaded texture with its purple body repainted. */
+export function ensureRepaintedTexture(scene, sourceKey, tint) {
+  const key = `${sourceKey}_paint_${tint.toString(16).padStart(6, "0")}`;
+  if (scene.textures.exists(key)) return key;
+  if (!scene.textures.exists(sourceKey)) throw new Error(`Missing artwork: ${sourceKey}`);
+  const source = scene.textures.get(sourceKey).getSourceImage();
+  const texture = scene.textures.createCanvas(key, source.width, source.height);
+  if (!texture) throw new Error(`Could not create artwork: ${key}`);
+  texture.context.drawImage(source, 0, 0);
+  const pixels = texture.context.getImageData(0, 0, source.width, source.height);
+  repaintPurplePixels(pixels.data, tint);
+  texture.context.putImageData(pixels, 0, 0);
+  texture.refresh().setFilter(1);
+  return key;
+}

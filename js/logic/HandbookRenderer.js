@@ -137,7 +137,11 @@ function storeTopic({ shopLevel, reputation }) {
         ${key("moveFixture")}, or use
         <strong>MOVE</strong> in the Fixtures tab. Its contents move with it.</p>
       <p>An empty fixture can be packed back into a crate, or sold for half of what it cost.
-        Your shop always keeps at least one register.</p>`),
+        Your shop always keeps at least one register.</p>
+      <p>To change the color of a shelf or register, face it and hold
+        <span class="kbd-only">${controlLabel("paint", "keyboard")}</span><span class="pad-only">${controlLabel("paint", "keyboard")} on the keyboard (there is no controller button for this yet)</span>,
+        then pick a color. Only that one shelf or register changes, and it keeps its color when
+        moved or packed into a crate. You can do this at any time, even while the store is open.</p>`),
     section("Presentation", `
       <p>Your shop starts with 20 presentation points. Its maximum starts at 20 and rises by
         20 per sales-floor expansion and 2 per Shop Level above 5; the starting points do not rise.</p>

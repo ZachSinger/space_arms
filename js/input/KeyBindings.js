@@ -13,6 +13,7 @@ export const BINDING_GROUPS = Object.freeze([
     { id: "putDown", label: "Put down crate; choose stocking crate", defaults: ["KeyQ", null] },
     { id: "nextCrate", label: "Move crate arrow / move fixture", defaults: ["Control", null] },
     { id: "highlightTrash", label: "Show trash", defaults: ["KeyH", null] },
+    { id: "paint", label: "Change a shelf's or register's color (hold)", defaults: ["KeyF", null] },
   ] },
   { title: "Fixtures", actions: [
     { id: "rotate", label: "Rotate fixture", defaults: ["KeyR", null] },
@@ -79,7 +80,8 @@ export function getBindings() {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         try {
-          const parsed = JSON.parse(saved);
+          // Controls added since the player last saved theirs start on their default keys.
+          const parsed = { ...defaultBindings(), ...JSON.parse(saved) };
           if (!validateBindings(parsed)) throw new Error("Invalid saved control bindings");
           current = parsed;
         } catch (error) {
@@ -126,7 +128,7 @@ export function isWorldMouseBinding(event) {
   const binding = bindingForEvent(event);
   return Boolean(binding?.startsWith("Mouse")) && [
     "moveUp", "moveDown", "moveLeft", "moveRight", "dash", "interact", "crate", "putDown",
-    "nextCrate", "highlightTrash", "tablet", "pause", "zoomIn", "zoomOut",
+    "nextCrate", "highlightTrash", "paint", "tablet", "pause", "zoomIn", "zoomOut",
   ].some((action) => isBound(action, binding));
 }
 

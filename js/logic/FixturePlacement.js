@@ -10,8 +10,8 @@ import { AREA } from "../world/Areas.js";
 import {
   getFixtureType, fixtureAtWorldPoint, fixtureBounds, fixtureFootprint, fixtureProjectionBoxes,
 } from "./FixtureLayout.js";
-import { getFixtureTexture, hasFacingTextures } from "./FixtureTexture.js";
-import { isPaintableFixture, shelfPaintTint } from "./ShelfPaint.js";
+import { getFixtureTexture, hasFacingTextures, showFixturePaint } from "./FixtureTexture.js";
+import { isPaintableFixture, paintsWithTint } from "./ShelfPaint.js";
 import { getInputDevice } from "../input/InputDevice.js";
 import { fixturePlacementContext } from "./FixturePlacementContext.js";
 import { matchesBinding } from "../input/KeyBindings.js";
@@ -224,7 +224,7 @@ export class FixturePlacement {
     this.ghost = this.scene.add.image(x, y, getFixtureTexture(this.spec))
       .setDisplaySize(this.spec.w * TILE_SIZE, this.spec.h * TILE_SIZE)
       .setAlpha(0.5).setDepth(9996);
-    if (isPaintableFixture(this.spec)) this.ghost.setTint(shelfPaintTint(original?.paint));
+    if (isPaintableFixture(this.spec)) showFixturePaint(this.scene, this.ghost, this.spec, this.rotation, original?.paint ?? fixtureCrate?.paint);
     this.graphics.setVisible(true);
     this.drawPlacedFixtures();
     this.padPoint = null;
@@ -288,6 +288,8 @@ export class FixturePlacement {
     if (hasFacingTextures(this.spec)) {
       // Upright art for the chosen facing, at the same size as the placed fixture.
       this.ghost.setTexture(getFixtureTexture(this.spec, rotation)).setAngle(0);
+      // Shelf tints survive the swap; a register needs its recolored art for the new facing.
+      if (isPaintableFixture(this.spec) && !paintsWithTint(this.spec)) showFixturePaint(this.scene, this.ghost, this.spec, rotation, this.original?.paint ?? this.fixtureCrate?.paint);
       this.scene.fixtureViews.sizeFacingArt(this.ghost, this.spec, rotation);
     } else {
       this.ghost.setAngle(rotation * 90);

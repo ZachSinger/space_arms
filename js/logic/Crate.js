@@ -63,13 +63,15 @@ function carrierFootprint(carrierSprite, margin = 4) {
  */
 export class Crate {
   constructor(scene, itemId, quantity, x, y, {
-    id = null, kind = "item", typeId = null, tint = null,
+    id = null, kind = "item", typeId = null, paint = null, tint = null,
     orderId = null, requiredItems = [], contents = [],
   } = {}) {
     this.scene = scene;
     this.id = id ?? scene.crateSystem?.createId?.() ?? `crate-local-${nextStandaloneCrateId++}`;
     this.kind = kind;
     this.typeId = kind === "fixture" ? typeId : null;
+    // A crated shelf or register keeps its color for when it's placed again.
+    this.paint = kind === "fixture" ? paint : null;
     this.orderId = kind === "remote-order" ? orderId : null;
     this.requiredItems = kind === "remote-order" ? requiredItems.map((entry) => ({ ...entry })) : [];
     this.contents = kind === "remote-order"
@@ -727,7 +729,7 @@ export class Crate {
 
   serializePayload() {
     const payload = this.kind === "fixture"
-      ? { kind: "fixture", typeId: this.typeId }
+      ? { kind: "fixture", typeId: this.typeId, ...(this.paint ? { paint: this.paint } : {}) }
       : this.kind === "remote-order"
         ? {
           kind: "remote-order",

@@ -88,7 +88,8 @@ export class Shop extends Slice {
   toSave() {
     return {
       fixtures: this.fixtures.all().map((fixture) => {
-        const entry = { id: fixture.id, type: fixture.type, gx: fixture.gx, gy: fixture.gy, rotation: fixtureRotation(fixture) };
+        const entry = { id: fixture.id, type: fixture.type, gx: fixture.gx, gy: fixture.gy, rotation: fixtureRotation(fixture),
+          ...(fixture.paint && fixture.paint !== DEFAULT_SHELF_PAINT ? { paint: fixture.paint } : {}) };
         if (fixture instanceof ShelfFixture) {
           const placements = fixture.placements.map((stack) => ({ ...stack }));
           return {
@@ -96,7 +97,6 @@ export class Shop extends Slice {
             placements,
             nextPlacementId: fixture.nextPlacementId,
             ...(fixture.handsOn ? { stockingVersion: 1 } : {}),
-            ...(fixture.paint && fixture.paint !== DEFAULT_SHELF_PAINT ? { paint: fixture.paint } : {}),
           };
         }
         return entry;

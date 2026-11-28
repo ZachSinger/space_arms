@@ -887,11 +887,13 @@ test("fixture rotation is saved, and older saves without it still load", () => {
   }
 });
 
-test("each shelf saves its own known paint; unknown paints and paint on other fixtures are rejected", () => {
+test("shelves and registers save their own known paint; unknown paints and paint on other fixtures are rejected", () => {
   const data = snapshot();
   const shelf = data.fixtures[0];
-  const other = data.fixtures.find(({ type }) => getFixtureType(type).artLayout !== "budget");
+  const register = data.fixtures.find(({ type }) => getFixtureType(type).kind === "register");
+  const other = data.fixtures.find(({ type }) => !["register", "shelf"].includes(getFixtureType(type).kind));
   shelf.paint = "purple";
+  register.paint = "red";
   assert.deepEqual(validateShopSave(data, database), data);
   shelf.paint = "glitter";
   assert.throws(() => validateShopSave(data, database), /unknown shelf paint/);
@@ -917,10 +919,13 @@ test("fixture crates can be saved on the floor or carried", () => {
     id: "crate-3",
     kind: "fixture", typeId: "shelf_budget_3x4", x: 320, y: 640, velocityX: 0, velocityY: 0,
   });
-  data.carriedCrate = { id: "crate-4", kind: "fixture", typeId: "shelf_budget_2x4" };
+  data.carriedCrate = { id: "crate-4", kind: "fixture", typeId: "shelf_budget_2x4", paint: "teal" };
   data.nextCrateId = 5;
   assert.deepEqual(validateShopSave(data, database), data);
 
+  data.carriedCrate.paint = "glitter";
+  assert.throws(() => validateShopSave(data, database), /unknown fixture crate paint/);
+  data.carriedCrate.paint = "teal";
   data.carriedCrate.typeId = "unknown";
   assert.throws(() => validateShopSave(data, database), /unknown fixture crate/);
 });

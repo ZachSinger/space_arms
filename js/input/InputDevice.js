@@ -70,6 +70,7 @@ export function getControlHelp() { return [
     `Hold ${controlLabel("moveFixture", "keyboard")}`,
     `Hold ${controlLabel("moveFixture", "gamepad")}`,
   ),
+  controlHelp("Change the color of the shelf or register you face", `Hold ${controlLabel("paint", "keyboard")}`, "No controller button yet"),
   controlHelp("Manager's Tablet", controlLabel("tablet", "keyboard"), controlLabel("tablet", "gamepad")),
   controlHelp("Pause or resume the shift", `${actionBindingLabel("pause")} (Esc closes an open window first)`,
     `${controlLabel("start", "gamepad")} opens the menu; choose PAUSE. Press ${controlLabel("start", "gamepad")} to resume`),
@@ -183,7 +184,7 @@ export function controlLabel(action, device = currentDevice) {
     if (!(action in GAMEPAD_ACTIONS)) throw new Error(`Unknown control action: ${action}`);
     return controllerButtonLabel(controllerButtonFor(GAMEPAD_ACTIONS[action]));
   }
-  if (!(action in GAMEPAD_ACTIONS) && !["dash", "highlightTrash"].includes(action)) {
+  if (!(action in GAMEPAD_ACTIONS) && !["dash", "highlightTrash", "paint"].includes(action)) {
     throw new Error(`Unknown control action: ${action}`);
   }
   const mapped = { moveFixture: "nextCrate", handOverChange: "crate", cancelFixture: "cancel" }[action] ?? action;

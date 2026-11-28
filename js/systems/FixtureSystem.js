@@ -18,6 +18,7 @@ import { createFixtureModel } from "../state/slices/Shop.js";
 import { sinkItems } from "../logic/InventoryTransfer.js";
 import { AREA, areaAtRow } from "../world/Areas.js";
 import { controlLabel } from "../input/InputDevice.js";
+import { DEFAULT_SHELF_PAINT, SHELF_PAINTS, isPaintableFixture } from "../logic/ShelfPaint.js";
 import crateTuning from "../../data/tuning/crates.json" with { type: "json" };
 import { loadTuning } from "../core/Tuning.js";
 
@@ -187,6 +188,34 @@ export class FixtureSystem {
     fixture ??= this.decorationInReach(origin);
     if (!fixture || !this.canRearrange()) return null;
     return this.moveAreaBlockReason(fixture) ? null : fixture;
+  }
+
+  // The shelf or register the player stands right in front of, for changing its color.
+  getPaintableFixture() {
+    const shop = this.shop;
+    if (!shop.controlMode.allows("interact") || shop.checkoutSystem.operatingRegister) return null;
+    const origin = shop.interactionSystem.getInteractionOrigin();
+    const find = (action, kind) => shop.interactables.findTarget(
+      action, origin, null, shop.player, shop.input, kind, { excludeProvider: "fixture-move" });
+    const shelf = find("fixture", "fixture");
+    if (shelf?.kind === "fixture" && shop.interactionSystem.isPlayerFacingFixture(shelf.target) &&
+      isPaintableFixture(getFixtureType(shelf.target.type))) return shelf.target;
+    const register = find("register", "register");
+    return register?.kind === "register" ? register.target : null;
+  }
+
+  /**
+   * @param {object} fixture - a placed shelf or register
+   * @param {string} paintId - a SHELF_PAINTS id
+   */
+  paintFixture(fixture, paintId) {
+    if (!isPaintableFixture(getFixtureType(fixture.type)) || !Object.hasOwn(SHELF_PAINTS, paintId)) {
+      throw new Error(`Cannot paint ${fixture.type} ${paintId}`);
+    }
+    if (fixture.paint === paintId) return;
+    fixture.paint = paintId;
+    this.shop.fixtureViews.showPaint(fixture);
+    this.shop.gameState.shop.changed();
   }
 
   // A hovercart charger the player faces from right in front of it.
@@ -593,6 +622,7 @@ export class FixtureSystem {
       return false;
     }
     if (scene.shelfStockingWindow?.fixture === fixture) scene.shelfStockingWindow.uiWindow.close();
+    scene.fixturePaintWindow?.closeFor(fixture);
     scene.fixtureViews.hide(fixture);
     this.fixtures.remove(fixture.id);
     const staff = scene.gameState.staff;
@@ -624,6 +654,7 @@ export class FixtureSystem {
     const crate = new Crate(scene, null, 1, fixture.x, fixture.y, {
       kind: "fixture",
       typeId: fixture.type,
+      paint: fixture.paint && fixture.paint !== DEFAULT_SHELF_PAINT ? fixture.paint : null,
     });
     crate.setPaused(scene.crateSystem.motionPaused);
     scene.restockCrates.push(crate);
@@ -755,7 +786,7 @@ export class FixtureSystem {
       return false;
     }
 
-    this.spawn({ id, type: crate.typeId, gx, gy, rotation });
+    this.spawn({ id, type: crate.typeId, gx, gy, rotation, paint: crate.paint ?? undefined });
     this.applyLayout(this.fixtures.layout(), result);
     crate.destroy();
     scene.crateSystem.removeCarriedCrate(crate);

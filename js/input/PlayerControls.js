@@ -34,6 +34,8 @@ export class PlayerControls {
     this.interactPress = null;
     // Ctrl held facing a fixture, until it's held long enough to pick the fixture up.
     this.fixtureMovePress = null;
+    // F held facing a shelf or register, until it's held long enough to open its color window.
+    this.paintPress = null;
     // The pick-up or put-down button being held, until it's released (tap) or held long enough (hold).
     this.cratePress = null;
     // E/A still held after packing an item into the remote order, so it keeps packing.
@@ -116,6 +118,7 @@ export class PlayerControls {
     this.cratePress = null;
     this.interactPress = null;
     this.fixtureMovePress = null;
+    this.paintPress = null;
     this.packRepeat = null;
   }
 
@@ -268,6 +271,7 @@ export class PlayerControls {
     this.updateInteractPress();
     this.updatePackRepeat();
     this.updateFixtureMovePress();
+    this.updatePaintPress();
   }
 
   // E/A acted right away; if it packed the remote order, keeping it held packs more.
@@ -350,6 +354,20 @@ export class PlayerControls {
     if (action?.target === press.fixture) action.perform();
   }
 
+  startPaintPress() {
+    const fixture = this.shop.fixtureSystem.getPaintableFixture();
+    this.paintPress = fixture ? { fixture, startedAt: this.shop.time.now } : null;
+  }
+
+  updatePaintPress() {
+    const press = this.paintPress;
+    if (!press || this.shop.time.now - press.startedAt < HOLD_KEY_MS) return;
+    this.paintPress = null;
+    if (this.shop.fixtureSystem.getPaintableFixture() === press.fixture) {
+      this.shop.fixturePaintWindow.open(press.fixture);
+    }
+  }
+
   bindCrateKeys() {
     const keyboard = this.shop.input.keyboard;
     keyboard.removeCapture("SPACE");
@@ -378,6 +396,7 @@ export class PlayerControls {
     const crateDown = alreadyDown("crate");
     const putDownDown = alreadyDown("putDown");
     const nextCrateDown = alreadyDown("nextCrate");
+    const paintDown = alreadyDown("paint");
     this.heldBindings.set(event.code || binding, binding);
     if (shop.controlMode.allows("cameraZoom")) {
       if (matchesBinding("zoomIn", event)) shop.cameraRig.zoomBy(1);
@@ -394,6 +413,7 @@ export class PlayerControls {
       this.startFixtureMovePress();
       shop.crateSystem.markNextCrateDown();
     }
+    if (!paintDown && matchesBinding("paint", event)) this.startPaintPress();
   }
 
   handleBoundUp(event) {
@@ -402,6 +422,7 @@ export class PlayerControls {
     if (matchesBinding("crate", event) && !this.isActionDown("crate")) this.endCratePress("pickUp");
     if (matchesBinding("putDown", event) && !this.isActionDown("putDown")) this.endCratePress("putDown");
     if (matchesBinding("nextCrate", event) && !this.isActionDown("nextCrate")) this.fixtureMovePress = null;
+    if (matchesBinding("paint", event) && !this.isActionDown("paint")) this.paintPress = null;
   }
 
   allowsCrateAction() {

@@ -335,6 +335,9 @@ export function checkShopSave(data, database) {
     const kind = crate.kind ?? "item";
     if (kind === "fixture") {
       requireSave(getFixtureType(crate.typeId), "unknown fixture crate.");
+      requireSave(crate.paint === undefined ||
+        (isPaintableFixture(getFixtureType(crate.typeId)) && Object.hasOwn(SHELF_PAINTS, crate.paint)),
+      "unknown fixture crate paint.");
       return;
     }
     if (kind === "remote-order") {

@@ -1,0 +1,26 @@
+/* Change-color window for one shelf or register (js/logic/FixturePaintWindow.js). */
+.fixture-paint-body { display: flex; flex-direction: column; gap: 12px; }
+.fixture-paint-intro { margin: 0; color: var(--color-text-muted); }
+.fixture-paint-swatches { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.fixture-paint-swatch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  color: var(--color-text);
+  background: #0f172a;
+  border: 2px solid var(--color-border-subtle);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fixture-paint-swatch:hover,
+.fixture-paint-swatch:focus-visible { border-color: #38bdf8; }
+.fixture-paint-swatch[aria-pressed="true"] { border-color: #86efac; color: #86efac; }
+.fixture-paint-swatch[aria-pressed="true"]::after { content: "✓"; margin-left: auto; }
+.fixture-paint-chip {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border: 1px solid #020617;
+}
