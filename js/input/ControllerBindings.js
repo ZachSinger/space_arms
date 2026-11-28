@@ -1,4 +1,4 @@
-// Controller actions use the standard Gamepad API button indexes. Sticks, triggers,
+// Controller actions use the standard Gamepad API button indexes. Sticks, LT,
 // and the D-pad keep their existing movement, dash, and navigation behavior.
 export const CONTROLLER_ACTIONS = Object.freeze([
   { id: "interact", label: "Use, open, or place a fixture", defaultButton: 0 },
@@ -6,6 +6,7 @@ export const CONTROLLER_ACTIONS = Object.freeze([
   { id: "putDown", label: "Put down a crate; turn a fixture", defaultButton: 3 },
   { id: "nextCrate", label: "Move the crate arrow", defaultButton: 11 },
   { id: "highlightTrash", label: "Show trash (hold)", defaultButton: 10 },
+  { id: "paint", label: "Change a shelf's or register's color (hold)", defaultButton: 7 },
   { id: "tablet", label: "Open or close the tablet", defaultButton: 8 },
   { id: "pause", label: "Open the menu or pause", defaultButton: 9 },
   { id: "cancel", label: "Go back, leave the register, or dash", defaultButton: 1 },
@@ -37,7 +38,8 @@ export function getControllerBindings() {
       const saved = window.localStorage.getItem(STORAGE_KEY);
       if (saved) {
         try {
-          const parsed = JSON.parse(saved);
+          // Actions added since the player last saved their buttons start on their default button.
+          const parsed = { ...defaultControllerBindings(), ...JSON.parse(saved) };
           if (!validateControllerBindings(parsed)) throw new Error("Invalid saved controller bindings");
           current = parsed;
         } catch (error) {

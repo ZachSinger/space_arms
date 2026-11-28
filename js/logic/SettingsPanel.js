@@ -98,7 +98,7 @@ export class SettingsPanel {
             <span>Automatic uses the controller name when it recognizes it. Otherwise, it uses Xbox button names.</span>
           </label>
           <h2>Controller buttons</h2>
-          <p>Choose an action, then press the controller button you want to use. If another action uses that button, the two assignments switch. Press the D-pad to stop listening; the D-pad, sticks, and triggers keep their current jobs.</p>
+          <p>Choose an action, then press the controller button you want to use. If another action uses that button, the two assignments switch. Press the D-pad to stop listening; the D-pad, sticks, and LT (dash) keep their current jobs.</p>
           <div class="settings-controller-bindings"></div>
           <div class="settings-controller-capture-actions hidden">
             <button class="settings-cancel-controller-capture">STOP LISTENING</button>

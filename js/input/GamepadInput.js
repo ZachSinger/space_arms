@@ -162,9 +162,9 @@ export class GamepadInput {
     return { ...this.leftStick };
   }
 
-  // Holding the mapped cancel button or either trigger.
+  // Holding the mapped cancel button or LT. RT is an assignable button, so it does not dash.
   wantsDash() {
-    return this.isActionDown("cancel") || this.down.has(PAD.RT) || this.down.has(PAD.LT);
+    return this.isActionDown("cancel") || this.down.has(PAD.LT);
   }
 
   // Holding the mapped trash-highlight button lights up all trash on the floor.

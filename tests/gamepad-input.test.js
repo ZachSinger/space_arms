@@ -35,12 +35,21 @@ test("the first poll only notes what is already held", () => {
 test("triggers count as pressed past halfway", () => {
   const { state, input } = fakePad();
   input.poll(0);
-  state.buttons[PAD.RT] = { pressed: false, value: 0.4 };
+  state.buttons[PAD.LT] = { pressed: false, value: 0.4 };
   input.poll(16);
   assert.equal(input.wantsDash(), false);
-  state.buttons[PAD.RT] = { pressed: false, value: 0.8 };
+  state.buttons[PAD.LT] = { pressed: false, value: 0.8 };
   input.poll(32);
   assert.equal(input.wantsDash(), true);
+});
+
+test("RT changes colors instead of dashing", () => {
+  const { input, press } = fakePad();
+  input.poll(0);
+  press(PAD.RT);
+  input.poll(16);
+  assert.equal(input.isActionDown("paint"), true);
+  assert.equal(input.wantsDash(), false);
 });
 
 test("holding B dashes", () => {

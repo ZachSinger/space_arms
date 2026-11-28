@@ -16,18 +16,15 @@ const CONTROLLER_LABEL_STYLES = Object.freeze(["automatic", "xbox", "playstation
 const GAMEPAD_LAYOUTS = Object.freeze({
   xbox: Object.freeze({
     0: "A", 1: "B", 2: "X", 3: "Y", 4: "LB", 5: "RB",
-    8: "View", 9: "Start", 10: "Left stick click", 11: "Right stick click",
-    leftTrigger: "LT", rightTrigger: "RT",
+    6: "LT", 7: "RT", 8: "View", 9: "Start", 10: "Left stick click", 11: "Right stick click",
   }),
   playstation: Object.freeze({
     0: "✕", 1: "○", 2: "□", 3: "△", 4: "L1", 5: "R1",
-    8: "Share/Create", 9: "Options", 10: "Left stick click (L3)", 11: "Right stick click (R3)",
-    leftTrigger: "L2", rightTrigger: "R2",
+    6: "L2", 7: "R2", 8: "Share/Create", 9: "Options", 10: "Left stick click (L3)", 11: "Right stick click (R3)",
   }),
   nintendo: Object.freeze({
     0: "B", 1: "A", 2: "Y", 3: "X", 4: "L", 5: "R",
-    8: "Minus", 9: "Plus", 10: "Left stick click", 11: "Right stick click",
-    leftTrigger: "ZL", rightTrigger: "ZR",
+    6: "ZL", 7: "ZR", 8: "Minus", 9: "Plus", 10: "Left stick click", 11: "Right stick click",
   }),
 });
 
@@ -38,6 +35,7 @@ const GAMEPAD_ACTIONS = Object.freeze({
   nextCrate: "nextCrate",
   dash: "cancel",
   highlightTrash: "highlightTrash",
+  paint: "paint",
   moveFixture: "interact",
   tablet: "tablet",
   rotate: "putDown",
@@ -70,7 +68,7 @@ export function getControlHelp() { return [
     `Hold ${controlLabel("moveFixture", "keyboard")}`,
     `Hold ${controlLabel("moveFixture", "gamepad")}`,
   ),
-  controlHelp("Change the color of the shelf or register you face", `Hold ${controlLabel("paint", "keyboard")}`, "No controller button yet"),
+  controlHelp("Change the color of the shelf or register you face", `Hold ${controlLabel("paint", "keyboard")}`, `Hold ${controlLabel("paint", "gamepad")}`),
   controlHelp("Manager's Tablet", controlLabel("tablet", "keyboard"), controlLabel("tablet", "gamepad")),
   controlHelp("Pause or resume the shift", `${actionBindingLabel("pause")} (Esc closes an open window first)`,
     `${controlLabel("start", "gamepad")} opens the menu; choose PAUSE. Press ${controlLabel("start", "gamepad")} to resume`),
@@ -174,9 +172,8 @@ export function withInputDevice(device, fn) {
  */
 export function controlLabel(action, device = currentDevice) {
   if (device === "gamepad") {
-    const layout = GAMEPAD_LAYOUTS[getResolvedControllerLabelStyle()];
     if (action === "dash") {
-      return `${controllerButtonLabel(controllerButtonFor("cancel"))} or a trigger (${layout.leftTrigger} or ${layout.rightTrigger})`;
+      return `${controllerButtonLabel(controllerButtonFor("cancel"))} or ${controllerButtonLabel(6)}`;
     }
     if (action === "highlightTrash") {
       return `${controllerButtonLabel(controllerButtonFor("highlightTrash"))} (hold)`;
@@ -184,7 +181,7 @@ export function controlLabel(action, device = currentDevice) {
     if (!(action in GAMEPAD_ACTIONS)) throw new Error(`Unknown control action: ${action}`);
     return controllerButtonLabel(controllerButtonFor(GAMEPAD_ACTIONS[action]));
   }
-  if (!(action in GAMEPAD_ACTIONS) && !["dash", "highlightTrash", "paint"].includes(action)) {
+  if (!(action in GAMEPAD_ACTIONS) && !["dash", "highlightTrash"].includes(action)) {
     throw new Error(`Unknown control action: ${action}`);
   }
   const mapped = { moveFixture: "nextCrate", handOverChange: "crate", cancelFixture: "cancel" }[action] ?? action;

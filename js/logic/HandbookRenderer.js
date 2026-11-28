@@ -139,7 +139,7 @@ function storeTopic({ shopLevel, reputation }) {
       <p>An empty fixture can be packed back into a crate, or sold for half of what it cost.
         Your shop always keeps at least one register.</p>
       <p>To change the color of a shelf or register, face it and hold
-        <span class="kbd-only">${controlLabel("paint", "keyboard")}</span><span class="pad-only">${controlLabel("paint", "keyboard")} on the keyboard (there is no controller button for this yet)</span>,
+        ${key("paint")},
         then pick a color. Only that one shelf or register changes, and it keeps its color when
         moved or packed into a crate. You can do this at any time, even while the store is open.</p>`),
     section("Presentation", `

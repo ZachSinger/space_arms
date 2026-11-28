@@ -94,4 +94,10 @@ test("controller assignments persist and reload", async (t) => {
 
   const reloaded = await import("../js/input/ControllerBindings.js?controller-bindings-reload");
   assert.deepEqual(reloaded.getControllerBindings(), bindings);
+
+  const { paint, ...savedBeforePaint } = bindings;
+  stored.set("space-arms-dealer.controller-bindings", JSON.stringify(savedBeforePaint));
+  const older = await import("../js/input/ControllerBindings.js?controller-bindings-before-paint");
+  assert.equal(older.getControllerBindings().paint, PAD.RT);
+  assert.equal(older.getControllerBindings().interact, PAD.RB);
 });

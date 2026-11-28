@@ -236,6 +236,7 @@ export class PlayerControls {
         this.startCratePress("putDown", { button: controllerButtonFor("putDown") });
       }
       if (pad.justPressedAction("nextCrate")) shop.crateSystem.markNextCrateDown();
+      if (pad.justPressedAction("paint")) this.startPaintPress({ button: controllerButtonFor("paint") });
       if (pad.justPressedAction("cancel") && shop.checkoutSystem.operatingRegister) {
         shop.checkoutSystem.endRegisterSession();
       }
@@ -354,14 +355,20 @@ export class PlayerControls {
     if (action?.target === press.fixture) action.perform();
   }
 
-  startPaintPress() {
+  /** @param {{ button?: number }} [options] - the controller button, which is polled for release */
+  startPaintPress({ button = null } = {}) {
     const fixture = this.shop.fixtureSystem.getPaintableFixture();
-    this.paintPress = fixture ? { fixture, startedAt: this.shop.time.now } : null;
+    this.paintPress = fixture ? { fixture, button, startedAt: this.shop.time.now } : null;
   }
 
   updatePaintPress() {
     const press = this.paintPress;
-    if (!press || this.shop.time.now - press.startedAt < HOLD_KEY_MS) return;
+    if (!press) return;
+    if (press.button !== null && !this.padInput?.isDown(press.button)) {
+      this.paintPress = null;
+      return;
+    }
+    if (this.shop.time.now - press.startedAt < HOLD_KEY_MS) return;
     this.paintPress = null;
     if (this.shop.fixtureSystem.getPaintableFixture() === press.fixture) {
       this.shop.fixturePaintWindow.open(press.fixture);
