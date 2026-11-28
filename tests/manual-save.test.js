@@ -94,6 +94,7 @@ function createHarness(write = async () => true) {
   const errors = [];
   const writes = [];
   const controls = [];
+  let stored = null;
   Object.assign(scene, {
     shift: { starting: false, ended: false },
     shiftClock: { started: false },
@@ -103,9 +104,12 @@ function createHarness(write = async () => true) {
     messages: { closeSaveError() {}, show: (message) => messages.push(message) },
   });
   scene.saves = new SaveSystem(scene, {
+    read: async () => structuredClone(stored),
     write: async (payload) => {
       writes.push(payload);
-      return write(payload);
+      const result = await write(payload);
+      if (result === true) stored = structuredClone(payload);
+      return result;
     },
   });
   scene.saves.serialize = () => ({ credits: scene.credits });
@@ -1050,7 +1054,7 @@ test("manual save persists the current shop and confirms unchanged saves without
   const { scene, writes, messages, controls } = createHarness();
   await scene.saves.saveManually();
   assert.equal(writes.length, 1);
-  assert.deepEqual(writes[0].data.shop, { credits: 436 });
+  assert.deepEqual(writes[0].slots[0].data.shop, { credits: 436 });
   assert.equal(scene.saves.lastSavedSnapshot, JSON.stringify({ credits: 436 }));
   assert.deepEqual(messages, ["Game saved."]);
   assert.equal(controls.at(-1).canSave, true);
@@ -1070,10 +1074,26 @@ test("manual save shows busy controls until the write finishes", async () => {
   assert.equal(controls.at(-1).saving, true);
   assert.equal(messages.length, 0);
 
+  await new Promise((resolve) => setImmediate(resolve));
   finishWrite(true);
   await saving;
   assert.equal(controls.at(-1).saving, false);
   assert.equal(messages.at(-1), "Game saved.");
+});
+
+test("play time is saved during shifts without overwriting the last closed-shop checkpoint", async () => {
+  const { scene } = createHarness();
+  scene.saves.updatePlayTime(10000);
+  await scene.saves.saveManually();
+  const slotId = scene.saves.manager.slotId;
+  scene.shiftClock.started = true;
+  scene.credits = 1000;
+  scene.saves.updatePlayTime(12000);
+  await scene.saves.flushMetadata();
+  const slot = await scene.saves.manager.read(slotId);
+  assert.equal(slot.playTimeMs, 22000);
+  assert.deepEqual(slot.data.shop, { credits: 436 });
+  assert.equal(scene.saves.canWrite(), false);
 });
 
 test("manual save failures use the save error path and never confirm success", async () => {

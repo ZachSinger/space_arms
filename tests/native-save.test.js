@@ -58,7 +58,7 @@ test("native saves replace atomically, serialize writes, recover from errors, an
     assert.equal(await load(), null);
     await Promise.all([save({}, { value: 1 }), save({}, { value: 2 })]);
     assert.deepEqual(await load(), { value: 2 });
-    assert.equal((await readdir(directory)).includes("savegame.json.tmp"), false);
+    assert.equal((await readdir(directory)).includes("save-slots.json.tmp"), false);
 
     const circular = {};
     circular.self = circular;
@@ -77,9 +77,9 @@ test("native saves replace atomically, serialize writes, recover from errors, an
     await pending;
     await setImmediate();
     assert.equal(window.destroyed, true);
-    assert.deepEqual(JSON.parse(await readFile(join(directory, "savegame.json"), "utf8")), { value: 4 });
+    assert.deepEqual(JSON.parse(await readFile(join(directory, "save-slots.json"), "utf8")), { value: 4 });
 
-    await writeFile(join(directory, "savegame.json"), "{broken", "utf8");
+    await writeFile(join(directory, "save-slots.json"), "{broken", "utf8");
     await assert.rejects(load(), SyntaxError);
   } finally {
     errorLog.mock.restore();

@@ -10,6 +10,7 @@ import "../../styles/windows/remote-orders.css";
 import "../../styles/windows/tutorial.css";
 import "../../styles/windows/settings.css";
 import "../../styles/windows/pause.css";
+import "../../styles/windows/saves.css";
 import "../../styles/windows/coop.css";
 import "../../styles/windows/checkout.css";
 import "../../styles/windows/contracts.css";

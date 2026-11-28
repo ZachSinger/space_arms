@@ -48,7 +48,12 @@ export async function startGame({ port = 5391, headless = true, vitePlugins = []
     errors: () => problems.filter((problem) => problem.type !== "warning"),
     warnings: (pattern) => problems.filter((problem) => problem.type === "warning" && pattern.test(problem.text)),
     async newGame(data = {}) {
-      await page.evaluate((startData) => {
+      await page.evaluate(async (startData) => {
+        const previous = window.__game.scene.getScene("scene-game");
+        if (previous?.sys.isActive()) {
+          previous.setGamePaused(true);
+          await previous.saves.flushMetadata();
+        }
         window.localStorage.clear();
         window.__previousPlayer = window.__game.scene.getScene("scene-game")?.player ?? null;
         window.__game.scene.getScene("scene-title").scene.start("scene-game", startData);

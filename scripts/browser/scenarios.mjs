@@ -63,6 +63,123 @@ const openFloor = (h) => h.game((scene) => {
 // --- Scenarios ---
 
 export const scenarios = {
+  async "multiple save slots keep separate shops and show play time"(h) {
+    const failures = [];
+    const check = (condition, message) => { if (!condition) failures.push(message); };
+    const list = "#pause-save-slots";
+    const confirm = "#pause-save-slots-confirmation";
+    await h.newGame({ real: true, saveName: "First shop" });
+    const first = await h.game(async (scene) => {
+      await scene.saves.saveOffShift();
+      scene.saves.updatePlayTime(90000);
+      scene.pauseMenu.open();
+      await scene.saves.flushMetadata();
+      return { id: scene.saves.manager.slotId, money: scene.gameState.economy.credits, time: scene.saves.playTimeMs };
+    });
+    await h.page.locator('[data-pause-action="save"]').click();
+    await h.page.locator(`${list} [data-slot-action="select"]`).waitFor();
+    const controllerScope = await h.game((scene) => {
+      const navigator = scene.controls.uiNavigator;
+      const scope = navigator.getScope();
+      navigator.handle({
+        navDirection: null, rightStick: { y: 0 },
+        justPressedAction: (action) => action === "interact",
+        isDown: () => false, isActionDown: () => false,
+      });
+      return scope.id;
+    });
+    check(controllerScope === "pause-save-slots", "Controller focus missed the save chooser");
+    await h.page.locator(list).waitFor({ state: "hidden" });
+    await h.page.locator('[data-pause-action="save"]').click();
+    check(await h.page.locator(`${list} [data-slot-action="delete"]`).isDisabled(), "Current save can be deleted");
+    check((await h.page.locator(`${list} [data-save-list]`).innerText()).includes("Total play time: 1 minute"), "Play time is missing");
+    check(await h.page.locator(`${list} time[datetime]`).count() === 1, "Last-played date is missing");
+    await h.page.locator(`${list} [data-save-name]`).fill("Copy <b>bold</b>");
+    await h.page.locator(`${list} [data-save-new]`).click();
+    await h.page.locator(list).waitFor({ state: "hidden" });
+    const copyId = await h.game((scene) => scene.saves.manager.slotId);
+    check(copyId !== first.id, "New save reused the original slot");
+    check(await h.game((scene) => scene.gamePaused), "Saving unexpectedly resumed the shop");
+    await h.page.locator('[data-pause-action="load"]').click();
+    await h.page.locator(`${list} [data-slot-id="${first.id}"][data-slot-action="select"]`).click();
+    await h.game((scene) => scene.controls.uiNavigator.handle({
+      navDirection: null, rightStick: { y: 0 },
+      justPressedAction: (action) => action === "cancel",
+      isDown: () => false, isActionDown: () => false,
+    }));
+    await h.page.locator(confirm).waitFor({ state: "hidden" });
+    check(await h.game((scene) => scene.saves.manager.slotId) === copyId, "Cancel loaded the other shop");
+    await h.page.locator(`${list} [data-slot-id="${first.id}"][data-slot-action="select"]`).click();
+    await h.page.locator(`${confirm} [data-save-confirm]`).click();
+    await h.page.waitForFunction((id) => {
+      const scene = window.__game.scene.getScene("scene-game");
+      return scene?.sys.isActive() && scene.saves?.manager.slotId === id && !scene.gamePaused;
+    }, first.id, { timeout: 60000 });
+    check(await h.game((scene) => scene.gameState.economy.credits) === first.money, "Loading changed the original shop");
+    check(await h.game((scene) => scene.realMode), "Loading lost real-game mode");
+    check(await h.game((scene) => scene.saves.playTimeMs) >= first.time, "Loading reset play time");
+
+    await h.game((scene) => {
+      scene.pauseMenu.open();
+      scene.gameState.economy.credits = 333;
+    });
+    const pausedTime = await h.game((scene) => scene.saves.playTimeMs);
+    await h.wait(150);
+    check(await h.game((scene) => scene.saves.playTimeMs) === pausedTime, "Paused time counted as play time");
+    await h.page.locator('[data-pause-action="save"]').click();
+    const target = `${list} [data-slot-id="${copyId}"][data-slot-action="select"]`;
+    await h.page.locator(target).click();
+    await h.page.locator(`${confirm} [data-save-cancel]`).click();
+    check(await h.game((scene) => scene.saves.manager.slotId) === first.id, "Cancel changed the autosave destination");
+    await h.page.locator(target).click();
+    await h.page.locator(`${confirm} [data-save-confirm]`).click();
+    await h.page.locator(list).waitFor({ state: "hidden" });
+    check(await h.game((scene) => scene.saves.manager.slotId) === copyId, "Replacement did not select the new autosave destination");
+    check(await h.game(async (scene, id) => (await scene.saves.manager.read(id)).data.shop.playerState.credits, first.id) === first.money,
+      "Replacement overwrote the wrong save");
+
+    await h.page.locator('[data-pause-action="save"]').click();
+    check(await h.page.locator(`${list} b`).count() === 0, "Save names were rendered as HTML");
+    await h.page.locator(`${list} [data-slot-id="${first.id}"][data-slot-action="rename"]`).click();
+    await h.page.locator(`${confirm} [data-save-rename]`).fill("Renamed shop");
+    await h.page.locator(`${confirm} [data-save-confirm]`).click();
+    await h.page.locator(`${list} h3`).filter({ hasText: "Renamed shop" }).waitFor();
+    check(await h.page.locator(`${list} [data-slot-id="${copyId}"][data-slot-action="delete"]`).isDisabled(),
+      "Refreshing enabled deletion of the current shop");
+    await h.page.locator(`${list} [data-slot-id="${first.id}"][data-slot-action="delete"]`).click();
+    await h.page.locator(`${confirm} [data-save-cancel]`).click();
+    check(await h.page.locator(`${list} .save-slot`).count() === 2, "Cancel deleted a save");
+    await h.page.locator(`${list} [data-slot-id="${first.id}"][data-slot-action="delete"]`).click();
+    await h.page.locator(`${confirm} [data-save-confirm]`).click();
+    await h.page.locator(`${list} [data-slot-id="${first.id}"]`).first().waitFor({ state: "detached" });
+    check(await h.page.locator(`${list} .save-slot`).count() === 1, "Deletion removed the wrong number of saves");
+    await h.game((scene) => scene.pauseMenu.uiWindow.close());
+    await h.game(async (scene) => {
+      scene.gameState.economy.credits = 444;
+      await scene.saves.saveOffShift();
+      scene.scene.start("scene-title");
+    });
+    await h.page.waitForFunction(() => window.__game.scene.getScene("scene-title")?.sys.isActive());
+    await h.page.evaluate(() => window.__game.scene.getScene("scene-title").confirmNewGame());
+    await h.page.locator("[data-new-save-name]").fill("Third shop");
+    await h.page.locator("[data-confirm-new-game]").click();
+    await h.page.waitForFunction(() => {
+      const scene = window.__game.scene.getScene("scene-game");
+      return scene?.sys.isActive() && scene.saves?.manager.name === "Third shop" && scene.saves.manager.slotId;
+    }, null, { timeout: 60000 });
+    check(await h.game(async (scene) => (await scene.saves.manager.list()).length) === 2, "New Game replaced another save");
+    await h.game((scene) => { scene.scene.start("scene-title"); });
+    await h.page.waitForFunction(() => window.__game.scene.getScene("scene-title")?.sys.isActive());
+    await h.page.evaluate(() => window.__game.scene.getScene("scene-title").continueGame());
+    await h.page.locator(`#title-save-slots [data-slot-id="${copyId}"][data-slot-action="select"]`).click();
+    await h.page.waitForFunction((id) => {
+      const scene = window.__game.scene.getScene("scene-game");
+      return scene?.sys.isActive() && scene.saves?.manager.slotId === id && scene.gameState.economy.credits === 444;
+    }, copyId, { timeout: 60000 });
+    check(!(await h.game((scene) => scene.controls.uiNavigator.getScope()?.id ?? "")).includes("save-slots"),
+      "A closed save window retained controller focus");
+    return failures;
+  },
   async "thrown crate hits a customer"(h) {
     await freshShop(h);
     const before = await h.game((scene) => {

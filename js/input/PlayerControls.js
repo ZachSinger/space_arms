@@ -143,8 +143,9 @@ export class PlayerControls {
     const shop = this.shop;
     if (shop.controlMode.getMode() !== CONTROL_MODES.PAUSED) return;
     if (shop.pauseMenu?.settings?.isCapturing) return;
-    if (event.target?.closest?.("#pause-menu, #pause-confirmation, #bug-report-window, .settings-window, #shift-receipt")) return;
-    if (shop.pauseMenu?.settingsOpen && event.type === "keydown" && event.key === "Escape") return;
+    if (event.target?.closest?.("#pause-menu, #pause-confirmation, #pause-save-slots, #pause-save-slots-confirmation, #bug-report-window, .settings-window, #shift-receipt")) return;
+    if (event.type === "keydown" && event.key === "Escape" &&
+      (shop.pauseMenu?.settingsOpen || shop.pauseMenu?.saveSlots?.uiWindow.isOpen)) return;
     if (event.type !== "keydown" && event.target?.closest?.("#hud-pause-btn")) return;
     event.preventDefault();
     event.stopImmediatePropagation();

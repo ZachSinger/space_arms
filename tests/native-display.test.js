@@ -119,7 +119,7 @@ test("native display choices work across modes and Windows display scaling", asy
     assert.equal(quitCalls, 0, "exit must wait for the pending save");
     await Promise.all([write, exit]);
     assert.equal(quitCalls, 1);
-    assert.deepEqual(JSON.parse(await readFile(join(directory, "savegame.json"), "utf8")), payload);
+    assert.deepEqual(JSON.parse(await readFile(join(directory, "save-slots.json"), "utf8")), payload);
   } finally {
     delete globalThis.__nativeDisplayTest;
     if (server) await server.close();

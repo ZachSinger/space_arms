@@ -42,8 +42,8 @@ completed or no longer relevant.
 - [ ] Add a space drive-thru window. A customer pulls up and places an order with the player
       at a terminal; the player then gathers the order from the shop, sends it out through a
       vacuum tube, and takes the customer's payment.
-- [ ] Add multiple save file slots. Track how long the player has played each save, and
-      show on every save the date and time it was last saved and its total play time.
+- [x] Add multiple save file slots. Track how long the player has played each save, and
+      show on every save the date and time it was last played and its total play time.
 
 ## Planned modules after the base shop
 

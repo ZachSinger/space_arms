@@ -117,12 +117,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * @param {{ savedShopData?: object, sandbox?: boolean, lab?: "ui" | "template" | "decorator" | "tutorial" | "crates", real?: boolean, seed?: number }} data -
+   * @param {{ savedShopData?: object, saveSlot?: { slotId: string, playTimeMs: number }, saveName?: string, sandbox?: boolean, lab?: "ui" | "template" | "decorator" | "tutorial" | "crates", real?: boolean, seed?: number }} data -
    *   save to load, or none for a new shop; sandbox starts a DEV test area that never saves;
    *   real starts a fresh game with every debug tool removed; seed fixes gameplay dice rolls
    */
   init(data = {}) {
     this.savedShopData = data.savedShopData ?? null;
+    this.saveSlot = data.saveSlot ?? null;
+    this.saveName = data.saveName ?? null;
     this.sandbox = data.sandbox === true;
     this.lab = this.sandbox && ["ui", "robots", "template", "decorator", "decorations", "tutorial", "crates"].includes(data.lab) ? data.lab : null;
     this.realMode = data.real === true;
@@ -428,6 +430,7 @@ export class GameScene extends Phaser.Scene {
 
   cleanUpOnShutdown() {
     this.events.once("shutdown", () => {
+      this.saves.destroy();
       this.eventBus.clear();
       this.debugInfo?.destroy();
       this.debugTools?.destroy();
@@ -477,6 +480,8 @@ export class GameScene extends Phaser.Scene {
       this.goBacksBadge.refresh();
     });
     this.shiftClock.subscribe(() => this.saves.updateControls());
+    this.saves.requestAutosave();
+    void this.saves.flushMetadata().catch((error) => this.saves.handleError(error));
   }
 
   // --- Frame update and shift flow ---
@@ -484,6 +489,7 @@ export class GameScene extends Phaser.Scene {
   update(time, delta) {
     this.controls.handleGamepad(time, delta);
     if (this.gamePaused) return;
+    this.saves.updatePlayTime(delta);
     this.worldElapsedMs += delta;
     this.supply.animation.update(delta);
     if (this.controlMode.getMode() !== CONTROL_MODES.PAUSED) this.fixturePlacement.update();

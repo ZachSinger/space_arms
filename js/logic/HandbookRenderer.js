@@ -177,7 +177,15 @@ function storeTopic({ shopLevel, reputation }) {
         "<strong>CLOSE STORE</strong> stops new customers from coming in for a while. Customers already inside keep shopping, and the clock keeps running. <strong>REOPEN STORE</strong> lets them in again.",
       ])}
       <p>Some things can only be done between shifts: hiring staff, changing their job order,
-        buying more space, and saving.</p>`),
+        buying more space, and saving.</p>
+      <p>Each new shop has its own save. In the pause menu, <strong>Save Game</strong>
+        lets you save to your current save, create a separate copy, or replace another saved
+        shop after confirmation. Future autosaves go to the save you choose.
+        <strong>Load Game</strong> and <strong>Continue</strong> on the title screen show
+        each save's last-played date and time and total play time. Play time includes shop
+        preparation and management, but not the pause menu. You can rename saves or delete
+        them after confirmation; return to the title screen to delete the shop you are playing.
+        Loading during a shift returns to the last between-shift checkpoint.</p>`),
     section("Ending a Shift", `
       ${list([
         "At 20:00 the doors close to new customers. Everyone already inside can still finish shopping and pay.",

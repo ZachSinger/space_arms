@@ -8,6 +8,7 @@ import { getBindings } from "../input/KeyBindings.js";
 import { getControllerLabelStyle, getInputDevice, getResolvedControllerLabelStyle } from "../input/InputDevice.js";
 import { database } from "../scenes/boot.js";
 import { showLoadingThen } from "../scenes/loadingScreen.js";
+import { SaveSlotsWindow } from "./SaveSlotsWindow.js";
 
 export class PauseMenu {
   constructor(shop) {
@@ -51,6 +52,21 @@ export class PauseMenu {
         <button class="action-btn" data-pause-confirm>Continue</button>
         <button class="action-btn" data-pause-cancel>Cancel</button>`,
     }, shop.windowManager);
+    this.saveSlots = new SaveSlotsWindow(shop.windowManager, {
+      id: "pause-save-slots", saves: shop.saves.manager,
+      onClose: () => {
+        if (this.isOpen && !this.destroying) {
+          this.uiWindow.element.classList.remove("hidden");
+          shop.windowManager.focusWindow(this.uiWindow);
+        }
+      },
+      onSave: (options) => shop.saves.saveManually(options),
+      onLoad: async (payload) => {
+        const savedShopData = validateShopSave(payload.data.shop, database);
+        await shop.saves.flushMetadata();
+        showLoadingThen(() => shop.scene.restart({ savedShopData, saveSlot: payload, real: payload.real }));
+      },
+    });
     this.bugReport = new UIWindow({
       id: "bug-report-window", title: "REPORT A PROBLEM", width: "500px", height: "auto",
       contentHTML: `
@@ -114,7 +130,7 @@ export class PauseMenu {
     this.shade.classList.remove("hidden");
     const menuElements = [
       this.uiWindow.element, this.confirmation.element, this.bugReport.element,
-      this.settings.element, this.shade,
+      this.settings.element, this.shade, this.saveSlots.uiWindow.element, this.saveSlots.confirmation.element,
     ];
     for (const element of document.getElementById("ui-layer").children) {
       if (menuElements.includes(element) || element.inert) continue;
@@ -144,6 +160,8 @@ export class PauseMenu {
   resume() {
     if (this.destroying) return;
     this.confirmation.close();
+    this.saveSlots.uiWindow.close();
+    this.saveSlots.confirmation.close();
     this.bugReport.close();
     this.shade.classList.add("hidden");
     this.restoreBackground();
@@ -238,20 +256,24 @@ export class PauseMenu {
     }
     else if (action === "invite") await this.inviteFriend();
     else if (action === "save") {
-      await this.shop.saves.saveManually();
-      this.status(this.shop.saves.status);
+      await this.shop.saves.flushMetadata();
+      this.uiWindow.element.classList.add("hidden");
+      await this.saveSlots.open("save");
     } else if (action === "settings") await this.settings.open();
     else if (action === "load") {
-      this.confirm("Load your saved game? Unsaved progress will be lost.", async () => {
-        const payload = await this.shop.saves.manager.read();
-        if (!payload) throw new Error("No saved game was found.");
-        const savedShopData = validateShopSave(payload.data.shop, database);
-        showLoadingThen(() => this.shop.scene.restart({ savedShopData, real: this.shop.realMode }));
-      });
+      await this.shop.saves.flushMetadata();
+      this.uiWindow.element.classList.add("hidden");
+      await this.saveSlots.open("load");
     } else if (action === "menu") {
-      this.confirm("Exit to the main menu? Unsaved progress will be lost.", () => window.location.reload());
+      this.confirm("Exit to the main menu? Unsaved progress will be lost.", async () => {
+        await this.shop.saves.flushMetadata();
+        window.location.reload();
+      });
     } else if (action === "desktop") {
-      this.confirm("Exit the game? Unsaved progress will be lost.", () => window.desktopApi.quitGame());
+      this.confirm("Exit the game? Unsaved progress will be lost.", async () => {
+        await this.shop.saves.flushMetadata();
+        await window.desktopApi.quitGame();
+      });
     } else {
       throw new RangeError(`Unknown pause menu action: ${action}`);
     }
@@ -364,6 +386,7 @@ export class PauseMenu {
     this.restoreBackground();
     this.shop.setGamePaused(false, { shutdown: true });
     this.settings.destroy();
+    this.saveSlots.destroy();
     this.bugReport.close();
     this.shade.remove();
   }

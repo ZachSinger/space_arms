@@ -3,7 +3,7 @@
 // ==========================================
 // Saving and loading the shop: when saving is allowed, autosaves while the store is closed,
 // manual saves, loading a save onto the map, and the save/load error window.
-// SaveManager writes this system's snapshot under the save file's "shop" key.
+// SaveManager writes this system's snapshot into the selected saved shop.
 import { database } from "../scenes/boot.js";
 import { GameState } from "../state/GameState.js";
 import { validateShopSave } from "../logic/ShopSave.js";
@@ -28,7 +28,14 @@ export class SaveSystem {
     this.showingSave = false;
     this.lastSavedSnapshot = null;
     this.status = "Not saved yet";
-    this.manager = new SaveManager({ shop: this }, storage);
+    this.playTimeMs = shop.saveSlot?.playTimeMs ?? 0;
+    this.metadataElapsedMs = 0;
+    this.lastMetadataPlayTimeMs = null;
+    this.manager = new SaveManager({ shop: this }, storage, {
+      slotId: shop.saveSlot?.slotId ?? null,
+      name: shop.saveSlot?.name ?? shop.saveName ?? null,
+      real: shop.realMode === true,
+    });
   }
 
   // Saving needs a quiet store: no shift running and nobody inside.
@@ -138,27 +145,30 @@ export class SaveSystem {
     });
   }
 
-  async saveManually() {
+  async saveManually(options = {}) {
     const { shop } = this;
     if (shop.sandbox) {
       shop.messages.show("Test areas are never saved.");
-      return;
+      return false;
     }
     if (this.loadFailed || shop.shift.starting || !this.canSaveOffShift()) {
       shop.messages.show(this.loadFailed
         ? "Cannot save after a load error. Your existing save has not been overwritten."
         : "Finish the shift before saving.");
-      return;
+      return false;
     }
     try {
       this.showingSave = true;
-      await this.saveOffShift();
+      await this.saveOffShift({ ...options, force: Object.hasOwn(options, "slotId") });
+      await this.flushMetadata();
       this.autosaveBlocked = false;
       shop.messages.closeSaveError();
       this.setStatus(SAVED_STATUS);
       shop.messages.show("Game saved.");
+      return true;
     } catch (error) {
       this.handleError(error);
+      return false;
     } finally {
       this.showingSave = false;
       this.updateControls();
@@ -167,20 +177,22 @@ export class SaveSystem {
 
   // Waits out any save already running, then skips writing if nothing changed since the
   // last successful save.
-  async saveOffShift() {
+  async saveOffShift({ force = false, ...options } = {}) {
     if (!this.canWrite()) return;
     if (this.inProgress) {
       await this.inProgress;
-      return this.saveOffShift();
+      return this.saveOffShift({ force, ...options });
     }
     const snapshot = JSON.stringify(this.serialize());
-    if (snapshot === this.lastSavedSnapshot) return;
-    this.inProgress = this.manager.save();
+    if (!force && this.manager.slotId !== null && snapshot === this.lastSavedSnapshot) return;
+    const playTimeMs = this.playTimeMs;
+    this.inProgress = this.manager.save({ ...options, playTimeMs });
     // Background autosaves stay silent; only a save the player asked for shows progress.
     if (this.showingSave) this.setStatus("Saving...");
     try {
       await this.inProgress;
       this.lastSavedSnapshot = snapshot;
+      this.lastMetadataPlayTimeMs = playTimeMs;
       this.autosaveBlocked = false;
       this.setStatus(SAVED_STATUS);
       this.shop.messages.closeSaveError();
@@ -188,6 +200,29 @@ export class SaveSystem {
       this.inProgress = null;
       this.updateControls();
     }
+  }
+
+  updatePlayTime(delta) {
+    if (this.shop.sandbox || this.loadFailed) return;
+    this.playTimeMs += delta;
+    this.metadataElapsedMs += delta;
+    if (this.metadataElapsedMs < 30000) return;
+    this.metadataElapsedMs = 0;
+    void this.flushMetadata().catch((error) => this.handleError(error));
+  }
+
+  // Play-time updates never replace the last off-shift checkpoint with a running shift.
+  async flushMetadata() {
+    if (this.shop.sandbox || this.loadFailed) return;
+    if (this.inProgress) await this.inProgress;
+    if (this.manager.slotId === null || this.lastMetadataPlayTimeMs === this.playTimeMs) return;
+    const playTimeMs = this.playTimeMs;
+    await this.manager.touch(playTimeMs);
+    this.lastMetadataPlayTimeMs = playTimeMs;
+  }
+
+  destroy() {
+    void this.flushMetadata().catch((error) => console.error("Could not save play time:", error));
   }
 
   updateControls() {
@@ -226,7 +261,10 @@ export class SaveSystem {
         if (this.loadFailed) shop.scene.start("scene-title");
         else {
           this.autosaveBlocked = false;
-          this.saveOffShift().catch((failure) => this.handleError(failure));
+          this.flushMetadata().then(() => this.saveOffShift()).then(() => {
+            shop.messages.closeSaveError();
+            this.setStatus(SAVED_STATUS);
+          }).catch((failure) => this.handleError(failure));
         }
       },
     });

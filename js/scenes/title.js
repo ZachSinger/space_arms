@@ -8,7 +8,8 @@ import { SettingsPanel } from "../logic/SettingsPanel.js";
 import { installSceneTextSize } from "../logic/GameTextSize.js";
 import { UIWindow } from "../logic/UIWindow.js";
 import { WindowManager } from "../logic/WindowManager.js";
-import { SaveManager } from "../../SaveManager.js";
+import { SaveManager, validateSaveName } from "../../SaveManager.js";
+import { SaveSlotsWindow } from "../logic/SaveSlotsWindow.js";
 import { validateShopSave } from "../logic/ShopSave.js";
 import { database } from "./boot.js";
 import { GamepadInput } from "../input/GamepadInput.js";
@@ -106,16 +107,32 @@ export class TitleScene extends Phaser.Scene {
       id: "new-game-confirmation", title: "NEW GAME", width: "380px", height: "auto",
       x: 80, y: 120, onClose: () => this.setMenuActive(true),
       contentHTML: `
-        <p>Start a new shop? This replaces your existing saved game.</p>
+        <p>Start a new shop in its own save. Your other saved shops stay unchanged.</p>
+        <label>Save name (optional) <input data-new-save-name maxlength="40" placeholder="Automatic name if left empty"></label>
+        <p data-new-save-status role="status"></p>
         <button class="action-btn" data-confirm-new-game>START NEW GAME</button>
         <button class="action-btn" data-cancel-new-game>CANCEL</button>
       `,
     }, this.windowManager);
     this.newGameWindow.element.querySelector("[data-confirm-new-game]").addEventListener("click", () => {
-      this.newGameWindow.close();
-      this.startGameScene();
+      try {
+        const value = this.newGameWindow.element.querySelector("[data-new-save-name]").value;
+        const saveName = value.trim() ? validateSaveName(value) : undefined;
+        this.newGameWindow.close();
+        this.startGameScene({ saveName });
+      } catch (error) {
+        this.newGameWindow.element.querySelector("[data-new-save-status]").textContent = error.message;
+      }
     });
     this.newGameWindow.element.querySelector("[data-cancel-new-game]").addEventListener("click", () => this.newGameWindow.close());
+    this.saveSlots = new SaveSlotsWindow(this.windowManager, {
+      id: "title-save-slots", saves: this.saveManager,
+      onClose: () => this.setMenuActive(true),
+      onLoad: (payload) => {
+        const savedShopData = validateShopSave(payload.data.shop, database);
+        this.startGameScene({ savedShopData, saveSlot: payload, real: payload.real });
+      },
+    });
     this.devWindow = new UIWindow({
       id: "dev-area-chooser", title: "DEV", width: "380px", height: "auto",
       x: 80, y: 120, onClose: () => this.setMenuActive(true),
@@ -194,6 +211,7 @@ export class TitleScene extends Phaser.Scene {
       this.uiNavigator.destroy();
       this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
       this.settingsPanel.destroy();
+      this.saveSlots.destroy();
       this.windowManager.destroy();
     });
     // Accepting a Steam invite can happen on any screen; this game may already be joined.
@@ -289,10 +307,11 @@ export class TitleScene extends Phaser.Scene {
   confirmNewGame() {
     if (this.loadingSave) return;
     this.setMenuActive(false);
+    this.newGameWindow.element.querySelector("[data-new-save-status]").textContent = "";
     this.newGameWindow.openWindow();
   }
 
-  // REAL skips the save-overwrite question and starts a debug-free fresh game.
+  // REAL starts a debug-free fresh shop in its own automatically named save.
   startRealGame() {
     if (this.loadingSave) return;
     this.startGameScene({ real: true });
@@ -312,26 +331,20 @@ export class TitleScene extends Phaser.Scene {
     this.devWindow.openWindow();
   }
 
-  // Load the save and start the game with it; any failure stays on the title with a message.
+  // Show all saved shops rather than silently picking one to overwrite or resume.
   async continueGame() {
     if (this.loadingSave) return;
     this.loadingSave = true;
     this.setMenuActive(false);
-    this.showStatus("LOADING SAVED GAME...");
+    this.showStatus("");
     try {
-      const payload = await this.saveManager.read();
-      if (payload === null) {
-        this.showStatus("NO SAVED GAME FOUND");
-        return;
-      }
-      const savedShopData = validateShopSave(payload.data.shop, database);
-      this.startGameScene({ savedShopData });
+      await this.saveSlots.open("load");
     } catch (error) {
       console.error("Could not load saved game", error);
       this.showStatus(`LOAD FAILED: ${error.message}`);
     } finally {
       this.loadingSave = false;
-      this.setMenuActive(true);
+      if (!this.saveSlots.uiWindow.isOpen) this.setMenuActive(true);
     }
   }
 

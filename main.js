@@ -348,7 +348,7 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
-const SAVE_FILE_PATH = path.join(app.getPath("userData"), "savegame.json");
+const SAVE_FILE_PATH = path.join(app.getPath("userData"), "save-slots.json");
 
 ipcMain.handle("save:write", async (event, payload) => {
   // Fixed filename under userData avoids any path traversal from renderer input. Write to

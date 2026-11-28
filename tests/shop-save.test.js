@@ -7,6 +7,7 @@ import { BASIC_FIXTURES, getFixtureType } from "../js/logic/FixtureLayout.js";
 import { Market } from "../js/logic/Market.js";
 import { roundMoney } from "../js/logic/Money.js";
 import { SHOP_LAYOUT_VERSION, validateShopSave } from "../js/logic/ShopSave.js";
+import { formatPlayTime } from "../js/logic/SaveSlotsWindow.js";
 
 const database = new DatabaseManager();
 database.loadItemsJSON(JSON.parse(await readFile(new URL("../data/Items.json", import.meta.url), "utf8")));
@@ -477,7 +478,112 @@ test("desktop saving uses IPC, and failures never silently fall back to browser 
     saveGame: async () => { throw new Error("disk full"); },
   } }));
   await assert.rejects(() => failing.read(), /disk read failed/);
-  await assert.rejects(() => failing.save(), /disk full/);
+  const failedWrite = new SaveManager({ shop: { serialize: snapshot } }, createSaveStorage({ desktopApi: {
+    loadGame: async () => null,
+    saveGame: async () => { throw new Error("disk full"); },
+  } }));
+  await assert.rejects(() => failedWrite.save(), /disk full/);
+});
+
+function slotStorage() {
+  let saved = null;
+  return {
+    read: async () => structuredClone(saved),
+    write: async (library) => { saved = structuredClone(library); return true; },
+  };
+}
+
+test("separate named saves keep independent shops and survive concurrent writes", async () => {
+  const storage = slotStorage();
+  const first = new SaveManager({ shop: { serialize: () => ({ money: 125 }) } }, storage);
+  const second = new SaveManager({ shop: { serialize: () => ({ money: 900 }) } }, storage);
+  await Promise.all([
+    first.save({ name: "Small shop", playTimeMs: 120000 }),
+    second.save({ name: "Big shop", playTimeMs: 600000 }),
+  ]);
+  assert.notEqual(first.slotId, second.slotId);
+  const reader = new SaveManager({}, storage);
+  assert.equal((await reader.list()).length, 2);
+  assert.deepEqual((await reader.read(first.slotId)).data.shop, { money: 125 });
+  assert.deepEqual((await reader.read(second.slotId)).data.shop, { money: 900 });
+  assert.equal((await reader.read(first.slotId)).playTimeMs, 120000);
+  assert.equal((await reader.read(second.slotId)).playTimeMs, 600000);
+
+  await second.save({ slotId: null, name: "Separate copy", playTimeMs: 600000 });
+  assert.equal((await reader.list()).length, 3);
+  assert.deepEqual((await reader.read(first.slotId)).data.shop, { money: 125 });
+  await second.save({ slotId: null });
+  assert.equal((await second.read()).name, "Shop 1");
+});
+
+test("simultaneous saves from one shop overwrite its own slot rather than creating duplicates", async () => {
+  const manager = new SaveManager({ shop: { serialize: () => ({ money: 125 }) } }, slotStorage());
+  await Promise.all([manager.save(), manager.save()]);
+  assert.equal((await manager.list()).length, 1);
+});
+
+test("save descriptions use whole seconds, minutes, and hours", () => {
+  assert.equal(formatPlayTime(59999), "59 seconds");
+  assert.equal(formatPlayTime(60000), "1 minute");
+  assert.equal(formatPlayTime(3900000), "1 hour 5 minutes");
+});
+
+test("invalid save dates, play times, and duplicate slot ids are rejected", async () => {
+  const storage = slotStorage();
+  const manager = new SaveManager({ shop: { serialize: () => ({ money: 125 }) } }, storage);
+  await manager.save();
+  const valid = await storage.read();
+  for (const mutate of [
+    (library) => { library.slots[0].playTimeMs = -1; },
+    (library) => { library.slots[0].lastPlayedAt = 9000000000000000; },
+    (library) => { library.slots.push(structuredClone(library.slots[0])); },
+  ]) {
+    const invalid = structuredClone(valid);
+    mutate(invalid);
+    await storage.write(invalid);
+    await assert.rejects(manager.list(), /invalid|repeated/);
+  }
+});
+
+test("last-played time updates without changing a shop checkpoint; saves can be renamed and deleted", async (context) => {
+  let now = 1000;
+  context.mock.method(Date, "now", () => now);
+  const storage = slotStorage();
+  const manager = new SaveManager({ shop: { serialize: () => ({ money: 125 }) } }, storage);
+  await manager.save({ name: "First shop", playTimeMs: 2500 });
+  const slotId = manager.slotId;
+  now = 5000;
+  await manager.touch(12500);
+  await manager.touch(100);
+  const slot = await manager.read();
+  assert.equal(slot.savedAt, 1000);
+  assert.equal(slot.lastPlayedAt, 5000);
+  assert.equal(slot.playTimeMs, 12500);
+  assert.deepEqual(slot.data.shop, { money: 125 });
+  await manager.rename(slotId, "  Renamed shop  ");
+  assert.equal((await manager.list())[0].name, "Renamed shop");
+  await assert.rejects(manager.rename(slotId, " "), /Enter a save name/);
+  await assert.rejects(manager.delete(slotId), /cannot delete the shop you are playing/);
+  const title = new SaveManager({}, storage);
+  await title.delete(slotId);
+  assert.deepEqual(await title.list(), []);
+  await assert.rejects(title.read(slotId), /no longer exists/);
+});
+
+test("failed replacement leaves both saves and the active save unchanged", async () => {
+  const storage = slotStorage();
+  const first = new SaveManager({ shop: { serialize: () => ({ money: 125 }) } }, storage);
+  const second = new SaveManager({ shop: { serialize: () => ({ money: 900 }) } }, storage);
+  await first.save();
+  await second.save();
+  const active = first.slotId;
+  const write = storage.write;
+  storage.write = async () => { throw new Error("disk full"); };
+  await assert.rejects(first.save({ slotId: second.slotId }), /disk full/);
+  assert.equal(first.slotId, active);
+  storage.write = write;
+  assert.deepEqual((await second.read()).data.shop, { money: 900 });
+  assert.equal((await first.list()).length, 2);
 });
 
 test("unreadable, unsupported, or incomplete saves are rejected", async () => {
@@ -489,7 +595,9 @@ test("unreadable, unsupported, or incomplete saves are rejected", async () => {
     localStorage: { getItem: () => "{broken" },
   }));
   await assert.rejects(() => malformed.read(), SyntaxError);
-  await assert.rejects(() => new SaveManager({}, { write: async () => false }).save(), /could not be written/);
+  await assert.rejects(() => new SaveManager({ shop: { serialize: snapshot } }, {
+    read: async () => null, write: async () => false,
+  }).save(), /could not be written/);
 });
 
 test("invalid saved inventory and economy are rejected before restoration", () => {
