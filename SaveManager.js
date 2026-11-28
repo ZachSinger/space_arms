@@ -7,6 +7,7 @@
 export const SAVE_VERSION = 1;
 export const SAVE_LIBRARY_VERSION = 2;
 export const SAVE_STORAGE_KEY = "space-arms-saves-v2";
+const AUTOSAVE_IDS = ["autosave-1", "autosave-2", "autosave-3"];
 const storages = new WeakMap();
 const pendingWrites = new WeakMap();
 
@@ -28,6 +29,12 @@ function validateLibrary(raw) {
       throw new Error("The save library contains an invalid or repeated save.");
     }
     ids.add(slot.slotId);
+    if (slot.kind !== undefined && slot.kind !== "manual" && slot.kind !== "autosave") {
+      throw new Error("The save library contains an invalid save type.");
+    }
+    if ((slot.kind === "autosave") !== AUTOSAVE_IDS.includes(slot.slotId)) {
+      throw new Error("The save library contains an invalid autosave slot.");
+    }
     validateSaveName(slot.name);
     for (const field of ["savedAt", "lastPlayedAt", "playTimeMs"]) {
       if (!Number.isSafeInteger(slot[field]) || slot[field] < 0) {
@@ -117,8 +124,10 @@ export class SaveManager {
       const index = library.slots.findIndex((slot) => slot.slotId === id);
       if (selectedId !== null && index === -1) throw new Error("That save no longer exists.");
       const previous = library.slots[index];
+      if (previous?.kind === "autosave") throw new Error("Autosaves cannot be overwritten with Save Game.");
       const slot = {
         version: SAVE_VERSION,
+        kind: "manual",
         slotId: id,
         name: validateSaveName(name ?? previous?.name ?? (this.slotId === null ? this.name : null) ?? nextSaveName(library.slots)),
         savedAt: Date.now(),
@@ -137,14 +146,44 @@ export class SaveManager {
     return true;
   }
 
+  async autosave({ playTimeMs = 0 } = {}) {
+    const data = {};
+    for (const [key, subsystem] of Object.entries(this.subsystems)) {
+      data[key] = subsystem.serialize();
+    }
+    await changeLibrary(this.storage, (library) => {
+      const autosaves = library.slots.filter((slot) => slot.kind === "autosave");
+      const id = AUTOSAVE_IDS.find((candidate) => !autosaves.some((slot) => slot.slotId === candidate))
+        ?? [...autosaves].sort((first, second) => first.savedAt - second.savedAt)[0].slotId;
+      const index = library.slots.findIndex((slot) => slot.slotId === id);
+      const now = Date.now();
+      const slot = {
+        version: SAVE_VERSION,
+        kind: "autosave",
+        slotId: id,
+        name: `Autosave ${AUTOSAVE_IDS.indexOf(id) + 1}`,
+        savedAt: now,
+        lastPlayedAt: now,
+        playTimeMs: Math.round(playTimeMs),
+        real: this.real,
+        data: structuredClone(data),
+      };
+      if (index !== -1) library.slots.splice(index, 1);
+      library.slots.push(slot);
+      validateLibrary(library);
+    });
+    return true;
+  }
+
   async library() {
     await pendingWrites.get(this.storage);
     return validateLibrary(await this.storage.read());
   }
 
-  async list() {
+  async list({ includeAutosaves = true } = {}) {
     const library = await this.library();
     return library.slots
+      .filter((slot) => includeAutosaves || slot.kind !== "autosave")
       .map(({ data, ...metadata }) => metadata)
       .sort((first, second) => second.lastPlayedAt - first.lastPlayedAt);
   }
@@ -202,8 +241,8 @@ export class SaveManager {
       if (!slice) throw new Error(`The save is missing ${key}.`);
       subsystem.applySave(slice);
     }
-    this.slotId = payload.slotId;
-    this.name = payload.name;
+    this.slotId = payload.kind === "autosave" ? null : payload.slotId;
+    this.name = payload.kind === "autosave" ? null : payload.name;
     this.real = payload.real;
     return true;
   }

@@ -430,7 +430,6 @@ export class GameScene extends Phaser.Scene {
 
   cleanUpOnShutdown() {
     this.events.once("shutdown", () => {
-      this.saves.destroy();
       this.eventBus.clear();
       this.debugInfo?.destroy();
       this.debugTools?.destroy();
@@ -441,7 +440,6 @@ export class GameScene extends Phaser.Scene {
       this.managerTablet.inventoryTab.destroy();
       this.managerTablet.robotServiceTab.destroy();
       this.managerTablet.fixtureHighlight.destroy();
-      this.autosaveTimer.remove();
       this.storeDoorAnimation.destroy();
       this.areas.destroy();
       this.hud.destroy();
@@ -451,7 +449,7 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  // Loads the save or test area, then starts autosave and live refreshes.
+  // Loads the save or test area, then starts live refreshes.
   startSession() {
     if (this.savedShopData) this.saves.loadAtStart(this.savedShopData);
     this.sandboxRoom = !this.sandbox ? null
@@ -466,22 +464,13 @@ export class GameScene extends Phaser.Scene {
       this.sandboxRoom?.destroy();
       this.sandboxRoom = null;
     });
-    // Autosave check runs every 1000 ms; it only saves while the store is closed.
-    this.autosaveTimer = this.time.addEvent({
-      delay: 1000,
-      loop: true,
-      callback: () => this.saves.requestAutosave(),
-    });
     this.goBacksBadge = new GoBacksBadge(this);
     this.gameState.subscribe(() => {
-      this.saves.requestAutosave();
       this.fixtureViews.refreshStockDisplays();
       this.saves.updateControls();
       this.goBacksBadge.refresh();
     });
     this.shiftClock.subscribe(() => this.saves.updateControls());
-    this.saves.requestAutosave();
-    void this.saves.flushMetadata().catch((error) => this.saves.handleError(error));
   }
 
   // --- Frame update and shift flow ---

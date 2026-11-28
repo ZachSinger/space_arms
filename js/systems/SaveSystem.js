@@ -1,7 +1,7 @@
 // ==========================================
 // FILE: SaveSystem.js
 // ==========================================
-// Saving and loading the shop: when saving is allowed, autosaves while the store is closed,
+// Saving and loading the shop: manual saves between shifts, separate end-of-day autosaves,
 // manual saves, loading a save onto the map, and the save/load error window.
 // SaveManager writes this system's snapshot into the selected saved shop.
 import { database } from "../scenes/boot.js";
@@ -12,7 +12,7 @@ import { TILE_SIZE } from "../logic/RoomLayout.js";
 import { AREA } from "../world/Areas.js";
 import { SaveManager } from "../../SaveManager.js";
 
-const SAVED_STATUS = "Saved. Autosaves while the store is closed.";
+const SAVED_STATUS = "Saved.";
 
 export class SaveSystem {
   /**
@@ -22,19 +22,15 @@ export class SaveSystem {
   constructor(shop, storage) {
     this.shop = shop;
     this.loadFailed = false;
-    this.autosaveBlocked = false;
     this.deletingActiveSave = false;
-    this.autosaveQueued = false;
     this.inProgress = null;
     this.showingSave = false;
     this.lastSavedSnapshot = null;
     this.status = "Not saved yet";
     this.playTimeMs = shop.saveSlot?.playTimeMs ?? 0;
-    this.metadataElapsedMs = 0;
-    this.lastMetadataPlayTimeMs = null;
     this.manager = new SaveManager({ shop: this }, storage, {
-      slotId: shop.saveSlot?.slotId ?? null,
-      name: shop.saveSlot?.name ?? shop.saveName ?? null,
+      slotId: shop.saveSlot?.kind === "autosave" ? null : shop.saveSlot?.slotId ?? null,
+      name: shop.saveSlot?.kind === "autosave" ? null : shop.saveSlot?.name ?? shop.saveName ?? null,
       real: shop.realMode === true,
     });
   }
@@ -135,15 +131,27 @@ export class SaveSystem {
     }
   }
 
-  // Coalesces any number of requests in one tick into a single save attempt.
-  requestAutosave() {
-    if (!this.canWrite() || this.autosaveBlocked || this.deletingActiveSave || this.autosaveQueued) return;
-    this.autosaveQueued = true;
-    queueMicrotask(() => {
-      this.autosaveQueued = false;
-      if (!this.shop.scene.isActive() || !this.canWrite() || this.autosaveBlocked || this.deletingActiveSave) return;
-      this.saveOffShift().catch((error) => this.handleError(error));
-    });
+  async autosave() {
+    if (this.shop.sandbox) {
+      this.shop.messages.show("Test areas are never saved.");
+      return false;
+    }
+    if (this.deletingActiveSave || this.shop.shift.starting || !this.canWrite()) {
+      throw new Error("Finish the shift before autosaving.");
+    }
+    if (this.inProgress) {
+      await this.inProgress;
+      return this.autosave();
+    }
+    this.inProgress = this.manager.autosave({ playTimeMs: this.playTimeMs });
+    try {
+      await this.inProgress;
+      this.setStatus("Autosaved.");
+      return true;
+    } finally {
+      this.inProgress = null;
+      this.updateControls();
+    }
   }
 
   async saveManually(options = {}) {
@@ -161,8 +169,6 @@ export class SaveSystem {
     try {
       this.showingSave = true;
       await this.saveOffShift({ ...options, force: Object.hasOwn(options, "slotId") });
-      await this.flushMetadata();
-      if (!this.deletingActiveSave) this.autosaveBlocked = false;
       shop.messages.closeSaveError();
       this.setStatus(SAVED_STATUS);
       shop.messages.show("Game saved.");
@@ -189,13 +195,11 @@ export class SaveSystem {
     if (!force && this.manager.slotId !== null && snapshot === this.lastSavedSnapshot) return;
     const playTimeMs = this.playTimeMs;
     this.inProgress = this.manager.save({ ...options, playTimeMs });
-    // Background autosaves stay silent; only a save the player asked for shows progress.
+    // Only a save the player asked for shows progress.
     if (this.showingSave) this.setStatus("Saving...");
     try {
       await this.inProgress;
       this.lastSavedSnapshot = snapshot;
-      this.lastMetadataPlayTimeMs = playTimeMs;
-      if (!this.deletingActiveSave) this.autosaveBlocked = false;
       this.setStatus(SAVED_STATUS);
       this.shop.messages.closeSaveError();
     } finally {
@@ -207,40 +211,23 @@ export class SaveSystem {
   updatePlayTime(delta) {
     if (this.shop.sandbox || this.loadFailed) return;
     this.playTimeMs += delta;
-    this.metadataElapsedMs += delta;
-    if (this.metadataElapsedMs < 30000) return;
-    this.metadataElapsedMs = 0;
-    void this.flushMetadata().catch((error) => this.handleError(error));
   }
 
-  // Play-time updates never replace the last off-shift checkpoint with a running shift.
-  async flushMetadata() {
-    if (this.shop.sandbox || this.loadFailed || this.deletingActiveSave) return;
+  async waitForSave() {
     if (this.inProgress) await this.inProgress;
-    if (this.deletingActiveSave) return;
-    if (this.manager.slotId === null || this.lastMetadataPlayTimeMs === this.playTimeMs) return;
-    const playTimeMs = this.playTimeMs;
-    await this.manager.touch(playTimeMs);
-    this.lastMetadataPlayTimeMs = playTimeMs;
   }
 
   async deleteSave(slotId) {
     if (slotId !== this.manager.slotId) return this.manager.delete(slotId);
-    const wasBlocked = this.autosaveBlocked;
-    this.autosaveBlocked = true;
     this.deletingActiveSave = true;
     try {
       if (this.inProgress) await this.inProgress;
       await this.manager.delete(slotId);
-    } catch (error) {
-      this.autosaveBlocked = wasBlocked;
+      this.lastSavedSnapshot = null;
+      this.setStatus("Save deleted. Save again to keep your progress.");
+    } finally {
       this.deletingActiveSave = false;
-      throw error;
     }
-  }
-
-  destroy() {
-    void this.flushMetadata().catch((error) => console.error("Could not save play time:", error));
   }
 
   updateControls() {
@@ -263,14 +250,13 @@ export class SaveSystem {
   }
 
   /**
-   * Blocks autosave and shows the save/load error window. After a failed load the only way
+   * Shows the save/load error window. After a failed load the only way
    * out is back to the title, so the existing save is never overwritten.
    * @param {Error} error
    */
   handleError(error) {
     const { shop } = this;
     console.error(this.loadFailed ? "Could not load game" : "Could not save game", error);
-    this.autosaveBlocked = true;
     this.setStatus(`Not saved: ${error.message}`);
     shop.messages.showSaveError({
       text: `${this.loadFailed ? "Your saved game could not be loaded. It has not been overwritten." : "Your progress could not be saved."} ${error.message}`,
@@ -278,8 +264,7 @@ export class SaveSystem {
       onButton: () => {
         if (this.loadFailed) shop.scene.start("scene-title");
         else {
-          this.autosaveBlocked = false;
-          this.flushMetadata().then(() => this.saveOffShift()).then(() => {
+          this.saveOffShift().then(() => {
             shop.messages.closeSaveError();
             this.setStatus(SAVED_STATUS);
           }).catch((failure) => this.handleError(failure));

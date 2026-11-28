@@ -1,7 +1,7 @@
 // ==========================================
 // FILE: ShiftSystem.js
 // ==========================================
-// The shift and the day: starting a shift (checkpoint save, wages, staff on the floor),
+// The shift and the day: starting a shift (wages, staff on the floor),
 // the soft close that waits for the last customer, the end-of-shift summary and Shop Level
 // news, End Day, the day's sales on the receipt, the emergency loan, and the Finances view.
 import { database } from "../scenes/boot.js";
@@ -69,7 +69,7 @@ export class ShiftSystem {
     this.reputationAtStart = this.shop.gameState.reputation.global;
   }
 
-  // Saves a checkpoint first; if that save fails, the shift doesn't start.
+  // Opens the store and pays staff for the shift.
   async start() {
     const shop = this.shop;
     const { gameState } = shop;
@@ -86,13 +86,6 @@ export class ShiftSystem {
     shop.shelfStockingWindow?.uiWindow.close();
     shop.managerTablet.uiWindow.close();
     shop.player.sprite.body.stop();
-    try {
-      await shop.saves.saveOffShift();
-    } catch (error) {
-      this.starting = false;
-      shop.saves.handleError(error);
-      return;
-    }
     shop.customerFlow.prepareSchedule();
     shop.customerFlow.clearTemporaryClosure();
     shop.hud.renderStoreStatus(false);
@@ -105,7 +98,6 @@ export class ShiftSystem {
     this.ended = false;
     this.starting = false;
     shop.staffSystem.spawnWorking();
-    shop.saves.setStatus("Checkpoint saved. Autosaving resumes after this shift.");
     this.customersServed = 0;
     this.priceReactionCounts = emptyPriceReactionCounts();
     this.priceReactionCustomers = emptyPriceReactionCustomers();
@@ -288,14 +280,12 @@ export class ShiftSystem {
       `Emergency loan received: ${formatMoneyAmount(offer.amount)}. You owe ${formatMoneyAmount(offer.repayTotal)}, paid back from your sales.`,
       "#f59e0b",
     );
-    this.shop.saves.requestAutosave();
     return true;
   }
 
   payOffLoan() {
     if (!this.shop.gameState.economy.payOffLoan()) return false;
     this.shop.messages.show("Emergency loan paid off.", "#10b981");
-    this.shop.saves.requestAutosave();
     return true;
   }
 

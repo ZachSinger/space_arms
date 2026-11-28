@@ -63,6 +63,82 @@ const openFloor = (h) => h.game((scene) => {
 // --- Scenarios ---
 
 export const scenarios = {
+  async "end-day autosaves rotate separately and only appear when loading"(h) {
+    const failures = [];
+    const check = (condition, message) => { if (!condition) failures.push(message); };
+    const receipt = "#shift-receipt";
+    const list = "#pause-save-slots";
+    const confirm = "#pause-save-slots-confirmation";
+    await h.newGame({ real: true });
+    await h.wait(1100);
+    check(await h.game(async (scene) => (await scene.saves.manager.list()).length) === 0,
+      "Starting or preparing a new shop wrote a save");
+    const manual = await h.game(async (scene) => {
+      await scene.saves.saveManually({ slotId: null, name: "Manual shop" });
+      const saved = await scene.saves.manager.read();
+      scene.gameState.economy.credits = 800;
+      await scene.shift.start();
+      scene.shift.end();
+      return saved;
+    });
+    check(await h.game(async (scene, id) => JSON.stringify(await scene.saves.manager.read(id)), manual.slotId)
+      === JSON.stringify(manual), "Starting or ending a shift changed a manual save");
+    await h.page.locator(`${receipt} [data-end-day]`).waitFor();
+    await h.game((scene) => {
+      window.__saveWrite = scene.saves.manager.storage.write;
+      scene.saves.manager.storage.write = async () => { throw new Error("Receipt test: disk full"); };
+    });
+    await h.page.locator(`${receipt} [data-end-day]`).click();
+    await h.page.waitForFunction(() => document.querySelector("[data-receipt-save-status]")
+      .textContent.includes("Receipt test: disk full"));
+    check(await h.game((scene) => scene.gameState.calendar.day) === 2, "Ending the day did not advance the calendar");
+    check(await h.game((scene) => scene.gamePaused), "A failed autosave dismissed the receipt or unpaused the shop");
+    await h.game((scene) => { scene.saves.manager.storage.write = window.__saveWrite; });
+    for (let index = h.problems.length - 1; index >= 0; index -= 1) {
+      if (h.problems[index].text.includes("Receipt test: disk full")) h.problems.splice(index, 1);
+    }
+    await h.page.locator(`${receipt} [data-end-day]`).click();
+    await h.page.locator(receipt).waitFor({ state: "hidden" });
+    check(await h.game((scene) => scene.gameState.calendar.day) === 2, "Retry advanced the day a second time");
+    check(!await h.game((scene) => scene.gamePaused), "A successful autosave left the shop paused");
+    for (let index = 0; index < 3; index += 1) {
+      await h.game((scene) => scene.shift.end());
+      await h.page.locator(`${receipt} [data-end-day]`).click();
+      await h.page.locator(receipt).waitFor({ state: "hidden" });
+    }
+    const stored = await h.game((scene) => scene.saves.manager.library());
+    const autosaves = stored.slots.filter((slot) => slot.kind === "autosave");
+    check(autosaves.length === 3, "Autosaves did not stay within three reserved slots");
+    check(JSON.stringify(autosaves.map((slot) => slot.data.shop.market.day).sort()) === "[3,4,5]",
+      "The oldest autosave was not replaced");
+    check(JSON.stringify(stored.slots.find((slot) => slot.slotId === manual.slotId)) === JSON.stringify(manual),
+      "Autosaves changed a manual save");
+    await h.game((scene) => scene.pauseMenu.open());
+    await h.page.locator('[data-pause-action="save"]').click();
+    check(await h.page.locator(`${list} [data-save-slot]`).count() === 1, "Autosaves appeared in Save Game");
+    await h.game((scene) => scene.pauseMenu.saveSlots.uiWindow.close());
+    await h.page.locator('[data-pause-action="load"]').click();
+    check(await h.page.locator(`${list} [data-save-slot]`).count() === 4, "Autosaves were missing from Load Game");
+    const latest = autosaves.find((slot) => slot.data.shop.market.day === 5);
+    await h.page.locator(`${list} [data-save-slot="${latest.slotId}"]`).click();
+    await h.page.locator(`${confirm} [data-save-confirm]`).click();
+    await h.page.waitForFunction(() => {
+      const scene = window.__game.scene.getScene("scene-game");
+      return scene?.sys.isActive() && scene.gameState.calendar.day === 5 && !scene.gamePaused;
+    }, null, { timeout: 60000 });
+    check(await h.game((scene) => scene.saves.manager.slotId) === null, "Loading an autosave selected it for manual overwriting");
+    await h.game((scene) => scene.pauseMenu.open());
+    await h.page.locator('[data-pause-action="save"]').click();
+    await h.page.locator(`${list} [data-save-new]`).click();
+    await h.page.locator(`${confirm} [data-save-name]`).fill("Saved from autosave");
+    await h.page.locator(`${confirm} [data-save-confirm]`).click();
+    await h.page.locator(list).waitFor({ state: "hidden" });
+    const after = await h.game((scene) => scene.saves.manager.library());
+    check(after.slots.filter((slot) => slot.kind === "manual").length === 2, "Saving from an autosave did not create a regular save");
+    check(JSON.stringify(after.slots.filter((slot) => slot.kind === "autosave")) === JSON.stringify(autosaves),
+      "Saving manually after loading changed an autosave");
+    return failures;
+  },
   async "right-click deletes saves after confirmation"(h) {
     const failures = [];
     const check = (condition, message) => { if (!condition) failures.push(message); };
@@ -132,16 +208,27 @@ export const scenarios = {
     const activeCard = `${pauseList} [data-save-slot="${ids.active}"]`;
     await h.page.locator(activeCard).click({ button: "right" });
     const warning = await h.page.locator(`${pauseConfirm} [data-save-warning]`).innerText();
-    check(warning.includes("title screen") && warning.includes("unsaved progress"),
-      "Active-save deletion did not warn about leaving the shop");
+    check(warning.includes("keep playing") && warning.includes("save again"),
+      "Active-save deletion did not explain keeping the ongoing game");
     await h.page.locator(`${pauseConfirm} [data-save-cancel]`).click();
     check(await h.page.locator(activeCard).count() === 1, "Cancel deleted the active save");
     await h.page.locator(activeCard).click({ button: "right" });
     await h.page.locator(`${pauseConfirm} [data-save-confirm]`).click();
-    await h.page.waitForFunction(() => window.__game.scene.getScene("scene-title")?.sys.isActive());
+    await h.page.locator(activeCard).waitFor({ state: "detached" });
     await h.wait(300);
     const remaining = await h.page.evaluate(() => JSON.parse(localStorage.getItem("space-arms-saves-v2")).slots);
     check(remaining.length === 0, "The deleted active save was recreated or another save remained");
+    check(await h.game((scene) => scene.sys.isActive()), "Deleting the active save left the game");
+    await h.game((scene) => scene.pauseMenu.saveSlots.uiWindow.close());
+    await h.page.locator('[data-pause-action="resume"]').click();
+    await h.game((scene) => { scene.gameState.economy.credits = 888; scene.pauseMenu.open(); });
+    await h.page.locator('[data-pause-action="save"]').click();
+    await h.page.locator(`${pauseList} [data-save-new]`).click();
+    await h.page.locator(`${pauseConfirm} [data-save-name]`).fill("Kept playing");
+    await h.page.locator(`${pauseConfirm} [data-save-confirm]`).click();
+    await h.page.locator(pauseList).waitFor({ state: "hidden" });
+    check(await h.game(async (scene) => (await scene.saves.manager.read()).data.shop.playerState.credits) === 888,
+      "The ongoing game could not be saved after deleting its save");
     return failures;
   },
   async "multiple save slots keep separate shops and show play time"(h) {
@@ -151,10 +238,10 @@ export const scenarios = {
     const confirm = "#pause-save-slots-confirmation";
     await h.newGame({ real: true, saveName: "First shop" });
     const first = await h.game(async (scene) => {
-      await scene.saves.saveOffShift();
       scene.saves.updatePlayTime(90000);
+      await scene.saves.saveOffShift();
       scene.pauseMenu.open();
-      await scene.saves.flushMetadata();
+      await scene.saves.waitForSave();
       return { id: scene.saves.manager.slotId, money: scene.gameState.economy.credits, time: scene.saves.playTimeMs };
     });
     await h.page.locator('[data-pause-action="save"]').click();
@@ -224,11 +311,11 @@ export const scenarios = {
     check((await h.page.locator(`${confirm} [data-save-warning]`).innerText()).includes("Overwrite"),
       "Clicking a save card did not ask before overwriting");
     await h.page.locator(`${confirm} [data-save-cancel]`).click();
-    check(await h.game((scene) => scene.saves.manager.slotId) === first.id, "Cancel changed the autosave destination");
+    check(await h.game((scene) => scene.saves.manager.slotId) === first.id, "Cancel changed the selected regular save");
     await h.page.locator(target).click();
     await h.page.locator(`${confirm} [data-save-confirm]`).click();
     await h.page.locator(list).waitFor({ state: "hidden" });
-    check(await h.game((scene) => scene.saves.manager.slotId) === copyId, "Replacement did not select the new autosave destination");
+    check(await h.game((scene) => scene.saves.manager.slotId) === copyId, "Replacement did not select the regular save");
     check(await h.game(async (scene, id) => (await scene.saves.manager.read(id)).data.shop.playerState.credits, first.id) === first.money,
       "Replacement overwrote the wrong save");
 
@@ -244,8 +331,9 @@ export const scenarios = {
     await h.page.locator("[data-confirm-new-game]").click();
     await h.page.waitForFunction(() => {
       const scene = window.__game.scene.getScene("scene-game");
-      return scene?.sys.isActive() && scene.saves?.manager.name === "Third shop" && scene.saves.manager.slotId;
+      return scene?.sys.isActive() && scene.saves?.manager.name === "Third shop";
     }, null, { timeout: 60000 });
+    await h.game((scene) => scene.saves.saveManually({ slotId: null, name: "Third shop" }));
     check(await h.game(async (scene) => (await scene.saves.manager.list()).length) === 3, "New Game replaced another save");
     await h.game((scene) => { scene.scene.start("scene-title"); });
     await h.page.waitForFunction(() => window.__game.scene.getScene("scene-title")?.sys.isActive());

@@ -928,7 +928,7 @@ test("hovercart assignment changes require docked carts, but docked leftover car
   cart.cartCrates.push(makeDeliveryCrate(1));
   assert.equal(staffSystem.assignHovercart(employee.data.id, cart.charger.id), true);
   assert.equal(staffSystem.assignHovercart(employee.data.id, null), true);
-  assert.equal(autosaves, 2);
+  assert.equal(autosaves, 0);
   assert.equal(cart.cartCrates.length, 1);
 });
 

@@ -52,7 +52,7 @@ export async function startGame({ port = 5391, headless = true, vitePlugins = []
         const previous = window.__game.scene.getScene("scene-game");
         if (previous?.sys.isActive()) {
           previous.setGamePaused(true);
-          await previous.saves.flushMetadata();
+          await previous.saves.waitForSave();
         }
         window.localStorage.clear();
         window.__previousPlayer = window.__game.scene.getScene("scene-game")?.player ?? null;

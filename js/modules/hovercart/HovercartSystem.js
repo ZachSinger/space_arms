@@ -131,7 +131,6 @@ export class HovercartSystem {
     scene.supply.deliver(new Crate(scene, null, 1, spot.x, spot.y, { kind: "fixture", typeId: HOVERCART_CHARGER_TYPE }));
     scene.supply.freePlayerFromPad();
     scene.gameState.shop.changed();
-    scene.saves.requestAutosave();
     scene.messages.show(option.cartCount
       ? "Linked hovercart bought. Its charger is packed in a crate on the Loading Pad."
       : "Hovercart bought. It's packed with its charger in a crate on the Loading Pad. Pick the crate up and place the charger anywhere in the store.", "#10b981");
@@ -193,7 +192,6 @@ export class HovercartSystem {
       label: `${HOVERCART_NAME} ${path} upgrade ${option.step}`,
     });
     scene.gameState.shop.changed();
-    scene.saves.requestAutosave();
     scene.messages.show(`${HOVERCART_NAME} ${path} upgrade ${option.step} installed.`, "#10b981");
     return true;
   }

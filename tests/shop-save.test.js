@@ -522,6 +522,63 @@ test("simultaneous saves from one shop overwrite its own slot rather than creati
   assert.equal((await manager.list()).length, 1);
 });
 
+test("autosaves use three reserved slots, replace the oldest, and never change manual saves", async (context) => {
+  let now = 1000;
+  let money = 125;
+  context.mock.method(Date, "now", () => now);
+  const manager = new SaveManager({ shop: { serialize: () => ({ money }) } }, slotStorage());
+  await manager.save({ name: "My shop", playTimeMs: 500 });
+  const manualId = manager.slotId;
+  const manual = structuredClone(await manager.read());
+  for (let index = 1; index <= 5; index += 1) {
+    now += 1000;
+    money = index * 100;
+    await manager.autosave({ playTimeMs: index * 60000 });
+  }
+  const slots = await manager.list();
+  assert.equal(slots.length, 4);
+  assert.equal(slots.filter((slot) => slot.kind === "autosave").length, 3);
+  const autosaves = await Promise.all(slots.filter((slot) => slot.kind === "autosave")
+    .map((slot) => manager.read(slot.slotId)));
+  assert.deepEqual(autosaves.map((slot) => slot.data.shop.money).sort(), [300, 400, 500]);
+  assert.deepEqual(await manager.read(manualId), manual);
+  assert.equal(manager.slotId, manualId);
+  assert.equal(manager.name, "My shop");
+  assert.deepEqual((await manager.list({ includeAutosaves: false })).map((slot) => slot.slotId), [manualId]);
+  await assert.rejects(manager.save({ slotId: autosaves[0].slotId }), /Autosaves cannot be overwritten/);
+});
+
+test("concurrent autosaves at the same time rotate through three slots and loading one permits a new manual save", async (context) => {
+  context.mock.method(Date, "now", () => 1000);
+  const storage = slotStorage();
+  let money = 0;
+  const manager = new SaveManager({ shop: { serialize: () => ({ money: ++money }) } }, storage);
+  await Promise.all(Array.from({ length: 5 }, () => manager.autosave()));
+  const slots = await manager.list();
+  assert.equal(slots.length, 3);
+  assert.deepEqual((await storage.read()).slots.map((slot) => slot.data.shop.money).sort(), [3, 4, 5]);
+  assert.equal(manager.slotId, null);
+  const latest = await manager.read();
+  const loader = new SaveManager({ shop: { applySave() {}, serialize: () => ({ money: 999 }) } },
+    storage, { slotId: latest.slotId });
+  await loader.load();
+  assert.equal(loader.slotId, null);
+  await loader.save({ name: "Saved after loading" });
+  assert.equal((await loader.list()).length, 4);
+  assert.equal((await loader.read(latest.slotId)).kind, "autosave");
+});
+
+test("a failed autosave leaves the three autosaves and manual save unchanged", async () => {
+  const storage = slotStorage();
+  const manager = new SaveManager({ shop: { serialize: () => ({ money: 125 }) } }, storage);
+  await manager.save();
+  for (let index = 0; index < 3; index += 1) await manager.autosave();
+  const before = await storage.read();
+  storage.write = async () => false;
+  await assert.rejects(manager.autosave(), /could not be written/);
+  assert.deepEqual(await storage.read(), before);
+});
+
 test("save descriptions use whole seconds, minutes, and hours", () => {
   assert.equal(formatPlayTime(59999), "59 seconds");
   assert.equal(formatPlayTime(60000), "1 minute");

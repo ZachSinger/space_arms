@@ -46,7 +46,6 @@ export class StaffSystem {
       `${employee.name} hired and On Shift. Their wage of ${employee.wagePerShift} is due at each shift start.`,
       STAFF_MESSAGE_COLOR,
     );
-    shop.saves.requestAutosave();
     return true;
   }
 
@@ -68,7 +67,6 @@ export class StaffSystem {
         : `${employee.name} is Off Shift. They'll stay home and won't be paid until you set them On Shift.`,
       STAFF_MESSAGE_COLOR,
     );
-    shop.saves.requestAutosave();
     return true;
   }
 
@@ -100,7 +98,6 @@ export class StaffSystem {
       `${employee.name} will be away training next shift. Their wage of ${employee.wagePerShift} is still due.`,
       STAFF_MESSAGE_COLOR,
     );
-    shop.saves.requestAutosave();
     return true;
   }
 
@@ -111,7 +108,6 @@ export class StaffSystem {
       return false;
     }
     if (!this.staff.prioritizeJob(employeeId, jobId)) return false;
-    shop.saves.requestAutosave();
     return true;
   }
 
@@ -122,7 +118,6 @@ export class StaffSystem {
       return false;
     }
     if (!this.staff.moveJob(employeeId, jobId, targetIndex)) return false;
-    shop.saves.requestAutosave();
     return true;
   }
 
@@ -148,7 +143,6 @@ export class StaffSystem {
         : `${employee.name} won't work a register. They'll do their other jobs instead.`,
       STAFF_MESSAGE_COLOR,
     );
-    shop.saves.requestAutosave();
     return true;
   }
 
@@ -185,7 +179,6 @@ export class StaffSystem {
         (bumped ? ` ${bumped.name} no longer has a hovercart.` : "")
       : `${employee.name} will stock by hand. Their hovercart is available to you.`,
     STAFF_MESSAGE_COLOR);
-    shop.saves.requestAutosave();
     return true;
   }
 

@@ -18,6 +18,7 @@ import { BACKROOM_UPGRADE_ORDER, EXPANSION_ORDER, ZONES, getZone } from "../js/l
 import { formatMoneyAmount } from "../js/logic/Money.js";
 import { FIXTURE_TYPES, fixtureFacingStep, fixtureFootprint, fixtureSolidBounds, positionRegisterQueue } from "../js/logic/FixtureLayout.js";
 import { upgradeContractSplit } from "../js/state/migrations/contractSplit.js";
+import { ShiftReceiptWindow } from "../js/logic/ShiftReceiptWindow.js";
 
 let server;
 let cacheDirectory;
@@ -115,7 +116,6 @@ function createHarness(write = async () => true) {
   scene.saves.serialize = () => ({ credits: scene.credits });
   scene.saves.handleError = (error) => {
     errors.push(error);
-    scene.saves.autosaveBlocked = true;
     scene.saves.setStatus(`Not saved: ${error.message}`);
   };
   scene.fixtureSystem = new FixtureSystem(scene);
@@ -381,7 +381,7 @@ test("buying the first store expansion deducts credits and records a receipt lin
     quantity: 1,
   }]);
   assert.equal(harness.cameraRefreshes, 1);
-  assert.equal(harness.autosaves, 1);
+  assert.equal(harness.autosaves, 0);
 });
 
 test("backroom expansions require their level, credits, and previous purchases", () => {
@@ -414,7 +414,7 @@ test("buying all backroom expansions records costs and opens the wider room", ()
   assert.deepEqual(scene.gameState.economy.dayLedger.serialize().lines.map((line) => line.amount),
     costs.map((cost) => -cost));
   assert.equal(harness.cameraRefreshes, 3);
-  assert.equal(harness.autosaves, 3);
+  assert.equal(harness.autosaves, 0);
 });
 
 test("debug upgrade buttons open the next zone free, even at Level 1 with the store open", () => {
@@ -770,7 +770,7 @@ test("the actual hire action explains the level lock and allows hiring after the
   state.finishShift({ customersServed: needed, customersTurnedAway: 0 });
   assert.equal(staffSystem.hire("tavi_stock_clerk"), true);
   assert.equal(state.economy.credits, TEST_STARTING_TEMPLATE.money - EMPLOYEE_HIRE_COST);
-  assert.equal(autosaves, 1);
+  assert.equal(autosaves, 0);
 });
 
 test("taking an employee off shift is between shifts only, stops wages, and keeps them hired", () => {
@@ -801,7 +801,7 @@ test("taking an employee off shift is between shifts only, stops wages, and keep
   assert.equal(state.economy.credits, creditsAfterHire);
   staffSystem.spawnWorking();
   assert.deepEqual(scene.employees, []);
-  assert.equal(autosaves, 1);
+  assert.equal(autosaves, 0);
 
   const restored = reload(state);
   assert.deepEqual(restored.staff.offShift, ["tavi_stock_clerk"]);
@@ -809,7 +809,7 @@ test("taking an employee off shift is between shifts only, stops wages, and keep
   assert.equal(staffSystem.payWages(), EMPLOYEE_BASE_WAGE);
 });
 
-test("moving employee jobs preserves full order and saves only valid between-shift changes", () => {
+test("moving employee jobs preserves full order and allows only valid between-shift changes", () => {
   const state = newGame();
   state.reputation.shopLevel = FIRST_STAFF_LEVEL;
   state.hireEmployee("tavi_stock_clerk");
@@ -838,7 +838,7 @@ test("moving employee jobs preserves full order and saves only valid between-shi
   ]) {
     assert.equal(staffSystem.moveJob(id, job, index), false);
   }
-  assert.equal(autosaves, 2);
+  assert.equal(autosaves, 0);
 });
 
 test("training can only be booked between shifts and trainees are paid without spawning for work", () => {
@@ -861,7 +861,7 @@ test("training can only be booked between shifts and trainees are paid without s
   assert.equal(state.economy.credits, afterHire);
   staffSystem.canManage = () => true;
   assert.equal(staffSystem.train("tavi_stock_clerk", "register"), true);
-  assert.equal(autosaves, 1);
+  assert.equal(autosaves, 0);
   assert.equal(staffSystem.setOnShift("tavi_stock_clerk", false), false);
   assert.match(warnings.at(-1), /away training/);
   assert.equal(staffSystem.payWages(), EMPLOYEE_BASE_WAGE);
@@ -1081,7 +1081,7 @@ test("manual save shows busy controls until the write finishes", async () => {
   assert.equal(messages.at(-1), "Game saved.");
 });
 
-test("play time is saved during shifts without overwriting the last closed-shop checkpoint", async () => {
+test("playing after a manual save does not change its checkpoint or saved play time", async () => {
   const { scene } = createHarness();
   scene.saves.updatePlayTime(10000);
   await scene.saves.saveManually();
@@ -1089,14 +1089,15 @@ test("play time is saved during shifts without overwriting the last closed-shop 
   scene.shiftClock.started = true;
   scene.credits = 1000;
   scene.saves.updatePlayTime(12000);
-  await scene.saves.flushMetadata();
+  scene.saves.updatePlayTime(40000);
+  await scene.saves.waitForSave();
   const slot = await scene.saves.manager.read(slotId);
-  assert.equal(slot.playTimeMs, 22000);
+  assert.equal(slot.playTimeMs, 10000);
   assert.deepEqual(slot.data.shop, { credits: 436 });
   assert.equal(scene.saves.canWrite(), false);
 });
 
-test("deleting the active save waits for a pending save and prevents autosave from recreating it", async () => {
+test("deleting the active save waits for a pending save and allows saving the ongoing game again", async () => {
   let finishWrite;
   let delayWrite = false;
   const { scene, errors } = createHarness(() => delayWrite
@@ -1109,21 +1110,23 @@ test("deleting the active save waits for a pending save and prevents autosave fr
   delayWrite = true;
   const saving = scene.saves.saveOffShift();
   await new Promise((resolve) => setImmediate(resolve));
-  scene.saves.requestAutosave();
   const deleting = scene.saves.deleteSave(slotId);
   delayWrite = false;
   finishWrite(true);
   await saving;
   await deleting;
-  scene.saves.requestAutosave();
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(await scene.saves.manager.list(), []);
   assert.equal(scene.saves.manager.slotId, null);
-  assert.equal(scene.saves.autosaveBlocked, true);
+  assert.equal(scene.saves.deletingActiveSave, false);
   assert.deepEqual(errors, []);
+  scene.credits = 600;
+  assert.equal(await scene.saves.saveManually({ slotId: null, name: "Kept playing" }), true);
+  assert.notEqual(scene.saves.manager.slotId, slotId);
+  assert.equal((await scene.saves.manager.read()).data.shop.credits, 600);
 });
 
-test("a failed active-save deletion keeps the save and restores autosaving", async () => {
+test("a failed active-save deletion keeps the save and still allows manual saving", async () => {
   let fail = false;
   const { scene } = createHarness(async () => {
     if (fail) throw new Error("Disk full");
@@ -1136,8 +1139,59 @@ test("a failed active-save deletion keeps the save and restores autosaving", asy
   await assert.rejects(scene.saves.deleteSave(slotId), /Disk full/);
   assert.equal(scene.saves.manager.slotId, slotId);
   assert.equal((await scene.saves.manager.read(slotId)).data.shop.credits, 436);
-  assert.equal(scene.saves.autosaveBlocked, false);
   assert.equal(scene.saves.deletingActiveSave, false);
+  fail = false;
+  assert.equal(await scene.saves.saveManually(), true);
+});
+
+test("autosaving after a day records play time without selecting or changing a manual save", async () => {
+  const { scene } = createHarness();
+  await scene.saves.saveManually();
+  const slotId = scene.saves.manager.slotId;
+  const manual = structuredClone(await scene.saves.manager.read(slotId));
+  scene.credits = 800;
+  scene.saves.updatePlayTime(60000);
+  assert.equal(await scene.saves.autosave(), true);
+  assert.deepEqual(await scene.saves.manager.read(slotId), manual);
+  assert.equal(scene.saves.manager.slotId, slotId);
+  const slots = await scene.saves.manager.list();
+  const autosave = await scene.saves.manager.read(slots.find((slot) => slot.kind === "autosave").slotId);
+  assert.equal(autosave.playTimeMs, 60000);
+  assert.equal(autosave.data.shop.credits, 800);
+});
+
+test("the receipt waits for autosaving and retries a failed write without ending the day again", async (context) => {
+  let finishSave;
+  let ended = 0;
+  let closed = 0;
+  const button = { disabled: false, textContent: "END DAY 1" };
+  const status = { textContent: "" };
+  const receipt = Object.create(ShiftReceiptWindow.prototype);
+  Object.assign(receipt, {
+    endingDay: false, dayEnded: false,
+    shop: {
+      shift: { endDay: () => { ended += 1; return true; } },
+      saves: { autosave: () => new Promise((resolve, reject) => { finishSave = { resolve, reject }; }) },
+    },
+    uiWindow: { element: { querySelector: (selector) => selector === "[data-end-day]" ? button : status } },
+    close: () => { closed += 1; },
+  });
+  context.mock.method(console, "error", () => {});
+  const first = receipt.finishDay();
+  await receipt.finishDay();
+  assert.equal(ended, 1);
+  assert.equal(button.disabled, true);
+  assert.equal(closed, 0);
+  finishSave.reject(new Error("Disk full"));
+  await first;
+  assert.equal(closed, 0);
+  assert.equal(button.disabled, false);
+  assert.match(status.textContent, /Autosave failed: Disk full/);
+  const retry = receipt.finishDay();
+  finishSave.resolve(true);
+  await retry;
+  assert.equal(ended, 1);
+  assert.equal(closed, 1);
 });
 
 test("manual save failures use the save error path and never confirm success", async () => {

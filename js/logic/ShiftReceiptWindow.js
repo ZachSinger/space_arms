@@ -5,6 +5,8 @@ export class ShiftReceiptWindow {
   constructor(shop) {
     this.shop = shop;
     this.background = [];
+    this.endingDay = false;
+    this.dayEnded = false;
     this.shade = document.createElement("div");
     this.shade.className = "shift-receipt-shade hidden";
     document.getElementById("ui-layer").append(this.shade);
@@ -16,13 +18,14 @@ export class ShiftReceiptWindow {
     this.uiWindow.element.setAttribute("aria-modal", "true");
     this.uiWindow.element.setAttribute("aria-label", "Today's receipt");
     this.uiWindow.element.addEventListener("click", (event) => {
-      if (event.target.closest("[data-end-day]") && shop.shift.endDay()) this.close();
+      if (event.target.closest("[data-end-day]")) void this.finishDay();
     });
   }
 
   get isOpen() { return this.uiWindow.isOpen; }
 
   open() {
+    this.dayEnded = false;
     const view = this.shop.shift.financesView();
     this.uiWindow.element.querySelector(".retro-window-title").textContent = `SHOP CLOSED - DAY ${view.day}`;
     this.uiWindow.element.querySelector(".retro-window-body").innerHTML = `
@@ -32,6 +35,7 @@ export class ShiftReceiptWindow {
       </div>
       <div class="shift-receipt-footer">
         <p>Review today's sales and spending before ending the day.</p>
+        <p data-receipt-save-status role="status" aria-live="polite"></p>
         <button type="button" class="action-btn" data-end-day data-pad-autofocus
           ${view.canEndDay ? "" : "disabled"}>END DAY ${view.day}</button>
       </div>`;
@@ -46,6 +50,31 @@ export class ShiftReceiptWindow {
     }
     this.shop.setGamePaused(true);
     this.uiWindow.element.querySelector("[data-end-day]").focus();
+  }
+
+  async finishDay() {
+    if (this.endingDay) return;
+    this.endingDay = true;
+    const button = this.uiWindow.element.querySelector("[data-end-day]");
+    const status = this.uiWindow.element.querySelector("[data-receipt-save-status]");
+    button.disabled = true;
+    status.textContent = "";
+    try {
+      if (!this.dayEnded) {
+        if (!this.shop.shift.endDay()) return;
+        this.dayEnded = true;
+      }
+      status.textContent = "Autosaving...";
+      await this.shop.saves.autosave();
+      this.close();
+    } catch (error) {
+      console.error("End-of-day autosave failed:", error);
+      status.textContent = `Autosave failed: ${error.message} Try again before continuing.`;
+      button.textContent = "RETRY AUTOSAVE";
+    } finally {
+      button.disabled = false;
+      this.endingDay = false;
+    }
   }
 
   close() {

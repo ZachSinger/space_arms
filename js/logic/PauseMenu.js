@@ -61,14 +61,10 @@ export class PauseMenu {
         }
       },
       onSave: (options) => shop.saves.saveManually(options),
-      onDelete: async (slotId) => {
-        const deletingActive = slotId === shop.saves.manager.slotId;
-        await shop.saves.deleteSave(slotId);
-        if (deletingActive) shop.scene.start("scene-title");
-      },
+      onDelete: (slotId) => shop.saves.deleteSave(slotId),
       onLoad: async (payload) => {
         const savedShopData = validateShopSave(payload.data.shop, database);
-        await shop.saves.flushMetadata();
+        await shop.saves.waitForSave();
         showLoadingThen(() => shop.scene.restart({ savedShopData, saveSlot: payload, real: payload.real }));
       },
     });
@@ -261,22 +257,22 @@ export class PauseMenu {
     }
     else if (action === "invite") await this.inviteFriend();
     else if (action === "save") {
-      await this.shop.saves.flushMetadata();
+      await this.shop.saves.waitForSave();
       this.uiWindow.element.classList.add("hidden");
       await this.saveSlots.open("save");
     } else if (action === "settings") await this.settings.open();
     else if (action === "load") {
-      await this.shop.saves.flushMetadata();
+      await this.shop.saves.waitForSave();
       this.uiWindow.element.classList.add("hidden");
       await this.saveSlots.open("load");
     } else if (action === "menu") {
       this.confirm("Exit to the main menu? Unsaved progress will be lost.", async () => {
-        await this.shop.saves.flushMetadata();
+        await this.shop.saves.waitForSave();
         window.location.reload();
       });
     } else if (action === "desktop") {
       this.confirm("Exit the game? Unsaved progress will be lost.", async () => {
-        await this.shop.saves.flushMetadata();
+        await this.shop.saves.waitForSave();
         await window.desktopApi.quitGame();
       });
     } else {

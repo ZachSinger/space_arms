@@ -170,7 +170,7 @@ function storeTopic({ shopLevel, reputation }) {
         store job also mop dirt.</p>`),
     section("Starting a Shift", `
       ${list([
-        "Press <strong>START SHIFT</strong> on the top bar. The game saves first.",
+        "Press <strong>START SHIFT</strong> on the top bar. Starting a shift does not change your saves.",
         "Staff wages are paid as the shift starts, even if that takes your money below 0.",
         "The shift clock runs from 08:00 to 20:00, about 7 minutes of play.",
         "<strong>PAUSE</strong>, P, or Esc opens the pause menu and freezes the entire shop, including animations. The menu offers Resume, Save Game, Load Game, Settings, Exit to Main Menu, and Exit to Desktop. Saving is available only between shifts; Exit to Desktop is available in the desktop game.",
@@ -180,14 +180,17 @@ function storeTopic({ shopLevel, reputation }) {
         buying more space, and saving.</p>
       <p>Each new shop has its own save. In the pause menu, <strong>Save Game</strong>
         shows your saved shops. Choose one to replace its progress after confirmation, or
-        choose <strong>CREATE NEW SAVE</strong> and enter a save file name. Future autosaves
-        go to the save you choose.
+        choose <strong>CREATE NEW SAVE</strong> and enter a save file name.
+        Regular saves only change when you save manually.
         <strong>Load Game</strong> and <strong>Continue</strong> on the title screen show
-        each save's last-played date and time and total play time. Right-click a save to
-        delete it after confirmation. Deleting the shop you are playing returns you to the
-        title screen. Play time includes shop
-        preparation and management, but not the pause menu. Loading during a shift returns
-        to the last between-shift checkpoint.</p>`),
+        each save's date and time and total play time. Right-click a save to delete it
+        after confirmation. Deleting the save you loaded does not stop your game; save
+        again before closing to keep your progress.
+        Clicking <strong>END DAY</strong> on the receipt creates an autosave in one of
+        three separate autosave slots. Once all three are used, the oldest autosave is
+        replaced. Autosaves only appear in Load Game, never in Save Game, and never
+        replace regular saves. Play time includes shop preparation and management,
+        but not the pause menu. Loading restores the shop as it was when saved.</p>`),
     section("Ending a Shift", `
       ${list([
         "At 20:00 the doors close to new customers. Everyone already inside can still finish shopping and pay.",

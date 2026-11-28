@@ -218,9 +218,7 @@ export function createDebugSnapshot(scene, identifyCustomer, recentEvents, envir
     persistence: {
       status: scene.saves.status,
       loadFailed: scene.saves.loadFailed,
-      autosaveBlocked: scene.saves.autosaveBlocked,
       saveInProgress: Boolean(scene.saves.inProgress),
-      autosaveQueued: scene.autosaveQueued,
     },
     recentEvents,
     diagnostics: {

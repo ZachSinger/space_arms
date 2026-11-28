@@ -65,7 +65,6 @@ export class RobotServiceSystem {
       return false;
     }
     scene.messages.show("Master Computer ordered. Place it from the loading pad to use the Master Terminal.", "#10b981");
-    scene.saves.requestAutosave();
     return true;
   }
 
@@ -99,7 +98,6 @@ export class RobotServiceSystem {
     });
     this.scene.fixtureViews.orient(this.scene.fixtures.ofKind(MASTER_COMPUTER_TYPE)[0]);
     scene.messages.show(`Computer Upgrade ${level - 1} installed. Your Master Computer can run ${level} robot${level === 1 ? "" : "s"}.`, "#10b981");
-    scene.saves.requestAutosave();
     return true;
   }
 
@@ -145,7 +143,6 @@ export class RobotServiceSystem {
       robot = robotService.addRobot({ ...build, name: robotName, battery: 1 });
     });
     scene.messages.show(`${robot.name} bought.`, "#10b981");
-    scene.saves.requestAutosave();
     return robot;
   }
 
@@ -175,7 +172,6 @@ export class RobotServiceSystem {
       gameState.robotService.addPart(partId);
     });
     scene.messages.show(`${part.name} bought.`, "#10b981");
-    scene.saves.requestAutosave();
     return true;
   }
 
@@ -208,7 +204,6 @@ export class RobotServiceSystem {
       return false;
     }
     scene.messages.show("Charging station delivered to the loading pad. Place it in the backroom.", "#10b981");
-    scene.saves.requestAutosave();
     return true;
   }
 
@@ -226,7 +221,6 @@ export class RobotServiceSystem {
     if (!robot) throw new Error(`Unknown robot: ${robotId}.`);
     scene.gameState.robotService.setBattery(robot.id, 1);
     scene.messages.show(`${robot.name} recharged.`, "#10b981");
-    scene.saves.requestAutosave();
     return true;
   }
 
@@ -240,7 +234,6 @@ export class RobotServiceSystem {
     if (!robot) throw new Error(`Unknown robot: ${robotId}.`);
     scene.gameState.robotService.setOnShift(robotId, onShift);
     scene.messages.show(`${robot.name} is ${onShift ? "On Shift" : "Off Shift"}.`);
-    scene.saves.requestAutosave();
     return true;
   }
 
@@ -301,7 +294,6 @@ export class RobotServiceSystem {
       assembled = inventory.addRobot(robot);
     });
     scene.messages.show(`${assembled.name} assembled.`, "#10b981");
-    scene.saves.requestAutosave();
     return assembled;
   }
 
@@ -322,7 +314,6 @@ export class RobotServiceSystem {
       }
     });
     scene.messages.show(`${robot.name} dismantled. Its parts are back in your inventory.`);
-    scene.saves.requestAutosave();
     return true;
   }
 }

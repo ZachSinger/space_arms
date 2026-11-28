@@ -87,7 +87,6 @@ export class DebugTools {
       });
     }
     gameState.shop.changed();
-    scene.saves.requestAutosave();
     const played = gameState.calendar.day - startDay;
     scene.messages.show(
       `Employee Test: played ${played} shift${played === 1 ? "" : "s"}. Shop Level ${gameState.reputation.shopLevel}, ` +
@@ -108,7 +107,6 @@ export class DebugTools {
       return false;
     }
     scene.fixtureSystem.openZone(zone.id);
-    scene.saves.requestAutosave();
     scene.messages.show(`Debug: ${zone.name} is open.`);
     return true;
   }
@@ -218,7 +216,6 @@ export class DebugTools {
     for (const shelf of scene.fixtures.shelves()) scene.fixtureViews.refreshStockDisplay(shelf);
     gameState.shop.changed();
     scene.catalogSystem.recalculateActiveFactions();
-    scene.saves.requestAutosave();
     const roomNote = unplaced > 0 ? ` ${unplaced} owned item${unplaced === 1 ? "" : "s"} had no shelf room.` : "";
     scene.messages.show(
       `Skipped days ${startDay}-${gameState.calendar.day - 1}. Shop Level ${gameState.reputation.shopLevel}, ` +

@@ -66,7 +66,7 @@ export class SaveSlotsWindow {
         }
         this.confirmation.close();
         this.uiWindow.close();
-      }, { title: "NEW SAVE", button: "CREATE SAVE", name: "" });
+      }, { title: "NEW SAVE", button: "CREATE SAVE", name: this.saves.slotId === null ? this.saves.name ?? "" : "" });
     });
     this.confirmation.element.querySelector("[data-save-cancel]").addEventListener("click", () => this.confirmation.close());
     this.confirmation.element.querySelector("[data-save-confirm]").addEventListener("click", () => {
@@ -127,17 +127,17 @@ export class SaveSlotsWindow {
   }
 
   async refresh() {
-    this.slots = await this.saves.list();
+    this.slots = await this.saves.list({ includeAutosaves: this.mode === "load" });
     this.uiWindow.element.querySelector("[data-save-list]").innerHTML = this.slots.length
       ? this.slots.map((slot) => {
-        const date = new Date(slot.lastPlayedAt);
+        const date = new Date(slot.savedAt);
         const dateText = `${date.toLocaleDateString("en-US")} ${date.toLocaleTimeString("en-US", {
           hour: "numeric", minute: "2-digit",
         })}`;
         return String(html`
           <button type="button" class="save-slot" data-save-slot="${slot.slotId}" data-pad-autofocus title="Right-click to delete this save.">
             <strong>${slot.name}</strong>
-            <span>Last played: <time datetime="${date.toISOString()}">${dateText}</time></span>
+            <span>Saved: <time datetime="${date.toISOString()}">${dateText}</time></span>
             <span>Total play time: ${formatPlayTime(slot.playTimeMs)}</span>
           </button>`);
       }).join("")
@@ -190,12 +190,12 @@ export class SaveSlotsWindow {
     if (!slot) throw new Error("That save no longer exists.");
     const active = Boolean(this.onSave) && slotId === this.saves.slotId;
     const warning = active
-      ? `Delete "${slot.name}"? You will return to the title screen and lose unsaved progress. This cannot be undone.`
+      ? `Delete "${slot.name}"? You can keep playing, but save again before closing the game to keep your progress. This deletion cannot be undone.`
       : `Delete "${slot.name}"? This cannot be undone.`;
     this.confirm(warning, async () => {
       await this.onDelete(slotId);
       this.confirmation.close();
-      if (!active) await this.refresh();
+      await this.refresh();
     }, { title: "DELETE SAVE", button: "DELETE" });
   }
 

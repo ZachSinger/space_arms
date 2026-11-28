@@ -76,7 +76,7 @@ test("the Master Computer purchase checks access, license, money, and loading-pa
   assert.equal(ready.system.buyMasterComputer(), true);
   assert.equal(ready.gameState.economy.balance, 10000 - computerPrice);
   assert.equal(ready.gameState.robotService.masterComputerLevel, 1);
-  assert.equal(ready.saved(), 1);
+  assert.equal(ready.saved(), 0);
 });
 
 test("computer upgrades add one rack at a time and require the computer in the shop", () => {
@@ -93,7 +93,7 @@ test("computer upgrades add one rack at a time and require the computer in the s
   assert.equal(system.buyMasterComputerUpgrade(2), true);
   assert.equal(gameState.robotService.masterComputerLevel, 2);
   assert.equal(gameState.economy.balance, 7000);
-  assert.equal(saved(), 1);
+  assert.equal(saved(), 0);
 });
 
 test("buying a part checks unlock, affordability, and off-shift access", () => {
@@ -115,7 +115,7 @@ test("buying a part checks unlock, affordability, and off-shift access", () => {
   assert.equal(ready.system.buyPart("basic_frame"), true);
   assert.equal(ready.gameState.economy.balance, 10000 - price);
   assert.equal(ready.gameState.robotService.partCount("basic_frame"), 1);
-  assert.equal(ready.saved(), 1);
+  assert.equal(ready.saved(), 0);
 });
 
 test("a useful self-charging stock robot can be assembled at Shop Level 5", () => {
@@ -147,12 +147,12 @@ test("charging stations require an unlocked, quiet store and a free loading pad"
   system.scene.supply.firstFreePadSpot = () => ({ x: 1, y: 1 });
   assert.equal(system.buyChargingStation(), true);
   assert.equal(ordered, "robot_charger");
-  assert.equal(saved(), 1);
+  assert.equal(saved(), 0);
   gameState.reputation.shopLevel = ROBOT_SERVICE_LEVEL - 1;
   assert.equal(system.buyChargingStation(), false);
 });
 
-test("assembly consumes owned parts and saves a powered robot; dismantling returns them", () => {
+test("assembly consumes owned parts for a powered robot; dismantling returns them", () => {
   const { system, gameState, saved } = harness();
   installMasterComputer(system, gameState);
   const service = gameState.robotService;
@@ -167,13 +167,13 @@ test("assembly consumes owned parts and saves a powered robot; dismantling retur
   assert.equal(service.robots.length, 1);
   assert.equal(service.partCount("worker_frame"), 0);
   assert.equal(service.partCount("register_1"), 0);
-  assert.equal(saved(), 1);
+  assert.equal(saved(), 0);
 
   assert.equal(system.dismantle(robot.id), true);
   assert.equal(service.robots.length, 0);
   assert.equal(service.partCount("worker_frame"), 1);
   assert.equal(service.partCount("register_1"), 1);
-  assert.equal(saved(), 2);
+  assert.equal(saved(), 0);
 });
 
 test("assembly refuses builds with insufficient power, no logic board, or custom boards", () => {

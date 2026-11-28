@@ -394,7 +394,6 @@ export class FixtureSystem {
       economy.spend(candidate.cost, { category: "expansions", label: candidate.name });
       this.openZone(candidate.id);
     }
-    scene.saves.requestAutosave();
     scene.messages.show(`${zone.name} is open.`);
     return true;
   }

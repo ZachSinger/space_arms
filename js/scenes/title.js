@@ -107,8 +107,8 @@ export class TitleScene extends Phaser.Scene {
       id: "new-game-confirmation", title: "NEW GAME", width: "380px", height: "auto",
       x: 80, y: 120, onClose: () => this.setMenuActive(true),
       contentHTML: `
-        <p>Start a new shop in its own save. Your other saved shops stay unchanged.</p>
-        <label>Save name (optional) <input data-new-save-name maxlength="40" placeholder="Automatic name if left empty"></label>
+        <p>Start a new shop. Your other saved shops stay unchanged. Use Save Game to create a named save.</p>
+        <label>Suggested save name (optional) <input data-new-save-name maxlength="40"></label>
         <p data-new-save-status role="status"></p>
         <button class="action-btn" data-confirm-new-game>START NEW GAME</button>
         <button class="action-btn" data-cancel-new-game>CANCEL</button>
