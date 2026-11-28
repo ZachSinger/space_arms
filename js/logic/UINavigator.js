@@ -25,6 +25,7 @@ const TARGET_SELECTOR = [
   "[data-placement-index]",
   "[data-grid-cell]",
   "[data-go-backs-item-id]",
+  "[data-save-slot]",
   "[data-pad-row]",
 ].join(",");
 

@@ -112,7 +112,7 @@ async function continueGame(h, expectedDay, expectedSave) {
   await h.page.waitForFunction(() =>
     window.__game.scene.getScene("scene-title")?.sys.isActive(), null, { timeout: 30000 });
   await clickTitleCommand(h.page, "CONTINUE");
-  await h.page.locator('#title-save-slots [data-slot-action="select"]').first().click();
+  await h.page.locator('#title-save-slots [data-save-slot]').first().click();
   await h.page.waitForFunction((day) => {
     const scene = window.__game.scene.getScene("scene-game");
     return scene?.sys.isActive() && scene.player && scene.player !== window.__threeShiftPreviousPlayer &&

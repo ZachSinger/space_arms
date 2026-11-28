@@ -30,7 +30,6 @@ export class SaveSlotsWindow {
           <p data-save-help></p>
           <div class="save-slot-list" data-save-list></div>
           <div class="save-slot-create" data-save-create>
-            <label>New save name (optional) <input data-save-name maxlength="40" placeholder="Automatic name if left empty"></label>
             <button class="action-btn" data-save-new>CREATE NEW SAVE</button>
           </div>
           <p class="save-slot-status" data-save-status role="status" aria-live="polite"></p>
@@ -43,29 +42,44 @@ export class SaveSlotsWindow {
       },
       contentHTML: `
         <p data-save-warning></p>
-        <label data-save-rename-label>Save name <input data-save-rename maxlength="40"></label>
+        <label data-save-name-label>Enter a save file name <input data-save-name maxlength="40"></label>
         <p data-save-confirm-status role="status"></p>
-        <button class="action-btn" data-save-confirm>CONFIRM</button>
+        <button class="action-btn" data-save-confirm></button>
         <button class="action-btn" data-save-cancel>CANCEL</button>`,
     }, manager);
     this.uiWindow.element.addEventListener("click", (event) => {
-      const button = event.target.closest("button[data-slot-action]");
-      if (button) void this.run(() => this.select(button.dataset.slotAction, button.dataset.slotId));
+      const card = event.target.closest("button[data-save-slot]");
+      if (card) void this.run(() => this.select(card.dataset.saveSlot));
     });
     this.uiWindow.element.querySelector("[data-save-new]").addEventListener("click", () => {
-      void this.run(async () => {
-        const value = this.uiWindow.element.querySelector("[data-save-name]").value;
-        const name = value.trim() ? validateSaveName(value) : undefined;
-        if (await this.onSave({ slotId: null, name })) this.uiWindow.close();
-        else this.status("Save failed. Your previous saves are unchanged.");
-      });
+      this.confirm("Enter a name for your new save.", async () => {
+        const name = validateSaveName(this.confirmation.element.querySelector("[data-save-name]").value);
+        if (!await this.onSave({ slotId: null, name })) {
+          throw new Error("Save failed. Your previous saves are unchanged.");
+        }
+        this.confirmation.close();
+        this.uiWindow.close();
+      }, { title: "NEW SAVE", button: "CREATE SAVE", name: "" });
     });
     this.confirmation.element.querySelector("[data-save-cancel]").addEventListener("click", () => this.confirmation.close());
     this.confirmation.element.querySelector("[data-save-confirm]").addEventListener("click", () => {
-      void this.run(async () => {
-        await this.confirmedAction();
-        this.confirmation.close();
-      });
+      const nameLabel = this.confirmation.element.querySelector("[data-save-name-label]");
+      if (!nameLabel.hidden) {
+        try {
+          validateSaveName(this.confirmation.element.querySelector("[data-save-name]").value);
+        } catch (error) {
+          this.status(error.message);
+          this.confirmation.element.querySelector("[data-save-name]").focus();
+          return;
+        }
+      }
+      void this.run(() => this.confirmedAction());
+    });
+    this.confirmation.element.querySelector("[data-save-name]").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        this.confirmation.element.querySelector("[data-save-confirm]").click();
+      }
     });
   }
 
@@ -73,9 +87,7 @@ export class SaveSlotsWindow {
     this.mode = mode;
     this.uiWindow.element.querySelector(".retro-window-title").textContent = mode === "save" ? "SAVE GAME" : "LOAD GAME";
     this.uiWindow.element.querySelector("[data-save-create]").hidden = mode !== "save";
-    this.uiWindow.element.querySelector("[data-save-help]").textContent = mode === "save"
-      ? "Save to your current save, create a separate copy, or replace another saved shop. Autosaves follow the save you choose."
-      : "Choose a saved shop. Each save has its own progress.";
+    this.uiWindow.element.querySelector("[data-save-help]").textContent = mode === "save" ? "Save Game" : "Load Game";
     this.uiWindow.openWindow();
     await this.run(() => this.refresh());
   }
@@ -111,65 +123,59 @@ export class SaveSlotsWindow {
     this.slots = await this.saves.list();
     this.uiWindow.element.querySelector("[data-save-list]").innerHTML = this.slots.length
       ? this.slots.map((slot) => {
-        const current = slot.slotId === this.saves.slotId;
         const date = new Date(slot.lastPlayedAt);
+        const dateText = `${date.toLocaleDateString("en-US")} ${date.toLocaleTimeString("en-US", {
+          hour: "numeric", minute: "2-digit",
+        })}`;
         return String(html`
-          <article class="save-slot${current ? " current-save" : ""}">
-            <h3>${slot.name}${current ? " (current save)" : ""}</h3>
-            <p>Last played: <time datetime="${date.toISOString()}">${date.toLocaleString()}</time></p>
-            <p>Total play time: ${formatPlayTime(slot.playTimeMs)}</p>
-            <div class="save-slot-actions">
-              <button class="action-btn" data-slot-action="select" data-slot-id="${slot.slotId}" data-pad-autofocus>${this.mode === "load" ? "LOAD" : "SAVE HERE"}</button>
-              <button class="action-btn" data-slot-action="rename" data-slot-id="${slot.slotId}">RENAME</button>
-              <button class="action-btn" data-slot-action="delete" data-slot-id="${slot.slotId}" ${current ? html`disabled title="Return to the title screen to delete the shop you are playing."` : ""}>DELETE</button>
-            </div>
-          </article>`);
+          <button type="button" class="save-slot" data-save-slot="${slot.slotId}" data-pad-autofocus>
+            <strong>${slot.name}</strong>
+            <span>Last played: <time datetime="${date.toISOString()}">${dateText}</time></span>
+            <span>Total play time: ${formatPlayTime(slot.playTimeMs)}</span>
+          </button>`);
       }).join("")
-      : '<p class="save-slot-empty">No saved shops yet. Start a new game to create one.</p>';
+      : '<p class="save-slot-empty">No saved shops yet.</p>';
   }
 
-  confirm(message, action, name = null) {
+  confirm(message, action, { title = "CONFIRM", button = "CONFIRM", name = null } = {}) {
     this.confirmedAction = action;
+    this.confirmation.element.querySelector(".retro-window-title").textContent = title;
     this.confirmation.element.querySelector("[data-save-warning]").textContent = message;
     this.confirmation.element.querySelector("[data-save-confirm-status]").textContent = "";
-    const label = this.confirmation.element.querySelector("[data-save-rename-label]");
+    this.confirmation.element.querySelector("[data-save-confirm]").textContent = button;
+    const label = this.confirmation.element.querySelector("[data-save-name-label]");
     label.hidden = name === null;
-    if (name !== null) this.confirmation.element.querySelector("[data-save-rename]").value = name;
+    if (name !== null) this.confirmation.element.querySelector("[data-save-name]").value = name;
     this.confirmation.openWindow();
-    this.confirmation.element.querySelector(name === null ? "[data-save-confirm]" : "[data-save-rename]").focus();
+    this.confirmation.element.querySelector(name === null ? "[data-save-confirm]" : "[data-save-name]").focus();
   }
 
-  async select(action, slotId) {
+  async select(slotId) {
     const slot = this.slots.find((entry) => entry.slotId === slotId);
     if (!slot) throw new Error("That save no longer exists.");
-    if (action === "rename") {
-      this.confirm(`Rename "${slot.name}".`, async () => {
-        await this.saves.rename(slotId, this.confirmation.element.querySelector("[data-save-rename]").value);
-        await this.refresh();
-      }, slot.name);
-    } else if (action === "delete") {
-      this.confirm(`Permanently delete "${slot.name}"? This cannot be undone.`, async () => {
-        await this.saves.delete(slotId);
-        await this.refresh();
-      });
-    } else if (action === "select" && this.mode === "load") {
+    if (this.mode === "load") {
       const load = async () => {
         const payload = await this.saves.read(slotId);
         await this.onLoad(payload);
+        this.confirmation.close();
         this.uiWindow.close();
       };
-      if (this.onSave) this.confirm(`Load "${slot.name}"? Unsaved shop progress will be lost.`, load);
-      else await load();
-    } else if (action === "select") {
-      const save = async () => {
-        if (!await this.onSave({ slotId })) throw new Error("Save failed. Your previous saves are unchanged.");
-        this.uiWindow.close();
-      };
-      if (slotId === this.saves.slotId) await save();
-      else this.confirm(`Replace "${slot.name}" with your current shop? Its previous progress will be lost.`, save);
-    } else {
-      throw new Error(`Unknown save action: ${action}.`);
+      if (this.onSave) {
+        this.confirm(`Load "${slot.name}"? Unsaved shop progress will be lost.`, load, {
+          title: "LOAD SAVE", button: "LOAD",
+        });
+      } else {
+        await load();
+      }
+      return;
     }
+    this.confirm(`Overwrite "${slot.name}"? Its saved progress will be replaced.`, async () => {
+      if (!await this.onSave({ slotId })) {
+        throw new Error("Save failed. Your previous saves are unchanged.");
+      }
+      this.confirmation.close();
+      this.uiWindow.close();
+    }, { title: "OVERWRITE SAVE", button: "OVERWRITE" });
   }
 
   destroy() {

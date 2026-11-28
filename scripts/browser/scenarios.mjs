@@ -77,31 +77,42 @@ export const scenarios = {
       return { id: scene.saves.manager.slotId, money: scene.gameState.economy.credits, time: scene.saves.playTimeMs };
     });
     await h.page.locator('[data-pause-action="save"]').click();
-    await h.page.locator(`${list} [data-slot-action="select"]`).waitFor();
-    const controllerScope = await h.game((scene) => {
+    await h.page.locator(`${list} [data-save-slot]`).waitFor();
+    const controllerState = await h.game((scene) => {
       const navigator = scene.controls.uiNavigator;
       const scope = navigator.getScope();
-      navigator.handle({
-        navDirection: null, rightStick: { y: 0 },
-        justPressedAction: (action) => action === "interact",
-        isDown: () => false, isActionDown: () => false,
-      });
-      return scope.id;
+      return {
+        id: scope?.id,
+        hasSaveCard: navigator.getTargets(scope).some((element) => element.hasAttribute("data-save-slot")),
+      };
     });
-    check(controllerScope === "pause-save-slots", "Controller focus missed the save chooser");
-    await h.page.locator(list).waitFor({ state: "hidden" });
-    await h.page.locator('[data-pause-action="save"]').click();
-    check(await h.page.locator(`${list} [data-slot-action="delete"]`).isDisabled(), "Current save can be deleted");
+    check(controllerState.id === "pause-save-slots" && controllerState.hasSaveCard,
+      "Save cards are unavailable to controller navigation");
+    check((await h.page.locator(`${list} [data-save-help]`).innerText()) === "Save Game", "Save screen guidance is incorrect");
+    check((await h.page.locator(`${list} [data-save-list]`).innerText()).includes("(current save)") === false,
+      "Current-save label is displayed");
+    check(await h.page.locator(`${list} [data-save-list] input, ${list} .save-slot-actions`).count() === 0,
+      "Save cards contain name fields or extra actions");
+    for (const date of await h.page.locator(`${list} time`).allInnerTexts()) {
+      check(!/,\s/.test(date), "A comma appears between the calendar date and time");
+    }
     check((await h.page.locator(`${list} [data-save-list]`).innerText()).includes("Total play time: 1 minute"), "Play time is missing");
     check(await h.page.locator(`${list} time[datetime]`).count() === 1, "Last-played date is missing");
-    await h.page.locator(`${list} [data-save-name]`).fill("Copy <b>bold</b>");
     await h.page.locator(`${list} [data-save-new]`).click();
+    check(await h.page.locator(`${confirm} [data-save-name]`).isVisible(), "Create-new-save did not ask for a name");
+    await h.page.locator(`${confirm} [data-save-confirm]`).click();
+    check((await h.page.locator(`${confirm} [data-save-confirm-status]`).innerText()).includes("Enter a save name"),
+      "An empty save name was accepted");
+    await h.page.locator(`${confirm} [data-save-name]`).fill("Copy <b>bold</b>");
+    await h.page.locator(`${confirm} [data-save-confirm]`).click();
     await h.page.locator(list).waitFor({ state: "hidden" });
     const copyId = await h.game((scene) => scene.saves.manager.slotId);
     check(copyId !== first.id, "New save reused the original slot");
     check(await h.game((scene) => scene.gamePaused), "Saving unexpectedly resumed the shop");
     await h.page.locator('[data-pause-action="load"]').click();
-    await h.page.locator(`${list} [data-slot-id="${first.id}"][data-slot-action="select"]`).click();
+    await h.page.locator(`${list} [data-save-slot="${first.id}"]`).click();
+    check((await h.page.locator(`${confirm} [data-save-warning]`).innerText()).includes("Load"),
+      "Loading a save in-game did not ask for confirmation");
     await h.game((scene) => scene.controls.uiNavigator.handle({
       navDirection: null, rightStick: { y: 0 },
       justPressedAction: (action) => action === "cancel",
@@ -109,7 +120,7 @@ export const scenarios = {
     }));
     await h.page.locator(confirm).waitFor({ state: "hidden" });
     check(await h.game((scene) => scene.saves.manager.slotId) === copyId, "Cancel loaded the other shop");
-    await h.page.locator(`${list} [data-slot-id="${first.id}"][data-slot-action="select"]`).click();
+    await h.page.locator(`${list} [data-save-slot="${first.id}"]`).click();
     await h.page.locator(`${confirm} [data-save-confirm]`).click();
     await h.page.waitForFunction((id) => {
       const scene = window.__game.scene.getScene("scene-game");
@@ -127,8 +138,10 @@ export const scenarios = {
     await h.wait(150);
     check(await h.game((scene) => scene.saves.playTimeMs) === pausedTime, "Paused time counted as play time");
     await h.page.locator('[data-pause-action="save"]').click();
-    const target = `${list} [data-slot-id="${copyId}"][data-slot-action="select"]`;
+    const target = `${list} [data-save-slot="${copyId}"]`;
     await h.page.locator(target).click();
+    check((await h.page.locator(`${confirm} [data-save-warning]`).innerText()).includes("Overwrite"),
+      "Clicking a save card did not ask before overwriting");
     await h.page.locator(`${confirm} [data-save-cancel]`).click();
     check(await h.game((scene) => scene.saves.manager.slotId) === first.id, "Cancel changed the autosave destination");
     await h.page.locator(target).click();
@@ -138,21 +151,6 @@ export const scenarios = {
     check(await h.game(async (scene, id) => (await scene.saves.manager.read(id)).data.shop.playerState.credits, first.id) === first.money,
       "Replacement overwrote the wrong save");
 
-    await h.page.locator('[data-pause-action="save"]').click();
-    check(await h.page.locator(`${list} b`).count() === 0, "Save names were rendered as HTML");
-    await h.page.locator(`${list} [data-slot-id="${first.id}"][data-slot-action="rename"]`).click();
-    await h.page.locator(`${confirm} [data-save-rename]`).fill("Renamed shop");
-    await h.page.locator(`${confirm} [data-save-confirm]`).click();
-    await h.page.locator(`${list} h3`).filter({ hasText: "Renamed shop" }).waitFor();
-    check(await h.page.locator(`${list} [data-slot-id="${copyId}"][data-slot-action="delete"]`).isDisabled(),
-      "Refreshing enabled deletion of the current shop");
-    await h.page.locator(`${list} [data-slot-id="${first.id}"][data-slot-action="delete"]`).click();
-    await h.page.locator(`${confirm} [data-save-cancel]`).click();
-    check(await h.page.locator(`${list} .save-slot`).count() === 2, "Cancel deleted a save");
-    await h.page.locator(`${list} [data-slot-id="${first.id}"][data-slot-action="delete"]`).click();
-    await h.page.locator(`${confirm} [data-save-confirm]`).click();
-    await h.page.locator(`${list} [data-slot-id="${first.id}"]`).first().waitFor({ state: "detached" });
-    check(await h.page.locator(`${list} .save-slot`).count() === 1, "Deletion removed the wrong number of saves");
     await h.game((scene) => scene.pauseMenu.uiWindow.close());
     await h.game(async (scene) => {
       scene.gameState.economy.credits = 444;
@@ -167,11 +165,11 @@ export const scenarios = {
       const scene = window.__game.scene.getScene("scene-game");
       return scene?.sys.isActive() && scene.saves?.manager.name === "Third shop" && scene.saves.manager.slotId;
     }, null, { timeout: 60000 });
-    check(await h.game(async (scene) => (await scene.saves.manager.list()).length) === 2, "New Game replaced another save");
+    check(await h.game(async (scene) => (await scene.saves.manager.list()).length) === 3, "New Game replaced another save");
     await h.game((scene) => { scene.scene.start("scene-title"); });
     await h.page.waitForFunction(() => window.__game.scene.getScene("scene-title")?.sys.isActive());
     await h.page.evaluate(() => window.__game.scene.getScene("scene-title").continueGame());
-    await h.page.locator(`#title-save-slots [data-slot-id="${copyId}"][data-slot-action="select"]`).click();
+    await h.page.locator(`#title-save-slots [data-save-slot="${copyId}"]`).click();
     await h.page.waitForFunction((id) => {
       const scene = window.__game.scene.getScene("scene-game");
       return scene?.sys.isActive() && scene.saves?.manager.slotId === id && scene.gameState.economy.credits === 444;
